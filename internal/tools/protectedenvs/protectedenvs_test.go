@@ -578,6 +578,34 @@ func TestProtect_APIError(t *testing.T) {
 	}
 }
 
+// TestProtect_Forbidden verifies Protect returns permission guidance for 403 responses.
+func TestProtect_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	_, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42", Name: "staging"})
+	if err == nil {
+		t.Fatal("expected error for forbidden response")
+	}
+	if !strings.Contains(err.Error(), "Premium/Ultimate") {
+		t.Fatalf("error = %v, want permission hint", err)
+	}
+}
+
+// TestUpdate_NotFound verifies Update returns protection guidance for 404 responses.
+func TestUpdate_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "42", Environment: "production"})
+	if err == nil {
+		t.Fatal("expected error for not found response")
+	}
+	if !strings.Contains(err.Error(), "gitlab_protected_environment_protect") {
+		t.Fatalf("error = %v, want protect hint", err)
+	}
+}
+
 // TestUnprotect_APIError verifies Unprotect returns error on API failure.
 func TestUnprotect_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -108,7 +108,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
   runtime validation.
 - **IMP-005**: Return repairable validation failures as tool results with `isError: true`.
 - **IMP-006**: Require `confirm:true` for destructive execution and preserve safe mode previews.
-- **IMP-007**: Extend `cmd/eval_meta_tools` to compare current meta-tools, dynamic toolset, and unified dispatcher.
+- **IMP-007**: Extend `cmd/eval_mcp_surfaces` to compare current meta-tools, dynamic toolset, and unified dispatcher.
 - **IMP-008**: Add observability for search query, selected action, describe usage, validation failure, policy block, and
   destructive confirmation events.
 

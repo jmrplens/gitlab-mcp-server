@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -1089,6 +1091,117 @@ func TestFormatRawBlobContentMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(md, "hello world") {
 		t.Error("expected content in output")
+	}
+}
+
+// TestMarkdownForResult_BlobContentCategories verifies blob result formatters
+// preserve text metadata and attach image content for multimodal clients.
+func TestMarkdownForResult_BlobContentCategories(t *testing.T) {
+	tests := []struct {
+		name          string
+		result        any
+		wantText      string
+		wantImageMIME string
+	}{
+		{
+			name:     "blob text",
+			result:   BlobOutput{SHA: "textsha", Size: 4, Content: "text", ContentCategory: "text"},
+			wantText: "Content**: text",
+		},
+		{
+			name:     "blob binary",
+			result:   BlobOutput{SHA: "binsha", Size: 4, ContentCategory: "binary"},
+			wantText: "content omitted",
+		},
+		{
+			name:          "blob image",
+			result:        BlobOutput{SHA: "imgsha", Size: 4, ContentCategory: "image", ImageData: []byte{0x89, 0x50}, ImageMIMEType: "image/png"},
+			wantText:      "image (image/png)",
+			wantImageMIME: "image/png",
+		},
+		{
+			name:     "raw text",
+			result:   RawBlobContentOutput{SHA: "rawtext", Size: 4, Content: "text", ContentCategory: "text"},
+			wantText: "text",
+		},
+		{
+			name:     "raw binary",
+			result:   RawBlobContentOutput{SHA: "rawbin", Size: 4, ContentCategory: "binary"},
+			wantText: "content omitted",
+		},
+		{
+			name:          "raw image",
+			result:        RawBlobContentOutput{SHA: "rawimg", Size: 4, ContentCategory: "image", ImageData: []byte{0x89, 0x50}, ImageMIMEType: "image/png"},
+			wantText:      "image (image/png)",
+			wantImageMIME: "image/png",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callResult := toolutil.MarkdownForResult(tt.result)
+			if callResult == nil {
+				t.Fatal("MarkdownForResult returned nil")
+			}
+			content, ok := callResult.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("content[0] = %T, want *mcp.TextContent", callResult.Content[0])
+			}
+			if !strings.Contains(content.Text, tt.wantText) {
+				t.Fatalf("markdown missing %q:\n%s", tt.wantText, content.Text)
+			}
+			if tt.wantImageMIME == "" {
+				if len(callResult.Content) != 1 {
+					t.Fatalf("content items = %d, want 1", len(callResult.Content))
+				}
+				return
+			}
+			if len(callResult.Content) != 2 {
+				t.Fatalf("content items = %d, want 2", len(callResult.Content))
+			}
+			image, ok := callResult.Content[1].(*mcp.ImageContent)
+			if !ok {
+				t.Fatalf("content[1] = %T, want *mcp.ImageContent", callResult.Content[1])
+			}
+			if image.MIMEType != tt.wantImageMIME {
+				t.Fatalf("image MIMEType = %q, want %q", image.MIMEType, tt.wantImageMIME)
+			}
+		})
+	}
+}
+
+// TestClassifyBlobContent verifies MIME sniffing maps blobs to the content
+// categories consumed by Markdown and multimodal result formatters.
+func TestClassifyBlobContent(t *testing.T) {
+	tests := []struct {
+		name          string
+		data          []byte
+		mime          string
+		wantCategory  string
+		wantContent   string
+		wantImageMIME string
+	}{
+		{name: "image", data: []byte{0x89, 0x50}, mime: "image/png", wantCategory: "image", wantImageMIME: "image/png"},
+		{name: "text", data: []byte("hello"), mime: "text/plain; charset=utf-8", wantCategory: "text", wantContent: "hello"},
+		{name: "binary", data: []byte{0x00, 0x01}, mime: "application/octet-stream", wantCategory: "binary"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			category, content, imageData, imageMIME := classifyBlobContent(tt.data, tt.mime)
+			if category != tt.wantCategory {
+				t.Fatalf("category = %q, want %q", category, tt.wantCategory)
+			}
+			if content != tt.wantContent {
+				t.Fatalf("content = %q, want %q", content, tt.wantContent)
+			}
+			if imageMIME != tt.wantImageMIME {
+				t.Fatalf("image MIME = %q, want %q", imageMIME, tt.wantImageMIME)
+			}
+			if tt.wantCategory == "image" && string(imageData) != string(tt.data) {
+				t.Fatalf("image data = %v, want %v", imageData, tt.data)
+			}
+		})
 	}
 }
 

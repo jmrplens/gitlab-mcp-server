@@ -543,6 +543,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		{"gitlab_list_custom_attributes", map[string]any{"resource_type": "users", "resource_id": float64(1)}},
 		{"gitlab_get_custom_attribute", map[string]any{"resource_type": "users", "resource_id": float64(1), "key": "k"}},
 		{"gitlab_set_custom_attribute", map[string]any{"resource_type": "users", "resource_id": float64(1), "key": "k", "value": "v"}},
+		{"gitlab_delete_custom_attribute", map[string]any{"resource_type": "users", "resource_id": float64(1), "key": "k"}},
 	}
 	for _, tt := range tools {
 		t.Run(tt.name, func(t *testing.T) {

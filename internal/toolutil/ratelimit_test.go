@@ -150,6 +150,45 @@ func TestAttachRateLimit_ListNotGated(t *testing.T) {
 	}
 }
 
+// TestExtractToolName verifies the middleware helper handles nil requests,
+// raw call params, typed call params, and whitespace-only names.
+func TestExtractToolName(t *testing.T) {
+	t.Parallel()
+	if got := extractToolName(nil); got != "" {
+		t.Fatalf("extractToolName(nil) = %q, want empty", got)
+	}
+
+	tests := []struct {
+		name string
+		req  mcp.Request
+		want string
+	}{
+		{
+			name: "raw params",
+			req:  &mcp.ClientRequest[*mcp.CallToolParamsRaw]{Params: &mcp.CallToolParamsRaw{Name: " echo "}},
+			want: "echo",
+		},
+		{
+			name: "typed params",
+			req:  &mcp.ClientRequest[*mcp.CallToolParams]{Params: &mcp.CallToolParams{Name: "status"}},
+			want: "status",
+		},
+		{
+			name: "other params",
+			req:  &mcp.ClientRequest[*mcp.ListToolsParams]{Params: &mcp.ListToolsParams{}},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := extractToolName(tt.req); got != tt.want {
+				t.Fatalf("extractToolName() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestValidateRateLimit verifies the validation rules for limiter
 // configuration: rps must be >= 0, and burst must be >= 1 when rps > 0.
 func TestValidateRateLimit(t *testing.T) {

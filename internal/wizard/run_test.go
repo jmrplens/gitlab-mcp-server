@@ -4,11 +4,13 @@ package wizard
 
 import (
 	"bytes"
+	"encoding/json"
+	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestRun_UnknownMode verifies that Run returns an error for an
@@ -46,46 +48,123 @@ func TestRun_CLIMode_Dispatch(t *testing.T) {
 	}
 }
 
-// TestHasDisplay_NoDisplayVars_ReturnsFalse verifies that hasDisplay returns
-// false on Linux when neither DISPLAY nor WAYLAND_DISPLAY is set.
-func TestHasDisplay_NoDisplayVars_ReturnsFalse(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("test only applicable on Linux")
+// TestRun_AutoHeadlessFallsBackToCLI verifies auto mode skips browser startup
+// when no display is available and completes through the CLI fallback.
+func TestRun_AutoHeadlessFallsBackToCLI(t *testing.T) {
+	useFakeClients(t)
+	stubWriteEnvFile(t)
+	originalHasDisplay := hasDisplayFn
+	hasDisplayFn = func() bool { return false }
+	t.Cleanup(func() { hasDisplayFn = originalHasDisplay })
+	originalStdin := os.Stdin
+	nonInteractiveStdin, err := os.CreateTemp(t.TempDir(), "stdin-*")
+	if err != nil {
+		t.Fatalf("creating non-interactive stdin: %v", err)
 	}
+	os.Stdin = nonInteractiveStdin
+	t.Cleanup(func() {
+		os.Stdin = originalStdin
+		_ = nonInteractiveStdin.Close()
+	})
 
-	t.Setenv("DISPLAY", "")
-	t.Setenv("WAYLAND_DISPLAY", "")
+	tmpDir := t.TempDir()
+	installDir := filepath.Join(tmpDir, "bin")
+	input := strings.Join([]string{
+		installDir + string(os.PathSeparator) + DefaultBinaryName(),
+		"https://gitlab.example.com",
+		"test-token-test123",
+		"n",
+		"a",
+	}, "\n") + "\n"
 
-	if hasDisplay() {
-		t.Error("hasDisplay() = true on headless Linux, want false")
+	var output bytes.Buffer
+	if runErr := Run("1.0.0", UIModeAuto, strings.NewReader(input), &output); runErr != nil {
+		t.Fatalf("Run(auto) error = %v", runErr)
+	}
+	if !strings.Contains(output.String(), "gitlab-mcp-server Setup Wizard") {
+		t.Fatalf("Run(auto) output = %q, want CLI wizard", output.String())
 	}
 }
 
-// TestHasDisplay_WithDISPLAY_ReturnsTrue verifies that hasDisplay returns
-// true when the DISPLAY environment variable is set.
-func TestHasDisplay_WithDISPLAY_ReturnsTrue(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("test only applicable on Linux")
+// TestRun_WebModeCompletesAfterConfigure exercises the browser wizard without
+// launching a real browser by posting a valid configuration to the local server.
+func TestRun_WebModeCompletesAfterConfigure(t *testing.T) {
+	useFakeClients(t)
+	stubWriteEnvFile(t)
+	stubInstallBinary(t)
+	stubLoadExistingConfig(t)
+
+	originalOpenBrowser := openBrowserFn
+	openedURL := make(chan string, 1)
+	openBrowserFn = func(url string) error {
+		openedURL <- url
+		return nil
+	}
+	t.Cleanup(func() { openBrowserFn = originalOpenBrowser })
+
+	var output bytes.Buffer
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Run("2.0.0-test", UIModeWeb, nil, &output)
+	}()
+
+	var webURL string
+	select {
+	case webURL = <-openedURL:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run(web) did not open the local wizard URL")
 	}
 
-	t.Setenv("DISPLAY", ":0")
+	reqBody := configureRequest{
+		InstallPath:       filepath.Join(t.TempDir(), "bin"),
+		GitLabURL:         "https://gitlab.example.com",
+		GitLabToken:       "test-token-test123",
+		ToolSurface:       "meta",
+		CapabilitySurface: "full",
+		MetaParamSchema:   "opaque",
+		AutoUpdateMode:    "false",
+		RateLimitRPS:      "0",
+		RateLimitBurst:    "40",
+		LogLevel:          "info",
+		SelectedClients:   []int{0},
+	}
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("marshal configure request: %v", err)
+	}
+	resp, err := http.Post(webURL+"/api/configure", mimeJSON, bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("POST /api/configure: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /api/configure status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
 
-	if !hasDisplay() {
-		t.Error("hasDisplay() = false with DISPLAY=:0, want true")
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("Run(web) error = %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run(web) did not finish after configuration")
+	}
+	if !strings.Contains(output.String(), "Setup wizard available") {
+		t.Fatalf("Run(web) output = %q, want setup URL", output.String())
 	}
 }
 
-// TestHasDisplay_WithWAYLAND_ReturnsTrue verifies that hasDisplay returns
-// true when the WAYLAND_DISPLAY environment variable is set.
-func TestHasDisplay_WithWAYLAND_ReturnsTrue(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("test only applicable on Linux")
+// TestToolSurfaceHelpers verifies legacy meta-tools values still map to the
+// modern tool surface defaults used in generated wizard configuration.
+func TestToolSurfaceHelpers(t *testing.T) {
+	if got := toolSurfaceFromMetaTools(true); got != "meta" {
+		t.Fatalf("toolSurfaceFromMetaTools(true) = %q, want meta", got)
 	}
-
-	t.Setenv("DISPLAY", "")
-	t.Setenv("WAYLAND_DISPLAY", "wayland-0")
-
-	if !hasDisplay() {
-		t.Error("hasDisplay() = false with WAYLAND_DISPLAY=wayland-0, want true")
+	if got := toolSurfaceFromMetaTools(false); got != "individual" {
+		t.Fatalf("toolSurfaceFromMetaTools(false) = %q, want individual", got)
+	}
+	toolSurface, metaTools := toolSurfaceFromEnv(map[string]string{"TOOL_SURFACE": "invalid", "META_TOOLS": "false"})
+	if toolSurface != "individual" || metaTools {
+		t.Fatalf("toolSurfaceFromEnv(invalid,false) = %q/%v, want individual/false", toolSurface, metaTools)
 	}
 }

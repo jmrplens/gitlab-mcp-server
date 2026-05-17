@@ -6,11 +6,16 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 )
@@ -324,6 +329,80 @@ func TestPackagePublishDirectory_WithPattern(t *testing.T) {
 	}
 }
 
+// TestPackagePublishDirectory_WithProgressToken verifies PublishDirectory sends
+// progress notifications when invoked through MCP with a progress token.
+func TestPackagePublishDirectory_WithProgressToken(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "artifact.bin"), []byte("progress-data"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/packages/generic/") {
+			testutil.RespondJSON(w, http.StatusCreated, `{
+				"id": 9, "package_id": 10, "file_name": "artifact.bin",
+				"size": 13, "file_sha256": "hash", "file_md5": "md5", "file_sha1": "sha1", "file_store": 1
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "package-directory-test", Version: "0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "package_directory_with_progress"}, func(ctx context.Context, req *mcp.CallToolRequest, input PublishDirInput) (*mcp.CallToolResult, PublishDirOutput, error) {
+		out, err := PublishDirectory(ctx, req, client, input)
+		if err != nil {
+			return nil, PublishDirOutput{}, err
+		}
+		return &mcp.CallToolResult{}, out, nil
+	})
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	progressSeen := make(chan struct{}, 1)
+	var once sync.Once
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "package-directory-client"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, _ *mcp.ProgressNotificationClientRequest) {
+			once.Do(func() { progressSeen <- struct{}{} })
+		},
+	})
+	clientSession, err := mcpClient.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		_ = serverSession.Wait()
+	})
+
+	_, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name: "package_directory_with_progress",
+		Arguments: map[string]any{
+			"project_id":      "42",
+			"package_name":    "my-pkg",
+			"package_version": "1.0.0",
+			"directory_path":  dir,
+		},
+		Meta: mcp.Meta{"progressToken": "package-directory-progress-token"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+
+	select {
+	case <-progressSeen:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for progress notification")
+	}
+}
+
 // TestPackagePublishDirectory_NoMatchingFiles verifies PackagePublishDirectory when no matching files.
 func TestPackagePublishDirectory_NoMatchingFiles(t *testing.T) {
 	dir := t.TempDir()
@@ -487,7 +566,6 @@ func TestPackagePublishDirectory_ContextCancelled(t *testing.T) {
 	}))
 
 	ctx := testutil.CancelledCtx(t)
-
 	_, err := PublishDirectory(ctx, nil, client, PublishDirInput{
 		ProjectID:      "42",
 		PackageName:    "my-pkg",
@@ -496,6 +574,51 @@ func TestPackagePublishDirectory_ContextCancelled(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for canceled context, got nil")
+	}
+}
+
+// TestPackagePublishDirectory_CancelledDuringLoop verifies PublishDirectory
+// returns partial output if cancellation happens after one file is published.
+func TestPackagePublishDirectory_CancelledDuringLoop(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"a.bin", "b.bin"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("content"), 0644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	callCount := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.Contains(r.URL.Path, "/packages/generic/") {
+			callCount++
+			testutil.RespondJSON(w, http.StatusCreated, `{
+				"id": 1, "package_id": 10, "file_name": "a.bin",
+				"size": 7, "file_sha256": "hash", "file_md5": "md5", "file_sha1": "sha1", "file_store": 1
+			}`)
+			cancel()
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := PublishDirectory(ctx, nil, client, PublishDirInput{
+		ProjectID:      "42",
+		PackageName:    "my-pkg",
+		PackageVersion: "1.0.0",
+		DirectoryPath:  dir,
+	})
+	if err == nil {
+		t.Fatal("expected cancellation error after first file")
+	}
+	if !strings.Contains(err.Error(), "context canceled after 1 of 2 files") {
+		t.Fatalf("error = %q, want partial cancellation message", err.Error())
+	}
+	if out.TotalFiles != 0 || len(out.Published) != 1 {
+		t.Fatalf("partial output = %+v, want one published item before totals", out)
+	}
+	if callCount != 1 {
+		t.Fatalf("callCount = %d, want 1", callCount)
 	}
 }
 
@@ -587,5 +710,26 @@ func TestCollectMatchingFiles_NonexistentDir(t *testing.T) {
 	_, err := collectMatchingFiles("/nonexistent-path-42", "")
 	if err == nil {
 		t.Fatal("expected error for nonexistent directory, got nil")
+	}
+}
+
+type failingDirEntry struct{}
+
+func (failingDirEntry) Name() string { return "missing.bin" }
+
+func (failingDirEntry) IsDir() bool { return false }
+
+func (failingDirEntry) Type() fs.FileMode { return 0 }
+
+func (failingDirEntry) Info() (fs.FileInfo, error) { return nil, fmt.Errorf("stat missing.bin") }
+
+// TestShouldIncludeFile_InfoError verifies shouldIncludeFile returns stat errors.
+func TestShouldIncludeFile_InfoError(t *testing.T) {
+	included, err := shouldIncludeFile(failingDirEntry{}, "")
+	if err == nil {
+		t.Fatal("expected info error, got nil")
+	}
+	if included {
+		t.Fatal("included = true, want false")
 	}
 }

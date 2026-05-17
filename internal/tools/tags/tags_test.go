@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
@@ -699,6 +700,20 @@ func TestTagList_APIError(t *testing.T) {
 	}
 }
 
+// TestTagList_EmptyProjectID verifies List validates project_id before calling GitLab.
+func TestTagList_EmptyProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach API")
+	}))
+	_, err := List(context.Background(), client, ListInput{})
+	if err == nil {
+		t.Fatal(errExpEmptyProjectID)
+	}
+	if !strings.Contains(err.Error(), argProjectID) {
+		t.Fatalf("error = %v, want project_id", err)
+	}
+}
+
 // TestTagGetSignature_APIError verifies TagGetSignature when API error.
 func TestTagGetSignature_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1134,6 +1149,37 @@ func TestFormatListProtectedTagsMarkdownString_Empty(t *testing.T) {
 	md := FormatListProtectedTagsMarkdownString(ListProtectedTagsOutput{})
 	if !strings.Contains(md, "No protected tags found") {
 		t.Error("expected 'No protected tags found' message")
+	}
+}
+
+// TestFormatMarkdownWrappers verifies the MCP CallToolResult wrappers preserve
+// the Markdown content produced by the tag string formatters.
+func TestFormatMarkdownWrappers(t *testing.T) {
+	tests := []struct {
+		name   string
+		result *mcp.CallToolResult
+		want   string
+	}{
+		{name: "tag", result: FormatOutputMarkdown(Output{Name: testTagV100, Target: "abc"}), want: "## Tag: v1.0.0"},
+		{name: "list", result: FormatListMarkdown(ListOutput{Tags: []Output{{Name: testTagV100, Target: "abc"}}, Pagination: toolutil.PaginationOutput{TotalItems: 1}}), want: "## Tags (1)"},
+		{name: "signature", result: FormatSignatureMarkdown(SignatureOutput{SignatureType: "X509", VerificationStatus: "verified"}), want: "## Tag Signature"},
+		{name: "protected", result: FormatProtectedTagMarkdown(ProtectedTagOutput{Name: "v*"}), want: "## Protected Tag: v*"},
+		{name: "protected list", result: FormatListProtectedTagsMarkdown(ListProtectedTagsOutput{Tags: []ProtectedTagOutput{{Name: "v*"}}, Pagination: toolutil.PaginationOutput{TotalItems: 1}}), want: "## Protected Tags (1)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.result == nil {
+				t.Fatal("expected non-nil result")
+			}
+			content, ok := tt.result.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("content type = %T, want TextContent", tt.result.Content[0])
+			}
+			if !strings.Contains(content.Text, tt.want) {
+				t.Fatalf("markdown missing %q:\n%s", tt.want, content.Text)
+			}
+		})
 	}
 }
 

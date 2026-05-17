@@ -374,6 +374,32 @@ func TestMilestoneUpdate_APIError(t *testing.T) {
 	}
 }
 
+// TestMilestoneUpdate_WithDates verifies valid date options are sent on update.
+func TestMilestoneUpdate_WithDates(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathProjectMilestones, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("iids[]") != "" {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1}]`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	mux.HandleFunc(pathProjectMilestones+"/1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s, want PUT", r.Method)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"project_id":42,"title":"v1.0"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: "42", MilestoneIID: 1, StartDate: "2026-01-01", DueDate: "2026-02-01",
+	})
+	if err != nil {
+		t.Fatalf("milestoneUpdate() unexpected error: %v", err)
+	}
+}
+
 // TestMilestoneUpdate_ResolveError verifies that Update handles resolveIID failure.
 func TestMilestoneUpdate_ResolveError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -440,6 +466,63 @@ func TestMilestoneGetMergeRequests_ResolveError(t *testing.T) {
 	_, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{ProjectID: "42", MilestoneIID: 999})
 	if err == nil {
 		t.Fatal("expected error for not-found IID")
+	}
+}
+
+// TestMilestoneResolvedAPIErrors covers API errors after resolving milestone IID to global ID.
+func TestMilestoneResolvedAPIErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathProjectMilestones, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("iids[]") != "" {
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"iid":1}]`)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	mux.HandleFunc(pathProjectMilestones+"/1", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+		case http.MethodDelete:
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	mux.HandleFunc(pathProjectMilestones+"/1/issues", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	})
+	mux.HandleFunc(pathProjectMilestones+"/1/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	tests := []struct {
+		name string
+		call func(context.Context) error
+	}{
+		{"Get", func(ctx context.Context) error {
+			_, err := Get(ctx, client, GetInput{ProjectID: "42", MilestoneIID: 1})
+			return err
+		}},
+		{"Delete", func(ctx context.Context) error {
+			return Delete(ctx, client, DeleteInput{ProjectID: "42", MilestoneIID: 1})
+		}},
+		{"GetIssues", func(ctx context.Context) error {
+			_, err := GetIssues(ctx, client, GetIssuesInput{ProjectID: "42", MilestoneIID: 1})
+			return err
+		}},
+		{"GetMergeRequests", func(ctx context.Context) error {
+			_, err := GetMergeRequests(ctx, client, GetMergeRequestsInput{ProjectID: "42", MilestoneIID: 1})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(t.Context()); err == nil {
+				t.Fatal("expected API error")
+			}
+		})
 	}
 }
 
@@ -1144,6 +1227,14 @@ func TestFormatMergeRequestsMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatMilestoneNotFound verifies not-found result formatting for milestones.
+func TestFormatMilestoneNotFound(t *testing.T) {
+	result := formatMilestoneNotFound(milestoneNotFoundOutput{Identifier: "IID 9 in project 42"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatMilestoneNotFound() = %+v, want error result", result)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
@@ -1264,6 +1355,22 @@ func TestActionSpecs_MilestoneGetRoute(t *testing.T) {
 	}
 	if out.IID != 3 || out.ID != 99 {
 		t.Fatalf("milestone output = %#v, want IID 3 ID 99", out)
+	}
+}
+
+// TestActionSpecs_MilestoneGetRouteNotFound verifies get route converts 404 into a not-found result.
+func TestActionSpecs_MilestoneGetRouteNotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	byTool := milestoneSpecsByTool(t, ActionSpecs(client))
+
+	result, err := byTool["gitlab_milestone_get"].Route.Handler(t.Context(), map[string]any{"project_id": "42", "milestone_iid": 9})
+	if err != nil {
+		t.Fatalf("Route.Handler error: %v", err)
+	}
+	if _, ok := result.(milestoneNotFoundOutput); !ok {
+		t.Fatalf("result type = %T, want milestoneNotFoundOutput", result)
 	}
 }
 

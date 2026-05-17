@@ -4,6 +4,7 @@ package users
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -90,6 +91,21 @@ func TestActionSpecs_GetUserNotFound(t *testing.T) {
 	}
 	if out.Identifier != "ID 999" {
 		t.Fatalf("identifier = %q", out.Identifier)
+	}
+}
+
+// TestFormatUserNotFound verifies not-found result formatting for user lookups.
+func TestFormatUserNotFound(t *testing.T) {
+	result := formatUserNotFound(userNotFoundOutput{Identifier: "ID 999"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatUserNotFound() = %+v, want error result", result)
+	}
+	content, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content type = %T, want *mcp.TextContent", result.Content[0])
+	}
+	if !strings.Contains(content.Text, "User") || !strings.Contains(content.Text, "ID 999") {
+		t.Fatalf("content = %q, want user identifier", content.Text)
 	}
 }
 

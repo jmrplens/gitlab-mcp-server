@@ -429,6 +429,20 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_BadRequest verifies invalid key/environment-scope hints.
+func TestCreate_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid key"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{GroupID: "10", Key: "K", Value: "V"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "key must match") {
+		t.Fatalf("error = %v, want key hint", err)
+	}
+}
+
 // TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -514,6 +528,20 @@ func TestUpdate_APIError(t *testing.T) {
 	}
 }
 
+// TestUpdate_NotFound verifies missing variable hints.
+func TestUpdate_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{GroupID: "10", Key: "K"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "gitlab_group_variable_list") {
+		t.Fatalf("error = %v, want list hint", err)
+	}
+}
+
 // TestUpdate_CancelledContext verifies Update when cancelled context.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -586,6 +614,20 @@ func TestDelete_APIError(t *testing.T) {
 	err := Delete(context.Background(), client, DeleteInput{GroupID: "10", Key: "K"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestDelete_NotFound verifies already-deleted variable hints.
+func TestDelete_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{GroupID: "10", Key: "K"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "may already be deleted") {
+		t.Fatalf("error = %v, want deletion hint", err)
 	}
 }
 

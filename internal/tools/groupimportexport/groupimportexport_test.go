@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -216,21 +217,19 @@ func TestScheduleExport_CancelledContext(t *testing.T) {
 // TestExportDownload_ReadAllError verifies that ExportDownload returns an error
 // when io.ReadAll fails due to an abruptly closed connection after partial write.
 func TestExportDownload_ReadAllError(t *testing.T) {
+	_, err := exportDownloadOutput(failingReader{})
+	if err == nil {
+		t.Fatal("expected error from failing reader")
+	}
+}
+
+func TestExportDownload_HTTPShortBodyError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/1/export/download" && r.Method == http.MethodGet {
-			// Hijack the connection to send a partial HTTP response and close abruptly.
-			hj, ok := w.(http.Hijacker)
-			if !ok {
-				t.Fatal("response writer does not support hijacking")
-			}
-			conn, bufrw, err := hj.Hijack()
-			if err != nil {
-				t.Fatalf("hijack: %v", err)
-			}
-			_, _ = bufrw.WriteString("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nTransfer-Encoding: chunked\r\n\r\n")
-			_, _ = bufrw.WriteString("5\r\nhello\r\n")
-			_ = bufrw.Flush()
-			conn.Close()
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Length", "10")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("short"))
 			return
 		}
 		http.NotFound(w, r)
@@ -240,6 +239,23 @@ func TestExportDownload_ReadAllError(t *testing.T) {
 	_, err := ExportDownload(t.Context(), client, ExportDownloadInput{GroupID: "1"})
 	if err == nil {
 		t.Fatal("expected error from io.ReadAll with abruptly closed connection")
+	}
+}
+
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) {
+	return 0, errors.New("read failed")
+}
+
+// TestImportFile_InvalidArchivePath verifies ImportFile rejects invalid local archive paths before making an API call.
+func TestImportFile_InvalidArchivePath(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("ImportFile should reject invalid file path before API request")
+	}))
+	_, err := ImportFile(t.Context(), client, ImportFileInput{Name: "test-group", Path: "test-group", File: ""})
+	if err == nil {
+		t.Fatal(errExpectedErr)
 	}
 }
 

@@ -402,6 +402,21 @@ func TestApply_APIError(t *testing.T) {
 	}
 }
 
+// TestApplyDeferredFallback_DownloadError verifies the Windows fallback helper
+// wraps errors from DownloadAndReplace without attempting to replace binaries.
+func TestApplyDeferredFallback_DownloadError(t *testing.T) {
+	updater := newUnreachableUpdater(t)
+	out := ApplyOutput{PreviousVersion: "1.0.0"}
+
+	_, err := applyDeferredFallback(context.Background(), updater, out, errors.New("apply failed"))
+	if err == nil {
+		t.Fatal("expected fallback download error")
+	}
+	if !contains(err.Error(), "Windows rename fallback") {
+		t.Fatalf("error = %q, want fallback context", err.Error())
+	}
+}
+
 // TestFormatApplyMarkdownString_Deferred verifies the Deferred branch of
 // the apply Markdown formatter, including staging path and the Windows note.
 func TestFormatApplyMarkdownString_Deferred(t *testing.T) {

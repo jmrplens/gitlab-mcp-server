@@ -791,7 +791,7 @@ func camelToWords(s string) string {
 // commonInitialisms maps uppercase identifier tokens to their preferred spelling
 // in generated prose.
 var commonInitialisms = map[string]string{
-	"AI": "AI", "API": "API", "ASCII": "ASCII", "AST": "AST", "CE": "CE", "CI": "CI", "CICD": "CI/CD", "CLI": "CLI", "CPU": "CPU", "CRUD": "CRUD", "CSS": "CSS", "CSV": "CSV", "DORA": "DORA", "EE": "EE", "E2E": "E2E", "EOF": "EOF", "HTML": "HTML", "HTTP": "HTTP", "HTTPS": "HTTPS", "ID": "ID", "IDS": "IDs", "IID": "IID", "JSON": "JSON", "JWT": "JWT", "LDAP": "LDAP", "LFS": "LFS", "LRU": "LRU", "MCP": "MCP", "MR": "MR", "OAUTH": "OAuth", "PAT": "PAT", "REST": "REST", "SAML": "SAML", "SHA": "SHA", "SSH": "SSH", "TLS": "TLS", "TTL": "TTL", "UI": "UI", "URL": "URL", "UUID": "UUID", "XML": "XML", "YAML": "YAML",
+	"AI": "AI", "API": "API", "APIURL": "API URL", "ASCII": "ASCII", "AST": "AST", "CE": "CE", "CI": "CI", "CICD": "CI/CD", "CLI": "CLI", "CPU": "CPU", "CRUD": "CRUD", "CSS": "CSS", "CSV": "CSV", "DORA": "DORA", "EE": "EE", "E2E": "E2E", "EOF": "EOF", "HTML": "HTML", "HTTP": "HTTP", "HTTPS": "HTTPS", "ID": "ID", "IDS": "IDs", "IID": "IID", "JSON": "JSON", "JWT": "JWT", "LDAP": "LDAP", "LFS": "LFS", "LRU": "LRU", "MCP": "MCP", "MR": "MR", "OAUTH": "OAuth", "PAT": "PAT", "REST": "REST", "SAML": "SAML", "SHA": "SHA", "SSH": "SSH", "TLS": "TLS", "TTL": "TTL", "UI": "UI", "URL": "URL", "UUID": "UUID", "XML": "XML", "YAML": "YAML",
 }
 
 // shouldSplitIdentifier reports whether a word boundary belongs before

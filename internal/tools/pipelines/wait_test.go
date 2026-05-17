@@ -428,3 +428,25 @@ func TestFormatWaitMarkdown_Canceled(t *testing.T) {
 		t.Error("expected 'canceled' in markdown")
 	}
 }
+
+// TestFormatPipelineNotFound verifies not-found result formatting for pipelines.
+func TestFormatPipelineNotFound(t *testing.T) {
+	result := formatPipelineNotFound(pipelineNotFoundOutput{Identifier: "ID 10 in project 42"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatPipelineNotFound() = %+v, want error result", result)
+	}
+}
+
+// TestFormatWaitResult verifies wait result formatting marks timeouts as errors.
+func TestFormatWaitResult(t *testing.T) {
+	result := formatWaitResult(WaitOutput{
+		Pipeline:    DetailOutput{ID: 10, Status: "running", WebURL: "https://gitlab.example.com/-/pipelines/10"},
+		WaitedFor:   "60s",
+		PollCount:   6,
+		FinalStatus: "running",
+		TimedOut:    true,
+	})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatWaitResult() = %+v, want timeout error result", result)
+	}
+}

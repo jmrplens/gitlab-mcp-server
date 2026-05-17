@@ -74,6 +74,27 @@ func TestAuditDefaultActionAliases_ReturnsOnlyExpectedDefaultFindings(t *testing
 	}
 }
 
+// TestAuditDiscoveryTerms_NilAndSparseInputs verifies discovery audits ignore
+// nil catalogs and sparse registries.
+func TestAuditDiscoveryTerms_NilAndSparseInputs(t *testing.T) {
+	if findings := AuditCatalogDiscoveryTerms(nil); findings != nil {
+		t.Fatalf("AuditCatalogDiscoveryTerms(nil) = %+v, want nil", findings)
+	}
+	if findings := AuditRegistryDiscoveryTerms(nil); findings != nil {
+		t.Fatalf("AuditRegistryDiscoveryTerms(nil) = %+v, want nil", findings)
+	}
+
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
+	group.SetAction(actioncatalog.Action{Name: "get", Route: toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return nil, nil })})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	if findings := AuditRegistryDiscoveryTerms(NewRegistryFromCatalog(catalog)); findings != nil {
+		t.Fatalf("AuditRegistryDiscoveryTerms(sparse) = %+v, want nil", findings)
+	}
+}
+
 // TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals verifies the
 // metadata audit catches actions in crowded groups when their only searchable
 // text is the canonical identifier, while ignoring actions with targeted tags
@@ -81,6 +102,7 @@ func TestAuditDefaultActionAliases_ReturnsOnlyExpectedDefaultFindings(t *testing
 func TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals(t *testing.T) {
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
+	secondGroup := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_beta"})
 	weakRoute := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return nil, nil })
 	for index := range 8 {
 		action := actioncatalog.Action{Name: "weak_action_" + string(rune('a'+index)), Route: weakRoute}
@@ -91,9 +113,13 @@ func TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals(t *testing.T
 			action.Route.InputSchema = map[string]any{"properties": map[string]any{"project_id": map[string]any{}}}
 		}
 		group.SetAction(action)
+		secondGroup.SetAction(actioncatalog.Action{Name: "weak_action_" + string(rune('a'+index)), Route: weakRoute})
 	}
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)
+	}
+	if err := catalog.AddGroup(secondGroup); err != nil {
+		t.Fatalf("AddGroup(second) error = %v", err)
 	}
 
 	findings := AuditCatalogDiscoveryTerms(catalog)
@@ -101,8 +127,8 @@ func TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals(t *testing.T
 	if len(registryFindings) != len(findings) {
 		t.Fatalf("AuditRegistryDiscoveryTerms() returned %d findings, want %d", len(registryFindings), len(findings))
 	}
-	if len(findings) != 6 {
-		t.Fatalf("AuditCatalogDiscoveryTerms() returned %d findings, want 6: %+v", len(findings), findings)
+	if len(findings) != 14 {
+		t.Fatalf("AuditCatalogDiscoveryTerms() returned %d findings, want 14: %+v", len(findings), findings)
 	}
 	for _, ignored := range []string{"project.weak_action_a", "project.weak_action_b"} {
 		if slices.ContainsFunc(findings, func(finding CatalogDiscoveryFinding) bool { return finding.ID == ignored }) {
@@ -110,8 +136,13 @@ func TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals(t *testing.T
 		}
 	}
 	for _, finding := range findings {
-		if finding.Severity != "warning" || finding.Problem != "weak_discovery_terms" || finding.Tool != "gitlab_project" || finding.Message == "" {
+		if finding.Severity != "warning" || finding.Problem != "weak_discovery_terms" || finding.Message == "" {
 			t.Fatalf("finding = %+v, want populated weak discovery warning", finding)
+		}
+	}
+	for index := 1; index < len(findings); index++ {
+		if findings[index-1].Tool > findings[index].Tool {
+			t.Fatalf("findings not sorted by tool: %+v before %+v", findings[index-1], findings[index])
 		}
 	}
 }

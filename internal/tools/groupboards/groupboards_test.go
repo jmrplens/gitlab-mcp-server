@@ -550,6 +550,22 @@ func TestCreateGroupBoard_APIError(t *testing.T) {
 	}
 }
 
+// TestCreateGroupBoard_ValidationAPIError verifies validation failures include
+// guidance about unique names and referenced scope IDs.
+func TestCreateGroupBoard_ValidationAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Name has already been taken"}`)
+	}))
+
+	_, err := CreateGroupBoard(context.Background(), client, CreateGroupBoardInput{GroupID: "42", Name: "board"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "unique within the group") {
+		t.Fatalf("error = %q, want validation hint", err.Error())
+	}
+}
+
 // TestCreateGroupBoard_CancelledContext verifies CreateGroupBoard when cancelled context.
 func TestCreateGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
@@ -572,6 +588,22 @@ func TestUpdateGroupBoard_APIError(t *testing.T) {
 	_, err := UpdateGroupBoard(context.Background(), client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "x"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestUpdateGroupBoard_ValidationAPIError verifies validation failures include
+// guidance about referenced assignee, milestone, label, and weight values.
+func TestUpdateGroupBoard_ValidationAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"Invalid board scope"}`)
+	}))
+
+	_, err := UpdateGroupBoard(context.Background(), client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1, Name: "x"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "referenced assignee_id") {
+		t.Fatalf("error = %q, want validation hint", err.Error())
 	}
 }
 
@@ -672,6 +704,22 @@ func TestCreateGroupBoardList_APIError(t *testing.T) {
 	_, err := CreateGroupBoardList(context.Background(), client, CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 5})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestCreateGroupBoardList_ValidationAPIError verifies validation failures
+// include guidance about allowed list scopes and duplicate board lists.
+func TestCreateGroupBoardList_ValidationAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"List already exists"}`)
+	}))
+
+	_, err := CreateGroupBoardList(context.Background(), client, CreateGroupBoardListInput{GroupID: "42", BoardID: 1, LabelID: 5})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "same scope already exists") {
+		t.Fatalf("error = %q, want duplicate scope hint", err.Error())
 	}
 }
 

@@ -243,6 +243,9 @@ func TestResolveRequestOptions_IgnoredOptions(t *testing.T) {
 	if !options.HasIgnoredOptions() {
 		t.Fatal("HasIgnoredOptions() = false, want true")
 	}
+	if !options.HasDeprecatedOptions() {
+		t.Fatal("HasDeprecatedOptions() = false, want true")
+	}
 	ignored := options.IgnoredOptionsCopy()
 	want := []string{"META_TOOLS", "TOOL_SURFACE", "META_PARAM_SCHEMA", "RATE_LIMIT_RPS", RequestOptionGitLabURL}
 	if !slicesEqual(ignored, want) {

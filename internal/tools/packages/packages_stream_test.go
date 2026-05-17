@@ -9,7 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -97,6 +101,69 @@ func TestStreamDownloadPackageFile_CreatesDirectory(t *testing.T) {
 	}
 }
 
+// TestStreamDownloadPackageFile_WithProgressToken verifies Download wraps the
+// streaming writer when the MCP request includes a progress token.
+func TestStreamDownloadPackageFile_WithProgressToken(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	fileBody := strings.Repeat("stream-progress-block-", 4096)
+	client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))
+	outPath := filepath.Join(t.TempDir(), testOutputBin)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "package-download-test", Version: "0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "package_download_with_progress"}, func(ctx context.Context, req *mcp.CallToolRequest, input DownloadInput) (*mcp.CallToolResult, DownloadOutput, error) {
+		out, err := Download(ctx, req, client, input)
+		if err != nil {
+			return nil, DownloadOutput{}, err
+		}
+		return &mcp.CallToolResult{}, out, nil
+	})
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	progressSeen := make(chan struct{}, 1)
+	var once sync.Once
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "package-download-client"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, _ *mcp.ProgressNotificationClientRequest) {
+			once.Do(func() { progressSeen <- struct{}{} })
+		},
+	})
+	clientSession, err := mcpClient.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		_ = serverSession.Wait()
+	})
+
+	_, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name: "package_download_with_progress",
+		Arguments: map[string]any{
+			"project_id":      "42",
+			"package_name":    testPackageName,
+			"package_version": testPkgVersion,
+			"file_name":       testAppBin,
+			"output_path":     outPath,
+		},
+		Meta: mcp.Meta{"progressToken": "package-download-progress-token"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+
+	select {
+	case <-progressSeen:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for progress notification")
+	}
+}
+
 // TestStreamDownloadPackageFile_ContextCancelled verifies StreamDownloadPackageFile when context cancelled.
 func TestStreamDownloadPackageFile_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, testStreamServer(t, "data", http.StatusOK))
@@ -167,5 +234,27 @@ func TestStreamDownload_UnwritablePath(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for unwritable output path, got nil")
+	}
+}
+
+// TestStreamDownload_OutputPathIsDirectory verifies streamDownloadPackageFile
+// returns the os.Create error when the requested output path is a directory.
+func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
+	}))
+
+	_, err := Download(context.Background(), nil, client, DownloadInput{
+		ProjectID:      "42",
+		PackageName:    testPackageName,
+		PackageVersion: testPkgVersion,
+		FileName:       testAppBin,
+		OutputPath:     t.TempDir(),
+	})
+	if err == nil {
+		t.Fatal("expected error when output_path is a directory")
+	}
+	if !strings.Contains(err.Error(), "create output file") {
+		t.Fatalf("error = %q, want create output file message", err.Error())
 	}
 }

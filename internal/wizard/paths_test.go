@@ -17,6 +17,21 @@ func TestDefaultInstallDir_NotEmpty(t *testing.T) {
 	}
 }
 
+// TestDefaultInstallDir_LinuxUsesHomeLocalBin verifies the Linux install
+// default follows the documented ~/.local/bin convention.
+func TestDefaultInstallDir_LinuxUsesHomeLocalBin(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux-only test")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := DefaultInstallDir()
+	if !strings.HasSuffix(dir, ".local/bin") || !strings.HasPrefix(dir, home) {
+		t.Fatalf("DefaultInstallDir() = %q, want under temp HOME .local/bin", dir)
+	}
+}
+
 // TestDefaultBinaryName_Platform verifies DefaultBinaryName returns
 // "gitlab-mcp-server.exe" on Windows and "gitlab-mcp-server" elsewhere.
 func TestDefaultBinaryName_Platform(t *testing.T) {
@@ -140,6 +155,19 @@ func TestCrushConfigPath_Linux(t *testing.T) {
 	p := crushConfigPath()
 	if !strings.Contains(p, ".config/crush/crush.json") {
 		t.Errorf("crushConfigPath = %q, want to contain .config/crush/crush.json", p)
+	}
+}
+
+// TestCrushConfigPath_LinuxXDG verifies crushConfigPath honors XDG_CONFIG_HOME
+// through configDir on Linux.
+func TestCrushConfigPath_LinuxXDG(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux-only test")
+	}
+	t.Setenv("XDG_CONFIG_HOME", "/tmp/custom-config")
+	p := crushConfigPath()
+	if p != "/tmp/custom-config/crush/crush.json" {
+		t.Errorf("crushConfigPath = %q, want /tmp/custom-config/crush/crush.json", p)
 	}
 }
 

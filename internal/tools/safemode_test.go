@@ -176,6 +176,25 @@ func TestWrapMutatingToolsForSafeMode_MixedTools(t *testing.T) {
 	}
 }
 
+// TestSafeModeHandler_MarshalError verifies invalid raw arguments are surfaced
+// as an MCP tool error result rather than a Go error.
+func TestSafeModeHandler_MarshalError(t *testing.T) {
+	handler := safeModeHandler("gitlab_bad_args")
+	result, err := handler(context.Background(), &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+		Name:      "gitlab_bad_args",
+		Arguments: json.RawMessage(`{`),
+	}})
+	if err != nil {
+		t.Fatalf("safeModeHandler() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("safeModeHandler() result = %+v, want error result", result)
+	}
+	if text := extractText(t, result); text != "safe mode: failed to marshal preview" {
+		t.Fatalf("safe mode text = %q", text)
+	}
+}
+
 // callTool invokes a tool via an ephemeral in-memory MCP session and returns
 // the result.
 func callTool(t *testing.T, server *mcp.Server, name string, args json.RawMessage) *mcp.CallToolResult {

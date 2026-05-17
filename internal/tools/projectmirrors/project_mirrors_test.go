@@ -71,6 +71,28 @@ func TestRedactMirrorURL_RemovesEmbeddedCredentials(t *testing.T) {
 	}
 }
 
+// TestRedactMirrorURL_EdgeCases verifies URL redaction preserves safe URLs and
+// still redacts credential-looking text when URL parsing fails.
+func TestRedactMirrorURL_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "safe URL", in: "https://example.com/group/repo.git", want: "https://example.com/group/repo.git"},
+		{name: "invalid URL with credentials", in: "https://user:token@example.com/%zz", want: "https://[redacted]@example.com/%zz"},
+		{name: "invalid URL without credentials", in: "https://example.com/%zz", want: "https://example.com/%zz"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := redactMirrorURL(tt.in); got != tt.want {
+				t.Fatalf("redactMirrorURL(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestRedactMirrorError_RemovesEmbeddedCredentials verifies RedactMirrorError when removes embedded credentials.
 func TestRedactMirrorError_RemovesEmbeddedCredentials(t *testing.T) {
 	err := redactMirrorError(errors.New("mirror failed for https://user:secret-token@example.com/group/repo.git"))
@@ -83,6 +105,18 @@ func TestRedactMirrorError_RemovesEmbeddedCredentials(t *testing.T) {
 	}
 	if strings.Contains(msg, "secret-token") || strings.Contains(msg, "user:") {
 		t.Fatalf("redactMirrorError() = %q, want credentials removed", msg)
+	}
+}
+
+// TestRedactMirrorError_EdgeCases verifies nil errors and already-safe errors
+// are preserved without allocation or message changes.
+func TestRedactMirrorError_EdgeCases(t *testing.T) {
+	if redactMirrorError(nil) != nil {
+		t.Fatal("redactMirrorError(nil) should return nil")
+	}
+	err := errors.New("plain mirror error")
+	if got := redactMirrorError(err); !errors.Is(got, err) || got.Error() != err.Error() {
+		t.Fatalf("redactMirrorError(safe) = %v, want original error", got)
 	}
 }
 
@@ -146,6 +180,20 @@ func TestList_APIError(t *testing.T) {
 	_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
 	if err == nil {
 		t.Fatal("expected error for 403")
+	}
+}
+
+// TestList_NotFound verifies List returns the project lookup hint for 404s.
+func TestList_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Project Not Found"}`)
+	}))
+	_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
+	if err == nil {
+		t.Fatal("expected error for 404")
+	}
+	if !strings.Contains(err.Error(), "gitlab_project_get") {
+		t.Fatalf("error missing project lookup hint: %v", err)
 	}
 }
 
@@ -429,6 +477,38 @@ func TestAdd_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestAdd_ErrorBranches verifies Add handles validation-style and fallback API
+// errors while redacting credentialed mirror URLs from returned messages.
+func TestAdd_ErrorBranches(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		want       string
+	}{
+		{name: "bad request", statusCode: http.StatusBadRequest, want: "mirror URL is well-formed"},
+		{name: "fallback", statusCode: http.StatusUnprocessableEntity, want: "remote rejected mirror"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.statusCode, `{"message":"remote rejected mirror https://user:secret@example.com/repo.git"}`)
+			}))
+			_, err := Add(context.Background(), client, AddInput{ProjectID: testProjectID, URL: "https://user:secret@example.com/repo.git"})
+			if err == nil {
+				t.Fatal("expected API error")
+			}
+			msg := err.Error()
+			if !strings.Contains(msg, tt.want) {
+				t.Fatalf("error missing %q: %v", tt.want, err)
+			}
+			if strings.Contains(msg, "secret") || strings.Contains(msg, "user:") {
+				t.Fatalf("error leaked credentials: %v", err)
+			}
+		})
+	}
+}
+
 // Edit tests.
 
 // TestEdit_Success verifies that Edit updates a project push mirror on a successful GitLab API response.
@@ -490,6 +570,38 @@ func TestEdit_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestEdit_ErrorBranches verifies Edit handles not-found and fallback API
+// errors while redacting credentialed mirror URLs from returned messages.
+func TestEdit_ErrorBranches(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		want       string
+	}{
+		{name: "not found", statusCode: http.StatusNotFound, want: hintVerifyMirrorID},
+		{name: "fallback", statusCode: http.StatusUnprocessableEntity, want: "remote rejected mirror"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.statusCode, `{"message":"remote rejected mirror https://user:secret@example.com/repo.git"}`)
+			}))
+			_, err := Edit(context.Background(), client, EditInput{ProjectID: testProjectID, MirrorID: 42})
+			if err == nil {
+				t.Fatal("expected API error")
+			}
+			msg := err.Error()
+			if !strings.Contains(msg, tt.want) {
+				t.Fatalf("error missing %q: %v", tt.want, err)
+			}
+			if strings.Contains(msg, "secret") || strings.Contains(msg, "user:") {
+				t.Fatalf("error leaked credentials: %v", err)
+			}
+		})
+	}
+}
+
 // Delete tests.
 
 // TestDelete_Success verifies that Delete deletes a project push mirror on a successful GitLab API response.
@@ -541,6 +653,20 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestDelete_NotFound verifies Delete returns the shared mirror lookup hint for 404s.
+func TestDelete_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Mirror Not Found"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: testProjectID, MirrorID: 42})
+	if err == nil {
+		t.Fatal("expected error for 404")
+	}
+	if !strings.Contains(err.Error(), hintVerifyMirrorID) {
+		t.Fatalf("error missing mirror hint: %v", err)
+	}
+}
+
 // ForcePushUpdate tests.
 
 // TestForcePushUpdate_Success verifies that ForcePushUpdate triggers a force-push update on a project push mirror on a successful GitLab API response.
@@ -589,6 +715,21 @@ func TestForcePushUpdate_CancelledContext(t *testing.T) {
 	err := ForcePushUpdate(ctx, client, ForcePushInput{ProjectID: testProjectID, MirrorID: 42})
 	if err == nil {
 		t.Fatal("expected context error")
+	}
+}
+
+// TestForcePushUpdate_NotFound verifies ForcePushUpdate returns the shared
+// mirror lookup hint for 404s.
+func TestForcePushUpdate_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Mirror Not Found"}`)
+	}))
+	err := ForcePushUpdate(context.Background(), client, ForcePushInput{ProjectID: testProjectID, MirrorID: 42})
+	if err == nil {
+		t.Fatal("expected error for 404")
+	}
+	if !strings.Contains(err.Error(), hintVerifyMirrorID) {
+		t.Fatalf("error missing mirror hint: %v", err)
 	}
 }
 

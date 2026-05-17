@@ -125,6 +125,25 @@ func TestSeverityCount_ServerError(t *testing.T) {
 	}
 }
 
+// TestSeverityCount_ProjectNotFound verifies a nil project node returns a
+// project-specific not-found error.
+func TestSeverityCount_ProjectNotFound(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"vulnerabilitySeveritiesCount": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": null}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := SeverityCount(context.Background(), client, SeverityCountInput{ProjectPath: "g/missing"})
+	if err == nil {
+		t.Fatal("expected project not found error")
+	}
+	if !strings.Contains(err.Error(), "project \"g/missing\" not found") {
+		t.Fatalf("error = %q, want project not found message", err.Error())
+	}
+}
+
 // Pipeline security summary tests.
 
 // TestPipelineSecuritySummary_Success verifies that the pipeline security
@@ -283,6 +302,28 @@ func TestPipelineSecuritySummary_PipelineNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("error = %q, want to contain 'not found'", err.Error())
+	}
+}
+
+// TestPipelineSecuritySummary_ProjectNotFound verifies a nil project node
+// returns a project-specific not-found error before pipeline processing.
+func TestPipelineSecuritySummary_ProjectNotFound(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportSummary": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": null}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := PipelineSecuritySummary(context.Background(), client, PipelineSecuritySummaryInput{
+		ProjectPath: "g/missing",
+		PipelineIID: "42",
+	})
+	if err == nil {
+		t.Fatal("expected project not found error")
+	}
+	if !strings.Contains(err.Error(), "project \"g/missing\" not found") {
+		t.Fatalf("error = %q, want project not found message", err.Error())
 	}
 }
 

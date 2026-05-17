@@ -4,8 +4,53 @@ import (
 	"context"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
+
+// TestApplyToGroupSpecs_EmptyInputReturnsNil verifies empty catalog groups stay nil.
+func TestApplyToGroupSpecs_EmptyInputReturnsNil(t *testing.T) {
+	if groups := ApplyToGroupSpecs(nil); groups != nil {
+		t.Fatalf("ApplyToGroupSpecs(nil) = %+v, want nil", groups)
+	}
+}
+
+// TestApplyToGroupSpecs_ProjectsAllGroups verifies slice-level projection
+// forwards each group through ApplyToGroupSpec.
+func TestApplyToGroupSpecs_ProjectsAllGroups(t *testing.T) {
+	groups := ApplyToGroupSpecs([]actioncatalog.CatalogGroupSpec{
+		{ToolName: "gitlab_job", Actions: []toolutil.ActionSpec{toolutil.NewActionSpec("list", testCompatRoute(), toolutil.ActionSpecOptions{})}},
+	})
+	if len(groups) != 1 {
+		t.Fatalf("ApplyToGroupSpecs() returned %d groups, want 1", len(groups))
+	}
+	if len(groups[0].Actions[0].Compatibility.ActionAliases) != 1 {
+		t.Fatalf("action aliases = %+v, want projected alias", groups[0].Actions[0].Compatibility.ActionAliases)
+	}
+}
+
+// TestApplyToGroupSpec_ClonesAndUsesToolNameDomain verifies group projection clones inputs and falls back to the tool name domain.
+func TestApplyToGroupSpec_ClonesAndUsesToolNameDomain(t *testing.T) {
+	route := toolutil.ActionRoute{
+		Handler:     func(_ context.Context, _ map[string]any) (any, error) { return nil, nil },
+		InputSchema: map[string]any{"properties": map[string]any{"scope": map[string]any{}}},
+	}
+	original := actioncatalog.CatalogGroupSpec{
+		ToolName: "gitlab_job",
+		Actions:  []toolutil.ActionSpec{toolutil.NewActionSpec("list", route, toolutil.ActionSpecOptions{})},
+	}
+
+	projected := ApplyToGroupSpec(original)
+	if len(projected.Actions) != 1 {
+		t.Fatalf("projected actions = %d, want 1", len(projected.Actions))
+	}
+	if len(projected.Actions[0].Compatibility.ActionAliases) != 1 {
+		t.Fatalf("action aliases = %+v, want pipeline.jobs compatibility alias", projected.Actions[0].Compatibility.ActionAliases)
+	}
+	if len(original.Actions[0].Compatibility.ActionAliases) != 0 {
+		t.Fatalf("original action aliases = %+v, want original group unchanged", original.Actions[0].Compatibility.ActionAliases)
+	}
+}
 
 // TestApplyToActionSpecs_ProjectsCompatibilityMetadata verifies ApplyToActionSpecs projects compatibility metadata.
 func TestApplyToActionSpecs_ProjectsCompatibilityMetadata(t *testing.T) {
@@ -31,6 +76,13 @@ func TestApplyToActionSpecs_ProjectsCompatibilityMetadata(t *testing.T) {
 	}
 }
 
+// TestApplyToActionSpecs_EmptyInputReturnsNil verifies action projection keeps empty specs nil.
+func TestApplyToActionSpecs_EmptyInputReturnsNil(t *testing.T) {
+	if specs := ApplyToActionSpecs("gitlab_job", "job", nil); specs != nil {
+		t.Fatalf("ApplyToActionSpecs(nil) = %+v, want nil", specs)
+	}
+}
+
 // TestApplyToActionSpecs_PreservesUnsearchableActionAlias verifies ApplyToActionSpecs preserves unsearchable action alias.
 func TestApplyToActionSpecs_PreservesUnsearchableActionAlias(t *testing.T) {
 	specs := ApplyToActionSpecs("gitlab_repository", "repository", []toolutil.ActionSpec{
@@ -50,8 +102,19 @@ func TestApplyToActionSpecs_PreservesUnsearchableActionAlias(t *testing.T) {
 	}
 }
 
+// TestActionAliasSpecsForAction_Empty verifies no metadata is emitted for
+// actions without compatibility aliases.
+func TestActionAliasSpecsForAction_Empty(t *testing.T) {
+	if aliases := actionAliasSpecsForAction("get", nil); aliases != nil {
+		t.Fatalf("actionAliasSpecsForAction(nil) = %+v, want nil", aliases)
+	}
+}
+
 // TestNormalizeActionAlias_UsesCompatibilityPolicy verifies NormalizeActionAlias uses compatibility policy.
 func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
+	if normalized, ok := NormalizeActionAlias(" "); ok || normalized != "" {
+		t.Fatalf("NormalizeActionAlias(empty) = %q, %t; want empty false", normalized, ok)
+	}
 	canonical, ok := NormalizeActionAlias(" FEATURE_FLAG_USER_LIST.CREATE ")
 	if !ok || canonical != "feature_flags.ff_user_list_create" {
 		t.Fatalf("NormalizeActionAlias() = %q, %t; want feature_flags.ff_user_list_create, true", canonical, ok)
@@ -74,5 +137,12 @@ func TestNormalizeParamsWithExplanation_AppliesActionScopedPolicy(t *testing.T) 
 	}
 	if len(explanations) != 1 || explanations[0].Alias != "branch" || explanations[0].Canonical != "ref" {
 		t.Fatalf("explanations = %+v, want branch -> ref", explanations)
+	}
+}
+
+func testCompatRoute() toolutil.ActionRoute {
+	return toolutil.ActionRoute{
+		Handler:     func(context.Context, map[string]any) (any, error) { return nil, nil },
+		InputSchema: map[string]any{"properties": map[string]any{"scope": map[string]any{}}},
 	}
 }

@@ -61,6 +61,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		{"gitlab_mr_draft_note_list", map[string]any{"project_id": "42", "merge_request_iid": 1}},
 		{"gitlab_mr_draft_note_create", map[string]any{"project_id": "42", "merge_request_iid": 1, "note": "x"}},
 		{"gitlab_mr_draft_note_update", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 1, "note": "x"}},
+		{"gitlab_mr_draft_note_delete", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 1}},
 		{"gitlab_mr_draft_note_publish", map[string]any{"project_id": "42", "merge_request_iid": 1, "note_id": 1}},
 		{"gitlab_mr_draft_note_publish_all", map[string]any{"project_id": "42", "merge_request_iid": 1}},
 	}
@@ -199,6 +200,73 @@ func TestUpdate_MissingBody(t *testing.T) {
 	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", MRIID: 1, NoteID: 1})
 	if err == nil {
 		t.Fatal("expected error for missing body")
+	}
+}
+
+// TestCreate_BadRequest verifies Create returns guidance for invalid draft note payloads.
+func TestCreate_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ProjectID: "1", MRIID: 1, Note: "bad"})
+	if err == nil {
+		t.Fatal("expected bad request error")
+	}
+	if !strings.Contains(err.Error(), "note body is required") {
+		t.Fatalf("error = %v, want create payload hint", err)
+	}
+}
+
+// TestUpdate_Forbidden verifies Update returns guidance for author-only draft notes.
+func TestUpdate_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", MRIID: 1, NoteID: 1, Note: "updated"})
+	if err == nil {
+		t.Fatal("expected forbidden error")
+	}
+	if !strings.Contains(err.Error(), "only the draft author can update") {
+		t.Fatalf("error = %v, want author-only hint", err)
+	}
+}
+
+// TestCreateUpdate_InvalidPosition verifies inline draft notes reject files outside the MR diff.
+func TestCreateUpdate_InvalidPosition(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[{"new_path":"other.go","old_path":"other.go","diff":"@@ -1 +1 @@\n-old\n+new"}]`)
+	}))
+	position := &DiffPosition{BaseSHA: "base", StartSHA: "start", HeadSHA: "head", NewPath: "missing.go", NewLine: 1}
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "create",
+			run: func() error {
+				_, err := Create(context.Background(), client, CreateInput{ProjectID: "1", MRIID: 1, Note: "inline", Position: position})
+				return err
+			},
+		},
+		{
+			name: "update",
+			run: func() error {
+				_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", MRIID: 1, NoteID: 1, Note: "inline", Position: position})
+				return err
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.run()
+			if err == nil {
+				t.Fatal("expected invalid position error")
+			}
+			if !strings.Contains(err.Error(), "missing.go") {
+				t.Fatalf("error = %v, want missing file hint", err)
+			}
+		})
 	}
 }
 

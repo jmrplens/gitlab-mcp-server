@@ -9,10 +9,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
 // Shared format strings and URI prefix constants used across resource tests.
@@ -1459,5 +1464,1236 @@ func TestGroupLabelResource_Success(t *testing.T) {
 	}
 	if l.ID != 42 || l.Name != "bug" {
 		t.Errorf("got %+v", l)
+	}
+}
+
+// newTestClient creates a GitLab client pointed at a test HTTP server.
+func newTestClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
+	t.Helper()
+
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{
+		GitLabURL:     srv.URL,
+		GitLabToken:   "test-token",
+		SkipTLSVerify: false,
+	}
+
+	client, err := gitlabclient.NewClient(cfg)
+	if err != nil {
+		t.Fatalf("failed to create test gitlab client: %v", err)
+	}
+	return client
+}
+
+// respondJSON writes a JSON response with the given status code and body.
+func respondJSON(w http.ResponseWriter, status int, body string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(body))
+}
+
+// newMCPSession creates an in-memory MCP client session connected to a server
+// that has all resources registered against the given mock GitLab client.
+func newMCPSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
+	t.Helper()
+	client := newTestClient(t, handler)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	Register(server, client)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+
+	_, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+	return session
+}
+
+// TestMilestonesResource_WithDueDate exercises the DueDate != nil branch.
+func TestMilestonesResource_WithDueDate(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/milestones" {
+			respondJSON(w, http.StatusOK, `[
+				{"id":1,"iid":1,"title":"v1.0","description":"First","state":"active","web_url":"https://x.com/m/1","due_date":"2026-06-30"},
+				{"id":2,"iid":2,"title":"v2.0","description":"Second","state":"active","web_url":"https://x.com/m/2"}
+			]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
+		URI: "gitlab://project/42/milestones",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var milestones []MilestoneResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &milestones); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if milestones[0].DueDate == "" {
+		t.Error("expected DueDate to be set for first milestone")
+	}
+	if milestones[1].DueDate != "" {
+		t.Error("expected DueDate to be empty for second milestone (no due_date)")
+	}
+}
+
+// TestMilestoneResource_WithDueDate exercises DueDate on a single project milestone.
+func TestMilestoneResource_WithDueDate(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/milestones" {
+			respondJSON(w, http.StatusOK, `[{"id":3,"iid":3,"title":"v3.0","description":"Third","state":"active","web_url":"https://x.com/m/3","due_date":"2026-07-31"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/milestone/3"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var milestone MilestoneResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &milestone); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if milestone.DueDate == "" {
+		t.Error("expected DueDate to be set")
+	}
+}
+
+// TestGroupMilestoneResource_WithDueDate exercises DueDate on a single group milestone.
+func TestGroupMilestoneResource_WithDueDate(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/10/milestones" {
+			respondJSON(w, http.StatusOK, `[{"id":3,"iid":3,"title":"v3.0","description":"Third","state":"active","due_date":"2026-07-31"}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/10/milestone/3"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var milestone MilestoneResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &milestone); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if milestone.DueDate == "" {
+		t.Error("expected DueDate to be set")
+	}
+}
+
+// TestMergeRequestResource_NilAuthor exercises the nil author branch.
+func TestMergeRequestResource_NilAuthor(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/1" {
+			respondJSON(w, http.StatusOK, `{"id":1,"iid":1,"title":"No Author MR","state":"opened","source_branch":"dev","target_branch":"main","author":null,"web_url":"https://x.com/mr/1","detailed_merge_status":"mergeable"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
+		URI: "gitlab://project/42/mr/1",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var mr MRResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &mr); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if mr.Author != "" {
+		t.Errorf("expected empty author for nil author, got %q", mr.Author)
+	}
+	if mr.Title != "No Author MR" {
+		t.Errorf("title = %q, want %q", mr.Title, "No Author MR")
+	}
+}
+
+// TestMergeRequestDiscussionsResource_NilNote skips nil notes returned by GitLab.
+func TestMergeRequestDiscussionsResource_NilNote(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/merge_requests/7/discussions" {
+			respondJSON(w, http.StatusOK, `[{"id":"disc-1","individual_note":false,"notes":[null,{"id":1,"body":"hello","author":{"username":"alice"},"created_at":"2026-01-01T00:00:00Z"}]}]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/7/discussions"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var discussions []MRDiscussionResourceOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &discussions); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(discussions) != 1 || len(discussions[0].Notes) != 1 {
+		t.Fatalf("notes = %#v, want one non-nil note", discussions)
+	}
+}
+
+// Resource API error tests.
+
+// TestCurrentUserResource_APIError verifies that the current_user resource
+// returns an error when the GitLab API responds with 401 Unauthorized.
+func TestCurrentUserResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://user/current"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestGroupsResource_APIError verifies that the groups resource returns an
+// error when the GitLab API responds with an error status code.
+func TestGroupsResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusBadRequest, `{"message":"Bad Request"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://groups"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestProjectResource_APIError verifies that the project resource returns an
+// error when the GitLab API responds with 404 Not Found.
+func TestProjectResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/999"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestProjectMembersResource_APIError verifies that the project_members
+// resource returns an error when the GitLab API responds with 403 Forbidden.
+func TestProjectMembersResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/members"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestLatestPipelineResource_APIError verifies that the latest_pipeline
+// resource returns an error when the GitLab API responds with 404 Not Found.
+func TestLatestPipelineResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/pipelines/latest"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestPipelineResource_APIError verifies that the pipeline resource returns
+// an error when the GitLab API responds with 404 Not Found.
+func TestPipelineResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/pipeline/100"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestPipelineJobsResource_APIError verifies that the pipeline_jobs resource
+// returns an error when the GitLab API responds with 404 Not Found.
+func TestPipelineJobsResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/pipeline/100/jobs"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestProjectLabelsResource_APIError verifies that the project_labels resource
+// returns an error when the GitLab API responds with 404 Not Found.
+func TestProjectLabelsResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/labels"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestProjectMilestonesResource_APIError verifies that the project_milestones
+// resource returns an error when the GitLab API responds with 404 Not Found.
+func TestProjectMilestonesResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/milestones"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestMergeRequestResource_APIError verifies that the merge_request resource
+// returns an error when the GitLab API responds with 404 Not Found.
+func TestMergeRequestResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/1"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestProjectBranchesResource_APIError verifies that the project_branches
+// resource returns an error when the GitLab API responds with 404 Not Found.
+func TestProjectBranchesResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/branches"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// URI edge-case tests — empty and missing identifiers.
+
+// TestProjectResource_EmptyID verifies that the project resource returns an
+// error when the URI has an empty project identifier (gitlab://project/).
+func TestProjectResource_EmptyID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called for empty project ID")
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID")
+	}
+}
+
+// TestLatestPipelineResource_EmptyProjectID verifies that the latest_pipeline
+// resource returns an error when the project ID segment is empty.
+func TestLatestPipelineResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called for empty project ID")
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//pipelines/latest"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in latest pipeline URI")
+	}
+}
+
+// TestGroupResource_EmptyID verifies that the group resource returns an error
+// when the URI has an empty group identifier (gitlab://group/).
+func TestGroupResource_EmptyID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called for empty group ID")
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/"})
+	if err == nil {
+		t.Fatal("expected error for empty group ID")
+	}
+}
+
+// TestPipelineResource_InvalidPipelineID verifies that the pipeline resource
+// returns an error when the pipeline ID in the URI is not a valid number.
+func TestPipelineResource_InvalidPipelineID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called for invalid pipeline ID")
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/pipeline/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric pipeline ID")
+	}
+}
+
+// TestPipelineJobsResource_InvalidPipelineID verifies that the pipeline_jobs
+// resource returns an error when the pipeline ID in the URI is non-numeric.
+func TestPipelineJobsResource_InvalidPipelineID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called for invalid pipeline ID")
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/pipeline/abc/jobs"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric pipeline ID")
+	}
+}
+
+// TestMergeRequestResource_InvalidMRIID verifies that the merge_request
+// resource returns an error when the MR IID in the URI is non-numeric.
+func TestMergeRequestResource_InvalidMRIID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("handler should not be called for invalid MR IID")
+	}))
+
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric MR IID")
+	}
+}
+
+// marshalResourceJSON error test.
+
+// TestMarshalResourceJSON_Error verifies that [marshalResourceJSON] returns an
+// error when given a value that cannot be serialized to JSON (a channel).
+func TestMarshalResourceJSON_Error(t *testing.T) {
+	_, err := marshalResourceJSON(make(chan int))
+	if err == nil {
+		t.Fatal("expected error for un-marshalable value")
+	}
+}
+
+// extractSuffix/extractMiddle/extractTwoParts edge cases.
+
+// TestExtractSuffix_EmptyResult verifies that [extractSuffix] returns an empty
+// string when the URI exactly equals the prefix with no trailing content.
+func TestExtractSuffix_EmptyResult(t *testing.T) {
+	result := extractSuffix("gitlab://user/current", "gitlab://user/current")
+	if result != "" {
+		t.Errorf("expected empty string, got %q", result)
+	}
+}
+
+// TestExtractMiddle_EmptyResult verifies that [extractMiddle] returns an empty
+// string when the middle segment between prefix and suffix is empty.
+func TestExtractMiddle_EmptyResult(t *testing.T) {
+	result := extractMiddle("gitlab://project//pipelines/latest", "gitlab://project/", "/pipelines/latest")
+	if result != "" {
+		t.Errorf("expected empty string, got %q", result)
+	}
+}
+
+// TestExtractMiddle_NoSuffix verifies that [extractMiddle] returns an empty
+// string when the URI does not contain the expected suffix.
+func TestExtractMiddle_NoSuffix(t *testing.T) {
+	result := extractMiddle("gitlab://project/42", "gitlab://project/", "/pipelines/latest")
+	if result != "" {
+		t.Errorf("expected empty string, got %q", result)
+	}
+}
+
+// TestExtractTwoParts_MissingSeparator verifies that [extractTwoParts]
+// returns empty strings when the URI does not contain the separator.
+func TestExtractTwoParts_MissingSeparator(t *testing.T) {
+	a, b := extractTwoParts("gitlab://project/42", "gitlab://project/", "/pipeline/")
+	if a != "" || b != "" {
+		t.Errorf("expected empty strings, got %q and %q", a, b)
+	}
+}
+
+// TestExtractTwoParts_EmptySecondPart verifies that [extractTwoParts] returns
+// empty strings when the second segment after the separator is empty.
+func TestExtractTwoParts_EmptySecondPart(t *testing.T) {
+	a, b := extractTwoParts("gitlab://project/42/pipeline/", "gitlab://project/", "/pipeline/")
+	if a != "" || b != "" {
+		t.Errorf("expected empty strings, got %q and %q", a, b)
+	}
+}
+
+// Empty URI tests for remaining template resources — each covers the
+// "extracted ID is empty" guard that returns mcp.ResourceNotFoundError.
+
+// TestProjectMembersResource_EmptyProjectID verifies that ProjectMembersResource returns a validation error when project_id is empty.
+func TestProjectMembersResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//members"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in members URI")
+	}
+}
+
+// TestProjectLabelsResource_EmptyProjectID verifies that ProjectLabelsResource returns a validation error when project_id is empty.
+func TestProjectLabelsResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//labels"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in labels URI")
+	}
+}
+
+// TestProjectMilestonesResource_EmptyProjectID verifies that ProjectMilestonesResource returns a validation error when project_id is empty.
+func TestProjectMilestonesResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//milestones"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in milestones URI")
+	}
+}
+
+// TestProjectBranchesResource_EmptyProjectID verifies that ProjectBranchesResource returns a validation error when project_id is empty.
+func TestProjectBranchesResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//branches"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in branches URI")
+	}
+}
+
+// TestGroupMembersResource_EmptyGroupID verifies that GroupMembersResource returns a validation error when group_id is empty.
+func TestGroupMembersResource_EmptyGroupID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty group ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group//members"})
+	if err == nil {
+		t.Fatal("expected error for empty group ID in members URI")
+	}
+}
+
+// TestGroupProjectsResource_EmptyGroupID verifies that GroupProjectsResource returns a validation error when group_id is empty.
+func TestGroupProjectsResource_EmptyGroupID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty group ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group//projects"})
+	if err == nil {
+		t.Fatal("expected error for empty group ID in projects URI")
+	}
+}
+
+// TestProjectIssuesResource_EmptyProjectID verifies that ProjectIssuesResource returns a validation error when project_id is empty.
+func TestProjectIssuesResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//issues"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in issues URI")
+	}
+}
+
+// TestIssueResource_EmptyProjectID verifies that IssueResource returns a validation error when project_id is empty.
+func TestIssueResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//issue/1"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in issue URI")
+	}
+}
+
+// TestProjectReleasesResource_EmptyProjectID verifies that ProjectReleasesResource returns a validation error when project_id is empty.
+func TestProjectReleasesResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//releases"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in releases URI")
+	}
+}
+
+// TestProjectTagsResource_EmptyProjectID verifies that ProjectTagsResource returns a validation error when project_id is empty.
+func TestProjectTagsResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not call API for empty project ID")
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//tags"})
+	if err == nil {
+		t.Fatal("expected error for empty project ID in tags URI")
+	}
+}
+
+// TestGroupResource_APIError verifies that GroupResource returns an error when the GitLab API responds with a failure status.
+func TestGroupResource_APIError(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusForbidden, `{"message":"403"}`)
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/10"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestWorkflowGuides_ReadSuccess verifies that RegisterWorkflowGuides creates
+// resources that can be read back via MCP and return markdown content.
+func TestWorkflowGuides_ReadSuccess(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterWorkflowGuides(server)
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "tc", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.ReadResource(ctx, &mcp.ReadResourceParams{URI: "gitlab://guides/git-workflow"})
+	if err != nil {
+		t.Fatalf("unexpected error reading workflow guide: %v", err)
+	}
+	if len(result.Contents) == 0 {
+		t.Fatal("expected at least 1 content item")
+	}
+	if result.Contents[0].Text == "" {
+		t.Error("expected non-empty markdown content")
+	}
+}
+
+// errAPIHandler returns an http.Handler that responds with the given status
+// code and a generic GitLab error JSON body. Used to verify that resource
+// handlers propagate GitLab API errors as MCP errors.
+func errAPIHandler(status int) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, status, `{"message":"error"}`)
+	}
+}
+
+// noAPICallHandler returns an http.Handler that fails the test if the
+// resource handler attempts to call the GitLab API. Used for empty-ID and
+// invalid-ID URI tests where the handler must short-circuit before any
+// network call.
+func noAPICallHandler(t *testing.T) http.HandlerFunc {
+	t.Helper()
+	return func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("handler should not call API, got %s %s", r.Method, r.URL.Path)
+	}
+}
+
+// API error tests for single-resource handlers that lacked one.
+
+// TestReleaseResource_APIError verifies that the release resource returns an
+// error when the GitLab API responds with a failure status.
+func TestReleaseResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusInternalServerError))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/release/v1.0.0"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestBranchResource_APIError verifies that the branch resource returns an
+// error when the GitLab API responds with 404.
+func TestBranchResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/branch/missing"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestTagResource_APIError verifies that the tag resource returns an error
+// when the GitLab API responds with 404.
+func TestTagResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/tag/v9.9.9"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestLabelResource_APIError verifies that the label resource returns an
+// error when the GitLab API responds with 404.
+func TestLabelResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/label/999"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestMilestoneResource_APIError verifies that the milestone resource
+// returns an error when the GitLab API list call fails.
+func TestMilestoneResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusInternalServerError))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/milestone/3"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestIssueResource_APIError verifies that the singleton issue resource
+// propagates GitLab API failures.
+func TestIssueResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusForbidden))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/issue/7"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestFileBlobResource_APIError verifies that the file_blob resource returns
+// ResourceNotFoundError when the file lookup fails.
+func TestFileBlobResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/file/main/README.md"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestMergeRequestNotesResource_APIError verifies MR note listing failures are
+// wrapped and returned.
+func TestMergeRequestNotesResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusForbidden))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/7/notes"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestDeploymentResource_APIError verifies that the deployment resource
+// returns an error when the GitLab API responds with 404.
+func TestDeploymentResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/deployment/17"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestEnvironmentResource_APIError verifies that the environment resource
+// returns an error when the GitLab API responds with 404.
+func TestEnvironmentResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/environment/7"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestJobResource_APIError verifies that the job resource returns an error
+// when the GitLab API responds with 404.
+func TestJobResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/job/555"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestSnippetResource_APIError verifies that the snippet resource returns
+// an error when the GitLab API responds with 404.
+func TestSnippetResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://snippet/123"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestProjectSnippetResource_APIError verifies that the project_snippet
+// resource returns an error when the GitLab API responds with 404.
+func TestProjectSnippetResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/snippet/123"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestFeatureFlagResource_APIError verifies that the feature_flag resource
+// returns an error when the GitLab API responds with 404.
+func TestFeatureFlagResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/feature_flag/my_flag"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestDeployKeyResource_APIError verifies that the deploy_key resource
+// returns an error when the GitLab API responds with 404.
+func TestDeployKeyResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/deploy_key/9"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestBoardResource_APIError verifies that the board resource returns an
+// error when the GitLab API responds with 404.
+func TestBoardResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/board/3"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestGroupMilestoneResource_APIError verifies that the group_milestone
+// resource returns an error when the GitLab API list call fails.
+func TestGroupMilestoneResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusInternalServerError))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/10/milestone/3"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// TestGroupMilestoneResource_NotFound verifies that the group_milestone
+// resource returns ResourceNotFoundError when the IID does not exist (the
+// list endpoint returns an empty array).
+func TestGroupMilestoneResource_NotFound(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	}))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/10/milestone/99"})
+	if err == nil {
+		t.Fatal("expected error for unknown group milestone IID")
+	}
+}
+
+// TestGroupLabelResource_APIError verifies that the group_label resource
+// returns an error when the GitLab API responds with 404.
+func TestGroupLabelResource_APIError(t *testing.T) {
+	session := newMCPSession(t, errAPIHandler(http.StatusNotFound))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/10/label/bug"})
+	if err == nil {
+		t.Fatal(msgExpectedAPIErr)
+	}
+}
+
+// Invalid-numeric-ID tests for handlers that call strconv.Atoi/ParseInt.
+
+// TestMilestoneResource_InvalidIID verifies that the milestone resource
+// returns ResourceNotFoundError when the milestone IID is not numeric.
+func TestMilestoneResource_InvalidIID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/milestone/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric milestone IID")
+	}
+}
+
+// TestDeploymentResource_InvalidID verifies that the deployment resource
+// returns ResourceNotFoundError when the deployment ID is not numeric.
+func TestDeploymentResource_InvalidID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/deployment/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric deployment ID")
+	}
+}
+
+// TestEnvironmentResource_InvalidID verifies that the environment resource
+// returns ResourceNotFoundError when the environment ID is not numeric.
+func TestEnvironmentResource_InvalidID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/environment/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric environment ID")
+	}
+}
+
+// TestJobResource_InvalidID verifies that the job resource returns
+// ResourceNotFoundError when the job ID is not numeric.
+func TestJobResource_InvalidID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/job/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric job ID")
+	}
+}
+
+// TestSnippetResource_InvalidID verifies that the snippet resource returns
+// ResourceNotFoundError when the snippet ID is not numeric.
+func TestSnippetResource_InvalidID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://snippet/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric snippet ID")
+	}
+}
+
+// TestProjectSnippetResource_InvalidID verifies that the project_snippet
+// resource returns ResourceNotFoundError when the snippet ID is not numeric.
+func TestProjectSnippetResource_InvalidID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/snippet/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric project snippet ID")
+	}
+}
+
+// TestDeployKeyResource_InvalidID verifies that the deploy_key resource
+// returns ResourceNotFoundError when the deploy key ID is not numeric.
+func TestDeployKeyResource_InvalidID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/deploy_key/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric deploy key ID")
+	}
+}
+
+// TestBoardResource_InvalidID verifies that the board resource returns
+// ResourceNotFoundError when the board ID is not numeric.
+func TestBoardResource_InvalidID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/board/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric board ID")
+	}
+}
+
+// TestGroupMilestoneResource_InvalidIID verifies that the group_milestone
+// resource returns ResourceNotFoundError when the milestone IID is not
+// numeric.
+func TestGroupMilestoneResource_InvalidIID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/10/milestone/abc"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric group milestone IID")
+	}
+}
+
+// Empty-URI guard tests for resources that did not have an empty-ID test.
+
+// TestReleaseResource_EmptyProjectID verifies that the release resource
+// returns ResourceNotFoundError when the project_id segment is empty.
+func TestReleaseResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//release/v1.0.0"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in release URI")
+	}
+}
+
+// TestBranchResource_EmptyProjectID verifies that the singleton branch
+// resource returns ResourceNotFoundError when the project_id segment is empty.
+func TestBranchResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//branch/main"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in branch URI")
+	}
+}
+
+// TestTagResource_EmptyProjectID verifies that the singleton tag resource
+// returns ResourceNotFoundError when the project_id segment is empty.
+func TestTagResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//tag/v1.0.0"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in tag URI")
+	}
+}
+
+// TestLabelResource_EmptyProjectID verifies that the singleton label
+// resource returns ResourceNotFoundError when the project_id segment is empty.
+func TestLabelResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//label/5"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in label URI")
+	}
+}
+
+// TestMilestoneResource_EmptyProjectID verifies that the singleton milestone
+// resource returns ResourceNotFoundError when the project_id segment is empty.
+func TestMilestoneResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//milestone/3"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in milestone URI")
+	}
+}
+
+// TestDeploymentResource_EmptyProjectID verifies that the deployment
+// resource returns ResourceNotFoundError when the project_id segment is empty.
+func TestDeploymentResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//deployment/17"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in deployment URI")
+	}
+}
+
+// TestEnvironmentResource_EmptyProjectID verifies that the environment
+// resource returns ResourceNotFoundError when the project_id segment is empty.
+func TestEnvironmentResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//environment/7"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in environment URI")
+	}
+}
+
+// TestJobResource_EmptyProjectID verifies that the job resource returns
+// ResourceNotFoundError when the project_id segment is empty.
+func TestJobResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//job/555"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in job URI")
+	}
+}
+
+// TestSnippetResource_EmptyID verifies that the personal snippet resource
+// returns ResourceNotFoundError when the snippet ID is missing.
+func TestSnippetResource_EmptyID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://snippet/"})
+	if err == nil {
+		t.Fatal("expected error for empty snippet ID")
+	}
+}
+
+// TestProjectSnippetResource_EmptyProjectID verifies that the project
+// snippet resource returns ResourceNotFoundError when the project_id segment
+// is empty.
+func TestProjectSnippetResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//snippet/123"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in snippet URI")
+	}
+}
+
+// TestFeatureFlagResource_EmptyProjectID verifies that the feature_flag
+// resource returns ResourceNotFoundError when the project_id segment is empty.
+func TestFeatureFlagResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//feature_flag/my_flag"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in feature_flag URI")
+	}
+}
+
+// TestDeployKeyResource_EmptyProjectID verifies that the deploy_key resource
+// returns ResourceNotFoundError when the project_id segment is empty.
+func TestDeployKeyResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//deploy_key/9"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in deploy_key URI")
+	}
+}
+
+// TestBoardResource_EmptyProjectID verifies that the board resource returns
+// ResourceNotFoundError when the project_id segment is empty.
+func TestBoardResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//board/3"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in board URI")
+	}
+}
+
+// TestGroupMilestoneResource_EmptyGroupID verifies that the group_milestone
+// resource returns ResourceNotFoundError when the group_id segment is empty.
+func TestGroupMilestoneResource_EmptyGroupID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group//milestone/3"})
+	if err == nil {
+		t.Fatal("expected error for empty group_id in milestone URI")
+	}
+}
+
+// TestGroupLabelResource_EmptyGroupID verifies that the group_label
+// resource returns ResourceNotFoundError when the group_id segment is empty.
+func TestGroupLabelResource_EmptyGroupID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group//label/bug"})
+	if err == nil {
+		t.Fatal("expected error for empty group_id in group label URI")
+	}
+}
+
+// TestPipelineResource_EmptyProjectID verifies that the pipeline resource
+// returns ResourceNotFoundError when the project_id segment is empty.
+func TestPipelineResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//pipeline/100"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in pipeline URI")
+	}
+}
+
+// TestPipelineJobsResource_EmptyProjectID verifies that the pipeline_jobs
+// resource returns ResourceNotFoundError when the project_id segment is empty.
+func TestPipelineJobsResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//pipeline/100/jobs"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in pipeline_jobs URI")
+	}
+}
+
+// TestMergeRequestNotesResource_EmptyProjectID verifies that the
+// merge_request_notes resource returns ResourceNotFoundError when the
+// project_id segment is empty.
+func TestMergeRequestNotesResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//mr/7/notes"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in MR notes URI")
+	}
+}
+
+// TestMergeRequestResource_EmptyProjectID verifies the singleton merge request
+// resource rejects an empty project_id before calling GitLab.
+func TestMergeRequestResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//mr/7"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in MR URI")
+	}
+}
+
+// TestMergeRequestDiscussionsResource_EmptyProjectID verifies that the
+// merge_request_discussions resource returns ResourceNotFoundError when the
+// project_id segment is empty.
+func TestMergeRequestDiscussionsResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//mr/7/discussions"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in MR discussions URI")
+	}
+}
+
+// TestMergeRequestDiscussionsResource_BadIID verifies that a non-numeric MR
+// IID returns a resource-not-found error from the discussions handler.
+func TestMergeRequestDiscussionsResource_BadIID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/notanumber/discussions"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric MR IID in discussions URI")
+	}
+}
+
+// TestWikiResource_EmptyProjectID verifies that the wiki_page resource
+// returns ResourceNotFoundError when the project_id segment is empty.
+func TestWikiResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//wiki/some-page"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in wiki URI")
+	}
+}
+
+// TestCommitResource_EmptyProjectID verifies that the commit resource
+// returns ResourceNotFoundError when the project_id segment is empty.
+func TestCommitResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//commit/abc123"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in commit URI")
+	}
+}
+
+// TestFileBlobResource_EmptyProjectID verifies that the file_blob resource
+// returns ResourceNotFoundError when the project_id segment is empty.
+func TestFileBlobResource_EmptyProjectID(t *testing.T) {
+	session := newMCPSession(t, noAPICallHandler(t))
+	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project//file/main/README.md"})
+	if err == nil {
+		t.Fatal("expected error for empty project_id in file_blob URI")
+	}
+}
+
+// Direct decodeFileContent unit tests covering nil input, plain-text and
+// binary encodings, base64 decode error, and post-decode binary detection.
+
+// TestDecodeFileContent_Nil verifies that [decodeFileContent] returns
+// ("", "binary") when given a nil [gl.File] pointer.
+func TestDecodeFileContent_Nil(t *testing.T) {
+	content, category := decodeFileContent(nil)
+	if content != "" || category != "binary" {
+		t.Errorf("decodeFileContent(nil) = (%q, %q), want (\"\", \"binary\")", content, category)
+	}
+}
+
+// TestDecodeFileContent_PlainTextEncoding verifies that a file with a
+// non-base64 encoding and a textual file name returns the raw content as text.
+func TestDecodeFileContent_PlainTextEncoding(t *testing.T) {
+	f := &gl.File{FileName: "README.md", Encoding: "text", Content: "hello world"}
+	content, category := decodeFileContent(f)
+	if content != "hello world" || category != "text" {
+		t.Errorf("decodeFileContent(plain) = (%q, %q), want (\"hello world\", \"text\")", content, category)
+	}
+}
+
+// TestDecodeFileContent_PlainTextEncoding_BinaryFile verifies that a file
+// with a non-base64 encoding but a binary file extension returns
+// ("", "binary"), suppressing content for the JSON response.
+func TestDecodeFileContent_PlainTextEncoding_BinaryFile(t *testing.T) {
+	f := &gl.File{FileName: "archive.zip", Encoding: "text", Content: "ignored"}
+	content, category := decodeFileContent(f)
+	if content != "" || category != "binary" {
+		t.Errorf("decodeFileContent(binary plain) = (%q, %q), want (\"\", \"binary\")", content, category)
+	}
+}
+
+// TestDecodeFileContent_Base64DecodeError verifies that an invalid base64
+// payload causes [decodeFileContent] to return ("", "binary").
+func TestDecodeFileContent_Base64DecodeError(t *testing.T) {
+	f := &gl.File{FileName: "README.md", Encoding: "base64", Content: "!!!not-base64!!!"}
+	content, category := decodeFileContent(f)
+	if content != "" || category != "binary" {
+		t.Errorf("decodeFileContent(invalid base64) = (%q, %q), want (\"\", \"binary\")", content, category)
+	}
+}
+
+// TestDecodeFileContent_Base64BinaryFile verifies that a file with a binary
+// extension (e.g. .pdf) returns ("", "binary") even when the base64 content
+// decodes successfully, suppressing the binary payload.
+func TestDecodeFileContent_Base64BinaryFile(t *testing.T) {
+	// "aGVsbG8=" decodes to "hello"; the .pdf extension forces binary classification.
+	f := &gl.File{FileName: "manual.pdf", Encoding: "base64", Content: "aGVsbG8="}
+	content, category := decodeFileContent(f)
+	if content != "" || category != "binary" {
+		t.Errorf("decodeFileContent(binary base64) = (%q, %q), want (\"\", \"binary\")", content, category)
 	}
 }

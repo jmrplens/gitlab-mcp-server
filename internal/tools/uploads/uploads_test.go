@@ -12,7 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -197,6 +199,88 @@ func TestProjectUpload_SendsFileContent(t *testing.T) {
 
 	if out.Markdown != "![document](/uploads/def456/document.txt)" {
 		t.Errorf("unexpected markdown: %q", out.Markdown)
+	}
+}
+
+// TestProjectUpload_WithProgressToken verifies Upload wraps the request body
+// with a progress reader when the MCP request includes a progress token.
+func TestProjectUpload_WithProgressToken(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathProjectUploads || r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if err := r.ParseMultipartForm(10 << 20); err != nil {
+			t.Fatalf("failed to parse multipart form: %v", err)
+		}
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			t.Fatalf("failed to get form file: %v", err)
+		}
+		defer file.Close()
+		if _, err = io.Copy(io.Discard, file); err != nil {
+			t.Fatalf("failed to read uploaded file: %v", err)
+		}
+		testutil.RespondJSON(w, http.StatusCreated, `{
+			"alt": "progress.txt",
+			"url": "/uploads/progress/progress.txt",
+			"full_path": "/g/p/uploads/progress/progress.txt",
+			"markdown": "![progress.txt](/uploads/progress/progress.txt)"
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "upload-test-server", Version: "0.0.1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "upload_with_progress"}, func(ctx context.Context, req *mcp.CallToolRequest, input UploadInput) (*mcp.CallToolResult, UploadOutput, error) {
+		out, err := Upload(ctx, req, client, input)
+		if err != nil {
+			return nil, UploadOutput{}, err
+		}
+		return UploadToolResult(out), out, nil
+	})
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	progressSeen := make(chan struct{}, 1)
+	var once sync.Once
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "upload-test-client"}, &mcp.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, _ *mcp.ProgressNotificationClientRequest) {
+			once.Do(func() { progressSeen <- struct{}{} })
+		},
+	})
+	clientSession, err := mcpClient.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		_ = serverSession.Wait()
+	})
+
+	_, err = clientSession.CallTool(ctx, &mcp.CallToolParams{
+		Name: "upload_with_progress",
+		Arguments: map[string]any{
+			"project_id":     "42",
+			"filename":       "progress.txt",
+			"content_base64": base64.StdEncoding.EncodeToString([]byte("progress payload")),
+		},
+		Meta: mcp.Meta{"progressToken": "upload-progress-token"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+
+	select {
+	case <-progressSeen:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for progress notification")
 	}
 }
 

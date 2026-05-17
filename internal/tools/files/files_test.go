@@ -1232,19 +1232,38 @@ func TestFormatOutputMarkdown(t *testing.T) {
 
 // TestFormatFileInfoMarkdown verifies FormatFileInfoMarkdown.
 func TestFormatFileInfoMarkdown(t *testing.T) {
-	got := FormatFileInfoMarkdown(FileInfoOutput{
-		FilePath: "new_file.txt",
-		Branch:   "feature",
-	})
-	for _, want := range []string{
-		"## File Operation Result",
-		"**File**: new_file.txt",
-		"**Branch**: feature",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
+	t.Run("without commit IDs", func(t *testing.T) {
+		got := FormatFileInfoMarkdown(FileInfoOutput{
+			FilePath: "new_file.txt",
+			Branch:   "feature",
+		})
+		for _, want := range []string{
+			"## File Operation Result",
+			"**File**: new_file.txt",
+			"**Branch**: feature",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
+			}
 		}
-	}
+		if strings.Contains(got, "Commit ID") {
+			t.Errorf("FormatFileInfoMarkdown should omit empty commit IDs:\n%s", got)
+		}
+	})
+
+	t.Run("with commit IDs", func(t *testing.T) {
+		got := FormatFileInfoMarkdown(FileInfoOutput{
+			FilePath:     "new_file.txt",
+			Branch:       "feature",
+			CommitID:     "commit123",
+			LastCommitID: "last456",
+		})
+		for _, want := range []string{"**Commit ID**: commit123", "**Last commit ID**: last456"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("FormatFileInfoMarkdown missing %q in:\n%s", want, got)
+			}
+		}
+	})
 }
 
 // TestFormatBlameMarkdown verifies FormatBlameMarkdown.
@@ -1664,5 +1683,75 @@ func TestFileDelete_ServerError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for 500, got nil")
+	}
+}
+
+// TestFileCreate_OptionalFields covers optional fields in Create.
+func TestFileCreate_OptionalFields(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, `{"file_path":"f.go","branch":"main"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID:     "1",
+		Branch:        "main",
+		CommitMessage: "add",
+		Content:       "data",
+		StartBranch:   "dev",
+		Encoding:      "text",
+		AuthorEmail:   "a@b.com",
+		AuthorName:    "A",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestFileUpdate_OptionalFields covers optional fields in Update.
+func TestFileUpdate_OptionalFields(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"file_path":"f.go","branch":"main"}`)
+	})
+	client := testutil.NewTestClient(t, mux)
+	fm := true
+	_, err := Update(context.Background(), client, UpdateInput{
+		ProjectID:       "1",
+		FilePath:        "f.go",
+		Branch:          "main",
+		CommitMessage:   "up",
+		Content:         "data",
+		StartBranch:     "dev",
+		Encoding:        "text",
+		AuthorEmail:     "a@b.com",
+		AuthorName:      "A",
+		LastCommitID:    "abc",
+		ExecuteFilemode: &fm,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestFileDelete_OptionalFields covers optional fields in Delete.
+func TestFileDelete_OptionalFields(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	client := testutil.NewTestClient(t, mux)
+	err := Delete(context.Background(), client, DeleteInput{
+		ProjectID:     "1",
+		FilePath:      "f.go",
+		Branch:        "main",
+		CommitMessage: "del",
+		StartBranch:   "dev",
+		AuthorEmail:   "a@b.com",
+		AuthorName:    "A",
+		LastCommitID:  "abc",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

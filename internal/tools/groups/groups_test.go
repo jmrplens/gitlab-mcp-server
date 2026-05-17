@@ -1359,6 +1359,20 @@ func TestTransferProject_ServerError(t *testing.T) {
 	}
 }
 
+// TestTransferProject_BadRequest verifies TransferProject returns the compatibility hint for 400 responses.
+func TestTransferProject_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
+	}))
+	_, err := TransferProject(context.Background(), client, TransferInput{GroupID: "99", ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error on bad request, got nil")
+	}
+	if !strings.Contains(err.Error(), "target group is incompatible") {
+		t.Fatalf("error = %v, want compatibility hint", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ListProjects — canceled context, with optional filter fields
 // ---------------------------------------------------------------------------.

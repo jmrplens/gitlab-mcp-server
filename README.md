@@ -522,7 +522,7 @@ Numbers nobody asked for, but here they are anyway.
 
 | Record | File |
 | --- | --- |
-| Longest source file | `cmd/eval_meta_tools/main.go` — 8,540 lines |
+| Longest source file | `cmd/eval_mcp_surfaces/main.go` — 8,540 lines |
 | Longest test file | `internal/tools/projects/projects_test.go` — 6,428 lines |
 
 ### Because why not

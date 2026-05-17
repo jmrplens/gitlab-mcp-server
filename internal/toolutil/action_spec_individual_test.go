@@ -10,6 +10,10 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
 
+type optionalIndividualInput struct {
+	Name string `json:"name,omitempty"`
+}
+
 // TestIndividualToolFromActionSpec_ProjectsMetadata verifies IndividualToolFromActionSpec projects metadata.
 func TestIndividualToolFromActionSpec_ProjectsMetadata(t *testing.T) {
 	route := ActionRoute{
@@ -240,6 +244,36 @@ func TestIndividualToolFromSpecs_ProjectsMatchingSpec(t *testing.T) {
 	}
 }
 
+// TestIndividualToolFromSpecs_RejectsEmptyName verifies individual projection
+// rejects empty tool names before scanning specs.
+func TestIndividualToolFromSpecs_RejectsEmptyName(t *testing.T) {
+	if _, err := IndividualToolFromSpecs(nil, "  ", IndividualToolProjectionOptions{}); err == nil {
+		t.Fatal("IndividualToolFromSpecs() empty name error = nil, want error")
+	}
+}
+
+// TestMustIndividualToolFromSpecs_ProjectsOrPanics verifies the must helper
+// returns projected tools and panics on invalid metadata.
+func TestMustIndividualToolFromSpecs_ProjectsOrPanics(t *testing.T) {
+	specs := []ActionSpec{
+		NewActionSpec("get", ActionRoute{InputSchema: testActionSpecSchema("project_id"), OutputSchema: testActionSpecSchema("id")}, ActionSpecOptions{
+			ReadOnly:       true,
+			IndividualTool: IndividualToolSpec{Name: "gitlab_project_get", Description: "Get a project."},
+		}),
+	}
+	tool := MustIndividualToolFromSpecs(specs, "gitlab_project_get", IndividualToolProjectionOptions{})
+	if tool.Name != "gitlab_project_get" {
+		t.Fatalf("tool name = %q, want gitlab_project_get", tool.Name)
+	}
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("MustIndividualToolFromSpecs() did not panic for missing spec")
+		}
+	}()
+	MustIndividualToolFromSpecs(specs, "gitlab_project_missing", IndividualToolProjectionOptions{})
+}
+
 // TestIndividualToolFromSpecs_RejectsMissingOrDuplicateSpec verifies IndividualToolFromSpecs rejects missing or duplicate spec.
 func TestIndividualToolFromSpecs_RejectsMissingOrDuplicateSpec(t *testing.T) {
 	specs := []ActionSpec{
@@ -258,6 +292,31 @@ func TestIndividualToolFromSpecs_RejectsMissingOrDuplicateSpec(t *testing.T) {
 	}
 	if _, err := IndividualToolFromSpecs(specs, "gitlab_project_get", IndividualToolProjectionOptions{}); err == nil {
 		t.Fatal("IndividualToolFromSpecs() duplicate error = nil, want error")
+	}
+}
+
+// TestIndividualToolFromActionSpec_RemovesStaleRequired verifies required
+// fields are recalculated from the reflected input type.
+func TestIndividualToolFromActionSpec_RemovesStaleRequired(t *testing.T) {
+	route := RouteFunc(func(_ context.Context, _ optionalIndividualInput) (testOutput, error) {
+		return testOutput{}, nil
+	})
+	route.InputSchema["required"] = []any{"name"}
+	spec := NewActionSpec("get", route, ActionSpecOptions{
+		ReadOnly:       true,
+		IndividualTool: IndividualToolSpec{Name: "gitlab_project_get", Description: "Get a project."},
+	})
+
+	tool, err := IndividualToolFromActionSpec(spec, IndividualToolProjectionOptions{})
+	if err != nil {
+		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)
+	}
+	schema, ok := tool.InputSchema.(map[string]any)
+	if !ok {
+		t.Fatalf("tool input schema = %T, want map[string]any", tool.InputSchema)
+	}
+	if _, hasRequired := schema["required"]; hasRequired {
+		t.Fatalf("schema required = %#v, want removed", schema["required"])
 	}
 }
 

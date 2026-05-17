@@ -511,6 +511,34 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_PositionValidationError verifies Create returns the validation
+// error when an inline comment targets a file outside the MR diff.
+func TestCreate_PositionValidationError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/diffs") {
+			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"other.go","new_path":"other.go","diff":"@@ -1,1 +1,1 @@\n-old\n+new\n"}]`)
+			return
+		}
+		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42",
+		MRIID:     1,
+		Body:      "missing file",
+		Position: &DiffPosition{
+			NewPath: "missing.go",
+			NewLine: 1,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected position validation error")
+	}
+	if !strings.Contains(err.Error(), "not in the merge request diff") {
+		t.Fatalf("error = %q, want diff validation message", err.Error())
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Resolve — missing project_id, canceled context, API error
 // ---------------------------------------------------------------------------.
@@ -681,6 +709,22 @@ func TestUpdateNote_APIError(t *testing.T) {
 	_, err := UpdateNote(context.Background(), client, UpdateNoteInput{ProjectID: "42", MRIID: 1, DiscussionID: "abc123", NoteID: 300, Body: "x"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestUpdateNote_NotFoundAPIError verifies UpdateNote uses the note lookup
+// hint for non-403 API failures such as 404.
+func TestUpdateNote_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Note Not Found"}`)
+	}))
+
+	_, err := UpdateNote(context.Background(), client, UpdateNoteInput{ProjectID: "42", MRIID: 1, DiscussionID: "abc123", NoteID: 300, Body: "x"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "gitlab_mr_discussion_get") {
+		t.Fatalf("error = %q, want discussion get hint", err.Error())
 	}
 }
 

@@ -5,17 +5,17 @@
 > **Prerequisites**: Go toolchain, model provider API keys, Docker for live mode
 
 This guide explains how to run and maintain the AI model evaluation system built
-around `cmd/eval_meta_tools`.
+around `cmd/eval_mcp_surfaces`.
 
 ## Source Map
 
 | Path | Purpose |
 | --- | --- |
-| `cmd/eval_meta_tools/main.go` | Evaluation runner, task filtering, MCP execution, report writing, trace writing. |
-| `cmd/eval_meta_tools/providers.go` | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs. |
-| `cmd/eval_meta_tools/fixtures.go` | Docker GitLab fixture preparation and placeholder replacement. |
-| `cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md` | Canonical task corpus. |
-| `dist/evaluation/meta-tools/` | Generated reports, traces, and fixture state; ignored by Git. |
+| `cmd/eval_mcp_surfaces/main.go` | Evaluation runner, task filtering, MCP execution, report writing, trace writing. |
+| `cmd/eval_mcp_surfaces/providers.go` | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs. |
+| `cmd/eval_mcp_surfaces/fixtures.go` | Docker GitLab fixture preparation and placeholder replacement. |
+| `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md` | Canonical task corpus. |
+| `dist/evaluation/mcp-surfaces/` | Generated reports, traces, and fixture state; ignored by Git. |
 | `docs/testing/model-results.md` | Current published benchmark result copied from generated reports. |
 
 ## Environment
@@ -62,11 +62,11 @@ export PATH="/usr/local/go/bin:$HOME/go/bin:/snap/bin:$PATH"
 GO_BIN="${GO_BIN:-$(command -v go)}"
 EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 
-timeout 10800s "$GO_BIN" run ./cmd/eval_meta_tools \
+timeout 10800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
   --preset schema-enterprise \
   --models "$EVAL_MODELS" \
   --skip-unavailable \
-  --out dist/evaluation/meta-tools/schema-enterprise-all-models.md
+  --out dist/evaluation/mcp-surfaces/schema-enterprise-all-models.md
 '
 ```
 
@@ -99,7 +99,7 @@ export PATH="/usr/local/go/bin:$HOME/go/bin:/snap/bin:$PATH"
 GO_BIN="${GO_BIN:-$(command -v go)}"
 
 for preset in docker-read docker-mutating-safe docker-destructive-safe; do
-  timeout 3600s "$GO_BIN" run ./cmd/eval_meta_tools \
+  timeout 3600s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
     --preset "$preset" \
     --model openai:gpt-5.4-nano \
     --backend=gitlab \
@@ -108,7 +108,7 @@ for preset in docker-read docker-mutating-safe docker-destructive-safe; do
     --use-fixtures \
     --execute-tools \
     --skip-unavailable \
-    --out "dist/evaluation/meta-tools/${preset}-openai-gpt-5.4-nano.md"
+    --out "dist/evaluation/mcp-surfaces/${preset}-openai-gpt-5.4-nano.md"
 done
 '
 ```
@@ -124,7 +124,7 @@ GO_BIN="${GO_BIN:-$(command -v go)}"
 EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 
 for preset in docker-read docker-mutating-safe docker-destructive-safe; do
-  timeout 7200s "$GO_BIN" run ./cmd/eval_meta_tools \
+  timeout 7200s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
     --preset "$preset" \
     --models "$EVAL_MODELS" \
     --backend=gitlab \
@@ -133,7 +133,7 @@ for preset in docker-read docker-mutating-safe docker-destructive-safe; do
     --use-fixtures \
     --execute-tools \
     --skip-unavailable \
-    --out "dist/evaluation/meta-tools/${preset}-all-models.md"
+    --out "dist/evaluation/mcp-surfaces/${preset}-all-models.md"
 done
 '
 ```
@@ -150,7 +150,7 @@ set -euo pipefail
 export PATH="/usr/local/go/bin:$HOME/go/bin:/snap/bin:$PATH"
 GO_BIN="${GO_BIN:-$(command -v go)}"
 
-timeout 1800s "$GO_BIN" run ./cmd/eval_meta_tools \
+timeout 1800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
   --model openai:gpt-5.4-nano \
   --backend=gitlab \
   --gitlab-env-file test/e2e/.env.docker \
@@ -158,7 +158,7 @@ timeout 1800s "$GO_BIN" run ./cmd/eval_meta_tools \
   --use-fixtures \
   --execute-tools \
   --task MT-032,MT-039,MT-093,MT-095 \
-  --out dist/evaluation/meta-tools/targeted-openai-gpt-5.4-nano.md
+  --out dist/evaluation/mcp-surfaces/targeted-openai-gpt-5.4-nano.md
 '
 ```
 
@@ -211,7 +211,7 @@ output is only progress logging.
 4. Fix harness noise before judging model quality.
 5. Re-run the targeted task set.
 6. Re-run the affected preset.
-7. Publish the reviewed reports with `cmd/eval_meta_tools --publish-docs`.
+7. Publish the reviewed reports with `cmd/eval_mcp_surfaces --publish-docs`.
 
 Use `--publish-from` once per reviewed Markdown report and set a clear
 `--publish-label`. The publication phase updates only the managed marker blocks
@@ -222,7 +222,7 @@ match the committed docs.
 
 ## Adding Or Updating Cases
 
-Edit `cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md`. Preserve the
+Edit `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md`. Preserve the
 existing table format and update the summary counts at the bottom. Use the
 following guidance:
 
@@ -239,7 +239,7 @@ After changing tests or evaluation behavior, run focused verification and lint
 the affected Markdown files:
 
 ```bash
-timeout 300s go test ./cmd/eval_meta_tools ./cmd/gen_testing_docs -count=1
+timeout 300s go test ./cmd/eval_mcp_surfaces ./cmd/gen_testing_docs -count=1
 timeout 120s go run ./cmd/gen_testing_docs/ --check
 timeout 120s npx markdownlint-cli2 docs/testing/*.md
 ```

@@ -93,6 +93,27 @@ func contentText(res *mcp.CallToolResult) string {
 	return b.String()
 }
 
+func TestCancelledOutput_SurfaceToolTextOnly(t *testing.T) {
+	cancelledOutput{}.SurfaceToolTextOnly()
+}
+
+func TestFormatResult_DefaultUnknown(t *testing.T) {
+	if result := FormatResult(struct{}{}); result != nil {
+		t.Fatalf("FormatResult() = %#v, want nil for unknown type", result)
+	}
+}
+
+func TestElicitationRoute_UnmarshalError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NotFoundHandler())
+	byTool := elicitationSpecsByTool(t, ActionSpecs(client))
+	spec := byTool["gitlab_interactive_issue_create"]
+
+	_, err := spec.Route.Handler(context.Background(), map[string]any{keyProjectID: []string{"bad"}})
+	if err == nil {
+		t.Fatal("expected unmarshal error")
+	}
+}
+
 // TestCatalogSurface_IssueCancelRoundTrip verifies that the catalog-backed
 // gitlab_interactive_issue_create tool returns a non-error CancelledResult
 // when elicitation is cancelled mid-flow.

@@ -471,6 +471,50 @@ func TestFormatNoteMarkdownString_NoDate(t *testing.T) {
 	}
 }
 
+// TestFormatMarkdownWrappers verifies the CallToolResult formatter wrappers
+// preserve the Markdown produced by the string formatters.
+func TestFormatMarkdownWrappers(t *testing.T) {
+	tests := []struct {
+		name   string
+		result *mcp.CallToolResult
+		want   string
+	}{
+		{
+			name:   "list",
+			result: FormatListMarkdown(ListOutput{Discussions: []Output{{ID: testDiscussionID}}}),
+			want:   "Commit Discussions (1)",
+		},
+		{
+			name:   "discussion",
+			result: FormatMarkdown(Output{ID: testDiscussionID, Notes: []NoteOutput{{Author: testAuthorAlice, Body: "comment"}}}),
+			want:   "Discussion d1",
+		},
+		{
+			name:   "note",
+			result: FormatNoteMarkdown(NoteOutput{ID: 12, Author: "bot", Body: "ack"}),
+			want:   "ack",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.result == nil {
+				t.Fatal("expected non-nil result")
+			}
+			if len(tt.result.Content) != 1 {
+				t.Fatalf("content length = %d, want 1", len(tt.result.Content))
+			}
+			content, ok := tt.result.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("content type = %T, want TextContent", tt.result.Content[0])
+			}
+			if !strings.Contains(content.Text, tt.want) {
+				t.Fatalf("markdown missing %q:\n%s", tt.want, content.Text)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------.

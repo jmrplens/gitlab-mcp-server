@@ -57,6 +57,23 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
+// TestGroupActionSpecs_CallRoutes exercises issue actions exposed through the group meta-tool.
+func TestGroupActionSpecs_CallRoutes(t *testing.T) {
+	byTool := issueSpecsByTool(t, GroupActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))))
+
+	result, err := byTool["gitlab_issue_list_group"].Route.Handler(t.Context(), map[string]any{"group_id": "99"})
+	if err != nil {
+		t.Fatalf("Route.Handler(gitlab_issue_list_group) error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("Route.Handler(gitlab_issue_list_group) returned nil")
+	}
+	spec := byTool["gitlab_issue_list_group"]
+	if !spec.ReadOnly || !spec.Idempotent {
+		t.Fatalf("group issue spec read-only/idempotent = %v/%v, want true/true", spec.ReadOnly, spec.Idempotent)
+	}
+}
+
 // TestActionSpecs_DeleteOutput verifies issue delete preserves its success message.
 func TestActionSpecs_DeleteOutput(t *testing.T) {
 	byTool := issueSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))))

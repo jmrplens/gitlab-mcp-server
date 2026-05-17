@@ -123,6 +123,20 @@ func TestAddInstanceScope_APIError(t *testing.T) {
 	}
 }
 
+// TestAddInstanceScope_Conflict verifies already-assigned instance scope hints.
+func TestAddInstanceScope_Conflict(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusConflict, `{"message":"conflict"}`)
+	}))
+	_, err := AddInstanceScope(context.Background(), client, AddInstanceScopeInput{ControllerID: 1})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "already have instance scope") {
+		t.Fatalf("error = %v, want instance scope hint", err)
+	}
+}
+
 // TestAddInstanceScope_ContextCancelled verifies context cancellation.
 func TestAddInstanceScope_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
@@ -168,6 +182,20 @@ func TestRemoveInstanceScope_APIError(t *testing.T) {
 	err := RemoveInstanceScope(context.Background(), client, RemoveInstanceScopeInput{ControllerID: 1})
 	if err == nil {
 		t.Fatal(errExpAPIErr)
+	}
+}
+
+// TestRemoveInstanceScope_NotFound verifies missing instance scope hints.
+func TestRemoveInstanceScope_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	err := RemoveInstanceScope(context.Background(), client, RemoveInstanceScopeInput{ControllerID: 1})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "may not have instance scope") {
+		t.Fatalf("error = %v, want missing instance scope hint", err)
 	}
 }
 
@@ -235,6 +263,20 @@ func TestAddRunnerScope_APIError(t *testing.T) {
 	}
 }
 
+// TestAddRunnerScope_NotFound verifies controller or runner lookup hints.
+func TestAddRunnerScope_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	_, err := AddRunnerScope(context.Background(), client, AddRunnerScopeInput{ControllerID: 1, RunnerID: 42})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "controller_id and runner_id") {
+		t.Fatalf("error = %v, want controller/runner hint", err)
+	}
+}
+
 // TestAddRunnerScope_ContextCancelled verifies context cancellation.
 func TestAddRunnerScope_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
@@ -293,6 +335,20 @@ func TestRemoveRunnerScope_APIError(t *testing.T) {
 	err := RemoveRunnerScope(context.Background(), client, RemoveRunnerScopeInput{ControllerID: 1, RunnerID: 42})
 	if err == nil {
 		t.Fatal(errExpAPIErr)
+	}
+}
+
+// TestRemoveRunnerScope_NotFound verifies missing runner scope hints.
+func TestRemoveRunnerScope_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	err := RemoveRunnerScope(context.Background(), client, RemoveRunnerScopeInput{ControllerID: 1, RunnerID: 42})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "may not be scoped") {
+		t.Fatalf("error = %v, want missing runner scope hint", err)
 	}
 }
 

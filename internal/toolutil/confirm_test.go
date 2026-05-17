@@ -133,6 +133,16 @@ func TestConfirmDestructiveAction_NoElicitation(t *testing.T) {
 	}
 }
 
+// TestConfirmDestructiveAction_RequestWithoutElicitation verifies named tool
+// requests still proceed when the client does not support elicitation.
+func TestConfirmDestructiveAction_RequestWithoutElicitation(t *testing.T) {
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "delete_project"}}
+	result := ConfirmDestructiveAction(context.Background(), req, nil, testConfirmPrompt)
+	if result != nil {
+		t.Fatalf("ConfirmDestructiveAction() = %+v, want nil without elicitation support", result)
+	}
+}
+
 // TestCancelledResult verifies that [CancelledResult] returns a non-nil
 // CallToolResult with a single TextContent entry matching the given message.
 func TestCancelledResult(t *testing.T) {

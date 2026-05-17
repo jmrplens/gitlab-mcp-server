@@ -65,6 +65,25 @@ func TestCleanupOldBinary_NoOldFile(t *testing.T) {
 	CleanupOldBinary()
 }
 
+// TestCleanupOldBinary_RemoveError verifies cleanup leaves startup unaffected
+// when removing a stale .old path fails.
+func TestCleanupOldBinary_RemoveError(t *testing.T) {
+	exe := stubExecutablePath(t)
+	oldPath := exe + ".old"
+	if err := os.Mkdir(oldPath, 0o755); err != nil {
+		t.Fatalf("cannot create .old directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(oldPath, "nested"), []byte("stale"), 0o644); err != nil {
+		t.Fatalf("cannot create nested stale file: %v", err)
+	}
+
+	CleanupOldBinary()
+
+	if _, err := os.Stat(oldPath); err != nil {
+		t.Fatalf("old directory should remain after remove failure: %v", err)
+	}
+}
+
 // TestReplaceExecutable_Success verifies the rename-and-replace logic
 // on a temporary directory with fake binaries.
 func TestReplaceExecutable_Success(t *testing.T) {

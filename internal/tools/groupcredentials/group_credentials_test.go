@@ -44,6 +44,14 @@ func TestListPATs_Success(t *testing.T) {
 	}
 }
 
+// TestToPATOutput_Nil verifies nil token conversion returns zero output.
+func TestToPATOutput_Nil(t *testing.T) {
+	out := toPATOutput(nil)
+	if out.ID != 0 || out.Name != "" || len(out.Scopes) != 0 || out.State != "" {
+		t.Fatalf("toPATOutput(nil) = %+v, want zero output", out)
+	}
+}
+
 // TestListPATs_WithPagination verifies that ListPATs forwards the pagination parameters to the GitLab API.
 func TestListPATs_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -155,6 +163,14 @@ func TestListSSHKeys_Success(t *testing.T) {
 	}
 	if out.Keys[0].UsageType != "auth" {
 		t.Errorf("expected usage_type auth, got %s", out.Keys[0].UsageType)
+	}
+}
+
+// TestToSSHKeyOutput_Nil verifies nil SSH key conversion returns zero output.
+func TestToSSHKeyOutput_Nil(t *testing.T) {
+	out := toSSHKeyOutput(nil)
+	if out != (SSHKeyOutput{}) {
+		t.Fatalf("toSSHKeyOutput(nil) = %+v, want zero output", out)
 	}
 }
 

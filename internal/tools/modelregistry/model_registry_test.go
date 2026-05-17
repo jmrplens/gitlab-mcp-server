@@ -5,6 +5,7 @@ package modelregistry
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -256,4 +257,22 @@ func TestDownload(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDownloadOutput_ReadError(t *testing.T) {
+	_, err := downloadOutput(DownloadInput{
+		ProjectID:      toolutil.StringOrInt("42"),
+		ModelVersionID: toolutil.StringOrInt("7"),
+		Path:           "models",
+		Filename:       "model.bin",
+	}, failingReader{})
+	if err == nil {
+		t.Fatal("downloadOutput() error = nil, want read error")
+	}
+}
+
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) {
+	return 0, errors.New("read failed")
 }

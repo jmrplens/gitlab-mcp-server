@@ -59,6 +59,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		{"gitlab_mr_note_get", map[string]any{"project_id": testProjectID, "merge_request_iid": 1, "note_id": 1}},
 		{"gitlab_mr_note_create", map[string]any{"project_id": testProjectID, "merge_request_iid": 1, "body": "x"}},
 		{"gitlab_mr_note_update", map[string]any{"project_id": testProjectID, "merge_request_iid": 1, "note_id": 1, "body": "x"}},
+		{"gitlab_mr_note_delete", map[string]any{"project_id": testProjectID, "merge_request_iid": 1, "note_id": 1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.tool, func(t *testing.T) {

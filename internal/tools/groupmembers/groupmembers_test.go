@@ -375,6 +375,33 @@ func TestAddMember_APIError(t *testing.T) {
 	}
 }
 
+// TestAddMember_StatusErrorBranches verifies add-member status-specific hints.
+func TestAddMember_StatusErrorBranches(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		wantText   string
+	}{
+		{name: "conflict", statusCode: http.StatusConflict, wantText: "already a direct member"},
+		{name: "bad request", statusCode: http.StatusBadRequest, wantText: "access_level must be"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, tt.statusCode, `{"message":"failed"}`)
+			}))
+			_, err := AddMember(context.Background(), client, AddInput{GroupID: "5", UserID: 1, AccessLevel: 30})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), tt.wantText) {
+				t.Fatalf("error = %v, want %q", err, tt.wantText)
+			}
+		})
+	}
+}
+
 // TestAddMember_MissingGroupID verifies AddMember when missing group ID.
 func TestAddMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
@@ -563,6 +590,20 @@ func TestShareGroup_APIError(t *testing.T) {
 	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestShareGroup_Conflict verifies already-shared group hints.
+func TestShareGroup_Conflict(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusConflict, `{"message":"conflict"}`)
+	}))
+	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "already shared") {
+		t.Fatalf("error = %v, want already-shared hint", err)
 	}
 }
 

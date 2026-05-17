@@ -550,6 +550,37 @@ func TestGet_Latest403FallbackToList(t *testing.T) {
 	}
 }
 
+// TestGetLatest_FallbackWithRef verifies that the fallback list request keeps
+// the requested ref filter after the /latest endpoint returns 403.
+func TestGetLatest_FallbackWithRef(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v4/projects/42/pipelines/latest":
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+		case r.URL.Path == "/api/v4/projects/42/pipelines" && r.Method == http.MethodGet:
+			if ref := r.URL.Query().Get("ref"); ref != "release" {
+				t.Errorf("fallback ref = %q, want release", ref)
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[{"id":77,"status":"success","ref":"release","sha":"abc123"}]`)
+		case r.URL.Path == "/api/v4/projects/42/pipelines/77":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":77,"status":"success","ref":"release","sha":"abc123","web_url":"https://gitlab.example.com/p/-/pipelines/77"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := GetLatest(context.Background(), client, GetLatestInput{ProjectID: "42", Ref: "release"})
+	if err != nil {
+		t.Fatalf("GetLatest() with ref fallback unexpected error: %v", err)
+	}
+	if out.ID != 77 {
+		t.Errorf("fallback ID = %d, want 77", out.ID)
+	}
+	if out.Ref != "release" {
+		t.Errorf("fallback Ref = %q, want release", out.Ref)
+	}
+}
+
 // TestCreate_PipelineSuccess verifies Create when pipeline success.
 func TestCreate_PipelineSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1098,6 +1129,22 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
+// TestDelete_NonForbiddenAPIError verifies Delete uses the generic mutating
+// error wrapper for non-403 API failures.
+func TestDelete_NonForbiddenAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"cannot delete pipeline"}`)
+	}))
+
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42", PipelineID: 10})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "cannot delete pipeline") {
+		t.Fatalf("error = %q, want GitLab message", err.Error())
+	}
+}
+
 // TestGetVariables_APIError verifies GetVariables when API error.
 func TestGetVariables_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1161,6 +1208,22 @@ func TestUpdateMetadata_APIError(t *testing.T) {
 	_, err := UpdateMetadata(context.Background(), client, UpdateMetadataInput{ProjectID: "42", PipelineID: 10, Name: "x"})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestUpdateMetadata_NotFoundAPIError verifies UpdateMetadata uses the
+// pipeline_id lookup hint for non-403 API failures such as 404.
+func TestUpdateMetadata_NotFoundAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Pipeline Not Found"}`)
+	}))
+
+	_, err := UpdateMetadata(context.Background(), client, UpdateMetadataInput{ProjectID: "42", PipelineID: 10, Name: "x"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "gitlab_pipeline_list") {
+		t.Fatalf("error = %q, want pipeline list hint", err.Error())
 	}
 }
 

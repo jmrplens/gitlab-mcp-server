@@ -483,6 +483,38 @@ func TestFormatMessageMarkdown_WithOptionalFields(t *testing.T) {
 	}
 }
 
+// TestMarkdownRegistry_MessageOutputTypes verifies broadcast message output
+// wrappers are registered and render through the message formatter.
+func TestMarkdownRegistry_MessageOutputTypes(t *testing.T) {
+	message := MessageItem{ID: 7, Message: "Registry check", BroadcastType: testBannerType, Active: true}
+	tests := []struct {
+		name   string
+		output any
+	}{
+		{name: "get", output: GetOutput{Message: message}},
+		{name: "create", output: CreateOutput{Message: message}},
+		{name: "update", output: UpdateOutput{Message: message}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := toolutil.MarkdownForResult(tt.output)
+			if result == nil {
+				t.Fatal("expected non-nil markdown result")
+			}
+			content, ok := result.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("content type = %T, want TextContent", result.Content[0])
+			}
+			for _, want := range []string{"Broadcast Message #7", "Registry check", testBannerType} {
+				if !strings.Contains(content.Text, want) {
+					t.Fatalf("markdown missing %q:\n%s", want, content.Text)
+				}
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ActionSpecs — metadata
 // ---------------------------------------------------------------------------.

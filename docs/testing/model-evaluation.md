@@ -18,7 +18,7 @@ how to recover.
 ## What Is Evaluated
 
 The evaluator uses natural-language tasks from
-`cmd/eval_meta_tools/testdata/automated-meta-tool-cases.md`. Each row declares
+`cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md`. Each row declares
 the expected tool, action, required parameters, whether the task is destructive,
 and the success condition.
 

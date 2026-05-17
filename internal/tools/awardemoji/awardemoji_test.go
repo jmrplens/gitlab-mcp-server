@@ -1485,6 +1485,84 @@ func TestActionSpecs_CreateErrors(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_DeleteErrors validates delete routes return API errors.
+func TestActionSpecs_DeleteErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, covEmojiJSON)
+	})
+
+	client := testutil.NewTestClient(t, mux)
+	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
+
+	deleteTools := []struct {
+		name string
+		args map[string]any
+	}{
+		{"gitlab_issue_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
+		{"gitlab_issue_note_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_mr_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
+		{"gitlab_mr_note_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
+		{"gitlab_snippet_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
+		{"gitlab_snippet_note_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
+	}
+	for _, tc := range deleteTools {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
+			if err == nil {
+				t.Fatalf("Route.Handler(%s) expected error, got nil", tc.name)
+			}
+		})
+	}
+}
+
+// TestDeleteAwardEmoji_NotFoundHints covers delete not-found hint branches.
+func TestDeleteAwardEmoji_NotFoundHints(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"404 Not Found"}`))
+	}))
+
+	tests := []struct {
+		name string
+		call func(context.Context) error
+	}{
+		{"DeleteIssueAwardEmoji", func(ctx context.Context) error {
+			return DeleteIssueAwardEmoji(ctx, client, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
+		}},
+		{"DeleteIssueNoteAwardEmoji", func(ctx context.Context) error {
+			return DeleteIssueNoteAwardEmoji(ctx, client, IssueDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+		}},
+		{"DeleteMRAwardEmoji", func(ctx context.Context) error {
+			return DeleteMRAwardEmoji(ctx, client, MRDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
+		}},
+		{"DeleteMRNoteAwardEmoji", func(ctx context.Context) error {
+			return DeleteMRNoteAwardEmoji(ctx, client, MRDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+		}},
+		{"DeleteSnippetAwardEmoji", func(ctx context.Context) error {
+			return DeleteSnippetAwardEmoji(ctx, client, SnippetDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
+		}},
+		{"DeleteSnippetNoteAwardEmoji", func(ctx context.Context) error {
+			return DeleteSnippetNoteAwardEmoji(ctx, client, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call(t.Context())
+			if err == nil {
+				t.Fatal("expected not-found error")
+			}
+			if !strings.Contains(err.Error(), "award already removed") {
+				t.Fatalf("error = %q, want not-found hint", err.Error())
+			}
+		})
+	}
+}
+
 // TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())

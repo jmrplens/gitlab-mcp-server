@@ -670,6 +670,17 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 	}
 }
 
+// TestFormatReleaseNotFound verifies the special not-found formatter emits content.
+func TestFormatReleaseNotFound(t *testing.T) {
+	result := formatReleaseNotFound(releaseNotFoundOutput{Identifier: "v99.0.0 in project 42"})
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected content in not-found result")
+	}
+}
+
 // TestFormatMarkdown_MinimalFields verifies FormatMarkdown when minimal fields.
 func TestFormatMarkdown_MinimalFields(t *testing.T) {
 	md := FormatMarkdown(Output{

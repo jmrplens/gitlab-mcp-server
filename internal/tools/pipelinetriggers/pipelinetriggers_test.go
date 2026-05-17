@@ -576,6 +576,22 @@ func TestRunTrigger_APIError(t *testing.T) {
 	}
 }
 
+// TestRunTrigger_BadRequest verifies RunTrigger returns ref and CI lint guidance for 400 responses.
+func TestRunTrigger_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
+	}))
+	_, err := RunTrigger(context.Background(), client, RunInput{
+		ProjectID: "1", Ref: "missing", Token: "tok123",
+	})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "gitlab_ci_lint") {
+		t.Fatalf("error = %v, want CI lint hint", err)
+	}
+}
+
 // TestRunTrigger_MissingProjectID verifies RunTrigger when missing project ID.
 func TestRunTrigger_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))

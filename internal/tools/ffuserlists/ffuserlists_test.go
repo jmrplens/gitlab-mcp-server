@@ -310,6 +310,20 @@ func TestListUserLists_APIError(t *testing.T) {
 	}
 }
 
+// TestListUserLists_Forbidden verifies ListUserLists adds the Premium/Ultimate hint on forbidden responses.
+func TestListUserLists_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+	}))
+	_, err := ListUserLists(context.Background(), client, ListInput{ProjectID: "1"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "Premium/Ultimate") {
+		t.Fatalf("error = %v, want Premium/Ultimate hint", err)
+	}
+}
+
 // TestListUserLists_WithSearch verifies ListUserLists when with search.
 func TestListUserLists_WithSearch(t *testing.T) {
 	mux := http.NewServeMux()
@@ -365,6 +379,33 @@ func TestCreateUserList_APIError(t *testing.T) {
 	}
 }
 
+// TestCreateUserList_ErrorBranches verifies CreateUserList status-specific errors.
+func TestCreateUserList_ErrorBranches(t *testing.T) {
+	testCases := []struct {
+		name       string
+		statusCode int
+		wantText   string
+	}{
+		{name: "forbidden", statusCode: http.StatusForbidden, wantText: "Premium/Ultimate"},
+		{name: "generic", statusCode: http.StatusUnprocessableEntity, wantText: "ff_user_list_create"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, testCase.statusCode, `{"message":"failed"}`)
+			}))
+			_, err := CreateUserList(context.Background(), client, CreateInput{ProjectID: "1", Name: "x", UserXIDs: "u1"})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), testCase.wantText) {
+				t.Fatalf("error = %v, want %q", err, testCase.wantText)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Update — API error
 // ---------------------------------------------------------------------------.
@@ -379,6 +420,20 @@ func TestUpdateUserList_APIError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestUpdateUserList_Forbidden verifies UpdateUserList adds the role hint on forbidden responses.
+func TestUpdateUserList_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+	}))
+	_, err := UpdateUserList(context.Background(), client, UpdateInput{ProjectID: "1", IID: 10, Name: "x"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "Developer+ role") {
+		t.Fatalf("error = %v, want Developer+ role hint", err)
 	}
 }
 

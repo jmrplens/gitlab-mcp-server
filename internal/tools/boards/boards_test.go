@@ -843,6 +843,20 @@ func TestCreateBoardList_ServerError(t *testing.T) {
 	}
 }
 
+// TestCreateBoardList_BadRequest verifies CreateBoardList returns list-type guidance for 400 responses.
+func TestCreateBoardList_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
+	}))
+	_, err := CreateBoardList(context.Background(), client, CreateBoardListInput{ProjectID: "10", BoardID: 1, LabelID: 20})
+	if err == nil {
+		t.Fatal(errExpectedErr)
+	}
+	if !strings.Contains(err.Error(), "exactly one") {
+		t.Fatalf("error = %v, want exactly-one hint", err)
+	}
+}
+
 // TestCreateBoardList_CancelledContext verifies CreateBoardList when cancelled context.
 func TestCreateBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

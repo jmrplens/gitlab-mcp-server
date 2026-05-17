@@ -130,6 +130,12 @@ func TestLockdownSchemaNode_NestedObjects(t *testing.T) {
 				"properties": map[string]any{"c": map[string]any{"type": "string"}},
 			},
 		},
+		"oneOf": []any{
+			map[string]any{"type": "object"},
+		},
+		"allOf": []any{
+			map[string]any{"type": "object"},
+		},
 	}
 
 	lockdownSchemaNode(node)
@@ -148,6 +154,40 @@ func TestLockdownSchemaNode_NestedObjects(t *testing.T) {
 	anyOfFirst := node["anyOf"].([]any)[0].(map[string]any)
 	if v, _ := anyOfFirst["additionalProperties"].(bool); v {
 		t.Errorf("anyOf[0] additionalProperties = true, want false")
+	}
+	oneOfFirst := node["oneOf"].([]any)[0].(map[string]any)
+	if v, _ := oneOfFirst["additionalProperties"].(bool); v {
+		t.Errorf("oneOf[0] additionalProperties = true, want false")
+	}
+	allOfFirst := node["allOf"].([]any)[0].(map[string]any)
+	if v, _ := allOfFirst["additionalProperties"].(bool); v {
+		t.Errorf("allOf[0] additionalProperties = true, want false")
+	}
+}
+
+// TestSchemaMap verifies schema normalization accepts maps and marshalable
+// structs, while malformed schema values are rejected without panicking.
+func TestSchemaMap(t *testing.T) {
+	t.Parallel()
+
+	if got := schemaMap(nil); got != nil {
+		t.Fatalf("schemaMap(nil) = %#v, want nil", got)
+	}
+	original := map[string]any{"type": "object"}
+	if got := schemaMap(original); got["type"] != "object" {
+		t.Fatalf("schemaMap(map) = %#v", got)
+	}
+	type schemaStruct struct {
+		Type string `json:"type"`
+	}
+	if got := schemaMap(schemaStruct{Type: "object"}); got["type"] != "object" {
+		t.Fatalf("schemaMap(struct) = %#v", got)
+	}
+	if got := schemaMap(func() {}); got != nil {
+		t.Fatalf("schemaMap(func) = %#v, want nil", got)
+	}
+	if got := schemaMap([]string{"not", "an", "object"}); got != nil {
+		t.Fatalf("schemaMap(array) = %#v, want nil", got)
 	}
 }
 

@@ -229,6 +229,25 @@ func TestUploadMetricImage_FilePath_Success(t *testing.T) {
 	}
 }
 
+// TestUploadMetricImage_FilePathInvalid verifies local file validation errors.
+func TestUploadMetricImage_FilePathInvalid(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	_, err := UploadMetricImage(t.Context(), client, UploadMetricImageInput{
+		ProjectID:     "1",
+		AlertIID:      5,
+		FilePathLocal: t.TempDir() + "/missing.png",
+		Filename:      "missing.png",
+	})
+	if err == nil {
+		t.Fatal("expected file validation error")
+	}
+	if !strings.Contains(err.Error(), "gitlab_upload_alert_metric_image") {
+		t.Fatalf("error = %v, want upload context", err)
+	}
+}
+
 // TestUploadMetricImage_BothInputs verifies error when both file_path and content_base64 provided.
 func TestUploadMetricImage_BothInputs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

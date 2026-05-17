@@ -81,6 +81,25 @@ func TestStandalone_AddStandaloneRoutesPreservesExistingMappings(t *testing.T) {
 	}
 }
 
+// TestStandalone_AddStandaloneRoutesPropagatesCatalogErrors verifies route-map
+// conversion surfaces duplicate standalone catalog errors.
+func TestStandalone_AddStandaloneRoutesPropagatesCatalogErrors(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_discover_project": {
+			"resolve": {
+				Handler: func(_ context.Context, _ map[string]any) (any, error) {
+					return map[string]any{}, nil
+				},
+			},
+		},
+	}
+
+	_, err := AddStandaloneRoutes(routes, nil, StandaloneOptions{})
+	if err == nil || !strings.Contains(err.Error(), "gitlab_discover_project.resolve") {
+		t.Fatalf("AddStandaloneRoutes() error = %v, want duplicate discover route", err)
+	}
+}
+
 // TestStandalone_AddStandaloneCatalogRejectsDuplicateStandaloneGroups covers Standalone with table-driven subtests for add standalone catalog rejects duplicate standalone groups.
 func TestStandalone_AddStandaloneCatalogRejectsDuplicateStandaloneGroups(t *testing.T) {
 	testCases := []struct {

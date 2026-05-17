@@ -105,6 +105,20 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestList_NotFound verifies non-forbidden list errors use the controller lookup hint.
+func TestList_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	_, err := List(context.Background(), client, ListInput{ControllerID: 1})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "gitlab_runner_controller_list") {
+		t.Fatalf("error = %v, want controller list hint", err)
+	}
+}
+
 // TestList_ContextCancelled verifies that List respects context cancellation.
 func TestList_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
@@ -241,6 +255,20 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestCreate_NotFound verifies non-forbidden create errors use the controller lookup hint.
+func TestCreate_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	_, err := Create(context.Background(), client, CreateInput{ControllerID: 1})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "gitlab_runner_controller_list") {
+		t.Fatalf("error = %v, want controller list hint", err)
+	}
+}
+
 // TestCreate_ContextCancelled verifies that Create respects context cancellation.
 func TestCreate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
@@ -305,6 +333,20 @@ func TestRotate_APIError(t *testing.T) {
 	}
 }
 
+// TestRotate_Unauthorized verifies revoked or expired token hints on unauthorized responses.
+func TestRotate_Unauthorized(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"unauthorized"}`)
+	}))
+	_, err := Rotate(context.Background(), client, RotateInput{ControllerID: 1, TokenID: 10})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "already be revoked or expired") {
+		t.Fatalf("error = %v, want revoked/expired hint", err)
+	}
+}
+
 // TestRotate_ContextCancelled verifies that Rotate respects context cancellation.
 func TestRotate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, nopHandler())
@@ -363,6 +405,20 @@ func TestRevoke_APIError(t *testing.T) {
 	err := Revoke(context.Background(), client, RevokeInput{ControllerID: 1, TokenID: 10})
 	if err == nil {
 		t.Fatal(errExpAPIErr)
+	}
+}
+
+// TestRevoke_NotFound verifies non-forbidden revoke errors use the token lookup hint.
+func TestRevoke_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	err := Revoke(context.Background(), client, RevokeInput{ControllerID: 1, TokenID: 10})
+	if err == nil {
+		t.Fatal(errExpAPIErr)
+	}
+	if !strings.Contains(err.Error(), "gitlab_runner_controller_token_list") {
+		t.Fatalf("error = %v, want token list hint", err)
 	}
 }
 

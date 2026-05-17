@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -55,7 +56,7 @@ type dockerTool struct {
 
 // main runs the Docker MCP Registry generator and writes failures to stderr.
 func main() {
-	if err := run(); err != nil {
+	if err := run(os.Args[1:], os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
@@ -63,10 +64,14 @@ func main() {
 
 // run introspects the selected MCP catalog mode and writes a tools.json payload
 // compatible with Docker MCP Registry ingestion.
-func run() error {
-	enterprise := flag.Bool("enterprise", false, "include enterprise meta-tools")
-	individual := flag.Bool("individual", false, "emit individual tools instead of meta-tools")
-	flag.Parse()
+func run(args []string, stdout io.Writer) error {
+	flags := flag.NewFlagSet("gen_docker_tools", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	enterprise := flags.Bool("enterprise", false, "include enterprise meta-tools")
+	individual := flags.Bool("individual", false, "emit individual tools instead of meta-tools")
+	if err := flags.Parse(args); err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -128,7 +133,7 @@ func run() error {
 
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
 	if encErr := enc.Encode(out); encErr != nil {
 		return fmt.Errorf("encode: %w", encErr)

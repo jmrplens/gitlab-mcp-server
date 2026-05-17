@@ -9,6 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
 )
 
 // TestRegisterServerMaintenanceSurfaceTools_SafeModeWrapsMutatingSpec verifies RegisterServerMaintenanceSurfaceTools when safe mode wraps mutating spec.
@@ -58,6 +59,13 @@ func TestRegisterServerMaintenanceSurfaceTools_SafeModeWrapsMutatingSpec(t *test
 	if preview.Status != "blocked" || preview.Tool != "gitlab_server_apply_update" || !strings.Contains(preview.Hint, "GITLAB_SAFE_MODE=false") {
 		t.Fatalf("safe mode preview = %+v, want blocked apply-update preview", preview)
 	}
+}
+
+func TestRegisterSurfaceTools_InvalidSpecPanics(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	assertPanics(t, func() {
+		RegisterSurfaceTools(server, []actioncatalog.SurfaceToolSpec{{Name: "gitlab_invalid_surface"}})
+	})
 }
 
 // toolsByName converts the GitLab API response to the tool output format.

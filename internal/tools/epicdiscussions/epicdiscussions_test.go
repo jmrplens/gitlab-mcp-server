@@ -56,6 +56,15 @@ const gqlDiscussionsEmpty = `{
 
 const gqlNamespaceNull = `{"namespace": null}`
 
+const gqlDiscussionsNoWidget = `{
+	"namespace": {
+		"workItem": {
+			"id": "gid://gitlab/WorkItem/1",
+			"widgets": [{}]
+		}
+	}
+}`
+
 const gqlCreateNoteData = `{
   "createNote": {
     "note": {
@@ -117,6 +126,55 @@ func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
 	return testutil.GraphQLHandler(handlers)
 }
 
+// TestDiscussionIDHelpers verifies discussion ID helper edge cases.
+func TestDiscussionIDHelpers(t *testing.T) {
+	if got := extractDiscussionHex("plain-id"); got != "plain-id" {
+		t.Fatalf("extractDiscussionHex() = %q, want plain-id", got)
+	}
+	fullGID := "gid://gitlab/Discussion/d1hex"
+	if got := formatDiscussionGID(fullGID); got != fullGID {
+		t.Fatalf("formatDiscussionGID(full) = %q, want %q", got, fullGID)
+	}
+}
+
+// TestResolveWorkItemGID_ErrorPaths verifies GraphQL and missing-epic errors
+// while resolving an epic work item GID.
+func TestResolveWorkItemGID_ErrorPaths(t *testing.T) {
+	tests := []struct {
+		name    string
+		handler http.Handler
+		wantErr string
+	}{
+		{
+			name: "graphql error",
+			handler: graphqlMux(map[string]http.HandlerFunc{"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+			}}),
+			wantErr: "forbidden",
+		},
+		{
+			name: "missing epic",
+			handler: graphqlMux(map[string]http.HandlerFunc{"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
+			}}),
+			wantErr: "epic not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			_, err := resolveWorkItemGID(t.Context(), client, testFullPath, 5)
+			if err == nil {
+				t.Fatalf("expected error containing %q", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
+
 // --------------------------------------------------------------------------
 // List
 // --------------------------------------------------------------------------
@@ -161,6 +219,19 @@ func TestList(t *testing.T) {
 			input: ListInput{FullPath: testFullPath, IID: 5},
 			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondGraphQL(w, http.StatusOK, gqlDiscussionsEmpty)
+			}}),
+			check: func(t *testing.T, out ListOutput) {
+				t.Helper()
+				if len(out.Discussions) != 0 {
+					t.Fatalf("got %d discussions, want 0", len(out.Discussions))
+				}
+			},
+		},
+		{
+			name:  "skips widgets without discussions",
+			input: ListInput{FullPath: testFullPath, IID: 5},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlDiscussionsNoWidget)
 			}}),
 			check: func(t *testing.T, out ListOutput) {
 				t.Helper()
@@ -304,6 +375,22 @@ func TestGet(t *testing.T) {
 			wantErr: "epic not found",
 		},
 		{
+			name:  "returns error when widgets have no discussions",
+			input: GetInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlDiscussionsNoWidget)
+			}}),
+			wantErr: "discussion",
+		},
+		{
+			name:  "returns error on API server error",
+			input: GetInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetNotes": func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+			}}),
+			wantErr: "epicDiscussionGet",
+		},
+		{
 			name:    "returns error on cancelled context",
 			input:   GetInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex"},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
@@ -407,6 +494,40 @@ func TestCreate(t *testing.T) {
 				},
 			}),
 			wantErr: "permission denied",
+		},
+		{
+			name:  "returns error when resolving epic fails",
+			input: CreateInput{FullPath: testFullPath, IID: 5, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
+			}}),
+			wantErr: "epicDiscussionCreate",
+		},
+		{
+			name:  "returns error on createNote API error",
+			input: CreateInput{FullPath: testFullPath, IID: 5, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					http.Error(w, "forbidden", http.StatusForbidden)
+				},
+			}),
+			wantErr: "epicDiscussionCreate",
+		},
+		{
+			name:  "returns error when createNote returns no note",
+			input: CreateInput{FullPath: testFullPath, IID: 5, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"createNote":{"note":null,"errors":[]}}`)
+				},
+			}),
+			wantErr: "no note returned",
 		},
 		{
 			name:    "returns error on cancelled context",
@@ -517,6 +638,40 @@ func TestAddNote(t *testing.T) {
 			wantErr: "forbidden",
 		},
 		{
+			name:  "returns error when resolving epic fails",
+			input: AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex", Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, gqlNamespaceNull)
+			}}),
+			wantErr: "epicDiscussionAddNote",
+		},
+		{
+			name:  "returns error on createNote API error",
+			input: AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex", Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					http.Error(w, "forbidden", http.StatusForbidden)
+				},
+			}),
+			wantErr: "epicDiscussionAddNote",
+		},
+		{
+			name:  "returns error when createNote returns no note",
+			input: AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex", Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{
+				"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, gqlWorkItemGIDData)
+				},
+				"createNote": func(w http.ResponseWriter, _ *http.Request) {
+					testutil.RespondGraphQL(w, http.StatusOK, `{"createNote":{"note":null,"errors":[]}}`)
+				},
+			}),
+			wantErr: "no note returned",
+		},
+		{
 			name:    "returns error on cancelled context",
 			input:   AddNoteInput{FullPath: testFullPath, IID: 5, DiscussionID: "d1hex", Body: "test"},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
@@ -615,6 +770,22 @@ func TestUpdateNote(t *testing.T) {
 			wantErr: "not found",
 		},
 		{
+			name:  "returns error on updateNote API error",
+			input: UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"updateNote": func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+			}}),
+			wantErr: "epicDiscussionUpdateNote",
+		},
+		{
+			name:  "returns error when updateNote returns no note",
+			input: UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "test"},
+			handler: graphqlMux(map[string]http.HandlerFunc{"updateNote": func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondGraphQL(w, http.StatusOK, `{"updateNote":{"note":null,"errors":[]}}`)
+			}}),
+			wantErr: "no note returned",
+		},
+		{
 			name:    "returns error on cancelled context",
 			input:   UpdateNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100, Body: "test"},
 			handler: graphqlMux(map[string]http.HandlerFunc{}),
@@ -695,6 +866,14 @@ func TestDeleteNote(t *testing.T) {
 				testutil.RespondGraphQL(w, http.StatusOK, `{"destroyNote":{"errors":["forbidden"]}}`)
 			}}),
 			wantErr: "forbidden",
+		},
+		{
+			name:  "returns error on destroyNote API error",
+			input: DeleteNoteInput{FullPath: testFullPath, IID: 5, NoteID: 100},
+			handler: graphqlMux(map[string]http.HandlerFunc{"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+			}}),
+			wantErr: "epicDiscussionDeleteNote",
 		},
 		{
 			name:    "returns error on cancelled context",

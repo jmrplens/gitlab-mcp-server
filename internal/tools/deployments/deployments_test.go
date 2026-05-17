@@ -506,6 +506,33 @@ func TestDeploymentCreate_APIError(t *testing.T) {
 	}
 }
 
+// TestDeploymentCreate_StatusErrorBranches verifies status-specific create errors.
+func TestDeploymentCreate_StatusErrorBranches(t *testing.T) {
+	testCases := []struct {
+		name       string
+		statusCode int
+		wantText   string
+	}{
+		{name: "bad request", statusCode: http.StatusBadRequest, wantText: "verify environment exists"},
+		{name: "generic", statusCode: http.StatusUnprocessableEntity, wantText: opCreateDeployment},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, testCase.statusCode, `{"message":"failed"}`)
+			}))
+			_, err := Create(context.Background(), client, CreateInput{ProjectID: "1", Environment: "staging", Ref: "main", SHA: "abc123"})
+			if err == nil {
+				t.Fatal(errExpectedAPI)
+			}
+			if !strings.Contains(err.Error(), testCase.wantText) {
+				t.Fatalf("error = %v, want %q", err, testCase.wantText)
+			}
+		})
+	}
+}
+
 // TestDeploymentCreate_WithOptionalFields verifies DeploymentCreate when with optional fields.
 func TestDeploymentCreate_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -562,6 +589,20 @@ func TestDeploymentUpdate_APIError(t *testing.T) {
 	}
 }
 
+// TestDeploymentUpdate_BadRequest verifies invalid status transition hints.
+func TestDeploymentUpdate_BadRequest(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad status"}`)
+	}))
+	_, err := Update(context.Background(), client, UpdateInput{ProjectID: "1", DeploymentID: 1, Status: "blocked"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "transitions out of terminal states") {
+		t.Fatalf("error = %v, want transition hint", err)
+	}
+}
+
 // TestDeploymentUpdate_MissingProjectID verifies DeploymentUpdate when missing project ID.
 func TestDeploymentUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
@@ -583,6 +624,20 @@ func TestDeploymentDelete_APIError(t *testing.T) {
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: "1", DeploymentID: 1})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestDeploymentDelete_NotFound verifies non-forbidden delete errors use the not-found hint path.
+func TestDeploymentDelete_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+	}))
+	err := Delete(context.Background(), client, DeleteInput{ProjectID: "1", DeploymentID: 1})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "gitlab_deployment_list") {
+		t.Fatalf("error = %v, want list hint", err)
 	}
 }
 
@@ -724,6 +779,17 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 	if strings.Contains(md, "| ID |") {
 		t.Error("should not contain table header when empty")
+	}
+}
+
+// TestFormatDeploymentNotFound verifies the deployment not-found Markdown adapter.
+func TestFormatDeploymentNotFound(t *testing.T) {
+	result := formatDeploymentNotFound(deploymentNotFoundOutput{Identifier: "17"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatDeploymentNotFound() = %#v, want error result", result)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("formatDeploymentNotFound() returned no content")
 	}
 }
 

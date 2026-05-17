@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -36,6 +37,19 @@ func (m *mockSource) ListReleases(_ context.Context, _ selfupdate.Repository) ([
 // DownloadReleaseAsset handles download release asset for mockSource.
 func (m *mockSource) DownloadReleaseAsset(_ context.Context, _ *selfupdate.Release, _ int64) (io.ReadCloser, error) {
 	return nil, errors.New("mock: download not implemented")
+}
+
+// panicSource implements selfupdate.Source by panicking during release lookup.
+type panicSource struct{}
+
+// ListReleases panics to exercise panic recovery around update checks.
+func (panicSource) ListReleases(context.Context, selfupdate.Repository) ([]selfupdate.SourceRelease, error) {
+	panic("simulated source panic")
+}
+
+// DownloadReleaseAsset panics because panicSource never reaches downloads.
+func (panicSource) DownloadReleaseAsset(context.Context, *selfupdate.Release, int64) (io.ReadCloser, error) {
+	panic("unexpected download")
 }
 
 // mockRelease implements selfupdate.SourceRelease.
@@ -249,6 +263,27 @@ func TestNewUpdater_Defaults(t *testing.T) {
 	}
 }
 
+// TestNewUpdater_GitHubSourceError verifies errors from the default source
+// factory are wrapped and returned to the caller.
+func TestNewUpdater_GitHubSourceError(t *testing.T) {
+	orig := newGitHubSource
+	newGitHubSource = func() (selfupdate.Source, error) {
+		return nil, errors.New("source unavailable")
+	}
+	t.Cleanup(func() { newGitHubSource = orig })
+
+	_, err := NewUpdater(Config{
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if err == nil {
+		t.Fatal("expected source creation error")
+	}
+	if !strings.Contains(err.Error(), "creating GitHub source") {
+		t.Errorf("error = %q, want GitHub source context", err.Error())
+	}
+}
+
 // TestIsEnabled verifies mode-to-enabled mapping.
 func TestIsEnabled(t *testing.T) {
 	tests := []struct {
@@ -322,6 +357,25 @@ func TestStartPeriodicCheck_ContextCancellation(t *testing.T) {
 
 	// Allow the goroutine to exit gracefully.
 	time.Sleep(200 * time.Millisecond)
+}
+
+// TestStartPeriodicCheck_InvalidIntervalRecovered verifies the periodic
+// goroutine recovers if ticker creation panics due to invalid internal state.
+func TestStartPeriodicCheck_InvalidIntervalRecovered(t *testing.T) {
+	u := NewUpdaterWithSource(Config{
+		Mode:           ModeAuto,
+		Repository:     "a/b",
+		CurrentVersion: "1.0.0",
+		Interval:       time.Millisecond,
+	}, nil)
+	u.cfg.Interval = 0
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	u.StartPeriodicCheck(ctx)
+
+	// Let the goroutine start, panic in time.NewTicker, recover, and exit.
+	time.Sleep(20 * time.Millisecond)
 }
 
 // NewUpdater branch coverage.
@@ -992,6 +1046,36 @@ func TestDownloadAndReplace_InvalidBinaryContent(t *testing.T) {
 	}
 }
 
+// TestDownloadAndReplace_ReplaceErrorRemovesStaging verifies that a staged
+// binary is cleaned up when the final executable replacement fails.
+func TestDownloadAndReplace_ReplaceErrorRemovesStaging(t *testing.T) {
+	dir := t.TempDir()
+	missingExe := filepath.Join(dir, "missing-binary")
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) { return missingExe, nil }
+	t.Cleanup(func() { resolveExecutable = orig })
+
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
+		downloadData: fakeBinary(),
+	}
+	u := NewUpdaterWithSource(Config{
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, src)
+
+	_, err := u.DownloadAndReplace(context.Background())
+	if err == nil {
+		t.Fatal("expected replacement error")
+	}
+	if !strings.Contains(err.Error(), "renaming current binary") {
+		t.Errorf("error = %q, want renaming context", err.Error())
+	}
+	if _, statErr := os.Stat(missingExe + ".tmp"); !os.IsNotExist(statErr) {
+		t.Fatalf("staged file should be removed after replace failure, statErr=%v", statErr)
+	}
+}
+
 // restoreTestBinary stubs the executable path to a temp directory and
 // registers cleanup that restores any .old backup. This prevents tests
 // from modifying the production binary.
@@ -1096,9 +1180,6 @@ func TestPeriodicCheckOnce_ModeAuto_WindowsFallbackRenameFails(t *testing.T) {
 // TestPeriodicFallbackDownload_DownloadError verifies the error path in
 // periodicFallbackDownload when downloadToStaging fails.
 func TestPeriodicFallbackDownload_DownloadError(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("periodicFallbackDownload is Windows-only")
-	}
 	src := &downloadableMockSource{
 		releases:    []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
 		downloadErr: errors.New("network timeout"),
@@ -1116,9 +1197,6 @@ func TestPeriodicFallbackDownload_DownloadError(t *testing.T) {
 // TestCheckOnceFallbackDownload_DownloadError verifies checkOnceFallbackDownload
 // returns a combined error when downloadToStaging fails.
 func TestCheckOnceFallbackDownload_DownloadError(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("checkOnceFallbackDownload is Windows-only")
-	}
 	src := &downloadableMockSource{
 		releases:    []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
 		downloadErr: errors.New("download failed"),
@@ -1144,9 +1222,6 @@ func TestCheckOnceFallbackDownload_DownloadError(t *testing.T) {
 // TestCheckOnceFallbackDownload_InvalidBinary verifies checkOnceFallbackDownload
 // returns a combined error when the downloaded binary fails validation.
 func TestCheckOnceFallbackDownload_InvalidBinary(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("checkOnceFallbackDownload is Windows-only")
-	}
 	badData := make([]byte, minBinarySize+1)
 	src := &downloadableMockSource{
 		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
@@ -1167,9 +1242,6 @@ func TestCheckOnceFallbackDownload_InvalidBinary(t *testing.T) {
 // TestPeriodicFallbackDownload_InvalidBinary verifies periodicFallbackDownload
 // logs error when the downloaded binary has invalid content.
 func TestPeriodicFallbackDownload_InvalidBinary(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("periodicFallbackDownload is Windows-only")
-	}
 	badData := make([]byte, minBinarySize+1)
 	src := &downloadableMockSource{
 		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
@@ -1188,9 +1260,6 @@ func TestPeriodicFallbackDownload_InvalidBinary(t *testing.T) {
 // TestPeriodicFallbackDownload_ValidBinary verifies periodicFallbackDownload
 // succeeds end-to-end when downloadToStaging produces a valid binary.
 func TestPeriodicFallbackDownload_ValidBinary(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("periodicFallbackDownload is Windows-only")
-	}
 	restoreTestBinary(t)
 
 	src := &downloadableMockSource{
@@ -1205,6 +1274,89 @@ func TestPeriodicFallbackDownload_ValidBinary(t *testing.T) {
 
 	// Should succeed or log error depending on binary locking.
 	u.periodicFallbackDownload(context.Background(), errors.New("apply failed"))
+}
+
+// TestCheckOnceFallbackDownload_ValidBinary verifies the direct fallback helper
+// can download and replace a staged binary when invoked independently of GOOS gating.
+func TestCheckOnceFallbackDownload_ValidBinary(t *testing.T) {
+	restoreTestBinary(t)
+
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
+		downloadData: fakeBinary(),
+	}
+	u := NewUpdaterWithSource(Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, src)
+
+	newVersion, updated, err := u.checkOnceFallbackDownload(context.Background(), errors.New("apply failed"))
+	if err != nil {
+		if !strings.Contains(err.Error(), "rename fallback") {
+			t.Fatalf("error = %q, want rename fallback context", err.Error())
+		}
+		return
+	}
+	if !updated {
+		t.Fatal("updated = false, want true")
+	}
+	if newVersion != "2.0.0" {
+		t.Fatalf("newVersion = %q, want 2.0.0", newVersion)
+	}
+}
+
+// TestCheckOnceFallbackDownload_RenameError verifies staging cleanup when the
+// downloaded binary is valid but replacing the current executable fails.
+func TestCheckOnceFallbackDownload_RenameError(t *testing.T) {
+	dir := t.TempDir()
+	missingExe := filepath.Join(dir, "missing-binary")
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) { return missingExe, nil }
+	t.Cleanup(func() { resolveExecutable = orig })
+
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
+		downloadData: fakeBinary(),
+	}
+	u := NewUpdaterWithSource(Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, src)
+
+	_, _, err := u.checkOnceFallbackDownload(context.Background(), errors.New("apply failed"))
+	if err == nil || !strings.Contains(err.Error(), "rename fallback") {
+		t.Fatalf("error = %v, want rename fallback", err)
+	}
+	if _, statErr := os.Stat(missingExe + ".tmp"); !os.IsNotExist(statErr) {
+		t.Fatalf("staged file should be removed after rename failure, statErr=%v", statErr)
+	}
+}
+
+// TestPeriodicFallbackDownload_RenameError verifies the periodic fallback logs
+// and cleans up when a valid staged binary cannot replace the executable.
+func TestPeriodicFallbackDownload_RenameError(t *testing.T) {
+	dir := t.TempDir()
+	missingExe := filepath.Join(dir, "missing-binary")
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) { return missingExe, nil }
+	t.Cleanup(func() { resolveExecutable = orig })
+
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{newMockReleaseForPlatform("v2.0.0", "", "")},
+		downloadData: fakeBinary(),
+	}
+	u := NewUpdaterWithSource(Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, src)
+
+	u.periodicFallbackDownload(context.Background(), errors.New("apply failed"))
+	if _, statErr := os.Stat(missingExe + ".tmp"); !os.IsNotExist(statErr) {
+		t.Fatalf("staged file should be removed after rename failure, statErr=%v", statErr)
+	}
 }
 
 // TestSelfupdateUpdater verifies that selfupdateUpdater returns
@@ -1355,11 +1507,8 @@ func TestSafePeriodicCheckOnce_PanicRecovery(t *testing.T) {
 		Mode:           ModeAuto,
 		Repository:     "group/project",
 		CurrentVersion: "1.0.0",
-	}, nil)
+	}, panicSource{})
 
-	// safePeriodicCheckOnce will call periodicCheckOnce which will call
-	// CheckForUpdate with nil source — this may panic. The recovery should
-	// catch it.
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("safePeriodicCheckOnce should have recovered from panic, got: %v", r)
@@ -1481,4 +1630,43 @@ func TestDownloadToStaging_ResolveError(t *testing.T) {
 	if !strings.Contains(err.Error(), "resolving executable") {
 		t.Errorf("error = %q, want to contain 'resolving executable'", err.Error())
 	}
+}
+
+// stubExecutablePath overrides resolveExecutable to return a fake binary
+// inside t.TempDir(), preventing tests from creating .old/.tmp/.new files
+// next to the real production binary.
+func stubExecutablePath(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	fakeBin := filepath.Join(dir, "gitlab-mcp-server")
+	if err := os.WriteFile(fakeBin, []byte("fake-binary"), 0o755); err != nil {
+		t.Fatalf("cannot create fake binary: %v", err)
+	}
+
+	orig := resolveExecutable
+	resolveExecutable = func() (string, error) { return fakeBin, nil }
+	t.Cleanup(func() { resolveExecutable = orig })
+	return fakeBin
+}
+
+// stubExecSelf overrides the execSelf function variable to return the
+// given error, allowing tests to simulate exec success/failure without
+// calling syscall.Exec. Returns the path from stubExecutablePath.
+func stubExecSelf(t *testing.T, err error) string {
+	t.Helper()
+	exe := stubExecutablePath(t)
+	orig := execSelf
+	execSelf = func() error { return err }
+	t.Cleanup(func() { execSelf = orig })
+	return exe
+}
+
+// stubNewGitHubSource overrides newGitHubSource to return the given source,
+// allowing tests to inject mock sources into NewUpdater and PreStartUpdate
+// without requiring network access.
+func stubNewGitHubSource(t *testing.T, src selfupdate.Source) {
+	t.Helper()
+	orig := newGitHubSource
+	newGitHubSource = func() (selfupdate.Source, error) { return src, nil }
+	t.Cleanup(func() { newGitHubSource = orig })
 }

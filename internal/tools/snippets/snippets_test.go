@@ -10,6 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -227,6 +230,27 @@ func TestCreate_MissingContent(t *testing.T) {
 	}
 }
 
+// TestValidateCreateSnippetContent_MultiFileErrors verifies per-file validation.
+func TestValidateCreateSnippetContent_MultiFileErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		files   []CreateFileInput
+		wantErr string
+	}{
+		{name: "missing path", files: []CreateFileInput{{Content: "package main"}}, wantErr: "files[0].file_path"},
+		{name: "missing content", files: []CreateFileInput{{FilePath: "main.go"}}, wantErr: "files[0].content"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateCreateSnippetContent("", "", tt.files)
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("validateCreateSnippetContent() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Update
 // ---------------------------------------------------------------------------.
@@ -352,6 +376,73 @@ func TestFormatContentMarkdown(t *testing.T) {
 	if !strings.Contains(md, "hello world") {
 		t.Errorf("unexpected markdown: %s", md)
 	}
+}
+
+// TestFormatSnippetNotFound verifies not-found result formatting.
+func TestFormatSnippetNotFound(t *testing.T) {
+	result := formatSnippetNotFound(snippetNotFoundOutput{Identifier: "42"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatSnippetNotFound() = %+v, want error result", result)
+	}
+	content, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content type = %T, want *mcp.TextContent", result.Content[0])
+	}
+	if !strings.Contains(content.Text, "Snippet") || !strings.Contains(content.Text, "42") {
+		t.Fatalf("content = %q, want snippet identifier", content.Text)
+	}
+}
+
+// TestAddSnippetCreateFileRequirement_EdgeCases verifies schema mutation guards.
+func TestAddSnippetCreateFileRequirement_EdgeCases(t *testing.T) {
+	addSnippetCreateFileRequirement(nil)
+
+	schema := &jsonschema.Schema{}
+	addSnippetCreateFileRequirement(schema)
+	if schema.Properties == nil {
+		t.Fatal("expected properties map to be initialized")
+	}
+	if len(schema.AnyOf) != 2 {
+		t.Fatalf("AnyOf length = %d, want 2", len(schema.AnyOf))
+	}
+
+	filesSchema := &jsonschema.Schema{}
+	schema = &jsonschema.Schema{Properties: map[string]*jsonschema.Schema{"files": filesSchema}}
+	addSnippetCreateFileRequirement(schema)
+	if filesSchema.MinItems == nil || *filesSchema.MinItems != 1 {
+		t.Fatalf("files MinItems = %v, want 1", filesSchema.MinItems)
+	}
+}
+
+// TestCreateInputSchemaMaps verifies snippet create schema maps expose the file requirement.
+func TestCreateInputSchemaMaps(t *testing.T) {
+	for name, schema := range map[string]map[string]any{
+		"personal": CreateInputSchemaMap(),
+		"project":  ProjectCreateInputSchemaMap(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if len(schema) == 0 {
+				t.Fatal("expected non-empty schema map")
+			}
+			if _, ok := schema["anyOf"]; !ok {
+				t.Fatalf("schema missing anyOf: %#v", schema)
+			}
+		})
+	}
+}
+
+// TestSnippetCreateInputSchemaPanicsForUnsupportedType verifies schema-generation failures are surfaced.
+func TestSnippetCreateInputSchemaPanicsForUnsupportedType(t *testing.T) {
+	type unsupportedSchemaInput struct {
+		Callback func() `json:"callback"`
+	}
+
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic for unsupported schema type")
+		}
+	}()
+	_ = snippetCreateInputSchema[unsupportedSchemaInput]()
 }
 
 // TestFormatFileContentMarkdown verifies FormatFileContentMarkdown.

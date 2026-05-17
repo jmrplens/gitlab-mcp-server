@@ -193,6 +193,66 @@ func TestMarkdownForResult_FileRichContent(t *testing.T) {
 	}
 }
 
+// TestMarkdownForResult_FileTextBinaryAndNotFound verifies the file Markdown
+// registry covers non-image file outputs and the canonical not-found output.
+func TestMarkdownForResult_FileTextBinaryAndNotFound(t *testing.T) {
+	tests := []struct {
+		name        string
+		result      any
+		want        string
+		wantIsError bool
+	}{
+		{
+			name:   "file get text",
+			result: Output{FilePath: "main.go", Ref: "main", Encoding: "base64", BlobID: "blob", Size: 13},
+			want:   "## File: main.go",
+		},
+		{
+			name:   "file get binary",
+			result: Output{FilePath: "archive.zip", ContentCategory: "binary", Ref: "main", BlobID: "blob", Size: 42},
+			want:   "content omitted",
+		},
+		{
+			name:   "raw text",
+			result: RawOutput{FilePath: "main.go", Size: 13, Content: "package main\n"},
+			want:   "## Raw File: main.go",
+		},
+		{
+			name:   "raw binary",
+			result: RawOutput{FilePath: "archive.zip", ContentCategory: "binary", Size: 42},
+			want:   "## Binary File: archive.zip",
+		},
+		{
+			name:        "not found",
+			result:      fileNotFoundOutput{Identifier: "src/missing.go@main"},
+			want:        "File Not Found",
+			wantIsError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callResult := toolutil.MarkdownForResult(tt.result)
+			if callResult == nil {
+				t.Fatal("MarkdownForResult returned nil")
+			}
+			if callResult.IsError != tt.wantIsError {
+				t.Fatalf("IsError = %v, want %v", callResult.IsError, tt.wantIsError)
+			}
+			if len(callResult.Content) != 1 {
+				t.Fatalf("content items = %d, want 1", len(callResult.Content))
+			}
+			content, ok := callResult.Content[0].(*mcp.TextContent)
+			if !ok {
+				t.Fatalf("content[0] = %T, want *mcp.TextContent", callResult.Content[0])
+			}
+			if !strings.Contains(content.Text, tt.want) {
+				t.Fatalf("markdown missing %q:\n%s", tt.want, content.Text)
+			}
+		})
+	}
+}
+
 func fileMockHandler(w http.ResponseWriter, r *http.Request) {
 	content := base64.StdEncoding.EncodeToString([]byte("package main\n"))
 	path := r.URL.Path

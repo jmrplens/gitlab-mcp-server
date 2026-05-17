@@ -567,3 +567,23 @@ func TestGet_ArrayFallback_EmptyArray(t *testing.T) {
 		t.Fatal("expected error for empty fallback array")
 	}
 }
+
+// TestGet_ArrayFallback_DoError verifies raw fallback request errors are wrapped.
+func TestGet_ArrayFallback_DoError(t *testing.T) {
+	calls := 0
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		if calls == 1 {
+			testutil.RespondJSON(w, http.StatusOK, `[{}]`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+	}))
+	_, err := Get(context.Background(), client, GetInput{ID: "missing"})
+	if err == nil {
+		t.Fatal("expected error for fallback request")
+	}
+	if !strings.Contains(err.Error(), "namespace_get") {
+		t.Fatalf("error = %v, want namespace_get context", err)
+	}
+}

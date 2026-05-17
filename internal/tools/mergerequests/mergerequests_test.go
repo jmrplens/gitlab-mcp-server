@@ -17,6 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // Test constants for merge request endpoint paths and reusable values.
@@ -1395,6 +1396,279 @@ func assertContains(t *testing.T, err error, substr string) {
 	}
 }
 
+// TestMRCreate_LabelAndStatusBranches verifies Create forwards labels and
+// returns status-specific hints for conflict and bad request responses.
+func TestMRCreate_LabelAndStatusBranches(t *testing.T) {
+	t.Run("labels", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != pathMRs {
+				http.NotFound(w, r)
+				return
+			}
+			testutil.RespondJSON(w, http.StatusCreated, mrJSONMinimalMR)
+		}))
+		_, err := Create(context.Background(), client, CreateInput{
+			ProjectID:    testProjectID,
+			SourceBranch: testBranchFeat,
+			TargetBranch: testBranchMain,
+			Title:        testMRTitle,
+			Labels:       testLabels,
+		})
+		if err != nil {
+			t.Fatalf("Create() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("conflict", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusConflict, `{"message":"branch already has a merge request"}`)
+		}))
+		_, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, SourceBranch: testBranchFeat, TargetBranch: testBranchMain, Title: testMRTitle})
+		assertContains(t, err, "source_branch filter")
+	})
+
+	t.Run("bad request", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"source branch is invalid"}`)
+		}))
+		_, err := Create(context.Background(), client, CreateInput{ProjectID: testProjectID, SourceBranch: testBranchFeat, TargetBranch: testBranchMain, Title: testMRTitle})
+		assertContains(t, err, "gitlab_branch_list")
+	})
+}
+
+// TestMRGenericErrorBranches verifies non-specialized API errors use generic wrappers.
+func TestMRGenericErrorBranches(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func(*testing.T)
+	}{
+		{"get", func(t *testing.T) {
+			t.Helper()
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+			}))
+			_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
+			assertContains(t, err, "forbidden")
+		}},
+		{"list", func(t *testing.T) {
+			t.Helper()
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"project not found"}`)
+			}))
+			_, err := List(context.Background(), client, ListInput{ProjectID: testProjectID})
+			assertContains(t, err, "gitlab_project_get")
+		}},
+		{"delete", func(t *testing.T) {
+			t.Helper()
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+			}))
+			err := Delete(context.Background(), client, DeleteInput{ProjectID: testProjectID, MRIID: 1})
+			assertContains(t, err, "404")
+		}},
+		{"rebase", func(t *testing.T) {
+			t.Helper()
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+			}))
+			_, err := Rebase(context.Background(), client, RebaseInput{ProjectID: testProjectID, MRIID: 1})
+			assertContains(t, err, "404")
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, tt.fn)
+	}
+}
+
+// TestBuildUpdateOpts_LabelBranches verifies label update options are populated.
+func TestBuildUpdateOpts_LabelBranches(t *testing.T) {
+	opts := buildUpdateOpts(UpdateInput{Labels: "bug,critical", AddLabels: "security"})
+	if opts.Labels == nil || len(*opts.Labels) != 2 {
+		t.Fatalf("Labels = %#v, want two labels", opts.Labels)
+	}
+	if opts.AddLabels == nil || len(*opts.AddLabels) != 1 {
+		t.Fatalf("AddLabels = %#v, want one label", opts.AddLabels)
+	}
+}
+
+// TestMRStatusHintBranches verifies remaining status-specific handler hints.
+func TestMRStatusHintBranches(t *testing.T) {
+	t.Run("list group not found", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"group not found"}`)
+		}))
+		_, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: "99"})
+		assertContains(t, err, "gitlab_group_get")
+	})
+
+	t.Run("reviewers missing project", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+		}))
+		_, err := Reviewers(context.Background(), client, ParticipantsInput{MRIID: 1})
+		assertContains(t, err, "project_id")
+	})
+
+	t.Run("unapprove not found", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+		}))
+		err := Unapprove(context.Background(), client, ApproveInput{ProjectID: testProjectID, MRIID: 1})
+		assertContains(t, err, "gitlab_mr_approve")
+	})
+
+	t.Run("create pipeline forbidden", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+		}))
+		_, err := CreatePipeline(context.Background(), client, CreatePipelineInput{ProjectID: testProjectID, MRIID: 1})
+		assertContains(t, err, "Developer")
+	})
+
+	t.Run("create pipeline bad request", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid pipeline"}`)
+		}))
+		_, err := CreatePipeline(context.Background(), client, CreatePipelineInput{ProjectID: testProjectID, MRIID: 1})
+		assertContains(t, err, "gitlab_ci_lint")
+	})
+
+	t.Run("create pipeline not found", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+		}))
+		_, err := CreatePipeline(context.Background(), client, CreatePipelineInput{ProjectID: testProjectID, MRIID: 1})
+		assertContains(t, err, "gitlab_mr_get")
+	})
+
+	t.Run("cancel auto merge not found", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+		}))
+		_, err := CancelAutoMerge(context.Background(), client, GetInput{ProjectID: testProjectID, MRIID: 1})
+		assertContains(t, err, "gitlab_mr_get")
+	})
+}
+
+// TestMRPaginationBranches verifies list-like MR helpers forward pagination.
+func TestMRPaginationBranches(t *testing.T) {
+	t.Run("commits", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == pathMR1+"/commits" {
+				testutil.AssertQueryParam(t, r, "page", "3")
+				testutil.AssertQueryParam(t, r, "per_page", "7")
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		_, err := Commits(context.Background(), client, CommitsInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 7}})
+		if err != nil {
+			t.Fatalf("Commits() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("issues closed", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == pathMR1+"/closes_issues" {
+				testutil.AssertQueryParam(t, r, "page", "2")
+				testutil.AssertQueryParam(t, r, "per_page", "5")
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		_, err := IssuesClosed(context.Background(), client, IssuesClosedInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5}})
+		if err != nil {
+			t.Fatalf("IssuesClosed() unexpected error: %v", err)
+		}
+	})
+
+	t.Run("related issues", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == pathMR1+"/related_issues" {
+				testutil.AssertQueryParam(t, r, "page", "4")
+				testutil.AssertQueryParam(t, r, "per_page", "9")
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		_, err := RelatedIssues(context.Background(), client, RelatedIssuesInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: toolutil.PaginationInput{Page: 4, PerPage: 9}})
+		if err != nil {
+			t.Fatalf("RelatedIssues() unexpected error: %v", err)
+		}
+	})
+}
+
+// TestMRDependencyStatusBranches verifies dependency endpoint status-specific hints.
+func TestMRDependencyStatusBranches(t *testing.T) {
+	t.Run("create forbidden", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
+		}))
+		_, err := CreateDependency(context.Background(), client, DependencyInput{ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestID: 100})
+		assertContains(t, err, "Premium")
+	})
+
+	t.Run("create not found", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+		}))
+		_, err := CreateDependency(context.Background(), client, DependencyInput{ProjectID: testProjectID, MRIID: 1, BlockingMergeRequestID: 100})
+		assertContains(t, err, "blocking_merge_request_id")
+	})
+
+	t.Run("get not found", func(t *testing.T) {
+		client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
+		}))
+		_, err := GetDependencies(context.Background(), client, GetDependenciesInput{ProjectID: testProjectID, MRIID: 1})
+		assertContains(t, err, "gitlab_mr_get")
+	})
+}
+
+// TestMRRebase_WithSkipCI verifies Rebase accepts the skip_ci option.
+func TestMRRebase_WithSkipCI(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathMR1+"/rebase" {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Rebase(context.Background(), client, RebaseInput{ProjectID: testProjectID, MRIID: 1, SkipCI: true})
+	if err != nil {
+		t.Fatalf("Rebase() unexpected error: %v", err)
+	}
+	if !out.RebaseInProgress {
+		t.Fatal("RebaseInProgress = false, want true")
+	}
+}
+
+// TestDiagnoseMergeBlocker_Branches verifies merge blocker diagnostics for nil,
+// field-derived, and generic merge request states.
+func TestDiagnoseMergeBlocker_Branches(t *testing.T) {
+	assertContains(t, diagnoseMergeBlocker(1, nil, io.EOF), "mrMerge")
+	assertContains(t, diagnoseMergeBlocker(1, &gl.MergeRequest{
+		BasicMergeRequest: gl.BasicMergeRequest{
+			Draft:                       true,
+			HasConflicts:                true,
+			BlockingDiscussionsResolved: false,
+			State:                       "closed",
+		},
+		MergeError: "pipeline failed",
+	}, io.EOF), "pipeline failed")
+	assertContains(t, diagnoseMergeBlocker(1, &gl.MergeRequest{
+		BasicMergeRequest: gl.BasicMergeRequest{
+			DetailedMergeStatus:         "mergeable",
+			BlockingDiscussionsResolved: true,
+			State:                       "opened",
+		},
+	}, io.EOF), "mrMerge")
+}
+
 // ---------------------------------------------------------------------------
 // ProjectPath extraction tests
 // ---------------------------------------------------------------------------.
@@ -2042,6 +2316,30 @@ func TestCreateTodo_APIError(t *testing.T) {
 	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
 	if err == nil {
 		t.Fatal("CreateTodo() expected error for API failure, got nil")
+	}
+}
+
+// TestCreateTodo_AlreadyExists verifies CreateTodo when GitLab returns 304 for an existing todo.
+func TestCreateTodo_AlreadyExists(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != pathMR1+"/todo" {
+			t.Fatalf("path = %s, want %s", r.URL.Path, pathMR1+"/todo")
+		}
+		w.WriteHeader(http.StatusNotModified)
+	}))
+
+	_, err := CreateTodo(context.Background(), client, CreateTodoInput{ProjectID: testProjectID, MRIID: 1})
+	if err == nil {
+		t.Fatal("CreateTodo() expected error for existing todo, got nil")
+	}
+	if !strings.Contains(err.Error(), "pending todo") {
+		t.Fatalf("CreateTodo() error = %v, want pending todo hint", err)
+	}
+	if !strings.Contains(err.Error(), "HTTP 304") {
+		t.Fatalf("CreateTodo() error = %v, want HTTP 304 context", err)
 	}
 }
 
@@ -4248,6 +4546,39 @@ func TestActionSpecs_MRGetNotFound(t *testing.T) {
 	}
 	if _, ok := result.(mergeRequestNotFoundOutput); !ok {
 		t.Fatalf("result type = %T, want mergeRequestNotFoundOutput", result)
+	}
+}
+
+// TestFormatMergeRequestNotFound verifies not-found result formatting for merge requests.
+func TestFormatMergeRequestNotFound(t *testing.T) {
+	result := formatMergeRequestNotFound(mergeRequestNotFoundOutput{Identifier: "!5 in project 42"})
+	if result == nil || !result.IsError {
+		t.Fatalf("formatMergeRequestNotFound() = %+v, want error result", result)
+	}
+}
+
+// TestActionSpecs_DeleteOutputErrors verifies MR delete-style wrappers propagate backend failures.
+func TestActionSpecs_DeleteOutputErrors(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
+	}))
+	byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
+
+	tests := []struct {
+		tool string
+		args map[string]any
+	}{
+		{"gitlab_mr_unapprove", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_delete", map[string]any{"project_id": "42", "merge_request_iid": 1}},
+		{"gitlab_mr_dependency_delete", map[string]any{"project_id": "42", "merge_request_iid": 1, "blocking_merge_request_id": 100}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			_, err := byTool[tt.tool].Route.Handler(t.Context(), tt.args)
+			if err == nil {
+				t.Fatalf("expected route error for %s", tt.tool)
+			}
+		})
 	}
 }
 

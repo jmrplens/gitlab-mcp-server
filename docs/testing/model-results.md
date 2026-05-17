@@ -1,7 +1,7 @@
 # AI Model Evaluation Results
 
 This document publishes the current model-evaluation results selected with
-`cmd/eval_meta_tools --publish-docs`. Meta-tools and Dynamic 3-tool results are
+`cmd/eval_mcp_surfaces --publish-docs`. Meta-tools and Dynamic 3-tool results are
 kept in separate managed sections so publishing one surface does not replace the
 other. Raw reports and traces are not committed.
 
@@ -34,7 +34,7 @@ other. Raw reports and traces are not committed.
 | `qwen:qwen3.6-flash` | `schema-enterprise` | Docker GitLab via MCP | 1 | 1 | 1 | 1 | 100.0% | 100.0% | 100.0% | - | 100.0% | 100.0% | in 41848 / out 82 | 1efd9f82eb59 / docs/eval-doc-refresh-2026-05-13 / 2026-05-13T18:08:00Z |
 | **Aggregate** | **all selected** | - | **560** | **1084** | **1096** | **1094** | **99.5%** | **98.9%** | **98.8%** | **23.1% (6/26)** | **99.8%** | **99.1%** | - | - |
 
-Published with `cmd/eval_meta_tools --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
+Published with `cmd/eval_mcp_surfaces --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
 <!-- END MODEL EVAL META RESULTS -->
 
 ## Dynamic 2-Tool Results
@@ -72,5 +72,5 @@ No Dynamic 2-tool evaluation results have been published yet.
 | `qwen:qwen3.6-flash` | `schema-enterprise` | Docker GitLab via MCP | 1 | 1 | 1 | 1 | 100.0% | 100.0% | 100.0% | - | 100.0% | 100.0% | in 2832 / out 92 | 1efd9f82eb59 / docs/eval-doc-refresh-2026-05-13 / 2026-05-13T19:57:05Z |
 | **Aggregate** | **all selected** | - | **564** | **1088** | **1356** | **1356** | **100.0%** | **99.6%** | **99.6%** | **18.4% (7/38)** | **100.0%** | **99.8%** | - | - |
 
-Published with `cmd/eval_meta_tools --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
+Published with `cmd/eval_mcp_surfaces --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
 <!-- END MODEL EVAL DYNAMIC3 RESULTS -->
