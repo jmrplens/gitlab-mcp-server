@@ -539,6 +539,9 @@ func toSCIMIdentityOutputs(identities []*gl.SCIMIdentity) []SCIMIdentityOutput {
 			Active:    identity.Active,
 		})
 	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
 }
 

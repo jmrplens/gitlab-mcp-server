@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -208,6 +210,49 @@ func TestGet_UserAPIError(t *testing.T) {
 	_, err := Get(context.Background(), client, GetInput{UserID: 999})
 	if err == nil {
 		t.Fatal(errExpAPIFailure)
+	}
+}
+
+// TestToSCIMIdentityOutputs verifies SCIM identity conversion handles valid,
+// empty, and nil-only slices consistently for omitempty output.
+func TestToSCIMIdentityOutputs(t *testing.T) {
+	tests := []struct {
+		name       string
+		identities []*gl.SCIMIdentity
+		want       []SCIMIdentityOutput
+	}{
+		{
+			name:       "empty",
+			identities: nil,
+			want:       nil,
+		},
+		{
+			name:       "nil only",
+			identities: []*gl.SCIMIdentity{nil},
+			want:       nil,
+		},
+		{
+			name: "filters nil identities",
+			identities: []*gl.SCIMIdentity{
+				nil,
+				{ExternUID: "scim-user-42", GroupID: 7, Active: true},
+			},
+			want: []SCIMIdentityOutput{{ExternUID: "scim-user-42", GroupID: 7, Active: true}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := toSCIMIdentityOutputs(tt.identities)
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %d identities, want %d", len(got), len(tt.want))
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("identity[%d] = %+v, want %+v", i, got[i], tt.want[i])
+				}
+			}
+		})
 	}
 }
 
