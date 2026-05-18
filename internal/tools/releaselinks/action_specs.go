@@ -49,6 +49,34 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		OwnerPackage:   "releaselinks",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if actionName == "link_create" || actionName == "link_update" {
+		options.Usage = "Create or update a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url."
+		if actionName == "link_create" {
+			options.Aliases = []string{"create release link", "add release asset link", "link release asset"}
+		} else {
+			options.Aliases = []string{"update release link", "edit release asset link", "modify release asset link"}
+		}
+		options.RelatedActions = []string{"release.create", "release.link_list", "package.publish", "package.publish_directory"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"url": {
+				SemanticRole: "release_asset_absolute_url",
+				ValueSource:  "Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions.",
+				CommonConfusions: []string{
+					"Do not use local file paths, relative paths, or package file names as url.",
+					"Do not construct package registry URLs manually when a package publish action returned the asset URL.",
+				},
+			},
+		}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("url", map[string]any{
+				"description": "Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.",
+			}),
+			toolutil.SchemaPropertyOverride("link_type", map[string]any{
+				"enum":        []any{"other", "runbook", "image", "package"},
+				"description": "Type of the release link: other, runbook, image, or package.",
+			}),
+		}
+	}
 	if actionName == "link_create_batch" {
 		options.Usage = "Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets."
 		options.Aliases = []string{"batch release links", "release package asset links", "link package files to release", "create multiple release assets"}

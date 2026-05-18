@@ -67,6 +67,31 @@ func TestActionSpecs_CreateBatchGuidance(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_SingleLinkURLGuidance verifies single-link create/update
+// actions explain GitLab's absolute URL requirement.
+func TestActionSpecs_SingleLinkURLGuidance(t *testing.T) {
+	byTool := releaseLinkSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, releaseLinksActionHandler())))
+	for _, toolName := range []string{"gitlab_release_link_create", "gitlab_release_link_update"} {
+		t.Run(toolName, func(t *testing.T) {
+			spec := byTool[toolName]
+			if !strings.Contains(spec.Usage, "absolute http, https, or ftp URL") {
+				t.Fatalf("Usage = %q, want absolute URL guidance", spec.Usage)
+			}
+			guidance := spec.ParameterGuidance["url"]
+			if guidance.SemanticRole != "release_asset_absolute_url" {
+				t.Fatalf("url SemanticRole = %q, want release_asset_absolute_url", guidance.SemanticRole)
+			}
+			if !containsText(guidance.CommonConfusions, "local file paths") {
+				t.Fatalf("url CommonConfusions = %v, want local path warning", guidance.CommonConfusions)
+			}
+			description := schemaPropertyDescription(t, spec.Route.InputSchema, "url")
+			if !strings.Contains(description, "Absolute http, https, or ftp URL") {
+				t.Fatalf("url schema description = %q, want absolute URL warning", description)
+			}
+		})
+	}
+}
+
 // TestActionSpecs_MutationErrors verifies canonical routes propagate backend errors.
 func TestActionSpecs_MutationErrors(t *testing.T) {
 	byTool := releaseLinkSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

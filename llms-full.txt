@@ -5282,8 +5282,10 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_package/<action>.
 Action guidance:
+- list: List package registry packages. If ordering is requested, use order_by with one of created_at, name, version, or type; do not use updated_at, released_at, or downloaded_at.
 - publish_directory: Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file; include_pattern is one glob, not a comma-separated file list.
 Parameter guidance:
+- list.order_by: package_list_sort_field; source: Use only GitLab Package Registry ordering fields accepted by the packages API.; avoid: Do not use updated_at, released_at, downloaded_at, last_downloaded_at, or id as order_by values.
 - publish_directory.include_pattern: single_glob_filter; source: Optional single glob matched against file names inside directory_path; omit it to include all regular files.; avoid: Do not pass comma-separated filenames., Do not use include_pattern to enumerate exact files; omit it when all fixture files should be uploaded.
 
 Manage GitLab package registry, container registry, and protection rules. Upload/download generic packages, list/delete packages, browse container images/tags, and configure access policies. Delete actions are destructive.
@@ -7022,9 +7024,13 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_release/<action>.
 Action guidance:
+- link_create: Create or update a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url.
 - link_create_batch: Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets.
+- link_update: Create or update a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url.
 Parameter guidance:
+- link_create.url: release_asset_absolute_url; source: Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions.; avoid: Do not use local file paths, relative paths, or package file names as url., Do not construct package registry URLs manually when a package publish action returned the asset URL.
 - link_create_batch.links: release_asset_links; source: Array of link objects. Each item supports only name, url, and link_type; url must be absolute.; avoid: Do not send direct_asset_path or filepath to link_create_batch., For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.
+- link_update.url: release_asset_absolute_url; source: Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions.; avoid: Do not use local file paths, relative paths, or package file names as url., Do not construct package registry URLs manually when a package publish action returned the asset URL.
 
 Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
 When to use: publish a release for a tag, create a release and its tag from a ref, list/get/update releases, attach asset links to a release, batch-attach links after a CI build.
@@ -19460,7 +19466,7 @@ List packages in a GitLab project. Can filter by name, version, type, and suppor
 **Parameters:**
 
 - `include_versionless` (boolean): Include versionless packages
-- `order_by` (string): Order by: name, created_at, version, type
+- `order_by` (string): Order by package registry field: created_at, name, version, or type.
 - `package_name` (string): Filter by package name
 - `package_type` (string): Filter by type (generic, npm, maven, etc.)
 - `package_version` (string): Filter by package version
@@ -21636,11 +21642,11 @@ Add an asset link to a GitLab release. IMPORTANT: (1) When linking to uploaded p
 
 **Parameters:**
 
-- `link_type` (string): Type of the link (runbook, package, image, other)
+- `link_type` (string): Type of the release link: other, runbook, image, or package.
 - `name` (string) (required): Name of the link
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `tag_name` (string) (required): Tag name of the release
-- `url` (string) (required): URL of the link target. For packages use the real url returned by gitlab_package_publish — never construct URLs manually
+- `url` (string) (required): Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -21703,11 +21709,11 @@ Update an existing release asset link. Can change name, URL, filepath, direct as
 - `direct_asset_path` (string): New direct asset path for the link
 - `filepath` (string): New filepath for a direct asset link
 - `link_id` (integer) (required): ID of the release link to update
-- `link_type` (string): New link type (runbook, package, image, other)
+- `link_type` (string): Type of the release link: other, runbook, image, or package.
 - `name` (string): New name of the link
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `tag_name` (string) (required): Tag name of the release
-- `url` (string): New URL of the link
+- `url` (string): Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

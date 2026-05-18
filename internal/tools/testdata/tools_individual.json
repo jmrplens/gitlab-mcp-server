@@ -75392,7 +75392,13 @@
           "type": "boolean"
         },
         "order_by": {
-          "description": "Order by: name, created_at, version, type",
+          "description": "Order by package registry field: created_at, name, version, or type.",
+          "enum": [
+            "created_at",
+            "name",
+            "version",
+            "type"
+          ],
           "type": "string"
         },
         "package_name": {
@@ -75421,10 +75427,20 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "status": {
           "description": "Filter by status: default, hidden, processing, error",
+          "enum": [
+            "default",
+            "hidden",
+            "processing",
+            "error"
+          ],
           "type": "string"
         }
       },
@@ -96325,7 +96341,13 @@
       "additionalProperties": false,
       "properties": {
         "link_type": {
-          "description": "Type of the link (runbook, package, image, other)",
+          "description": "Type of the release link: other, runbook, image, or package.",
+          "enum": [
+            "other",
+            "runbook",
+            "image",
+            "package"
+          ],
           "type": "string"
         },
         "name": {
@@ -96341,7 +96363,7 @@
           "type": "string"
         },
         "url": {
-          "description": "URL of the link target. For packages use the real url returned by gitlab_package_publish — never construct URLs manually",
+          "description": "Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.",
           "type": "string"
         }
       },
@@ -96833,7 +96855,13 @@
           "type": "integer"
         },
         "link_type": {
-          "description": "New link type (runbook, package, image, other)",
+          "description": "Type of the release link: other, runbook, image, or package.",
+          "enum": [
+            "other",
+            "runbook",
+            "image",
+            "package"
+          ],
           "type": "string"
         },
         "name": {
@@ -96849,7 +96877,7 @@
           "type": "string"
         },
         "url": {
-          "description": "New URL of the link",
+          "description": "Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.",
           "type": "string"
         }
       },

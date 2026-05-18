@@ -99,6 +99,27 @@ func TestActionSpecs_PublishDirectoryGuidance(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_ListOrderingGuidance verifies package list exposes accepted
+// order_by values so models avoid unsupported GitLab API sort fields.
+func TestActionSpecs_ListOrderingGuidance(t *testing.T) {
+	byTool := packageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, packageActionHandler())))
+	spec := byTool["gitlab_package_list"]
+
+	if !strings.Contains(spec.Usage, "created_at, name, version, or type") {
+		t.Fatalf("Usage = %q, want accepted order_by guidance", spec.Usage)
+	}
+	guidance := spec.ParameterGuidance["order_by"]
+	if guidance.SemanticRole != "package_list_sort_field" {
+		t.Fatalf("order_by SemanticRole = %q, want package_list_sort_field", guidance.SemanticRole)
+	}
+	if !containsText(guidance.CommonConfusions, "updated_at") {
+		t.Fatalf("order_by CommonConfusions = %v, want unsupported field warning", guidance.CommonConfusions)
+	}
+	if got := schemaPropertyEnum(t, spec.Route.InputSchema, "order_by"); !sameStringSet(got, []string{"created_at", "name", "version", "type"}) {
+		t.Fatalf("order_by enum = %v, want created_at/name/version/type", got)
+	}
+}
+
 // TestActionSpecs_DeleteOutputs verifies delete routes preserve their success messages.
 func TestActionSpecs_DeleteOutputs(t *testing.T) {
 	byTool := packageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, packageActionHandler())))
@@ -269,6 +290,31 @@ func schemaPropertyDescription(t *testing.T, schema map[string]any, propertyName
 	return description
 }
 
+func schemaPropertyEnum(t *testing.T, schema map[string]any, propertyName string) []string {
+	t.Helper()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties missing or wrong type: %T", schema["properties"])
+	}
+	property, ok := properties[propertyName].(map[string]any)
+	if !ok {
+		t.Fatalf("property %q missing or wrong type: %T", propertyName, properties[propertyName])
+	}
+	values, ok := property["enum"].([]any)
+	if !ok {
+		t.Fatalf("property %q enum missing or wrong type: %T", propertyName, property["enum"])
+	}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		text, isString := value.(string)
+		if !isString {
+			t.Fatalf("property %q enum contains non-string value %T", propertyName, value)
+		}
+		result = append(result, text)
+	}
+	return result
+}
+
 func containsText(values []string, needle string) bool {
 	for _, value := range values {
 		if strings.Contains(value, needle) {
@@ -276,4 +322,20 @@ func containsText(values []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func sameStringSet(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	seen := make(map[string]struct{}, len(got))
+	for _, value := range got {
+		seen[value] = struct{}{}
+	}
+	for _, value := range want {
+		if _, ok := seen[value]; !ok {
+			return false
+		}
+	}
+	return true
 }

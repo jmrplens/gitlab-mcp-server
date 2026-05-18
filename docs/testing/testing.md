@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,158 |
-| Unit test functions                                   |  9,907 |
+| Total test functions                                  | 10,160 |
+| Unit test functions                                   |  9,909 |
 | E2E test functions                                    |    251 |
 | cmd test functions                                    |    520 |
 | Test files (internal/)                                |    419 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,103 | 89.6% |
+| `TestFunc_Scenario` (2-part)           | 9,105 | 89.6% |
 | `TestFunc` (no underscore)             |   765 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   290 |  2.9% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,721 |         79 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (170) |          7,382 |        328 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (170) |          7,384 |        328 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            520 |         22 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,158** |    **550** |                                                                                                 |
+| **Total**               |     **10,160** |    **550** |                                                                                                 |
 
 ### Core Packages
 
@@ -88,7 +88,7 @@
 | groups            |   125 |   100.0% |    18 |
 | dynamic           |   123 |    99.7% |     2 |
 | search            |   116 |   100.0% |    10 |
-| packages          |   110 |    99.0% |     8 |
+| packages          |   111 |    99.1% |     8 |
 | awardemoji        |   109 |    99.2% |    24 |
 | runners           |   105 |   100.0% |    19 |
 | commits           |   104 |   100.0% |    13 |
@@ -227,7 +227,7 @@
 | namespaces              |        35 |          1 |    98.9% |         4 |
 | notifications           |        29 |          1 |   100.0% |         6 |
 | orbit                   |        26 |          1 |   100.0% |         5 |
-| packages                |       110 |          5 |    99.0% |         8 |
+| packages                |       111 |          5 |    99.1% |         8 |
 | pages                   |        54 |          2 |   100.0% |         9 |
 | pipelines               |       104 |          2 |   100.0% |        12 |
 | pipelineschedules       |        86 |          2 |   100.0% |        11 |
@@ -244,7 +244,7 @@
 | projecttemplates        |        18 |          1 |   100.0% |         2 |
 | protectedenvs           |        38 |          2 |   100.0% |         5 |
 | protectedpackages       |        32 |          2 |   100.0% |         4 |
-| releaselinks            |        55 |          2 |   100.0% |         6 |
+| releaselinks            |        56 |          2 |   100.0% |         6 |
 | releases                |        61 |          1 |   100.0% |         6 |
 | repository              |        66 |          1 |   100.0% |         9 |
 | repositorysubmodules    |        48 |          3 |   100.0% |         3 |
@@ -282,7 +282,7 @@
 | vulnerabilities         |        57 |          3 |   100.0% |         8 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,382** |    **328** |          | **1,112** |
+| **Total**               | **7,384** |    **328** |          | **1,112** |
 
 </details>
 
@@ -453,7 +453,7 @@
 | namespaces              |    98.9% |
 | notifications           |   100.0% |
 | orbit                   |   100.0% |
-| packages                |    99.0% |
+| packages                |    99.1% |
 | pages                   |   100.0% |
 | pipelines               |   100.0% |
 | pipelineschedules       |   100.0% |
