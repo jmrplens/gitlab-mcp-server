@@ -334,7 +334,7 @@ Meta-tools advertise a deliberately compact input schema by default (`META_PARAM
    }
    ```
 
-  These resources are omitted when `CAPABILITY_SURFACE=minimal` is enabled. In that low-token mode, Dynamic surfaces should use `gitlab_find_action` for inline schemas; meta-tool callers can keep `CAPABILITY_SURFACE=full` or use the inlined schema modes below.
+  These resources remain available for meta-tools when `CAPABILITY_SURFACE=minimal` is enabled, while optional resources, prompts, and workflow guides are omitted. Dynamic surfaces should use `gitlab_find_action` for inline schemas in minimal mode; meta-tool callers can keep `META_PARAM_SCHEMA=opaque` and read the schema resources below.
 
 1. **Embed schemas in the tool description** — set `META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. Current audit metrics show `full` is 11.9x larger than `opaque`, and `compact` is 6.5x larger, so keep `opaque` unless your MCP client cannot read resources. See [env-reference.md](env-reference.md) for size/cost trade-offs.
 

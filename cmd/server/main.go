@@ -711,7 +711,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	if capabilitySurface == config.CapabilitySurfaceFull {
 		resources.Register(server, client)
 	}
-	if capabilitySurface == config.CapabilitySurfaceFull && toolSurface != config.ToolSurfaceIndividual {
+	if shouldRegisterMetaSchemaResources(capabilitySurface, toolSurface) {
 		resources.RegisterMetaSchemaResources(server, metaSchemaRoutes)
 	}
 	resources.RegisterWorkspaceRoots(server, rootsManager)
@@ -746,6 +746,16 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 
 	return server, nil
+}
+
+func shouldRegisterMetaSchemaResources(capabilitySurface, toolSurface string) bool {
+	if toolSurface == config.ToolSurfaceIndividual {
+		return false
+	}
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		return true
+	}
+	return capabilitySurface == config.CapabilitySurfaceMinimal && toolSurface == config.ToolSurfaceMeta
 }
 
 // httpShutdownTimeout bounds graceful HTTP shutdown after the process context

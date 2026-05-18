@@ -1103,7 +1103,7 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 		wantSchema        bool
 	}{
 		{name: "meta full", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
-		{name: "meta minimal", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceMinimal},
+		{name: "meta minimal", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceMinimal, wantSchema: true},
 		{name: "dynamic full", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
 		{name: "dynamic minimal", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceMinimal},
 	}
@@ -1130,8 +1130,14 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 						t.Fatalf("full resources missing %q: %+v", uri, resourcesResult.Resources)
 					}
 				}
-			} else if len(resourcesResult.Resources) != 1 {
-				t.Fatalf("minimal resources = %+v, want only workspace roots", resourcesResult.Resources)
+			} else {
+				wantResourceCount := 1
+				if tc.wantSchema {
+					wantResourceCount++
+				}
+				if len(resourcesResult.Resources) != wantResourceCount {
+					t.Fatalf("minimal resources = %+v, want %d resources", resourcesResult.Resources, wantResourceCount)
+				}
 			}
 
 			templatesResult, err := session.ListResourceTemplates(t.Context(), nil)
@@ -1145,8 +1151,12 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 			if !tc.wantSchema && hasSchemaTemplate {
 				t.Fatalf("minimal resource templates unexpectedly include meta schema: %+v", templatesResult.ResourceTemplates)
 			}
-			if !tc.wantFullCatalog && len(templatesResult.ResourceTemplates) != 0 {
-				t.Fatalf("minimal resource templates = %+v, want none", templatesResult.ResourceTemplates)
+			wantTemplateCount := 0
+			if tc.wantSchema {
+				wantTemplateCount = 1
+			}
+			if !tc.wantFullCatalog && len(templatesResult.ResourceTemplates) != wantTemplateCount {
+				t.Fatalf("minimal resource templates = %+v, want %d", templatesResult.ResourceTemplates, wantTemplateCount)
 			}
 
 			_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
@@ -1154,11 +1164,36 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 				t.Fatalf("meta-schema resource should be readable: %v", err)
 			}
 			if !tc.wantSchema && err == nil {
-				t.Fatal("minimal capability surface should omit meta-schema resources")
+				t.Fatal("capability surface should omit meta-schema resources")
 			}
 
 			assertPromptSurface(t, session, tc.wantFullCatalog)
 			assertCompletionHandlerAvailable(t, session)
+		})
+	}
+}
+
+func TestShouldRegisterMetaSchemaResources(t *testing.T) {
+	testCases := []struct {
+		name              string
+		capabilitySurface string
+		toolSurface       string
+		want              bool
+	}{
+		{name: "full meta", capabilitySurface: config.CapabilitySurfaceFull, toolSurface: config.ToolSurfaceMeta, want: true},
+		{name: "full dynamic", capabilitySurface: config.CapabilitySurfaceFull, toolSurface: config.ToolSurfaceDynamic, want: true},
+		{name: "full individual", capabilitySurface: config.CapabilitySurfaceFull, toolSurface: config.ToolSurfaceIndividual},
+		{name: "minimal meta", capabilitySurface: config.CapabilitySurfaceMinimal, toolSurface: config.ToolSurfaceMeta, want: true},
+		{name: "minimal dynamic", capabilitySurface: config.CapabilitySurfaceMinimal, toolSurface: config.ToolSurfaceDynamic},
+		{name: "minimal individual", capabilitySurface: config.CapabilitySurfaceMinimal, toolSurface: config.ToolSurfaceIndividual},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldRegisterMetaSchemaResources(tc.capabilitySurface, tc.toolSurface)
+			if got != tc.want {
+				t.Fatalf("shouldRegisterMetaSchemaResources(%q, %q) = %v, want %v", tc.capabilitySurface, tc.toolSurface, got, tc.want)
+			}
 		})
 	}
 }

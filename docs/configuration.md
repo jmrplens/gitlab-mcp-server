@@ -29,7 +29,7 @@ These are the settings every user needs to get started.
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
 | `TOOL_SURFACE` | `dynamic` | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` |
 | `META_TOOLS` | *(legacy)* | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, and `dynamic` -> `dynamic`. Ignored when `TOOL_SURFACE` is set |
-| `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` preserves all resources, meta-schema resources, workflow guides, and prompts; `minimal` keeps only `gitlab://workspace/roots` |
+| `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` preserves all resources, meta-schema resources, workflow guides, and prompts; `minimal` keeps `gitlab://workspace/roots` and, in `TOOL_SURFACE=meta`, meta-schema resources |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
 | `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence |
@@ -212,7 +212,7 @@ See [Meta-Tools](meta-tools.md) for the complete domain-action mapping and [Dyna
 
 | Tool surface | Visible tool schema impact | Schema resource availability | Dynamic describe behavior | Token impact | Recommended use |
 | --- | --- | --- | --- | --- | --- |
-| `meta` | Applies to every visible domain meta-tool. `opaque` shows `{action, params}`; `compact` and `full` inline per-action `oneOf` schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | Not applicable | `full` is 11.9x larger than `opaque`; `compact` is 6.5x larger | Keep `opaque`; use schema resources for exact params |
+| `meta` | Applies to every visible domain meta-tool. `opaque` shows `{action, params}`; `compact` and `full` inline per-action `oneOf` schemas | Available when `CAPABILITY_SURFACE=full` or `CAPABILITY_SURFACE=minimal` | Not applicable | `full` is 11.9x larger than `opaque`; `compact` is 6.5x larger | Keep `opaque`; use schema resources for exact params |
 | `dynamic` | Does not change the two dynamic tool schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_find_action` returns discovery and schema details inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; use find |
 | `individual` | Ignored because individual tools expose one operation per tool with direct typed schemas | Meta-schema resources are not registered in individual mode | Not applicable | None | Leave unset |
 
@@ -220,9 +220,9 @@ The evaluated modes remain `opaque`, `compact`, and `full`. The setting name rem
 
 ### Capability Surface
 
-`CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `CAPABILITY_SURFACE=minimal` is a non-default low-token mode intended for dynamic toolset experiments: it keeps `gitlab://workspace/roots` for project discovery and omits static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates. Dynamic execution still works because `gitlab_find_action` returns exact action schemas inline.
+`CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `CAPABILITY_SURFACE=minimal` is a non-default low-token mode: it keeps `gitlab://workspace/roots` for project discovery and omits static GitLab data resources, workflow guide resources, and prompt templates. In `TOOL_SURFACE=meta`, minimal also keeps meta-schema resources so callers can keep `META_PARAM_SCHEMA=opaque` while still reading exact action parameter schemas. Dynamic execution still works without those resources because `gitlab_find_action` returns exact action schemas inline.
 
-Measured startup context is the reason this setting keeps only two modes for now: full resources plus prompts cost about 18.2k tokens, while minimal keeps the shared capability overhead near 184 tokens. Candidate intermediate modes such as `schemas`, `resources`, or `docs` would add another configuration axis without beating the existing `dynamic + minimal + find` workflow for low-token clients. Reconsider an intermediate mode only if future audits show a concrete client that needs schema resources but cannot tolerate prompts or static resources.
+Measured startup context is the reason this setting keeps only two modes for now: full resources plus prompts cost about 18.2k tokens, while minimal keeps the shared capability overhead near 184 tokens in dynamic mode and about 760 tokens in meta mode with schema resources. Candidate intermediate modes such as `schemas`, `resources`, or `docs` would add another configuration axis without beating the existing low-token workflows. Reconsider an intermediate mode only if future audits show a concrete client that needs more resources but cannot tolerate prompts or static resources.
 
 ### HTTP Server Mode
 

@@ -32,7 +32,7 @@ Use the meta-schema resources when a client needs the exact parameter shape for 
 2. Replace `{tool}` and `{action}` in `gitlab://schema/meta/{tool}/{action}` to read the JSON Schema for that action's `params` object.
 3. Call the meta-tool with the normal `{ "action": "...", "params": { ... } }` envelope.
 
-For example, `gitlab://schema/meta/gitlab_merge_request/create` returns the parameter schema for the `create` action of `gitlab_merge_request`. These schema resources are available with `CAPABILITY_SURFACE=full` regardless of `META_PARAM_SCHEMA` mode. They are omitted with `CAPABILITY_SURFACE=minimal`; Dynamic clients should use `gitlab_find_action` for inline schemas in that mode.
+For example, `gitlab://schema/meta/gitlab_merge_request/create` returns the parameter schema for the `create` action of `gitlab_merge_request`. These schema resources are available for meta-tools with `CAPABILITY_SURFACE=full` or `minimal`, regardless of `META_PARAM_SCHEMA` mode. Dynamic clients using `CAPABILITY_SURFACE=minimal` should use `gitlab_find_action` for inline schemas instead.
 
 ### Project resource templates (23)
 
@@ -262,7 +262,7 @@ The server returns a structured prompt with context-aware content that the LLM u
 
 | Variable             | Default | Description                                                                                                           |
 | -------------------- | ------- | --------------------------------------------------------------------------------------------------------------------- |
-| `CAPABILITY_SURFACE` | `full`  | `full` registers resources, meta-schema resources, workflow guides, and prompts; `minimal` keeps only workspace roots |
+| `CAPABILITY_SURFACE` | `full`  | `full` registers resources, meta-schema resources, workflow guides, and prompts; `minimal` keeps workspace roots and, for meta-tools, meta-schema resources |
 
 :::tip
 Resources are particularly useful for providing project context at the start of a conversation. By reading the project resource, the LLM gains immediate understanding of the repository's purpose, team, and current state.
