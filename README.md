@@ -31,24 +31,28 @@ A **Model Context Protocol (MCP) server** that exposes the entire GitLab API as 
 
 ## Token Footprint
 
-Measured with `go run ./cmd/audit_tokens/` against the current catalog. Totals estimate startup context visible to an MCP client: tool schemas plus shared resources and prompts, using a 200K-token context window as a reference.
+<!-- START TOKEN FOOTPRINT -->
 
-**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `META_TOOLS` unset, and `GITLAB_ENTERPRISE` unset or `false`, the server uses the **dynamic find/execute surface**. That means 2 visible tools, 867 reachable base actions, and no Enterprise/Premium-only catalog. `META_TOOLS` remains a deprecated compatibility selector; use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools.
+Measured with `go run ./cmd/gen_readme/` against the current base catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the same byte/4 token heuristic as `cmd/audit_tokens`.
 
-| Mode / configuration | Visible tools | Reachable actions | Tool tokens | Shared tokens | Total tokens |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Individual tools (Enterprise/Premium catalog) | 1014 | 1014 | 552,458 | 17,622 | 570,080 |
-| Meta-tools (base catalog + MCP helpers) | 34 | 867 | 58,223 | 18,198 | 76,421 |
-| Meta-tools (Enterprise/Premium catalog + MCP helpers) | 50 | 1018 | 75,851 | 18,198 | 94,049 |
-| Dynamic (`TOOL_SURFACE=dynamic`, **default**) | 2 | 867 / 1018 | 2,000 | 18,198 | 20,198 |
-| Dynamic + minimal capabilities (`CAPABILITY_SURFACE=minimal`) | 2 | 867 / 1018 | 2,000 | 184 | 2,184 |
+**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_ENTERPRISE` unset or `false`, the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.
 
-Reachable actions include the five standalone utility actions (`gitlab_discover_project` plus four interactive creation flows). They are visible standalone tools in meta mode and folded into the dynamic catalog, which is why the catalog-only route count is 862 / 1013 while the comparable reachable-action count is 867 / 1018. `dynamic` exposes the two-tool find/execute surface.
+| Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
+| ----------------------------------------------------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
+| `dynamic` / `full` (default)                          |             2 |               867 | n/a                 |              1,963 |        18,198 |       20,161 |
+| `dynamic` / `minimal`                                 |             2 |               867 | n/a                 |              1,963 |           184 |        2,147 |
+| `meta` / `full`                                       |            34 |               867 | `opaque`            |             63,945 |        18,198 |       82,143 |
+| `meta` / `minimal`                                    |            34 |               867 | `opaque`            |             63,945 |           760 |       64,705 |
+| `individual` / `full`                                 |           863 |               863 | n/a                 |            469,831 |        17,622 |      487,453 |
+
+Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and individual mode already exposes one schema per tool. In `meta` + `minimal`, shared tokens still include meta-schema resources so opaque meta-tools can look up exact action parameter schemas.
+
+<!-- END TOKEN FOOTPRINT -->
 
 ## Highlights
 
 - **1014 MCP tools** on self-managed Enterprise/Premium, or **1019 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 165 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security attributes, security categories, templates, admin settings, access tokens, deploy keys, Orbit, and more
-- **Default dynamic toolset** — exposes only `gitlab_find_action` and `gitlab_execute_tool` while keeping the same canonical GitLab action catalog. Optional meta-tools remain available with `TOOL_SURFACE=meta`: 33 base, 49 on self-managed Enterprise/Premium, or 50 on GitLab.com Enterprise/Premium
+- **Default dynamic toolset** — exposes only `gitlab_find_action` and `gitlab_execute_tool` while keeping the same canonical GitLab action catalog. Optional domain meta-tools remain available with `TOOL_SURFACE=meta`: 33 base, 49 on self-managed Enterprise/Premium, or 50 on GitLab.com Enterprise/Premium
 - **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. Published summaries appear in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
@@ -243,73 +247,14 @@ Three registration modes, controlled by `TOOL_SURFACE`:
 | Mode | Tools | Description |
 |------|-------|-------------|
 | **Dynamic Toolset** (default) | 2 visible tools | Low-token find/execute surface over the canonical action catalog. |
-| **Meta-Tools** | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`. |
+| **Meta-Tools** | 33 base domain meta-tools plus the `gitlab_server` helper | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
 | **Individual** | 863 CE / 1014 self-managed enterprise / 1019 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
 
-For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP) to keep only `gitlab://workspace/roots` and omit optional MCP resources, prompts, and meta-schema resources. The default remains `full`.
+For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Dynamic minimal keeps only `gitlab://workspace/roots`; meta minimal keeps workspace roots plus meta-schema resources so opaque meta-tools can still read exact action schemas. The default remains `full`.
 
 Dynamic mode is now the default low-token find/execute surface; see [Dynamic Toolset](docs/dynamic-tools.md) for the field-aware ranking model, fuzzy fallback, response shapes, workflow diagrams, and migration guidance. Set `TOOL_SURFACE=meta` to use the consolidated domain meta-tool catalog.
 
-Meta-tool summary:
-
-<!-- START TOOLS -->
-
-| Meta-Tool | Actions | Description |
-|-----------|:-------:|-------------|
-| `gitlab_access` | 48 | Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. |
-| `gitlab_admin` | 88 | GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab→GitLab migrations) and external imports (GitHub/Bitbucket). |
-| `gitlab_analyze` | 11 | LLM-assisted analysis of GitLab data via MCP sampling. |
-| `gitlab_branch` | 11 | Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). |
-| `gitlab_ci_catalog` | 2 | Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). |
-| `gitlab_ci_variable` | 15 | Manage GitLab CI/CD variables at instance, group, and project scope. |
-| `gitlab_custom_emoji` | 3 | Manage group-level custom emoji via GraphQL. |
-| `gitlab_discover_project` | — | Resolve a full git remote URL to a GitLab project and return its project_id and metadata. |
-| `gitlab_environment` | 23 | Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. |
-| `gitlab_feature_flags` | 10 | Manage project feature flags and feature-flag user lists for gradual rollouts. |
-| `gitlab_group` | 130 | Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export. |
-| `gitlab_interactive_issue_create` | — | Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. |
-| `gitlab_interactive_mr_create` | — | Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. |
-| `gitlab_interactive_project_create` | — | Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. |
-| `gitlab_interactive_release_create` | — | Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. |
-| `gitlab_issue` | 63 | Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events. |
-| `gitlab_job` | 25 | Manage GitLab CI/CD jobs and the CI/CD job token scope: lifecycle, manual play, log/artifact retrieval, and inbound trust boundaries. |
-| `gitlab_merge_request` | 58 | Manage GitLab merge request lifecycle plus approval rules and settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todos, related issues, award emoji, and resource events. |
-| `gitlab_model_registry` | 1 | Download ML model package files from the GitLab Model Registry. |
-| `gitlab_mr_review` | 23 | Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload. |
-| `gitlab_package` | 24 | Manage GitLab package registry, container registry, and protection rules. |
-| `gitlab_pipeline` | 33 | Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. |
-| `gitlab_project` | 122 | Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). |
-| `gitlab_release` | 12 | Manage GitLab releases and their asset links (binaries, packages, runbooks). |
-| `gitlab_repository` | 41 | Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions. |
-| `gitlab_runner` | 34 | Manage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments. |
-| `gitlab_search` | 10 | Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. |
-| `gitlab_snippet` | 34 | Manage GitLab snippets (personal, project-scoped, and explore feed): CRUD snippet metadata and content, threaded discussions, notes (project snippets only), and award emoji on snippets and snippet notes. |
-| `gitlab_storage_move` | 18 | Manage repository storage moves for projects, groups, and snippets (admin only). |
-| `gitlab_tag` | 9 | Manage Git tags and tag protections in a project, plus GPG signature inspection. |
-| `gitlab_template` | 12 | Browse GitLab built-in templates (gitignore, CI/CD YAML, Dockerfile, license, project scaffolding) and lint CI configuration. |
-| `gitlab_user` | 74 | User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars. |
-| `gitlab_wiki` | 6 | CRUD project wiki pages and upload attachments to wikis. |
-| `gitlab_attestation` 🏢 | 2 | List and download build attestations (SLSA provenance) for project artifacts. |
-| `gitlab_audit_event` 🏢 | 6 | List and get GitLab audit events at instance, group, and project levels for compliance tracking. |
-| `gitlab_compliance_policy` 🏢 | 2 | Get and update admin compliance policy settings (CSP namespace configuration). |
-| `gitlab_dependency` 🏢 | 4 | List project dependencies and create/download SBOM exports (CycloneDX). |
-| `gitlab_dora_metrics` 🏢 | 2 | Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate. |
-| `gitlab_enterprise_user` 🏢 | 4 | Manage enterprise users for a GitLab group: list, get, disable 2FA, delete. |
-| `gitlab_external_status_check` 🏢 | 8 | Manage external status checks for MRs and projects. |
-| `gitlab_geo` 🏢 | 8 | Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate). |
-| `gitlab_group_scim` 🏢 | 4 | Manage SCIM identities for GitLab group provisioning. |
-| `gitlab_member_role` 🏢 | 6 | Manage custom member roles at instance or group level. |
-| `gitlab_merge_train` 🏢 | 4 | Manage GitLab merge trains (automated merge queues). |
-| `gitlab_orbit` 🏢 | 5 | GitLab orbit actions. |
-| `gitlab_project_alias` 🏢 | 4 | CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate). |
-| `gitlab_security_attribute` 🏢 | 5 | Manage GitLab security attributes via GraphQL (Premium/Ultimate). |
-| `gitlab_security_category` 🏢 | 3 | Manage GitLab security categories via GraphQL (Premium/Ultimate). |
-| `gitlab_security_finding` 🏢 | 1 | List pipeline security report findings via GraphQL (Premium/Ultimate). |
-| `gitlab_vulnerability` 🏢 | 8 | List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). |
-
-**33 base** / **49 self-managed enterprise** / **50 GitLab.com Enterprise** meta-tools. Rows marked 🏢 require the Enterprise/Premium catalog; `gitlab_orbit` additionally requires GitLab.com. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.
-
-<!-- END TOOLS -->
+The detailed meta-tool catalog now lives in [Meta-Tools Reference](docs/meta-tools.md), including action counts, Enterprise/Premium markers, and examples.
 
 ## Compatibility
 
@@ -382,7 +327,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 |-----------|------------|
 | Language | Go 1.26+ |
 | MCP SDK | `github.com/modelcontextprotocol/go-sdk` v1.6.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.24.1 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.27.0 |
 | Transport | stdio (default), HTTP (Streamable HTTP) |
 
 ## Building from Source
@@ -459,68 +404,68 @@ Numbers nobody asked for, but here they are anyway.
 
 ### File counts
 
-| Category | Files | Lines |
-| --- | ---: | ---: |
-| Source (`.go`, non-test) | 847 | 140,716 |
-| Unit tests (`_test.go`) | 440 | 241,987 |
-| End-to-end tests | 111 | 24,416 |
-| **Total** | **1,398** | **407,119** |
+| Category                 |     Files |       Lines |
+| ------------------------ | --------: | ----------: |
+| Source (`.go`, non-test) |       848 |     141,140 |
+| Unit tests (`_test.go`)  |       441 |     242,323 |
+| End-to-end tests         |       111 |      24,416 |
+| **Total**                | **1,400** | **407,879** |
 
 ### Functions
 
-| Category | Count |
-| --- | ---: |
-| Source functions | 5,540 |
-| — exported (public) | 2,380 |
-| — unexported (private) | 3,160 |
-| Unit test functions (`TestXxx`) | 9,899 |
-| Subtests (`t.Run(...)`) | 2,183 |
-| End-to-end test functions | 252 |
+| Category                        | Count |
+| ------------------------------- | ----: |
+| Source functions                | 5,564 |
+| — exported (public)             | 2,381 |
+| — unexported (private)          | 3,183 |
+| Unit test functions (`TestXxx`) | 9,910 |
+| Subtests (`t.Run(...)`)         | 2,185 |
+| End-to-end test functions       |   252 |
 
 ### Ratios worth noting
 
-| Observation | Value |
-| --- | ---: |
-| Test lines vs source lines | 1.72× more tests than code |
-| Average source file length | ~166 lines |
-| Average test file length | ~549 lines |
-| Comment lines in source | 11,744 (~8.3% of source) |
-| Test functions per source function | 1.8× |
+| Observation                        |                      Value |
+| ---------------------------------- | -------------------------: |
+| Test lines vs source lines         | 1.72× more tests than code |
+| Average source file length         |                 ~166 lines |
+| Average test file length           |                 ~549 lines |
+| Comment lines in source            |   11,735 (~8.3% of source) |
+| Test functions per source function |                       1.8× |
 
 ### Code patterns
 
-| Pattern | Count |
-| --- | ---: |
-| `if err != nil` checks | 5,863 |
-| `defer` statements | 749 |
-| `struct` types defined | 2,195 |
-| `//nolint` suppressions | 49 |
-| `TODO` / `FIXME` / `HACK` comments | 1 |
+| Pattern                            | Count |
+| ---------------------------------- | ----: |
+| `if err != nil` checks             | 5,891 |
+| `defer` statements                 |   752 |
+| `struct` types defined             | 2,197 |
+| `//nolint` suppressions            |    48 |
+| `TODO` / `FIXME` / `HACK` comments |     1 |
 
 ### Project
 
-| Metric | Value |
-| --- | ---: |
-| Go packages | 206 |
-| Direct dependencies (`go.mod`) | 11 |
-| Indirect dependencies | 49 |
-| Git commits | 140 |
-| Unique contributors | 2 |
+| Metric                         | Value |
+| ------------------------------ | ----: |
+| Go packages                    |   207 |
+| Direct dependencies (`go.mod`) |    11 |
+| Indirect dependencies          |    49 |
+| Git commits                    |   144 |
+| Unique contributors            |     2 |
 
 ### Hall of fame
 
-| Record | File |
-| --- | --- |
-| Longest source file | `cmd/eval_mcp_surfaces/main.go` — 8,642 lines |
-| Longest test file | `internal/tools/projects/projects_test.go` — 6,875 lines |
+| Record              | File                                                     |
+| ------------------- | -------------------------------------------------------- |
+| Longest source file | `cmd/eval_mcp_surfaces/main.go` — 8,642 lines            |
+| Longest test file   | `internal/tools/projects/projects_test.go` — 6,875 lines |
 
 ### Because why not
 
-| Fact | Value |
-| --- | --- |
-| Source code printed at 55 lines/page | ~2,558 pages of A4 |
-| Source lines mentioning `"gitlab"` | 8,286 (impossible to avoid) |
-| Longest function name in source | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars) |
-| Longest test function name | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
+| Fact                                 | Value                                                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Source code printed at 55 lines/page | ~2,566 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 8,295 (impossible to avoid)                                                                          |
+| Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
+| Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
 <!-- END STATS -->

@@ -2,116 +2,189 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 )
 
-// TestDescriptionSummary_TableDriven verifies summary extraction for generated
-// meta-tool prefixes, standalone examples, and Markdown table escaping.
-func TestDescriptionSummary_TableDriven(t *testing.T) {
-	tests := []struct {
-		name        string
-		description string
-		want        string
-	}{
-		{
-			name:        "strips generated meta-tool prefix",
-			description: testMetaTool("gitlab_issue", "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji. Delete actions are destructive.", "create", "list").Description,
-			want:        "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji.",
-		},
-		{
-			name:        "preserves standalone examples",
-			description: "Example: resolve this remote before listing projects. More details follow.",
-			want:        "Example: resolve this remote before listing projects.",
-		},
-		{
-			name:        "escapes Markdown table pipes",
-			description: "Manage group | project access. Extra details follow.",
-			want:        "Manage group \\| project access.",
-		},
+// TestRenderTokenFootprint_IncludesOrderedConfigurationRows verifies the README
+// token footprint table keeps the requested configuration order and schema-mode
+// column without reintroducing the detailed meta-tool catalog.
+func TestRenderTokenFootprint_IncludesOrderedConfigurationRows(t *testing.T) {
+	rows := []tokenFootprintRow{
+		{Configuration: "`dynamic` / `full` (default)", VisibleTools: 2, ReachableActions: 867, ToolSchemaTokens: 1962, SharedTokens: 18198},
+		{Configuration: "`dynamic` / `minimal`", VisibleTools: 2, ReachableActions: 867, ToolSchemaTokens: 1962, SharedTokens: 184},
+		{Configuration: "`meta` / `full`", MetaParamSchema: config.MetaParamSchemaOpaque, VisibleTools: 34, ReachableActions: 867, ToolSchemaTokens: 63932, SharedTokens: 18198},
+		{Configuration: "`meta` / `minimal`", MetaParamSchema: config.MetaParamSchemaOpaque, VisibleTools: 34, ReachableActions: 867, ToolSchemaTokens: 63932, SharedTokens: 760},
+		{Configuration: "`individual` / `full`", VisibleTools: 863, ReachableActions: 863, ToolSchemaTokens: 451000, SharedTokens: 17622},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := descriptionSummary(tt.description)
-			if got != tt.want {
-				t.Fatalf("descriptionSummary() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-// TestBuildTable_UsesRealMetaToolDescription verifies that the README meta-tool
-// table renders the real domain summary, not the generated schema example.
-//
-// The test feeds buildTable an MCP tool with a generated meta-tool prefix and a
-// two-action schema. It asserts the rendered table includes the useful domain
-// sentence, excludes the generated example, and keeps the action count.
-func TestBuildTable_UsesRealMetaToolDescription(t *testing.T) {
-	tool := testMetaTool("gitlab_issue", "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji. Delete actions are destructive.", "create", "list")
-
-	table := buildTable([]*mcp.Tool{tool}, []*mcp.Tool{tool}, []*mcp.Tool{tool})
-	if !strings.Contains(table, "Manage GitLab issues, notes, discussions, links, statistics, and issue emoji.") {
-		t.Fatalf("table missing real description:\n%s", table)
-	}
-	if strings.Contains(table, "Example:") {
-		t.Fatalf("table should not include generated example prefix:\n%s", table)
-	}
-	if !strings.Contains(table, "| `gitlab_issue` | 2 |") {
-		t.Fatalf("table missing expected action count:\n%s", table)
-	}
-}
-
-// TestBuildTable_IncludesEnterpriseUnionAndPrefersGitLabCom verifies that the
-// README table merges enterprise catalogs and prefers GitLab.com metadata.
-func TestBuildTable_IncludesEnterpriseUnionAndPrefersGitLabCom(t *testing.T) {
-	baseTool := testMetaTool("gitlab_issue", "Manage GitLab issues.", "list")
-	selfManagedOnly := testMetaTool("gitlab_geo", "Manage self-managed Geo replication.", "list")
-	selfManagedShared := testMetaTool("gitlab_dependency", "Self-managed dependency description.", "list")
-	gitLabComShared := testMetaTool("gitlab_dependency", "GitLab.com dependency description.", "list", "get")
-	gitLabComOnly := testMetaTool("gitlab_orbit", "Query GitLab.com Orbit.", "status", "query")
-
-	table := buildTable(
-		[]*mcp.Tool{baseTool},
-		[]*mcp.Tool{baseTool, selfManagedOnly, selfManagedShared},
-		[]*mcp.Tool{baseTool, gitLabComShared, gitLabComOnly},
-	)
-
+	got := renderTokenFootprint(config.MetaParamSchemaOpaque, rows)
 	for _, want := range []string{
-		"| `gitlab_issue` | 1 | Manage GitLab issues. |",
-		"| `gitlab_geo` 🏢 | 1 | Manage self-managed Geo replication. |",
-		"| `gitlab_dependency` 🏢 | 2 | GitLab.com dependency description. |",
-		"| `gitlab_orbit` 🏢 | 2 | Query GitLab.com Orbit. |",
-		"**1 base** / **3 self-managed enterprise** / **3 GitLab.com Enterprise** meta-tools.",
+		"| Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |",
+		"`dynamic` / `full` (default)",
+		"20,160",
+		"`meta` / `full`",
+		"`opaque`",
+		"82,130",
+		"`META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas",
 	} {
-		if !strings.Contains(table, want) {
-			t.Fatalf("table missing %q:\n%s", want, table)
+		if !strings.Contains(got, want) {
+			t.Fatalf("renderTokenFootprint() missing %q:\n%s", want, got)
 		}
 	}
-	if strings.Contains(table, "Self-managed dependency description") {
-		t.Fatalf("table should prefer the GitLab.com definition for shared enterprise tools:\n%s", table)
+	assertBefore(t, got, "`dynamic` / `full`", "`dynamic` / `minimal`")
+	assertBefore(t, got, "`dynamic` / `minimal`", "`meta` / `full`")
+	assertBefore(t, got, "`meta` / `full`", "`meta` / `minimal`")
+	assertBefore(t, got, "`meta` / `minimal`", "`individual` / `full`")
+	if strings.Contains(got, "| Meta-Tool | Actions | Description |") {
+		t.Fatalf("renderTokenFootprint() should not include detailed meta-tool table:\n%s", got)
 	}
 }
 
-func testMetaTool(name, description string, actions ...string) *mcp.Tool {
-	routes := make(toolutil.ActionMap, len(actions))
-	for _, action := range actions {
-		routes[action] = toolutil.Route(nil)
+// TestMeasureTokenFootprintRows_BaseCatalog_ReturnsRequestedConfigurations
+// verifies the real mock-backed measurement path produces the README rows in
+// the intended order and with minimal/full capability differences preserved.
+func TestMeasureTokenFootprintRows_BaseCatalog_ReturnsRequestedConfigurations(t *testing.T) {
+	client, closeClient, err := newReadmeClient()
+	if err != nil {
+		t.Fatalf("newReadmeClient() error = %v", err)
+	}
+	defer closeClient()
+
+	rows, err := measureTokenFootprintRows(client, config.MetaParamSchemaOpaque)
+	if err != nil {
+		t.Fatalf("measureTokenFootprintRows() error = %v", err)
+	}
+	wantOrder := []string{
+		"`dynamic` / `full` (default)",
+		"`dynamic` / `minimal`",
+		"`meta` / `full`",
+		"`meta` / `minimal`",
+		"`individual` / `full`",
+	}
+	if len(rows) != len(wantOrder) {
+		t.Fatalf("measureTokenFootprintRows() returned %d rows, want %d", len(rows), len(wantOrder))
+	}
+	for i, want := range wantOrder {
+		if rows[i].Configuration != want {
+			t.Fatalf("row[%d].Configuration = %q, want %q", i, rows[i].Configuration, want)
+		}
+	}
+	if rows[0].VisibleTools != 2 || rows[1].VisibleTools != 2 {
+		t.Fatalf("dynamic visible tools = %d/%d, want 2/2", rows[0].VisibleTools, rows[1].VisibleTools)
+	}
+	if rows[0].SharedTokens <= rows[1].SharedTokens {
+		t.Fatalf("dynamic full shared tokens = %d, want greater than minimal %d", rows[0].SharedTokens, rows[1].SharedTokens)
+	}
+	if rows[3].SharedTokens <= rows[1].SharedTokens {
+		t.Fatalf("meta minimal shared tokens = %d, want greater than dynamic minimal %d", rows[3].SharedTokens, rows[1].SharedTokens)
+	}
+	if rows[2].MetaParamSchema != config.MetaParamSchemaOpaque || rows[3].MetaParamSchema != config.MetaParamSchemaOpaque {
+		t.Fatalf("meta schema modes = %q/%q, want opaque", rows[2].MetaParamSchema, rows[3].MetaParamSchema)
+	}
+	if rows[4].MetaParamSchema != "" {
+		t.Fatalf("individual schema mode = %q, want empty n/a marker", rows[4].MetaParamSchema)
+	}
+	if rows[4].VisibleTools <= rows[2].VisibleTools {
+		t.Fatalf("individual visible tools = %d, want greater than meta %d", rows[4].VisibleTools, rows[2].VisibleTools)
 	}
 
-	return &mcp.Tool{
-		Name:        name,
-		Description: toolutil.MetaToolDescriptionPrefix(name, routes) + description,
-		InputSchema: map[string]any{
-			"properties": map[string]any{
-				"action": map[string]any{
-					"enum": actions,
-				},
-			},
-		},
+	compactRows, err := measureTokenFootprintRows(client, config.MetaParamSchemaCompact)
+	if err != nil {
+		t.Fatalf("measureTokenFootprintRows(compact) error = %v", err)
+	}
+	if compactRows[0].ToolSchemaTokens != rows[0].ToolSchemaTokens {
+		t.Fatalf("dynamic tool schema tokens changed with META_PARAM_SCHEMA: compact %d, opaque %d", compactRows[0].ToolSchemaTokens, rows[0].ToolSchemaTokens)
+	}
+	if compactRows[2].ToolSchemaTokens <= rows[2].ToolSchemaTokens {
+		t.Fatalf("compact meta tool schema tokens = %d, want greater than opaque %d", compactRows[2].ToolSchemaTokens, rows[2].ToolSchemaTokens)
+	}
+	if compactRows[2].MetaParamSchema != config.MetaParamSchemaCompact {
+		t.Fatalf("compact meta schema mode = %q, want compact", compactRows[2].MetaParamSchema)
+	}
+}
+
+// TestMeasureToolSchemaTokens_UsesAggregateBytesBeforeDivision verifies the
+// token estimate follows the documented byte/4 heuristic over the aggregate
+// payload instead of flooring each tool independently.
+func TestMeasureToolSchemaTokens_UsesAggregateBytesBeforeDivision(t *testing.T) {
+	toolList := []*mcp.Tool{{Name: "a"}, {Name: "bb"}, {Name: "ccc"}}
+
+	totalBytes := 0
+	perToolFlooredTokens := 0
+	for _, tool := range toolList {
+		payload, err := json.Marshal(tool)
+		if err != nil {
+			t.Fatalf("json.Marshal() error = %v", err)
+		}
+		totalBytes += len(payload)
+		perToolFlooredTokens += len(payload) / readmeBytesPerToken
+	}
+	want := totalBytes / readmeBytesPerToken
+	if perToolFlooredTokens == want {
+		t.Fatalf("test fixture does not distinguish aggregate and per-tool rounding: both = %d", want)
+	}
+
+	got, err := measureToolSchemaTokens(toolList)
+	if err != nil {
+		t.Fatalf("measureToolSchemaTokens() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("measureToolSchemaTokens() = %d, want aggregate byte estimate %d", got, want)
+	}
+}
+
+// TestReadMetaParamSchemaMode_DefaultAndConfigured verifies gen_readme defaults
+// to opaque schema mode and accepts documented configured values case-insensitively.
+func TestReadMetaParamSchemaMode_DefaultAndConfigured(t *testing.T) {
+	t.Setenv("META_PARAM_SCHEMA", "")
+	got, err := readMetaParamSchemaMode()
+	if err != nil {
+		t.Fatalf("readMetaParamSchemaMode() error = %v", err)
+	}
+	if got != config.DefaultMetaParamSchema {
+		t.Fatalf("default schema mode = %q, want %q", got, config.DefaultMetaParamSchema)
+	}
+
+	t.Setenv("META_PARAM_SCHEMA", " Compact ")
+	got, err = readMetaParamSchemaMode()
+	if err != nil {
+		t.Fatalf("readMetaParamSchemaMode() configured error = %v", err)
+	}
+	if got != config.MetaParamSchemaCompact {
+		t.Fatalf("configured schema mode = %q, want %q", got, config.MetaParamSchemaCompact)
+	}
+}
+
+// TestReadMetaParamSchemaMode_InvalidRejectsValue verifies gen_readme fails
+// fast when the configured schema mode cannot be measured accurately.
+func TestReadMetaParamSchemaMode_InvalidRejectsValue(t *testing.T) {
+	t.Setenv("META_PARAM_SCHEMA", "verbose")
+	_, err := readMetaParamSchemaMode()
+	if err == nil {
+		t.Fatal("readMetaParamSchemaMode() error = nil, want invalid value error")
+	}
+	if !strings.Contains(err.Error(), "META_PARAM_SCHEMA must be one of") {
+		t.Fatalf("readMetaParamSchemaMode() error = %v, want allowed-values message", err)
+	}
+}
+
+func assertBefore(t *testing.T, s, before, after string) {
+	t.Helper()
+	beforeIndex := strings.Index(s, before)
+	if beforeIndex < 0 {
+		t.Fatalf("%q not found in:\n%s", before, s)
+	}
+	afterIndex := strings.Index(s, after)
+	if afterIndex < 0 {
+		t.Fatalf("%q not found in:\n%s", after, s)
+	}
+	if beforeIndex >= afterIndex {
+		t.Fatalf("%q should appear before %q in:\n%s", before, after, s)
 	}
 }

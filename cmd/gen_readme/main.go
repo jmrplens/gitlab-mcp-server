@@ -1,7 +1,7 @@
 // Command gen_readme auto-generates the managed README.md sections.
-// It creates an in-memory MCP server, lists meta-tools, counts actions
-// from each InputSchema action enum, collects filesystem-level codebase
-// metrics, and replaces content between the tools and statistics marker pairs.
+// It creates an in-memory MCP server, measures the README token-footprint
+// configurations, collects filesystem-level codebase metrics, and replaces
+// content between the token footprint and statistics marker pairs.
 //
 // Usage:
 //
@@ -16,27 +16,36 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/internal/docgen"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
+	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
+	gitlabtools "github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
-// README generation markers define the managed tools table section.
+// README generation markers define managed sections and measurement constants.
 const (
-	startMarker = "<!-- START TOOLS -->"
-	endMarker   = "<!-- END TOOLS -->"
-	readmePath  = "README.md"
-	repoRoot    = "."
+	footprintStartMarker = "<!-- START TOKEN FOOTPRINT -->"
+	footprintEndMarker   = "<!-- END TOKEN FOOTPRINT -->"
+	readmePath           = "README.md"
+	repoRoot             = "."
+	readmeServerName     = "gen-readme"
+	readmeClientName     = "gen-readme-client"
+	readmeVersion        = "0.0.1"
+	readmeBytesPerToken  = 4
 )
 
-// main regenerates the README meta-tool table and exits non-zero on failure.
+// main regenerates the README managed sections and exits non-zero on failure.
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -44,39 +53,25 @@ func main() {
 	}
 }
 
-// run introspects base and Enterprise/Premium meta-tool catalogs and replaces
-// the managed README section with a regenerated table.
+// run introspects the base catalog and replaces README sections with fresh
+// token footprint and repository statistics content.
 func run() error {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
-		GitLabURL:   srv.URL,
-		GitLabToken: "gen-readme-token",
-	}
-	client, err := gitlabclient.NewClient(cfg)
+	client, closeClient, err := newReadmeClient()
 	if err != nil {
-		return fmt.Errorf("create client: %w", err)
+		return err
 	}
-	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
-		GitLabURL:   config.DefaultGitLabURL,
-		GitLabToken: "gen-readme-token",
-	})
+	defer closeClient()
+
+	schemaMode, err := readMetaParamSchemaMode()
 	if err != nil {
-		return fmt.Errorf("create gitlab.com client: %w", err)
+		return err
 	}
 
-	baseTools := listMetaTools(client, false)
-	selfManagedEnterpriseTools := listMetaTools(client, true)
-	gitLabComEnterpriseTools := listMetaTools(gitLabComClient, true)
-
-	table := buildTable(baseTools, selfManagedEnterpriseTools, gitLabComEnterpriseTools)
-
-	if replaceErr := replaceSection(readmePath, startMarker, endMarker, table); replaceErr != nil {
+	tokenFootprint, err := buildTokenFootprint(client, schemaMode)
+	if err != nil {
+		return fmt.Errorf("building token footprint: %w", err)
+	}
+	if replaceErr := replaceSection(readmePath, footprintStartMarker, footprintEndMarker, tokenFootprint); replaceErr != nil {
 		return replaceErr
 	}
 
@@ -88,186 +83,398 @@ func run() error {
 		return replaceErr
 	}
 
-	fmt.Printf("Updated %s (%d base / %d self-managed enterprise / %d GitLab.com enterprise meta-tools, stats regenerated)\n",
-		readmePath, len(baseTools), len(selfManagedEnterpriseTools), len(gitLabComEnterpriseTools))
+	fmt.Printf("Updated %s (token footprint using META_PARAM_SCHEMA=%s, stats regenerated)\n", readmePath, schemaMode)
 	return nil
 }
 
-// listMetaTools registers meta-tools on an in-memory MCP server and returns the
-// tool definitions exposed by tools/list.
-func listMetaTools(client *gitlabclient.Client, enterprise bool) []*mcp.Tool {
-	opts := &mcp.ServerOptions{PageSize: 2000}
-	server := mcp.NewServer(&mcp.Implementation{Name: "gen-readme", Version: "0.0.1"}, opts)
-	if err := tools.RegisterAllMeta(server, client, enterprise); err != nil {
-		fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
-		os.Exit(1)
+func newReadmeClient() (*gitlabclient.Client, func(), error) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"version":"17.0.0"}`)
+	}))
+
+	cfg := &config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
+		GitLabURL:   srv.URL,
+		GitLabToken: "gen-readme-token",
+	}
+	client, err := gitlabclient.NewClient(cfg)
+	if err != nil {
+		srv.Close()
+		return nil, nil, fmt.Errorf("create client: %w", err)
+	}
+	return client, srv.Close, nil
+}
+
+func readMetaParamSchemaMode() (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv("META_PARAM_SCHEMA")))
+	if mode == "" {
+		return config.DefaultMetaParamSchema, nil
+	}
+	switch mode {
+	case config.MetaParamSchemaOpaque, config.MetaParamSchemaCompact, config.MetaParamSchemaFull:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("META_PARAM_SCHEMA must be one of %q, %q, or %q (got %q)",
+			config.MetaParamSchemaOpaque, config.MetaParamSchemaCompact, config.MetaParamSchemaFull, mode)
+	}
+}
+
+// tokenFootprintRow is a README-facing token measurement for one runtime
+// configuration.
+type tokenFootprintRow struct {
+	Configuration    string
+	MetaParamSchema  string
+	VisibleTools     int
+	ReachableActions int
+	ToolSchemaTokens int
+	SharedTokens     int
+}
+
+// resourceRegistrationOptions selects which MCP resource groups are advertised
+// for README token-footprint measurements.
+type resourceRegistrationOptions struct {
+	Core           bool
+	MetaSchema     bool
+	WorkflowGuides bool
+	WorkspaceRoots bool
+}
+
+func (r tokenFootprintRow) totalTokens() int {
+	return r.ToolSchemaTokens + r.SharedTokens
+}
+
+func buildTokenFootprint(client *gitlabclient.Client, schemaMode string) (string, error) {
+	rows, err := measureTokenFootprintRows(client, schemaMode)
+	if err != nil {
+		return "", err
+	}
+	return renderTokenFootprint(schemaMode, rows), nil
+}
+
+func measureTokenFootprintRows(client *gitlabclient.Client, schemaMode string) ([]tokenFootprintRow, error) {
+	restoreSchemaMode := gitlabtools.SetMetaParamSchemaScoped(schemaMode)
+	defer restoreSchemaMode()
+
+	metaCatalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
+		Enterprise: false,
+		IncludeMCP: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("build base action catalog: %w", err)
 	}
 
+	dynamicCatalog, err := dynamictools.AddStandaloneCatalog(metaCatalog, client, dynamictools.StandaloneOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("add standalone dynamic catalog: %w", err)
+	}
+	metaRoutes := metaCatalog.ActionMaps()
+	dynamicRoutes := dynamicCatalog.ActionMaps()
+	reachableActions := countActions(dynamicRoutes)
+
+	dynamicTools, err := listDynamicTools(dynamicCatalog)
+	if err != nil {
+		return nil, err
+	}
+	metaTools, err := listMetaToolsFromCatalog(client, metaCatalog)
+	if err != nil {
+		return nil, err
+	}
+	individualTools, err := listIndividualTools(client)
+	if err != nil {
+		return nil, err
+	}
+
+	dynamicToolTokens, err := measureToolSchemaTokens(dynamicTools)
+	if err != nil {
+		return nil, err
+	}
+	metaToolTokens, err := measureToolSchemaTokens(metaTools)
+	if err != nil {
+		return nil, err
+	}
+	individualToolTokens, err := measureToolSchemaTokens(individualTools)
+	if err != nil {
+		return nil, err
+	}
+	promptTokens, err := measurePrompts(client)
+	if err != nil {
+		return nil, err
+	}
+
+	dynamicFullShared, err := measureSharedTokens(client, dynamicRoutes, config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, promptTokens)
+	if err != nil {
+		return nil, err
+	}
+	dynamicMinimalShared, err := measureSharedTokens(client, dynamicRoutes, config.ToolSurfaceDynamic, config.CapabilitySurfaceMinimal, promptTokens)
+	if err != nil {
+		return nil, err
+	}
+	metaFullShared, err := measureSharedTokens(client, metaRoutes, config.ToolSurfaceMeta, config.CapabilitySurfaceFull, promptTokens)
+	if err != nil {
+		return nil, err
+	}
+	metaMinimalShared, err := measureSharedTokens(client, metaRoutes, config.ToolSurfaceMeta, config.CapabilitySurfaceMinimal, promptTokens)
+	if err != nil {
+		return nil, err
+	}
+	individualFullShared, err := measureSharedTokens(client, nil, config.ToolSurfaceIndividual, config.CapabilitySurfaceFull, promptTokens)
+	if err != nil {
+		return nil, err
+	}
+
+	return []tokenFootprintRow{
+		{
+			Configuration:    "`dynamic` / `full` (default)",
+			VisibleTools:     len(dynamicTools),
+			ReachableActions: reachableActions,
+			ToolSchemaTokens: dynamicToolTokens,
+			SharedTokens:     dynamicFullShared,
+		},
+		{
+			Configuration:    "`dynamic` / `minimal`",
+			VisibleTools:     len(dynamicTools),
+			ReachableActions: reachableActions,
+			ToolSchemaTokens: dynamicToolTokens,
+			SharedTokens:     dynamicMinimalShared,
+		},
+		{
+			Configuration:    "`meta` / `full`",
+			MetaParamSchema:  schemaMode,
+			VisibleTools:     len(metaTools),
+			ReachableActions: reachableActions,
+			ToolSchemaTokens: metaToolTokens,
+			SharedTokens:     metaFullShared,
+		},
+		{
+			Configuration:    "`meta` / `minimal`",
+			MetaParamSchema:  schemaMode,
+			VisibleTools:     len(metaTools),
+			ReachableActions: reachableActions,
+			ToolSchemaTokens: metaToolTokens,
+			SharedTokens:     metaMinimalShared,
+		},
+		{
+			Configuration:    "`individual` / `full`",
+			VisibleTools:     len(individualTools),
+			ReachableActions: len(individualTools),
+			ToolSchemaTokens: individualToolTokens,
+			SharedTokens:     individualFullShared,
+		},
+	}, nil
+}
+
+func renderTokenFootprint(schemaMode string, rows []tokenFootprintRow) string {
+	var b strings.Builder
+	b.WriteString("Measured with `go run ./cmd/gen_readme/` against the current base catalog. Totals estimate startup context visible to an MCP client: visible tool schemas plus shared resources and prompts, using the same byte/4 token heuristic as `cmd/audit_tokens`.\n\n")
+	b.WriteString("**Default configuration**: with `TOOL_SURFACE` unset or `TOOL_SURFACE=dynamic`, `CAPABILITY_SURFACE=full`, `META_TOOLS` unset, `META_PARAM_SCHEMA=opaque`, and `GITLAB_ENTERPRISE` unset or `false`, the server uses the **dynamic find/execute surface**. Use `TOOL_SURFACE=meta` only when you explicitly want domain meta-tools; use `TOOL_SURFACE=individual` only when your client can handle the full tool catalog.\n\n")
+
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		schemaCell := "n/a"
+		if row.MetaParamSchema != "" {
+			schemaCell = fmt.Sprintf("`%s`", row.MetaParamSchema)
+		}
+		tableRows = append(tableRows, []string{
+			row.Configuration,
+			fmtNum(row.VisibleTools),
+			fmtNum(row.ReachableActions),
+			schemaCell,
+			fmtNum(row.ToolSchemaTokens),
+			fmtNum(row.SharedTokens),
+			fmtNum(row.totalTokens()),
+		})
+	}
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`)", "Visible tools", "Reachable actions", "`META_PARAM_SCHEMA`", "Tool schema tokens", "Shared tokens", "Total tokens"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight},
+		tableRows,
+	))
+
+	fmt.Fprintf(&b, "\nRows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=%s` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and individual mode already exposes one schema per tool. In `meta` + `minimal`, shared tokens still include meta-schema resources so opaque meta-tools can look up exact action parameter schemas.\n", schemaMode)
+	return b.String()
+}
+
+func listMetaToolsFromCatalog(client *gitlabclient.Client, catalog *actioncatalog.Catalog) ([]*mcp.Tool, error) {
+	server := newReadmeMCPServer()
+	gitlabtools.RegisterMetaCatalog(server, catalog)
+	gitlabtools.RegisterMetaStandaloneTools(server, client)
+	return listToolsFromServer(server)
+}
+
+func listIndividualTools(client *gitlabclient.Client) ([]*mcp.Tool, error) {
+	server := newReadmeMCPServer()
+	gitlabtools.RegisterAll(server, client, false)
+	return listToolsFromServer(server)
+}
+
+func listDynamicTools(catalog *actioncatalog.Catalog) ([]*mcp.Tool, error) {
+	server := newReadmeMCPServer()
+	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+	return listToolsFromServer(server)
+}
+
+func newReadmeMCPServer() *mcp.Server {
+	return mcp.NewServer(&mcp.Implementation{Name: readmeServerName, Version: readmeVersion}, &mcp.ServerOptions{PageSize: 2000})
+}
+
+func listToolsFromServer(server *mcp.Server) ([]*mcp.Tool, error) {
+	return withReadmeSession(server, "tools", func(ctx context.Context, session *mcp.ClientSession) ([]*mcp.Tool, error) {
+		result, err := session.ListTools(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("list tools: %w", err)
+		}
+		return result.Tools, nil
+	})
+}
+
+func measureToolSchemaTokens(toolList []*mcp.Tool) (int, error) {
+	totalBytes := 0
+	for _, t := range toolList {
+		b, err := json.Marshal(t)
+		if err != nil {
+			return 0, fmt.Errorf("marshal tool %s: %w", t.Name, err)
+		}
+		totalBytes += len(b)
+	}
+	return totalBytes / readmeBytesPerToken, nil
+}
+
+func measureSharedTokens(client *gitlabclient.Client, routes map[string]toolutil.ActionMap, toolSurface, capabilitySurface string, promptTokens int) (int, error) {
+	resourceTokens, err := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
+		Core:           capabilitySurface == config.CapabilitySurfaceFull,
+		MetaSchema:     shouldRegisterReadmeMetaSchemaResources(capabilitySurface, toolSurface) && len(routes) > 0,
+		WorkflowGuides: capabilitySurface == config.CapabilitySurfaceFull,
+		WorkspaceRoots: true,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		return resourceTokens + promptTokens, nil
+	}
+	return resourceTokens, nil
+}
+
+func shouldRegisterReadmeMetaSchemaResources(capabilitySurface, toolSurface string) bool {
+	if toolSurface == config.ToolSurfaceIndividual {
+		return false
+	}
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		return true
+	}
+	return capabilitySurface == config.CapabilitySurfaceMinimal && toolSurface == config.ToolSurfaceMeta
+}
+
+func measureResourcesWithOptions(client *gitlabclient.Client, routes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) (int, error) {
+	server := mcp.NewServer(&mcp.Implementation{Name: readmeServerName, Version: readmeVersion}, nil)
+	if opts.Core {
+		resources.Register(server, client)
+	}
+	if opts.MetaSchema && len(routes) > 0 {
+		resources.RegisterMetaSchemaResources(server, routes)
+	}
+	if opts.WorkspaceRoots {
+		resources.RegisterWorkspaceRoots(server, roots.NewManager())
+	}
+	if opts.WorkflowGuides {
+		resources.RegisterWorkflowGuides(server)
+	}
+
+	return withReadmeSession(server, "resources", func(ctx context.Context, session *mcp.ClientSession) (int, error) {
+		totalBytes := 0
+		res, err := session.ListResources(ctx, nil)
+		if err != nil {
+			return 0, fmt.Errorf("list resources: %w", err)
+		}
+		for _, r := range res.Resources {
+			b, mErr := json.Marshal(r)
+			if mErr != nil {
+				return 0, fmt.Errorf("marshal resource %s: %w", r.Name, mErr)
+			}
+			totalBytes += len(b)
+		}
+
+		tpl, err := session.ListResourceTemplates(ctx, nil)
+		if err != nil {
+			return 0, fmt.Errorf("list resource templates: %w", err)
+		}
+		for _, t := range tpl.ResourceTemplates {
+			b, mErr := json.Marshal(t)
+			if mErr != nil {
+				return 0, fmt.Errorf("marshal template %s: %w", t.Name, mErr)
+			}
+			totalBytes += len(b)
+		}
+		return totalBytes / readmeBytesPerToken, nil
+	})
+}
+
+func measurePrompts(client *gitlabclient.Client) (int, error) {
+	server := mcp.NewServer(&mcp.Implementation{Name: readmeServerName, Version: readmeVersion}, nil)
+	prompts.Register(server, client)
+
+	return withReadmeSession(server, "prompts", func(ctx context.Context, session *mcp.ClientSession) (int, error) {
+		totalBytes := 0
+		promptList, err := session.ListPrompts(ctx, nil)
+		if err != nil {
+			return 0, fmt.Errorf("list prompts: %w", err)
+		}
+		for _, pr := range promptList.Prompts {
+			b, mErr := json.Marshal(pr)
+			if mErr != nil {
+				return 0, fmt.Errorf("marshal prompt %s: %w", pr.Name, mErr)
+			}
+			totalBytes += len(b)
+		}
+		return totalBytes / readmeBytesPerToken, nil
+	})
+}
+
+func withReadmeSession[T any](server *mcp.Server, label string, fn func(context.Context, *mcp.ClientSession) (T, error)) (T, error) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
+	var zero T
 
-	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
-		os.Exit(1)
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		return zero, fmt.Errorf("server connect %s: %w", label, err)
 	}
+	defer serverSession.Close()
 
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "gen-readme-client", Version: "0.0.1"}, nil)
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: readmeClientName, Version: readmeVersion}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
-		os.Exit(1)
+		return zero, fmt.Errorf("client connect %s: %w", label, err)
 	}
 	defer session.Close()
 
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
-	}
-	return result.Tools
+	return fn(ctx, session)
 }
 
-// actionCount extracts the number of actions from the tool's inputSchema
-// by looking for the "action" property's enum values.
-func actionCount(tool *mcp.Tool) int {
-	raw, err := json.Marshal(tool.InputSchema)
-	if err != nil {
-		return 0
+// countActions returns the number of actions in a route catalog.
+func countActions(routes map[string]toolutil.ActionMap) int {
+	total := 0
+	for _, actions := range routes {
+		total += len(actions)
 	}
-
-	var schema struct {
-		Properties map[string]struct {
-			Enum []string `json:"enum"`
-		} `json:"properties"`
-	}
-	err = json.Unmarshal(raw, &schema)
-	if err != nil {
-		return 0
-	}
-	if action, ok := schema.Properties["action"]; ok {
-		return len(action.Enum)
-	}
-	return 0
+	return total
 }
 
-// toolInfo is the normalized row model used to render the README meta-tool
-// table.
-type toolInfo struct {
-	Name        string
-	Description string
-	Actions     int
-	Enterprise  bool
-}
-
-// firstSentence returns the first sentence (up to the first sentence-ending
-// period or newline), whichever is shorter. Skips common abbreviations.
-func firstSentence(s string) string {
-	// Take the first line.
-	if idx := strings.IndexByte(s, '\n'); idx >= 0 {
-		s = s[:idx]
+// fmtNum formats integers with comma thousands separators for report tables.
+func fmtNum(n int) string {
+	s := strconv.Itoa(n)
+	if len(s) <= 3 {
+		return s
 	}
-	// Trim to first real sentence boundary, skipping abbreviations.
-	if idx := findSentenceEnd(s); idx >= 0 {
-		s = s[:idx+1]
+	var result []byte
+	for i, c := range []byte(s) {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result = append(result, ',')
+		}
+		result = append(result, c)
 	}
-	// Escape pipe characters for Markdown tables.
-	s = strings.ReplaceAll(s, "|", "\\|")
-	return strings.TrimSpace(s)
-}
-
-// descriptionSummary returns the README-facing summary for a tool description.
-// Meta-tools prepend a generated usage example and schema-resource hint for
-// MCP clients; those lines are useful in tools/list but noisy in README tables.
-func descriptionSummary(description string) string {
-	return firstSentence(toolutil.StripMetaToolDescriptionPrefix(description))
-}
-
-// abbreviations that should not be treated as sentence boundaries.
-var abbreviations = []string{"e.g.", "i.e.", "etc.", "vs.", "approx.", "dept.", "est.", "govt.", "incl."}
-
-// findSentenceEnd returns the index of the first ". " that is NOT part of a
-// common abbreviation, or -1 if none found.
-func findSentenceEnd(s string) int {
-	offset := 0
-	for {
-		i := strings.Index(s[offset:], ". ")
-		if i < 0 {
-			return -1
-		}
-		pos := offset + i
-		isAbbrev := false
-		for _, abbr := range abbreviations {
-			if len(abbr) <= pos+1 && s[pos+1-len(abbr):pos+1] == abbr {
-				isAbbrev = true
-				break
-			}
-		}
-		if !isAbbrev {
-			return pos
-		}
-		offset = pos + 2
-	}
-}
-
-// buildTable renders the managed README Markdown table, marking tools that are
-// only available in the Enterprise/Premium catalog.
-func buildTable(baseTools, selfManagedEnterpriseTools, gitLabComEnterpriseTools []*mcp.Tool) string {
-	baseSet := make(map[string]bool, len(baseTools))
-	for _, t := range baseTools {
-		baseSet[t.Name] = true
-	}
-
-	byName := make(map[string]toolInfo, len(selfManagedEnterpriseTools)+len(gitLabComEnterpriseTools))
-	for _, t := range selfManagedEnterpriseTools {
-		byName[t.Name] = toolInfo{
-			Name:        t.Name,
-			Description: descriptionSummary(t.Description),
-			Actions:     actionCount(t),
-			Enterprise:  !baseSet[t.Name],
-		}
-	}
-	for _, t := range gitLabComEnterpriseTools {
-		byName[t.Name] = toolInfo{
-			Name:        t.Name,
-			Description: descriptionSummary(t.Description),
-			Actions:     actionCount(t),
-			Enterprise:  !baseSet[t.Name],
-		}
-	}
-
-	infos := make([]toolInfo, 0, len(byName))
-	for _, info := range byName {
-		infos = append(infos, info)
-	}
-
-	sort.Slice(infos, func(i, j int) bool {
-		// Base tools first, then enterprise, alphabetical within each group.
-		if infos[i].Enterprise != infos[j].Enterprise {
-			return !infos[i].Enterprise
-		}
-		return infos[i].Name < infos[j].Name
-	})
-
-	var b strings.Builder
-	b.WriteString("| Meta-Tool | Actions | Description |\n")
-	b.WriteString("|-----------|:-------:|-------------|\n")
-
-	for _, info := range infos {
-		name := fmt.Sprintf("`%s`", info.Name)
-		if info.Enterprise {
-			name += " 🏢"
-		}
-		actions := strconv.Itoa(info.Actions)
-		if info.Actions == 0 {
-			actions = "—"
-		}
-		fmt.Fprintf(&b, "| %s | %s | %s |\n", name, actions, info.Description)
-	}
-
-	fmt.Fprintf(&b, "\n**%d base** / **%d self-managed enterprise** / **%d GitLab.com Enterprise** meta-tools. Rows marked 🏢 require the Enterprise/Premium catalog; `gitlab_orbit` additionally requires GitLab.com. See [Meta-Tools Reference](docs/meta-tools.md) for the complete list with actions and examples.\n",
-		len(baseTools), len(selfManagedEnterpriseTools), len(gitLabComEnterpriseTools))
-
-	return b.String()
+	return string(result)
 }
 
 // replaceSection replaces content between startMark and endMark in the file at

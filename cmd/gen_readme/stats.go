@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/jmrplens/gitlab-mcp-server/internal/docgen"
 )
 
 // Marker constants for the stats section of README.md.
@@ -18,10 +20,6 @@ const (
 	statsStartMarker = "<!-- START STATS -->"
 	statsEndMarker   = "<!-- END STATS -->"
 	linesPerPage     = 55 // approximate readable lines per A4 page at 12pt
-
-	// tableAlignRight is the Markdown separator row for a two-column table
-	// with the second column right-aligned.
-	tableAlignRight = "| --- | ---: |\n"
 
 	// scannerBufSize is the initial and maximum bufio.Scanner token size.
 	// 512 KB handles the largest generated Go files without reallocating.
@@ -371,63 +369,97 @@ func renderStats(s *repoStats) string {
 	var b strings.Builder
 
 	b.WriteString("### File counts\n\n")
-	b.WriteString("| Category | Files | Lines |\n")
-	b.WriteString("| --- | ---: | ---: |\n")
-	fmt.Fprintf(&b, "| Source (`.go`, non-test) | %s | %s |\n", fmtInt(s.SourceFiles), fmtInt(s.SourceLines))
-	fmt.Fprintf(&b, "| Unit tests (`_test.go`) | %s | %s |\n", fmtInt(s.UnitTestFiles), fmtInt(s.UnitTestLines))
-	fmt.Fprintf(&b, "| End-to-end tests | %s | %s |\n", fmtInt(s.E2ETestFiles), fmtInt(s.E2ETestLines))
-	fmt.Fprintf(&b, "| **Total** | **%s** | **%s** |\n\n", fmtInt(totalFiles), fmtInt(totalLines))
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Category", "Files", "Lines"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight},
+		[][]string{
+			{"Source (`.go`, non-test)", fmtInt(s.SourceFiles), fmtInt(s.SourceLines)},
+			{"Unit tests (`_test.go`)", fmtInt(s.UnitTestFiles), fmtInt(s.UnitTestLines)},
+			{"End-to-end tests", fmtInt(s.E2ETestFiles), fmtInt(s.E2ETestLines)},
+			{"**Total**", "**" + fmtInt(totalFiles) + "**", "**" + fmtInt(totalLines) + "**"},
+		},
+	))
+	b.WriteByte('\n')
 
 	b.WriteString("### Functions\n\n")
-	b.WriteString("| Category | Count |\n")
-	b.WriteString(tableAlignRight)
-	fmt.Fprintf(&b, "| Source functions | %s |\n", fmtInt(srcFuncs))
-	fmt.Fprintf(&b, "| — exported (public) | %s |\n", fmtInt(s.ExportedFuncs))
-	fmt.Fprintf(&b, "| — unexported (private) | %s |\n", fmtInt(s.UnexportedFuncs))
-	fmt.Fprintf(&b, "| Unit test functions (`TestXxx`) | %s |\n", fmtInt(s.TestFuncs))
-	fmt.Fprintf(&b, "| Subtests (`t.Run(...)`) | %s |\n", fmtInt(s.Subtests))
-	fmt.Fprintf(&b, "| End-to-end test functions | %s |\n\n", fmtInt(s.E2ETestFuncs))
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Category", "Count"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight},
+		[][]string{
+			{"Source functions", fmtInt(srcFuncs)},
+			{"— exported (public)", fmtInt(s.ExportedFuncs)},
+			{"— unexported (private)", fmtInt(s.UnexportedFuncs)},
+			{"Unit test functions (`TestXxx`)", fmtInt(s.TestFuncs)},
+			{"Subtests (`t.Run(...)`)", fmtInt(s.Subtests)},
+			{"End-to-end test functions", fmtInt(s.E2ETestFuncs)},
+		},
+	))
+	b.WriteByte('\n')
 
 	b.WriteString("### Ratios worth noting\n\n")
-	b.WriteString("| Observation | Value |\n")
-	b.WriteString(tableAlignRight)
-	fmt.Fprintf(&b, "| Test lines vs source lines | %.2f× more tests than code |\n", testRatio)
-	fmt.Fprintf(&b, "| Average source file length | ~%s lines |\n", fmtInt(avgSrc))
-	fmt.Fprintf(&b, "| Average test file length | ~%s lines |\n", fmtInt(avgTest))
-	fmt.Fprintf(&b, "| Comment lines in source | %s (~%.1f%% of source) |\n", fmtInt(s.CommentLines), commentPct)
-	fmt.Fprintf(&b, "| Test functions per source function | %.1f× |\n\n", testPerFunc)
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Observation", "Value"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight},
+		[][]string{
+			{"Test lines vs source lines", fmt.Sprintf("%.2f× more tests than code", testRatio)},
+			{"Average source file length", "~" + fmtInt(avgSrc) + " lines"},
+			{"Average test file length", "~" + fmtInt(avgTest) + " lines"},
+			{"Comment lines in source", fmt.Sprintf("%s (~%.1f%% of source)", fmtInt(s.CommentLines), commentPct)},
+			{"Test functions per source function", fmt.Sprintf("%.1f×", testPerFunc)},
+		},
+	))
+	b.WriteByte('\n')
 
 	b.WriteString("### Code patterns\n\n")
-	b.WriteString("| Pattern | Count |\n")
-	b.WriteString(tableAlignRight)
-	fmt.Fprintf(&b, "| `if err != nil` checks | %s |\n", fmtInt(s.ErrChecks))
-	fmt.Fprintf(&b, "| `defer` statements | %s |\n", fmtInt(s.DeferStmts))
-	fmt.Fprintf(&b, "| `struct` types defined | %s |\n", fmtInt(s.StructTypes))
-	fmt.Fprintf(&b, "| `//nolint` suppressions | %s |\n", fmtInt(s.Nolints))
-	fmt.Fprintf(&b, "| `TODO` / `FIXME` / `HACK` comments | %s |\n\n", fmtInt(s.TODOs))
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Pattern", "Count"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight},
+		[][]string{
+			{"`if err != nil` checks", fmtInt(s.ErrChecks)},
+			{"`defer` statements", fmtInt(s.DeferStmts)},
+			{"`struct` types defined", fmtInt(s.StructTypes)},
+			{"`//nolint` suppressions", fmtInt(s.Nolints)},
+			{"`TODO` / `FIXME` / `HACK` comments", fmtInt(s.TODOs)},
+		},
+	))
+	b.WriteByte('\n')
 
 	b.WriteString("### Project\n\n")
-	b.WriteString("| Metric | Value |\n")
-	b.WriteString(tableAlignRight)
-	fmt.Fprintf(&b, "| Go packages | %s |\n", fmtInt(s.Packages))
-	fmt.Fprintf(&b, "| Direct dependencies (`go.mod`) | %s |\n", fmtInt(s.DirectDeps))
-	fmt.Fprintf(&b, "| Indirect dependencies | %s |\n", fmtInt(s.IndirectDeps))
-	fmt.Fprintf(&b, "| Git commits | %s |\n", fmtInt(s.CommitCount))
-	fmt.Fprintf(&b, "| Unique contributors | %s |\n\n", fmtInt(s.ContributorCount))
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Metric", "Value"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight},
+		[][]string{
+			{"Go packages", fmtInt(s.Packages)},
+			{"Direct dependencies (`go.mod`)", fmtInt(s.DirectDeps)},
+			{"Indirect dependencies", fmtInt(s.IndirectDeps)},
+			{"Git commits", fmtInt(s.CommitCount)},
+			{"Unique contributors", fmtInt(s.ContributorCount)},
+		},
+	))
+	b.WriteByte('\n')
 
 	b.WriteString("### Hall of fame\n\n")
-	b.WriteString("| Record | File |\n")
-	b.WriteString("| --- | --- |\n")
-	fmt.Fprintf(&b, "| Longest source file | `%s` — %s lines |\n", s.LargestSrcFile, fmtInt(s.LargestSrcLines))
-	fmt.Fprintf(&b, "| Longest test file | `%s` — %s lines |\n\n", s.LargestTestFile, fmtInt(s.LargestTestLines))
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Record", "File"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft},
+		[][]string{
+			{"Longest source file", fmt.Sprintf("`%s` — %s lines", s.LargestSrcFile, fmtInt(s.LargestSrcLines))},
+			{"Longest test file", fmt.Sprintf("`%s` — %s lines", s.LargestTestFile, fmtInt(s.LargestTestLines))},
+		},
+	))
+	b.WriteByte('\n')
 
 	b.WriteString("### Because why not\n\n")
-	b.WriteString("| Fact | Value |\n")
-	b.WriteString("| --- | --- |\n")
-	fmt.Fprintf(&b, "| Source code printed at 55 lines/page | ~%s pages of A4 |\n", fmtInt(s.SourceLines/linesPerPage))
-	fmt.Fprintf(&b, "| Source lines mentioning `\"gitlab\"` | %s (impossible to avoid) |\n", fmtInt(s.GitlabLines))
-	fmt.Fprintf(&b, "| Longest function name in source | `%s` (%d chars) |\n", s.LongestFuncName, len(s.LongestFuncName))
-	fmt.Fprintf(&b, "| Longest test function name | `%s` (%d chars) |\n", s.LongestTestName, len(s.LongestTestName))
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Fact", "Value"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft},
+		[][]string{
+			{"Source code printed at 55 lines/page", "~" + fmtInt(s.SourceLines/linesPerPage) + " pages of A4"},
+			{"Source lines mentioning `\"gitlab\"`", fmtInt(s.GitlabLines) + " (impossible to avoid)"},
+			{"Longest function name in source", fmt.Sprintf("`%s` (%d chars)", s.LongestFuncName, len(s.LongestFuncName))},
+			{"Longest test function name", fmt.Sprintf("`%s` (%d chars)", s.LongestTestName, len(s.LongestTestName))},
+		},
+	))
 
 	return b.String()
 }
