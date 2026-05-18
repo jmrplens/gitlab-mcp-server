@@ -2,6 +2,8 @@ package accesstokens
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -64,32 +66,105 @@ func PersonalRevokeSelfOutput(ctx context.Context, client *gitlabclient.Client, 
 }
 
 func accessTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := accessTokenOptions(individualTool)
+	options := accessTokenOptions(name, individualTool)
 	options.ReadOnly = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func accessTokenCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, accessTokenOptions(individualTool))
+	return toolutil.NewActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
 func accessTokenRotateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, accessTokenOptions(individualTool))
+	return toolutil.NewActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
 func accessTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := accessTokenOptions(individualTool)
+	options := accessTokenOptions(name, individualTool)
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
-func accessTokenOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
-		Tags:           []string{"access", "token"},
+func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	options := toolutil.ActionSpecOptions{
+		Tags:           []string{"access", "access_token", "token"},
 		OpenWorld:      true,
 		OwnerPackage:   "accesstokens",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+	scope, operation := accessTokenScopeAndOperation(actionName)
+	if scope == "" {
+		return options
+	}
+	operationText := strings.ReplaceAll(operation, "_", " ")
+	options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action %s a %s-scoped API token.", scope, accessTokenOperationPhrase(operation), scope)
+	options.Aliases = []string{fmt.Sprintf("%s %s access token", operationText, scope)}
+	if operation == "list" {
+		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action lists %s-scoped API tokens.", scope, scope)
+		options.Tags = append(options.Tags, fmt.Sprintf("%s_access_tokens", scope))
+		options.Aliases = append(options.Aliases, fmt.Sprintf("%s access tokens", scope), fmt.Sprintf("list %s access tokens", scope))
+	}
+	options.RelatedActions = accessTokenRelatedActions(scope)
+	if accessTokenNeedsTokenID(operation) {
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"token_id": {
+				SemanticRole:     "access_token",
+				ValueSource:      fmt.Sprintf("Access token ID returned by token_%s_list or token_%s_get.", scope, scope),
+				CommonConfusions: []string{"Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself."},
+			},
+		}
+	}
+	return options
+}
+
+func accessTokenScopeAndOperation(actionName string) (scope, operation string) {
+	for _, scope := range []string{"project", "group", "personal"} {
+		prefix := "token_" + scope + "_"
+		suffix, found := strings.CutPrefix(actionName, prefix)
+		if found {
+			return scope, suffix
+		}
+	}
+	return "", ""
+}
+
+func accessTokenOperationPhrase(operation string) string {
+	switch operation {
+	case "list":
+		return "lists"
+	case "get":
+		return "gets"
+	case "create":
+		return "creates"
+	case "rotate", "rotate_self":
+		return "rotates"
+	case "revoke", "revoke_self":
+		return "revokes"
+	default:
+		return strings.ReplaceAll(operation, "_", " ")
+	}
+}
+
+func accessTokenNeedsTokenID(operation string) bool {
+	switch operation {
+	case "get", "rotate", "revoke":
+		return true
+	default:
+		return false
+	}
+}
+
+func accessTokenRelatedActions(scope string) []string {
+	switch scope {
+	case "project":
+		return []string{"project.get", "access.deploy_key_list_project", "access.deploy_token_list_project"}
+	case "group":
+		return []string{"group.get"}
+	case "personal":
+		return []string{"user.current"}
+	default:
+		return nil
 	}
 }

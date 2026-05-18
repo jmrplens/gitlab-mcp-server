@@ -1,20 +1,21 @@
-// Command gen_llms generates llms.txt and llms-full.txt files following the
-// llmstxt.org standard. It creates an in-memory MCP server with all tools,
-// resources, and prompts registered, introspects them via the SDK, and writes
-// two files to the project root:
+// Command gen_llms generates llms.txt and llms-full.txt files. It creates an
+// in-memory MCP server with all tools, resources, and prompts registered,
+// introspects them via the SDK, and writes two files to the project root:
 //
-//   - llms.txt: concise overview for LLM discovery
-//   - llms-full.txt: detailed listing with tool schemas
+//   - llms.txt: concise llmstxt.org index for LLM discovery
+//   - llms-full.txt: detailed companion reference with tool schemas
 //
 // Usage:
 //
 //	go run ./cmd/gen_llms/
+//	go run ./cmd/gen_llms/ --check
 package main
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -32,6 +33,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -40,7 +42,13 @@ const (
 	// keep the file scannable. When a description exceeds this limit, generation
 	// falls back to its first sentence; if that is still too long, the text is
 	// hard-truncated at the rune boundary.
-	maxFullDescRunes = 600
+	maxFullDescRunes       = 600
+	llmsFileName           = "llms.txt"
+	llmsFullFileName       = "llms-full.txt"
+	dynamicFindToolName    = "gitlab_find_action"
+	dynamicExecuteToolName = "gitlab_execute_tool"
+	llmsSummaryItemFormat  = "- %s: %s\n"
+	llmsBoldTitleFormat    = "**%s**\n\n"
 )
 
 type llmsCatalog struct {
@@ -49,6 +57,7 @@ type llmsCatalog struct {
 	MetaBase                []*mcp.Tool
 	MetaEnterprise          []*mcp.Tool
 	MetaGitLabComEnterprise []*mcp.Tool
+	Dynamic                 []*mcp.Tool
 	MetaRoutes              map[string]toolutil.ActionMap
 	Resources               []*mcp.Resource
 	ResourceTemplates       []*mcp.ResourceTemplate
@@ -56,7 +65,10 @@ type llmsCatalog struct {
 }
 
 func main() {
-	if err := run(); err != nil {
+	checkOnly := flag.Bool("check", false, "validate generated llms files without writing them")
+	flag.Parse()
+
+	if err := run(*checkOnly); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to generate llms files: %v\n", err)
 		os.Exit(1)
 	}
@@ -64,7 +76,12 @@ func main() {
 
 // run introspects the live MCP catalog and regenerates llms.txt and
 // llms-full.txt in the project root.
-func run() error {
+func run(checkOnly bool) error {
+	rootDir, err := findProjectRoot()
+	if err != nil {
+		return err
+	}
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -87,7 +104,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("create gitlab.com client: %w", err)
 	}
-	version := readVersion()
+	version := readVersion(rootDir)
 	res, resTpl, err := listResources(client)
 	if err != nil {
 		return err
@@ -112,6 +129,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	dynamicTools, err := listDynamicTools(gitLabComClient)
+	if err != nil {
+		return err
+	}
 	metaCatalog, err := tools.BuildActionCatalog(gitLabComClient, tools.ActionCatalogOptions{Enterprise: true})
 	if err != nil {
 		return fmt.Errorf("build meta action catalog: %w", err)
@@ -126,28 +147,39 @@ func run() error {
 		MetaBase:                metaBase,
 		MetaEnterprise:          metaEnterprise,
 		MetaGitLabComEnterprise: metaGitLabComEnterprise,
+		Dynamic:                 dynamicTools,
 		MetaRoutes:              metaCatalog.ActionMaps(),
 		Resources:               res,
 		ResourceTemplates:       resTpl,
 		Prompts:                 promptList,
 	}
 
-	if writeErr := writeLLMSTxt(version, catalog); writeErr != nil {
+	if writeErr := writeLLMSTxt(version, catalog, checkOnly); writeErr != nil {
 		return writeErr
 	}
-	if writeErr := writeLLMSFullTxt(version, catalog); writeErr != nil {
+	if writeErr := writeLLMSFullTxt(version, catalog, checkOnly); writeErr != nil {
 		return writeErr
 	}
 
-	fmt.Printf("Generated llms.txt (%d max tools, %d base meta, %d GitLab.com enterprise meta, %d resources, %d prompts)\n",
-		len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaGitLabComEnterprise), len(catalog.Resources)+len(catalog.ResourceTemplates)+1, len(catalog.Prompts))
+	if checkOnly {
+		fmt.Printf("Validated llms.txt and llms-full.txt\n")
+		return nil
+	}
+	fmt.Printf("Generated llms.txt (%d max tools, %d base meta, %d GitLab.com enterprise meta, %d dynamic tools, %d resources, %d prompts)\n",
+		len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), len(catalog.Resources)+len(catalog.ResourceTemplates)+1, len(catalog.Prompts))
 	fmt.Printf("Generated llms-full.txt\n")
 	return nil
 }
 
 // readVersion reads the VERSION file from the project root.
-func readVersion() string {
-	data, err := os.ReadFile("VERSION")
+func readVersion(rootDir string) string {
+	root, err := os.OpenRoot(rootDir)
+	if err != nil {
+		return "unknown"
+	}
+	defer func() { _ = root.Close() }()
+
+	data, err := root.ReadFile("VERSION")
 	if err != nil {
 		return "unknown"
 	}
@@ -224,6 +256,68 @@ func listToolsEnterprise(client *gitlabclient.Client) ([]*mcp.Tool, error) {
 	return result.Tools, nil
 }
 
+// listDynamicTools returns the visible two-tool dynamic catalog from a real MCP
+// tools/list session.
+func listDynamicTools(client *gitlabclient.Client) ([]*mcp.Tool, error) {
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		return nil, fmt.Errorf("build dynamic action catalog: %w", err)
+	}
+	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("add dynamic standalone catalog: %w", err)
+	}
+	session, cleanup, err := newSession(func(server *mcp.Server) error {
+		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	result, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("list dynamic tools: %w", err)
+	}
+	sortDynamicTools(result.Tools)
+	if contractErr := validateDynamicToolContract(result.Tools); contractErr != nil {
+		return nil, contractErr
+	}
+	return result.Tools, nil
+}
+
+func sortDynamicTools(dynamicTools []*mcp.Tool) {
+	order := map[string]int{
+		dynamicFindToolName:    0,
+		dynamicExecuteToolName: 1,
+	}
+	sort.SliceStable(dynamicTools, func(i, j int) bool {
+		left, leftOK := order[dynamicTools[i].Name]
+		right, rightOK := order[dynamicTools[j].Name]
+		if leftOK && rightOK {
+			return left < right
+		}
+		if leftOK != rightOK {
+			return leftOK
+		}
+		return dynamicTools[i].Name < dynamicTools[j].Name
+	})
+}
+
+func validateDynamicToolContract(dynamicTools []*mcp.Tool) error {
+	expected := []string{dynamicFindToolName, dynamicExecuteToolName}
+	if len(dynamicTools) != len(expected) {
+		return fmt.Errorf("expected %d dynamic tools, got %d", len(expected), len(dynamicTools))
+	}
+	for i, name := range expected {
+		if dynamicTools[i].Name != name {
+			return fmt.Errorf("unexpected dynamic tool %q at position %d", dynamicTools[i].Name, i)
+		}
+	}
+	return nil
+}
+
 // listResources returns the static resources and resource templates advertised
 // by the MCP server, including the per-action meta-schema template.
 func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error) {
@@ -274,25 +368,26 @@ func listPrompts(client *gitlabclient.Client) ([]*mcp.Prompt, error) {
 }
 
 // writeLLMSTxt generates the concise llms.txt overview.
-func writeLLMSTxt(version string, catalog llmsCatalog) error {
+func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	var b strings.Builder
 	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates) + 1 // +1 for workspace_roots
+	domains := classifyMetaDomains(catalog.MetaBase)
 
 	b.WriteString("# gitlab-mcp-server\n\n")
 	b.WriteString("> A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.\n\n")
 	fmt.Fprintf(&b, "gitlab-mcp-server v%s is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.\n", version)
 	fmt.Fprintf(&b, "It provides up to %d individual MCP tools across %d GitLab API domains, %d base meta-tools, %d self-managed enterprise meta-tools, %d GitLab.com Enterprise meta-tools,\n",
 		len(catalog.Individual), countDomains(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise))
-	fmt.Fprintf(&b, "a default 2-tool dynamic find/execute surface, %d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
-		resourceCount, len(catalog.Prompts))
+	fmt.Fprintf(&b, "a default %d-tool dynamic find/execute surface, %d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
+		len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 
-	b.WriteString("## Quick Start\n\n")
+	b.WriteString("Quick start:\n\n")
 	b.WriteString("1. Download the binary for your platform from the Releases page\n")
 	b.WriteString("2. Run `gitlab-mcp-server --setup` to launch the interactive setup wizard\n")
 	b.WriteString("3. The wizard configures your AI client (VS Code, Cursor, Claude Desktop, etc.)\n\n")
 
-	b.WriteString("## Configuration (environment variables — stdio mode)\n\n")
-	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: %s; set for self-managed instances)\n", config.DefaultGitLabURL)
+	b.WriteString("Configuration (environment variables, stdio mode):\n\n")
+	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: `%s`; set for self-managed instances)\n", config.DefaultGitLabURL)
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
 	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
 	b.WriteString("- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic\n")
@@ -300,15 +395,20 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	b.WriteString("- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny\n")
 	b.WriteString("- GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)\n\n")
 
-	b.WriteString("## Tool Domains\n\n")
-	domains := classifyMetaDomains(catalog.MetaBase)
+	b.WriteString("Tool domains:\n\n")
 	b.WriteString(strings.Join(domains, ", "))
 	b.WriteString(".\n\n")
 
-	b.WriteString("## Dynamic Toolset (default mode)\n\n")
+	b.WriteString("Dynamic toolset (default mode):\n\n")
 	b.WriteString("When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set TOOL_SURFACE=meta to use consolidated domain meta-tools instead.\n\n")
+	for _, t := range catalog.Dynamic {
+		desc := firstSentence(t.Description)
+		desc = truncateRunes(desc, 80)
+		fmt.Fprintf(&b, llmsSummaryItemFormat, t.Name, desc)
+	}
+	b.WriteString("\n")
 
-	b.WriteString("## Meta-Tools\n\n")
+	b.WriteString("Meta-tool overview:\n\n")
 	fmt.Fprintf(&b, "When TOOL_SURFACE=meta, %d domain meta-tools are registered instead of\n", len(catalog.MetaBase))
 	fmt.Fprintf(&b, "up to %d individual tools. Enterprise/Premium entries register %d meta-tools on self-managed GitLab,\n", len(catalog.Individual), len(catalog.MetaEnterprise))
 	fmt.Fprintf(&b, "or %d on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single\n", len(catalog.MetaGitLabComEnterprise))
@@ -316,57 +416,178 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	for _, t := range catalog.MetaBase {
 		desc := firstSentence(toolutil.StripMetaToolDescriptionPrefix(t.Description))
 		desc = truncateRunes(desc, 80)
-		fmt.Fprintf(&b, "- %s — %s\n", t.Name, desc)
+		fmt.Fprintf(&b, llmsSummaryItemFormat, t.Name, desc)
 	}
 	b.WriteString("\n")
 
-	b.WriteString("## Resources\n\n")
+	b.WriteString("Resources:\n\n")
 	fmt.Fprintf(&b, "%d read-only resources:\n\n", resourceCount)
 	for _, r := range catalog.Resources {
-		fmt.Fprintf(&b, "- %s: %s\n", r.URI, r.Name)
+		fmt.Fprintf(&b, llmsSummaryItemFormat, r.URI, r.Name)
 	}
 	for _, r := range catalog.ResourceTemplates {
-		fmt.Fprintf(&b, "- %s: %s\n", r.URITemplate, r.Name)
+		fmt.Fprintf(&b, llmsSummaryItemFormat, r.URITemplate, r.Name)
 	}
 	b.WriteString("- gitlab://workspace/roots: Workspace Roots\n")
 	b.WriteString("\n")
 
-	b.WriteString("## Prompts\n\n")
+	b.WriteString("Prompts:\n\n")
 	fmt.Fprintf(&b, "%d prompts:\n\n", len(catalog.Prompts))
 	for _, p := range catalog.Prompts {
 		desc := firstSentence(p.Description)
 		desc = truncateRunes(desc, 80)
-		fmt.Fprintf(&b, "- %s — %s\n", p.Name, desc)
+		fmt.Fprintf(&b, llmsSummaryItemFormat, p.Name, desc)
 	}
 	b.WriteString("\n")
 
 	b.WriteString("## Documentation\n\n")
-	b.WriteString("- docs/configuration.md — Full configuration reference\n")
-	b.WriteString("- docs/meta-tools.md — Meta-tool action reference\n")
-	b.WriteString("- docs/dynamic-tools.md — Low-token dynamic find/execute mode\n")
-	b.WriteString("- docs/tools/README.md — All tools reference\n")
-	b.WriteString("- docs/resources-reference.md — Resources reference\n")
-	b.WriteString("- docs/prompts-reference.md — Prompts reference\n")
-	b.WriteString("- docs/security.md — Security model\n")
-	b.WriteString("- llms-full.txt — Full tool listing with schemas\n")
+	writeLLMSLink(&b, "Getting started", "docs/getting-started.md", "Installation and first-run guide")
+	writeLLMSLink(&b, "Configuration", "docs/configuration.md", "Full configuration reference")
+	writeLLMSLink(&b, "Environment variables", "docs/env-reference.md", "Environment variable reference")
+	writeLLMSLink(&b, "HTTP server mode", "docs/http-server-mode.md", "Remote MCP transport setup")
+	writeLLMSLink(&b, "Security model", "docs/security.md", "Authentication, read-only mode, safe mode, and security controls")
 
-	if err := writeFile("llms.txt", b.String()); err != nil {
+	b.WriteString("\n## Tool References\n\n")
+	writeLLMSLink(&b, "Dynamic tools", "docs/dynamic-tools.md", "Low-token find/execute mode and usage pattern")
+	writeLLMSLink(&b, "Meta-tools", "docs/meta-tools.md", "Consolidated domain meta-tool action reference")
+	writeLLMSLink(&b, "All tools", "docs/tools/README.md", "Complete per-domain tool reference")
+	writeLLMSLink(&b, "Resources", "docs/resources-reference.md", "Read-only MCP resource reference")
+	writeLLMSLink(&b, "Prompts", "docs/prompts-reference.md", "Reusable MCP prompt templates")
+
+	b.WriteString("\n## Optional\n\n")
+	writeLLMSLink(&b, "Full LLM reference", llmsFullFileName, "Generated companion reference with tool schemas, resource listings, and prompts")
+	writeLLMSLink(&b, "Architecture", "docs/architecture.md", "Internal architecture and catalog-first runtime overview")
+	writeLLMSLink(&b, "Output format", "docs/output-format.md", "Markdown and structured output conventions")
+	writeLLMSLink(&b, "Troubleshooting", "docs/troubleshooting.md", "Common setup and runtime issues")
+	writeLLMSLink(&b, "Evaluation results", "docs/testing/model-results.md", "Surface evaluation summaries for model behavior")
+
+	content := b.String()
+	if err := validateLLMSTxt(content); err != nil {
+		return fmt.Errorf("validate llms.txt: %w", err)
+	}
+	if err := writeGeneratedFile(llmsFileName, content, checkOnly); err != nil {
 		return fmt.Errorf("write llms.txt: %w", err)
 	}
 	return nil
 }
 
+func writeLLMSLink(b *strings.Builder, label, target, description string) {
+	fmt.Fprintf(b, "- [%s](%s): %s\n", label, target, description)
+}
+
+func validateLLMSTxt(content string) error {
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) == "" {
+		return errors.New("missing H1 title")
+	}
+	if !strings.HasPrefix(strings.TrimSpace(lines[0]), "# ") || strings.HasPrefix(strings.TrimSpace(lines[0]), "##") {
+		return fmt.Errorf("first line must be an H1 title, got %q", lines[0])
+	}
+
+	foundSummary := false
+	inFileListSection := false
+	currentSection := ""
+	sectionHasLink := false
+	for index, rawLine := range lines[1:] {
+		lineNumber := index + 2
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "#") {
+			if strings.HasPrefix(line, "## ") && !strings.HasPrefix(line, "###") {
+				if inFileListSection && !sectionHasLink {
+					return fmt.Errorf("section %q has no file links", currentSection)
+				}
+				currentSection = strings.TrimSpace(strings.TrimPrefix(line, "## "))
+				if currentSection == "" {
+					return fmt.Errorf("line %d: H2 section title is empty", lineNumber)
+				}
+				inFileListSection = true
+				sectionHasLink = false
+				continue
+			}
+			return fmt.Errorf("line %d: llms.txt only allows H1 plus H2 file-list sections", lineNumber)
+		}
+		if !inFileListSection {
+			if strings.HasPrefix(line, ">") {
+				foundSummary = true
+			}
+			continue
+		}
+		if err := validateLLMSFileListItem(line); err != nil {
+			return fmt.Errorf("line %d: %w", lineNumber, err)
+		}
+		sectionHasLink = true
+	}
+	if !foundSummary {
+		return errors.New("missing blockquote summary")
+	}
+	if inFileListSection && !sectionHasLink {
+		return fmt.Errorf("section %q has no file links", currentSection)
+	}
+	return nil
+}
+
+func validateLLMSFileListItem(line string) error {
+	if !strings.HasPrefix(line, "- [") {
+		return fmt.Errorf("file-list entries must start with a markdown link, got %q", line)
+	}
+	closeLabel := strings.Index(line, "](")
+	if closeLabel <= len("- [") {
+		return fmt.Errorf("file-list entry is missing markdown link label, got %q", line)
+	}
+	urlStart := closeLabel + len("](")
+	urlEnd := strings.Index(line[urlStart:], ")")
+	if urlEnd < 0 {
+		return fmt.Errorf("file-list entry is missing markdown link target, got %q", line)
+	}
+	url := strings.TrimSpace(line[urlStart : urlStart+urlEnd])
+	if url == "" {
+		return fmt.Errorf("file-list entry has empty markdown link target, got %q", line)
+	}
+	remainder := strings.TrimSpace(line[urlStart+urlEnd+1:])
+	if remainder != "" && !strings.HasPrefix(remainder, ":") {
+		return fmt.Errorf("file-list entry notes must follow ':' after the markdown link, got %q", line)
+	}
+	return nil
+}
+
+func validateLLMSFullTxt(content string) error {
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+	if len(lines) == 0 || !strings.HasPrefix(strings.TrimSpace(lines[0]), "# ") {
+		return errors.New("missing H1 title")
+	}
+	for _, section := range []string{"## Dynamic Toolset", "## Meta-Tools", "## Individual Tools", "## Resources", "## Prompts"} {
+		if !strings.Contains(content, section+"\n") {
+			return fmt.Errorf("missing %q section", section)
+		}
+	}
+	return nil
+}
+
 // writeLLMSFullTxt generates the detailed llms-full.txt with tool schemas.
-func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
+func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	var b strings.Builder
 	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates) + 1
 
 	b.WriteString("# gitlab-mcp-server — Full Reference\n\n")
-	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | 2 dynamic tools | %d resources | %d prompts\n\n",
-		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), resourceCount, len(catalog.Prompts))
+	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | %d dynamic tools | %d resources | %d prompts\n\n",
+		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 
 	b.WriteString("## Dynamic Toolset\n\n")
 	b.WriteString("Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.\n\n")
+	for _, t := range catalog.Dynamic {
+		fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
+		if t.Title != "" {
+			fmt.Fprintf(&b, llmsBoldTitleFormat, t.Title)
+		}
+		b.WriteString(t.Description)
+		b.WriteString("\n\n")
+		writeInputSchema(&b, t.InputSchema)
+		writeAnnotations(&b, t.Annotations)
+		b.WriteString("\n")
+	}
 
 	// --- Meta-tools ---
 	b.WriteString("## Meta-Tools\n\n")
@@ -376,7 +597,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 	for _, t := range catalog.MetaBase {
 		fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
 		if t.Title != "" {
-			fmt.Fprintf(&b, "**%s**\n\n", t.Title)
+			fmt.Fprintf(&b, llmsBoldTitleFormat, t.Title)
 		}
 		b.WriteString(t.Description)
 		b.WriteString("\n\n")
@@ -404,7 +625,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 		for _, t := range enterpriseOnly {
 			fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
 			if t.Title != "" {
-				fmt.Fprintf(&b, "**%s**\n\n", t.Title)
+				fmt.Fprintf(&b, llmsBoldTitleFormat, t.Title)
 			}
 			b.WriteString(t.Description)
 			b.WriteString("\n\n")
@@ -504,7 +725,11 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 		}
 	}
 
-	if err := writeFile("llms-full.txt", b.String()); err != nil {
+	content := b.String()
+	if err := validateLLMSFullTxt(content); err != nil {
+		return fmt.Errorf("validate llms-full.txt: %w", err)
+	}
+	if err := writeGeneratedFile(llmsFullFileName, content, checkOnly); err != nil {
 		return fmt.Errorf("write llms-full.txt: %w", err)
 	}
 	return nil
@@ -801,14 +1026,45 @@ func findSentenceEnd(s string) int {
 	}
 }
 
-// writeFile writes content to a file in the project root.
-func writeFile(name, content string) error {
+// writeGeneratedFile writes or checks generated content in the project root.
+func writeGeneratedFile(name, content string, checkOnly bool) error {
+	if !isGeneratedLLMSFile(name) {
+		return fmt.Errorf("unexpected generated file %q", name)
+	}
 	dir, err := findProjectRoot()
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(dir, name)
-	return os.WriteFile(path, []byte(content), 0o644) //#nosec G306 -- generated documentation files, not secrets
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+
+	if checkOnly {
+		existing, readErr := root.ReadFile(name)
+		if readErr != nil {
+			return readErr
+		}
+		if normalizeLineEndings(string(existing)) != normalizeLineEndings(content) {
+			return fmt.Errorf("%s is out of date; run go run ./cmd/gen_llms/", name)
+		}
+		return nil
+	}
+	return root.WriteFile(name, []byte(content), 0o644)
+}
+
+func normalizeLineEndings(s string) string {
+	return strings.ReplaceAll(s, "\r\n", "\n")
+}
+
+func isGeneratedLLMSFile(name string) bool {
+	switch name {
+	case llmsFileName, llmsFullFileName:
+		return true
+	default:
+		return false
+	}
 }
 
 // findProjectRoot walks up from cwd looking for go.mod.

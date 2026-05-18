@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/internal/docgen"
 )
 
 const (
@@ -70,13 +71,15 @@ const (
 	usageEstimatedCost = "Estimated cost"
 	// modelEvaluationSuffix identifies the model evaluation suffix constant used by this package.
 	modelEvaluationSuffix = " Model Evaluation"
+	boldIntFormat         = "**%d**"
+	boldStringFormat      = "**%s**"
 )
 
-// fullDockerAttemptsByPreset stores the package-level full docker attempts by preset state.
+// fullDockerAttemptsByPreset stores the minimum per-model attempts for complete Docker preset reports.
 var fullDockerAttemptsByPreset = map[string]int{
-	presetDockerRead:            40,
-	presetDockerMutatingSafe:    25,
-	presetDockerDestructiveSafe: 53,
+	presetDockerRead:            38,
+	presetDockerMutatingSafe:    33,
+	presetDockerDestructiveSafe: 63,
 }
 
 // publishReport captures publish report data for published evaluation reports.
@@ -220,7 +223,7 @@ func publishEvaluationDocs(opts options) error {
 	if opts.CheckDocs {
 		return nil
 	}
-	fmt.Printf("published evaluation docs: %s, %s\n", opts.PublishResults, opts.PublishReadme)
+	terminalPrintf("published evaluation docs: %s, %s\n", opts.PublishResults, opts.PublishReadme)
 	return nil
 }
 
@@ -861,17 +864,55 @@ func buildModelResultsBlock(label string, reports []publishReport) string {
 	aggregate := aggregatePublishRows(rows)
 	var b strings.Builder
 	fmt.Fprintf(&b, "### %s\n\n", label)
-	fmt.Fprintf(&b, "| Model | Preset | Backend | Attempts | Expected ops | %s | %s | Tool-selection | Action-selection | First-pass validation | Repair success | Destructive safety | Final task success | Cost/tokens | Commit / branch / date |\n", usageModelRequests, usageToolCallsEmitted)
-	fmt.Fprintf(&b, "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |\n")
-	for _, row := range rows {
-		fmt.Fprintf(&b, "| `%s` | `%s` | %s | %d | %d | %d | %d | %s | %s | %s | %s | %s | %s | %s | %s |\n",
-			escapeTable(row.Model), emptyDash(row.Preset), dockerBackendLabel(row), row.Attempts, row.ExpectedOps, row.ModelRequests, row.ToolCalls,
-			formatMetric(row.ToolSelection), formatMetric(row.ActionSelection), formatMetric(row.FirstPass), formatRepairMetric(row), formatMetric(row.DestructiveSafety), formatMetric(row.FinalSuccess), emptyDash(row.CostTokens), emptyDash(rowCommitBranchDate(row)))
-	}
-	fmt.Fprintf(&b, "| **Aggregate** | **all selected** | - | **%d** | **%d** | **%d** | **%d** | **%s** | **%s** | **%s** | **%s** | **%s** | **%s** | - | - |\n",
-		aggregate.Attempts, aggregate.ExpectedOps, aggregate.ModelRequests, aggregate.ToolCalls, formatMetric(aggregate.ToolSelection), formatMetric(aggregate.ActionSelection), formatMetric(aggregate.FirstPass), formatRepairMetric(aggregate), formatMetric(aggregate.DestructiveSafety), formatMetric(aggregate.FinalSuccess))
+	b.WriteString(renderModelResultsTable(rows, aggregate))
 	fmt.Fprintf(&b, "\nPublished with `cmd/eval_mcp_surfaces --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.\n")
 	return strings.TrimSpace(b.String()) + "\n"
+}
+
+func renderModelResultsTable(rows []publishRow, aggregate publishRow) string {
+	tableRows := make([][]string, 0, len(rows)+1)
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			fmt.Sprintf("`%s`", escapeTable(row.Model)),
+			fmt.Sprintf("`%s`", emptyDash(row.Preset)),
+			dockerBackendLabel(row),
+			strconv.Itoa(row.Attempts),
+			strconv.Itoa(row.ExpectedOps),
+			strconv.Itoa(row.ModelRequests),
+			strconv.Itoa(row.ToolCalls),
+			formatMetric(row.ToolSelection),
+			formatMetric(row.ActionSelection),
+			formatMetric(row.FirstPass),
+			formatRepairMetric(row),
+			formatMetric(row.DestructiveSafety),
+			formatMetric(row.FinalSuccess),
+			emptyDash(row.CostTokens),
+			emptyDash(rowCommitBranchDate(row)),
+		})
+	}
+	tableRows = append(tableRows, []string{
+		"**Aggregate**",
+		"**all selected**",
+		"-",
+		fmt.Sprintf(boldIntFormat, aggregate.Attempts),
+		fmt.Sprintf(boldIntFormat, aggregate.ExpectedOps),
+		fmt.Sprintf(boldIntFormat, aggregate.ModelRequests),
+		fmt.Sprintf(boldIntFormat, aggregate.ToolCalls),
+		fmt.Sprintf(boldStringFormat, formatMetric(aggregate.ToolSelection)),
+		fmt.Sprintf(boldStringFormat, formatMetric(aggregate.ActionSelection)),
+		fmt.Sprintf(boldStringFormat, formatMetric(aggregate.FirstPass)),
+		fmt.Sprintf(boldStringFormat, formatRepairMetric(aggregate)),
+		fmt.Sprintf(boldStringFormat, formatMetric(aggregate.DestructiveSafety)),
+		fmt.Sprintf(boldStringFormat, formatMetric(aggregate.FinalSuccess)),
+		"-",
+		"-",
+	})
+
+	return docgen.RenderMarkdownTable(
+		[]string{"Model", "Preset", "Backend", "Attempts", "Expected ops", usageModelRequests, usageToolCallsEmitted, "Tool-selection", "Action-selection", "First-pass validation", "Repair success", "Destructive safety", "Final task success", "Cost/tokens", "Commit / branch / date"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft, docgen.AlignLeft},
+		tableRows,
+	)
 }
 
 // buildReadmeSummaryBlock constructs the request parameters from the input.
@@ -881,16 +922,30 @@ func buildReadmeSummaryBlock(label string, reports []publishReport) string {
 	aggregate := aggregatePublishRows(rows)
 	var b strings.Builder
 	fmt.Fprintf(&b, "Current published result: **%s**.\n\n", label)
-	fmt.Fprintf(&b, "| Provider | Model | Compatibility | Tool accuracy | Recovery | Docker live status |\n")
-	fmt.Fprintf(&b, "| --- | --- | --- | ---: | ---: | --- |\n")
-	for _, summary := range summaries {
-		provider, model := providerModel(summary.Model)
-		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s | %s |\n",
-			provider, escapeTable(model), compatibilityLabel(summary), formatMetric(summary.ToolSelection), formatRecoverySummary(summary), dockerLiveStatus(summary))
-	}
+	b.WriteString(renderReadmeSummaryTable(summaries))
 	fmt.Fprintf(&b, "\nThe published model-evaluation set covers %d task attempts and %d expected MCP operations. Across the selected reports, models emitted %d tool calls over %d model requests, with %s aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.\n",
 		aggregate.Attempts, aggregate.ExpectedOps, aggregate.ToolCalls, aggregate.ModelRequests, formatMetric(aggregate.FinalSuccess))
 	return strings.TrimSpace(b.String()) + "\n"
+}
+
+func renderReadmeSummaryTable(summaries []publishModelSummary) string {
+	rows := make([][]string, 0, len(summaries))
+	for _, summary := range summaries {
+		provider, model := providerModel(summary.Model)
+		rows = append(rows, []string{
+			escapeTable(provider),
+			fmt.Sprintf("`%s`", escapeTable(model)),
+			compatibilityLabel(summary),
+			formatMetric(summary.ToolSelection),
+			formatRecoverySummary(summary),
+			dockerLiveStatus(summary),
+		})
+	}
+	return docgen.RenderMarkdownTable(
+		[]string{"Provider", "Model", "Compatibility", "Tool accuracy", "Recovery", "Docker live status"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft, docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft},
+		rows,
+	)
 }
 
 // sortedPublishRows sorts publish rows deterministically.
@@ -1100,7 +1155,7 @@ func updateManagedDoc(path, startMarker, endMarker, block, mode, label string) e
 		return fmt.Errorf("update %s: %w", path, applyErr)
 	}
 	if updated == content {
-		fmt.Printf("published evaluation docs unchanged: %s\n", path)
+		terminalPrintf("published evaluation docs unchanged: %s\n", path)
 		return nil
 	}
 	if mkdirErr := os.MkdirAll(filepath.Dir(path), 0o750); mkdirErr != nil {
@@ -1109,7 +1164,7 @@ func updateManagedDoc(path, startMarker, endMarker, block, mode, label string) e
 	if writeErr := os.WriteFile(path, []byte(updated), 0o644); writeErr != nil { // #nosec G306 -- tracked Markdown docs should remain world-readable.
 		return fmt.Errorf("write publish doc %s: %w", path, writeErr)
 	}
-	fmt.Printf("updated evaluation docs: %s\n", path)
+	terminalPrintf("updated evaluation docs: %s\n", path)
 	return nil
 }
 
@@ -1126,7 +1181,7 @@ func checkManagedDoc(path, startMarker, endMarker, block, mode, label string) er
 	if updated != content {
 		return fmt.Errorf("%s is not up to date with selected evaluation reports", path)
 	}
-	fmt.Printf("evaluation docs up to date: %s\n", path)
+	terminalPrintf("evaluation docs up to date: %s\n", path)
 	return nil
 }
 

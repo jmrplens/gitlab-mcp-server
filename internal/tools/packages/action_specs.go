@@ -65,6 +65,29 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 		OwnerPackage:   "packages",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if actionName == "list" {
+		options.Usage = "List package registry packages. If ordering is requested, use order_by with one of created_at, name, version, or type; do not use updated_at, released_at, or downloaded_at."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"order_by": {
+				SemanticRole: "package_list_sort_field",
+				ValueSource:  "Use only GitLab Package Registry ordering fields accepted by the packages API.",
+				CommonConfusions: []string{
+					"Do not use updated_at, released_at, downloaded_at, last_downloaded_at, or id as order_by values.",
+				},
+			},
+		}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{
+				"enum":        []any{"created_at", "name", "version", "type"},
+				"description": "Order by package registry field: created_at, name, version, or type.",
+			}),
+			toolutil.SchemaPropertyOverride("sort", map[string]any{"enum": []any{"asc", "desc"}}),
+			toolutil.SchemaPropertyOverride("status", map[string]any{
+				"enum":        []any{"default", "hidden", "processing", "error", "pending_destruction", "deprecated"},
+				"description": "Filter by status: default, hidden, processing, error, pending_destruction, or deprecated.",
+			}),
+		}
+	}
 	if actionName == "publish_directory" {
 		options.Usage = "Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file; include_pattern is one glob, not a comma-separated file list."
 		options.Aliases = []string{"publish local directory", "upload package directory", "generic package directory upload", "publish multiple package files"}

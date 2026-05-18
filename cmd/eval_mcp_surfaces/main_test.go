@@ -4437,6 +4437,33 @@ Task attempts: 3
 		t.Fatalf("eval metrics = %+v diagnostics=%+v coverage=%+v", evalInput.Metrics, evalInput.Diagnostics, evalInput.Coverage)
 	}
 
+	dynamicPath := filepath.Join(tmp, "current-abc123", "dynamic-base-read.md")
+	dynamicReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# Dynamic Surface Model Evaluation", 1)
+	dynamicReport = strings.Replace(dynamicReport, "Model: `claude-sonnet-4-6`", "Model: `test:model`\nTool surface: `dynamic`", 1)
+	if writeErr := os.WriteFile(dynamicPath, []byte(dynamicReport), 0o600); writeErr != nil {
+		t.Fatalf("write dynamic report: %v", writeErr)
+	}
+	dynamicInput, err := parseComparisonInput(dynamicPath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(dynamic) error = %v", err)
+	}
+	if dynamicInput.Kind != "evaluation" || dynamicInput.ToolSurface != config.ToolSurfaceDynamic || dynamicInput.TaskAttempts != 3 {
+		t.Fatalf("dynamic input = %+v", dynamicInput)
+	}
+
+	defaultTitlePath := filepath.Join(tmp, "current-abc123", "default-title.md")
+	defaultTitleReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# MCP Surface Model Evaluation", 1)
+	if writeErr := os.WriteFile(defaultTitlePath, []byte(defaultTitleReport), 0o600); writeErr != nil {
+		t.Fatalf("write default title report: %v", writeErr)
+	}
+	defaultTitleInput, err := parseComparisonInput(defaultTitlePath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(default title) error = %v", err)
+	}
+	if defaultTitleInput.Kind != "evaluation" || defaultTitleInput.TaskAttempts != 3 {
+		t.Fatalf("default title input = %+v", defaultTitleInput)
+	}
+
 	tokenPath := filepath.Join(tmp, "current-abc123", "tokens.md")
 	tokenReport := `# Tools Snapshot Token Audit
 
@@ -4877,6 +4904,73 @@ func TestDefaultTraceDir_ReplacesReportExtension(t *testing.T) {
 	}
 }
 
+// TestDefaultTerminalLogPath_ReplacesReportExtension verifies terminal logs sit
+// beside explicit Markdown reports.
+func TestDefaultTerminalLogPath_ReplacesReportExtension(t *testing.T) {
+	got := defaultTerminalLogPath("dist/evaluation/mcp-surfaces/report.md")
+	if got != "dist/evaluation/mcp-surfaces/report.log" {
+		t.Fatalf("defaultTerminalLogPath() = %q, want report.log", got)
+	}
+}
+
+// TestDefaultTerminalLogPath_UsesIgnoredTerminalDirectory verifies the fallback
+// terminal log path stays under ignored evaluation artifacts.
+func TestDefaultTerminalLogPath_UsesIgnoredTerminalDirectory(t *testing.T) {
+	got := defaultTerminalLogPath("")
+	expectedPrefix := filepath.Join("dist", "evaluation", "mcp-surfaces", "terminal") + string(filepath.Separator)
+	if !strings.HasPrefix(got, expectedPrefix) || filepath.Ext(got) != ".log" {
+		t.Fatalf("defaultTerminalLogPath() = %q, want ignored terminal log path", got)
+	}
+}
+
+// TestConfigureTerminalOutput_WritesLogWithoutEcho verifies progress output is
+// captured in the terminal log by default.
+func TestConfigureTerminalOutput_WritesLogWithoutEcho(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "terminal.log")
+	_, closeLog, err := configureTerminalOutput(options{TerminalLog: logPath})
+	if err != nil {
+		t.Fatalf("configureTerminalOutput() error = %v", err)
+	}
+	terminalPrintf("progress line %d\n", 1)
+	if closeErr := closeLog(); closeErr != nil {
+		t.Fatalf("close terminal log: %v", closeErr)
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read terminal log: %v", err)
+	}
+	requireContainsAll(t, "terminal log", string(data), []string{"eval_mcp_surfaces terminal output", "progress line 1"})
+}
+
+func TestShouldConfigureTerminalOutput_SkipsCheckDocsWithoutExplicitOutput(t *testing.T) {
+	for _, opts := range []options{
+		{CheckDocs: true},
+		{CheckEfficiency: stringList{"dist/evaluation/efficiency.md"}},
+		{CompareTraces: stringList{"dist/evaluation/report.traces"}},
+	} {
+		if shouldConfigureTerminalOutput(opts) {
+			t.Fatalf("shouldConfigureTerminalOutput(%+v) = true, want false", opts)
+		}
+	}
+	for _, opts := range []options{{CheckDocs: true, TerminalLog: "check.log"}, {CheckDocs: true, PrintOutput: true}} {
+		if !shouldConfigureTerminalOutput(opts) {
+			t.Fatalf("shouldConfigureTerminalOutput(%+v) = false, want true", opts)
+		}
+	}
+}
+
+// TestFixtureToolCoverage_DynamicFindActionRequiresExpectedStep verifies dynamic
+// discovery is counted only when fixtures explicitly expect it.
+func TestFixtureToolCoverage_DynamicFindActionRequiresExpectedStep(t *testing.T) {
+	summary := fixtureToolCoverage([]modelTool{{Name: dynamicFindTool}, {Name: dynamicExecuteTool}}, []taskResult{{
+		Task: evalTask{ExpectedTool: dynamicExecuteTool, ExpectedAction: "user.current"},
+	}})
+	if summary.Covered != 1 || len(summary.Missing) != 1 || summary.Missing[0] != dynamicFindTool {
+		t.Fatalf("fixtureToolCoverage() = %+v, want dynamic find reported missing", summary)
+	}
+}
+
 // TestDefaultOutputPath_UsesIgnoredDistDirectory verifies DefaultOutputPath uses ignored dist directory.
 func TestDefaultOutputPath_UsesIgnoredDistDirectory(t *testing.T) {
 	got := defaultOutputPath("claude/sonnet:4 6")
@@ -4916,7 +5010,7 @@ func TestWriteStartupReport_CreatesPlaceholder(t *testing.T) {
 		t.Fatalf("read startup report: %v", err)
 	}
 	requireContainsAll(t, "startup report", string(data), []string{
-		"# Meta-Tool Model Evaluation",
+		"# Dynamic Surface Model Evaluation",
 		"Status: `running`",
 		"Tool surface: `dynamic`",
 		"Backend: `gitlab`",
@@ -4950,6 +5044,64 @@ func TestWriteErrorReport_RecordsFailure(t *testing.T) {
 	})
 	if strings.Contains(string(data), "Status: `running`") {
 		t.Fatalf("error report still contains startup placeholder content: %s", data)
+	}
+}
+
+// TestWriteReportHeader_MetaTitle verifies meta reports keep the historical
+// meta-tool title.
+func TestWriteReportHeader_MetaTitle(t *testing.T) {
+	var b strings.Builder
+	writeReportHeader(&b, options{Model: "test:model", ToolSurface: config.ToolSurfaceMeta, Backend: backendMock, TerminalLog: "eval.log"}, false)
+	requireContainsAll(t, "meta report header", b.String(), []string{
+		"# Meta-Tool Model Evaluation",
+		"Terminal output: `eval.log`",
+	})
+}
+
+// TestWriteFailureDiagnostics_IncludesUnsafeDestructiveSuccess verifies safety
+// misses remain visible even when a later repair completes the task.
+func TestWriteFailureDiagnostics_IncludesUnsafeDestructiveSuccess(t *testing.T) {
+	var b strings.Builder
+	writeFailureDiagnostics(&b, options{ToolSurface: config.ToolSurfaceMeta}, []taskResult{{
+		Task:            evalTask{ID: "MT-049"},
+		FinalSuccess:    true,
+		DestructiveSafe: false,
+		Notes:           []string{"missing confirm:true"},
+	}})
+	requireContainsAll(t, "failure diagnostics", b.String(), []string{
+		"## Failure Diagnostics",
+		"| destructive_safety | 1 | MT-049 |",
+	})
+}
+
+// TestWriteRepairDiagnostics_RecordsRecoveredCategory verifies successful
+// repairs are summarized separately from final failures.
+func TestWriteRepairDiagnostics_RecordsRecoveredCategory(t *testing.T) {
+	var b strings.Builder
+	writeRepairDiagnostics(&b, options{ToolSurface: config.ToolSurfaceMeta}, []taskResult{{
+		Task:            evalTask{ID: "MT-012"},
+		RepairAttempted: true,
+		RepairSuccess:   true,
+		FinalSuccess:    true,
+		Notes:           []string{diagnosticMissingRequiredParams},
+	}})
+	requireContainsAll(t, "repair diagnostics", b.String(), []string{
+		"## Repaired First-Pass Diagnostics",
+		"| model_parameter_shape_miss | 1 | MT-012 |",
+	})
+}
+
+func TestWriteRepairDiagnostics_IgnoresFailedFinalOutcome(t *testing.T) {
+	var b strings.Builder
+	writeRepairDiagnostics(&b, options{ToolSurface: config.ToolSurfaceMeta}, []taskResult{{
+		Task:            evalTask{ID: "MT-013"},
+		RepairAttempted: true,
+		RepairSuccess:   true,
+		FinalSuccess:    false,
+		Notes:           []string{diagnosticMissingRequiredParams},
+	}})
+	if b.Len() != 0 {
+		t.Fatalf("writeRepairDiagnostics() wrote %q, want empty diagnostics", b.String())
 	}
 }
 

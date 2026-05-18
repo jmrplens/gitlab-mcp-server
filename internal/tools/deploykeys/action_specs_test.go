@@ -45,6 +45,11 @@ func TestActionSpecs_DeployKeyIDGuidance(t *testing.T) {
 	}))
 	byTool := deployKeySpecsByTool(t, ActionSpecs(client))
 
+	listSpec := byTool["gitlab_deploy_key_list_project"]
+	if !strings.Contains(listSpec.Usage, "SSH deploy keys") || !deployKeyContainsText(listSpec.Aliases, "project deploy keys") {
+		t.Fatalf("gitlab_deploy_key_list_project metadata = usage %q aliases %v, want project deploy key guidance", listSpec.Usage, listSpec.Aliases)
+	}
+
 	for _, toolName := range []string{"gitlab_deploy_key_get", "gitlab_deploy_key_update", "gitlab_deploy_key_delete", "gitlab_deploy_key_enable"} {
 		spec := byTool[toolName]
 		if !strings.Contains(spec.Usage, "deploy_key_id") || !strings.Contains(spec.Usage, "deploy_token_id") {

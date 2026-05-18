@@ -83,8 +83,8 @@ func TestValidatePublishReports_RejectsPartialDockerPresetWithoutTargetedLabel(t
 
 // TestSortedPublishRows_ReplacesDuplicateModelPresetRows verifies SortedPublishRows when replaces duplicate model preset rows.
 func TestSortedPublishRows_ReplacesDuplicateModelPresetRows(t *testing.T) {
-	oldPath := writeTempPublishReport(t, singleModelPublishReport("google:gemini-3.1-flash-lite-preview", presetDockerMutatingSafe, 25))
-	newPath := writeTempPublishReport(t, singleModelPublishReport("google:gemini-3.1-flash-lite-preview", presetDockerMutatingSafe, 25))
+	oldPath := writeTempPublishReport(t, singleModelPublishReport("google:gemini-3.1-flash-lite-preview", presetDockerMutatingSafe, fullDockerAttemptsByPreset[presetDockerMutatingSafe]))
+	newPath := writeTempPublishReport(t, singleModelPublishReport("google:gemini-3.1-flash-lite-preview", presetDockerMutatingSafe, fullDockerAttemptsByPreset[presetDockerMutatingSafe]))
 	reports, err := readPublishReports([]string{oldPath, newPath})
 	if err != nil {
 		t.Fatalf("readPublishReports() error = %v", err)
@@ -102,8 +102,8 @@ func TestSortedPublishRows_ReplacesDuplicateModelPresetRows(t *testing.T) {
 // TestAggregatePublishRows_RepairSuccessUsesRepairAttempts verifies AggregatePublishRows uses repair attempts for repair success.
 func TestAggregatePublishRows_RepairSuccessUsesRepairAttempts(t *testing.T) {
 	rows := []publishRow{
-		{Attempts: 40, RepairSuccess: 100},
-		{Attempts: 53, RepairSuccess: 50, RepairAttempts: 4, RepairSuccesses: 2},
+		{Attempts: fullDockerAttemptsByPreset[presetDockerRead], RepairSuccess: 100},
+		{Attempts: fullDockerAttemptsByPreset[presetDockerDestructiveSafe], RepairSuccess: 50, RepairAttempts: 4, RepairSuccesses: 2},
 	}
 
 	aggregate := aggregatePublishRows(rows)
@@ -202,7 +202,7 @@ func TestApplyManagedBlock_ReplacesAndAppendsSnapshots(t *testing.T) {
 func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	tmp := t.TempDir()
 	reportPath := filepath.Join(tmp, "report.md")
-	if err := os.WriteFile(reportPath, []byte(singleModelPublishReport("openai:gpt-5.4-nano", presetDockerRead, 40)), 0o600); err != nil {
+	if err := os.WriteFile(reportPath, []byte(singleModelPublishReport("openai:gpt-5.4-nano", presetDockerRead, fullDockerAttemptsByPreset[presetDockerRead])), 0o600); err != nil {
 		t.Fatalf("write report: %v", err)
 	}
 	resultsPath := filepath.Join(tmp, "model-results.md")
@@ -235,7 +235,7 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read results doc: %v", err)
 	}
-	if !strings.Contains(string(results), "| `openai:gpt-5.4-nano` | `docker-read` | Docker GitLab via MCP | 40 | 41 | 41 | 41 |") {
+	if !strings.Contains(string(results), "| `openai:gpt-5.4-nano` | `docker-read`") || !strings.Contains(string(results), "| **Aggregate**") {
 		t.Fatalf("results doc = %s", results)
 	}
 	if strings.Contains(string(results), "Source reports") || strings.Contains(string(results), reportPath) {
@@ -248,7 +248,7 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read readme: %v", err)
 	}
-	if !strings.Contains(string(readme), "| OpenAI | `gpt-5.4-nano` | OK | 100.0% | No repairs | 100.0% final across 41 ops |") {
+	if !strings.Contains(string(readme), "| OpenAI") || !strings.Contains(string(readme), "`gpt-5.4-nano`") || !strings.Contains(string(readme), fmt.Sprintf("100.0%% final across %d ops", fullDockerAttemptsByPreset[presetDockerRead]+1)) {
 		t.Fatalf("readme = %s", readme)
 	}
 	if !strings.Contains(string(readme), "existing dynamic summary") {
@@ -276,7 +276,7 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 func TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection(t *testing.T) {
 	tmp := t.TempDir()
 	reportPath := filepath.Join(tmp, "dynamic-report.md")
-	if err := os.WriteFile(reportPath, []byte(dynamicSingleModelPublishReport("openai:gpt-5.4-nano", presetDockerRead, 40)), 0o600); err != nil {
+	if err := os.WriteFile(reportPath, []byte(dynamicSingleModelPublishReport("openai:gpt-5.4-nano", presetDockerRead, fullDockerAttemptsByPreset[presetDockerRead])), 0o600); err != nil {
 		t.Fatalf("write report: %v", err)
 	}
 	resultsPath := filepath.Join(tmp, "model-results.md")
@@ -312,7 +312,7 @@ func TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection(t *testing.T
 	if !strings.Contains(string(results), "existing meta results") {
 		t.Fatalf("dynamic publish did not preserve meta results: %s", results)
 	}
-	if !strings.Contains(string(results), "### 2026-05-09 Dynamic OpenAI Docker full run") || !strings.Contains(string(results), "| `openai:gpt-5.4-nano` | `docker-read` | Docker GitLab via MCP | 40 | 41 | 41 | 41 |") {
+	if !strings.Contains(string(results), "### 2026-05-09 Dynamic OpenAI Docker full run") || !strings.Contains(string(results), "| `openai:gpt-5.4-nano` | `docker-read`") {
 		t.Fatalf("dynamic results section was not updated: %s", results)
 	}
 	readme, err := os.ReadFile(readmePath)

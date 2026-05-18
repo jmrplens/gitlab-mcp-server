@@ -48138,7 +48138,11 @@
           "type": "string"
         },
         "state_event": {
-          "description": "State transition (close, reopen)",
+          "description": "State transition; set to close or reopen when changing issue state.",
+          "enum": [
+            "close",
+            "reopen"
+          ],
           "type": "string"
         },
         "title": {
@@ -69824,7 +69828,7 @@
       "additionalProperties": false,
       "properties": {
         "auto_merge": {
-          "description": "Automatically merge when pipeline succeeds (auto-merge)",
+          "description": "Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge.",
           "type": [
             "null",
             "boolean"
@@ -75388,7 +75392,13 @@
           "type": "boolean"
         },
         "order_by": {
-          "description": "Order by: name, created_at, version, type",
+          "description": "Order by package registry field: created_at, name, version, or type.",
+          "enum": [
+            "created_at",
+            "name",
+            "version",
+            "type"
+          ],
           "type": "string"
         },
         "package_name": {
@@ -75417,10 +75427,22 @@
         },
         "sort": {
           "description": "Sort direction: asc or desc",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "status": {
-          "description": "Filter by status: default, hidden, processing, error",
+          "description": "Filter by status: default, hidden, processing, error, pending_destruction, or deprecated.",
+          "enum": [
+            "default",
+            "hidden",
+            "processing",
+            "error",
+            "pending_destruction",
+            "deprecated"
+          ],
           "type": "string"
         }
       },
@@ -80828,7 +80850,7 @@
           "type": "integer"
         },
         "pipeline_id": {
-          "description": "Pipeline ID to wait for",
+          "description": "Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines; do not use merge_request_iid.",
           "type": "integer"
         },
         "project_id": {
@@ -96321,7 +96343,13 @@
       "additionalProperties": false,
       "properties": {
         "link_type": {
-          "description": "Type of the link (runbook, package, image, other)",
+          "description": "Type of the release link: other, runbook, image, or package.",
+          "enum": [
+            "other",
+            "runbook",
+            "image",
+            "package"
+          ],
           "type": "string"
         },
         "name": {
@@ -96337,7 +96365,9 @@
           "type": "string"
         },
         "url": {
-          "description": "URL of the link target. For packages use the real url returned by gitlab_package_publish — never construct URLs manually",
+          "description": "Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.",
+          "format": "uri",
+          "pattern": "^(https?|ftp)://",
           "type": "string"
         }
       },
@@ -96414,7 +96444,9 @@
                 "type": "string"
               },
               "url": {
-                "description": "Absolute URL of the link target. For package assets, use the URL returned by gitlab_package publish actions; do not construct package URLs manually.",
+                "description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL returned by gitlab_package publish actions; do not construct package URLs manually.",
+                "format": "uri",
+                "pattern": "^(https?|ftp)://",
                 "type": "string"
               }
             },
@@ -96829,7 +96861,13 @@
           "type": "integer"
         },
         "link_type": {
-          "description": "New link type (runbook, package, image, other)",
+          "description": "Type of the release link: other, runbook, image, or package.",
+          "enum": [
+            "other",
+            "runbook",
+            "image",
+            "package"
+          ],
           "type": "string"
         },
         "name": {
@@ -96845,7 +96883,9 @@
           "type": "string"
         },
         "url": {
-          "description": "New URL of the link",
+          "description": "Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.",
+          "format": "uri",
+          "pattern": "^(https?|ftp)://",
           "type": "string"
         }
       },

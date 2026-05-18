@@ -28,6 +28,12 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - run: go mod download
+      - name: Check generated llms files
+        run: make check-llms
+      - name: Check MCP Registry manifest
+        run: make check-server-json
+      - name: Check Open Plugins manifest
+        run: make check-openplugin
       - name: Run tests with coverage
         run: |
           go test -count=1 -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./cmd/... ./internal/...

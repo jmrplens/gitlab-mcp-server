@@ -4,6 +4,8 @@ package accesstokens
 import (
 	"context"
 	"net/http"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -41,6 +43,32 @@ func TestActionSpecs_RevokeErrors(t *testing.T) {
 				t.Fatalf("Route.Handler(%s) expected error, got nil", tt.name)
 			}
 		})
+	}
+}
+
+// TestActionSpecs_AccessTokenGuidance verifies access token actions carry
+// model-facing hints that distinguish token IDs from scope owner IDs.
+func TestActionSpecs_AccessTokenGuidance(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	byTool := accessTokenSpecsByTool(t, ActionSpecs(client))
+
+	projectList := byTool["gitlab_project_access_token_list"]
+	if !strings.Contains(projectList.Usage, "project access tokens") {
+		t.Fatalf("project access token list Usage = %q, want project access tokens", projectList.Usage)
+	}
+	if !slices.Contains(projectList.Aliases, "list project access tokens") {
+		t.Fatalf("project access token list Aliases = %v, want list project access tokens", projectList.Aliases)
+	}
+
+	projectGet := byTool["gitlab_project_access_token_get"]
+	guidance := projectGet.ParameterGuidance["token_id"]
+	if guidance.SemanticRole != "access_token" || !strings.Contains(guidance.ValueSource, "token_project_list") {
+		t.Fatalf("project access token token_id guidance = %+v, want project access token source", guidance)
+	}
+	if !slices.Contains(projectGet.RelatedActions, "access.deploy_key_list_project") {
+		t.Fatalf("project access token RelatedActions = %v, want deploy key neighbor", projectGet.RelatedActions)
 	}
 }
 

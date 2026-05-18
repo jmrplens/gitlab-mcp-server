@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -146,6 +147,8 @@ const (
 	metricValueTableHeader = "| Metric | Value |\n| --- | ---: |\n"
 	// metricIntegerValueTableRow identifies the metric integer value table row constant used by this package.
 	metricIntegerValueTableRow = "| %s | %d |\n"
+	// timestampLayout identifies the UTC timestamp layout used for generated evaluator artifacts.
+	timestampLayout = "20060102-150405"
 
 	// actionDiscoverProjectResolve identifies the action discover project resolve constant used by this package.
 	actionDiscoverProjectResolve = "discover_project.resolve"
@@ -213,6 +216,7 @@ type options struct {
 	TasksPath           string
 	Output              string
 	TraceDir            string
+	TerminalLog         string
 	Model               string
 	Models              string
 	ToolsFile           string
@@ -258,8 +262,85 @@ type options struct {
 	SkipMutating        bool
 	OnlyMutating        bool
 	SkipUnavailable     bool
+	PrintOutput         bool
 	TraceProviderBodies bool
 	explicitFlags       map[string]bool
+}
+
+type terminalOutput struct {
+	file io.Writer
+	echo bool
+}
+
+func (out *terminalOutput) Write(p []byte) (int, error) {
+	if out.file != nil {
+		if _, err := out.file.Write(p); err != nil {
+			return 0, err
+		}
+	}
+	if out.echo {
+		_, _ = os.Stdout.Write(p)
+	}
+	return len(p), nil
+}
+
+var commandOutput terminalOutput
+
+func terminalPrintf(format string, args ...any) {
+	if commandOutput.file != nil {
+		_, _ = fmt.Fprintf(commandOutput.file, format, args...)
+	}
+	if commandOutput.echo {
+		fmt.Printf(format, args...)
+	}
+}
+
+func terminalPrint(content string) {
+	if commandOutput.file != nil {
+		_, _ = fmt.Fprint(commandOutput.file, content)
+	}
+	if commandOutput.echo {
+		fmt.Print(content)
+	}
+}
+
+func terminalLogPrintf(format string, args ...any) {
+	if commandOutput.file != nil {
+		_, _ = fmt.Fprintf(commandOutput.file, format, args...)
+	}
+}
+
+func configureTerminalOutput(opts options) (options, func() error, error) {
+	if opts.TerminalLog == "" {
+		opts.TerminalLog = defaultTerminalLogPath(opts.Output)
+	}
+	if err := os.MkdirAll(filepath.Dir(opts.TerminalLog), 0o750); err != nil {
+		return opts, nil, fmt.Errorf("create terminal log directory: %w", err)
+	}
+	file, err := os.OpenFile(opts.TerminalLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304 -- evaluator log path is an explicit CLI/default artifact path.
+	if err != nil {
+		return opts, nil, fmt.Errorf("open terminal log: %w", err)
+	}
+	commandOutput = terminalOutput{file: file, echo: opts.PrintOutput}
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&commandOutput, nil)))
+	terminalLogPrintf("eval_mcp_surfaces terminal output\n")
+	terminalLogPrintf("terminal_log=%s\n", opts.TerminalLog)
+	if opts.PrintOutput {
+		terminalLogPrintf("print_output=true\n")
+	}
+	return opts, func() error {
+		slog.SetDefault(previousLogger)
+		commandOutput = terminalOutput{}
+		return file.Close()
+	}, nil
+}
+
+func shouldConfigureTerminalOutput(opts options) bool {
+	if opts.TerminalLog != "" || opts.PrintOutput {
+		return true
+	}
+	return !opts.CheckDocs && len(opts.CheckEfficiency) == 0 && len(opts.CompareTraces) == 0
 }
 
 // stringList holds string list data for the main package.
@@ -561,6 +642,24 @@ func main() {
 // run runs resources for the main package.
 func run() (runErr error) {
 	opts := parseFlags()
+	closeTerminalOutput := func() error { return nil }
+	if shouldConfigureTerminalOutput(opts) {
+		var terminalErr error
+		opts, closeTerminalOutput, terminalErr = configureTerminalOutput(opts)
+		if terminalErr != nil {
+			return terminalErr
+		}
+	}
+	defer func() {
+		if closeErr := closeTerminalOutput(); closeErr != nil {
+			runErr = errors.Join(runErr, closeErr)
+		}
+	}()
+	defer func() {
+		if runErr != nil {
+			terminalLogPrintf("eval_mcp_surfaces: %v\n", runErr)
+		}
+	}()
 	var presetErr error
 	opts, presetErr = applyPresetDefaults(opts)
 	if presetErr != nil {
@@ -635,12 +734,11 @@ func run() (runErr error) {
 		if writeErr := writeLiveFixtures(opts.Fixtures, fixtures); writeErr != nil {
 			return writeErr
 		}
-		fmt.Printf("fixtures: wrote %s for %s\n", opts.Fixtures, fixtures.ProjectPath)
+		terminalPrintf("fixtures: wrote %s for %s\n", opts.Fixtures, fixtures.ProjectPath)
 		if opts.FixturesOnly {
 			return nil
 		}
 	}
-
 	tasks, parseErr := parseTasksFile(opts.TasksPath)
 	if parseErr != nil {
 		return parseErr
@@ -795,7 +893,7 @@ func run() (runErr error) {
 				result.Trace.Model = spec.String()
 				result.Trace.Summary = traceSummaryFromResult(result)
 				results = append(results, result)
-				fmt.Printf("model=%s run=%d %s: final=%t first=%s/%s final_call=%s/%s calls=%d tools=%d\n", spec.String(), runIndex, taskForAttempt.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction, result.ModelCalls, result.ToolCalls)
+				terminalPrintf("model=%s run=%d %s: final=%t first=%s/%s final_call=%s/%s calls=%d tools=%d\n", spec.String(), runIndex, taskForAttempt.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction, result.ModelCalls, result.ToolCalls)
 				if opts.Pause > 0 {
 					time.Sleep(opts.Pause)
 				}
@@ -819,6 +917,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.TasksPath, "tasks", defaultTasksPath, "Markdown file containing the evaluation task fixture")
 	flag.StringVar(&opts.Output, "out", "", "Markdown report path; defaults under dist/evaluation/mcp-surfaces")
 	flag.StringVar(&opts.TraceDir, "trace-dir", "", "Directory for per-task model trace artifacts; defaults to <report>.traces in model-backed mode")
+	flag.StringVar(&opts.TerminalLog, "terminal-log", "", "File receiving command progress and terminal output; defaults under dist/evaluation/mcp-surfaces/terminal or beside --out")
 	flag.StringVar(&opts.Model, "model", "", "Single provider:model or legacy Anthropic model; overrides --models and EVAL_MODELS")
 	flag.StringVar(&opts.Models, "models", "", "Comma-separated provider:model list for local multi-model evaluation; defaults to EVAL_MODELS when --model is not set")
 	flag.StringVar(&opts.ToolsFile, "tools-file", "", "Optional tools/list JSON snapshot to evaluate instead of the live catalog")
@@ -867,6 +966,7 @@ func parseFlags() options {
 	flag.BoolVar(&opts.SkipMutating, "skip-mutating", false, "Skip tasks whose expected calls mutate GitLab state")
 	flag.BoolVar(&opts.OnlyMutating, "only-mutating", false, "Run only tasks whose expected calls mutate GitLab state")
 	flag.BoolVar(&opts.SkipUnavailable, flagSkipUnavailable, false, "Skip tasks whose expected routes or live fixtures are unavailable")
+	flag.BoolVar(&opts.PrintOutput, "print-output", false, "Echo command progress and optional report output to the terminal in addition to --terminal-log")
 	flag.BoolVar(&opts.TraceProviderBodies, "trace-provider-bodies", false, "Include raw model provider request and response bodies in trace artifacts")
 	flag.Parse()
 	opts.explicitFlags = map[string]bool{}
@@ -1403,7 +1503,7 @@ func toolExecutionMode(opts options) string {
 
 // defaultOutputPath returns the default output path.
 func defaultOutputPath(model string) string {
-	stamp := time.Now().UTC().Format("20060102-150405")
+	stamp := time.Now().UTC().Format(timestampLayout)
 	if strings.Contains(model, ",") {
 		model = "multi-model"
 	}
@@ -1413,7 +1513,7 @@ func defaultOutputPath(model string) string {
 
 // defaultComparisonOutputPath returns the default comparison output path.
 func defaultComparisonOutputPath() string {
-	stamp := time.Now().UTC().Format("20060102-150405")
+	stamp := time.Now().UTC().Format(timestampLayout)
 	return filepath.Join(defaultEvalDir, "comparison", fmt.Sprintf("%s-summary.md", stamp))
 }
 
@@ -1424,6 +1524,18 @@ func defaultTraceDir(reportPath string) string {
 		return reportPath + ".traces"
 	}
 	return strings.TrimSuffix(reportPath, ext) + ".traces"
+}
+
+func defaultTerminalLogPath(outputPath string) string {
+	if strings.TrimSpace(outputPath) == "" {
+		stamp := time.Now().UTC().Format(timestampLayout)
+		return filepath.Join(defaultEvalDir, "terminal", fmt.Sprintf("%s.log", stamp))
+	}
+	ext := filepath.Ext(outputPath)
+	if ext == "" {
+		return outputPath + ".log"
+	}
+	return strings.TrimSuffix(outputPath, ext) + ".log"
 }
 
 // parseTasksFile handles parse tasks file and returns [[]evalTask].
@@ -2029,7 +2141,7 @@ func runMCPSmoke(opts options) error {
 	if result != nil && result.IsError {
 		return fmt.Errorf("mcp smoke %s/user.current: %s", toolName, callToolResultText(result))
 	}
-	fmt.Printf("mcp-smoke: %s/user.current succeeded against GitLab backend\n", toolName)
+	terminalPrintf("mcp-smoke: %s/user.current succeeded against GitLab backend\n", toolName)
 	return nil
 }
 
@@ -7271,7 +7383,7 @@ func writeComparisonReport(path string, files []string) error {
 	if err := os.WriteFile(path, []byte(report), 0o600); err != nil {
 		return fmt.Errorf("write comparison report: %w", err)
 	}
-	fmt.Printf("wrote comparison report: %s\n", path)
+	terminalPrintf("wrote comparison report: %s\n", path)
 	return nil
 }
 
@@ -7299,7 +7411,7 @@ func parseComparisonInput(path string) (comparisonInput, error) {
 		if input.ToolsFile != "" {
 			input.Label = comparisonLabelFromSnapshot(input.ToolsFile, input.Label)
 		}
-	case strings.HasPrefix(content, "# Meta-Tool Anthropic Evaluation"), strings.HasPrefix(content, "# Meta-Tool Model Evaluation"):
+	case strings.HasPrefix(content, "# Meta-Tool Anthropic Evaluation"), strings.HasPrefix(content, "# Meta-Tool Model Evaluation"), strings.HasPrefix(content, "# Dynamic Surface Model Evaluation"), strings.HasPrefix(content, "# MCP Surface Model Evaluation"):
 		input.Kind = "evaluation"
 		input.Date = firstMetadataValue(content, "Date")
 		input.Mode = firstMetadataValue(content, "Mode")
@@ -7734,7 +7846,7 @@ func writeStatusReport(path string, opts options, status, message string, runErr
 
 // writeReportHeader writes report header to disk.
 func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
-	fmt.Fprintf(b, "# Meta-Tool Model Evaluation\n\n")
+	fmt.Fprintf(b, "# %s\n\n", reportTitle(opts.ToolSurface))
 	fmt.Fprintf(b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
 	if branch, commit := currentGitReportMetadata(); branch != "" || commit != "" {
 		if branch != "" {
@@ -7748,6 +7860,9 @@ func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	fmt.Fprintf(b, "Model: `%s`\n", opts.Model)
 	fmt.Fprintf(b, "Tool surface: `%s`\n", opts.ToolSurface)
 	fmt.Fprintf(b, "Backend: `%s`\n", normalizedBackend(opts.Backend))
+	if opts.TerminalLog != "" {
+		fmt.Fprintf(b, "Terminal output: `%s`\n", opts.TerminalLog)
+	}
 	if opts.Preset != "" {
 		fmt.Fprintf(b, "Preset: `%s`\n", opts.Preset)
 	}
@@ -7757,6 +7872,17 @@ func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	}
 	if opts.Partition != "" {
 		fmt.Fprintf(b, "Partition: `%s`\n", opts.Partition)
+	}
+}
+
+func reportTitle(toolSurface string) string {
+	switch toolSurface {
+	case config.ToolSurfaceDynamic:
+		return "Dynamic Surface Model Evaluation"
+	case config.ToolSurfaceMeta:
+		return "Meta-Tool Model Evaluation"
+	default:
+		return "MCP Surface Model Evaluation"
 	}
 }
 
@@ -7800,6 +7926,7 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	}
 	writeUsageSummary(&b, opts, results, dryRun)
 	writeFailureDiagnostics(&b, opts, results)
+	writeRepairDiagnostics(&b, opts, results)
 	writeFixtureCoverage(&b, catalog, results, routes)
 	fmt.Fprintf(&b, "\n## Task Results\n\n")
 	includeModel := resultsHaveMultipleModels(results)
@@ -7831,7 +7958,7 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
 		return fmt.Errorf("write report: %w", err)
 	}
-	fmt.Printf("wrote evaluation report: %s\n", path)
+	terminalPrintf("wrote evaluation report: %s\n", path)
 	return nil
 }
 
@@ -7840,10 +7967,13 @@ func writeFailureDiagnostics(b *strings.Builder, opts options, results []taskRes
 	counts := make(map[string]int)
 	examples := make(map[string]string)
 	for _, result := range results {
-		if result.FinalSuccess {
+		if result.FinalSuccess && result.DestructiveSafe {
 			continue
 		}
 		category := failureDiagnosticCategoryForResult(opts, result)
+		if result.FinalSuccess && !result.DestructiveSafe {
+			category = "destructive_safety"
+		}
 		counts[category]++
 		if examples[category] == "" {
 			examples[category] = result.Task.ID
@@ -7858,6 +7988,34 @@ func writeFailureDiagnostics(b *strings.Builder, opts options, results []taskRes
 		title = "Docker Live Failure Triage"
 	}
 	fmt.Fprintf(b, "\n## %s\n\n", title)
+	fmt.Fprintf(b, "| Category | Count | Example task |\n| --- | ---: | --- |\n")
+	for _, category := range failureDiagnosticCategories(opts) {
+		count := counts[category]
+		if count == 0 {
+			continue
+		}
+		fmt.Fprintf(b, "| %s | %d | %s |\n", category, count, examples[category])
+	}
+}
+
+func writeRepairDiagnostics(b *strings.Builder, opts options, results []taskResult) {
+	counts := make(map[string]int)
+	examples := make(map[string]string)
+	for _, result := range results {
+		if !result.RepairAttempted || !result.RepairSuccess || !result.FinalSuccess {
+			continue
+		}
+		category := failureDiagnosticCategoryForResult(opts, result)
+		counts[category]++
+		if examples[category] == "" {
+			examples[category] = result.Task.ID
+		}
+	}
+	if len(counts) == 0 {
+		return
+	}
+
+	fmt.Fprintf(b, "\n## Repaired First-Pass Diagnostics\n\n")
 	fmt.Fprintf(b, "| Category | Count | Example task |\n| --- | ---: | --- |\n")
 	for _, category := range failureDiagnosticCategories(opts) {
 		count := counts[category]
@@ -8056,7 +8214,7 @@ func writeTraceArtifacts(dir string, results []taskResult, traceProviderBodies b
 	if err := os.WriteFile(filepath.Join(dir, "index.md"), []byte(index.String()), 0o600); err != nil {
 		return fmt.Errorf("write trace index: %w", err)
 	}
-	fmt.Printf("wrote evaluation traces: %s\n", dir)
+	terminalPrintf("wrote evaluation traces: %s\n", dir)
 	return nil
 }
 
@@ -8160,7 +8318,7 @@ func writeCoverageReportIfRequested(opts options, results []taskResult, routes m
 	if err := os.WriteFile(opts.CoverageReport, []byte(report), 0o600); err != nil {
 		return fmt.Errorf("write coverage report: %w", err)
 	}
-	fmt.Printf("wrote route coverage report: %s\n", opts.CoverageReport)
+	terminalPrintf("wrote route coverage report: %s\n", opts.CoverageReport)
 	return nil
 }
 

@@ -1,10 +1,38 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.0.0-RC1 | up to 1019 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 38 prompts
+> Version 2.0.0 | up to 1019 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 38 prompts
 
 ## Dynamic Toolset
 
 Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.
+
+### gitlab_find_action
+
+**GitLab Find Action**
+
+Find GitLab catalog actions by searching with domain keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'). Returns exact schemas, required params, safety metadata, and execute examples. ALWAYS use this before gitlab_execute_tool when the canonical action ID or params schema is not already known; do NOT invent action IDs.
+
+**Parameters:**
+
+- `explain` (boolean): When true, include deterministic scoring reasons for each returned action. Defaults to false to keep responses compact.
+- `limit` (integer): Maximum number of matches to return. Defaults to 20 and is capped at 50.
+- `query` (string) (required): Search terms for GitLab actions, such as project create, merge request approve, pipeline retry, or ci variable.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+### gitlab_execute_tool
+
+**GitLab Execute Tool**
+
+Execute one GitLab catalog action by canonical action ID (e.g. domain.action). Always include params as an object: {"action":"domain.action","params":{...}}; use params:{} only for actions with no parameters. Use gitlab_find_action first unless the exact action ID and all required param names are already known. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.
+
+**Parameters:**
+
+- `action` (string) (required): Canonical action ID returned by gitlab_find_action, such as project.list.
+- `confirm` (boolean): Set true to explicitly confirm destructive actions.
+- `params` (object) (required): Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters.
+
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ## Meta-Tools
 
@@ -18,11 +46,34 @@ operations under a single tool with an `action` parameter.
 Use {"action":"approve_group","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_access/<action>.
 Action guidance:
+- deploy_key_add: Use for SSH deploy keys that grant repository access to projects.
+- deploy_key_add_instance: Use for SSH deploy keys that grant repository access to projects.
 - deploy_key_delete: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
 - deploy_key_enable: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
 - deploy_key_get: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
+- deploy_key_list_all: Use for SSH deploy keys that grant repository access to projects.
+- deploy_key_list_project: Lists SSH deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested.
+- deploy_key_list_user_project: Use for SSH deploy keys that grant repository access to projects.
 - deploy_key_update: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
 - deploy_token_delete_project: Use to delete a deploy token owned by a project; pass the deploy token ID, not another token type.
+- token_group_create: Use for GitLab group access tokens; this action creates a group-scoped API token.
+- token_group_get: Use for GitLab group access tokens; this action gets a group-scoped API token.
+- token_group_list: Use for GitLab group access tokens; this action lists group-scoped API tokens.
+- token_group_revoke: Use for GitLab group access tokens; this action revokes a group-scoped API token.
+- token_group_rotate: Use for GitLab group access tokens; this action rotates a group-scoped API token.
+- token_group_rotate_self: Use for GitLab group access tokens; this action rotates a group-scoped API token.
+- token_personal_get: Use for GitLab personal access tokens; this action gets a personal-scoped API token.
+- token_personal_list: Use for GitLab personal access tokens; this action lists personal-scoped API tokens.
+- token_personal_revoke: Use for GitLab personal access tokens; this action revokes a personal-scoped API token.
+- token_personal_revoke_self: Use for GitLab personal access tokens; this action revokes a personal-scoped API token.
+- token_personal_rotate: Use for GitLab personal access tokens; this action rotates a personal-scoped API token.
+- token_personal_rotate_self: Use for GitLab personal access tokens; this action rotates a personal-scoped API token.
+- token_project_create: Use for GitLab project access tokens; this action creates a project-scoped API token.
+- token_project_get: Use for GitLab project access tokens; this action gets a project-scoped API token.
+- token_project_list: Use for GitLab project access tokens; this action lists project-scoped API tokens.
+- token_project_revoke: Use for GitLab project access tokens; this action revokes a project-scoped API token.
+- token_project_rotate: Use for GitLab project access tokens; this action rotates a project-scoped API token.
+- token_project_rotate_self: Use for GitLab project access tokens; this action rotates a project-scoped API token.
 Parameter guidance:
 - deploy_key_delete.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_key_enable.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
@@ -30,6 +81,15 @@ Parameter guidance:
 - deploy_key_update.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_token_delete_project.deploy_token_id: deploy_token; source: Deploy token ID, not a project, deploy key, personal token, or runner ID.; avoid: Do not use deploy_key_id or token_id for project deploy token deletion.
 - deploy_token_delete_project.project_id: scope_owner_project; source: Project that owns the deploy token.
+- token_group_get.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_group_revoke.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_group_rotate.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_personal_get.token_id: access_token; source: Access token ID returned by token_personal_list or token_personal_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_personal_revoke.token_id: access_token; source: Access token ID returned by token_personal_list or token_personal_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_personal_rotate.token_id: access_token; source: Access token ID returned by token_personal_list or token_personal_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_project_get.token_id: access_token; source: Access token ID returned by token_project_list or token_project_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_project_revoke.token_id: access_token; source: Access token ID returned by token_project_list or token_project_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_project_rotate.token_id: access_token; source: Access token ID returned by token_project_list or token_project_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
 
 Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
 When to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.
@@ -3596,11 +3656,13 @@ Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_issue/<action>.
 Action guidance:
 - link_create: Use to create a relationship from a source issue to a target issue, optionally across projects.
+- update: Update issue fields. To close or reopen an issue, set params.state_event to close or reopen; do not omit state_event when the task asks for an issue state transition.
 Parameter guidance:
 - link_create.issue_iid: source_issue; source: IID of the source issue receiving the link.; avoid: Do not use the target issue IID here.
 - link_create.project_id: source_project; source: Project that owns the source issue.; avoid: Use target_project_id for the linked issue's project when it differs.
 - link_create.target_issue_iid: target_issue; source: IID of the issue being linked to.; avoid: Do not use the source issue IID here.
 - link_create.target_project_id: target_project; source: Project that owns the target issue.; avoid: For same-project links this may equal project_id; otherwise keep it distinct.
+- update.state_event: issue_state_transition; source: task intent when closing or reopening an issue; avoid: Do not use state=closed/opened for transitions; use state_event=close or state_event=reopen.
 
 Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events.
 When to use: issue lifecycle — create, update, close, move, comment, link, time-track, and manage Work Items (including Epics). NOT for: merge requests (use gitlab_merge_request), project settings (use gitlab_project), CI/CD (use gitlab_pipeline).
@@ -4456,10 +4518,16 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_merge_request/<action>.
 Action guidance:
+- cancel_auto_merge: Cancels auto-merge on a merge request; it does not cancel a running pipeline.
 - create: Use to open a merge request from a source branch into the target branch in a project.
+- create_pipeline: Creates a new pipeline for a merge request; use pipeline.wait after receiving pipeline_id if the task asks to wait for completion.
+- merge: Use to merge a merge request now, or set params.auto_merge=true when the task asks to merge when pipeline succeeds. Do not use pipeline.wait unless the task only asks to wait for an existing pipeline.
+- pipelines: Lists pipelines attached to a merge request; use pipeline.wait with the returned pipeline_id only when the task asks to wait for CI completion.
 Parameter guidance:
 - create.source_branch: source_branch; source: Branch named after 'from'.; avoid: Do not use ref, tag_name, target_branch, or value for the source branch.
 - create.target_branch: target_branch; source: Branch named after 'into' or the merge target.; avoid: Do not use source_branch, ref, tag_name, or to for the target branch.
+- merge.auto_merge: merge_scheduling; source: Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge.; avoid: Do not call pipeline.wait for merge-when-pipeline-succeeds requests; use merge_request.merge with auto_merge=true.
+- merge.merge_request_iid: merge_request_iid; source: Project-scoped MR IID from merge_request.list or merge_request.get.; avoid: Do not use pipeline_id; merge_request.merge requires merge_request_iid.
 
 Manage GitLab merge request lifecycle plus approval rules and settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todos, related issues, award emoji, and resource events. Delete permanently removes an MR.
 When to use: MR lifecycle (open/list/update/merge/close/delete/rebase), approvals at MR/group/project level, time tracking, subscriptions, context commits, MR dependencies, todos, related issues, award emoji, MR resource events.
@@ -5280,8 +5348,10 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_package/<action>.
 Action guidance:
+- list: List package registry packages. If ordering is requested, use order_by with one of created_at, name, version, or type; do not use updated_at, released_at, or downloaded_at.
 - publish_directory: Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file; include_pattern is one glob, not a comma-separated file list.
 Parameter guidance:
+- list.order_by: package_list_sort_field; source: Use only GitLab Package Registry ordering fields accepted by the packages API.; avoid: Do not use updated_at, released_at, downloaded_at, last_downloaded_at, or id as order_by values.
 - publish_directory.include_pattern: single_glob_filter; source: Optional single glob matched against file names inside directory_path; omit it to include all regular files.; avoid: Do not pass comma-separated filenames., Do not use include_pattern to enumerate exact files; omit it when all fixture files should be uploaded.
 
 Manage GitLab package registry, container registry, and protection rules. Upload/download generic packages, list/delete packages, browse container images/tags, and configure access policies. Delete actions are destructive.
@@ -5540,9 +5610,11 @@ Action params schema: gitlab://schema/meta/gitlab_pipeline/<action>.
 Action guidance:
 - schedule_create_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
 - schedule_edit_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
+- wait: Use only to poll an existing pipeline_id until a terminal status. For merge when pipeline succeeds, use merge_request.merge with auto_merge=true instead.
 Parameter guidance:
 - schedule_create_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
 - schedule_edit_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
+- wait.pipeline_id: pipeline_identifier; source: Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines.; avoid: Do not use merge_request_iid; pipeline.wait requires pipeline_id.
 
 Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
 When to use: pipeline CRUD on a project, retry/cancel a run, fetch CI variables and JUnit test reports, manage trigger tokens, resource groups (mutual-exclusion locks), scheduled pipelines and their variables.
@@ -7020,9 +7092,14 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_release/<action>.
 Action guidance:
+- link_create: Create a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url.
 - link_create_batch: Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets.
+- link_update: Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url.
 Parameter guidance:
+- link_create.url: release_asset_absolute_url; source: Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions.; avoid: Do not use local file paths, relative paths, or package file names as url., Do not construct package registry URLs manually when a package publish action returned the asset URL.
 - link_create_batch.links: release_asset_links; source: Array of link objects. Each item supports only name, url, and link_type; url must be absolute.; avoid: Do not send direct_asset_path or filepath to link_create_batch., For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.
+- link_update.link_id: release_asset_link_identifier; source: Use the release link ID returned by release.link_create, release.link_create_batch, or release.link_list.; avoid: Do not use link_update to create a new release asset link; call link_create or link_create_batch first.
+- link_update.url: release_asset_absolute_url; source: Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions.; avoid: Do not use local file paths, relative paths, or package file names as url., Do not construct package registry URLs manually when a package publish action returned the asset URL.
 
 Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
 When to use: publish a release for a tag, create a release and its tag from a ref, list/get/update releases, attach asset links to a release, batch-attach links after a CI build.
@@ -7034,7 +7111,7 @@ Returns:
 - link_list: array of {id, name, url, link_type, direct_asset_path}.
 - link_create / link_create_batch / link_get / link_update: link object(s).
 - delete / link_delete: {success: bool, message: string}.
-Errors: 404 not found (hint: verify tag_name), 403 forbidden (hint: requires Developer+ for create, Maintainer+ for update/delete), 400 invalid params (hint: link url must be absolute https://).
+Errors: 404 not found (hint: verify tag_name), 403 forbidden (hint: requires Developer+ for create, Maintainer+ for update/delete), 400 invalid params (hint: link url must be absolute (http, https, or ftp)).
 
 Param conventions: * = required. All actions need project_id*. Release actions need tag_name*. Link actions need tag_name* + link_id* (except link_create / link_create_batch / link_list).
 
@@ -7048,7 +7125,7 @@ Releases:
 
 Asset links:
 - link_create: project_id*, tag_name*, name*, url*, link_type (runbook/package/image/other), filepath, direct_asset_path
-- link_create_batch: project_id*, tag_name*, links* (array of {name, url, link_type, filepath, direct_asset_path})
+- link_create_batch: project_id*, tag_name*, links* (array of {name, url, link_type})
 - link_get: project_id*, tag_name*, link_id*
 - link_list: project_id*, tag_name*, page, per_page
 - link_update: project_id*, tag_name*, link_id*, name, url, filepath, direct_asset_path, link_type
@@ -7924,6 +8001,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"code","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_search/<action>.
+Action guidance:
+- code: Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories; do not use for project or repository name discovery.
+- projects: Search project records by project name, path, namespace, or description. Use when the task asks to find projects or repositories; do not use for code contents.
 
 Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
 When to use: full-text search across the supplied scope. Use action code for prompts like "search code for ..." or "find occurrences of ...". Most actions accept project_id and / or group_id; if both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).
@@ -9008,7 +9088,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
+{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"scim_identities":{"items":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"extern_uid":{"type":"string"},"group_id":{"type":"integer"}},"required":["extern_uid","group_id","active"],"type":"object"},"type":["null","array"]},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
 ```
 
 </details>
@@ -9048,7 +9128,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>create_service_account</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
+{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"scim_identities":{"items":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"extern_uid":{"type":"string"},"group_id":{"type":"integer"}},"required":["extern_uid","group_id","active"],"type":"object"},"type":["null","array"]},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
 ```
 
 </details>
@@ -9056,7 +9136,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>current</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
+{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"scim_identities":{"items":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"extern_uid":{"type":"string"},"group_id":{"type":"integer"}},"required":["extern_uid","group_id","active"],"type":"object"},"type":["null","array"]},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
 ```
 
 </details>
@@ -9184,7 +9264,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
+{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"scim_identities":{"items":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"extern_uid":{"type":"string"},"group_id":{"type":"integer"}},"required":["extern_uid","group_id","active"],"type":"object"},"type":["null","array"]},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
 ```
 
 </details>
@@ -9280,7 +9360,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"},"users":{"items":{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"},"type":["null","array"]}},"required":["users","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"},"users":{"items":{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"scim_identities":{"items":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"extern_uid":{"type":"string"},"group_id":{"type":"integer"}},"required":["extern_uid","group_id","active"],"type":"object"},"type":["null","array"]},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"},"type":["null","array"]}},"required":["users","pagination"],"type":"object"}
 ```
 
 </details>
@@ -9304,7 +9384,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>me</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
+{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"scim_identities":{"items":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"extern_uid":{"type":"string"},"group_id":{"type":"integer"}},"required":["extern_uid","group_id","active"],"type":"object"},"type":["null","array"]},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
 ```
 
 </details>
@@ -9320,7 +9400,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>modify</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
+{"additionalProperties":false,"properties":{"avatar_url":{"type":"string"},"bio":{"type":"string"},"bot":{"type":"boolean"},"can_create_group":{"type":"boolean"},"can_create_project":{"type":"boolean"},"color_scheme_id":{"type":"integer"},"created_at":{"type":"string"},"current_sign_in_at":{"type":"string"},"email":{"type":"string"},"external":{"type":"boolean"},"id":{"type":"integer"},"is_admin":{"type":"boolean"},"job_title":{"type":"string"},"last_activity_on":{"type":"string"},"location":{"type":"string"},"locked":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note":{"type":"string"},"organization":{"type":"string"},"private_profile":{"type":"boolean"},"projects_limit":{"type":"integer"},"public_email":{"type":"string"},"scim_identities":{"items":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"extern_uid":{"type":"string"},"group_id":{"type":"integer"}},"required":["extern_uid","group_id","active"],"type":"object"},"type":["null","array"]},"state":{"type":"string"},"theme_id":{"type":"integer"},"two_factor_enabled":{"type":"boolean"},"username":{"type":"string"},"using_license_seat":{"type":"boolean"},"web_url":{"type":"string"},"website_url":{"type":"string"}},"required":["id","username","email","name","state","web_url","avatar_url","is_admin","bot","two_factor_enabled","external","locked","private_profile","projects_limit","can_create_project","can_create_group","using_license_seat"],"type":"object"}
 ```
 
 </details>
@@ -16732,7 +16812,7 @@ Update a GitLab issue. Supports changing title, description, state (close/reopen
 - `milestone_id` (integer): New milestone ID (0 to unset; omit to leave unchanged)
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `remove_labels` (string): Comma-separated labels to remove
-- `state_event` (string): State transition (close, reopen)
+- `state_event` (string): State transition; set to close or reopen when changing issue state.
 - `title` (string): New title
 - `weight` (integer): Issue weight (0 or higher)
 
@@ -18821,7 +18901,7 @@ Merge an accepted GitLab merge request into its target branch. Supports optional
 
 **Parameters:**
 
-- `auto_merge` (boolean): Automatically merge when pipeline succeeds (auto-merge)
+- `auto_merge` (boolean): Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge.
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_commit_message` (string): Custom merge commit message
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
@@ -19455,7 +19535,7 @@ List packages in a GitLab project. Can filter by name, version, type, and suppor
 **Parameters:**
 
 - `include_versionless` (boolean): Include versionless packages
-- `order_by` (string): Order by: name, created_at, version, type
+- `order_by` (string): Order by package registry field: created_at, name, version, or type.
 - `package_name` (string): Filter by package name
 - `package_type` (string): Filter by type (generic, npm, maven, etc.)
 - `package_version` (string): Filter by package version
@@ -19463,7 +19543,7 @@ List packages in a GitLab project. Can filter by name, version, type, and suppor
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `sort` (string): Sort direction: asc or desc
-- `status` (string): Filter by status: default, hidden, processing, error
+- `status` (string): Filter by status: default, hidden, processing, error, pending_destruction, or deprecated.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -20077,7 +20157,7 @@ Wait for a pipeline to reach a terminal state (success, failed, canceled, skippe
 
 - `fail_on_error` (boolean): Return isError when pipeline ends in failed/canceled status (default true)
 - `interval_seconds` (integer): Polling interval in seconds (5-60, default 10)
-- `pipeline_id` (integer) (required): Pipeline ID to wait for
+- `pipeline_id` (integer) (required): Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines; do not use merge_request_iid.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `timeout_seconds` (integer): Maximum wait time in seconds (1-3600, default 300)
 
@@ -21631,11 +21711,11 @@ Add an asset link to a GitLab release. IMPORTANT: (1) When linking to uploaded p
 
 **Parameters:**
 
-- `link_type` (string): Type of the link (runbook, package, image, other)
+- `link_type` (string): Type of the release link: other, runbook, image, or package.
 - `name` (string) (required): Name of the link
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `tag_name` (string) (required): Tag name of the release
-- `url` (string) (required): URL of the link target. For packages use the real url returned by gitlab_package_publish — never construct URLs manually
+- `url` (string) (required): Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -21698,11 +21778,11 @@ Update an existing release asset link. Can change name, URL, filepath, direct as
 - `direct_asset_path` (string): New direct asset path for the link
 - `filepath` (string): New filepath for a direct asset link
 - `link_id` (integer) (required): ID of the release link to update
-- `link_type` (string): New link type (runbook, package, image, other)
+- `link_type` (string): Type of the release link: other, runbook, image, or package.
 - `name` (string): New name of the link
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `tag_name` (string) (required): Tag name of the release
-- `url` (string): New URL of the link
+- `url` (string): Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
