@@ -81,8 +81,8 @@ func TestActionSpecs_UpdateStateEventGuidance(t *testing.T) {
 	byTool := issueSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))))
 	spec := byTool["gitlab_issue_update"]
 
-	if !strings.Contains(spec.Usage, "state_event") || !strings.Contains(spec.Usage, "close or reopen") {
-		t.Fatalf("Usage = %q, want state_event close/reopen guidance", spec.Usage)
+	if !strings.Contains(spec.Usage, "state_event") || !strings.Contains(spec.Usage, "issue.close") || !strings.Contains(spec.Usage, "issue.reopen") {
+		t.Fatalf("Usage = %q, want state_event and lifecycle alias guidance", spec.Usage)
 	}
 	guidance, ok := spec.ParameterGuidance["state_event"]
 	if !ok {

@@ -79,7 +79,7 @@ func issueUpdateSpec(name string, route toolutil.ActionRoute, individualTool str
 func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := issueOptions("gitlab_issue_update")
 	options.Idempotent = true
-	options.Usage = "Update issue fields. To close or reopen an issue, set params.state_event to close or reopen; do not omit state_event when the task asks for an issue state transition."
+	options.Usage = "Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen; dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically."
 	options.Aliases = []string{"close issue", "reopen issue", "change issue state", "transition issue"}
 	options.RelatedActions = []string{"issue.get", "issue.delete", "issue.list"}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

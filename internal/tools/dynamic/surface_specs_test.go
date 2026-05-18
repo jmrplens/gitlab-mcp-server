@@ -1,6 +1,7 @@
 package dynamic
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
@@ -25,10 +26,16 @@ func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	if !execute.Destructive || execute.ReadOnly || execute.Route.OutputSchema == nil {
 		t.Fatalf("execute spec = %+v, want potentially destructive controller with generic output schema", execute)
 	}
+	if execute.Description != executeToolDescription || !strings.Contains(execute.Description, "Call directly") {
+		t.Fatalf("execute description = %q, want shared direct-execution guidance", execute.Description)
+	}
 
 	find := findDynamicSurfaceSpec(t, specs, findToolName)
 	if !find.ReadOnly || find.Destructive {
 		t.Fatalf("find spec = %+v, want read-only controller", find)
+	}
+	if find.Description != findToolDescription || !strings.Contains(find.Description, "parameter schema is unclear") {
+		t.Fatalf("find description = %q, want shared lookup guidance", find.Description)
 	}
 }
 

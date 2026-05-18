@@ -26,6 +26,9 @@ const (
 	findToolName    = "gitlab_find_action"
 	executeToolName = "gitlab_execute_tool"
 
+	findToolDescription    = "Find GitLab catalog actions by searching with domain keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'). Returns exact schemas, required params, safety metadata, and execute examples. Use when the canonical action ID, compatibility alias, or parameter schema is unclear. If the task already names a clear action ID/alias and required params, call gitlab_execute_tool directly; do NOT invent action IDs."
+	executeToolDescription = "Execute one GitLab catalog action by canonical action ID or supported compatibility alias (e.g. domain.action, issue.close). Call directly when the action ID/alias and required params are clear from the task; use gitlab_find_action only when action selection or parameter names are uncertain. Always include params as an object: {\"action\":\"domain.action\",\"params\":{...}}; use params:{} only for actions with no parameters. Include ONLY exact param names from the action schema; do NOT invent extra params. For issue.close/issue.reopen aliases, omit state_event; for issue.update state transitions, include params.state_event. Destructive actions require confirm=true."
+
 	defaultLimit     = 20
 	maxLimit         = 50
 	minSegmentTerms  = 3
@@ -160,7 +163,7 @@ type FindOutput struct {
 
 // ExecuteInput is the input for gitlab_execute_tool.
 type ExecuteInput struct {
-	Action  string         `json:"action" jsonschema:"Canonical action ID returned by gitlab_find_action, such as project.list."`
+	Action  string         `json:"action" jsonschema:"Canonical action ID or supported compatibility alias, such as project.list, issue.update, or issue.close."`
 	Params  map[string]any `json:"params" jsonschema:"Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters."`
 	Confirm bool           `json:"confirm,omitempty" jsonschema:"Set true to explicitly confirm destructive actions."`
 }
@@ -215,7 +218,7 @@ func addFindTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         findToolName,
 		Title:        "GitLab Find Action",
-		Description:  "Find GitLab catalog actions by searching with domain keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'). Returns exact schemas, required params, safety metadata, and execute examples. ALWAYS use this before gitlab_execute_tool when the canonical action ID or params schema is not already known; do NOT invent action IDs.",
+		Description:  findToolDescription,
 		Annotations:  annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Find Action"),
 		Icons:        toolutil.IconSearch,
 		OutputSchema: nil,
@@ -226,9 +229,10 @@ func addExecuteTool(server *mcp.Server, registry *Registry) {
 	destructiveHint := true
 	openWorldHint := true
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        executeToolName,
-		Title:       "GitLab Execute Tool",
-		Description: "Execute one GitLab catalog action by canonical action ID (e.g. domain.action). Always include params as an object: {\"action\":\"domain.action\",\"params\":{...}}; use params:{} only for actions with no parameters. Use gitlab_find_action first unless the exact action ID and all required param names are already known. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.",
+		Name:         executeToolName,
+		Title:        "GitLab Execute Tool",
+		Description:  executeToolDescription,
+		OutputSchema: toolutil.ActionDispatchOutputSchema(),
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "GitLab Execute Tool",
 			DestructiveHint: &destructiveHint,
@@ -2694,8 +2698,15 @@ func formatFindOutput(output FindOutput) string {
 	}
 	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
 	withExplanations := hasFindExplanations(output.Results)
-	if withExplanations {
+	withGuidance := hasFindGuidance(output.Results)
+	if withExplanations && withGuidance {
+		b.WriteString("| Action ID | Score | Destructive | Required Params | Guidance | Why |\n")
+		b.WriteString("| --- | ---: | --- | --- | --- | --- |\n")
+	} else if withExplanations {
 		b.WriteString("| Action ID | Score | Destructive | Required Params | Why |\n")
+		b.WriteString("| --- | ---: | --- | --- | --- |\n")
+	} else if withGuidance {
+		b.WriteString("| Action ID | Score | Destructive | Required Params | Guidance |\n")
 		b.WriteString("| --- | ---: | --- | --- | --- |\n")
 	} else {
 		b.WriteString("| Action ID | Score | Destructive | Required Params |\n")
@@ -2706,12 +2717,72 @@ func formatFindOutput(output FindOutput) string {
 		if len(result.RequiredParams) > 0 {
 			required = strings.Join(result.RequiredParams, ", ")
 		}
-		if withExplanations {
+		if withExplanations && withGuidance {
+			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s | %s |\n", result.ID, result.Score, result.Destructive, required, compactFindGuidance(result), explanationSummary(result.Explanation))
+		} else if withExplanations {
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s |\n", result.ID, result.Score, result.Destructive, required, explanationSummary(result.Explanation))
+		} else if withGuidance {
+			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s |\n", result.ID, result.Score, result.Destructive, required, compactFindGuidance(result))
 		} else {
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s |\n", result.ID, result.Score, result.Destructive, required)
 		}
 	}
 	b.WriteString("\nStructured results include exact `input_schema` values and `gitlab_execute_tool` examples for each action.\n")
 	return b.String()
+}
+
+func hasFindGuidance(results []FindResult) bool {
+	return slices.ContainsFunc(results, func(result FindResult) bool {
+		return strings.TrimSpace(result.Usage) != "" || len(result.ParamGuidance) > 0
+	})
+}
+
+func compactFindGuidance(result FindResult) string {
+	parts := make([]string, 0, 2)
+	if usage := strings.TrimSpace(result.Usage); usage != "" {
+		parts = append(parts, usage)
+	}
+	if guidance := compactParameterGuidance(result.ParamGuidance, 2); guidance != "" {
+		parts = append(parts, guidance)
+	}
+	if len(parts) == 0 {
+		return "-"
+	}
+	return toolutil.EscapeMdTableCell(strings.Join(parts, " "))
+}
+
+func compactParameterGuidance(guidance map[string]toolutil.ParameterGuidance, limit int) string {
+	if len(guidance) == 0 || limit == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(guidance))
+	for name := range guidance {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	if limit > 0 && len(names) > limit {
+		names = names[:limit]
+	}
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		item := guidance[name]
+		parts = append(parts, compactParameterGuidanceItem(name, item))
+	}
+	return strings.Join(parts, " ")
+}
+
+func compactParameterGuidanceItem(name string, item toolutil.ParameterGuidance) string {
+	if item.ExampleBinding != "" {
+		return fmt.Sprintf("`%s` example %s.", name, item.ExampleBinding)
+	}
+	if item.ValueSource != "" {
+		return fmt.Sprintf("`%s`: %s.", name, item.ValueSource)
+	}
+	if item.SemanticRole != "" {
+		return fmt.Sprintf("`%s`: %s.", name, item.SemanticRole)
+	}
+	if len(item.CommonConfusions) > 0 {
+		return fmt.Sprintf("`%s`: %s", name, item.CommonConfusions[0])
+	}
+	return fmt.Sprintf("`%s` has action-specific guidance.", name)
 }

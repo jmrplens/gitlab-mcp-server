@@ -624,6 +624,21 @@ func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
 	if got := describedAgain.Actions[0].ParamGuidance["target"].SemanticRole; got != "custom_target" {
 		t.Fatalf("second describe ParamGuidance target role = %q, want cloned custom_target", got)
 	}
+
+	findResult, found, err := registry.Find(t.Context(), nil, FindInput{Query: "bespoke", Limit: 1})
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if findResult == nil || findResult.IsError {
+		t.Fatalf("Find() result = %+v, want non-error", findResult)
+	}
+	if found.Count != 1 || found.Results[0].ID != "custom.inspect" {
+		t.Fatalf("Find() output = %+v, want custom.inspect", found)
+	}
+	findText := textContent(findResult)
+	if !strings.Contains(findText, "Guidance") || !strings.Contains(findText, "Use for custom catalog metadata") || !strings.Contains(findText, "`target`") {
+		t.Fatalf("Find() text = %q, want compact usage and parameter guidance", findText)
+	}
 }
 
 // TestNewRegistryFromCatalog_NilCatalog verifies callers can pass a nil catalog
@@ -2212,11 +2227,68 @@ func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 	if len(tools.Tools) != 2 {
 		t.Fatalf("tool count = %d, want 2", len(tools.Tools))
 	}
+	findTool := listedTool(t, tools.Tools, findToolName)
+	if findTool.Description != findToolDescription || !strings.Contains(findTool.Description, "call gitlab_execute_tool directly") {
+		t.Fatalf("gitlab_find_action description = %q, want direct-execution guidance", findTool.Description)
+	}
+	executeTool := listedTool(t, tools.Tools, executeToolName)
+	if executeTool.Description != executeToolDescription || !strings.Contains(executeTool.Description, "issue.close") || !strings.Contains(executeTool.Description, "use gitlab_find_action only") {
+		t.Fatalf("gitlab_execute_tool description = %q, want direct and issue lifecycle guidance", executeTool.Description)
+	}
 	executeSchema := listedToolInputSchema(t, tools.Tools, "gitlab_execute_tool")
 	if !slices.Contains(schemaRequired(executeSchema), "params") {
 		t.Fatalf("gitlab_execute_tool required = %v, want params", schemaRequired(executeSchema))
 	}
 	assertSchemaHasProperties(t, executeSchema, "action", "params", "confirm")
+
+	executeOutputSchema := listedToolOutputSchema(t, tools.Tools, "gitlab_execute_tool")
+	if executeOutputSchema["type"] != "object" || executeOutputSchema["additionalProperties"] != true {
+		t.Fatalf("gitlab_execute_tool output schema = %v, want open object schema", executeOutputSchema)
+	}
+	assertSchemaHasProperties(t, executeOutputSchema, "next_steps", "pagination")
+}
+
+// TestRegisterCatalogFindExecuteTools_ExecuteOutputSchemaAcceptsActionOutput verifies that
+// the protocol-level execute tool output schema remains permissive enough for
+// action-dependent structured content.
+func TestRegisterCatalogFindExecuteTools_ExecuteOutputSchemaAcceptsActionOutput(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
+	RegisterCatalogFindExecuteTools(server, actioncatalog.FromActionMaps(testRoutes(t)))
+
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { serverSession.Close() })
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "dynamic-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "gitlab_execute_tool",
+		Arguments: map[string]any{
+			"action": "project.list",
+			"params": map[string]any{"owned": true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(gitlab_execute_tool) error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("CallTool(gitlab_execute_tool) result = %+v, want non-error", result)
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("CallTool(gitlab_execute_tool) StructuredContent is nil")
+	}
+	data := unmarshalStructuredContentMap(t, result.StructuredContent)
+	if data["owned"] != true {
+		t.Fatalf("StructuredContent = %+v, want owned=true", data)
+	}
 }
 
 // TestSearch_PartialMatchLongQuery verifies that incidental query terms do not
@@ -2803,6 +2875,56 @@ func listedToolInputSchema(t *testing.T, tools []*mcp.Tool, name string) map[str
 	}
 	t.Fatalf("tool %s not listed", name)
 	return nil
+}
+
+// listedTool locates a listed MCP tool by name for metadata assertions.
+func listedTool(t *testing.T, tools []*mcp.Tool, name string) *mcp.Tool {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name == name {
+			return tool
+		}
+	}
+	t.Fatalf("tool %s not listed", name)
+	return nil
+}
+
+// listedToolOutputSchema supports listed tool output schema assertions in dynamic tests.
+func listedToolOutputSchema(t *testing.T, tools []*mcp.Tool, name string) map[string]any {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name != name {
+			continue
+		}
+		if tool.OutputSchema == nil {
+			t.Fatalf("tool %s output schema is nil", name)
+		}
+		data, err := json.Marshal(tool.OutputSchema)
+		if err != nil {
+			t.Fatalf("marshal %s output schema: %v", name, err)
+		}
+		var schema map[string]any
+		if unmarshalErr := json.Unmarshal(data, &schema); unmarshalErr != nil {
+			t.Fatalf("unmarshal %s output schema: %v", name, unmarshalErr)
+		}
+		return schema
+	}
+	t.Fatalf("tool %s not listed", name)
+	return nil
+}
+
+// unmarshalStructuredContentMap decodes protocol structured content for dynamic tests.
+func unmarshalStructuredContentMap(t *testing.T, structured any) map[string]any {
+	t.Helper()
+	data, err := json.Marshal(structured)
+	if err != nil {
+		t.Fatalf("marshal structured content: %v", err)
+	}
+	var out map[string]any
+	if unmarshalErr := json.Unmarshal(data, &out); unmarshalErr != nil {
+		t.Fatalf("unmarshal structured content: %v", unmarshalErr)
+	}
+	return out
 }
 
 // sortedPropertyNames sorts ed property names fixtures into deterministic order.
