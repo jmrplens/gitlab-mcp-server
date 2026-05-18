@@ -68,6 +68,8 @@ const (
 	patternNoUnderscore = "no-underscore"
 	patternTestCov      = "TestCov"
 	patternOther        = "other"
+
+	testFilesMetricFormat = "Test files (%s)"
 )
 
 var (
@@ -734,9 +736,9 @@ func renderOverview(metrics repositoryMetrics) string {
 			{"Unit test functions", fmtInt(totalTests(metrics.Packages) - totals[layerE2E].tests)},
 			{"E2E test functions", fmtInt(totals[layerE2E].tests)},
 			{"cmd test functions", fmtInt(totals[layerCmd].tests)},
-			{fmt.Sprintf("Test files (%s)", internalPathPrefix), fmtInt(testFilesWithPrefix(metrics.Packages, internalPathPrefix))},
-			{fmt.Sprintf("Test files (%s)", cmdPathPrefix), fmtInt(testFilesWithPrefix(metrics.Packages, cmdPathPrefix))},
-			{fmt.Sprintf("Test files (%s)", e2eSuiteDisplay), fmtInt(testFilesWithPrefix(metrics.Packages, e2eSuitePath))},
+			{fmt.Sprintf(testFilesMetricFormat, internalPathPrefix), fmtInt(testFilesWithPrefix(metrics.Packages, internalPathPrefix))},
+			{fmt.Sprintf(testFilesMetricFormat, cmdPathPrefix), fmtInt(testFilesWithPrefix(metrics.Packages, cmdPathPrefix))},
+			{fmt.Sprintf(testFilesMetricFormat, e2eSuiteDisplay), fmtInt(testFilesWithPrefix(metrics.Packages, e2eSuitePath))},
 			{"Tool sub-packages tested", fmtInt(countTestedPackages(toolPackages))},
 			{"Core packages tested", fmtInt(countTestedPackages(corePackages))},
 			{fmt.Sprintf("Overall coverage (`go test %s %s`)", internalPattern, cmdPattern), fmtCoverage(metrics.OverallCoverage)},
