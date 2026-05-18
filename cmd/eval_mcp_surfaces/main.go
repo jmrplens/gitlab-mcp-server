@@ -7421,7 +7421,7 @@ func parseComparisonInput(path string) (comparisonInput, error) {
 		if input.ToolsFile != "" {
 			input.Label = comparisonLabelFromSnapshot(input.ToolsFile, input.Label)
 		}
-	case strings.HasPrefix(content, "# Meta-Tool Anthropic Evaluation"), strings.HasPrefix(content, "# Meta-Tool Model Evaluation"):
+	case strings.HasPrefix(content, "# Meta-Tool Anthropic Evaluation"), strings.HasPrefix(content, "# Meta-Tool Model Evaluation"), strings.HasPrefix(content, "# Dynamic Surface Model Evaluation"):
 		input.Kind = "evaluation"
 		input.Date = firstMetadataValue(content, "Date")
 		input.Mode = firstMetadataValue(content, "Mode")

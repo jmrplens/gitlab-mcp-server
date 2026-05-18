@@ -4437,6 +4437,20 @@ Task attempts: 3
 		t.Fatalf("eval metrics = %+v diagnostics=%+v coverage=%+v", evalInput.Metrics, evalInput.Diagnostics, evalInput.Coverage)
 	}
 
+	dynamicPath := filepath.Join(tmp, "current-abc123", "dynamic-base-read.md")
+	dynamicReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# Dynamic Surface Model Evaluation", 1)
+	dynamicReport = strings.Replace(dynamicReport, "Model: `claude-sonnet-4-6`", "Model: `test:model`\nTool surface: `dynamic`", 1)
+	if writeErr := os.WriteFile(dynamicPath, []byte(dynamicReport), 0o600); writeErr != nil {
+		t.Fatalf("write dynamic report: %v", writeErr)
+	}
+	dynamicInput, err := parseComparisonInput(dynamicPath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(dynamic) error = %v", err)
+	}
+	if dynamicInput.Kind != "evaluation" || dynamicInput.ToolSurface != config.ToolSurfaceDynamic || dynamicInput.TaskAttempts != 3 {
+		t.Fatalf("dynamic input = %+v", dynamicInput)
+	}
+
 	tokenPath := filepath.Join(tmp, "current-abc123", "tokens.md")
 	tokenReport := `# Tools Snapshot Token Audit
 
@@ -4918,8 +4932,8 @@ func TestConfigureTerminalOutput_WritesLogWithoutEcho(t *testing.T) {
 		t.Fatalf("configureTerminalOutput() error = %v", err)
 	}
 	terminalPrintf("progress line %d\n", 1)
-	if err := closeLog(); err != nil {
-		t.Fatalf("close terminal log: %v", err)
+	if closeErr := closeLog(); closeErr != nil {
+		t.Fatalf("close terminal log: %v", closeErr)
 	}
 
 	data, err := os.ReadFile(logPath)
