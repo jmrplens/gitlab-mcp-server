@@ -209,13 +209,13 @@ Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` para eliminar accione
 
 ## Dinámico vs meta-herramientas
 
-| Pregunta                    | Meta-herramientas                                           | Conjunto dinámico                                                     |
-| --------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------- |
-| Qué aparece en `tools/list` | 33 a 50 herramientas de dominio                             | 2 herramientas públicas de descubrimiento y ejecución                 |
-| Cómo elige el modelo        | Escoge una herramienta de dominio y una acción              | Encuentra una acción con schema y luego la ejecuta                    |
-| Dónde están los schemas     | Schema de herramienta o recursos `gitlab://schema/meta/...` | `gitlab_find_action`                                                  |
-| Mejor uso actual            | Modo explícito de compatibilidad                            | Descubrimiento de acciones predeterminado de bajo consumo             |
-| Vuelta atrás                | Usa `TOOL_SURFACE=meta`                                     | Ruta predeterminada                                                   |
+| Pregunta                    | Meta-herramientas                                           | Conjunto dinámico                                         |
+| --------------------------- | ----------------------------------------------------------- | --------------------------------------------------------- |
+| Qué aparece en `tools/list` | 33 a 50 herramientas de dominio                             | 2 herramientas públicas de descubrimiento y ejecución     |
+| Cómo elige el modelo        | Escoge una herramienta de dominio y una acción              | Encuentra una acción con schema y luego la ejecuta        |
+| Dónde están los schemas     | Schema de herramienta o recursos `gitlab://schema/meta/...` | `gitlab_find_action`                                      |
+| Mejor uso actual            | Modo explícito de compatibilidad                            | Descubrimiento de acciones predeterminado de bajo consumo |
+| Vuelta atrás                | Usa `TOOL_SURFACE=meta`                                     | Ruta predeterminada                                       |
 
 ## Solución de problemas
 
