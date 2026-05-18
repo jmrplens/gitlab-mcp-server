@@ -31,6 +31,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/jmrplens/gitlab-mcp-server/internal/docgen"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
 )
 
@@ -61,12 +62,6 @@ const (
 	layerOther              = "other"
 	layerToolsOrchestration = "tools-orchestration"
 	layerToolSubpackage     = "tool-subpackage"
-
-	tableDividerMetric         = "| --- | ---: |\n"
-	tableHeaderPackageCoverage = "| Package | Coverage |\n"
-	tableRowPackageCoverage    = "| %s | %s |\n"
-	tableRowTestFiles          = "| Test files (%s) | %s |\n"
-	tableRow4Columns           = "| %s | %s | %s | %s |\n"
 
 	pattern3Part        = "3-part"
 	pattern2Part        = "2-part"
@@ -731,20 +726,25 @@ func renderOverview(metrics repositoryMetrics) string {
 	toolPackages := packagesByLayer(metrics.Packages, layerToolSubpackage)
 	corePackages := packagesByLayer(metrics.Packages, layerCore)
 
-	b.WriteString("| Metric | Value |\n")
-	b.WriteString(tableDividerMetric)
-	fmt.Fprintf(&b, "| Total test functions | %s |\n", fmtInt(totalTests(metrics.Packages)))
-	fmt.Fprintf(&b, "| Unit test functions | %s |\n", fmtInt(totalTests(metrics.Packages)-totals[layerE2E].tests))
-	fmt.Fprintf(&b, "| E2E test functions | %s |\n", fmtInt(totals[layerE2E].tests))
-	fmt.Fprintf(&b, "| cmd test functions | %s |\n", fmtInt(totals[layerCmd].tests))
-	fmt.Fprintf(&b, tableRowTestFiles, internalPathPrefix, fmtInt(testFilesWithPrefix(metrics.Packages, internalPathPrefix)))
-	fmt.Fprintf(&b, tableRowTestFiles, cmdPathPrefix, fmtInt(testFilesWithPrefix(metrics.Packages, cmdPathPrefix)))
-	fmt.Fprintf(&b, tableRowTestFiles, e2eSuiteDisplay, fmtInt(testFilesWithPrefix(metrics.Packages, e2eSuitePath)))
-	fmt.Fprintf(&b, "| Tool sub-packages tested | %s |\n", fmtInt(countTestedPackages(toolPackages)))
-	fmt.Fprintf(&b, "| Core packages tested | %s |\n", fmtInt(countTestedPackages(corePackages)))
-	fmt.Fprintf(&b, "| Overall coverage (`go test %s %s`) | %s |\n", internalPattern, cmdPattern, fmtCoverage(metrics.OverallCoverage))
-	fmt.Fprintf(&b, "| Overall coverage (`go test %s`) | %s |\n", internalPattern, fmtCoverage(metrics.InternalCoverage))
-	fmt.Fprintf(&b, "| Average package coverage | %s |\n\n", fmtCoverage(metrics.AveragePackageCoverage))
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Metric", "Value"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight},
+		[][]string{
+			{"Total test functions", fmtInt(totalTests(metrics.Packages))},
+			{"Unit test functions", fmtInt(totalTests(metrics.Packages) - totals[layerE2E].tests)},
+			{"E2E test functions", fmtInt(totals[layerE2E].tests)},
+			{"cmd test functions", fmtInt(totals[layerCmd].tests)},
+			{fmt.Sprintf("Test files (%s)", internalPathPrefix), fmtInt(testFilesWithPrefix(metrics.Packages, internalPathPrefix))},
+			{fmt.Sprintf("Test files (%s)", cmdPathPrefix), fmtInt(testFilesWithPrefix(metrics.Packages, cmdPathPrefix))},
+			{fmt.Sprintf("Test files (%s)", e2eSuiteDisplay), fmtInt(testFilesWithPrefix(metrics.Packages, e2eSuitePath))},
+			{"Tool sub-packages tested", fmtInt(countTestedPackages(toolPackages))},
+			{"Core packages tested", fmtInt(countTestedPackages(corePackages))},
+			{fmt.Sprintf("Overall coverage (`go test %s %s`)", internalPattern, cmdPattern), fmtCoverage(metrics.OverallCoverage)},
+			{fmt.Sprintf("Overall coverage (`go test %s`)", internalPattern), fmtCoverage(metrics.InternalCoverage)},
+			{"Average package coverage", fmtCoverage(metrics.AveragePackageCoverage)},
+		},
+	))
+	b.WriteByte('\n')
 	return b.String()
 }
 
@@ -753,8 +753,7 @@ func renderNamingStats(metrics repositoryMetrics) string {
 	total := sumCounts(metrics.NamingCounts)
 	var b strings.Builder
 	b.WriteString("### Naming Convention Stats\n\n")
-	b.WriteString("| Pattern | Count | % |\n")
-	b.WriteString("| --- | ---: | ---: |\n")
+	tableRows := make([][]string, 0, len(metrics.NamingCounts))
 	for _, row := range []struct {
 		Pattern string
 		Label   string
@@ -769,9 +768,14 @@ func renderNamingStats(metrics repositoryMetrics) string {
 		if count == 0 {
 			continue
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s |\n", row.Label, fmtInt(count), fmtRatio(count, total))
+		tableRows = append(tableRows, []string{row.Label, fmtInt(count), fmtRatio(count, total)})
 	}
-	b.WriteString("\n")
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Pattern", "Count", "%"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight},
+		tableRows,
+	))
+	b.WriteByte('\n')
 	return b.String()
 }
 
@@ -781,8 +785,7 @@ func renderDistribution(metrics repositoryMetrics) string {
 	var b strings.Builder
 	b.WriteString("## Test Distribution\n\n")
 	b.WriteString("### By Layer\n\n")
-	b.WriteString("| Layer | Test Functions | Test Files | Description |\n")
-	b.WriteString("| --- | ---: | ---: | --- |\n")
+	tableRows := make([][]string, 0, 6)
 	rows := []struct {
 		Layer       string
 		Label       string
@@ -796,9 +799,15 @@ func renderDistribution(metrics repositoryMetrics) string {
 	}
 	for _, row := range rows {
 		total := totals[row.Layer]
-		fmt.Fprintf(&b, tableRow4Columns, row.Label, fmtInt(total.tests), fmtInt(total.files), escapeTable(row.Description))
+		tableRows = append(tableRows, []string{row.Label, fmtInt(total.tests), fmtInt(total.files), escapeTable(row.Description)})
 	}
-	fmt.Fprintf(&b, "| **Total** | **%s** | **%s** |  |\n\n", fmtInt(totalTests(metrics.Packages)), fmtInt(totalTestFiles(metrics.Packages)))
+	tableRows = append(tableRows, []string{"**Total**", "**" + fmtInt(totalTests(metrics.Packages)) + "**", "**" + fmtInt(totalTestFiles(metrics.Packages)) + "**", ""})
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Layer", "Test Functions", "Test Files", "Description"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft},
+		tableRows,
+	))
+	b.WriteByte('\n')
 	return b.String()
 }
 
@@ -809,17 +818,22 @@ func renderCorePackages(metrics repositoryMetrics) string {
 
 	var b strings.Builder
 	b.WriteString("### Core Packages\n\n")
-	b.WriteString("| Package | Tests | Coverage | Description |\n")
-	b.WriteString("| --- | ---: | ---: | --- |\n")
+	tableRows := make([][]string, 0, len(packages)+1)
 	subtotal := 0
 	for _, pkg := range packages {
 		if pkg.TestFunctions == 0 {
 			continue
 		}
 		subtotal += pkg.TestFunctions
-		fmt.Fprintf(&b, tableRow4Columns, pkg.Key, fmtInt(pkg.TestFunctions), fmtCoverage(pkg.Coverage), escapeTable(pkg.Summary))
+		tableRows = append(tableRows, []string{pkg.Key, fmtInt(pkg.TestFunctions), fmtCoverage(pkg.Coverage), escapeTable(pkg.Summary)})
 	}
-	fmt.Fprintf(&b, "| **Subtotal** | **%s** |  |  |\n\n", fmtInt(subtotal))
+	tableRows = append(tableRows, []string{"**Subtotal**", "**" + fmtInt(subtotal) + "**", "", ""})
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Package", "Tests", "Coverage", "Description"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignLeft},
+		tableRows,
+	))
+	b.WriteByte('\n')
 	return b.String()
 }
 
@@ -838,12 +852,16 @@ func renderTopToolPackages(metrics repositoryMetrics, topToolRows int) string {
 
 	var b strings.Builder
 	b.WriteString("### Tool Sub-Packages (Top Domains by Test Count)\n\n")
-	b.WriteString("| Sub-package | Tests | Coverage | Tools |\n")
-	b.WriteString("| --- | ---: | ---: | ---: |\n")
+	tableRows := make([][]string, 0, len(packages))
 	for _, pkg := range packages {
-		fmt.Fprintf(&b, tableRow4Columns, pkg.Key, fmtInt(pkg.TestFunctions), fmtCoverage(pkg.Coverage), fmtInt(pkg.ToolCount))
+		tableRows = append(tableRows, []string{pkg.Key, fmtInt(pkg.TestFunctions), fmtCoverage(pkg.Coverage), fmtInt(pkg.ToolCount)})
 	}
-	b.WriteString("\n")
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Sub-package", "Tests", "Coverage", "Tools"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight},
+		tableRows,
+	))
+	b.WriteByte('\n')
 	return b.String()
 }
 
@@ -857,8 +875,7 @@ func renderCompleteToolPackages(metrics repositoryMetrics) string {
 	b.WriteString("### Complete Tool Sub-Package Test Counts\n\n")
 	b.WriteString("<details>\n")
 	fmt.Fprintf(&b, "<summary>All %d tested sub-packages (click to expand)</summary>\n\n", tested)
-	b.WriteString("| Sub-package | Tests | Test Files | Coverage | Tools |\n")
-	b.WriteString("| --- | ---: | ---: | ---: | ---: |\n")
+	tableRows := make([][]string, 0, tested+1)
 	totalTests := 0
 	totalFiles := 0
 	totalTools := 0
@@ -869,9 +886,15 @@ func renderCompleteToolPackages(metrics repositoryMetrics) string {
 		totalTests += pkg.TestFunctions
 		totalFiles += pkg.TestFiles
 		totalTools += pkg.ToolCount
-		fmt.Fprintf(&b, "| %s | %s | %s | %s | %s |\n", pkg.Key, fmtInt(pkg.TestFunctions), fmtInt(pkg.TestFiles), fmtCoverage(pkg.Coverage), fmtInt(pkg.ToolCount))
+		tableRows = append(tableRows, []string{pkg.Key, fmtInt(pkg.TestFunctions), fmtInt(pkg.TestFiles), fmtCoverage(pkg.Coverage), fmtInt(pkg.ToolCount)})
 	}
-	fmt.Fprintf(&b, "| **Total** | **%s** | **%s** |  | **%s** |\n\n", fmtInt(totalTests), fmtInt(totalFiles), fmtInt(totalTools))
+	tableRows = append(tableRows, []string{"**Total**", "**" + fmtInt(totalTests) + "**", "**" + fmtInt(totalFiles) + "**", "", "**" + fmtInt(totalTools) + "**"})
+	b.WriteString(docgen.RenderMarkdownTable(
+		[]string{"Sub-package", "Tests", "Test Files", "Coverage", "Tools"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight, docgen.AlignRight},
+		tableRows,
+	))
+	b.WriteByte('\n')
 	b.WriteString("</details>\n\n")
 	return b.String()
 }
@@ -881,32 +904,40 @@ func renderCoverageReport(metrics repositoryMetrics) string {
 	var b strings.Builder
 	b.WriteString("## Coverage Report\n\n")
 	b.WriteString("### cmd Package Snapshot\n\n")
-	b.WriteString(tableHeaderPackageCoverage)
-	b.WriteString(tableDividerMetric)
-	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, layerCmd)) {
-		fmt.Fprintf(&b, tableRowPackageCoverage, pkg.Key, fmtCoverage(pkg.Coverage))
-	}
+	b.WriteString(renderPackageCoverageTable(sortedCoveragePackages(packagesByLayer(metrics.Packages, layerCmd))))
 	b.WriteString("\n")
 
 	b.WriteString("### Core Packages\n\n")
-	b.WriteString(tableHeaderPackageCoverage)
-	b.WriteString(tableDividerMetric)
-	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, layerCore)) {
-		fmt.Fprintf(&b, tableRowPackageCoverage, pkg.Key, fmtCoverage(pkg.Coverage))
-	}
+	b.WriteString(renderPackageCoverageTable(sortedCoveragePackages(packagesByLayer(metrics.Packages, layerCore))))
 	b.WriteString("\n")
 
 	b.WriteString("### Tool Sub-Packages\n\n")
-	b.WriteString(tableHeaderPackageCoverage)
-	b.WriteString(tableDividerMetric)
+	coverageRows := make([][]string, 0)
 	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, layerToolsOrchestration)) {
-		fmt.Fprintf(&b, tableRowPackageCoverage, "tools (orch.)", fmtCoverage(pkg.Coverage))
+		coverageRows = append(coverageRows, []string{"tools (orch.)", fmtCoverage(pkg.Coverage)})
 	}
-	for _, pkg := range sortedCoveragePackages(packagesByLayer(metrics.Packages, layerToolSubpackage)) {
-		fmt.Fprintf(&b, tableRowPackageCoverage, pkg.Key, fmtCoverage(pkg.Coverage))
-	}
+	b.WriteString(renderPackageCoverageTableRows(appendPackageCoverageRows(coverageRows, sortedCoveragePackages(packagesByLayer(metrics.Packages, layerToolSubpackage)))))
 	b.WriteString("\n")
 	return b.String()
+}
+
+func renderPackageCoverageTable(packages []packageMetrics) string {
+	return renderPackageCoverageTableRows(appendPackageCoverageRows(nil, packages))
+}
+
+func appendPackageCoverageRows(rows [][]string, packages []packageMetrics) [][]string {
+	for _, pkg := range packages {
+		rows = append(rows, []string{pkg.Key, fmtCoverage(pkg.Coverage)})
+	}
+	return rows
+}
+
+func renderPackageCoverageTableRows(rows [][]string) string {
+	return docgen.RenderMarkdownTable(
+		[]string{"Package", "Coverage"},
+		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight},
+		rows,
+	)
 }
 
 // renderCoverageExceptions renders packages that currently miss the target.
