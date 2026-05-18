@@ -319,39 +319,25 @@ func newReadmeMCPServer() *mcp.Server {
 }
 
 func listToolsFromServer(server *mcp.Server) ([]*mcp.Tool, error) {
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		return nil, fmt.Errorf("server connect: %w", err)
-	}
-	defer serverSession.Close()
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: readmeClientName, Version: readmeVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		return nil, fmt.Errorf("client connect: %w", err)
-	}
-	defer session.Close()
-
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("list tools: %w", err)
-	}
-	return result.Tools, nil
+	return withReadmeSession(server, "tools", func(ctx context.Context, session *mcp.ClientSession) ([]*mcp.Tool, error) {
+		result, err := session.ListTools(ctx, nil)
+		if err != nil {
+			return nil, fmt.Errorf("list tools: %w", err)
+		}
+		return result.Tools, nil
+	})
 }
 
 func measureToolSchemaTokens(toolList []*mcp.Tool) (int, error) {
-	total := 0
+	totalBytes := 0
 	for _, t := range toolList {
 		b, err := json.Marshal(t)
 		if err != nil {
 			return 0, fmt.Errorf("marshal tool %s: %w", t.Name, err)
 		}
-		total += len(b) / readmeBytesPerToken
+		totalBytes += len(b)
 	}
-	return total, nil
+	return totalBytes / readmeBytesPerToken, nil
 }
 
 func measureSharedTokens(client *gitlabclient.Client, routes map[string]toolutil.ActionMap, toolSurface, capabilitySurface string, promptTokens int) (int, error) {
@@ -395,82 +381,75 @@ func measureResourcesWithOptions(client *gitlabclient.Client, routes map[string]
 		resources.RegisterWorkflowGuides(server)
 	}
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		return 0, fmt.Errorf("server connect resources: %w", err)
-	}
-	defer serverSession.Close()
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: readmeClientName, Version: readmeVersion}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		return 0, fmt.Errorf("client connect resources: %w", err)
-	}
-	defer session.Close()
-
-	totalBytes := 0
-	res, err := session.ListResources(ctx, nil)
-	if err != nil {
-		return 0, fmt.Errorf("list resources: %w", err)
-	}
-	for _, r := range res.Resources {
-		b, mErr := json.Marshal(r)
-		if mErr != nil {
-			return 0, fmt.Errorf("marshal resource %s: %w", r.Name, mErr)
+	return withReadmeSession(server, "resources", func(ctx context.Context, session *mcp.ClientSession) (int, error) {
+		totalBytes := 0
+		res, err := session.ListResources(ctx, nil)
+		if err != nil {
+			return 0, fmt.Errorf("list resources: %w", err)
 		}
-		totalBytes += len(b)
-	}
-
-	tpl, err := session.ListResourceTemplates(ctx, nil)
-	if err != nil {
-		return 0, fmt.Errorf("list resource templates: %w", err)
-	}
-	for _, t := range tpl.ResourceTemplates {
-		b, mErr := json.Marshal(t)
-		if mErr != nil {
-			return 0, fmt.Errorf("marshal template %s: %w", t.Name, mErr)
+		for _, r := range res.Resources {
+			b, mErr := json.Marshal(r)
+			if mErr != nil {
+				return 0, fmt.Errorf("marshal resource %s: %w", r.Name, mErr)
+			}
+			totalBytes += len(b)
 		}
-		totalBytes += len(b)
-	}
-	return totalBytes / readmeBytesPerToken, nil
+
+		tpl, err := session.ListResourceTemplates(ctx, nil)
+		if err != nil {
+			return 0, fmt.Errorf("list resource templates: %w", err)
+		}
+		for _, t := range tpl.ResourceTemplates {
+			b, mErr := json.Marshal(t)
+			if mErr != nil {
+				return 0, fmt.Errorf("marshal template %s: %w", t.Name, mErr)
+			}
+			totalBytes += len(b)
+		}
+		return totalBytes / readmeBytesPerToken, nil
+	})
 }
 
 func measurePrompts(client *gitlabclient.Client) (int, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: readmeServerName, Version: readmeVersion}, nil)
 	prompts.Register(server, client)
 
+	return withReadmeSession(server, "prompts", func(ctx context.Context, session *mcp.ClientSession) (int, error) {
+		totalBytes := 0
+		promptList, err := session.ListPrompts(ctx, nil)
+		if err != nil {
+			return 0, fmt.Errorf("list prompts: %w", err)
+		}
+		for _, pr := range promptList.Prompts {
+			b, mErr := json.Marshal(pr)
+			if mErr != nil {
+				return 0, fmt.Errorf("marshal prompt %s: %w", pr.Name, mErr)
+			}
+			totalBytes += len(b)
+		}
+		return totalBytes / readmeBytesPerToken, nil
+	})
+}
+
+func withReadmeSession[T any](server *mcp.Server, label string, fn func(context.Context, *mcp.ClientSession) (T, error)) (T, error) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
+	var zero T
 
 	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
-		return 0, fmt.Errorf("server connect prompts: %w", err)
+		return zero, fmt.Errorf("server connect %s: %w", label, err)
 	}
 	defer serverSession.Close()
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: readmeClientName, Version: readmeVersion}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		return 0, fmt.Errorf("client connect prompts: %w", err)
+		return zero, fmt.Errorf("client connect %s: %w", label, err)
 	}
 	defer session.Close()
 
-	totalBytes := 0
-	promptList, err := session.ListPrompts(ctx, nil)
-	if err != nil {
-		return 0, fmt.Errorf("list prompts: %w", err)
-	}
-	for _, pr := range promptList.Prompts {
-		b, mErr := json.Marshal(pr)
-		if mErr != nil {
-			return 0, fmt.Errorf("marshal prompt %s: %w", pr.Name, mErr)
-		}
-		totalBytes += len(b)
-	}
-	return totalBytes / readmeBytesPerToken, nil
+	return fn(ctx, session)
 }
 
 // countActions returns the number of actions in a route catalog.

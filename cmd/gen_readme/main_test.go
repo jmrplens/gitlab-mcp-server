@@ -2,8 +2,11 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 )
@@ -103,6 +106,36 @@ func TestMeasureTokenFootprintRows_BaseCatalog_ReturnsRequestedConfigurations(t 
 	}
 	if compactRows[2].MetaParamSchema != config.MetaParamSchemaCompact {
 		t.Fatalf("compact meta schema mode = %q, want compact", compactRows[2].MetaParamSchema)
+	}
+}
+
+// TestMeasureToolSchemaTokens_UsesAggregateBytesBeforeDivision verifies the
+// token estimate follows the documented byte/4 heuristic over the aggregate
+// payload instead of flooring each tool independently.
+func TestMeasureToolSchemaTokens_UsesAggregateBytesBeforeDivision(t *testing.T) {
+	toolList := []*mcp.Tool{{Name: "a"}, {Name: "bb"}, {Name: "ccc"}}
+
+	totalBytes := 0
+	perToolFlooredTokens := 0
+	for _, tool := range toolList {
+		payload, err := json.Marshal(tool)
+		if err != nil {
+			t.Fatalf("json.Marshal() error = %v", err)
+		}
+		totalBytes += len(payload)
+		perToolFlooredTokens += len(payload) / readmeBytesPerToken
+	}
+	want := totalBytes / readmeBytesPerToken
+	if perToolFlooredTokens == want {
+		t.Fatalf("test fixture does not distinguish aggregate and per-tool rounding: both = %d", want)
+	}
+
+	got, err := measureToolSchemaTokens(toolList)
+	if err != nil {
+		t.Fatalf("measureToolSchemaTokens() error = %v", err)
+	}
+	if got != want {
+		t.Fatalf("measureToolSchemaTokens() = %d, want aggregate byte estimate %d", got, want)
 	}
 }
 

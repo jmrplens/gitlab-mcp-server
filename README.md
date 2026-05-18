@@ -39,11 +39,11 @@ Measured with `go run ./cmd/gen_readme/` against the current base catalog. Total
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          |             2 |               867 | n/a                 |              1,962 |        18,198 |       20,160 |
-| `dynamic` / `minimal`                                 |             2 |               867 | n/a                 |              1,962 |           184 |        2,146 |
-| `meta` / `full`                                       |            34 |               867 | `opaque`            |             63,932 |        18,198 |       82,130 |
-| `meta` / `minimal`                                    |            34 |               867 | `opaque`            |             63,932 |           760 |       64,692 |
-| `individual` / `full`                                 |           863 |               863 | n/a                 |            469,508 |        17,622 |      487,130 |
+| `dynamic` / `full` (default)                          |             2 |               867 | n/a                 |              1,963 |        18,198 |       20,161 |
+| `dynamic` / `minimal`                                 |             2 |               867 | n/a                 |              1,963 |           184 |        2,147 |
+| `meta` / `full`                                       |            34 |               867 | `opaque`            |             63,945 |        18,198 |       82,143 |
+| `meta` / `minimal`                                    |            34 |               867 | `opaque`            |             63,945 |           760 |       64,705 |
+| `individual` / `full`                                 |           863 |               863 | n/a                 |            469,831 |        17,622 |      487,453 |
 
 Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and individual mode already exposes one schema per tool. In `meta` + `minimal`, shared tokens still include meta-schema resources so opaque meta-tools can look up exact action parameter schemas.
 
@@ -406,19 +406,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       848 |     141,161 |
-| Unit tests (`_test.go`)  |       441 |     242,227 |
+| Source (`.go`, non-test) |       848 |     141,140 |
+| Unit tests (`_test.go`)  |       441 |     242,323 |
 | End-to-end tests         |       111 |      24,416 |
-| **Total**                | **1,400** | **407,804** |
+| **Total**                | **1,400** | **407,879** |
 
 ### Functions
 
 | Category                        | Count |
 | ------------------------------- | ----: |
-| Source functions                | 5,563 |
+| Source functions                | 5,564 |
 | — exported (public)             | 2,381 |
-| — unexported (private)          | 3,182 |
-| Unit test functions (`TestXxx`) | 9,905 |
+| — unexported (private)          | 3,183 |
+| Unit test functions (`TestXxx`) | 9,910 |
 | Subtests (`t.Run(...)`)         | 2,185 |
 | End-to-end test functions       |   252 |
 
@@ -436,8 +436,8 @@ Numbers nobody asked for, but here they are anyway.
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 5,893 |
-| `defer` statements                 |   756 |
+| `if err != nil` checks             | 5,891 |
+| `defer` statements                 |   752 |
 | `struct` types defined             | 2,197 |
 | `//nolint` suppressions            |    48 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
@@ -449,7 +449,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   207 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   143 |
+| Git commits                    |   144 |
 | Unique contributors            |     2 |
 
 ### Hall of fame
