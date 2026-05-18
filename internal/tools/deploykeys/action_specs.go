@@ -47,9 +47,15 @@ func deployKeyDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"access", "deploy_key", "ssh"},
+		Usage:          "Use for SSH deploy keys that grant repository access to projects.",
+		Aliases:        deployKeyAliases(actionName),
+		RelatedActions: []string{"access.deploy_token_list_project", "access.token_project_list"},
 		OpenWorld:      true,
 		OwnerPackage:   "deploykeys",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+	if actionName == "deploy_key_list_project" {
+		options.Usage = "Lists SSH deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested."
 	}
 	if actionName == "deploy_key_get" || actionName == "deploy_key_update" || actionName == "deploy_key_delete" || actionName == "deploy_key_enable" {
 		options.Usage = "Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource."
@@ -65,4 +71,29 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 		}
 	}
 	return options
+}
+
+func deployKeyAliases(actionName string) []string {
+	switch actionName {
+	case "deploy_key_list_project":
+		return []string{"list project deploy keys", "project deploy keys"}
+	case "deploy_key_get":
+		return []string{"get deploy key", "fetch deploy key"}
+	case "deploy_key_add":
+		return []string{"add project deploy key", "create project deploy key"}
+	case "deploy_key_update":
+		return []string{"update deploy key", "edit deploy key"}
+	case "deploy_key_delete":
+		return []string{"delete deploy key", "remove deploy key"}
+	case "deploy_key_enable":
+		return []string{"enable deploy key", "attach deploy key to project"}
+	case "deploy_key_list_all":
+		return []string{"list all deploy keys", "instance deploy keys"}
+	case "deploy_key_add_instance":
+		return []string{"add instance deploy key", "create instance deploy key"}
+	case "deploy_key_list_user_project":
+		return []string{"list user project deploy keys", "user project deploy keys"}
+	default:
+		return nil
+	}
 }

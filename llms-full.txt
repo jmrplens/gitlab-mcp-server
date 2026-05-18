@@ -18,11 +18,34 @@ operations under a single tool with an `action` parameter.
 Use {"action":"approve_group","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_access/<action>.
 Action guidance:
+- deploy_key_add: Use for SSH deploy keys that grant repository access to projects.
+- deploy_key_add_instance: Use for SSH deploy keys that grant repository access to projects.
 - deploy_key_delete: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
 - deploy_key_enable: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
 - deploy_key_get: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
+- deploy_key_list_all: Use for SSH deploy keys that grant repository access to projects.
+- deploy_key_list_project: Lists SSH deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested.
+- deploy_key_list_user_project: Use for SSH deploy keys that grant repository access to projects.
 - deploy_key_update: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
 - deploy_token_delete_project: Use to delete a deploy token owned by a project; pass the deploy token ID, not another token type.
+- token_group_create: Use for GitLab group access tokens; this action creates a group-scoped API token.
+- token_group_get: Use for GitLab group access tokens; this action gets a group-scoped API token.
+- token_group_list: Use for GitLab group access tokens; this action lists a group-scoped API token.
+- token_group_revoke: Use for GitLab group access tokens; this action revokes a group-scoped API token.
+- token_group_rotate: Use for GitLab group access tokens; this action rotates a group-scoped API token.
+- token_group_rotate_self: Use for GitLab group access tokens; this action rotates a group-scoped API token.
+- token_personal_get: Use for GitLab personal access tokens; this action gets a personal-scoped API token.
+- token_personal_list: Use for GitLab personal access tokens; this action lists a personal-scoped API token.
+- token_personal_revoke: Use for GitLab personal access tokens; this action revokes a personal-scoped API token.
+- token_personal_revoke_self: Use for GitLab personal access tokens; this action revokes a personal-scoped API token.
+- token_personal_rotate: Use for GitLab personal access tokens; this action rotates a personal-scoped API token.
+- token_personal_rotate_self: Use for GitLab personal access tokens; this action rotates a personal-scoped API token.
+- token_project_create: Use for GitLab project access tokens; this action creates a project-scoped API token.
+- token_project_get: Use for GitLab project access tokens; this action gets a project-scoped API token.
+- token_project_list: Use for GitLab project access tokens; this action lists a project-scoped API token.
+- token_project_revoke: Use for GitLab project access tokens; this action revokes a project-scoped API token.
+- token_project_rotate: Use for GitLab project access tokens; this action rotates a project-scoped API token.
+- token_project_rotate_self: Use for GitLab project access tokens; this action rotates a project-scoped API token.
 Parameter guidance:
 - deploy_key_delete.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_key_enable.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
@@ -30,6 +53,15 @@ Parameter guidance:
 - deploy_key_update.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_token_delete_project.deploy_token_id: deploy_token; source: Deploy token ID, not a project, deploy key, personal token, or runner ID.; avoid: Do not use deploy_key_id or token_id for project deploy token deletion.
 - deploy_token_delete_project.project_id: scope_owner_project; source: Project that owns the deploy token.
+- token_group_get.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_group_revoke.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_group_rotate.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_personal_get.token_id: access_token; source: Access token ID returned by token_personal_list or token_personal_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_personal_revoke.token_id: access_token; source: Access token ID returned by token_personal_list or token_personal_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_personal_rotate.token_id: access_token; source: Access token ID returned by token_personal_list or token_personal_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_project_get.token_id: access_token; source: Access token ID returned by token_project_list or token_project_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_project_revoke.token_id: access_token; source: Access token ID returned by token_project_list or token_project_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
+- token_project_rotate.token_id: access_token; source: Access token ID returned by token_project_list or token_project_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
 
 Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations. Revoke/delete actions are destructive and irreversible.
 When to use: provision and audit who/what can access a project or group; rotate (not revoke+create) to roll a token without invalidating CI configurations.
@@ -4458,10 +4490,16 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_merge_request/<action>.
 Action guidance:
+- cancel_auto_merge: Cancels auto-merge on a merge request; it does not cancel a running pipeline.
 - create: Use to open a merge request from a source branch into the target branch in a project.
+- create_pipeline: Creates a new pipeline for a merge request; use pipeline.wait after receiving pipeline_id if the task asks to wait for completion.
+- merge: Use to merge a merge request now, or set params.auto_merge=true when the task asks to merge when pipeline succeeds. Do not use pipeline.wait unless the task only asks to wait for an existing pipeline.
+- pipelines: Lists pipelines attached to a merge request; use pipeline.wait with the returned pipeline_id only when the task asks to wait for CI completion.
 Parameter guidance:
 - create.source_branch: source_branch; source: Branch named after 'from'.; avoid: Do not use ref, tag_name, target_branch, or value for the source branch.
 - create.target_branch: target_branch; source: Branch named after 'into' or the merge target.; avoid: Do not use source_branch, ref, tag_name, or to for the target branch.
+- merge.auto_merge: merge_scheduling; source: Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge.; avoid: Do not call pipeline.wait for merge-when-pipeline-succeeds requests; use merge_request.merge with auto_merge=true.
+- merge.merge_request_iid: merge_request_iid; source: Project-scoped MR IID from merge_request.list or merge_request.get.; avoid: Do not use pipeline_id; merge_request.merge requires merge_request_iid.
 
 Manage GitLab merge request lifecycle plus approval rules and settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todos, related issues, award emoji, and resource events. Delete permanently removes an MR.
 When to use: MR lifecycle (open/list/update/merge/close/delete/rebase), approvals at MR/group/project level, time tracking, subscriptions, context commits, MR dependencies, todos, related issues, award emoji, MR resource events.
@@ -5544,9 +5582,11 @@ Action params schema: gitlab://schema/meta/gitlab_pipeline/<action>.
 Action guidance:
 - schedule_create_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
 - schedule_edit_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
+- wait: Use only to poll an existing pipeline_id until a terminal status. For merge when pipeline succeeds, use merge_request.merge with auto_merge=true instead.
 Parameter guidance:
 - schedule_create_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
 - schedule_edit_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
+- wait.pipeline_id: pipeline_identifier; source: Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines.; avoid: Do not use merge_request_iid; pipeline.wait requires pipeline_id.
 
 Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules. Delete permanently removes a pipeline and all its jobs.
 When to use: pipeline CRUD on a project, retry/cancel a run, fetch CI variables and JUnit test reports, manage trigger tokens, resource groups (mutual-exclusion locks), scheduled pipelines and their variables.
@@ -18832,7 +18872,7 @@ Merge an accepted GitLab merge request into its target branch. Supports optional
 
 **Parameters:**
 
-- `auto_merge` (boolean): Automatically merge when pipeline succeeds (auto-merge)
+- `auto_merge` (boolean): Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge.
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `merge_commit_message` (string): Custom merge commit message
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
@@ -20088,7 +20128,7 @@ Wait for a pipeline to reach a terminal state (success, failed, canceled, skippe
 
 - `fail_on_error` (boolean): Return isError when pipeline ends in failed/canceled status (default true)
 - `interval_seconds` (integer): Polling interval in seconds (5-60, default 10)
-- `pipeline_id` (integer) (required): Pipeline ID to wait for
+- `pipeline_id` (integer) (required): Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines; do not use merge_request_iid.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `timeout_seconds` (integer): Maximum wait time in seconds (1-3600, default 300)
 

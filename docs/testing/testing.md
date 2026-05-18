@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,160 |
-| Unit test functions                                   |  9,909 |
+| Total test functions                                  | 10,163 |
+| Unit test functions                                   |  9,912 |
 | E2E test functions                                    |    251 |
 | cmd test functions                                    |    520 |
-| Test files (internal/)                                |    419 |
+| Test files (internal/)                                |    421 |
 | Test files (cmd/)                                     |     22 |
 | Test files (test/e2e/suite/)                          |    109 |
 | Tool sub-packages tested                              |    170 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,105 | 89.6% |
+| `TestFunc_Scenario` (2-part)           | 9,108 | 89.6% |
 | `TestFunc` (no underscore)             |   765 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   290 |  2.9% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,721 |         79 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (170) |          7,384 |        328 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (170) |          7,387 |        330 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            520 |         22 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,160** |    **550** |                                                                                                 |
+| **Total**               |     **10,163** |    **552** |                                                                                                 |
 
 ### Core Packages
 
@@ -80,7 +80,7 @@
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
 | projects          |   338 |    99.9% |    54 |
-| mergerequests     |   223 |   100.0% |    30 |
+| mergerequests     |   224 |   100.0% |    30 |
 | issues            |   207 |   100.0% |    21 |
 | users             |   186 |   100.0% |    36 |
 | samplingtools     |   166 |   100.0% |    11 |
@@ -90,12 +90,12 @@
 | search            |   116 |   100.0% |    10 |
 | packages          |   111 |    99.1% |     8 |
 | awardemoji        |   109 |    99.2% |    24 |
+| pipelines         |   105 |   100.0% |    12 |
 | runners           |   105 |   100.0% |    19 |
 | commits           |   104 |   100.0% |    13 |
-| pipelines         |   104 |   100.0% |    12 |
 | resourceevents    |    98 |   100.0% |    15 |
+| accesstokens      |    87 |    99.0% |    18 |
 | groupmilestones   |    87 |   100.0% |     8 |
-| accesstokens      |    86 |   100.0% |    18 |
 | pipelineschedules |    86 |   100.0% |    11 |
 | branches          |    83 |   100.0% |    10 |
 | files             |    78 |   100.0% |     8 |
@@ -103,7 +103,7 @@
 | tags              |    77 |   100.0% |     9 |
 | containerregistry |    74 |   100.0% |    12 |
 | milestones        |    69 |   100.0% |     7 |
-| deploykeys        |    66 |   100.0% |     9 |
+| deploykeys        |    66 |    99.5% |     9 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -113,7 +113,7 @@
 | Sub-package             |     Tests | Test Files | Coverage |     Tools |
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        41 |          2 |   100.0% |         8 |
-| accesstokens            |        86 |          2 |   100.0% |        18 |
+| accesstokens            |        87 |          2 |    99.0% |        18 |
 | actioncatalog           |        26 |          4 |    98.6% |         0 |
 | actioncompat            |        15 |          2 |    98.9% |         0 |
 | adminspecs              |         3 |          1 |   100.0% |        88 |
@@ -145,7 +145,7 @@
 | dbmigrations            |         7 |          1 |   100.0% |         1 |
 | dependencies            |        14 |          2 |   100.0% |         4 |
 | dependencyproxy         |         5 |          1 |   100.0% |         1 |
-| deploykeys              |        66 |          2 |   100.0% |         9 |
+| deploykeys              |        66 |          2 |    99.5% |         9 |
 | deploymentmergerequests |        20 |          1 |   100.0% |         1 |
 | deployments             |        52 |          2 |   100.0% |         6 |
 | deploytokens            |        63 |          2 |   100.0% |         9 |
@@ -212,7 +212,7 @@
 | markdown                |         8 |          1 |   100.0% |         1 |
 | memberroles             |        40 |          3 |   100.0% |         6 |
 | members                 |        59 |          2 |   100.0% |         6 |
-| mergerequests           |       223 |          1 |   100.0% |        30 |
+| mergerequests           |       224 |          2 |   100.0% |        30 |
 | mergetrains             |        10 |          2 |   100.0% |         4 |
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        69 |          1 |   100.0% |         7 |
@@ -229,7 +229,7 @@
 | orbit                   |        26 |          1 |   100.0% |         5 |
 | packages                |       111 |          5 |    99.1% |         8 |
 | pages                   |        54 |          2 |   100.0% |         9 |
-| pipelines               |       104 |          2 |   100.0% |        12 |
+| pipelines               |       105 |          3 |   100.0% |        12 |
 | pipelineschedules       |        86 |          2 |   100.0% |        11 |
 | pipelinetriggers        |        49 |          2 |   100.0% |         6 |
 | planlimits              |        13 |          2 |   100.0% |         2 |
@@ -282,7 +282,7 @@
 | vulnerabilities         |        57 |          3 |   100.0% |         8 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,384** |    **328** |          | **1,112** |
+| **Total**               | **7,387** |    **330** |          | **1,112** |
 
 </details>
 
@@ -339,7 +339,7 @@
 | ----------------------- | -------: |
 | tools (orch.)           |    97.6% |
 | accessrequests          |   100.0% |
-| accesstokens            |   100.0% |
+| accesstokens            |    99.0% |
 | actioncatalog           |    98.6% |
 | actioncompat            |    98.9% |
 | adminspecs              |   100.0% |
@@ -371,7 +371,7 @@
 | dbmigrations            |   100.0% |
 | dependencies            |   100.0% |
 | dependencyproxy         |   100.0% |
-| deploykeys              |   100.0% |
+| deploykeys              |    99.5% |
 | deploymentmergerequests |   100.0% |
 | deployments             |   100.0% |
 | deploytokens            |   100.0% |

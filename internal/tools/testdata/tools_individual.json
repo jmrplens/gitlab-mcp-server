@@ -69828,7 +69828,7 @@
       "additionalProperties": false,
       "properties": {
         "auto_merge": {
-          "description": "Automatically merge when pipeline succeeds (auto-merge)",
+          "description": "Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge.",
           "type": [
             "null",
             "boolean"
@@ -80848,7 +80848,7 @@
           "type": "integer"
         },
         "pipeline_id": {
-          "description": "Pipeline ID to wait for",
+          "description": "Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines; do not use merge_request_iid.",
           "type": "integer"
         },
         "project_id": {

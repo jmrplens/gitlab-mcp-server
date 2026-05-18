@@ -106,24 +106,24 @@ func DeleteDependencyOutput(ctx context.Context, client *gitlabclient.Client, in
 }
 
 func mergeRequestReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mergeRequestOptions(individualTool)
+	options := mergeRequestOptions(name, individualTool)
 	options.ReadOnly = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func mergeRequestCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, mergeRequestOptions(individualTool))
+	return toolutil.NewActionSpec(name, route, mergeRequestOptions(name, individualTool))
 }
 
 func mergeRequestUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mergeRequestOptions(individualTool)
+	options := mergeRequestOptions(name, individualTool)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func mergeRequestDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mergeRequestOptions(individualTool)
+	options := mergeRequestOptions(name, individualTool)
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
@@ -131,18 +131,50 @@ func mergeRequestDeleteSpec(name string, route toolutil.ActionRoute, individualT
 
 func mergeRequestDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	individualDestructive := false
-	options := mergeRequestOptions(individualTool)
+	options := mergeRequestOptions(name, individualTool)
 	options.Destructive = true
 	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	return toolutil.NewActionSpec(name, route, options)
 }
 
-func mergeRequestOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"merge_request"},
 		OpenWorld:      true,
 		OwnerPackage:   "mergerequests",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	switch actionName {
+	case "merge":
+		options.Usage = "Use to merge a merge request now, or set params.auto_merge=true when the task asks to merge when pipeline succeeds. Do not use pipeline.wait unless the task only asks to wait for an existing pipeline."
+		options.Aliases = []string{"merge merge request", "merge mr", "merge when pipeline succeeds"}
+		options.RelatedActions = []string{"merge_request.pipelines", "pipeline.wait", "pipeline.get", "merge_request.cancel_auto_merge"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"auto_merge": {
+				SemanticRole:     "merge_scheduling",
+				ValueSource:      "Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge.",
+				CommonConfusions: []string{"Do not call pipeline.wait for merge-when-pipeline-succeeds requests; use merge_request.merge with auto_merge=true."},
+				ExampleBinding:   "merge !7 when pipeline succeeds => action merge with auto_merge=true.",
+			},
+			"merge_request_iid": {
+				SemanticRole:     "merge_request_iid",
+				ValueSource:      "Project-scoped MR IID from merge_request.list or merge_request.get.",
+				CommonConfusions: []string{"Do not use pipeline_id; merge_request.merge requires merge_request_iid."},
+			},
+		}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			{PropertyPath: "auto_merge", Values: map[string]any{"description": "Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge."}},
+		}
+	case "pipelines":
+		options.Usage = "Lists pipelines attached to a merge request; use pipeline.wait with the returned pipeline_id only when the task asks to wait for CI completion."
+		options.RelatedActions = []string{"pipeline.wait", "pipeline.get", "merge_request.merge", "merge_request.create_pipeline"}
+	case "create_pipeline":
+		options.Usage = "Creates a new pipeline for a merge request; use pipeline.wait after receiving pipeline_id if the task asks to wait for completion."
+		options.RelatedActions = []string{"merge_request.pipelines", "pipeline.wait", "pipeline.get"}
+	case "cancel_auto_merge":
+		options.Usage = "Cancels auto-merge on a merge request; it does not cancel a running pipeline."
+		options.RelatedActions = []string{"merge_request.merge", "merge_request.get"}
+	}
+	return options
 }
