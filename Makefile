@@ -5,7 +5,7 @@
        mdlint mdlint-fix \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms gen-readme gen-testing-docs \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-readme gen-testing-docs \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -514,6 +514,10 @@ fly-restart: fly-check
 ## gen-llms: generate llms.txt and llms-full.txt from registered tools/resources/prompts.
 gen-llms:
 	go run ./cmd/gen_llms/
+
+## check-llms: validate llms.txt/llms-full.txt are current and structurally valid.
+check-llms:
+	go run ./cmd/gen_llms/ --check
 
 ## gen-readme: auto-generate meta-tool table in README.md from runtime tool definitions.
 gen-readme:

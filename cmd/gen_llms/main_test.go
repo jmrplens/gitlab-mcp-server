@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
@@ -82,6 +83,73 @@ func TestListResources_IncludesMetaSchemaTemplate(t *testing.T) {
 		}
 	}
 	t.Fatalf("listResources() templates missing meta-schema template: %v", templates)
+}
+
+func TestValidateLLMSTxt_AcceptsSpecFileListSections(t *testing.T) {
+	content := strings.Join([]string{
+		"# Example",
+		"",
+		"> Short project summary.",
+		"",
+		"Details before H2 sections can use normal Markdown lists.",
+		"",
+		"- key: value",
+		"",
+		"## Docs",
+		"",
+		"- [Guide](docs/guide.md): Short guide",
+		"- [Reference](docs/reference.md)",
+		"",
+		"## Optional",
+		"",
+		"- [Full reference](llms-full.txt): Expanded context",
+		"",
+	}, "\n")
+
+	if err := validateLLMSTxt(content); err != nil {
+		t.Fatalf("validateLLMSTxt() error: %v", err)
+	}
+}
+
+func TestValidateLLMSTxt_RejectsNonLinkH2Content(t *testing.T) {
+	content := strings.Join([]string{
+		"# Example",
+		"",
+		"> Short project summary.",
+		"",
+		"## Docs",
+		"",
+		"Plain text is not a file-list entry.",
+		"",
+	}, "\n")
+
+	if err := validateLLMSTxt(content); err == nil {
+		t.Fatal("validateLLMSTxt() error = nil, want error")
+	}
+}
+
+func TestValidateLLMSFullTxt_RequiresGeneratedSections(t *testing.T) {
+	content := strings.Join([]string{
+		"# Example Full Reference",
+		"",
+		"## Dynamic Toolset",
+		"",
+		"## Meta-Tools",
+		"",
+		"## Individual Tools",
+		"",
+		"## Resources",
+		"",
+		"## Prompts",
+		"",
+	}, "\n")
+
+	if err := validateLLMSFullTxt(content); err != nil {
+		t.Fatalf("validateLLMSFullTxt() error: %v", err)
+	}
+	if err := validateLLMSFullTxt("# Example\n\n## Dynamic Toolset\n"); err == nil {
+		t.Fatal("validateLLMSFullTxt() error = nil, want error")
+	}
 }
 
 func TestSchemaTypeLabel_ArrayAndNullableTypes(t *testing.T) {

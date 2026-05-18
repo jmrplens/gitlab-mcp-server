@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,163 |
-| Unit test functions                                   |  9,912 |
+| Total test functions                                  | 10,167 |
+| Unit test functions                                   |  9,916 |
 | E2E test functions                                    |    251 |
-| cmd test functions                                    |    520 |
+| cmd test functions                                    |    524 |
 | Test files (internal/)                                |    421 |
 | Test files (cmd/)                                     |     22 |
 | Test files (test/e2e/suite/)                          |    109 |
@@ -29,13 +29,13 @@
 | Core packages tested                                  |     17 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  88.9% |
 | Overall coverage (`go test ./internal/...`)           |  99.1% |
-| Average package coverage                              |  95.5% |
+| Average package coverage                              |  95.6% |
 
 ### Naming Convention Stats
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,108 | 89.6% |
+| `TestFunc_Scenario` (2-part)           | 9,112 | 89.6% |
 | `TestFunc` (no underscore)             |   765 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   290 |  2.9% |
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (170) |          7,387 |        330 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            520 |         22 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,163** |    **552** |                                                                                                 |
+| cmd packages            |            524 |         22 | server entry point and developer command utilities                                              |
+| **Total**               |     **10,167** |    **552** |                                                                                                 |
 
 ### Core Packages
 
@@ -306,7 +306,7 @@
 | cmd/find_dupes                  |    90.1% |
 | cmd/gen_action_catalog_manifest |    50.0% |
 | cmd/gen_docker_tools            |    81.9% |
-| cmd/gen_llms                    |    13.7% |
+| cmd/gen_llms                    |    22.0% |
 | cmd/gen_readme                  |    35.7% |
 | cmd/gen_testing_docs            |    27.1% |
 | cmd/server                      |    77.9% |
@@ -511,8 +511,8 @@
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 
-- **cmd/gen_llms** (13.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tokens** (19.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_llms** (22.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_output** (23.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_testing_docs** (27.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_metrics** (28.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
