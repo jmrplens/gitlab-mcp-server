@@ -2231,6 +2231,10 @@ func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 	if findTool.Description != findToolDescription || !strings.Contains(findTool.Description, "call gitlab_execute_tool directly") {
 		t.Fatalf("gitlab_find_action description = %q, want direct-execution guidance", findTool.Description)
 	}
+	findSchema := listedToolInputSchema(t, tools.Tools, findToolName)
+	if description := schemaPropertyDescription(findSchema, "query"); !strings.Contains(description, "domain or resource with a verb") {
+		t.Fatalf("gitlab_find_action query description = %q, want semantic query guidance", description)
+	}
 	executeTool := listedTool(t, tools.Tools, executeToolName)
 	if executeTool.Description != executeToolDescription || !strings.Contains(executeTool.Description, "issue.close") || !strings.Contains(executeTool.Description, "use gitlab_find_action only") {
 		t.Fatalf("gitlab_execute_tool description = %q, want direct and issue lifecycle guidance", executeTool.Description)
@@ -2240,6 +2244,12 @@ func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 		t.Fatalf("gitlab_execute_tool required = %v, want params", schemaRequired(executeSchema))
 	}
 	assertSchemaHasProperties(t, executeSchema, "action", "params", "confirm")
+	if description := schemaPropertyDescription(executeSchema, "action"); !strings.Contains(description, "returned by gitlab_find_action") {
+		t.Fatalf("gitlab_execute_tool action description = %q, want find linkage", description)
+	}
+	if description := schemaPropertyDescription(executeSchema, "confirm"); !strings.Contains(description, "top-level confirm=true") {
+		t.Fatalf("gitlab_execute_tool confirm description = %q, want top-level confirm guidance", description)
+	}
 
 	executeOutputSchema := listedToolOutputSchema(t, tools.Tools, "gitlab_execute_tool")
 	if executeOutputSchema["type"] != "object" || executeOutputSchema["additionalProperties"] != true {
@@ -2837,6 +2847,12 @@ func schemaProperties(schema map[string]any) map[string]any {
 		return map[string]any{}
 	}
 	return properties
+}
+
+func schemaPropertyDescription(schema map[string]any, name string) string {
+	property, _ := schemaProperties(schema)[name].(map[string]any)
+	description, _ := property["description"].(string)
+	return description
 }
 
 // schemaRequired extracts schema required details for schema assertions.

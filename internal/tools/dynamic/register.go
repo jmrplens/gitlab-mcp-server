@@ -26,8 +26,8 @@ const (
 	findToolName    = "gitlab_find_action"
 	executeToolName = "gitlab_execute_tool"
 
-	findToolDescription    = "Find GitLab catalog actions by searching with domain keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'). Returns exact schemas, required params, safety metadata, and execute examples. Use when the canonical action ID, compatibility alias, or parameter schema is unclear. If the task already names a clear action ID/alias and required params, call gitlab_execute_tool directly; do NOT invent action IDs."
-	executeToolDescription = "Execute one GitLab catalog action by canonical action ID or supported compatibility alias (e.g. domain.action, issue.close). Call directly when the action ID/alias and required params are clear from the task; use gitlab_find_action only when action selection or parameter names are uncertain. Always include params as an object: {\"action\":\"domain.action\",\"params\":{...}}; use params:{} only for actions with no parameters. Include ONLY exact param names from the action schema; do NOT invent extra params. For issue.close/issue.reopen aliases, omit state_event; for issue.update state transitions, include params.state_event. Destructive actions require confirm=true."
+	findToolDescription    = "Search the local GitLab action catalog by domain, resource, verb, or filter keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'); this is read-only and does not call GitLab. Returns matching canonical action IDs with exact input schemas, required params, destructive flags, usage hints, and gitlab_execute_tool examples. Use when the action ID, compatibility alias, or parameter names are unclear; use limit to keep results compact and explain=true only to debug ranking. If no useful result appears, broaden the query by GitLab domain or verb; if the task already names a clear action ID/alias and required params, call gitlab_execute_tool directly."
+	executeToolDescription = "Execute one GitLab catalog action by canonical action ID or supported compatibility alias (e.g. domain.action, issue.close) using the configured GitLab token; the selected action may read or mutate GitLab. Call directly when the action ID/alias and required params are clear from the task; use gitlab_find_action only when action selection or parameter names are uncertain. Always include params as an object, use params:{} only for no-parameter actions, and include only schema-defined param names; destructive actions require top-level confirm=true. Read-only or safe mode can block or preview mutations, and GitLab permission, scope, or rate-limit failures are returned as repairable tool errors. For issue.close/issue.reopen aliases, omit state_event; for issue.update state transitions, include params.state_event."
 
 	defaultLimit     = 20
 	maxLimit         = 50
@@ -128,7 +128,7 @@ type DescribeOutput struct {
 
 // FindInput is the input for gitlab_find_action.
 type FindInput struct {
-	Query   string `json:"query" jsonschema:"Search terms for GitLab actions, such as project create, merge request approve, pipeline retry, or ci variable."`
+	Query   string `json:"query" jsonschema:"Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable."`
 	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum number of matches to return. Defaults to 20 and is capped at 50."`
 	Explain bool   `json:"explain,omitempty" jsonschema:"When true, include deterministic scoring reasons for each returned action. Defaults to false to keep responses compact."`
 }
@@ -163,9 +163,9 @@ type FindOutput struct {
 
 // ExecuteInput is the input for gitlab_execute_tool.
 type ExecuteInput struct {
-	Action  string         `json:"action" jsonschema:"Canonical action ID or supported compatibility alias, such as project.list, issue.update, or issue.close."`
+	Action  string         `json:"action" jsonschema:"Canonical action ID returned by gitlab_find_action, or a supported compatibility alias, such as project.list, issue.update, or issue.close."`
 	Params  map[string]any `json:"params" jsonschema:"Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters."`
-	Confirm bool           `json:"confirm,omitempty" jsonschema:"Set true to explicitly confirm destructive actions."`
+	Confirm bool           `json:"confirm,omitempty" jsonschema:"Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_tool."`
 }
 
 type scoredActionEntry struct {

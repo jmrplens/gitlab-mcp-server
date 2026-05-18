@@ -34,7 +34,7 @@ func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	if !find.ReadOnly || find.Destructive {
 		t.Fatalf("find spec = %+v, want read-only controller", find)
 	}
-	if find.Description != findToolDescription || !strings.Contains(find.Description, "parameter schema is unclear") {
+	if find.Description != findToolDescription || !strings.Contains(find.Description, "does not call GitLab") || !strings.Contains(find.Description, "explain=true") {
 		t.Fatalf("find description = %q, want shared lookup guidance", find.Description)
 	}
 }
