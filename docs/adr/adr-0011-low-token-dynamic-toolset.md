@@ -48,7 +48,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 ### Positive
 
-- **POS-001**: Reduces the initial visible tool count from 33/49/50 to 3 in low-token mode.
+- **POS-001**: Reduces the initial visible tool count from 33/49/50 to 2 in low-token mode.
 - **POS-002**: Keeps plain MCP compatibility because discovery and execution remain ordinary tool calls.
 - **POS-003**: Reuses canonical `ActionSpec`/catalog routes, per-action schemas, handlers, markdown formatters, destructive flags,
   read-only mode, safe mode, and scope filtering.
@@ -60,7 +60,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 - **NEG-001**: Adds an additional discovery layer and likely increases tool calls per task.
 - **NEG-002**: Search quality becomes a core product behavior and needs evaluation, ranking tests, and telemetry.
-- **NEG-003**: Models may skip search/describe and call `gitlab_execute_tool` with invented action IDs.
+- **NEG-003**: Models may skip discovery and call `gitlab_execute_tool` with invented action IDs.
 - **NEG-004**: Action aliases and canonical `domain.action` naming add migration and documentation complexity.
 - **NEG-005**: The low-token mode requires a new evaluation path before it can be trusted as default.
 
@@ -74,7 +74,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
 ### Unified Dispatcher
 
 - **ALT-003**: **Description**: Expose one `gitlab` dispatcher with `domain.action` values and optional schema actions.
-- **ALT-004**: **Rejection Reason**: It has lower discoverability than explicit search/describe/execute and may increase
+- **ALT-004**: **Rejection Reason**: It has lower discoverability than explicit find/execute and may increase
   invented action IDs.
 
 ### Server-Side Code Mode

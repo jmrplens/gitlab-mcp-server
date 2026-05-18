@@ -97,7 +97,7 @@ Type a natural language request in the AI chat:
 
 > **"List my GitLab projects"**
 
-The AI assistant calls the `gitlab_project` meta-tool (or `gitlab_project_list` in individual mode) and returns a formatted list of your projects with names, URLs, and descriptions.
+In the default dynamic mode, the AI assistant finds the project-list action with `gitlab_find_action`, executes it with `gitlab_execute_tool`, and returns a formatted list of your projects with names, URLs, and descriptions. In meta-tool mode it calls `gitlab_project`; in individual mode it calls `gitlab_project_list`.
 
 ### Expected Output
 
@@ -152,15 +152,15 @@ To register the complete individual tool set instead (one tool per GitLab operat
 TOOL_SURFACE=individual
 ```
 
-To register the low-token dynamic toolset instead, set:
+To register the consolidated meta-tool catalog instead, set:
 
 ```env
-TOOL_SURFACE=dynamic
+TOOL_SURFACE=meta
 ```
 
 For the smallest dynamic startup surface, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources, prompts, and meta-schema resources. Dynamic action find and execute remain available because dynamic discovery returns action schemas inline.
 
-See [Meta-Tools](meta-tools.md) for the full reference.
+See [Dynamic Tools](dynamic-tools.md) for the default find/execute workflow and [Meta-Tools](meta-tools.md) for the explicit meta-tool catalog reference.
 
 ---
 

@@ -114,7 +114,7 @@ You operate in different modes depending on the type of plan requested. Always i
 **Key questions to investigate**:
 
 - Does this contradict any existing ADR?
-- How does this affect the 163 sub-package structure?
+- How does this affect the 165 sub-package structure?
 - What is the impact on HTTP mode vs stdio mode?
 - Does this require changes to the MCP SDK usage patterns?
 
