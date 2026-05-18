@@ -4,6 +4,7 @@ package issues
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -71,6 +72,37 @@ func TestGroupActionSpecs_CallRoutes(t *testing.T) {
 	spec := byTool["gitlab_issue_list_group"]
 	if !spec.ReadOnly || !spec.Idempotent {
 		t.Fatalf("group issue spec read-only/idempotent = %v/%v, want true/true", spec.ReadOnly, spec.Idempotent)
+	}
+}
+
+// TestActionSpecs_UpdateStateEventGuidance verifies issue update exposes the
+// state transition hints needed by meta and dynamic surfaces.
+func TestActionSpecs_UpdateStateEventGuidance(t *testing.T) {
+	byTool := issueSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))))
+	spec := byTool["gitlab_issue_update"]
+
+	if !strings.Contains(spec.Usage, "state_event") || !strings.Contains(spec.Usage, "close or reopen") {
+		t.Fatalf("Usage = %q, want state_event close/reopen guidance", spec.Usage)
+	}
+	guidance, ok := spec.ParameterGuidance["state_event"]
+	if !ok {
+		t.Fatal("state_event parameter guidance missing")
+	}
+	if guidance.SemanticRole != "issue_state_transition" || !strings.Contains(guidance.ExampleBinding, "close") {
+		t.Fatalf("state_event guidance = %+v, want transition role and close example", guidance)
+	}
+
+	properties, ok := spec.Route.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("InputSchema properties missing: %#v", spec.Route.InputSchema)
+	}
+	stateEventSchema, ok := properties["state_event"].(map[string]any)
+	if !ok {
+		t.Fatalf("state_event schema missing: %#v", properties["state_event"])
+	}
+	values, ok := stateEventSchema["enum"].([]any)
+	if !ok || len(values) != 2 || values[0] != "close" || values[1] != "reopen" {
+		t.Fatalf("state_event enum = %#v, want close/reopen", stateEventSchema["enum"])
 	}
 }
 

@@ -1308,6 +1308,7 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 		"environment.protected_get":        "protected environment",
 		"environment.deployment_list":      "Lists deployments",
 		"feature_flags.ff_user_list_get":   "user_list_iid",
+		"issue.update":                     "state_event",
 		"issue.note_get":                   "params.note_id",
 		"job.download_single_artifact":     "one artifact file path",
 		"mr_review.draft_note_publish_all": "Publishes all pending draft MR review notes",
@@ -1315,6 +1316,8 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 		"runner.remove":                    "numeric runner_id",
 		"release.link_get":                 "release asset link by link_id",
 		"repository.compare":               "params.from and params.to",
+		"search.code":                      "file contents",
+		"search.projects":                  "project name",
 		"analyze.release_notes":            "after requested release/compare",
 		"package.registry_list_project":    "container registry image repositories",
 	}

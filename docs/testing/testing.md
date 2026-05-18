@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,156 |
-| Unit test functions                                   |  9,905 |
+| Total test functions                                  | 10,158 |
+| Unit test functions                                   |  9,907 |
 | E2E test functions                                    |    251 |
 | cmd test functions                                    |    520 |
 | Test files (internal/)                                |    419 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,101 | 89.6% |
+| `TestFunc_Scenario` (2-part)           | 9,103 | 89.6% |
 | `TestFunc` (no underscore)             |   765 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   290 |  2.9% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,721 |         79 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (170) |          7,380 |        328 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (170) |          7,382 |        328 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            520 |         22 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,156** |    **550** |                                                                                                 |
+| **Total**               |     **10,158** |    **550** |                                                                                                 |
 
 ### Core Packages
 
@@ -81,13 +81,13 @@
 | ----------------- | ----: | -------: | ----: |
 | projects          |   338 |    99.9% |    54 |
 | mergerequests     |   223 |   100.0% |    30 |
-| issues            |   206 |   100.0% |    21 |
+| issues            |   207 |   100.0% |    21 |
 | users             |   186 |   100.0% |    36 |
 | samplingtools     |   166 |   100.0% |    11 |
 | jobs              |   129 |    99.8% |    17 |
 | groups            |   125 |   100.0% |    18 |
 | dynamic           |   123 |    99.7% |     2 |
-| search            |   115 |   100.0% |    10 |
+| search            |   116 |   100.0% |    10 |
 | packages          |   110 |    99.0% |     8 |
 | awardemoji        |   109 |    99.2% |    24 |
 | runners           |   105 |   100.0% |    19 |
@@ -201,7 +201,7 @@
 | issuediscussions        |        38 |          2 |   100.0% |         6 |
 | issuelinks              |        43 |          2 |   100.0% |         4 |
 | issuenotes              |        38 |          2 |   100.0% |         5 |
-| issues                  |       206 |          2 |   100.0% |        21 |
+| issues                  |       207 |          2 |   100.0% |        21 |
 | issuestatistics         |        40 |          1 |   100.0% |         3 |
 | jobs                    |       129 |          3 |    99.8% |        17 |
 | jobtokenscope           |        48 |          2 |   100.0% |         8 |
@@ -255,7 +255,7 @@
 | runnercontrollertokens  |        37 |          2 |   100.0% |         5 |
 | runners                 |       105 |          2 |   100.0% |        19 |
 | samplingtools           |       166 |         14 |   100.0% |        11 |
-| search                  |       115 |          1 |   100.0% |        10 |
+| search                  |       116 |          1 |   100.0% |        10 |
 | securefiles             |        24 |          2 |    98.8% |         4 |
 | securityattributes      |        24 |          1 |   100.0% |         5 |
 | securitycategories      |        16 |          1 |   100.0% |         3 |
@@ -282,7 +282,7 @@
 | vulnerabilities         |        57 |          3 |   100.0% |         8 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,380** |    **328** |          | **1,112** |
+| **Total**               | **7,382** |    **328** |          | **1,112** |
 
 </details>
 

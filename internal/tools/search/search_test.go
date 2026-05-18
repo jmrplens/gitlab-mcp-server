@@ -1757,6 +1757,25 @@ func TestActionSpecs_SearchTypeSchemaEnum(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_SearchDisambiguationUsage verifies confusing search scopes
+// expose selection hints for meta and dynamic tool descriptions.
+func TestActionSpecs_SearchDisambiguationUsage(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := searchSpecsByTool(t, ActionSpecs(client))
+
+	code := byTool["gitlab_search_code"]
+	if !strings.Contains(code.Usage, "file contents") || !strings.Contains(code.Usage, "do not use for project") {
+		t.Fatalf("code Usage = %q, want file-content/project distinction", code.Usage)
+	}
+
+	projects := byTool["gitlab_search_projects"]
+	if !strings.Contains(projects.Usage, "project name") || !strings.Contains(projects.Usage, "do not use for code") {
+		t.Fatalf("projects Usage = %q, want project/code distinction", projects.Usage)
+	}
+}
+
 // TestRegisterMeta_SearchTypeActionSchemaEnum verifies that gitlab_search
 // action schemas expose the same search_type enum as the individual tools.
 func TestRegisterMeta_SearchTypeActionSchemaEnum(t *testing.T) {

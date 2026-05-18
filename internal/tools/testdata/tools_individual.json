@@ -48138,7 +48138,11 @@
           "type": "string"
         },
         "state_event": {
-          "description": "State transition (close, reopen)",
+          "description": "State transition; set to close or reopen when changing issue state.",
+          "enum": [
+            "close",
+            "reopen"
+          ],
           "type": "string"
         },
         "title": {

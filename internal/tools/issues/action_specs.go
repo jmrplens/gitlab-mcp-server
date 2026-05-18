@@ -17,7 +17,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		issueReadSpec("list", toolutil.RouteAction(client, List), "gitlab_issue_list"),
 		issueReadSpec("list_all", toolutil.RouteAction(client, ListAll), "gitlab_issue_list_all"),
 		issueReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_issue_list_group"),
-		issueUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_issue_update"),
+		issueUpdateActionSpec(client),
 		issueDeleteSpec("delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_issue_delete"),
 		issueUpdateSpec("reorder", toolutil.RouteAction(client, Reorder), "gitlab_issue_reorder"),
 		issueUpdateSpec("move", toolutil.RouteAction(client, Move), "gitlab_issue_move"),
@@ -74,6 +74,32 @@ func issueUpdateSpec(name string, route toolutil.ActionRoute, individualTool str
 	options := issueOptions(individualTool)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
+}
+
+func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := issueOptions("gitlab_issue_update")
+	options.Idempotent = true
+	options.Usage = "Update issue fields. To close or reopen an issue, set params.state_event to close or reopen; do not omit state_event when the task asks for an issue state transition."
+	options.Aliases = []string{"close issue", "reopen issue", "change issue state", "transition issue"}
+	options.RelatedActions = []string{"issue.get", "issue.delete", "issue.list"}
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"state_event": {
+			SemanticRole:     "issue_state_transition",
+			ValueSource:      "task intent when closing or reopening an issue",
+			CommonConfusions: []string{"Do not use state=closed/opened for transitions; use state_event=close or state_event=reopen."},
+			ExampleBinding:   `{"state_event":"close"}`,
+		},
+	}
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		{
+			PropertyPath: "state_event",
+			Values: map[string]any{
+				"enum":        []any{"close", "reopen"},
+				"description": "State transition; set to close or reopen when changing issue state.",
+			},
+		},
+	}
+	return toolutil.NewActionSpec("update", toolutil.RouteAction(client, Update), options)
 }
 
 func issueDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
