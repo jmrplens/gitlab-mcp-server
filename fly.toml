@@ -26,17 +26,17 @@ kill_timeout = 10
 [build]
   dockerfile = "Dockerfile"
   [build.args]
-    VERSION = "2.0.0"
+    VERSION = "2.0.1"
 
 # Override Dockerfile CMD for HTTP mode.
 # No --gitlab-url: each client provides it via the GITLAB-URL header.
 # Auth mode: legacy (per-request PAT + GitLab URL from the client).
+# Tool surface omitted intentionally: HTTP mode defaults to dynamic.
 # Auto-update disabled: use `fly deploy` with new image tags instead.
 [experimental]
   cmd = [
     "--http",
     "--http-addr", "0.0.0.0:8080",
-    "--meta-tools",
     "--auto-update=false",
     "--trusted-proxy-header", "Fly-Client-IP"
   ]
