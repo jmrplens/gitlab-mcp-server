@@ -458,17 +458,26 @@ func isDuplicateAwardEmojiError(err error) bool {
 }
 
 func findExistingMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRCreateInput) (Output, bool) {
-	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}
-	emojis, _, err := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
+	currentUser, _, err := client.GL().Users.CurrentUser(gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, false
 	}
-	for _, emoji := range emojis {
-		if strings.EqualFold(emoji.Name, input.Name) {
-			return toOutput(emoji), true
+	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: 1, PerPage: 100}}
+	for {
+		emojis, resp, listErr := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
+		if listErr != nil {
+			return Output{}, false
 		}
+		for _, emoji := range emojis {
+			if strings.EqualFold(emoji.Name, input.Name) && emoji.User.ID == currentUser.ID {
+				return toOutput(emoji), true
+			}
+		}
+		if resp == nil || resp.NextPage == 0 {
+			return Output{}, false
+		}
+		opts.Page = resp.NextPage
 	}
-	return Output{}, false
 }
 
 // DeleteMRAwardEmoji deletes an award emoji from a merge request.

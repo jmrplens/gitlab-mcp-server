@@ -294,19 +294,35 @@ func TestCreateMRAwardEmoji_ValidationError(t *testing.T) {
 	}
 }
 
-// TestCreateMRAwardEmoji_DuplicateReturnsExisting verifies CreateMRAwardEmoji returns an existing award on GitLab's duplicate-name 404.
+// TestCreateMRAwardEmoji_DuplicateReturnsExisting verifies CreateMRAwardEmoji returns the current user's existing award on GitLab's duplicate-name 404.
 func TestCreateMRAwardEmoji_DuplicateReturnsExisting(t *testing.T) {
 	requests := 0
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		if r.URL.Path != testPathAPIProjects+testProjectID+"/merge_requests/3/award_emoji" {
+		switch r.URL.Path {
+		case "/api/v4/user":
+			if r.Method != http.MethodGet {
+				t.Errorf("method = %s, want GET", r.Method)
+			}
+			testutil.RespondJSON(w, http.StatusOK, `{"id":9,"username":"current"}`)
+			return
+		case testPathAPIProjects + testProjectID + "/merge_requests/3/award_emoji":
+		default:
 			t.Errorf(fmtUnexpPath, r.URL.Path)
+			return
 		}
 		switch r.Method {
 		case http.MethodPost:
 			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Award Emoji Name has already been taken Not Found"}`)
 		case http.MethodGet:
-			testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":30,"name":"eyes","user":{"id":3,"username":"user3"},"created_at":"2026-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "20", Total: "1"})
+			switch r.URL.Query().Get("page") {
+			case "1":
+				testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":30,"name":"eyes","user":{"id":3,"username":"user3"},"created_at":"2026-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "2", NextPage: "2", PerPage: "100", Total: "2"})
+			case "2":
+				testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":31,"name":"eyes","user":{"id":9,"username":"current"},"created_at":"2026-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`, testutil.PaginationHeaders{Page: "2", TotalPages: "2", PerPage: "100", Total: "2"})
+			default:
+				t.Errorf("page = %q, want 1 or 2", r.URL.Query().Get("page"))
+			}
 		default:
 			t.Errorf("method = %s, want POST or GET", r.Method)
 		}
@@ -320,11 +336,11 @@ func TestCreateMRAwardEmoji_DuplicateReturnsExisting(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if requests != 2 {
-		t.Fatalf("requests = %d, want 2", requests)
+	if requests != 4 {
+		t.Fatalf("requests = %d, want 4", requests)
 	}
-	if out.ID != 30 || out.Name != "eyes" {
-		t.Fatalf("award = {ID:%d Name:%q}, want {ID:30 Name:eyes}", out.ID, out.Name)
+	if out.ID != 31 || out.Name != "eyes" || out.UserID != 9 {
+		t.Fatalf("award = {ID:%d Name:%q UserID:%d}, want {ID:31 Name:eyes UserID:9}", out.ID, out.Name, out.UserID)
 	}
 }
 

@@ -152,13 +152,13 @@ To register the complete individual tool set instead (one tool per GitLab operat
 TOOL_SURFACE=individual
 ```
 
-To register the consolidated meta-tool catalog instead, set:
+To switch away from the default dynamic surface and register the consolidated meta-tool catalog instead, set:
 
 ```env
 TOOL_SURFACE=meta
 ```
 
-For the smallest dynamic startup surface, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources, prompts, and meta-schema resources. Dynamic action find and execute remain available because dynamic discovery returns action schemas inline.
+For the smallest startup surface with the default dynamic mode, also set `CAPABILITY_SURFACE=minimal`. This keeps `gitlab://workspace/roots` and omits optional resources, prompts, and meta-schema resources. Dynamic action find and execute remain available because dynamic discovery returns action schemas inline.
 
 See [Dynamic Tools](dynamic-tools.md) for the default find/execute workflow and [Meta-Tools](meta-tools.md) for the explicit meta-tool catalog reference.
 
