@@ -223,8 +223,13 @@ func TestToSCIMIdentityOutputs_MixedInputs_ReturnsExpectedSlices(t *testing.T) {
 		want       []SCIMIdentityOutput
 	}{
 		{
-			name:       "empty",
+			name:       "nil slice",
 			identities: nil,
+			want:       nil,
+		},
+		{
+			name:       "empty slice",
+			identities: []*gl.SCIMIdentity{},
 			want:       nil,
 		},
 		{
