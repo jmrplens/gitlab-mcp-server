@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
@@ -28,6 +29,41 @@ func newGenLLMSClient(t *testing.T) *gitlabclient.Client {
 		t.Fatalf("NewClient() error: %v", err)
 	}
 	return client
+}
+
+func TestListDynamicTools_ExposesFindAndExecute(t *testing.T) {
+	tools, err := listDynamicTools(newGenLLMSClient(t))
+	if err != nil {
+		t.Fatalf("listDynamicTools() error: %v", err)
+	}
+	if len(tools) != 2 {
+		t.Fatalf("len(listDynamicTools()) = %d, want 2", len(tools))
+	}
+	names := []string{tools[0].Name, tools[1].Name}
+	if names[0] != "gitlab_find_action" || names[1] != "gitlab_execute_tool" {
+		t.Fatalf("dynamic tools = %v, want find before execute", names)
+	}
+
+	executeSchema, ok := tools[1].InputSchema.(map[string]any)
+	if !ok {
+		t.Fatalf("execute InputSchema has type %T, want map[string]any", tools[1].InputSchema)
+	}
+	executeProperties, ok := executeSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("execute InputSchema properties has type %T, want map[string]any", executeSchema["properties"])
+	}
+	for _, property := range []string{"action", "params", "confirm"} {
+		if _, exists := executeProperties[property]; !exists {
+			t.Fatalf("execute InputSchema missing %q property: %v", property, executeProperties)
+		}
+	}
+	required, ok := executeSchema["required"].([]any)
+	if !ok {
+		t.Fatalf("execute InputSchema required has type %T, want []any", executeSchema["required"])
+	}
+	if !slices.Contains(required, any("action")) || !slices.Contains(required, any("params")) {
+		t.Fatalf("execute InputSchema required = %v, want action and params", required)
+	}
 }
 
 // TestListResources_IncludesMetaSchemaTemplate verifies llms generation sees

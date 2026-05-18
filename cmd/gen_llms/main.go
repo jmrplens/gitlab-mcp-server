@@ -32,6 +32,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
 
@@ -49,6 +50,7 @@ type llmsCatalog struct {
 	MetaBase                []*mcp.Tool
 	MetaEnterprise          []*mcp.Tool
 	MetaGitLabComEnterprise []*mcp.Tool
+	Dynamic                 []*mcp.Tool
 	MetaRoutes              map[string]toolutil.ActionMap
 	Resources               []*mcp.Resource
 	ResourceTemplates       []*mcp.ResourceTemplate
@@ -112,6 +114,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	dynamicTools, err := listDynamicTools(gitLabComClient)
+	if err != nil {
+		return err
+	}
 	metaCatalog, err := tools.BuildActionCatalog(gitLabComClient, tools.ActionCatalogOptions{Enterprise: true})
 	if err != nil {
 		return fmt.Errorf("build meta action catalog: %w", err)
@@ -126,6 +132,7 @@ func run() error {
 		MetaBase:                metaBase,
 		MetaEnterprise:          metaEnterprise,
 		MetaGitLabComEnterprise: metaGitLabComEnterprise,
+		Dynamic:                 dynamicTools,
 		MetaRoutes:              metaCatalog.ActionMaps(),
 		Resources:               res,
 		ResourceTemplates:       resTpl,
@@ -139,8 +146,8 @@ func run() error {
 		return writeErr
 	}
 
-	fmt.Printf("Generated llms.txt (%d max tools, %d base meta, %d GitLab.com enterprise meta, %d resources, %d prompts)\n",
-		len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaGitLabComEnterprise), len(catalog.Resources)+len(catalog.ResourceTemplates)+1, len(catalog.Prompts))
+	fmt.Printf("Generated llms.txt (%d max tools, %d base meta, %d GitLab.com enterprise meta, %d dynamic tools, %d resources, %d prompts)\n",
+		len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), len(catalog.Resources)+len(catalog.ResourceTemplates)+1, len(catalog.Prompts))
 	fmt.Printf("Generated llms-full.txt\n")
 	return nil
 }
@@ -224,6 +231,52 @@ func listToolsEnterprise(client *gitlabclient.Client) ([]*mcp.Tool, error) {
 	return result.Tools, nil
 }
 
+// listDynamicTools returns the visible two-tool dynamic catalog from a real MCP
+// tools/list session.
+func listDynamicTools(client *gitlabclient.Client) ([]*mcp.Tool, error) {
+	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		return nil, fmt.Errorf("build dynamic action catalog: %w", err)
+	}
+	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("add dynamic standalone catalog: %w", err)
+	}
+	session, cleanup, err := newSession(func(server *mcp.Server) error {
+		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	result, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("list dynamic tools: %w", err)
+	}
+	sortDynamicTools(result.Tools)
+	return result.Tools, nil
+}
+
+func sortDynamicTools(dynamicTools []*mcp.Tool) {
+	order := map[string]int{
+		"gitlab_find_action":  0,
+		"gitlab_execute_tool": 1,
+	}
+	sort.SliceStable(dynamicTools, func(i, j int) bool {
+		left, leftOK := order[dynamicTools[i].Name]
+		right, rightOK := order[dynamicTools[j].Name]
+		if leftOK && rightOK {
+			return left < right
+		}
+		if leftOK != rightOK {
+			return leftOK
+		}
+		return dynamicTools[i].Name < dynamicTools[j].Name
+	})
+}
+
 // listResources returns the static resources and resource templates advertised
 // by the MCP server, including the per-action meta-schema template.
 func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error) {
@@ -283,8 +336,8 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	fmt.Fprintf(&b, "gitlab-mcp-server v%s is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.\n", version)
 	fmt.Fprintf(&b, "It provides up to %d individual MCP tools across %d GitLab API domains, %d base meta-tools, %d self-managed enterprise meta-tools, %d GitLab.com Enterprise meta-tools,\n",
 		len(catalog.Individual), countDomains(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise))
-	fmt.Fprintf(&b, "a default 2-tool dynamic find/execute surface, %d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
-		resourceCount, len(catalog.Prompts))
+	fmt.Fprintf(&b, "a default %d-tool dynamic find/execute surface, %d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
+		len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 
 	b.WriteString("## Quick Start\n\n")
 	b.WriteString("1. Download the binary for your platform from the Releases page\n")
@@ -307,6 +360,12 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 
 	b.WriteString("## Dynamic Toolset (default mode)\n\n")
 	b.WriteString("When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set TOOL_SURFACE=meta to use consolidated domain meta-tools instead.\n\n")
+	for _, t := range catalog.Dynamic {
+		desc := firstSentence(t.Description)
+		desc = truncateRunes(desc, 80)
+		fmt.Fprintf(&b, "- %s — %s\n", t.Name, desc)
+	}
+	b.WriteString("\n")
 
 	b.WriteString("## Meta-Tools\n\n")
 	fmt.Fprintf(&b, "When TOOL_SURFACE=meta, %d domain meta-tools are registered instead of\n", len(catalog.MetaBase))
@@ -362,11 +421,22 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates) + 1
 
 	b.WriteString("# gitlab-mcp-server — Full Reference\n\n")
-	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | 2 dynamic tools | %d resources | %d prompts\n\n",
-		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), resourceCount, len(catalog.Prompts))
+	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | %d dynamic tools | %d resources | %d prompts\n\n",
+		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 
 	b.WriteString("## Dynamic Toolset\n\n")
 	b.WriteString("Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.\n\n")
+	for _, t := range catalog.Dynamic {
+		fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
+		if t.Title != "" {
+			fmt.Fprintf(&b, "**%s**\n\n", t.Title)
+		}
+		b.WriteString(t.Description)
+		b.WriteString("\n\n")
+		writeInputSchema(&b, t.InputSchema)
+		writeAnnotations(&b, t.Annotations)
+		b.WriteString("\n")
+	}
 
 	// --- Meta-tools ---
 	b.WriteString("## Meta-Tools\n\n")

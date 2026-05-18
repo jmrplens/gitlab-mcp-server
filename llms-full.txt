@@ -6,6 +6,34 @@
 
 Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.
 
+### gitlab_find_action
+
+**GitLab Find Action**
+
+Find GitLab catalog actions by searching with domain keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'). Returns exact schemas, required params, safety metadata, and execute examples. ALWAYS use this before gitlab_execute_tool when the canonical action ID or params schema is not already known; do NOT invent action IDs.
+
+**Parameters:**
+
+- `explain` (boolean): When true, include deterministic scoring reasons for each returned action. Defaults to false to keep responses compact.
+- `limit` (integer): Maximum number of matches to return. Defaults to 20 and is capped at 50.
+- `query` (string) (required): Search terms for GitLab actions, such as project create, merge request approve, pipeline retry, or ci variable.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+### gitlab_execute_tool
+
+**GitLab Execute Tool**
+
+Execute one GitLab catalog action by canonical action ID (e.g. domain.action). Always include params as an object: {"action":"domain.action","params":{...}}; use params:{} only for actions with no parameters. Use gitlab_find_action first unless the exact action ID and all required param names are already known. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.
+
+**Parameters:**
+
+- `action` (string) (required): Canonical action ID returned by gitlab_find_action, such as project.list.
+- `confirm` (boolean): Set true to explicitly confirm destructive actions.
+- `params` (object) (required): Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters.
+
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
+
 ## Meta-Tools
 
 Meta-tools are enabled with `TOOL_SURFACE=meta`. Each groups related
