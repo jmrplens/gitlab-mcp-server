@@ -635,7 +635,7 @@ func sortedComparisonTasks(tasks map[string]traceComparisonAggregate) []string {
 
 func writeOptionalMarkdownReport(path, content, label string) error {
 	if strings.TrimSpace(path) == "" {
-		fmt.Print(content)
+		terminalPrint(content)
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -644,7 +644,7 @@ func writeOptionalMarkdownReport(path, content, label string) error {
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return fmt.Errorf("write %s report: %w", label, err)
 	}
-	fmt.Printf("wrote %s report: %s\n", label, path)
+	terminalPrintf("wrote %s report: %s\n", label, path)
 	return nil
 }
 

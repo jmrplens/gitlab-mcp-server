@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,148 |
-| Unit test functions                                   |  9,897 |
+| Total test functions                                  | 10,156 |
+| Unit test functions                                   |  9,905 |
 | E2E test functions                                    |    251 |
-| cmd test functions                                    |    512 |
+| cmd test functions                                    |    520 |
 | Test files (internal/)                                |    419 |
 | Test files (cmd/)                                     |     22 |
 | Test files (test/e2e/suite/)                          |    109 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,093 | 89.6% |
+| `TestFunc_Scenario` (2-part)           | 9,101 | 89.6% |
 | `TestFunc` (no underscore)             |   765 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   290 |  2.9% |
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (170) |          7,380 |        328 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            512 |         22 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,148** |    **550** |                                                                                                 |
+| cmd packages            |            520 |         22 | server entry point and developer command utilities                                              |
+| **Total**               |     **10,156** |    **550** |                                                                                                 |
 
 ### Core Packages
 
@@ -302,7 +302,7 @@
 | cmd/audit_test_names            |    81.6% |
 | cmd/audit_tokens                |    19.2% |
 | cmd/audit_tools                 |    36.1% |
-| cmd/eval_mcp_surfaces           |    58.8% |
+| cmd/eval_mcp_surfaces           |    59.4% |
 | cmd/find_dupes                  |    90.1% |
 | cmd/gen_action_catalog_manifest |    50.0% |
 | cmd/gen_docker_tools            |    81.9% |
@@ -520,7 +520,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_tools** (36.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (50.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_mcp_surfaces** (58.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_mcp_surfaces** (59.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/add_docs** (60.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_action_spec_coverage** (76.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

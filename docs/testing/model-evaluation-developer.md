@@ -180,6 +180,8 @@ timeout 1800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
 | `--skip-unavailable` | Skip routes not available in the current catalog or GitLab edition. |
 | `--task` | Comma-separated task IDs for targeted runs. |
 | `--out` | Markdown report path. Trace directory defaults to `<report>.traces/`. |
+| `--terminal-log` | File receiving progress and terminal output. Defaults beside `--out`, or under `dist/evaluation/mcp-surfaces/terminal/` when no report path is known yet. |
+| `--print-output` | Also echo progress/output to the terminal. Without this flag, the command writes terminal output only to `--terminal-log`. |
 | `--publish-docs` | Publish reviewed evaluation reports into the managed docs blocks. |
 | `--publish-from` | Reviewed Markdown report path to publish; repeat once per report. |
 | `--publish-label` | Human-readable label for the published snapshot. |
@@ -192,14 +194,15 @@ Each model-backed run writes:
 | Output | Purpose |
 | --- | --- |
 | `*.md` report | Startup placeholder, then final summary metrics, task results, API usage, and failure triage. If the run stops before final metrics, the file is replaced with a failure report. |
+| `*.log` terminal log | Progress lines, report-write notifications, provider warnings, and command errors. The evaluator writes this by default and stays silent on the terminal unless `--print-output` is set. |
 | `*.traces/index.md` | Trace index. |
 | `*.traces/*.json` | Per-task trace with prompts, tool calls, validation, MCP results, and repairs. |
 | `*.traces/traces.jsonl` | JSONL stream for programmatic analysis. |
 | `e2e-fixtures.json` | Docker model-evaluation fixture IDs; generated and ignored. |
 
-For long runs, always pass an explicit `--out` path and redirect stdout/stderr
+For long runs, always pass an explicit `--out` path so the terminal log defaults
 to a sibling `.log` file. The Markdown report is the review artifact; terminal
-output is only progress logging.
+output is only progress logging and stays in the log file by default.
 
 ## Triage Workflow
 

@@ -4877,6 +4877,69 @@ func TestDefaultTraceDir_ReplacesReportExtension(t *testing.T) {
 	}
 }
 
+// TestDefaultTerminalLogPath_ReplacesReportExtension verifies terminal logs sit
+// beside explicit Markdown reports.
+func TestDefaultTerminalLogPath_ReplacesReportExtension(t *testing.T) {
+	got := defaultTerminalLogPath("dist/evaluation/mcp-surfaces/report.md")
+	if got != "dist/evaluation/mcp-surfaces/report.log" {
+		t.Fatalf("defaultTerminalLogPath() = %q, want report.log", got)
+	}
+}
+
+// TestDefaultTerminalLogPath_UsesIgnoredTerminalDirectory verifies the fallback
+// terminal log path stays under ignored evaluation artifacts.
+func TestDefaultTerminalLogPath_UsesIgnoredTerminalDirectory(t *testing.T) {
+	got := defaultTerminalLogPath("")
+	if !strings.HasPrefix(got, "dist/evaluation/mcp-surfaces/terminal/") || !strings.HasSuffix(got, ".log") {
+		t.Fatalf("defaultTerminalLogPath() = %q, want ignored terminal log path", got)
+	}
+}
+
+// TestTerminalPrintOutputRequested_ParsesFlagForms verifies explicit terminal
+// echo is opt-in.
+func TestTerminalPrintOutputRequested_ParsesFlagForms(t *testing.T) {
+	if terminalPrintOutputRequested([]string{"--model", "openai:gpt"}) {
+		t.Fatal("terminalPrintOutputRequested() = true without explicit flag")
+	}
+	if !terminalPrintOutputRequested([]string{"--print-output"}) {
+		t.Fatal("terminalPrintOutputRequested() = false for --print-output")
+	}
+	if terminalPrintOutputRequested([]string{"--print-output=false"}) {
+		t.Fatal("terminalPrintOutputRequested() = true for --print-output=false")
+	}
+}
+
+// TestConfigureTerminalOutput_WritesLogWithoutEcho verifies progress output is
+// captured in the terminal log by default.
+func TestConfigureTerminalOutput_WritesLogWithoutEcho(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "terminal.log")
+	_, closeLog, err := configureTerminalOutput(options{TerminalLog: logPath})
+	if err != nil {
+		t.Fatalf("configureTerminalOutput() error = %v", err)
+	}
+	terminalPrintf("progress line %d\n", 1)
+	if err := closeLog(); err != nil {
+		t.Fatalf("close terminal log: %v", err)
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read terminal log: %v", err)
+	}
+	requireContainsAll(t, "terminal log", string(data), []string{"eval_mcp_surfaces terminal output", "progress line 1"})
+}
+
+// TestFixtureToolCoverage_DynamicFindActionOptional verifies dynamic discovery
+// does not appear as missing when scenarios execute known actions directly.
+func TestFixtureToolCoverage_DynamicFindActionOptional(t *testing.T) {
+	summary := fixtureToolCoverage(options{ToolSurface: config.ToolSurfaceDynamic}, []modelTool{{Name: dynamicFindTool}, {Name: dynamicExecuteTool}}, []taskResult{{
+		Task: evalTask{ExpectedTool: dynamicExecuteTool, ExpectedAction: "user.current"},
+	}})
+	if summary.Covered != 2 || len(summary.Missing) != 0 {
+		t.Fatalf("fixtureToolCoverage() = %+v, want dynamic find treated as covered", summary)
+	}
+}
+
 // TestDefaultOutputPath_UsesIgnoredDistDirectory verifies DefaultOutputPath uses ignored dist directory.
 func TestDefaultOutputPath_UsesIgnoredDistDirectory(t *testing.T) {
 	got := defaultOutputPath("claude/sonnet:4 6")
@@ -4916,7 +4979,7 @@ func TestWriteStartupReport_CreatesPlaceholder(t *testing.T) {
 		t.Fatalf("read startup report: %v", err)
 	}
 	requireContainsAll(t, "startup report", string(data), []string{
-		"# Meta-Tool Model Evaluation",
+		"# Dynamic Surface Model Evaluation",
 		"Status: `running`",
 		"Tool surface: `dynamic`",
 		"Backend: `gitlab`",
@@ -4951,6 +5014,49 @@ func TestWriteErrorReport_RecordsFailure(t *testing.T) {
 	if strings.Contains(string(data), "Status: `running`") {
 		t.Fatalf("error report still contains startup placeholder content: %s", data)
 	}
+}
+
+// TestWriteReportHeader_MetaTitle verifies meta reports keep the historical
+// meta-tool title.
+func TestWriteReportHeader_MetaTitle(t *testing.T) {
+	var b strings.Builder
+	writeReportHeader(&b, options{Model: "test:model", ToolSurface: config.ToolSurfaceMeta, Backend: backendMock, TerminalLog: "eval.log"}, false)
+	requireContainsAll(t, "meta report header", b.String(), []string{
+		"# Meta-Tool Model Evaluation",
+		"Terminal output: `eval.log`",
+	})
+}
+
+// TestWriteFailureDiagnostics_IncludesUnsafeDestructiveSuccess verifies safety
+// misses remain visible even when a later repair completes the task.
+func TestWriteFailureDiagnostics_IncludesUnsafeDestructiveSuccess(t *testing.T) {
+	var b strings.Builder
+	writeFailureDiagnostics(&b, options{ToolSurface: config.ToolSurfaceMeta}, []taskResult{{
+		Task:            evalTask{ID: "MT-049"},
+		FinalSuccess:    true,
+		DestructiveSafe: false,
+		Notes:           []string{"missing confirm:true"},
+	}})
+	requireContainsAll(t, "failure diagnostics", b.String(), []string{
+		"## Failure Diagnostics",
+		"| destructive_safety | 1 | MT-049 |",
+	})
+}
+
+// TestWriteRepairDiagnostics_RecordsRecoveredCategory verifies successful
+// repairs are summarized separately from final failures.
+func TestWriteRepairDiagnostics_RecordsRecoveredCategory(t *testing.T) {
+	var b strings.Builder
+	writeRepairDiagnostics(&b, options{ToolSurface: config.ToolSurfaceMeta}, []taskResult{{
+		Task:            evalTask{ID: "MT-012"},
+		RepairAttempted: true,
+		RepairSuccess:   true,
+		Notes:           []string{diagnosticMissingRequiredParams},
+	}})
+	requireContainsAll(t, "repair diagnostics", b.String(), []string{
+		"## Repaired First-Pass Diagnostics",
+		"| model_parameter_shape_miss | 1 | MT-012 |",
+	})
 }
 
 // TestResolveModelSpecs_UsesEvalModels verifies ResolveModelSpecs uses eval models.
