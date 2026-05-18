@@ -33,6 +33,7 @@ const (
 	actionPackagePublishDirectory        = "package.publish_directory"
 	actionPipelineScheduleCreate         = "pipeline.schedule_create"
 	actionPipelineScheduleUpdate         = "pipeline.schedule_update"
+	actionProjectHookAdd                 = "project.hook_add"
 	actionProjectMemberAdd               = "project.member_add"
 	actionProjectMemberDelete            = "project.member_delete"
 	actionProjectMemberEdit              = "project.member_edit"
@@ -119,9 +120,9 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("merge_train.list", "merge_train.list_project"),
 		compatActionAlias("merge_request.accept", "merge_request.merge"),
 		compatActionAlias("merge_request.changes", "mr_review.changes_get"),
-		compatActionAlias("merge_request.emoji_award_create", "merge_request.emoji_mr_create"),
+		compatActionAlias("merge_request.emoji_award_create", actionMergeRequestEmojiMRCreate),
 		compatActionAlias("merge_request.emoji_award_delete", "merge_request.emoji_mr_delete"),
-		compatActionAlias("merge_request.emoji_mr_award_create", "merge_request.emoji_mr_create"),
+		compatActionAlias("merge_request.emoji_mr_award_create", actionMergeRequestEmojiMRCreate),
 		compatActionAlias("merge_request.emoji_mr_award_delete", "merge_request.emoji_mr_delete"),
 		compatActionAlias("merge_request.award_emoji_add", actionMergeRequestEmojiMRCreate),
 		compatActionAlias("merge_request.award_emoji_create", actionMergeRequestEmojiMRCreate),
@@ -140,7 +141,7 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("package.list_generic", actionPackageList),
 		compatActionAlias("personal_snippet.raw", "snippet.content"),
 		compatActionAlias("project.releases.list", "release.list"),
-		compatActionAlias("project.hook_create", "project.hook_add"),
+		compatActionAlias("project.hook_create", actionProjectHookAdd),
 		compatActionAlias("project.hooks.list", "project.hook_list"),
 		compatActionAlias("project.member_remove", actionProjectMemberDelete),
 		compatActionAlias("project.member_update", actionProjectMemberEdit),
@@ -209,8 +210,8 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("generic_packages.publish_directory", actionPackagePublishDirectory),
 		compatActionAlias("gitlab_package.publish_directory", actionPackagePublishDirectory),
 		compatActionAlias("gitlab_package/publish_directory", actionPackagePublishDirectory),
-		compatActionAlias("webhook.add", "project.hook_add"),
-		compatActionAlias("webhook.create", "project.hook_add"),
+		compatActionAlias("webhook.add", actionProjectHookAdd),
+		compatActionAlias("webhook.create", actionProjectHookAdd),
 		compatActionAlias("webhook.delete", "project.hook_delete"),
 	}
 }
