@@ -13,7 +13,7 @@ Todos los modos cubren la misma superficie de API de GitLab. Cambia el empaqueta
 
 En modo individual, el servidor registra una herramienta por operación de GitLab: **863 herramientas** para CE, **1014 herramientas** para Enterprise/Premium autoalojado, o **1019 herramientas** en GitLab.com Enterprise/Premium cuando Orbit está disponible. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
 
-### Modo meta-herramientas (predeterminado)
+### Modo meta-herramientas
 
 En modo meta-herramientas (`TOOL_SURFACE=meta`), las operaciones relacionadas se consolidan en **meta-herramientas a nivel de dominio**. Cada meta-herramienta acepta un parámetro `action` que enruta al handler apropiado. Esto reduce el recuento de herramientas a **33 meta-herramientas base**, **49 en Enterprise/Premium autoalojado**, o **50 en GitLab.com Enterprise/Premium** cuando Orbit está disponible, mejorando drásticamente la eficiencia de tokens del LLM mientras se preserva toda la funcionalidad.
 
@@ -32,13 +32,12 @@ En modo meta-herramientas (`TOOL_SURFACE=meta`), las operaciones relacionadas se
 
 ### Conjunto de herramientas dinámico
 
-El modo dinámico (`TOOL_SURFACE=dynamic` o `TOOL_SURFACE=dynamic-3`) es la alternativa de bajo consumo de tokens. Expone solo `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, mientras conserva las mismas acciones de GitLab detrás del catálogo canónico. El asistente busca una acción, describe el schema exacto y luego ejecuta el ID canónico `domain.action`.
+El modo dinámico (`TOOL_SURFACE=dynamic`) es la alternativa de bajo consumo de tokens. Expone solo `gitlab_find_action` y `gitlab_execute_tool`, mientras conserva las mismas acciones de GitLab detrás del catálogo canónico. El asistente encuentra una acción con su schema exacto y luego ejecuta el ID canónico `domain.action`.
 
 ```mermaid
 flowchart LR
-	A[Buscar herramientas] --> B[Describir acción]
-	B --> C[Ejecutar domain.action]
-	C --> D[Handler existente de GitLab]
+	A[Encontrar acción y schema] --> B[Ejecutar domain.action]
+	B --> C[Handler existente de GitLab]
 ```
 
 Como las meta-herramientas y el modo dinámico comparten el catálogo de acciones canónico, el comportamiento de seguridad es consistente entre ambos modos: filtrado de solo lectura, previsualizaciones de safe mode, filtrado por scopes del token, confirmaciones destructivas, schemas y formato de resultados se definen una vez y se reutilizan.

@@ -151,9 +151,9 @@ docs(readme): update tool count after wiki tools
 
 ### MCP Tool Patterns
 
-- Each GitLab operation = one tool with typed input/output structs
+- Each GitLab operation = one canonical action with typed input/output structs
 - Use `jsonschema` struct tags for tool input documentation
-- Register tools via `mcp.AddTool()` with descriptive names
+- Register runtime surfaces from the canonical action catalog
 - Set appropriate annotations (readOnlyHint, destructiveHint, etc.)
 - Return both structured JSON and human-readable Markdown
 
@@ -168,7 +168,7 @@ internal/tools/
 ├── errors.go                # Error helpers (bridge to toolutil)
 ├── markdown.go              # Markdown formatting (bridge to toolutil)
 ├── logging.go               # Tool call logging (bridge to toolutil)
-└── <domain>/                # 163 domain sub-packages
+└── <domain>/                # 165 domain sub-packages
     ├── action_specs.go      # Canonical ActionSpecs for catalog-backed tool surfaces
     ├── <domain>.go          # Typed input/output structs + handlers
     ├── <domain>_test.go     # Table-driven unit tests

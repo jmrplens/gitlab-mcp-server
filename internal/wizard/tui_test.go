@@ -1279,7 +1279,7 @@ func TestBuildResult_PreservesAdvancedOptions(t *testing.T) {
 	m.urlInput.SetValue("https://gitlab.example.com")
 	m.tokenInput.SetValue("test-token-tui-test")
 	m.optSkipTLS = true
-	m.optToolSurface = 2
+	m.optToolSurface = 0
 	m.optMeta = true
 	m.optCapabilitySurface = 1
 	m.optMetaParamSchema = 1

@@ -460,10 +460,10 @@ func TestOpenAITools_QwenKeepsStrictDisabled(t *testing.T) {
 // to gitlab_execute_tool.
 func TestOpenAITools_DoesNotMutateNonExecuteSchemas(t *testing.T) {
 	inputSchema := map[string]any{"type": "object", "required": []any{"query"}}
-	tools := openAITools([]modelTool{{Name: "gitlab_search_tools", InputSchema: inputSchema}})
+	tools := openAITools([]modelTool{{Name: dynamicFindTool, InputSchema: inputSchema}})
 
 	if tools[0].Function.Strict != nil {
-		t.Fatalf("strict = %#v, want nil for search tool", tools[0].Function.Strict)
+		t.Fatalf("strict = %#v, want nil for find tool", tools[0].Function.Strict)
 	}
 	if _, ok := tools[0].Function.Parameters.(map[string]any)["additionalProperties"]; ok {
 		t.Fatalf("parameters = %#v, non-execute schema should not be hardened", tools[0].Function.Parameters)

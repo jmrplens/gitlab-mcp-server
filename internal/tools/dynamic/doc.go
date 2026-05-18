@@ -2,9 +2,7 @@
 // canonical action catalog.
 //
 // Dynamic mode exposes a small discovery and execution interface instead of
-// advertising every GitLab operation as an MCP tool. The stable dynamic and
-// dynamic-3 surfaces register gitlab_search_tools, gitlab_describe_tools, and
-// gitlab_execute_tool. The parked dynamic-2 comparison surface registers
+// advertising every GitLab operation as an MCP tool. It registers
 // gitlab_find_action and gitlab_execute_tool.
 //
 // The package builds a deterministic search index from actioncatalog.Catalog,
@@ -14,10 +12,10 @@
 //
 // # Token Budget
 //
-// Dynamic mode is intentionally sparse: search returns ranked action summaries,
-// describe returns exact schemas for selected actions, and execute routes one
-// canonical action. Descriptive package and API-reference documentation belongs
-// in Go package comments and project docs, not in dynamic response fields.
+// Dynamic mode is intentionally sparse: find returns ranked action summaries
+// with exact schemas, and execute routes one canonical action. Descriptive
+// package and API-reference documentation belongs in Go package comments and
+// project docs, not in dynamic response fields.
 //
 // # Safety
 //

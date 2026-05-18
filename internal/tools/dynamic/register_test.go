@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -134,6 +135,33 @@ func TestSearch_IncludesCuratedRelatedActions(t *testing.T) {
 	}
 }
 
+// TestSearch_ReturnsNextStep verifies search results guide the next selection
+// step without forcing extra discovery.
+func TestSearch_ReturnsNextStep(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "project delete", Limit: 1})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if output.Count != 1 || output.Results[0].ID != "project.delete" {
+		t.Fatalf("Search() output = %+v, want project.delete", output)
+	}
+	if !strings.Contains(output.NextStep, "Use its exact parameter schema before executing") {
+		t.Fatalf("NextStep = %q, want schema-aware execution guidance", output.NextStep)
+	}
+	markdown := textContent(result)
+	if !strings.Contains(markdown, "Next step:") {
+		t.Fatalf("Search() markdown = %q, want next step guidance", markdown)
+	}
+	if strings.Contains(markdown, "extra discovery") {
+		t.Fatalf("Search() markdown still forces extra discovery: %s", markdown)
+	}
+}
+
 // TestSearch_NoMatchSuggestsNearbyTokens verifies empty searches still return a
 // small recovery hint instead of dumping the full catalog.
 func TestSearch_NoMatchSuggestsNearbyTokens(t *testing.T) {
@@ -252,6 +280,8 @@ func TestSearch_CurrentHighConfidenceQueriesRemainStable(t *testing.T) {
 		{name: "open issues", query: "list open issues", limit: 10},
 		{name: "pipeline trigger", query: "pipeline run trigger", wantContains: "pipeline.trigger_create"},
 		{name: "ci variable secret", query: "ci variable secret", wantTop: "ci_variable.create"},
+		{name: "project access token create", query: "project access token create eval-token read_api expires_at 2026-12-31 for project my-org/tools/gitlab-mcp-server", wantTop: "access.token_project_create"},
+		{name: "project deploy token create", query: "project deploy token create read_repository", wantTop: "access.deploy_token_create_project"},
 		{name: "project delete", query: "project delete", wantTop: "project.delete"},
 		{name: "project discovery", query: "discover project from remote", wantTop: "discover_project.resolve"},
 	}
@@ -1272,12 +1302,12 @@ func TestDescribe_IncludesDisambiguationUsage(t *testing.T) {
 	registry := realCatalogRegistry(t)
 
 	tests := map[string]string{
-		"admin.settings_get":               "current instance/application settings",
+		"admin.settings_get":               "GitLab application settings",
 		"access.deploy_key_list_project":   "deploy keys, not deploy tokens",
 		"access.deploy_token_list_project": "deploy tokens/credentials",
 		"environment.protected_get":        "protected environment",
 		"environment.deployment_list":      "Lists deployments",
-		"feature_flags.ff_user_list_get":   "params.user_list_iid",
+		"feature_flags.ff_user_list_get":   "user_list_iid",
 		"issue.note_get":                   "params.note_id",
 		"job.download_single_artifact":     "one artifact file path",
 		"mr_review.draft_note_publish_all": "Publishes all pending draft MR review notes",
@@ -1520,12 +1550,26 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 		},
 		{
 			name:  "issue link aliases same project target",
-			input: ExecuteInput{Action: "issue.link_create", Params: map[string]any{"project_id": 123, "issue_iid": 1, "linked_issue_iid": 2}},
+			input: ExecuteInput{Action: "issue.link_create", Params: map[string]any{"project_id": 123, "issue_iid": 1, "linked_issue_iid": 2, "type": "relates_to"}},
 			assert: func(t *testing.T, output any) {
 				t.Helper()
 				data := output.(map[string]any)
-				if data["target_issue_iid"] != 2 || data["target_project_id"] != 123 {
-					t.Fatalf("output = %#v, want target_issue_iid 2 and target_project_id 123", output)
+				if data["target_issue_iid"] != 2 || data["target_project_id"] != 123 || data["link_type"] != "relates_to" {
+					t.Fatalf("output = %#v, want target_issue_iid 2, target_project_id 123, and link_type relates_to", output)
+				}
+			},
+		},
+		{
+			name:  "issue spent time note alias",
+			input: ExecuteInput{Action: "issue.spent_time_add", Params: map[string]any{"project_id": 123, "issue_iid": 1, "duration": "30m", "note": "pairing"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["summary"] != "pairing" {
+					t.Fatalf("output = %#v, want summary pairing", output)
+				}
+				if _, ok := data["note"]; ok {
+					t.Fatalf("output = %#v, want note alias removed", output)
 				}
 			},
 		},
@@ -1559,6 +1603,20 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 				data := output.(map[string]any)
 				if data["state_event"] != "reopen" {
 					t.Fatalf("output = %#v, want state_event reopen", output)
+				}
+			},
+		},
+		{
+			name:  "merge request emoji drops stale duration",
+			input: ExecuteInput{Action: "merge_request.emoji_mr_create", Params: map[string]any{"project_id": 123, "merge_request_iid": 3, "name": "eyes", "duration": "15m"}},
+			assert: func(t *testing.T, output any) {
+				t.Helper()
+				data := output.(map[string]any)
+				if data["name"] != "eyes" {
+					t.Fatalf("output = %#v, want name eyes", output)
+				}
+				if _, ok := data["duration"]; ok {
+					t.Fatalf("output = %#v, want duration removed", output)
 				}
 			},
 		},
@@ -1804,7 +1862,9 @@ func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
 		"job.list",
 		"repository.file_get",
 		"issue.link_create",
+		"issue.spent_time_add",
 		"issue.update",
+		"merge_request.emoji_mr_create",
 		"pipeline.schedule_create",
 		"pipeline.schedule_update",
 		"branch.protect",
@@ -1814,6 +1874,7 @@ func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
 		"project.member_add",
 		"project.member_edit",
 		"release.link_create",
+		"release.link_create_batch",
 		"release.link_delete",
 		"release.link_get",
 		"release.link_list",
@@ -2114,11 +2175,11 @@ func TestExecute_CurrentDestructiveSafetyRemainsStable(t *testing.T) {
 	}
 }
 
-// TestRegisterCatalogTools_ExposesThreeDynamicTools verifies that the full dynamic
-// surface exposes search, describe, and execute through an MCP session.
-func TestRegisterCatalogTools_ExposesThreeDynamicTools(t *testing.T) {
+// TestRegisterCatalogFindExecuteTools_ExposesDynamicTools verifies that the
+// dynamic surface exposes find and execute through an MCP session.
+func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
-	RegisterCatalogTools(server, actioncatalog.FromActionMaps(testRoutes(t)))
+	RegisterCatalogFindExecuteTools(server, actioncatalog.FromActionMaps(testRoutes(t)))
 
 	st, ct := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(t.Context(), st, nil)
@@ -2138,8 +2199,8 @@ func TestRegisterCatalogTools_ExposesThreeDynamicTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTools() error = %v", err)
 	}
-	if len(tools.Tools) != 3 {
-		t.Fatalf("tool count = %d, want 3", len(tools.Tools))
+	if len(tools.Tools) != 2 {
+		t.Fatalf("tool count = %d, want 2", len(tools.Tools))
 	}
 	executeSchema := listedToolInputSchema(t, tools.Tools, "gitlab_execute_tool")
 	if !slices.Contains(schemaRequired(executeSchema), "params") {
@@ -2435,6 +2496,7 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 		{name: "runner removal by id", query: "remove runner by numeric runner_id", want: []string{"runner.remove"}},
 		{name: "issue time tracking sequence", query: "issue time tracking set estimate add spent time reset spent time reset estimate", limit: 8, want: []string{"issue.time_estimate_set", "issue.spent_time_add", "issue.spent_time_reset", "issue.time_estimate_reset"}},
 		{name: "deploy token inventory", query: "list project deploy tokens credentials not deploy keys", limit: 8, want: []string{"access.deploy_token_list_project"}},
+		{name: "project access token creation", query: "project access token create eval-token read_api expires_at 2026-12-31 for project my-org/tools/gitlab-mcp-server", limit: 8, want: []string{"access.token_project_create"}},
 		{name: "protected environment deployment approval", query: "protected environment deployment_list deployment approve_or_reject", limit: 12, want: []string{"environment.protected_get", "environment.deployment_list", "environment.deployment_approve_or_reject"}},
 		{name: "feature flag user list lifecycle", query: "feature flag user list get user_list_iid update delete", limit: 8, want: []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_update", "feature_flags.ff_user_list_delete"}},
 		{name: "issue note lifecycle", query: "issue note get by note_id update delete comment", limit: 8, want: []string{"issue.note_get", "issue.note_update", "issue.note_delete"}},
@@ -2872,13 +2934,32 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 				},
 			},
 			"spent_time_add": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"spent": "added"}, nil
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return map[string]any{"spent": "added", "summary": params["summary"], "note": params["note"]}, nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "merge_request_iid", "duration"},
+					"properties": map[string]any{
+						"project_id":        map[string]any{"type": "integer"},
+						"merge_request_iid": map[string]any{"type": "integer"},
+						"duration":          map[string]any{"type": "string"},
+						"summary":           map[string]any{"type": "string"},
+					},
 				},
 			},
 			"emoji_mr_create": {
 				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"name": params["name"]}, nil
+					return maps.Clone(params), nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "merge_request_iid", "name"},
+					"properties": map[string]any{
+						"project_id":        map[string]any{"type": "integer"},
+						"merge_request_iid": map[string]any{"type": "integer"},
+						"name":              map[string]any{"type": "string"},
+					},
 				},
 			},
 			"emoji_mr_delete": {
@@ -2894,9 +2975,24 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 					return map[string]any{"notes": true}, nil
 				},
 			},
+			"spent_time_add": {
+				Handler: func(_ context.Context, params map[string]any) (any, error) {
+					return maps.Clone(params), nil
+				},
+				InputSchema: map[string]any{
+					"type":     "object",
+					"required": []any{"project_id", "issue_iid", "duration"},
+					"properties": map[string]any{
+						"project_id": map[string]any{"type": "integer"},
+						"issue_iid":  map[string]any{"type": "integer"},
+						"duration":   map[string]any{"type": "string"},
+						"summary":    map[string]any{"type": "string"},
+					},
+				},
+			},
 			"link_create": {
 				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"target_issue_iid": params["target_issue_iid"], "target_project_id": params["target_project_id"]}, nil
+					return map[string]any{"target_issue_iid": params["target_issue_iid"], "target_project_id": params["target_project_id"], "link_type": params["link_type"]}, nil
 				},
 				InputSchema: map[string]any{
 					"type":     "object",
@@ -2906,6 +3002,7 @@ func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 						"issue_iid":         map[string]any{"type": "integer"},
 						"target_project_id": map[string]any{"type": "integer"},
 						"target_issue_iid":  map[string]any{"type": "integer"},
+						"link_type":         map[string]any{"type": "string"},
 					},
 				},
 			},

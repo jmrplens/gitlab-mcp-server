@@ -65,7 +65,7 @@ func TestMeasureResourcesWithOptions_MinimalCandidate(t *testing.T) {
 }
 
 // TestListDynamicTools_ExposesLowTokenSurface verifies the dynamic audit path
-// measures the three public tools backed by the canonical action catalog.
+// measures the find/execute tools backed by the canonical action catalog.
 func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
 	client := newAuditTokensClient(t)
 	routes := buildMetaActionMaps(client, false)
@@ -79,32 +79,7 @@ func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	sort.Strings(names)
-	if got := strings.Join(names, ","); got != "gitlab_describe_tools,gitlab_execute_tool,gitlab_search_tools" {
-		t.Fatalf("dynamic tools = %q, want search/describe/execute", got)
-	}
-}
-
-// TestListDynamic2Tools_ExposesFindExecuteSurface verifies the token audit can
-// measure the experimental two-tool candidate independently from dynamic-3.
-func TestListDynamic2Tools_ExposesFindExecuteSurface(t *testing.T) {
-	client := newAuditTokensClient(t)
-	routes := buildMetaActionMaps(client, false)
-	if countActions(routes) == 0 {
-		t.Fatal("buildMetaActionMaps() returned no actions")
-	}
-
-	catalog := actioncatalog.FromActionMaps(routes)
-	dynamic3 := listDynamicTools(catalog)
-	dynamic2 := listDynamic2Tools(catalog)
-	names := make([]string, 0, len(dynamic2))
-	for _, tool := range dynamic2 {
-		names = append(names, tool.Name)
-	}
-	sort.Strings(names)
 	if got := strings.Join(names, ","); got != "gitlab_execute_tool,gitlab_find_action" {
-		t.Fatalf("dynamic-2 tools = %q, want find/execute", got)
-	}
-	if len(dynamic2) >= len(dynamic3) {
-		t.Fatalf("dynamic-2 tool count = %d, want less than dynamic-3 count %d", len(dynamic2), len(dynamic3))
+		t.Fatalf("dynamic tools = %q, want find/execute", got)
 	}
 }

@@ -2,9 +2,9 @@
 
 > A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.
 
-gitlab-mcp-server v1.6.1 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
+gitlab-mcp-server v2.0.0-RC1 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
 It provides up to 1019 individual MCP tools across 98 GitLab API domains, 33 base meta-tools, 49 self-managed enterprise meta-tools, 50 GitLab.com Enterprise meta-tools,
-an optional 3-tool dynamic search/describe/execute surface, 46 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
+a default 2-tool dynamic find/execute surface, 46 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 ## Quick Start
 
@@ -17,7 +17,7 @@ an optional 3-tool dynamic search/describe/execute surface, 46 resources, 38 pro
 - GITLAB_URL: GitLab instance URL (default: https://gitlab.com; set for self-managed instances)
 - GITLAB_TOKEN: Personal Access Token (required)
 - GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)
-- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic, dynamic-3, or parked dynamic-2
+- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic
 - META_TOOLS: Deprecated compatibility selector; prefer TOOL_SURFACE for new configs
 - CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny
 - GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)
@@ -26,9 +26,13 @@ an optional 3-tool dynamic search/describe/execute surface, 46 resources, 38 pro
 
 Access, Admin, Analyze, Branch, CI Catalog, CI Variable, Custom Emoji, Discover Project, Environment, Feature Flags, Group, Interactive Issue Create, Interactive MR Create, Interactive Project Create, Interactive Release Create, Issue, Job, MR Review, Merge Request, Model Registry, Package, Pipeline, Project, Release, Repository, Runner, Search, Snippet, Storage Move, Tag, Template, User, Wiki.
 
-## Meta-Tools (default mode)
+## Dynamic Toolset (default mode)
 
-When TOOL_SURFACE=meta (default), 33 domain meta-tools are registered instead of
+When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set TOOL_SURFACE=meta to use consolidated domain meta-tools instead.
+
+## Meta-Tools
+
+When TOOL_SURFACE=meta, 33 domain meta-tools are registered instead of
 up to 1019 individual tools. Enterprise/Premium entries register 49 meta-tools on self-managed GitLab,
 or 50 on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single
 tool with an "action" parameter. Key meta-tools:
@@ -66,10 +70,6 @@ tool with an "action" parameter. Key meta-tools:
 - gitlab_template — Browse GitLab built-in templates (gitignore, CI/CD YAML, Dockerfile, license, pr...
 - gitlab_user — User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, pe...
 - gitlab_wiki — CRUD project wiki pages and upload attachments to wikis.
-
-## Dynamic Toolset
-
-Set TOOL_SURFACE=dynamic to expose only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should search, describe exact schemas, then execute the canonical domain.action ID returned by search or describe. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. TOOL_SURFACE=dynamic-3 is the explicit current candidate name, while dynamic-2 is a parked find/execute comparison surface.
 
 ## Resources
 
@@ -169,7 +169,7 @@ Set TOOL_SURFACE=dynamic to expose only gitlab_search_tools, gitlab_describe_too
 
 - docs/configuration.md — Full configuration reference
 - docs/meta-tools.md — Meta-tool action reference
-- docs/dynamic-tools.md — Low-token dynamic search/describe/execute mode
+- docs/dynamic-tools.md — Low-token dynamic find/execute mode
 - docs/tools/README.md — All tools reference
 - docs/resources-reference.md — Resources reference
 - docs/prompts-reference.md — Prompts reference

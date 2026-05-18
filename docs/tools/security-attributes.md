@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Security Attributes
 > **Individual tools**: 5
-> **Meta-tool**: `gitlab_security_attribute` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_security_attribute` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [SecurityAttribute GraphQL object](https://docs.gitlab.com/api/graphql/reference/#securityattribute) · [Create](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributecreate) · [Update](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate) · [Delete](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributedestroy) · [Project update](https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate) · [Bulk update](https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes)
 > **Audience**: End users, AI assistant users
 > **Requires**: GitLab Ultimate or Premium

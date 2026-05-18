@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Orbit Knowledge Graph
 > **Individual tools**: 5
-> **Meta-tool**: `gitlab_orbit` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_orbit` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Orbit API](https://docs.gitlab.com/api/orbit/)
 > **Availability**: GitLab.com only; Enterprise/Premium catalog; experimental `knowledge_graph` feature
 > **Audience**: 👤 End users, AI assistant users
@@ -16,7 +16,7 @@ The Orbit domain exposes GitLab's experimental Knowledge Graph API for GitLab.co
 
 The upstream Orbit API is moving quickly. This MCP surface follows the latest GitLab client and CLI coverage, including `graph_status`; GitLab's public API reference may lag behind that endpoint. For schema formatting, the live API currently uses the `format` query parameter, while this server also accepts `response_format` as an input alias for compatibility with public documentation wording.
 
-With the default `TOOL_SURFACE=meta` catalog, all five individual tools below are consolidated into the `gitlab_orbit` meta-tool with an `action` parameter.
+With `TOOL_SURFACE=meta`, all five individual tools below are consolidated into the `gitlab_orbit` meta-tool with an `action` parameter.
 
 | Meta-tool Action | Individual Tool | Purpose |
 | --- | --- | --- |

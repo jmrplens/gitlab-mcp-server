@@ -2,6 +2,7 @@ package awardemoji
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -441,10 +442,42 @@ func CreateMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 	opts := &gl.CreateAwardEmojiOptions{Name: input.Name}
 	emoji, _, err := client.GL().AwardEmoji.CreateMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, 404) || isDuplicateAwardEmojiError(err) {
+			if existing, ok := findExistingMRAwardEmoji(ctx, client, input); ok {
+				return existing, nil
+			}
+		}
 		return Output{}, toolutil.WrapErrWithStatusHint("mr_emoji_create", err, 404,
 			"verify the merge request exists with gitlab_mr_get; emoji name must be a valid shortname without colons (e.g. \"thumbsup\")")
 	}
 	return toOutput(emoji), nil
+}
+
+func isDuplicateAwardEmojiError(err error) bool {
+	return toolutil.ContainsAny(err, "award emoji name has already been taken", "name has already been taken")
+}
+
+func findExistingMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input MRCreateInput) (Output, bool) {
+	currentUser, _, err := client.GL().Users.CurrentUser(gl.WithContext(ctx))
+	if err != nil {
+		return Output{}, false
+	}
+	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: 1, PerPage: 100}}
+	for {
+		emojis, resp, listErr := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
+		if listErr != nil {
+			return Output{}, false
+		}
+		for _, emoji := range emojis {
+			if strings.EqualFold(emoji.Name, input.Name) && emoji.User.ID == currentUser.ID {
+				return toOutput(emoji), true
+			}
+		}
+		if resp == nil || resp.NextPage == 0 {
+			return Output{}, false
+		}
+		opts.Page = resp.NextPage
+	}
 }
 
 // DeleteMRAwardEmoji deletes an award emoji from a merge request.

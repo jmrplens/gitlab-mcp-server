@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Search
 > **Individual tools**: 10
-> **Meta-tool**: `gitlab_search` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_search` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Search API](https://docs.gitlab.com/ee/api/search.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The search domain provides keyword-based search across GitLab resources: code (blobs), merge requests, issues, commits, milestones, notes (comments), projects, snippets, users, and wiki pages. Each search tool supports scoping by project, group, or global, with paginated results. Search tools also accept optional `search_type` (`basic`, `advanced`, or `zoekt`) when the GitLab instance supports selecting the search backend. The schemas expose those three values as an enum; if GitLab rejects a valid value because the backend is not enabled for the instance or scope, retry without `search_type` or use `basic`.
 
-With the default `TOOL_SURFACE=meta` catalog, all 10 individual tools below are consolidated into a single `gitlab_search` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, all 10 individual tools below are consolidated into a single `gitlab_search` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

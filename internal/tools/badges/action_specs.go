@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -34,71 +35,150 @@ func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func badgeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := badgeOptions(individualTool)
+	options := badgeOptions(name, individualTool)
 	options.ReadOnly = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func badgeCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, badgeOptions(individualTool))
+	return toolutil.NewActionSpec(name, route, badgeOptions(name, individualTool))
 }
 
 func badgeUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := badgeOptions(individualTool)
+	options := badgeOptions(name, individualTool)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func badgeDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := badgeOptions(individualTool)
+	options := badgeOptions(name, individualTool)
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
-func badgeOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+func badgeOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"project", "badge"},
 		RelatedActions: []string{"project.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "badges",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	return badgeGuidance(actionName, options)
 }
 
 func groupBadgeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBadgeOptions(individualTool)
+	options := groupBadgeOptions(name, individualTool)
 	options.ReadOnly = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func groupBadgeCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupBadgeOptions(individualTool))
+	return toolutil.NewActionSpec(name, route, groupBadgeOptions(name, individualTool))
 }
 
 func groupBadgeUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBadgeOptions(individualTool)
+	options := groupBadgeOptions(name, individualTool)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func groupBadgeDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBadgeOptions(individualTool)
+	options := groupBadgeOptions(name, individualTool)
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
-func groupBadgeOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+func groupBadgeOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"group", "badge"},
 		RelatedActions: []string{"group.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "badges",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	return badgeGuidance(actionName, options)
+}
+
+func badgeGuidance(actionName string, options toolutil.ActionSpecOptions) toolutil.ActionSpecOptions {
+	scope := "project"
+	idParam := "project_id"
+	otherParam := "group_id"
+	if len(options.Tags) > 0 && options.Tags[0] == "group" {
+		scope = "group"
+		idParam = "group_id"
+		otherParam = "project_id"
+	}
+	verb := strings.TrimPrefix(actionName, "badge_")
+	options.Usage = fmt.Sprintf("%s Use %s for %s badge operations; do not use %s. %s", badgeActionDescription(verb, scope), idParam, scope, otherParam, badgeScopeBoundary(scope))
+	if scope == "group" {
+		options.Aliases = []string{fmt.Sprintf("%s group badge", verb), fmt.Sprintf("%s badge in group", verb)}
+	} else {
+		options.Aliases = []string{fmt.Sprintf("%s project badge", verb), fmt.Sprintf("%s badge in project", verb)}
+	}
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		idParam: {
+			SemanticRole: fmt.Sprintf("scope_%s", scope),
+			ValueSource:  fmt.Sprintf("%s that owns the badge.", badgeTitle(scope)),
+			CommonConfusions: []string{
+				fmt.Sprintf("Do not use %s for %s badge actions.", otherParam, scope),
+			},
+		},
+	}
+	return badgeEditGuidance(actionName, options)
+}
+
+func badgeScopeBoundary(scope string) string {
+	if scope == "group" {
+		return "Use only when the task says group badge; project badge CRUD belongs to gitlab_project."
+	}
+	return "Use when the task says project badge; do not use gitlab_group for project badge CRUD."
+}
+
+func badgeActionDescription(verb, scope string) string {
+	switch verb {
+	case "add":
+		return fmt.Sprintf("Add a %s badge.", scope)
+	case "get":
+		return fmt.Sprintf("Get a %s badge.", scope)
+	case "edit":
+		return fmt.Sprintf("Edit a %s badge.", scope)
+	case "delete":
+		return fmt.Sprintf("Delete a %s badge.", scope)
+	case "list":
+		return fmt.Sprintf("List %s badges.", scope)
+	case "preview":
+		return fmt.Sprintf("Preview a %s badge.", scope)
+	default:
+		return fmt.Sprintf("Manage %s badges.", scope)
+	}
+}
+
+func badgeTitle(scope string) string {
+	return strings.ToUpper(scope[:1]) + scope[1:]
+}
+
+func badgeEditGuidance(actionName string, options toolutil.ActionSpecOptions) toolutil.ActionSpecOptions {
+	if actionName != "badge_edit" {
+		return options
+	}
+	options.Usage += " Use the parameter name name for a new badge name; new_name is not supported."
+	options.Aliases = append(options.Aliases, fmt.Sprintf("rename %s badge", options.Tags[0]), fmt.Sprintf("update %s badge name", options.Tags[0]))
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		options.Tags[0] + "_id": options.ParameterGuidance[options.Tags[0]+"_id"],
+		"name": {
+			SemanticRole: "badge_display_name",
+			ValueSource:  "Optional replacement badge name. The parameter is named name.",
+			CommonConfusions: []string{
+				"Do not send new_name; badge_edit accepts name, link_url, and image_url.",
+			},
+		},
+	}
+	return options
 }
 
 func projectBadgeGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {

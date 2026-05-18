@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Custom Emoji
 > **Individual tools**: 3
-> **Meta-tool**: `gitlab_custom_emoji` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_custom_emoji` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Custom Emoji GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#groupcustomemoji)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The custom emoji domain provides management of group-level custom emoji via the GitLab GraphQL API. Custom emoji are distinct from award emoji (reactions on issues/MRs) — they are custom images uploaded to a group that can be used as reactions or in Markdown text across the group's projects.
 
-With the default `TOOL_SURFACE=meta` catalog, all 3 individual tools below are consolidated into a single `gitlab_custom_emoji` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, all 3 individual tools below are consolidated into a single `gitlab_custom_emoji` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

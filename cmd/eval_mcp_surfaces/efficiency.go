@@ -606,7 +606,7 @@ func buildTraceComparisonReport(comparison traceComparison) string {
 
 	tasks := sortedComparisonTasks(comparison.ByTask)
 	if len(tasks) > 0 {
-		fmt.Fprintf(&builder, "\n## Largest Dynamic-3 Overheads\n\n")
+		fmt.Fprintf(&builder, "\n## Largest Dynamic Overheads\n\n")
 		fmt.Fprintf(&builder, "| Task | Dynamic calls | Meta calls | Positive overhead | Net overhead |\n")
 		fmt.Fprintf(&builder, "| --- | ---: | ---: | ---: | ---: |\n")
 		for _, taskID := range tasks[:min(30, len(tasks))] {

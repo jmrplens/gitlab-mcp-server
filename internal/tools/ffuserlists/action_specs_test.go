@@ -4,6 +4,7 @@ package ffuserlists
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -54,6 +55,26 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
+	}
+}
+
+// TestActionSpecs_UserListIIDGuidance verifies get, update, and delete actions
+// tell models to use the returned IID instead of the user-list name.
+func TestActionSpecs_UserListIIDGuidance(t *testing.T) {
+	byTool := userListSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
+
+	for _, toolName := range []string{"gitlab_ff_user_list_get", "gitlab_ff_user_list_update", "gitlab_ff_user_list_delete"} {
+		guidance := byTool[toolName].ParameterGuidance["user_list_iid"]
+		if guidance.SemanticRole != "feature_flag_user_list_iid" {
+			t.Fatalf("%s user_list_iid SemanticRole = %q, want feature_flag_user_list_iid", toolName, guidance.SemanticRole)
+		}
+		if !containsText(guidance.CommonConfusions, "user list name") {
+			t.Fatalf("%s user_list_iid CommonConfusions = %v, want name warning", toolName, guidance.CommonConfusions)
+		}
+		description := schemaPropertyDescription(t, byTool[toolName].Route.InputSchema, "user_list_iid")
+		if !strings.Contains(description, "do not use the user list name") {
+			t.Fatalf("%s user_list_iid schema description = %q, want name warning", toolName, description)
+		}
 	}
 }
 
@@ -171,4 +192,30 @@ func userListSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]t
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+func schemaPropertyDescription(t *testing.T, schema map[string]any, propertyName string) string {
+	t.Helper()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties = %T, want map[string]any", schema["properties"])
+	}
+	property, ok := properties[propertyName].(map[string]any)
+	if !ok {
+		t.Fatalf("schema property %q = %T, want map[string]any", propertyName, properties[propertyName])
+	}
+	description, ok := property["description"].(string)
+	if !ok {
+		t.Fatalf("schema property %q description = %T, want string", propertyName, property["description"])
+	}
+	return description
+}
+
+func containsText(values []string, needle string) bool {
+	for _, value := range values {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
 }

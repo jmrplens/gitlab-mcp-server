@@ -10,7 +10,7 @@ import (
 )
 
 // TestRun_DefaultMetaToolsOutputsSortedJSON verifies the generator can
-// introspect the default meta-tool surface and emit deterministic Docker JSON.
+// introspect the base meta-tool surface and emit deterministic Docker JSON.
 func TestRun_DefaultMetaToolsOutputsSortedJSON(t *testing.T) {
 	var stdout bytes.Buffer
 	if err := run(nil, &stdout); err != nil {

@@ -204,7 +204,7 @@ gitlab://group/7/projects                          → Group projects
 
 ## Meta-Tool Discovery
 
-With the default `TOOL_SURFACE=meta` catalog, 33 domain-level meta-tools (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) provide guided discovery:
+With `TOOL_SURFACE=meta`, 33 domain-level meta-tools (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) provide guided discovery:
 
 ```text
 Call: gitlab_project(action="help")

@@ -91,14 +91,10 @@ const (
 	ToolSurfaceMeta = "meta"
 	// ToolSurfaceIndividual exposes the full individual tool catalog.
 	ToolSurfaceIndividual = "individual"
-	// ToolSurfaceDynamic exposes the low-token search/describe/execute catalog.
+	// ToolSurfaceDynamic exposes the default low-token find/execute catalog.
 	ToolSurfaceDynamic = "dynamic"
-	// ToolSurfaceDynamic2 exposes the experimental find/execute dynamic catalog.
-	ToolSurfaceDynamic2 = "dynamic-2"
-	// ToolSurfaceDynamic3 explicitly selects the search/describe/execute dynamic catalog.
-	ToolSurfaceDynamic3 = "dynamic-3"
-	// DefaultToolSurface preserves the existing meta-tool default.
-	DefaultToolSurface = ToolSurfaceMeta
+	// DefaultToolSurface selects the low-token find/execute catalog by default.
+	DefaultToolSurface = ToolSurfaceDynamic
 )
 
 // Capability surface modes select which non-tool MCP capabilities are exposed.
@@ -397,7 +393,7 @@ func (c *Config) validate() error {
 	}
 	if c.ToolSurface != "" {
 		switch c.ToolSurface {
-		case ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic, ToolSurfaceDynamic2, ToolSurfaceDynamic3:
+		case ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic:
 		default:
 			return fmt.Errorf("TOOL_SURFACE must be one of %s (got %q)", validToolSurfaceList(), c.ToolSurface)
 		}
@@ -448,7 +444,7 @@ func parseBool(s string, defaultValue bool) (bool, error) {
 // so older tests and callers keep their current behavior.
 func EffectiveToolSurface(metaTools bool, toolSurface string) string {
 	switch toolSurface {
-	case ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic, ToolSurfaceDynamic2, ToolSurfaceDynamic3:
+	case ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic:
 		return toolSurface
 	}
 	if metaTools {
@@ -516,17 +512,13 @@ func parseToolSurfaceValue(value, name string) (string, error) {
 		return ToolSurfaceIndividual, nil
 	case ToolSurfaceDynamic, "dynamic-tools", "low-token":
 		return ToolSurfaceDynamic, nil
-	case ToolSurfaceDynamic2, "find-execute", "two-tool", "2-tool", "2-tools":
-		return ToolSurfaceDynamic2, nil
-	case ToolSurfaceDynamic3, "search-describe-execute", "three-tool", "3-tool", "3-tools":
-		return ToolSurfaceDynamic3, nil
 	default:
 		return "", fmt.Errorf("invalid %s value: expected true, false, or one of %s, got %q", name, validToolSurfaceList(), value)
 	}
 }
 
 func validToolSurfaceList() string {
-	return fmt.Sprintf("%q, %q, %q, %q, or %q", ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic, ToolSurfaceDynamic2, ToolSurfaceDynamic3)
+	return fmt.Sprintf("%q, %q, or %q", ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic)
 }
 
 func parseCapabilitySurface(s, defaultValue string) (string, error) {

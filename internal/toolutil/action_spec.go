@@ -338,6 +338,10 @@ func ActionSpecsToMapWithError(specs []ActionSpec) (ActionMap, error) {
 			continue
 		}
 		route := cloneActionRoute(spec.Route)
+		route.Aliases = mergeActionSpecStrings(route.Aliases, spec.Aliases)
+		route.Tags = mergeActionSpecStrings(route.Tags, spec.Tags)
+		route.Usage = firstNonEmptyString(spec.Usage, route.Usage)
+		route.RelatedActions = mergeActionSpecStrings(route.RelatedActions, spec.RelatedActions)
 		route.ParameterGuidance = mergeActionSpecGuidance(route.ParameterGuidance, spec.ParameterGuidance)
 		routes[name] = route
 	}

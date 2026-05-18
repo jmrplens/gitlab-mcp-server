@@ -8,9 +8,9 @@ import (
 
 // TestControllerSurfaceSpecs_ClassifyDynamicControllers verifies ControllerSurfaceSpecs when classify dynamic controllers.
 func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
-	specs := ControllerSurfaceSpecs(nil, true)
-	if len(specs) != 4 {
-		t.Fatalf("ControllerSurfaceSpecs() len = %d, want 4", len(specs))
+	specs := ControllerSurfaceSpecs(nil)
+	if len(specs) != 2 {
+		t.Fatalf("ControllerSurfaceSpecs() len = %d, want 2", len(specs))
 	}
 	for _, spec := range specs {
 		if err := spec.Validate(); err != nil {
@@ -32,33 +32,10 @@ func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	}
 }
 
-// TestControllerSurfaceSpecs_ExcludesFindForThreeToolSurface verifies ControllerSurfaceSpecs excludes find for three tool surface.
-func TestControllerSurfaceSpecs_ExcludesFindForThreeToolSurface(t *testing.T) {
-	specs := ControllerSurfaceSpecs(nil, false)
-	if len(specs) != 3 {
-		t.Fatalf("ControllerSurfaceSpecs() len = %d, want 3", len(specs))
-	}
-	for _, spec := range specs {
-		if spec.Name == findToolName {
-			t.Fatalf("ControllerSurfaceSpecs(false) included %s", findToolName)
-		}
-	}
-}
-
 // TestControllerSurfaceSpecs_RouteHandlers verifies controller specs execute
 // through their wrapped dynamic registry routes.
 func TestControllerSurfaceSpecs_RouteHandlers(t *testing.T) {
-	specs := ControllerSurfaceSpecs(NewRegistry(testRoutes(t)), true)
-
-	search := findDynamicSurfaceSpec(t, specs, searchToolName)
-	if _, err := search.Route.Handler(t.Context(), map[string]any{"query": "project get", "limit": 1}); err != nil {
-		t.Fatalf("search route error = %v", err)
-	}
-
-	describe := findDynamicSurfaceSpec(t, specs, describeToolName)
-	if _, err := describe.Route.Handler(t.Context(), map[string]any{"action": "project.get"}); err != nil {
-		t.Fatalf("describe route error = %v", err)
-	}
+	specs := ControllerSurfaceSpecs(NewRegistry(testRoutes(t)))
 
 	find := findDynamicSurfaceSpec(t, specs, findToolName)
 	if _, err := find.Route.Handler(t.Context(), map[string]any{"query": "project get", "limit": 1}); err != nil {

@@ -13,7 +13,7 @@
 
 The mirrors domain covers remote mirror management for GitLab projects: listing, retrieving, creating, editing, deleting mirrors, forcing push synchronization, and retrieving SSH public keys for authentication.
 
-With the default `TOOL_SURFACE=meta` catalog and the Enterprise/Premium catalog is enabled, the 7 individual tools below are available as enterprise-only routes inside the `gitlab_project` meta-tool.
+With `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled, the 7 individual tools below are available as enterprise-only routes inside the `gitlab_project` meta-tool.
 
 ### Common Questions
 

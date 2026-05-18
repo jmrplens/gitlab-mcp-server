@@ -5,7 +5,7 @@ The dynamic toolset is the low-token operating mode for gitlab-mcp-server. It ex
 > **Diataxis type**: Guide + Reference
 > **Audience**: Users, operators, and developers evaluating low-token MCP deployments
 > **Prerequisites**: Basic MCP tool-call concepts and a configured GitLab token
-> **Status**: Meta-tools remain the default today. The dynamic toolset is the current default candidate for a future low-token default.
+> **Status**: Dynamic find/execute is the default tool surface. `TOOL_SURFACE=meta` remains available for clients that prefer consolidated domain meta-tools.
 > **ADR**: See [ADR-0011: Low-token dynamic toolset mode](adr/adr-0011-low-token-dynamic-toolset.md).
 
 ## When To Use It
@@ -14,23 +14,20 @@ Use the dynamic toolset when the initial MCP `tools/list` payload is the limitin
 
 | Mode | Visible Tools | Best For |
 | --- | ---: | --- |
-| Meta-tools, current default | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Broad compatibility and predictable domain-level action selection |
-| Dynamic toolset | 3 | Low-token clients that can search, describe, then execute actions |
+| Dynamic toolset, default | 2 | Low-token clients that can find an action with schema, then execute it |
+| Meta-tools | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Broad compatibility and predictable domain-level action selection |
 | Individual tools | 863 CE / 1014 self-managed enterprise / 1019 GitLab.com Enterprise | Clients that benefit from one tool per GitLab operation |
 
 Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes discovery, not business behavior.
 
 ## Public Tools
 
-`TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` expose the same current three-tool surface:
+`TOOL_SURFACE=dynamic` (or leaving `TOOL_SURFACE` unset) exposes the current two-tool surface:
 
 | Tool | Purpose |
 | --- | --- |
-| `gitlab_search_tools` | Search the canonical action catalog using natural language, canonical action IDs, domains, verbs, aliases, and fuzzy matching |
-| `gitlab_describe_tools` | Return exact input schemas, examples, safety metadata, and output summaries for selected action IDs |
+| `gitlab_find_action` | Search the canonical action catalog and return exact input schemas, examples, safety metadata, and output summaries for matching action IDs |
 | `gitlab_execute_tool` | Execute one selected action by canonical `domain.action` ID with runtime validation and safety checks |
-
-The experimental two-tool surface `TOOL_SURFACE=dynamic-2` exposes `gitlab_find_action` and `gitlab_execute_tool`. Do not treat dynamic-2 as the main migration target.
 
 ## Configuration
 
@@ -47,7 +44,7 @@ For self-managed GitLab, add:
 GITLAB_URL=https://gitlab.example.com
 ```
 
-`META_TOOLS=dynamic` is also accepted as a legacy/convenience selector, but `TOOL_SURFACE=dynamic` is clearer and overrides `META_TOOLS` when both are set.
+`META_TOOLS=dynamic` is also accepted as a legacy/convenience selector, but new configurations should use `TOOL_SURFACE` or omit it for the default dynamic mode. `TOOL_SURFACE` overrides `META_TOOLS` when both are set.
 
 ### HTTP Mode
 
@@ -66,30 +63,26 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` and omits optional resources, prompts, workflow guides, and meta-schema resources. Dynamic execution still works because `gitlab_describe_tools` returns exact action schemas inline. `META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
+`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` and omits optional resources, prompts, workflow guides, and meta-schema resources. Dynamic execution still works because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
 
 ## User Workflow
 
-The model should use a three-step workflow:
+The model should use a two-step workflow:
 
-1. Search for candidate actions with `gitlab_search_tools`.
-2. Describe the action or actions it intends to call with `gitlab_describe_tools`.
-3. Execute one validated action with `gitlab_execute_tool`.
+1. Find candidate actions and exact schemas with `gitlab_find_action`.
+2. Execute one validated action with `gitlab_execute_tool`.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant LLM as AI Client
-    participant Search as gitlab_search_tools
-    participant Describe as gitlab_describe_tools
+    participant Find as gitlab_find_action
     participant Execute as gitlab_execute_tool
     participant GitLab
 
     User->>LLM: Show open MRs authored by me
-    LLM->>Search: query="merge request list open authored by me"
-    Search-->>LLM: merge_request.list and related candidates
-    LLM->>Describe: actions=["merge_request.list"]
-    Describe-->>LLM: exact params schema and examples
+    LLM->>Find: query="merge request list open authored by me"
+    Find-->>LLM: merge_request.list with exact params schema and examples
     LLM->>Execute: action="merge_request.list", params={...}
     Execute->>GitLab: GitLab API request
     GitLab-->>Execute: JSON response
@@ -97,13 +90,13 @@ sequenceDiagram
     LLM-->>User: Human-readable result
 ```
 
-The three dynamic tools return normal MCP tool results. The examples below show the `structuredContent` payloads, not the full MCP envelope. In the full result, human-readable Markdown appears in `content`, JSON data appears in `structuredContent`, and `isError` is set on the MCP result envelope when the server returns repair guidance instead of a successful action payload. The dynamic layer does not invent a second execution path: `gitlab_execute_tool` dispatches to the same handler, markdown formatter, schema validation, policy checks, and GitLab client used by the corresponding meta-tool action.
+The dynamic tools return normal MCP tool results. The examples below show the `structuredContent` payloads, not the full MCP envelope. In the full result, human-readable Markdown appears in `content`, JSON data appears in `structuredContent`, and `isError` is set on the MCP result envelope when the server returns repair guidance instead of a successful action payload. The dynamic layer does not invent a second execution path: `gitlab_execute_tool` dispatches to the same handler, markdown formatter, schema validation, policy checks, and GitLab client used by the corresponding meta-tool action.
 
 ## MCP Response Shapes
 
-### `gitlab_search_tools`
+### `gitlab_find_action`
 
-Search returns a ranked shortlist of catalog actions. The Markdown response is a compact table with action IDs, destructive flags, and required params. The `structuredContent` payload uses this shape:
+Find returns a ranked shortlist of catalog actions with exact schemas inline. The Markdown response is a compact table with action IDs, destructive flags, required params, and examples. The `structuredContent` payload uses this shape:
 
 ```json
 {
@@ -118,36 +111,6 @@ Search returns a ranked shortlist of catalog actions. The Markdown response is a
       "schema_uri": "gitlab://schema/meta/gitlab_merge_request/list",
       "destructive": false,
       "required_params": ["project_id"],
-      "usage": "",
-      "related_actions": [],
-      "score": 275
-    }
-  ]
-}
-```
-
-Pass `explain: true` to include deterministic scoring reasons in each result. The default omits explanations to keep responses compact. Enabling `explain` does not alter ranking; it only adds reasoning metadata. Search may also set `low_confidence: true` when the top result score or margin is weak, and `ambiguous_with` when a query matches a known ambiguous alias.
-
-An empty query returns `isError: true` with example search terms. A query with no matches returns a non-error result with `count: 0` and a small `suggestions` array of nearby tokens and common domains, so the model can broaden the query and try again without receiving a catalog dump.
-
-### `gitlab_describe_tools`
-
-Describe hydrates one or more canonical action IDs. It accepts either `action` or `actions`, trims duplicates, resolves unambiguous aliases, and rejects unknown or ambiguous IDs with repair guidance. The `structuredContent` payload includes the exact action-specific input schema and an executable example:
-
-```json
-{
-  "count": 1,
-  "actions": [
-    {
-      "id": "merge_request.list",
-      "tool": "gitlab_merge_request",
-      "domain": "merge_request",
-      "action": "list",
-      "schema_uri": "gitlab://schema/meta/gitlab_merge_request/list",
-      "destructive": false,
-      "required_params": ["project_id"],
-      "usage": "",
-      "related_actions": [],
       "input_schema": {
         "type": "object",
         "required": ["project_id"],
@@ -163,13 +126,14 @@ Describe hydrates one or more canonical action IDs. It accepts either `action` o
           "action": "merge_request.list",
           "params": { "project_id": "group/project" }
         }
-      }
+      },
+      "score": 275
     }
   ]
 }
 ```
 
-`usage` distinguishes commonly confused actions. `related_actions` appears only for curated workflows where order matters, such as comparing refs before generating release notes or checking tag/release state before deletion. `output_schema` is included when the underlying action route provides one. The Markdown response includes the core metadata and embeds the compact JSON input schema for clients that display only text content.
+Pass `explain: true` to include deterministic scoring reasons in each result. The default omits explanations to keep responses compact. Enabling `explain` does not alter ranking; it only adds reasoning metadata.
 
 ### `gitlab_execute_tool`
 
@@ -197,11 +161,11 @@ The response is the existing action response: the same Markdown and structured r
 
 ## Example Calls
 
-### Search
+### Find
 
 ```json
 {
-  "tool": "gitlab_search_tools",
+  "tool": "gitlab_find_action",
   "arguments": {
     "query": "merge request list open authored by me project",
     "limit": 5
@@ -209,20 +173,7 @@ The response is the existing action response: the same Markdown and structured r
 }
 ```
 
-A result contains canonical action IDs such as `merge_request.list`, backing meta-tool names, domains, action names, schema URIs, destructive metadata, required params, usage hints, and scores.
-
-### Describe
-
-```json
-{
-  "tool": "gitlab_describe_tools",
-  "arguments": {
-    "actions": ["merge_request.list"]
-  }
-}
-```
-
-Descriptions include input schemas and examples. Output schemas are included when the underlying action route provides one; otherwise the normal action response remains the authoritative result contract.
+A result contains canonical action IDs such as `merge_request.list`, backing meta-tool names, domains, action names, schema URIs, destructive metadata, required params, usage hints, scores, exact input schemas, and executable examples.
 
 ### Execute
 
@@ -241,7 +192,7 @@ Descriptions include input schemas and examples. Output schemas are included whe
 }
 ```
 
-The action ID is canonical. Aliases can help search, but execution should use the action ID returned by search or describe.
+The action ID is canonical. Aliases can help discovery, but execution should use the action ID returned by find.
 
 ## Repair Loop
 
@@ -249,10 +200,10 @@ Dynamic mode is designed for repairable failures. Models should treat `isError: 
 
 | Failure | Server response | Model recovery |
 | --- | --- | --- |
-| Missing search query | Error result with example query terms | Retry `gitlab_search_tools` with domain, resource, verb, and filters |
-| Unknown action ID | Error result, often with `Did you mean ...?` canonical IDs | Search or describe the suggested canonical action ID |
-| Ambiguous alias | Error result listing the valid canonical targets | Pick one listed `domain.action` ID and describe it |
-| Invalid params | Backing handler validation error | Call `gitlab_describe_tools` and rebuild `params` from `input_schema` |
+| Missing find query | Error result with example query terms | Retry `gitlab_find_action` with domain, resource, verb, and filters |
+| Unknown action ID | Error result, often with `Did you mean ...?` canonical IDs | Find the suggested canonical action ID |
+| Ambiguous alias | Error result listing the valid canonical targets | Pick one listed `domain.action` ID and find or describe it |
+| Invalid params | Backing handler validation error | Call `gitlab_find_action` and rebuild `params` from `input_schema` |
 | Destructive action without confirmation | Error result explaining that `confirm=true` is required | Ask the user for explicit approval, then retry with top-level `confirm: true` only if approved |
 
 ## Destructive Actions
@@ -306,8 +257,7 @@ flowchart TD
   end
 
     subgraph Public MCP Surface
-        E[gitlab_search_tools]
-        F[gitlab_describe_tools]
+        E[gitlab_find_action]
         G[gitlab_execute_tool]
     end
 
@@ -320,16 +270,15 @@ flowchart TD
 
     A --> B --> C --> D
     D --> E
-    D --> F
     D --> G
     G --> H --> I --> J --> K
 ```
 
-The canonical action catalog is filtered after policy decisions such as enterprise catalog selection, GitLab.com-only routing, read-only mode, safe mode, excluded tools, and token-scope filtering. That means dynamic search only advertises actions that the current server instance can route.
+The canonical action catalog is filtered after policy decisions such as enterprise catalog selection, GitLab.com-only routing, read-only mode, safe mode, excluded tools, and token-scope filtering. That means dynamic discovery only advertises actions that the current server instance can route.
 
 ### Search Ranking
 
-`gitlab_search_tools` combines several signals:
+`gitlab_find_action` uses these ranking signals:
 
 - **Normalization**: query text is lower-cased and split on spaces, dots, underscores, and hyphens. Frequent words such as `the`, `to`, `with`, and `please` are dropped.
 - **Search corpus**: each action is indexed by canonical ID, split ID words, backing meta-tool name, domain, action name, aliases, tags, required params, and schema property names.
@@ -339,13 +288,13 @@ The canonical action catalog is filtered after policy decisions such as enterpri
 - **Segmented matching**: long multi-intent prompts are also searched in overlapping three- to six-term windows. This helps prompts such as `discover project from remote url merge request list current user open authored` surface both project discovery and merge-request listing candidates.
 - **Ambiguity handling**: ambiguous aliases are reported with explicit canonical alternatives; execute rejects ambiguous aliases until the caller chooses one canonical `domain.action` ID.
 
-The goal is not to make the model guess blindly. The model should use search to shortlist actions, describe to fetch exact schemas, then execute.
+The goal is not to make the model guess blindly. The model should use find to shortlist actions and fetch exact schemas, then execute.
 
-Search returns only actions visible to the current server instance. Enterprise gating, GitLab.com-only routing, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, excluded tools, and token-scope filtering are applied before the dynamic registry is exposed.
+Find and search return only actions visible to the current server instance. Enterprise gating, GitLab.com-only routing, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, excluded tools, and token-scope filtering are applied before the dynamic registry is exposed.
 
 ### Metadata Guidance
 
-Dynamic search intentionally keeps most action metadata derived from canonical IDs, route schemas, required params, enum values, and route safety flags. Add hand-authored aliases, tags, usage hints, or related-action guidance only when deterministic corpus tests or model-backed Docker evaluations show that models confuse a specific family of actions.
+Dynamic discovery intentionally keeps most action metadata derived from canonical IDs, route schemas, required params, enum values, and route safety flags. Add hand-authored aliases, tags, usage hints, or related-action guidance only when deterministic corpus tests or model-backed Docker evaluations show that models confuse a specific family of actions.
 
 Prefer compact metadata that teaches the distinction rather than broad synonyms on every action. Good candidates are dense domains where similar verbs compete, such as deploy keys versus deploy tokens, protected environments versus deployment approvals, release assets versus release links, issue notes versus issue discussions, and feature-flag user lists versus feature flags. After adding metadata, run the dynamic search corpus and a targeted Docker-backed model evaluation for the affected tasks.
 
@@ -353,15 +302,15 @@ Prefer compact metadata that teaches the distinction rather than broad synonyms 
 
 | Concern | Meta-tools | Dynamic toolset |
 | --- | --- | --- |
-| Initial tool count | 33/49/50 | 3 |
-| Model selection | Choose a domain tool and action | Search an action registry, describe, execute |
-| Schema discovery | `action` enum plus optional schema resources or `META_PARAM_SCHEMA=compact/full` | `gitlab_describe_tools` returns action schemas inline |
-| Minimal capabilities | Loses meta-schema resources and prompts | Keeps action schema discovery through describe |
-| Compatibility | Best current default | Best low-token alternative |
-| Failure mode | Wrong domain/action choice | Skipped search/describe or wrong action ID |
-| Rollback | Default path | Switch back to `TOOL_SURFACE=meta` or unset `TOOL_SURFACE` |
+| Initial tool count | 33/49/50 | 2 |
+| Model selection | Choose a domain tool and action | Find an action with schema, execute |
+| Schema discovery | `action` enum plus optional schema resources or `META_PARAM_SCHEMA=compact/full` | `gitlab_find_action` returns action schemas inline |
+| Minimal capabilities | Loses meta-schema resources and prompts | Keeps action schema discovery through find |
+| Compatibility | Explicit consolidated-dispatcher mode | Default low-token mode |
+| Failure mode | Wrong domain/action choice | Skipped find or wrong action ID |
+| Rollback | Switch to `TOOL_SURFACE=meta` | Default path |
 
-For most users today, meta-tools remain the conservative default. Dynamic mode is recommended for low-token clients, evaluations, and deployments that benefit from progressive discovery.
+Dynamic mode is the default for low-token clients, evaluations, and deployments that benefit from compact progressive discovery. Meta-tools remain available for clients that prefer explicit domain dispatchers.
 
 ## Developer Notes
 
@@ -374,20 +323,20 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 | `internal/tools/actioncatalog/catalog.go` | Canonical action catalog data model, deterministic action ordering, lookup, and filters |
 | `internal/tools/action_catalog.go` | Builds the canonical catalog from collected `ActionSpec` groups and the generated manifest |
 | `internal/tools/meta_catalog.go` | Registers visible meta-tools from the canonical catalog |
-| `internal/tools/dynamic/register.go` | Public dynamic tools, catalog-backed registry, search, describe, find, and execute logic |
+| `internal/tools/dynamic/register.go` | Public dynamic tools, catalog-backed registry, find, internal search/describe helpers, and execute logic |
 | `internal/tools/dynamic/standalone.go` | Adds standalone actions such as project discovery and interactive creation flows to the canonical action catalog |
 | `internal/tools/actioncompat` | Historical action aliases, parameter aliases, and execute-time compatibility normalizers projected into catalog metadata |
 | `internal/toolutil/action_spec.go` | Canonical per-action metadata model, including aliases, tags, usage hints, related actions, and parameter guidance |
 | `internal/toolutil/metatool.go` | Shared `ActionRoute`, route classification, schema helpers, and execution wrappers |
-| `cmd/server/main.go` | Selects `TOOL_SURFACE` and registers meta, individual, dynamic, or comparison surfaces |
+| `cmd/server/main.go` | Selects `TOOL_SURFACE` and registers meta, individual, or dynamic surfaces |
 | `cmd/eval_mcp_surfaces` | Evaluates meta and dynamic surfaces against schema-only and Docker-backed tasks |
-| `test/e2e/suite/dynamic_test.go` | E2E coverage for the default dynamic three-tool surface |
+| `test/e2e/suite/dynamic_test.go` | E2E coverage for the default dynamic two-tool surface |
 
 ### Registering New Actions
 
-Add or change GitLab actions by updating the owning typed handler and its `ActionSpec` entry, using typed route constructors such as `RouteAction`, `RouteActionWithRequest`, `DestructiveAction`, and their void variants. Do not add dynamic-only action definitions for normal GitLab operations. Once the action is in the canonical catalog, meta-tools expose it as a domain `action`, dynamic search can discover it by canonical `domain.action` ID, `gitlab_describe_tools` can return its exact schema, and full capability surfaces can expose `gitlab://schema/meta/{tool}/{action}` schema resources.
+Add or change GitLab actions by updating the owning typed handler and its `ActionSpec` entry, using typed route constructors such as `RouteAction`, `RouteActionWithRequest`, `DestructiveAction`, and their void variants. Do not add dynamic-only action definitions for normal GitLab operations. Once the action is in the canonical catalog, meta-tools expose it as a domain `action`, dynamic discovery can find it by canonical `domain.action` ID, `gitlab_find_action` can return its exact schema, and full capability surfaces can expose `gitlab://schema/meta/{tool}/{action}` schema resources.
 
-Standalone dynamic helpers such as project discovery are the exception: add them in `internal/tools/dynamic/standalone.go` only when they are not normal meta-tool actions. Keep `dynamic-2` as an evaluation-only comparison surface unless the project explicitly decides otherwise.
+Standalone dynamic helpers such as project discovery are the exception: add them in `internal/tools/dynamic/standalone.go` only when they are not normal meta-tool actions.
 
 When adding or changing GitLab actions, keep these rules in sync:
 
@@ -400,7 +349,7 @@ When adding or changing GitLab actions, keep these rules in sync:
 
 ## Evaluation
 
-Dynamic mode has dedicated unit coverage for search ranking, schema cloning, registry behavior, and query-shape edge cases. It also has Docker-backed E2E coverage for the default three-tool workflow:
+Dynamic mode has dedicated unit coverage for search ranking, schema cloning, registry behavior, and query-shape edge cases. It also has Docker-backed E2E coverage for the default two-tool workflow:
 
 ```bash
 E2E_MODE=docker go test -v -tags e2e -timeout 600s \
@@ -413,16 +362,16 @@ Model-facing evaluations can compare surfaces with `cmd/eval_mcp_surfaces`:
 go run ./cmd/eval_mcp_surfaces --tool-surface=dynamic --dry-run --partition base-read
 ```
 
-Use `dynamic-3` when you need to pin the explicit three-tool selector. Use `dynamic` for production-like configuration.
+Use `dynamic` for production-like low-token configuration.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Only three tools appear | Dynamic mode is enabled | This is expected. Use `gitlab_search_tools` and `gitlab_describe_tools` to discover actions |
-| Search returns many broad list actions | Query is too generic | Include the domain, resource, verb, and filter terms, such as `merge request list open authored by me` |
-| Execute says the action is unknown | The model invented an action ID or the action was excluded | Search again and execute the canonical action ID from the result |
-| Execute rejects parameters | Params do not match the described schema | Call `gitlab_describe_tools` for that action and retry with the exact field names and types |
+| Only two tools appear | Dynamic mode is enabled | This is expected. Use `gitlab_find_action` to discover actions and schemas |
+| Find returns many broad list actions | Query is too generic | Include the domain, resource, verb, and filter terms, such as `merge request list open authored by me` |
+| Execute says the action is unknown | The model invented an action ID or the action was excluded | Find again and execute the canonical action ID from the result |
+| Execute rejects parameters | Params do not match the found schema | Call `gitlab_find_action` for that action and retry with the exact field names and types |
 | Destructive action returns an error | Confirmation is missing or policy blocks mutation | Add top-level `confirm:true` only when intentional, or check `GITLAB_READ_ONLY` and `GITLAB_SAFE_MODE` |
 | Resources and prompts still use context | Capability surface is still full | Set `CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal` |
 

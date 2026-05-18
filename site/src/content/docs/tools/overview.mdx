@@ -13,7 +13,7 @@ All modes cover the same GitLab API surface. They differ in packaging: individua
 
 In individual mode, the server registers one tool per GitLab operation: **863 tools** for CE, **1014 tools** for self-managed Enterprise/Premium, or **1019 tools** on GitLab.com Enterprise/Premium when Orbit is available. This provides maximum granularity but consumes significant LLM context tokens for tool discovery.
 
-### Meta-tool mode (default)
+### Meta-tool mode
 
 In meta-tool mode (`TOOL_SURFACE=meta`), related operations are consolidated into **domain-level meta-tools**. Each meta-tool accepts an `action` parameter that routes to the appropriate handler. This reduces the tool count to **33 base meta-tools**, **49 on self-managed Enterprise/Premium**, or **50 on GitLab.com Enterprise/Premium** when Orbit is available, dramatically improving LLM token efficiency while preserving full functionality.
 
@@ -32,13 +32,12 @@ In meta-tool mode (`TOOL_SURFACE=meta`), related operations are consolidated int
 
 ### Dynamic toolset
 
-Dynamic mode (`TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3`) is the low-token alternative. It exposes only three public tools: `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool` (the singular `gitlab_execute_tool` name is intentional). The same GitLab actions remain available in the canonical action catalog. The assistant searches for an action, describes the exact schema, then executes the canonical `domain.action` ID.
+Dynamic mode (`TOOL_SURFACE=dynamic`) is the low-token alternative. It exposes only two public tools: `gitlab_find_action` and `gitlab_execute_tool` (the singular `gitlab_execute_tool` name is intentional). The same GitLab actions remain available in the canonical action catalog. The assistant finds an action with its exact schema, then executes the canonical `domain.action` ID.
 
 ```mermaid
 flowchart LR
-    A[Search tools] --> B[Describe action]
-    B --> C[Execute domain.action]
-    C --> D[Existing GitLab handler]
+	A[Find action and schema] --> B[Execute domain.action]
+	B --> C[Existing GitLab handler]
 ```
 
 Because meta-tools and dynamic mode share the canonical action catalog, safety behavior stays consistent across both modes. Safety behavior includes read-only filtering, safe-mode previews, token-scope filtering, destructive confirmations, schemas, and result formatting.

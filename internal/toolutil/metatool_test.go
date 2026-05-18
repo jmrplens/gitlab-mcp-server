@@ -1588,6 +1588,31 @@ func TestMetaToolDescriptionPrefix_IncludesParameterGuidance(t *testing.T) {
 	}
 }
 
+// TestMetaToolDescriptionPrefix_IncludesActionGuidance verifies generated
+// descriptions surface per-action usage hints for meta-tool selection.
+func TestMetaToolDescriptionPrefix_IncludesActionGuidance(t *testing.T) {
+	routes := ActionMap{
+		"metadata_get": Route(nil).WithUsage("Read GitLab instance metadata such as version and revision."),
+		"settings_get": Route(nil).WithUsage("Read current GitLab application settings."),
+	}
+
+	got := MetaToolDescriptionPrefix("gitlab_admin", routes)
+	for _, want := range []string{
+		"Action guidance:",
+		"metadata_get: Read GitLab instance metadata such as version and revision.",
+		"settings_get: Read current GitLab application settings.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("prefix missing %q: %q", want, got)
+		}
+	}
+
+	description := got + "Manage GitLab instance administration."
+	if stripped := StripMetaToolDescriptionPrefix(description); stripped != "Manage GitLab instance administration." {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want base description", stripped)
+	}
+}
+
 // TestStripMetaToolDescriptionPrefix_StripsCurrentPrefix verifies the generated
 // concise prefix is removed before documentation summaries are rendered.
 func TestStripMetaToolDescriptionPrefix_StripsCurrentPrefix(t *testing.T) {

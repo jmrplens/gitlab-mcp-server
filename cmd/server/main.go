@@ -92,6 +92,7 @@ type httpConfig struct {
 	gitlabURL          string
 	skipTLSVerify      bool
 	metaTools          bool
+	metaToolsSet       bool
 	toolSurface        string
 	capabilitySurface  string
 	enterprise         bool
@@ -138,8 +139,8 @@ func main() {
 	flag.StringVar(&hcfg.addr, "http-addr", ":8080", "HTTP listen address")
 	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "Fixed GitLab instance URL; omit to require per-request GITLAB-URL header")
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
-	flag.BoolVar(&hcfg.metaTools, "meta-tools", true, "Legacy boolean tool selector; prefer --tool-surface")
-	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: meta (default), individual, dynamic, dynamic-2, dynamic-3")
+	flag.BoolVar(&hcfg.metaTools, "meta-tools", false, "Legacy boolean tool selector; prefer --tool-surface")
+	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: dynamic (default), meta, individual")
 	flag.StringVar(&hcfg.capabilitySurface, "capability-surface", config.DefaultCapabilitySurface, "Capability surface: full (default) or minimal")
 	flag.BoolVar(&hcfg.enterprise, "enterprise", false, "Force Enterprise/Premium tool catalog; omit to auto-detect per server entry")
 	flag.BoolVar(&hcfg.readOnly, "read-only", false, "Expose only read-only tools (no create/update/delete)")
@@ -162,8 +163,11 @@ func main() {
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "enterprise" {
+		switch f.Name {
+		case "enterprise":
 			hcfg.enterpriseSet = true
+		case "meta-tools":
+			hcfg.metaToolsSet = true
 		}
 	})
 
@@ -182,7 +186,7 @@ func main() {
 	}
 
 	if toolSearch != "" {
-		toolSurface, _, surfaceErr := config.ParseToolSurface(hcfg.toolSurface, strconv.FormatBool(hcfg.metaTools))
+		toolSurface, _, surfaceErr := config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(&hcfg))
 		if surfaceErr != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", surfaceErr)
 			exitProcess(1)
@@ -257,8 +261,8 @@ FLAGS
   -http-addr string         HTTP listen address (default ":8080")
   -gitlab-url string        Fixed GitLab URL; omit to require per-request GITLAB-URL header
   -skip-tls-verify          Skip TLS certificate verification (default false)
-  -meta-tools               Legacy boolean tool selector; prefer -tool-surface (default true)
-  -tool-surface string      Tool surface: meta|individual|dynamic|dynamic-2|dynamic-3
+	-meta-tools               Legacy boolean tool selector; prefer -tool-surface
+	-tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
   -capability-surface str   Capability surface: full|minimal (default full)
   -enterprise               Force Enterprise/Premium tool catalog; omit to auto-detect per server entry
   -read-only                Expose only read-only tools (default false)
@@ -278,8 +282,8 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
-  TOOL_SURFACE              Canonical tool surface: meta|individual|dynamic|dynamic-2|dynamic-3 (default meta)
-  META_TOOLS                Deprecated legacy selector: true|false|dynamic|dynamic-2|dynamic-3; ignored when TOOL_SURFACE is set
+	TOOL_SURFACE              Canonical tool surface: dynamic|meta|individual (default dynamic)
+	META_TOOLS                Deprecated legacy selector: true|false|dynamic; ignored when TOOL_SURFACE is set
   CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
@@ -303,7 +307,7 @@ JSON CONFIGURATION EXAMPLES
           "GITLAB_URL": "https://gitlab.example.com",
           "GITLAB_TOKEN": "glpat-your-token",
           "GITLAB_SKIP_TLS_VERIFY": "true",
-          "TOOL_SURFACE": "meta"
+		  "TOOL_SURFACE": "dynamic"
         }
       }
     }
@@ -379,7 +383,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		hcfg.gitlabURL = strings.TrimRight(hcfg.gitlabURL, "/")
 	}
 
-	toolSurface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, strconv.FormatBool(hcfg.metaTools))
+	toolSurface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(hcfg))
 	if err != nil {
 		return fmt.Errorf("parse tool surface: %w", err)
 	}
@@ -477,6 +481,13 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	startAutoUpdate(ctx, cfg)
 
 	return serveHTTP(ctx, cfg, hcfg.addr)
+}
+
+func legacyMetaToolsFlagValue(hcfg *httpConfig) string {
+	if hcfg == nil || !hcfg.metaToolsSet {
+		return ""
+	}
+	return strconv.FormatBool(hcfg.metaTools)
 }
 
 // runStdio loads configuration from environment variables (GITLAB_TOKEN
@@ -626,14 +637,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
 	}
 	switch toolSurface {
-	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
-		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
-		if catalogErr != nil {
-			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
-		}
-		metaSchemaRoutes = actionCatalog.ActionMaps()
-		dynamictools.RegisterCatalogTools(server, actionCatalog)
-	case config.ToolSurfaceDynamic2:
+	case config.ToolSurfaceDynamic:
 		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
 		if catalogErr != nil {
 			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
@@ -688,7 +692,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		slog.Warn("failed to count registered tools", "error", err)
 	}
 	switch toolSurface {
-	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2, config.ToolSurfaceDynamic3:
+	case config.ToolSurfaceDynamic:
 		slog.Info("registered dynamic toolset", "tools", toolCount, "catalog_groups", len(metaSchemaRoutes), "catalog_actions", countCatalogActions(metaSchemaRoutes))
 	case config.ToolSurfaceMeta:
 		slog.Info("registered meta-tools", "tools", toolCount)
@@ -1616,13 +1620,7 @@ func doToolSearch(query, toolSurface string, enterprise bool) error {
 		}
 	case config.ToolSurfaceIndividual:
 		gitlabtools.RegisterAll(server, nil, enterprise)
-	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
-		catalog, err := buildToolSearchCatalog(enterprise)
-		if err != nil {
-			return err
-		}
-		dynamictools.RegisterCatalogTools(server, catalog)
-	case config.ToolSurfaceDynamic2:
+	case config.ToolSurfaceDynamic:
 		catalog, err := buildToolSearchCatalog(enterprise)
 		if err != nil {
 			return err

@@ -19,7 +19,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | [Auto-Update](auto-update.md) | Self-update mechanism, modes, MCP tools, and release requirements |
 | [Resource Consumption](resource-consumption.md) | Memory footprint, scaling limits, and optimization strategies |
 | [Meta-Tools](meta-tools.md) | Domain-level meta-tool reference with action mappings |
-| [Dynamic Toolset](dynamic-tools.md) | Low-token search/describe/execute mode with canonical action catalog and migration guidance |
+| [Dynamic Toolset](dynamic-tools.md) | Low-token find/execute mode with canonical action catalog and migration guidance |
 | [Output Format](output-format.md) | How tool responses are structured: Markdown + JSON, annotations, clickable links, next-step hints |
 | [Testing](testing/) | Unit, E2E, and AI model evaluation documentation |
 | [GraphQL Integration](graphql.md) | When and how the server uses GitLab's GraphQL API |

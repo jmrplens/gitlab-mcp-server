@@ -29,10 +29,10 @@
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `TOOL_SURFACE` | `meta` | Canonical tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
-| `META_TOOLS` | *(legacy)* | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, `dynamic` -> `dynamic`, `dynamic-2` -> `dynamic-2`, and `dynamic-3` -> `dynamic-3`. Ignored when `TOOL_SURFACE` is set |
+| `TOOL_SURFACE` | `dynamic` | Canonical tool catalog selector: `dynamic`, `meta`, or `individual`. `dynamic` exposes find/execute |
+| `META_TOOLS` | *(legacy)* | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, and `dynamic` -> `dynamic`. Ignored when `TOOL_SURFACE` is set |
 | `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps only `gitlab://workspace/roots` and disables optional resources, meta-schema resources, workflow guides, and prompts. Dynamic describe/find still returns action schemas inline with `minimal` |
-| `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, 6.5x opaque size) or `full` (oneOf with full per-action JSON Schemas, 11.9x opaque size). Applies to visible meta-tool schemas in `meta`; has no practical effect on `dynamic`, `dynamic-2`, `dynamic-3`, or `individual` tool schemas. When `CAPABILITY_SURFACE=full`, per-action JSON Schemas are discoverable via `gitlab://schema/meta/{tool}/{action}` for meta and dynamic catalog-backed surfaces |
+| `META_PARAM_SCHEMA` | `opaque` | Meta-tool input-schema strategy: `opaque` (compact `{action, params:any}` envelope, default), `compact` (oneOf with property names + types only, 6.5x opaque size) or `full` (oneOf with full per-action JSON Schemas, 11.9x opaque size). Applies to visible meta-tool schemas in `meta`; has no practical effect on `dynamic` or `individual` tool schemas. When `CAPABILITY_SURFACE=full`, per-action JSON Schemas are discoverable via `gitlab://schema/meta/{tool}/{action}` for meta and dynamic catalog-backed surfaces |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools for GitLab Premium/Ultimate features in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup. Only tools with `ReadOnlyHint=true` remain available (`true`/`false`) |
@@ -117,7 +117,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Optional
 GITLAB_SKIP_TLS_VERIFY=false
-TOOL_SURFACE=meta
+TOOL_SURFACE=dynamic
 LOG_LEVEL=info
 UPLOAD_MAX_FILE_SIZE=500MB
 AUTO_UPDATE=true
@@ -138,8 +138,8 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 | `GITLAB_URL` | `--gitlab-url` | Optional in stdio mode; defaults to `https://gitlab.com`. Optional in HTTP mode unless `--auth-mode=oauth` is used, which requires a fixed `--gitlab-url`. When set in HTTP mode, it fixes the GitLab instance; when omitted, clients must send `GITLAB-URL` per request |
 | `GITLAB_TOKEN` | *(none)* | Not needed in HTTP mode — clients provide tokens per-request |
 | `GITLAB_SKIP_TLS_VERIFY` | `--skip-tls-verify` | |
-| `TOOL_SURFACE` | `--tool-surface` | Canonical selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
-| `META_TOOLS` | `--meta-tools` | Deprecated compatibility selector. `META_TOOLS=dynamic`, `dynamic-2`, and `dynamic-3` are supported in stdio mode for one compatibility window; use `TOOL_SURFACE` or `--tool-surface` for new configs |
+| `TOOL_SURFACE` | `--tool-surface` | Canonical selector: `meta`, `individual`, or `dynamic` |
+| `META_TOOLS` | `--meta-tools` | Deprecated compatibility selector. Use `TOOL_SURFACE` or `--tool-surface` for new configs |
 | `CAPABILITY_SURFACE` | `--capability-surface` | Explicit selector: `full` or `minimal` |
 | `META_PARAM_SCHEMA` | `--meta-param-schema` | |
 | `MAX_HTTP_CLIENTS` | `--max-http-clients` | |
@@ -167,7 +167,7 @@ In HTTP mode, configuration comes from CLI flags instead of environment variable
 
 - [CLI Reference](cli-reference.md) — Command-line flags for HTTP mode
 - [Configuration](configuration.md) — Setup wizard, client config, secure token management
-- [Dynamic Toolset](dynamic-tools.md) — Low-token search/describe/execute workflow and migration guidance
+- [Dynamic Toolset](dynamic-tools.md) — Low-token find/execute workflow and migration guidance
 - [Auto-Update](auto-update.md) — Update modes and release requirements
 - [Security](security.md) — Token management best practices
 - [HTTP Server Mode](http-server-mode.md) — OAuth mode architecture and deployment

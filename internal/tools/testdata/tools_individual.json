@@ -14149,7 +14149,7 @@
           "type": "boolean"
         },
         "deploy_key_id": {
-          "description": "Deploy key ID",
+          "description": "Deploy key ID returned by deploy key operations; do not use deploy_token_id",
           "type": "integer"
         },
         "project_id": {
@@ -14202,7 +14202,7 @@
       "additionalProperties": false,
       "properties": {
         "deploy_key_id": {
-          "description": "Deploy key ID to enable",
+          "description": "Deploy key ID to enable; do not use deploy_token_id",
           "type": "integer"
         },
         "project_id": {
@@ -14274,7 +14274,7 @@
       "additionalProperties": false,
       "properties": {
         "deploy_key_id": {
-          "description": "Deploy key ID",
+          "description": "Deploy key ID returned by deploy key operations; do not use deploy_token_id",
           "type": "integer"
         },
         "project_id": {
@@ -14819,7 +14819,7 @@
           ]
         },
         "deploy_key_id": {
-          "description": "Deploy key ID",
+          "description": "Deploy key ID returned by deploy key operations; do not use deploy_token_id",
           "type": "integer"
         },
         "project_id": {
@@ -17217,7 +17217,7 @@
           "type": "string"
         },
         "name": {
-          "description": "New badge name",
+          "description": "New badge name. Use name, not new_name",
           "type": "string"
         }
       },
@@ -17302,7 +17302,7 @@
           "type": "string"
         },
         "name": {
-          "description": "New badge name",
+          "description": "New badge name. Use name, not new_name",
           "type": "string"
         },
         "project_id": {
@@ -20806,7 +20806,7 @@
           "type": "string"
         },
         "user_list_iid": {
-          "description": "Feature flag user list internal ID",
+          "description": "Feature flag user list internal ID returned by list or create; do not use the user list name",
           "type": "integer"
         }
       },
@@ -20859,7 +20859,7 @@
           "type": "string"
         },
         "user_list_iid": {
-          "description": "Feature flag user list internal ID",
+          "description": "Feature flag user list internal ID returned by list or create; do not use the user list name",
           "type": "integer"
         }
       },
@@ -21073,7 +21073,7 @@
           "type": "string"
         },
         "user_list_iid": {
-          "description": "Feature flag user list internal ID",
+          "description": "Feature flag user list internal ID returned by list or create; do not use the user list name",
           "type": "integer"
         },
         "user_xids": {
@@ -75837,7 +75837,7 @@
           "type": "string"
         },
         "include_pattern": {
-          "description": "Glob pattern to filter files within the directory (e.g. *.tar.gz). If omitted, all regular files are included.",
+          "description": "Single glob pattern to filter files within the directory (e.g. *.txt or *.tar.gz). If omitted, all regular files are included. Do not pass comma-separated filenames.",
           "type": "string"
         },
         "package_name": {
@@ -78632,7 +78632,7 @@
           "type": "integer"
         },
         "value": {
-          "description": "Variable value",
+          "description": "Variable value. Required when creating a schedule variable",
           "type": "string"
         },
         "variable_type": {
@@ -78820,7 +78820,7 @@
           "type": "integer"
         },
         "value": {
-          "description": "New variable value",
+          "description": "New variable value. Required when editing a schedule variable",
           "type": "string"
         },
         "variable_type": {
@@ -96271,12 +96271,12 @@
       "additionalProperties": false,
       "properties": {
         "links": {
-          "description": "Array of links to create (each with name and url required)",
+          "description": "Array of release asset links. Each item supports only name, url, and link_type.",
           "items": {
             "additionalProperties": false,
             "properties": {
               "link_type": {
-                "description": "Type of the link (runbook, package, image, other)",
+                "description": "Type of the link: package, runbook, image, or other. Use package for package registry assets.",
                 "type": "string"
               },
               "name": {
@@ -96284,7 +96284,7 @@
                 "type": "string"
               },
               "url": {
-                "description": "URL of the link target",
+                "description": "Absolute URL of the link target. For package assets, use the URL returned by gitlab_package publish actions; do not construct package URLs manually.",
                 "type": "string"
               }
             },

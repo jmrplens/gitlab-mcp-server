@@ -18,7 +18,7 @@
 //	    |
 //	    +--> BuildActionCatalog --> RegisterMetaCatalog
 //	    |
-//	    +--> BuildActionCatalog --> dynamic.RegisterCatalogTools
+//	    +--> BuildActionCatalog --> dynamic.RegisterCatalogFindExecuteTools
 //
 // [RegisterAll] registers the individual tools by projecting the canonical
 // action catalog. [BuildActionCatalog] builds the catalog used by

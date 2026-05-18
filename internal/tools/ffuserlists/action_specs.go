@@ -17,35 +17,49 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func userListReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userListOptions(individualTool)
+	options := userListOptions(name, individualTool)
 	options.ReadOnly = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func userListCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, userListOptions(individualTool))
+	return toolutil.NewActionSpec(name, route, userListOptions(name, individualTool))
 }
 
 func userListUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userListOptions(individualTool)
+	options := userListOptions(name, individualTool)
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
 func userListDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userListOptions(individualTool)
+	options := userListOptions(name, individualTool)
 	options.Destructive = true
 	options.Idempotent = true
 	return toolutil.NewActionSpec(name, route, options)
 }
 
-func userListOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+func userListOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"feature_flags", "user_list", "rollout"},
 		RelatedActions: []string{"feature_flags.feature_flag_get", "feature_flags.feature_flag_update"},
 		OpenWorld:      true,
 		OwnerPackage:   "ffuserlists",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if actionName == "ff_user_list_get" || actionName == "ff_user_list_update" || actionName == "ff_user_list_delete" {
+		options.Usage = "Read, update, or delete a feature flag user list by its user_list_iid returned from list or create operations."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"user_list_iid": {
+				SemanticRole: "feature_flag_user_list_iid",
+				ValueSource:  "Use the iid/user_list_iid returned by ff_user_list_list or ff_user_list_create.",
+				CommonConfusions: []string{
+					"Do not use the user list name as user_list_iid.",
+					"The ID is project-scoped and distinct from the feature flag name.",
+				},
+			},
+		}
+	}
+	return options
 }

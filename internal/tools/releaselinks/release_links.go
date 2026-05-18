@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -75,7 +76,7 @@ type ListOutput struct {
 // LinkEntry describes a single link to create in a batch operation.
 type LinkEntry struct {
 	Name     string `json:"name"                jsonschema:"Name of the link,required"`
-	URL      string `json:"url"                 jsonschema:"URL of the link target,required"`
+	URL      string `json:"url"                 jsonschema:"Absolute URL of the link target. For package assets use the URL returned by package publish actions; do not construct URLs manually,required"`
 	LinkType string `json:"link_type,omitempty"  jsonschema:"Type of the link (runbook, package, image, other)"`
 }
 
@@ -84,7 +85,7 @@ type LinkEntry struct {
 type CreateBatchInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	TagName   string               `json:"tag_name"   jsonschema:"Tag name of the release,required"`
-	Links     []LinkEntry          `json:"links"      jsonschema:"Array of links to create (each with name and url required),required"`
+	Links     []LinkEntry          `json:"links"      jsonschema:"Array of links to create. Each item supports only name, url, and link_type; each item requires name and url,required"`
 }
 
 // CreateBatchOutput holds the results of a batch link creation.
@@ -120,8 +121,8 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		Name: new(input.Name),
 		URL:  new(input.URL),
 	}
-	if input.LinkType != "" {
-		opts.LinkType = new(gl.LinkTypeValue(input.LinkType))
+	if linkType := releaseLinkType(input.URL, input.LinkType); linkType != "" {
+		opts.LinkType = new(linkType)
 	}
 	l, _, err := client.GL().ReleaseLinks.CreateReleaseLink(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -161,8 +162,8 @@ func CreateBatch(ctx context.Context, client *gitlabclient.Client, input CreateB
 			Name: new(entry.Name),
 			URL:  new(entry.URL),
 		}
-		if entry.LinkType != "" {
-			opts.LinkType = new(gl.LinkTypeValue(entry.LinkType))
+		if linkType := releaseLinkType(entry.URL, entry.LinkType); linkType != "" {
+			opts.LinkType = new(linkType)
 		}
 		l, _, err := client.GL().ReleaseLinks.CreateReleaseLink(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx))
 		if err != nil {
@@ -172,6 +173,16 @@ func CreateBatch(ctx context.Context, client *gitlabclient.Client, input CreateB
 		out.Created = append(out.Created, ToOutput(l))
 	}
 	return out, nil
+}
+
+func releaseLinkType(url, explicit string) gl.LinkTypeValue {
+	if explicit != "" {
+		return gl.LinkTypeValue(explicit)
+	}
+	if strings.Contains(url, "/packages/generic/") {
+		return gl.PackageLinkType
+	}
+	return ""
 }
 
 // Delete removes an asset link from a release by its link ID.

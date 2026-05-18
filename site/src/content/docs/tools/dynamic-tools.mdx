@@ -1,38 +1,36 @@
 ---
 title: Dynamic toolset
-description: Low-token search, describe, and execute mode for large GitLab MCP catalogs
+description: Low-token find and execute mode for large GitLab MCP catalogs
 ---
 
 :::note[Developer Documentation]
 This page is the user-facing overview. For the authoritative field-level contract and implementation notes, see [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/dynamic-tools.md) in the repository.
 :::
 
-The dynamic toolset is the low-token mode for GitLab MCP Server. It keeps the complete GitLab action catalog available, but shows your AI client only three public tools:
+The dynamic toolset is the low-token mode for GitLab MCP Server. It keeps the complete GitLab action catalog available, but shows your AI client only two public tools:
 
-| Tool                    | What it does                                                                                             |
-| ----------------------- | -------------------------------------------------------------------------------------------------------- |
-| `gitlab_search_tools`   | Finds the right GitLab action from natural language, domains, verbs, aliases, and typo-tolerant matching |
-| `gitlab_describe_tools` | Returns the exact parameters, examples, and safety metadata for one or more actions                      |
-| `gitlab_execute_tool`   | Executes the selected action after validating the action ID and parameters                               |
+| Tool                  | What it does                                                                              |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `gitlab_find_action`  | Finds the right GitLab action and returns exact parameters, examples, and safety metadata |
+| `gitlab_execute_tool` | Executes the selected action after validating the action ID and parameters                |
 
-Meta-tools remain the default today because they are the most broadly compatible surface. Dynamic mode is the low-token alternative.
+Dynamic find/execute is the default tool surface. Meta-tools remain available with `TOOL_SURFACE=meta` for clients that prefer consolidated domain dispatchers.
 
 ## Why dynamic mode exists
 
-Large MCP servers can spend a lot of context on tool discovery before the user asks anything. GitLab MCP Server can expose up to 1019 individual operations, and even the default meta-tool catalog advertises 33 to 50 domain tools.
+Large MCP servers can spend a lot of context on tool discovery before the user asks anything. GitLab MCP Server can expose up to 1019 individual operations, and the optional meta-tool catalog advertises 33 to 50 domain tools.
 
-Dynamic mode exposes that catalog through search, describe, and execute tools. The model discovers only what it needs for the current task.
+Dynamic mode exposes that catalog through find and execute tools. The model discovers only what it needs for the current task.
 
 ```mermaid
 flowchart LR
-    A[tools/list] --> B[3 public dynamic tools]
-    B --> C[Search action catalog]
-    C --> D[Describe selected actions]
-    D --> E[Execute one canonical action]
+	A[tools/list] --> B[2 public dynamic tools]
+	B --> C[Find action and schema]
+	C --> E[Execute one canonical action]
     E --> F[GitLab REST v4 or GraphQL]
 ```
 
-This usually adds one or two discovery calls per task, but it keeps the initial MCP tool context very small.
+This usually adds one discovery call per task, but it keeps the initial MCP tool context very small.
 The catalog is shared with meta-tools, so dynamic mode reuses the same schemas, destructive-action safeguards, read-only filtering, safe-mode previews, token-scope filtering, and result formatting.
 
 ## Enable dynamic mode
@@ -73,32 +71,23 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` and omits optional resources, prompts, workflow guides, and meta-schema resources. Dynamic still has schema discovery because `gitlab_describe_tools` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
-
-:::caution[Dynamic variants]
-`TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` both select the stable three-tool surface. Use `dynamic` for normal configuration and `dynamic-3` only when you need to pin the three-tool variant explicitly.
-
-`TOOL_SURFACE=dynamic-2` is an experimental two-tool variant with `gitlab_find_action` plus `gitlab_execute_tool`. Do not use it for new deployments unless you are intentionally testing that experiment.
-:::
+`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` and omits optional resources, prompts, workflow guides, and meta-schema resources. Dynamic still has schema discovery because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
 
 ## The model workflow
 
-Dynamic mode works best when the assistant follows a simple rhythm: search, describe, execute.
+Dynamic mode works best when the assistant follows a simple rhythm: find, execute.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant AI as AI Assistant
-    participant Search as gitlab_search_tools
-    participant Describe as gitlab_describe_tools
+	participant Find as gitlab_find_action
     participant Execute as gitlab_execute_tool
     participant GitLab
 
     User->>AI: List open merge requests authored by me
-    AI->>Search: merge request list open authored by me
-    Search-->>AI: merge_request.list
-    AI->>Describe: merge_request.list
-    Describe-->>AI: Params schema and examples
+	AI->>Find: merge request list open authored by me
+	Find-->>AI: merge_request.list with params schema and examples
     AI->>Execute: merge_request.list with validated params
     Execute->>GitLab: API request
     GitLab-->>Execute: GitLab data
@@ -110,17 +99,16 @@ Each dynamic tool returns a normal MCP tool result: Markdown in `content`, JSON 
 
 ## What each call returns
 
-| Call                    | What the assistant receives                                                                                                                                                                     | How the assistant should use it                                                   |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `gitlab_search_tools`   | A ranked list of canonical action IDs with the backing meta-tool, domain, action, schema URI, destructive flag, required params, usage hints, related actions, optional explanations, and score | Pick the best `domain.action` candidate and describe it before execution          |
-| `gitlab_describe_tools` | Exact `input_schema`, required params, safety metadata, usage hints, related actions, optional `output_schema`, schema URI, and an executable `gitlab_execute_tool` example                     | Build `params` from the schema and avoid guessed field names                      |
-| `gitlab_execute_tool`   | The existing action response from the backing handler, usually Markdown plus structured JSON                                                                                                    | Use the returned data to answer the user, or repair from `isError: true` feedback |
+| Call                  | What the assistant receives                                                                                                                                                                      | How the assistant should use it                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `gitlab_find_action`  | Ranked canonical action IDs with exact `input_schema`, backing meta-tool, domain, action, schema URI, destructive flag, required params, usage hints, examples, optional explanations, and score | Pick the best `domain.action` candidate and build `params` from the schema        |
+| `gitlab_execute_tool` | The existing action response from the backing handler, usually Markdown plus structured JSON                                                                                                     | Use the returned data to answer the user, or repair from `isError: true` feedback |
 
-Search and describe are deliberately cheap compared with advertising every GitLab operation in `tools/list`. The model pays for detailed schemas only when it needs a specific action.
+Find is deliberately cheap compared with advertising every GitLab operation in `tools/list`. The model pays for detailed schemas only when it needs a specific action.
 
 ## How search finds actions
 
-`gitlab_search_tools` is more than a substring search. It indexes canonical IDs, split ID words, backing meta-tool names, domains, action names, aliases, tags, required params, optional params, schema property names, schema enum values, compact schema descriptions, and internal backend metadata.
+`gitlab_find_action` is more than a substring search. It indexes canonical IDs, split ID words, backing meta-tool names, domains, action names, aliases, tags, required params, optional params, schema property names, schema enum values, compact schema descriptions, and internal backend metadata.
 
 The ranking pipeline:
 
@@ -133,19 +121,19 @@ The ranking pipeline:
 
 Fuzzy recovery is bounded on purpose: it allows up to two edit mistakes for tokens of at least three characters and suppresses weak typo matches for destructive actions. That helps with prompts like `merje requesy list`, while short terms such as `mr` still rely on aliases and synonyms instead of loose typo matching.
 
-Search accepts `explain: true` when the assistant needs deterministic scoring reasons. The default response stays compact. Enabling `explain` does not change ranking; it only adds reasoning metadata. No-match searches return a small suggestions list, and curated workflows may return `related_actions`, such as `repository.compare` before `analyze.release_notes`.
+Find accepts `explain: true` when the assistant needs deterministic scoring reasons. The default response stays compact. Enabling `explain` does not change ranking; it only adds reasoning metadata. No-match searches return a small suggestions list, and curated workflows may return `related_actions`, such as `repository.compare` before `analyze.release_notes`.
 
 :::tip[Use canonical IDs]
-Aliases help search and may resolve when unambiguous, but canonical `domain.action` IDs are the stable execution contract. When in doubt, describe the action ID returned by search and execute exactly that ID.
+Aliases help find and may resolve when unambiguous, but canonical `domain.action` IDs are the stable execution contract. Execute the action ID returned by find.
 :::
 
 ## Example
 
-First, search for the action:
+First, find the action:
 
 ```json
 {
-	"tool": "gitlab_search_tools",
+	"tool": "gitlab_find_action",
 	"arguments": {
 		"query": "merge request list open authored by me project",
 		"limit": 5
@@ -153,18 +141,7 @@ First, search for the action:
 }
 ```
 
-Then describe the selected action:
-
-```json
-{
-	"tool": "gitlab_describe_tools",
-	"arguments": {
-		"actions": ["merge_request.list"]
-	}
-}
-```
-
-Finally, execute it:
+Then execute it:
 
 ```json
 {
@@ -181,7 +158,7 @@ Finally, execute it:
 }
 ```
 
-The assistant should execute the canonical action ID returned by search or describe. Aliases are useful for discovery, but canonical IDs are the stable execution contract.
+The assistant should execute the canonical action ID returned by find. Aliases are useful for discovery, but canonical IDs are the stable execution contract.
 
 ## Repair behavior
 
@@ -189,10 +166,10 @@ Dynamic mode is built to be repairable. If a call returns `isError: true`, the a
 
 | Failure                       | Recovery                                                                          |
 | ----------------------------- | --------------------------------------------------------------------------------- |
-| Search query is empty         | Retry search with a domain, resource, verb, and useful filters                    |
-| Action ID is unknown          | Search again or use the suggested canonical IDs from the error message            |
-| Ambiguous alias               | Pick one listed `domain.action` ID and describe it                                |
-| Params are rejected           | Describe the action and rebuild `params` from `input_schema`                      |
+| Find query is empty           | Retry find with a domain, resource, verb, and useful filters                      |
+| Action ID is unknown          | Find again or use the suggested canonical IDs from the error message              |
+| Ambiguous alias               | Pick one listed `domain.action` ID from find output                               |
+| Params are rejected           | Find the action and rebuild `params` from `input_schema`                          |
 | Destructive action is blocked | Ask the user for explicit approval before retrying with top-level `confirm: true` |
 
 ## Destructive actions stay protected
@@ -232,22 +209,22 @@ For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or
 
 ## Dynamic vs meta-tools
 
-| Question                         | Meta-tools                                          | Dynamic toolset                                               |
-| -------------------------------- | --------------------------------------------------- | ------------------------------------------------------------- |
-| What is visible in `tools/list`? | 33 to 50 domain tools                               | 3 public discovery/execution tools                            |
-| How does the model choose?       | Pick a domain tool and action                       | Search the canonical action catalog, then describe the action |
-| Where are schemas found?         | Tool schema or `gitlab://schema/meta/...` resources | `gitlab_describe_tools`                                       |
-| Best current use                 | Default compatibility                               | Low-token clients and compact action discovery                |
-| Rollback                         | Already default                                     | Unset `TOOL_SURFACE` or set `TOOL_SURFACE=meta`               |
+| Question                         | Meta-tools                                          | Dynamic toolset                                 |
+| -------------------------------- | --------------------------------------------------- | ----------------------------------------------- |
+| What is visible in `tools/list`? | 33 to 50 domain tools                               | 2 public discovery/execution tools              |
+| How does the model choose?       | Pick a domain tool and action                       | Find an action with schema, then execute it     |
+| Where are schemas found?         | Tool schema or `gitlab://schema/meta/...` resources | `gitlab_find_action`                            |
+| Best current use                 | Explicit compatibility mode                         | Default low-token action discovery              |
+| Rollback                         | Set `TOOL_SURFACE=meta`                             | Default path                                    |
 
 ## Troubleshooting
 
 | Symptom                                 | What to do                                                                                          |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| You only see three tools                | That is expected in dynamic mode. Ask the assistant to search and describe actions before execution |
-| Search returns broad results            | Include domain, resource, action, and filters, for example `merge request list open authored by me` |
-| Execute rejects an action               | Search again and use the canonical `domain.action` ID from the result                               |
-| Execute rejects parameters              | Describe the action and retry with the exact field names and types                                  |
+| You only see two tools                  | That is expected in dynamic mode. Ask the assistant to find actions before execution                |
+| Find returns broad results              | Include domain, resource, action, and filters, for example `merge request list open authored by me` |
+| Execute rejects an action               | Find again and use the canonical `domain.action` ID from the result                                 |
+| Execute rejects parameters              | Find the action and retry with the exact field names and types                                      |
 | Resources and prompts still use context | Add `CAPABILITY_SURFACE=minimal` or `--capability-surface=minimal`                                  |
 
 ## Further reading

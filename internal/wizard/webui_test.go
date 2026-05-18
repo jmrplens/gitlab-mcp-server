@@ -572,7 +572,7 @@ func TestNormalizeConfigureRequest_DefaultsAndLogLevel(t *testing.T) {
 	if err := normalizeConfigureRequest(&req); err != nil {
 		t.Fatalf("unexpected validation error: %v", err)
 	}
-	if req.ToolSurface != "meta" || req.CapabilitySurface != "full" || req.MetaParamSchema != "opaque" {
+	if req.ToolSurface != "dynamic" || req.CapabilitySurface != "full" || req.MetaParamSchema != "opaque" {
 		t.Errorf("catalog defaults not applied: %#v", req)
 	}
 	if req.AutoUpdateMode != "true" || !req.AutoUpdate {

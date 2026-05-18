@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Users
 > **Individual tools**: 27
-> **Meta-tools**: `gitlab_user`, `gitlab_event`, `gitlab_key`, `gitlab_namespace` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tools**: `gitlab_user`, `gitlab_event`, `gitlab_key`, `gitlab_namespace` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Users API](https://docs.gitlab.com/ee/api/users.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The users domain covers user profile retrieval, status management, SSH keys, emails, contribution events, association counts, to-do management, project/user events, SSH key lookups, and namespace operations.
 
-With the default `TOOL_SURFACE=meta` catalog, the individual tools below are consolidated into domain-specific meta-tools that dispatch by `action` parameter.
+With `TOOL_SURFACE=meta`, the individual tools below are consolidated into domain-specific meta-tools that dispatch by `action` parameter.
 
 ### Common Questions
 

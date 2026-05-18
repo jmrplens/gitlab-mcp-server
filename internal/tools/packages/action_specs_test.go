@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -74,6 +75,28 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 			t.Fatal("Route.Handler(gitlab_package_publish_directory) returned nil")
 		}
 	})
+}
+
+// TestActionSpecs_PublishDirectoryGuidance verifies directory publishing exposes
+// LLM-facing guidance for include_pattern semantics.
+func TestActionSpecs_PublishDirectoryGuidance(t *testing.T) {
+	byTool := packageSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, packageActionHandler())))
+	spec := byTool["gitlab_package_publish_directory"]
+
+	if !strings.Contains(spec.Usage, "include_pattern is one glob") {
+		t.Fatalf("Usage = %q, want single-glob guidance", spec.Usage)
+	}
+	guidance := spec.ParameterGuidance["include_pattern"]
+	if guidance.SemanticRole != "single_glob_filter" {
+		t.Fatalf("include_pattern SemanticRole = %q, want single_glob_filter", guidance.SemanticRole)
+	}
+	if !containsText(guidance.CommonConfusions, "comma-separated filenames") {
+		t.Fatalf("include_pattern CommonConfusions = %v, want comma-separated warning", guidance.CommonConfusions)
+	}
+	description := schemaPropertyDescription(t, spec.Route.InputSchema, "include_pattern")
+	if !strings.Contains(description, "Single glob pattern") || !strings.Contains(description, "Do not pass comma-separated filenames") {
+		t.Fatalf("include_pattern schema description = %q, want single-glob warning", description)
+	}
 }
 
 // TestActionSpecs_DeleteOutputs verifies delete routes preserve their success messages.
@@ -227,4 +250,30 @@ func packageSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]to
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+func schemaPropertyDescription(t *testing.T, schema map[string]any, propertyName string) string {
+	t.Helper()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties = %T, want map[string]any", schema["properties"])
+	}
+	property, ok := properties[propertyName].(map[string]any)
+	if !ok {
+		t.Fatalf("schema property %q = %T, want map[string]any", propertyName, properties[propertyName])
+	}
+	description, ok := property["description"].(string)
+	if !ok {
+		t.Fatalf("schema property %q description = %T, want string", propertyName, property["description"])
+	}
+	return description
+}
+
+func containsText(values []string, needle string) bool {
+	for _, value := range values {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
 }

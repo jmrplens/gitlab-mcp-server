@@ -122,7 +122,7 @@ Explicit boundary markers (e.g., `<user_content>...</user_content>`) were evalua
 
 ### Coverage
 
-Escaping is applied to all UGC fields across 163 domain sub-packages. Key field types:
+Escaping is applied to all UGC fields across 165 domain sub-packages. Key field types:
 
 - **Titles/names**: `EscapeMdTableCell()` in table contexts, `EscapeMdHeading()` in heading contexts
 - **Descriptions/bodies**: `WrapGFMBody()` for multi-line GFM content

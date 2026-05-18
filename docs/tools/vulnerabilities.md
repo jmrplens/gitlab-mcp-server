@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Vulnerabilities
 > **Individual tools**: 8
-> **Meta-tool**: `gitlab_vulnerability` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_vulnerability` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Vulnerabilities GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#queryvulnerabilities)
 > **Audience**: 👤 End users, AI assistant users
 > **Requires**: GitLab Ultimate or Premium
@@ -14,7 +14,7 @@
 
 The vulnerabilities domain provides full lifecycle management for security vulnerabilities detected by GitLab security scanners. All operations use the GitLab GraphQL API (no REST equivalent for these queries/mutations). This domain covers listing, inspecting, and triaging vulnerabilities, as well as retrieving severity counts and per-pipeline security report summaries.
 
-With the default `TOOL_SURFACE=meta` catalog, all 8 individual tools below are consolidated into a single `gitlab_vulnerability` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, all 8 individual tools below are consolidated into a single `gitlab_vulnerability` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

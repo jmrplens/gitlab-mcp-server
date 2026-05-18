@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Boards, Labels & Milestones
 > **Individual tools**: 25
-> **Meta-tool**: `gitlab_board` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_board` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Issue Boards API](https://docs.gitlab.com/ee/api/boards.html), [Labels API](https://docs.gitlab.com/ee/api/labels.html), [Milestones API](https://docs.gitlab.com/ee/api/milestones.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The boards domain covers project issue boards (board CRUD and board list management), project labels (CRUD, subscription, promotion), and project milestones (CRUD, associated issues, and merge requests). Boards organize issues into columns; labels and milestones are key attributes used to filter and categorize board lists.
 
-With the default `TOOL_SURFACE=meta` catalog, the 10 board tools are consolidated into a single `gitlab_board` meta-tool that dispatches by `action` parameter. Labels (8 tools) and milestones (7 tools) remain as individual tools.
+With `TOOL_SURFACE=meta`, the 10 board tools are consolidated into a single `gitlab_board` meta-tool that dispatches by `action` parameter. Labels (8 tools) and milestones (7 tools) remain as individual tools.
 
 ### Common Questions
 

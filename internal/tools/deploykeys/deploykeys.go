@@ -135,7 +135,7 @@ type ListProjectInput struct {
 // GetInput represents parameters for getting a single deploy key.
 type GetInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	DeployKeyID int64                `json:"deploy_key_id" jsonschema:"Deploy key ID,required"`
+	DeployKeyID int64                `json:"deploy_key_id" jsonschema:"Deploy key ID returned by deploy key operations; do not use deploy_token_id,required"`
 }
 
 // AddInput represents parameters for adding a deploy key to a project.
@@ -150,7 +150,7 @@ type AddInput struct {
 // UpdateInput represents parameters for updating a deploy key.
 type UpdateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	DeployKeyID int64                `json:"deploy_key_id" jsonschema:"Deploy key ID,required"`
+	DeployKeyID int64                `json:"deploy_key_id" jsonschema:"Deploy key ID returned by deploy key operations; do not use deploy_token_id,required"`
 	Title       string               `json:"title,omitempty" jsonschema:"New deploy key title"`
 	CanPush     *bool                `json:"can_push,omitempty" jsonschema:"Whether the key can push to the project"`
 }
@@ -158,13 +158,13 @@ type UpdateInput struct {
 // DeleteInput represents parameters for deleting a deploy key.
 type DeleteInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	DeployKeyID int64                `json:"deploy_key_id" jsonschema:"Deploy key ID,required"`
+	DeployKeyID int64                `json:"deploy_key_id" jsonschema:"Deploy key ID returned by deploy key operations; do not use deploy_token_id,required"`
 }
 
 // EnableInput represents parameters for enabling a deploy key for a project.
 type EnableInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	DeployKeyID int64                `json:"deploy_key_id" jsonschema:"Deploy key ID to enable,required"`
+	DeployKeyID int64                `json:"deploy_key_id" jsonschema:"Deploy key ID to enable; do not use deploy_token_id,required"`
 }
 
 // ListAllInput represents parameters for listing all instance-level deploy keys.

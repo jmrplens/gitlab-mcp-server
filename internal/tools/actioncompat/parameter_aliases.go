@@ -14,7 +14,15 @@ const (
 	reasonNormalizeAccessLevel           = "normalized GitLab access level name to numeric level"
 	reasonPipelineScheduleDescription    = "pipeline schedules use description as the display name"
 	reasonReleaseLinkParentTagName       = "release link actions use tag_name for the parent release"
+	reasonReleaseLinkBatchURL            = "batch release link entries use url for the link target"
+	reasonReleaseLinkBatchUnsupported    = "batch release link entries do not accept direct asset path fields"
+	reasonIssueLinkSourceIssueIID        = "issue.link_create uses issue_iid for the source issue"
 	reasonIssueLinkTargetIssueIID        = "issue.link_create uses target_issue_iid for the linked issue"
+	reasonIssueLinkRelation              = "issue.link_create uses link_type for the link relationship"
+	reasonIssueSpentTimeSummary          = "issue.spent_time_add uses summary for the time log note"
+	reasonIssueTimeEstimateDuration      = "issue.time_estimate_set uses duration for the estimate value"
+	reasonMergeRequestEmojiName          = "merge request emoji creation uses name for the emoji identifier"
+	reasonMergeRequestEmojiUnsupported   = "merge request emoji creation does not accept stale time-tracking or awardable metadata params"
 	reasonSnippetProjectCreateFiles      = "project snippet creation uses files entries in dynamic mode"
 	reasonSnippetProjectCreateFilePath   = "snippet file entries use file_path"
 	reasonSnippetProjectCreateNoAction   = "project snippet creation file entries do not include an action field"
@@ -45,9 +53,17 @@ func defaultParameterAliases() []ParameterAlias {
 	return []ParameterAlias{
 		parameterAlias(actionJobList, "status", "scope", "job.list uses scope for job status filtering"),
 		parameterAlias(actionRepositoryFileGet, "branch", "ref", "repository.file_get reads file content at a ref"),
+		parameterAlias(actionIssueLinkCreate, "source_issue_iid", "issue_iid", reasonIssueLinkSourceIssueIID),
 		parameterAlias(actionIssueLinkCreate, "linked_issue_iid", "target_issue_iid", reasonIssueLinkTargetIssueIID),
 		parameterAlias(actionIssueLinkCreate, "project_id", "target_project_id", "same-project issue links reuse project_id as target_project_id"),
+		parameterAlias(actionIssueLinkCreate, "relation", "link_type", reasonIssueLinkRelation),
+		parameterAlias(actionIssueLinkCreate, "type", "link_type", reasonIssueLinkRelation),
+		parameterAlias(actionIssueSpentTimeAdd, "note", "summary", reasonIssueSpentTimeSummary),
+		parameterAlias(actionIssueTimeEstimateSet, "time", "duration", reasonIssueTimeEstimateDuration),
 		parameterAlias(actionIssueUpdate, "state_event", "state_event", "normalized issue state event value"),
+		parameterAlias(actionMergeRequestEmojiMRCreate, "emoji", "name", reasonMergeRequestEmojiName),
+		normalizerOnlyParameterAlias(actionMergeRequestEmojiMRCreate, "duration", "removed", reasonMergeRequestEmojiUnsupported),
+		normalizerOnlyParameterAlias(actionMergeRequestEmojiMRCreate, "awardable_type", "removed", reasonMergeRequestEmojiUnsupported),
 		parameterAlias(actionPipelineScheduleCreate, "name", "description", reasonPipelineScheduleDescription),
 		parameterAlias(actionPipelineScheduleUpdate, "name", "description", reasonPipelineScheduleDescription),
 		parameterAlias(actionBranchProtect, "push_access_level", "push_access_level", reasonNormalizeAccessLevel),
@@ -58,6 +74,9 @@ func defaultParameterAliases() []ParameterAlias {
 		parameterAlias(actionProjectMemberAdd, "access_level", "access_level", reasonNormalizeAccessLevel),
 		parameterAlias(actionProjectMemberEdit, "access_level", "access_level", reasonNormalizeAccessLevel),
 		parameterAlias(actionReleaseLinkCreate, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
+		parameterAlias(actionReleaseLinkCreateBatch, "links.link_url", "links.url", reasonReleaseLinkBatchURL),
+		normalizerOnlyParameterAlias(actionReleaseLinkCreateBatch, "links.filepath", "links", reasonReleaseLinkBatchUnsupported),
+		normalizerOnlyParameterAlias(actionReleaseLinkCreateBatch, "links.direct_asset_path", "links", reasonReleaseLinkBatchUnsupported),
 		parameterAlias(actionReleaseLinkDelete, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
 		parameterAlias(actionReleaseLinkGet, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
 		parameterAlias(actionReleaseLinkList, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
@@ -133,6 +152,14 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 			}
 		}
 	case actionIssueLinkCreate:
+		if value, ok := out["source_issue_iid"]; ok && accepts("issue_iid") && !accepts("source_issue_iid") {
+			if _, hasIssueIID := out["issue_iid"]; !hasIssueIID {
+				updated := clone()
+				updated["issue_iid"] = value
+				delete(updated, "source_issue_iid")
+				record("source_issue_iid", "issue_iid", reasonIssueLinkSourceIssueIID)
+			}
+		}
 		if value, ok := out["linked_issue_iid"]; ok && accepts("target_issue_iid") && !accepts("linked_issue_iid") {
 			if _, hasTargetIssueIID := out["target_issue_iid"]; !hasTargetIssueIID {
 				updated := clone()
@@ -147,12 +174,63 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("project_id", "target_project_id", "same-project issue links reuse project_id as target_project_id")
 			}
 		}
+		if value, ok := out["relation"]; ok && accepts("link_type") && !accepts("relation") {
+			if _, hasLinkType := out["link_type"]; !hasLinkType {
+				updated := clone()
+				updated["link_type"] = value
+				delete(updated, "relation")
+				record("relation", "link_type", reasonIssueLinkRelation)
+			}
+		}
+		if value, ok := out["type"]; ok && accepts("link_type") && !accepts("type") {
+			if _, hasLinkType := out["link_type"]; !hasLinkType {
+				updated := clone()
+				updated["link_type"] = value
+				delete(updated, "type")
+				record("type", "link_type", reasonIssueLinkRelation)
+			}
+		}
+	case actionIssueSpentTimeAdd:
+		if value, ok := out["note"]; ok && accepts("summary") && !accepts("note") {
+			if _, hasSummary := out["summary"]; !hasSummary {
+				updated := clone()
+				updated["summary"] = value
+				delete(updated, "note")
+				record("note", "summary", reasonIssueSpentTimeSummary)
+			}
+		}
+	case actionIssueTimeEstimateSet:
+		if value, ok := out["time"]; ok && accepts("duration") && !accepts("time") {
+			if _, hasDuration := out["duration"]; !hasDuration {
+				updated := clone()
+				updated["duration"] = value
+				delete(updated, "time")
+				record("time", "duration", reasonIssueTimeEstimateDuration)
+			}
+		}
 	case actionIssueUpdate:
 		if value, ok := out["state_event"]; ok && accepts("state_event") {
 			if stateEvent, converted := issueStateEventValue(value); converted {
 				clone()["state_event"] = stateEvent
 				record("state_event", "state_event", "normalized issue state event value")
 			}
+		}
+	case actionMergeRequestEmojiMRCreate:
+		if value, ok := out["emoji"]; ok && accepts("name") && !accepts("emoji") {
+			if _, hasName := out["name"]; !hasName {
+				updated := clone()
+				updated["name"] = value
+				delete(updated, "emoji")
+				record("emoji", "name", reasonMergeRequestEmojiName)
+			}
+		}
+		if _, ok := out["duration"]; ok && !accepts("duration") {
+			delete(clone(), "duration")
+			record("duration", "removed", reasonMergeRequestEmojiUnsupported)
+		}
+		if _, ok := out["awardable_type"]; ok && !accepts("awardable_type") {
+			delete(clone(), "awardable_type")
+			record("awardable_type", "removed", reasonMergeRequestEmojiUnsupported)
 		}
 	case actionPipelineScheduleCreate, actionPipelineScheduleUpdate:
 		if value, ok := out["name"]; ok && accepts("description") && !accepts("name") {
@@ -211,6 +289,10 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 				record("release_tag_name", "tag_name", reasonReleaseLinkParentTagName)
 			}
 		}
+	case actionReleaseLinkCreateBatch:
+		if accepts("links") {
+			normalizeReleaseLinkBatchEntries(clone, out, record)
+		}
 	case actionRunnerUpdate:
 		if value, ok := out["paused"]; ok && accepts("paused") {
 			if paused, converted := boolStringValue(value); converted {
@@ -230,6 +312,59 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 		}
 	}
 	return out, explanations
+}
+
+func normalizeReleaseLinkBatchEntries(clone func() map[string]any, params map[string]any, record func(alias, target, reason string)) bool {
+	links, ok := params["links"].([]any)
+	if !ok || len(links) == 0 {
+		return false
+	}
+	var updatedLinks []any
+	changed := false
+	recorded := make(map[string]bool)
+	recordOnce := func(alias, target, reason string) {
+		key := alias + "->" + target
+		if recorded[key] {
+			return
+		}
+		recorded[key] = true
+		record(alias, target, reason)
+	}
+	for index, link := range links {
+		linkMap, mapOK := link.(map[string]any)
+		if !mapOK {
+			continue
+		}
+		updatedLink := maps.Clone(linkMap)
+		linkChanged := false
+		if value, hasLinkURL := updatedLink["link_url"]; hasLinkURL {
+			if _, hasURL := updatedLink["url"]; !hasURL {
+				updatedLink["url"] = value
+			}
+			delete(updatedLink, "link_url")
+			linkChanged = true
+			recordOnce("links.link_url", "links.url", reasonReleaseLinkBatchURL)
+		}
+		for _, unsupported := range []string{"filepath", "direct_asset_path"} {
+			if _, hasUnsupported := updatedLink[unsupported]; hasUnsupported {
+				delete(updatedLink, unsupported)
+				linkChanged = true
+				recordOnce("links."+unsupported, "links", reasonReleaseLinkBatchUnsupported)
+			}
+		}
+		if !linkChanged {
+			continue
+		}
+		if updatedLinks == nil {
+			updatedLinks = append([]any(nil), links...)
+		}
+		updatedLinks[index] = updatedLink
+		changed = true
+	}
+	if changed {
+		clone()["links"] = updatedLinks
+	}
+	return changed
 }
 
 func buildSnippetCreateFilesFromSingleFileParams(clone func() map[string]any, params map[string]any) bool {

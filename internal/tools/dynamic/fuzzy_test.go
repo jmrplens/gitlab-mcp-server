@@ -114,7 +114,7 @@ func TestFirstRuneString_HandlesUnicodeTokens(t *testing.T) {
 
 // TestFuzzyTokenScore_CoversTokenMatching validates scoring for exact tokens, typo tokens,
 // multi-token typo recovery, ignored short tokens, empty inputs, and non-matches.
-// These are the primitive behaviors that make gitlab_search_tools recover from
+// These are the primitive behaviors that make dynamic catalog search recover from
 // small spelling mistakes without replacing exact search ranking.
 func TestFuzzyTokenScore_CoversTokenMatching(t *testing.T) {
 	tokens := buildSearchTokens("merge_request list project issue")

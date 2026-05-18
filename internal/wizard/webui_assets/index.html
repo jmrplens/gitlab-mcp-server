@@ -389,14 +389,12 @@
         <div class="field advanced-field">
           <div class="option-heading">
             <label for="optToolSurface">Tool surface</label>
-            <button type="button" class="help-btn" aria-label="Tool surface help" data-tooltip="Choose the stdio tool catalog exposed to MCP clients: grouped meta-tools, every individual tool, or a low-token dynamic surface.">?</button>
+            <button type="button" class="help-btn" aria-label="Tool surface help" data-tooltip="Choose the stdio tool catalog exposed to MCP clients: low-token dynamic find/execute, grouped meta-tools, or every individual tool.">?</button>
           </div>
           <select id="optToolSurface">
-            <option value="meta" selected>meta</option>
+            <option value="dynamic" selected>dynamic</option>
+            <option value="meta">meta</option>
             <option value="individual">individual</option>
-            <option value="dynamic">dynamic</option>
-            <option value="dynamic-2">dynamic-2</option>
-            <option value="dynamic-3">dynamic-3</option>
           </select>
         </div>
         <div class="field advanced-field">
@@ -677,7 +675,7 @@ try {
     document.getElementById('tokenExistingHint').style.display = 'block';
   }
   setChecked('optSkipTLS', defaults.skip_tls_verify);
-  setValue('optToolSurface', defaults.tool_surface || 'meta');
+  setValue('optToolSurface', defaults.tool_surface || 'dynamic');
   setValue('optCapabilitySurface', defaults.capability_surface || 'full');
   setValue('optMetaParamSchema', defaults.meta_param_schema || 'opaque');
   setChecked('optEnterprise', defaults.enterprise);

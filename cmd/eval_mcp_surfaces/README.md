@@ -9,7 +9,7 @@
 | `--tasks` | `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md` | Executable Markdown fixture with `MT-*`, `MS-*`, and `MF-*` rows. |
 | `--model` | empty | Single `provider:model` string or legacy Anthropic model name. Overrides `--models` and `EVAL_MODELS`. |
 | `--models` | empty | Comma-separated `provider:model` list for local multi-model analysis. Defaults to `EVAL_MODELS` when `--model` is not set. |
-| `--tool-surface` | `meta` | Model-facing catalog surface to evaluate: `meta`, `dynamic`, `dynamic-3`, or `dynamic-2`. `dynamic` keeps the current three-tool search/describe/execute surface. `dynamic-3` explicitly selects that same three-tool pattern, while `dynamic-2` evaluates `gitlab_find_action` plus `gitlab_execute_tool`. |
+| `--tool-surface` | `dynamic` | Model-facing catalog surface to evaluate: `dynamic` or `meta`. `dynamic` evaluates `gitlab_find_action` plus `gitlab_execute_tool`. |
 | `--tools-file` | empty | Optional saved `tools/list` snapshot for schema/model comparison. |
 | `--preset` | empty | Optional batch preset: `docker-read`, `docker-mutating-safe`, `docker-destructive-safe`, or `schema-enterprise`. Explicit flags override preset defaults. |
 | `--partition` | empty | Optional fixture partition such as `base-read`, `enterprise-read`, or `error-recovery`. |
@@ -93,22 +93,6 @@ timeout 7200s go run ./cmd/eval_mcp_surfaces \
   --out dist/evaluation/mcp-surfaces/dynamic-haiku-all.md
 ```
 
-Compare the two dynamic candidates with schema-only dry-runs:
-
-```bash
-timeout 300s go run ./cmd/eval_mcp_surfaces \
-  --tool-surface=dynamic-3 \
-  --dry-run \
-  --repeat=1 \
-  --out dist/evaluation/mcp-surfaces/dynamic-3-dry-run.md
-
-timeout 300s go run ./cmd/eval_mcp_surfaces \
-  --tool-surface=dynamic-2 \
-  --dry-run \
-  --repeat=1 \
-  --out dist/evaluation/mcp-surfaces/dynamic-2-dry-run.md
-```
-
 Run the deterministic dynamic search corpus after ranker changes:
 
 ```bash
@@ -148,27 +132,27 @@ Compare token and evaluation reports:
 
 ```bash
 timeout 180s go run ./cmd/eval_mcp_surfaces \
-  --compare dist/evaluation/mcp-surfaces/snapshots/release-1.6.1/tokens.md \
-  --compare dist/evaluation/mcp-surfaces/snapshots/release-1.6.1/schema-base-read.md \
+  --compare dist/evaluation/mcp-surfaces/snapshots/release-2.0.0-RC1/tokens.md \
+  --compare dist/evaluation/mcp-surfaces/snapshots/release-2.0.0-RC1/schema-base-read.md \
   --compare dist/evaluation/mcp-surfaces/snapshots/current/schema-base-read.md \
   --out dist/evaluation/mcp-surfaces/comparison/version-summary.md
 ```
 
-Check Dynamic-3 call-efficiency gates from trace JSONL without parsing Markdown reports:
+Check dynamic call-efficiency gates from trace JSONL without parsing Markdown reports:
 
 ```bash
 timeout 180s go run ./cmd/eval_mcp_surfaces \
-  --check-efficiency dist/evaluation/mcp-surfaces/dynamic-3-full-live-2026-05-13.traces/traces.jsonl \
-  --out dist/evaluation/mcp-surfaces/dynamic-3-efficiency-check.md
+  --check-efficiency dist/evaluation/mcp-surfaces/dynamic-full-live.traces/traces.jsonl \
+  --out dist/evaluation/mcp-surfaces/dynamic-efficiency-check.md
 ```
 
-Compare Dynamic-3 and meta-tool traces on identical task/model rows only:
+Compare dynamic and meta-tool traces on identical task/model rows only:
 
 ```bash
 timeout 180s go run ./cmd/eval_mcp_surfaces \
-  --compare-traces dist/evaluation/mcp-surfaces/dynamic-3-full-live-2026-05-13.traces/traces.jsonl \
+  --compare-traces dist/evaluation/mcp-surfaces/dynamic-full-live.traces/traces.jsonl \
   --compare-traces dist/evaluation/mcp-surfaces/meta-default-opaque-full-plus-reactivated-2026-05-13.traces/traces.jsonl \
-  --out dist/evaluation/mcp-surfaces/meta-vs-dynamic-3-trace-comparison.md
+  --out dist/evaluation/mcp-surfaces/meta-vs-dynamic-trace-comparison.md
 ```
 
 Publish reviewed Docker reports into managed documentation blocks:
@@ -197,15 +181,15 @@ Run validated calls through an older or separately built stdio MCP server:
 
 ```bash
 E2E_MODE=docker timeout 900s go run ./cmd/eval_mcp_surfaces \
-  --tools-file dist/evaluation/mcp-surfaces/snapshots/release-1.6.1/tools.json \
-  --mcp-command dist/evaluation/mcp-surfaces/snapshots/release-1.6.1/gitlab-mcp-server-release-1.6.1 \
+  --tools-file dist/evaluation/mcp-surfaces/snapshots/release-2.0.0-RC1/tools.json \
+  --mcp-command dist/evaluation/mcp-surfaces/snapshots/release-2.0.0-RC1/gitlab-mcp-server-release-2.0.0-RC1 \
   --mcp-env-file test/e2e/.env.docker \
   --execute-tools \
   --use-fixtures \
   --fixtures dist/evaluation/mcp-surfaces/e2e-fixtures.json \
   --task MS-028 \
   --skip-unavailable \
-  --out dist/evaluation/mcp-surfaces/snapshots/release-1.6.1/live-ms-028.md
+  --out dist/evaluation/mcp-surfaces/snapshots/release-2.0.0-RC1/live-ms-028.md
 ```
 
 The Docker presets apply safe defaults for `--backend=gitlab`, `--gitlab-env-file test/e2e/.env.docker`, `--execute-tools`, `--use-fixtures`, `--skip-unavailable`, and the matching partition. Override any of those flags explicitly when debugging a narrower case.

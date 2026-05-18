@@ -27,8 +27,8 @@ These are the settings every user needs to get started.
 | --- | --- | --- |
 | `GITLAB_URL` | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances |
 | `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
-| `TOOL_SURFACE` | `meta` | Canonical tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
-| `META_TOOLS` | *(legacy)* | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, `dynamic` -> `dynamic`, `dynamic-2` -> `dynamic-2`, and `dynamic-3` -> `dynamic-3`. Ignored when `TOOL_SURFACE` is set |
+| `TOOL_SURFACE` | `dynamic` | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` |
+| `META_TOOLS` | *(legacy)* | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, and `dynamic` -> `dynamic`. Ignored when `TOOL_SURFACE` is set |
 | `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` preserves all resources, meta-schema resources, workflow guides, and prompts; `minimal` keeps only `gitlab://workspace/roots` |
 | `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
@@ -42,7 +42,7 @@ These are the settings every user needs to get started.
 ```env
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 GITLAB_SKIP_TLS_VERIFY=false
-TOOL_SURFACE=meta
+TOOL_SURFACE=dynamic
 GITLAB_READ_ONLY=false
 GITLAB_SAFE_MODE=false
 LOG_LEVEL=info
@@ -198,34 +198,31 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 
 | Mode | Variable | Tools Exposed | Best For |
 | --- | --- | --- | --- |
-| **Meta-tools** (default) | `TOOL_SURFACE=meta` | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Most users — lower token usage |
-| **Dynamic toolset** | `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-3` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Low-token clients that can search, describe, then execute actions |
-| **Dynamic-2 variant** | `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Experimental two-tool surface that combines discovery and schema lookup |
+| **Dynamic toolset** (default) | `TOOL_SURFACE=dynamic` | `gitlab_find_action`, `gitlab_execute_tool` | Most users — lowest startup context while retaining full catalog reachability |
+| **Meta-tools** | `TOOL_SURFACE=meta` | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Clients that prefer consolidated domain dispatchers with `action` parameters |
 | **Individual tools** | `TOOL_SURFACE=individual` | 863 CE / 1014 self-managed enterprise / 1019 GitLab.com Enterprise | Clients that need granular tool selection |
 
-`TOOL_SURFACE=dynamic` and `TOOL_SURFACE=dynamic-3` are functionally equivalent today: they expose `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. Prefer `TOOL_SURFACE=dynamic` for normal low-token deployments, use `dynamic-3` when you need to pin the explicit three-tool selector, and reserve `dynamic-2` for find/execute experiments. `META_TOOLS` remains accepted for one compatibility window only and should appear only in migration guidance.
+Use the default dynamic surface for normal low-token deployments. Set `TOOL_SURFACE=meta` only when a client or workflow prefers domain meta-tools. `META_TOOLS` remains accepted for compatibility only and should appear only in migration guidance.
 
-See [Meta-Tools](meta-tools.md) for the complete domain-action mapping and [Dynamic Toolset](dynamic-tools.md) for the low-token search/describe/execute workflow.
+See [Meta-Tools](meta-tools.md) for the complete domain-action mapping and [Dynamic Toolset](dynamic-tools.md) for the low-token find/execute workflow.
 
 ### Meta Parameter Schema
 
-`META_PARAM_SCHEMA` controls only the visible `inputSchema` of meta-tool dispatchers in `tools/list`. It does not change handler validation, execution, Dynamic describe output, or schema resource contents.
+`META_PARAM_SCHEMA` controls only the visible `inputSchema` of meta-tool dispatchers in `tools/list`. It does not change handler validation, execution, dynamic find output, or schema resource contents.
 
 | Tool surface | Visible tool schema impact | Schema resource availability | Dynamic describe behavior | Token impact | Recommended use |
 | --- | --- | --- | --- | --- | --- |
 | `meta` | Applies to every visible domain meta-tool. `opaque` shows `{action, params}`; `compact` and `full` inline per-action `oneOf` schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | Not applicable | `full` is 11.9x larger than `opaque`; `compact` is 6.5x larger | Keep `opaque`; use schema resources for exact params |
-| `dynamic` | Does not change the three dynamic tool schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_describe_tools` always returns exact action schemas inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; use describe |
-| `dynamic-3` | Same as `dynamic` | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_describe_tools` always returns exact action schemas inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; use describe |
-| `dynamic-2` | Does not change the two dynamic tool schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_find_action` returns discovery and schema details inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; reserve `dynamic-2` for experiments |
+| `dynamic` | Does not change the two dynamic tool schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_find_action` returns discovery and schema details inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; use find |
 | `individual` | Ignored because individual tools expose one operation per tool with direct typed schemas | Meta-schema resources are not registered in individual mode | Not applicable | None | Leave unset |
 
 The evaluated modes remain `opaque`, `compact`, and `full`. The setting name remains valid for the final architecture because it describes the meta-tool dispatcher envelope, while the action catalog remains the source of the underlying per-action schemas.
 
 ### Capability Surface
 
-`CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `CAPABILITY_SURFACE=minimal` is a non-default low-token mode intended for dynamic toolset experiments: it keeps `gitlab://workspace/roots` for project discovery and omits static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates. Dynamic execution still works because `gitlab_describe_tools` in `dynamic`/`dynamic-3` and `gitlab_find_action` in `dynamic-2` return exact action schemas inline.
+`CAPABILITY_SURFACE=full` is the default and preserves the existing MCP resources and prompts catalog. `CAPABILITY_SURFACE=minimal` is a non-default low-token mode intended for dynamic toolset experiments: it keeps `gitlab://workspace/roots` for project discovery and omits static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates. Dynamic execution still works because `gitlab_find_action` returns exact action schemas inline.
 
-Measured startup context is the reason this setting keeps only two modes for now: full resources plus prompts cost about 18.2k tokens, while minimal keeps the shared capability overhead near 184 tokens. Candidate intermediate modes such as `schemas`, `resources`, or `docs` would add another configuration axis without beating the existing `dynamic + minimal + describe` workflow for low-token clients. Reconsider an intermediate mode only if future audits show a concrete client that needs schema resources but cannot tolerate prompts or static resources.
+Measured startup context is the reason this setting keeps only two modes for now: full resources plus prompts cost about 18.2k tokens, while minimal keeps the shared capability overhead near 184 tokens. Candidate intermediate modes such as `schemas`, `resources`, or `docs` would add another configuration axis without beating the existing `dynamic + minimal + find` workflow for low-token clients. Reconsider an intermediate mode only if future audits show a concrete client that needs schema resources but cannot tolerate prompts or static resources.
 
 ### HTTP Server Mode
 
@@ -237,8 +234,8 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--http-addr` | `:8080` | HTTP listen address |
 | `--gitlab-url` | *(optional)* | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification |
-| `--tool-surface` | `meta` | Canonical tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
-| `--meta-tools` | `true` | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false` |
+| `--tool-surface` | `dynamic` | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` |
+| `--meta-tools` | *(unset)* | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false` |
 | `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `--max-http-clients` | `100` | Maximum concurrent client sessions |

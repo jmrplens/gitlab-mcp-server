@@ -76,6 +76,39 @@ func TestApplyToActionSpecs_ProjectsCompatibilityMetadata(t *testing.T) {
 	}
 }
 
+// TestApplyToActionSpecs_ProjectsPackageReleaseWorkflowAliases verifies aliases
+// for common package-to-release workflow action names are projected into specs.
+func TestApplyToActionSpecs_ProjectsPackageReleaseWorkflowAliases(t *testing.T) {
+	hasAlias := func(aliases []toolutil.ActionAliasSpec, alias, target string) bool {
+		for _, candidate := range aliases {
+			if candidate.Alias == alias && candidate.Target == target && candidate.Searchable {
+				return true
+			}
+		}
+		return false
+	}
+
+	packageSpecs := ApplyToActionSpecs("gitlab_package", "package", []toolutil.ActionSpec{
+		toolutil.NewActionSpec("publish_directory", toolutil.ActionRoute{}, toolutil.ActionSpecOptions{}),
+	})
+	packageAliases := packageSpecs[0].Compatibility.ActionAliases
+	for _, alias := range []string{"generic_packages.publish_directory", "gitlab_package/publish_directory"} {
+		if !hasAlias(packageAliases, alias, "publish_directory") {
+			t.Fatalf("package aliases = %+v, want %s -> publish_directory", packageAliases, alias)
+		}
+	}
+
+	releaseSpecs := ApplyToActionSpecs("gitlab_release_link", "release", []toolutil.ActionSpec{
+		toolutil.NewActionSpec("link_create_batch", toolutil.ActionRoute{}, toolutil.ActionSpecOptions{}),
+	})
+	releaseAliases := releaseSpecs[0].Compatibility.ActionAliases
+	for _, alias := range []string{"release_link.create_batch", "release_link.link_create_batch", "gitlab_release/link_create_batch", "gitlab_release_link/link_create_batch"} {
+		if !hasAlias(releaseAliases, alias, "link_create_batch") {
+			t.Fatalf("release aliases = %+v, want %s -> link_create_batch", releaseAliases, alias)
+		}
+	}
+}
+
 // TestApplyToActionSpecs_EmptyInputReturnsNil verifies action projection keeps empty specs nil.
 func TestApplyToActionSpecs_EmptyInputReturnsNil(t *testing.T) {
 	if specs := ApplyToActionSpecs("gitlab_job", "job", nil); specs != nil {
@@ -118,6 +151,25 @@ func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
 	canonical, ok := NormalizeActionAlias(" FEATURE_FLAG_USER_LIST.CREATE ")
 	if !ok || canonical != "feature_flags.ff_user_list_create" {
 		t.Fatalf("NormalizeActionAlias() = %q, %t; want feature_flags.ff_user_list_create, true", canonical, ok)
+	}
+	canonical, ok = NormalizeActionAlias("project.hook_create")
+	if !ok || canonical != "project.hook_add" {
+		t.Fatalf("NormalizeActionAlias(project.hook_create) = %q, %t; want project.hook_add, true", canonical, ok)
+	}
+	for alias, want := range map[string]string{
+		"generic_packages.publish_directory":    "package.publish_directory",
+		"gitlab_package/publish_directory":      "package.publish_directory",
+		"gitlab_release/create":                 "release.create",
+		"gitlab_release_link/link_create_batch": "release.link_create_batch",
+		"merge_request.award_emoji_add":         "merge_request.emoji_mr_create",
+		"merge_request.time_spent_set":          "merge_request.spent_time_add",
+		"release_link.create_batch":             "release.link_create_batch",
+		"release_link.link_create_batch":        "release.link_create_batch",
+	} {
+		canonical, ok = NormalizeActionAlias(alias)
+		if !ok || canonical != want {
+			t.Fatalf("NormalizeActionAlias(%s) = %q, %t; want %s, true", alias, canonical, ok, want)
+		}
 	}
 	unchanged, aliasOK := NormalizeActionAlias("project.get")
 	if aliasOK || unchanged != "project.get" {

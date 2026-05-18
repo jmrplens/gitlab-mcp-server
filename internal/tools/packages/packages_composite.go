@@ -107,7 +107,7 @@ type PublishDirInput struct {
 	PackageName    string               `json:"package_name" jsonschema:"Package name (alphanumeric, dots, dashes, underscores),required"`
 	PackageVersion string               `json:"package_version" jsonschema:"Package version (e.g. 1.0.0),required"`
 	DirectoryPath  string               `json:"directory_path" jsonschema:"Absolute path to a local directory whose files will be published,required"`
-	IncludePattern string               `json:"include_pattern,omitempty" jsonschema:"Glob pattern to filter files within the directory (e.g. *.tar.gz). If omitted, all regular files are included."`
+	IncludePattern string               `json:"include_pattern,omitempty" jsonschema:"Single glob pattern to filter files within the directory (e.g. *.txt or *.tar.gz). If omitted, all regular files are included. Do not pass comma-separated filenames."`
 	Status         string               `json:"status,omitempty" jsonschema:"Package status: default or hidden"`
 }
 

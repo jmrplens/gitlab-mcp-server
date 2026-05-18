@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Tags
 > **Individual tools**: 9
-> **Meta-tool**: `gitlab_tag` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_tag` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Tags API](https://docs.gitlab.com/ee/api/tags.html), [Protected Tags API](https://docs.gitlab.com/ee/api/protected_tags.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The tags domain covers Git tag management in GitLab projects: creating, retrieving, listing, and deleting tags, verifying tag signatures, and managing protected tag rules with configurable access levels.
 
-With the default `TOOL_SURFACE=meta` catalog, all 9 individual tools below are consolidated into a single `gitlab_tag` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, all 9 individual tools below are consolidated into a single `gitlab_tag` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

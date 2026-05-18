@@ -954,6 +954,29 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("%s should be destructive", toolName)
 		}
 	}
+	for _, toolName := range []string{"gitlab_edit_project_badge", "gitlab_edit_group_badge"} {
+		guidance := byTool[toolName].ParameterGuidance["name"]
+		if guidance.SemanticRole != "badge_display_name" {
+			t.Fatalf("%s name SemanticRole = %q, want badge_display_name", toolName, guidance.SemanticRole)
+		}
+		if !containsText(guidance.CommonConfusions, "new_name") {
+			t.Fatalf("%s name CommonConfusions = %v, want new_name warning", toolName, guidance.CommonConfusions)
+		}
+	}
+	projectAdd := byTool["gitlab_add_project_badge"]
+	if !strings.Contains(projectAdd.Usage, "project badge") || !strings.Contains(projectAdd.Usage, "project_id") || !strings.Contains(projectAdd.Usage, "group_id") || !strings.Contains(projectAdd.Usage, "do not use gitlab_group") {
+		t.Fatalf("project badge add Usage = %q, want project_id guidance", projectAdd.Usage)
+	}
+	if guidance := projectAdd.ParameterGuidance["project_id"]; guidance.SemanticRole != "scope_project" || !containsText(guidance.CommonConfusions, "group_id") {
+		t.Fatalf("project badge project_id guidance = %+v, want group_id warning", guidance)
+	}
+	groupAdd := byTool["gitlab_add_group_badge"]
+	if !strings.Contains(groupAdd.Usage, "group badge") || !strings.Contains(groupAdd.Usage, "group_id") || !strings.Contains(groupAdd.Usage, "project_id") || !strings.Contains(groupAdd.Usage, "project badge CRUD belongs to gitlab_project") {
+		t.Fatalf("group badge add Usage = %q, want group_id guidance", groupAdd.Usage)
+	}
+	if guidance := groupAdd.ParameterGuidance["group_id"]; guidance.SemanticRole != "scope_group" || !containsText(guidance.CommonConfusions, "project_id") {
+		t.Fatalf("group badge group_id guidance = %+v, want project_id warning", guidance)
+	}
 }
 
 // TestActionSpecs_CallAllRoutes validates all badge routes through canonical specs.
@@ -1120,4 +1143,13 @@ func badgeSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]tool
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+func containsText(values []string, needle string) bool {
+	for _, value := range values {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
 }

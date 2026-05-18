@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Templates
 > **Individual tools**: 10
-> **Meta-tool**: `gitlab_template` (default `TOOL_SURFACE=meta` catalog — also includes CI lint actions from the `cilint` sub-package)
+> **Meta-tool**: `gitlab_template` (`TOOL_SURFACE=meta` catalog — also includes CI lint actions from the `cilint` sub-package)
 > **GitLab API**: [CI YAML Templates](https://docs.gitlab.com/ee/api/templates/gitlab_ci_ymls.html) · [Dockerfile Templates](https://docs.gitlab.com/ee/api/templates/dockerfiles.html) · [Gitignore Templates](https://docs.gitlab.com/ee/api/templates/gitignores.html) · [License Templates](https://docs.gitlab.com/ee/api/templates/licenses.html) · [Project Templates](https://docs.gitlab.com/ee/api/project_templates.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The templates domain provides access to GitLab's built-in template libraries for CI YAML, Dockerfiles, gitignore files, open-source licenses, and project-level templates. All tools are read-only.
 
-With the default `TOOL_SURFACE=meta` catalog, all 10 template tools are consolidated into a single `gitlab_template` meta-tool. The meta-tool also includes CI lint actions (`lint`, `lint_project`) from the `cilint` sub-package for convenience.
+With `TOOL_SURFACE=meta`, all 10 template tools are consolidated into a single `gitlab_template` meta-tool. The meta-tool also includes CI lint actions (`lint`, `lint_project`) from the `cilint` sub-package for convenience.
 
 ### Common Questions
 

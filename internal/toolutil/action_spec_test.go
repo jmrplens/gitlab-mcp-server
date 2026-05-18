@@ -596,6 +596,41 @@ func TestActionSpecsToMapWithError_MergesGuidanceWithoutOverwritingRouteFields(t
 	}
 }
 
+// TestActionSpecsToMapWithError_ProjectsActionMetadata verifies non-guidance
+// catalog metadata remains available to meta-tool routes.
+func TestActionSpecsToMapWithError_ProjectsActionMetadata(t *testing.T) {
+	route := ActionRoute{
+		Aliases:        []string{"route alias"},
+		Tags:           []string{"route"},
+		Usage:          "route usage",
+		RelatedActions: []string{"route.get"},
+	}
+	spec := NewActionSpec("settings_get", route, ActionSpecOptions{
+		Aliases:        []string{"instance settings"},
+		Tags:           []string{"settings"},
+		Usage:          "Read current GitLab application settings.",
+		RelatedActions: []string{"metadata.get"},
+	})
+
+	routes, err := ActionSpecsToMapWithError([]ActionSpec{spec})
+	if err != nil {
+		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
+	}
+	got := routes["settings_get"]
+	if got.Usage != "Read current GitLab application settings." {
+		t.Fatalf("Usage = %q, want spec usage", got.Usage)
+	}
+	if len(got.Aliases) != 2 || got.Aliases[0] != "route alias" || got.Aliases[1] != "instance settings" {
+		t.Fatalf("Aliases = %+v, want merged route and spec aliases", got.Aliases)
+	}
+	if len(got.Tags) != 2 || got.Tags[0] != "route" || got.Tags[1] != "settings" {
+		t.Fatalf("Tags = %+v, want merged route and spec tags", got.Tags)
+	}
+	if len(got.RelatedActions) != 2 || got.RelatedActions[0] != "route.get" || got.RelatedActions[1] != "metadata.get" {
+		t.Fatalf("RelatedActions = %+v, want merged route and spec related actions", got.RelatedActions)
+	}
+}
+
 // TestActionSpecsToMapWithError_DeduplicatesCommonConfusions verifies ActionSpecsToMapWithError deduplicates common confusions.
 func TestActionSpecsToMapWithError_DeduplicatesCommonConfusions(t *testing.T) {
 	route := ActionRoute{

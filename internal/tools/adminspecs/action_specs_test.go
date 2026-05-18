@@ -2,6 +2,7 @@ package adminspecs
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
@@ -103,6 +104,28 @@ func TestActionSpecs_SelectedActionSemantics(t *testing.T) {
 			assertBoolOverride(t, "Destructive", spec.IndividualTool.AnnotationOverrides.Destructive, tt.individualDestructive)
 			assertBoolOverride(t, "Idempotent", spec.IndividualTool.AnnotationOverrides.Idempotent, tt.individualIdempotent)
 		})
+	}
+}
+
+// TestActionSpecs_SettingsAndMetadataUsageGuidance verifies settings and metadata
+// actions keep distinct selection hints for meta and dynamic surfaces.
+func TestActionSpecs_SettingsAndMetadataUsageGuidance(t *testing.T) {
+	specs := specsByName(t, ActionSpecs(nil))
+
+	settingsSpec := specs["settings_get"]
+	if !strings.Contains(settingsSpec.Usage, "application settings") {
+		t.Fatalf("settings_get Usage = %q, want application settings guidance", settingsSpec.Usage)
+	}
+	if !slices.Contains(settingsSpec.Aliases, "instance settings") {
+		t.Fatalf("settings_get Aliases = %v, want instance settings alias", settingsSpec.Aliases)
+	}
+
+	metadataSpec := specs["metadata_get"]
+	if !strings.Contains(metadataSpec.Usage, "version") || !strings.Contains(metadataSpec.Usage, "Do not use this for application settings") {
+		t.Fatalf("metadata_get Usage = %q, want metadata/version distinction", metadataSpec.Usage)
+	}
+	if !slices.Contains(metadataSpec.Aliases, "gitlab version") {
+		t.Fatalf("metadata_get Aliases = %v, want gitlab version alias", metadataSpec.Aliases)
 	}
 }
 

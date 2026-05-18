@@ -18,7 +18,7 @@ const (
 	SurfaceKindGitLabAction SurfaceKind = "gitlab-action"
 	// SurfaceKindMetaGroup identifies visible domain meta-tool dispatchers.
 	SurfaceKindMetaGroup SurfaceKind = "meta-group"
-	// SurfaceKindDynamicController identifies Dynamic search/describe/execute controllers.
+	// SurfaceKindDynamicController identifies Dynamic controller tools.
 	SurfaceKindDynamicController SurfaceKind = "dynamic-controller"
 	// SurfaceKindRuntimeUtility identifies non-GitLab runtime helper tools.
 	SurfaceKindRuntimeUtility SurfaceKind = "runtime-utility"

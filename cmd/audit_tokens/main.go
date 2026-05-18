@@ -97,18 +97,14 @@ func main() {
 	individualTools := listTools(client, config.ToolSurfaceIndividual, true)
 	metaBaseTools := listTools(client, config.ToolSurfaceMeta, false)
 	metaEnterpriseTools := listTools(client, config.ToolSurfaceMeta, true)
-	dynamic3BaseTools := listDynamicTools(dynamicBaseCatalog)
-	dynamic3EnterpriseTools := listDynamicTools(dynamicEnterpriseCatalog)
-	dynamic2BaseTools := listDynamic2Tools(dynamicBaseCatalog)
-	dynamic2EnterpriseTools := listDynamic2Tools(dynamicEnterpriseCatalog)
+	dynamicBaseTools := listDynamicTools(dynamicBaseCatalog)
+	dynamicEnterpriseTools := listDynamicTools(dynamicEnterpriseCatalog)
 
 	individualInfo := measureTools(individualTools)
 	metaBaseInfo := measureTools(metaBaseTools)
 	metaEnterpriseInfo := measureTools(metaEnterpriseTools)
-	dynamic3BaseInfo := measureTools(dynamic3BaseTools)
-	dynamic3EnterpriseInfo := measureTools(dynamic3EnterpriseTools)
-	dynamic2BaseInfo := measureTools(dynamic2BaseTools)
-	dynamic2EnterpriseInfo := measureTools(dynamic2EnterpriseTools)
+	dynamicBaseInfo := measureTools(dynamicBaseTools)
+	dynamicEnterpriseInfo := measureTools(dynamicEnterpriseTools)
 
 	individualResourceTokens := measureResources(client, nil)
 	metaBaseResourceTokens := measureResources(client, metaBaseRoutes)
@@ -125,10 +121,8 @@ func main() {
 	indTotal := totalTokens(individualInfo)
 	metaTotal := totalTokens(metaBaseInfo)
 	metaEntTotal := totalTokens(metaEnterpriseInfo)
-	dynamic3Total := totalTokens(dynamic3BaseInfo)
-	dynamic3EntTotal := totalTokens(dynamic3EnterpriseInfo)
-	dynamic2Total := totalTokens(dynamic2BaseInfo)
-	dynamic2EntTotal := totalTokens(dynamic2EnterpriseInfo)
+	dynamicTotal := totalTokens(dynamicBaseInfo)
+	dynamicEntTotal := totalTokens(dynamicEnterpriseInfo)
 	metaBaseCatalogActions := countActions(metaBaseRoutes)
 	metaEnterpriseCatalogActions := countActions(metaEnterpriseRoutes)
 	baseReachableActions := countActions(dynamicBaseRoutes)
@@ -142,10 +136,8 @@ func main() {
 	fmt.Fprintf(tw, "  Individual (all)\t%d\t%d\t%s\t%s\n", len(individualInfo), len(individualInfo), fmtNum(indTotal), fmtNum(indTotal*bytesPerTok))
 	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), baseReachableActions, fmtNum(metaTotal), fmtNum(metaTotal*bytesPerTok))
 	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(metaEnterpriseInfo), enterpriseReachableActions, fmtNum(metaEntTotal), fmtNum(metaEntTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic-3 (base)\t%d\t%d\t%s\t%s\n", len(dynamic3BaseInfo), baseReachableActions, fmtNum(dynamic3Total), fmtNum(dynamic3Total*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic-3 (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamic3EnterpriseInfo), enterpriseReachableActions, fmtNum(dynamic3EntTotal), fmtNum(dynamic3EntTotal*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic-2 (base)\t%d\t%d\t%s\t%s\n", len(dynamic2BaseInfo), baseReachableActions, fmtNum(dynamic2Total), fmtNum(dynamic2Total*bytesPerTok))
-	fmt.Fprintf(tw, "  Dynamic-2 (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamic2EnterpriseInfo), enterpriseReachableActions, fmtNum(dynamic2EntTotal), fmtNum(dynamic2EntTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic (base)\t%d\t%d\t%s\t%s\n", len(dynamicBaseInfo), baseReachableActions, fmtNum(dynamicTotal), fmtNum(dynamicTotal*bytesPerTok))
+	fmt.Fprintf(tw, "  Dynamic (enterprise)\t%d\t%d\t%s\t%s\n", len(dynamicEnterpriseInfo), enterpriseReachableActions, fmtNum(dynamicEntTotal), fmtNum(dynamicEntTotal*bytesPerTok))
 	_ = tw.Flush()
 	fmt.Println()
 	if addedStandalone := baseReachableActions - metaBaseCatalogActions; addedStandalone > 0 {
@@ -160,10 +152,8 @@ func main() {
 		fmt.Println()
 	}
 	if indTotal > 0 {
-		savings := float64(indTotal-dynamic3Total) / float64(indTotal) * 100
-		fmt.Printf("  Dynamic-3 mode reduces visible tool token overhead by %.1f%% vs individual mode\n", savings)
-		candidateSavings := float64(indTotal-dynamic2Total) / float64(indTotal) * 100
-		fmt.Printf("  Dynamic-2 candidate reduces visible tool token overhead by %.1f%% vs individual mode\n", candidateSavings)
+		savings := float64(indTotal-dynamicTotal) / float64(indTotal) * 100
+		fmt.Printf("  Dynamic mode reduces visible tool token overhead by %.1f%% vs individual mode\n", savings)
 		fmt.Println()
 	}
 
@@ -173,24 +163,23 @@ func main() {
 	fmt.Printf("  Resources (individual): ~%s tokens (%s bytes)\n", fmtNum(individualResourceTokens), fmtNum(individualResourceTokens*bytesPerTok))
 	fmt.Printf("  Resources (meta-tools): ~%s tokens (%s bytes)\n", fmtNum(metaBaseResourceTokens), fmtNum(metaBaseResourceTokens*bytesPerTok))
 	fmt.Printf("  Resources (dynamic): ~%s tokens (%s bytes)\n", fmtNum(dynamicBaseResourceTokens), fmtNum(dynamicBaseResourceTokens*bytesPerTok))
-	fmt.Printf("  Resources (dynamic-minimal candidate): ~%s tokens (%s bytes)\n", fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamicMinimalResourceTokens*bytesPerTok))
+	fmt.Printf("  Resources (dynamic-minimal): ~%s tokens (%s bytes)\n", fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamicMinimalResourceTokens*bytesPerTok))
 	fmt.Printf("  Prompts (full): ~%s tokens (%s bytes)\n", fmtNum(promptTokens), fmtNum(promptTokens*bytesPerTok))
-	fmt.Println("  Prompts (dynamic-minimal candidate): ~0 tokens (0 bytes)")
+	fmt.Println("  Prompts (dynamic-minimal): ~0 tokens (0 bytes)")
 	fmt.Printf("  Individual total: ~%s tokens\n", fmtNum(individualResourceTokens+promptTokens))
 	fmt.Printf("  Meta-tool total:  ~%s tokens\n", fmtNum(metaBaseResourceTokens+promptTokens))
 	fmt.Printf("  Dynamic total:    ~%s tokens\n", fmtNum(dynamicBaseResourceTokens+promptTokens))
-	fmt.Printf("  Dynamic-minimal candidate total: ~%s tokens\n", fmtNum(dynamicMinimalResourceTokens))
+	fmt.Printf("  Dynamic-minimal total: ~%s tokens\n", fmtNum(dynamicMinimalResourceTokens))
 	fmt.Println()
 
 	fmt.Println("## Minimal Capability Candidate")
 	fmt.Println()
-	fmt.Println("  Required for dynamic-3 action use: the three dynamic tools. `gitlab_describe_tools` returns exact schemas inline, so meta-schema resources are not required.")
-	fmt.Println("  Experimental dynamic-2 action use combines discovery and schemas in `gitlab_find_action`, plus `gitlab_execute_tool` for final execution.")
-	fmt.Println("  Retained candidate resource: `gitlab://workspace/roots` for local project discovery from .git/config remotes.")
-	fmt.Println("  Optional in the candidate: static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates.")
+	fmt.Println("  Required for dynamic action use: `gitlab_find_action` returns exact schemas inline, and `gitlab_execute_tool` performs execution.")
+	fmt.Println("  Retained minimal resource: `gitlab://workspace/roots` for local project discovery from .git/config remotes.")
+	fmt.Println("  Optional in minimal mode: static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates.")
 	if dynamicBaseResourceTokens+promptTokens > 0 {
 		savings := float64(dynamicBaseResourceTokens+promptTokens-dynamicMinimalResourceTokens) / float64(dynamicBaseResourceTokens+promptTokens) * 100
-		fmt.Printf("  Shared-overhead reduction: %.1f%% vs current dynamic resources+prompts\n", savings)
+		fmt.Printf("  Shared-overhead reduction: %.1f%% vs full dynamic resources+prompts\n", savings)
 	}
 	fmt.Println()
 
@@ -207,12 +196,7 @@ func main() {
 	// Dynamic tools by token cost
 	fmt.Println("## Dynamic Tools by Token Cost (base)")
 	fmt.Println()
-	printTopTools(dynamic3BaseInfo, len(dynamic3BaseInfo))
-
-	// Dynamic-2 tools by token cost
-	fmt.Println("## Dynamic-2 Tools by Token Cost (base)")
-	fmt.Println()
-	printTopTools(dynamic2BaseInfo, len(dynamic2BaseInfo))
+	printTopTools(dynamicBaseInfo, len(dynamicBaseInfo))
 
 	// Domain aggregation for individual tools
 	fmt.Println("## Domain Totals (Individual Mode, Top 20)")
@@ -226,14 +210,10 @@ func main() {
 		fmtNum(indTotal), fmtNum(individualResourceTokens+promptTokens), fmtNum(indTotal+individualResourceTokens+promptTokens))
 	fmt.Printf("  Meta-tool mode:  ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
 		fmtNum(metaTotal), fmtNum(metaBaseResourceTokens+promptTokens), fmtNum(metaTotal+metaBaseResourceTokens+promptTokens))
-	fmt.Printf("  Dynamic-3 mode:  ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(dynamic3Total), fmtNum(dynamicBaseResourceTokens+promptTokens), fmtNum(dynamic3Total+dynamicBaseResourceTokens+promptTokens))
-	fmt.Printf("  Dynamic-3 minimal candidate: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(dynamic3Total), fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamic3Total+dynamicMinimalResourceTokens))
-	fmt.Printf("  Dynamic-2 mode:  ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(dynamic2Total), fmtNum(dynamicBaseResourceTokens+promptTokens), fmtNum(dynamic2Total+dynamicBaseResourceTokens+promptTokens))
-	fmt.Printf("  Dynamic-2 minimal candidate: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
-		fmtNum(dynamic2Total), fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamic2Total+dynamicMinimalResourceTokens))
+	fmt.Printf("  Dynamic mode:    ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
+		fmtNum(dynamicTotal), fmtNum(dynamicBaseResourceTokens+promptTokens), fmtNum(dynamicTotal+dynamicBaseResourceTokens+promptTokens))
+	fmt.Printf("  Dynamic minimal: ~%s tokens (tools) + ~%s tokens (resources+prompts) = ~%s tokens\n",
+		fmtNum(dynamicTotal), fmtNum(dynamicMinimalResourceTokens), fmtNum(dynamicTotal+dynamicMinimalResourceTokens))
 	fmt.Println()
 }
 
@@ -262,14 +242,6 @@ func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool)
 // listDynamicTools registers the low-token dynamic public toolset backed by
 // action routes and returns the advertised tool definitions.
 func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
-	dynamictools.RegisterCatalogTools(server, catalog)
-	return listToolsFromServer(server)
-}
-
-// listDynamic2Tools registers the experimental find/execute dynamic public
-// toolset backed by action routes and returns the advertised tools.
-func listDynamic2Tools(catalog *actioncatalog.Catalog) []*mcp.Tool {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
 	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
 	return listToolsFromServer(server)

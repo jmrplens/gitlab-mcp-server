@@ -51,7 +51,7 @@ meta-schema resources.
 
 The configuration intentionally has only two modes today. `full` is the broad
 compatibility surface; `minimal` is the low-token surface for Dynamic clients
-that can use `gitlab_describe_tools` or `gitlab_find_action` for schemas inline.
+that can use `gitlab_find_action` for schemas inline.
 The latest token audit measured shared resources plus prompts at about 18.2k
 tokens in full mode and about 184 tokens in minimal mode. Intermediate modes
 such as schemas-only or resources-only are not exposed because they add another

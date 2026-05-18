@@ -209,13 +209,13 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	readmePath := filepath.Join(tmp, "README.md")
 	resultsDoc := "# Results\n\n" +
 		modelEvalMetaResultsStart + "\n" + modelEvalMetaResultsEnd + "\n\n" +
-		modelEvalDynamic3ResultsStart + "\nexisting dynamic\n" + modelEvalDynamic3ResultsEnd + "\n"
+		modelEvalDynamicResultsStart + "\nexisting dynamic\n" + modelEvalDynamicResultsEnd + "\n"
 	if err := os.WriteFile(resultsPath, []byte(resultsDoc), 0o600); err != nil {
 		t.Fatalf("write results doc: %v", err)
 	}
 	readmeDoc := "# README\n\n" +
 		modelEvalMetaSummaryStart + "\n" + modelEvalMetaSummaryEnd + "\n\n" +
-		modelEvalDynamic3SummaryStart + "\nexisting dynamic summary\n" + modelEvalDynamic3SummaryEnd + "\n"
+		modelEvalDynamicSummaryStart + "\nexisting dynamic summary\n" + modelEvalDynamicSummaryEnd + "\n"
 	if err := os.WriteFile(readmePath, []byte(readmeDoc), 0o600); err != nil {
 		t.Fatalf("write readme: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 	}
 	staleReadmeDoc := "# README\n\n" +
 		modelEvalMetaSummaryStart + "\nstale\n" + modelEvalMetaSummaryEnd + "\n\n" +
-		modelEvalDynamic3SummaryStart + "\nexisting dynamic summary\n" + modelEvalDynamic3SummaryEnd + "\n"
+		modelEvalDynamicSummaryStart + "\nexisting dynamic summary\n" + modelEvalDynamicSummaryEnd + "\n"
 	if writeErr := os.WriteFile(readmePath, []byte(staleReadmeDoc), 0o600); writeErr != nil {
 		t.Fatalf("write stale readme: %v", writeErr)
 	}
@@ -272,7 +272,7 @@ func TestPublishEvaluationDocs_WritesAndChecksManagedDocs(t *testing.T) {
 }
 
 // TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection verifies that
-// dynamic reports update only the dynamic3 blocks while preserving meta-tool data.
+// dynamic reports update only the dynamic blocks while preserving meta-tool data.
 func TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection(t *testing.T) {
 	tmp := t.TempDir()
 	reportPath := filepath.Join(tmp, "dynamic-report.md")
@@ -283,13 +283,13 @@ func TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection(t *testing.T
 	readmePath := filepath.Join(tmp, "README.md")
 	resultsDoc := "# Results\n\n" +
 		modelEvalMetaResultsStart + "\nexisting meta results\n" + modelEvalMetaResultsEnd + "\n\n" +
-		modelEvalDynamic3ResultsStart + "\n" + modelEvalDynamic3ResultsEnd + "\n"
+		modelEvalDynamicResultsStart + "\n" + modelEvalDynamicResultsEnd + "\n"
 	if err := os.WriteFile(resultsPath, []byte(resultsDoc), 0o600); err != nil {
 		t.Fatalf("write results doc: %v", err)
 	}
 	readmeDoc := "# README\n\n" +
 		modelEvalMetaSummaryStart + "\nexisting meta summary\n" + modelEvalMetaSummaryEnd + "\n\n" +
-		modelEvalDynamic3SummaryStart + "\n" + modelEvalDynamic3SummaryEnd + "\n"
+		modelEvalDynamicSummaryStart + "\n" + modelEvalDynamicSummaryEnd + "\n"
 	if err := os.WriteFile(readmePath, []byte(readmeDoc), 0o600); err != nil {
 		t.Fatalf("write readme: %v", err)
 	}
@@ -437,8 +437,8 @@ func TestPublishFormattingHelpers_CoverBranchLabels(t *testing.T) {
 	if got := dockerLiveStatus(publishModelSummary{DockerBacked: false}); got != "Not Docker-backed" {
 		t.Fatalf("dockerLiveStatus(non-docker) = %q", got)
 	}
-	if got := publishSectionForReport(publishReport{ToolSurface: config.ToolSurfaceDynamic2}); got != publishSectionDynamic2 {
-		t.Fatalf("publishSectionForReport(dynamic-2) = %q, want dynamic2", got)
+	if got := publishSectionForReport(publishReport{ToolSurface: config.ToolSurfaceDynamic}); got != publishSectionDynamic {
+		t.Fatalf("publishSectionForReport(dynamic) = %q, want dynamic", got)
 	}
 	if got := publishSectionForReport(publishReport{ToolSurface: "experimental"}); got != publishSectionUnknown {
 		t.Fatalf("publishSectionForReport(unknown) = %q, want unknown", got)

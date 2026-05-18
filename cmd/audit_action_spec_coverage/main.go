@@ -729,7 +729,7 @@ func inspectDomainSource(domainDir, packageName string) (domainSource, error) {
 				source.HasRegisterMeta = true
 			case "ActionSpecs":
 				source.HasActionSpecsFunction = true
-			case "RegisterCatalogTools", "RegisterCatalogFindExecuteTools":
+			case "RegisterCatalogFindExecuteTools":
 				source.HasDynamicCatalogRegistration = true
 			}
 		}
@@ -860,7 +860,7 @@ func collectSurfaceSpecs(client *gitlabclient.Client) []actioncatalog.SurfaceToo
 	specs := make([]actioncatalog.SurfaceToolSpec, 0, 11)
 	specs = append(specs, surfaces.StandaloneToolSpecs(client)...)
 	specs = append(specs, surfaces.ServerMaintenanceToolSpecs(updater)...)
-	specs = append(specs, dynamictools.ControllerSurfaceSpecs(nil, true)...)
+	specs = append(specs, dynamictools.ControllerSurfaceSpecs(nil)...)
 	return specs
 }
 
@@ -956,7 +956,7 @@ func classifySurface(source domainSource, coverage domainCoverage) string {
 func coverageNotes(source domainSource, coverage domainCoverage) []string {
 	notes := make([]string, 0, 4)
 	if source.HasDynamicCatalogRegistration {
-		notes = append(notes, "dynamic search/describe/execute surface registered from the canonical action catalog")
+		notes = append(notes, "dynamic controller surface registered from the canonical action catalog")
 	}
 	if coverage.HasSurfaceSpecs {
 		notes = append(notes, fmt.Sprintf("%d explicit surface specs: %s", coverage.SurfaceSpecCount, strings.Join(coverage.SurfaceKinds, ",")))

@@ -40,7 +40,7 @@ gitlab-mcp-server/
 │   ├── elicitation/             # Interactive user input client
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 163 domain sub-packages
+│   ├── tools/                   # Tool orchestration layer + 165 domain sub-packages
 │   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
 │   │   ├── register_meta.go     # RegisterAllMeta() — catalog-backed meta-tool groups and standalone surfaces
 │   │   ├── metatool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
@@ -48,7 +48,7 @@ gitlab-mcp-server/
 │   │   ├── branches/            # Branch management tools (example sub-package)
 │   │   ├── issues/              # Issue CRUD tools
 │   │   ├── mergerequests/       # MR lifecycle tools
-│   │   └── ...                  # 163 domain sub-packages total
+│   │   └── ...                  # 165 domain sub-packages total
 │   ├── resources/               # 46 MCP resource handlers
 │   └── prompts/                 # 38 MCP prompt handlers (12 core + 26 extended)
 ├── test/e2e/                    # End-to-end integration tests (suite/ + infra)
@@ -73,11 +73,11 @@ graph TD
     MAIN -->|builds| CATALOG
     CATALOG --> IND[individual projection<br/>tools.RegisterAll]
     CATALOG --> META[meta projection<br/>tools.RegisterAllMeta]
-    CATALOG --> DYN[dynamic projection<br/>dynamic.RegisterCatalogTools]
+    CATALOG --> DYN[dynamic projection<br/>dynamic.RegisterCatalogFindExecuteTools]
     STANDALONE[StandaloneSurfaceToolSpecs<br/>project discovery + interactive flows] -.->|dynamic route injection| DYN
     SURFACE -->|individual| IND
     SURFACE -->|meta| META
-    SURFACE -->|dynamic / dynamic-3| DYN
+    SURFACE -->|dynamic| DYN
     IND --> PROJECTION[Catalog-backed ActionRoute handlers]
     META --> PROJECTION
     DYN --> PROJECTION
@@ -365,7 +365,7 @@ With the catalog-first modular sub-package architecture:
 7. **Update documentation**: `docs/tools/{domain}.md` and `docs/tools/README.md`
 
 Meta-tools and the dynamic toolset share the canonical action catalog built by `internal/tools/action_catalog.go`.
-When adding a normal GitLab operation, define the route once inside the owning `ActionSpec` with typed `ActionRoute` constructors (`RouteAction`, `DestructiveAction`, `RouteActionWithRequest`, and void variants). The same catalog entry then powers the individual tool projection, visible meta-tool action, `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool`, schema resources, generated LLM files, and audit commands. Do not create package-local `RegisterTools` functions or dynamic-only copies of ordinary GitLab actions.
+When adding a normal GitLab operation, define the route once inside the owning `ActionSpec` with typed `ActionRoute` constructors (`RouteAction`, `DestructiveAction`, `RouteActionWithRequest`, and void variants). The same catalog entry then powers the individual tool projection, visible meta-tool action, `gitlab_find_action`, `gitlab_execute_tool`, schema resources, generated LLM files, and audit commands. Do not create package-local `RegisterTools` functions or dynamic-only copies of ordinary GitLab actions.
 
 See [Tool Surfaces And Canonical Action Core](tool-surfaces-and-action-core.md) for the ownership rules across individual tools, meta-tools, dynamic mode, and the canonical action catalog.
 

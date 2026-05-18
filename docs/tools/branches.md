@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Branches
 > **Individual tools**: 10
-> **Meta-tool**: `gitlab_branch` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_branch` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Branches API](https://docs.gitlab.com/ee/api/branches.html), [Protected Branches API](https://docs.gitlab.com/ee/api/protected_branches.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The branches domain covers Git branch management in GitLab projects: retrieving, creating, listing, and deleting branches, as well as protecting and unprotecting branches with configurable access levels. Protected branch tools allow inspecting and updating push/merge access restrictions.
 
-With the default `TOOL_SURFACE=meta` catalog, all 10 individual tools below are consolidated into a single `gitlab_branch` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, all 10 individual tools below are consolidated into a single `gitlab_branch` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

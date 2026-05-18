@@ -31,37 +31,26 @@ const (
 	modelEvalMetaSummaryStart = "<!-- START MODEL EVAL META SUMMARY -->"
 	// modelEvalMetaSummaryEnd identifies the model eval meta summary end constant used by this package.
 	modelEvalMetaSummaryEnd = "<!-- END MODEL EVAL META SUMMARY -->"
-	// modelEvalDynamic3SummaryStart identifies the model eval dynamic 3 summary start constant used by this package.
-	modelEvalDynamic3SummaryStart = "<!-- START MODEL EVAL DYNAMIC3 SUMMARY -->"
-	// modelEvalDynamic3SummaryEnd identifies the model eval dynamic 3 summary end constant used by this package.
-	modelEvalDynamic3SummaryEnd = "<!-- END MODEL EVAL DYNAMIC3 SUMMARY -->"
+	// modelEvalDynamicSummaryStart identifies the model eval dynamic summary start constant used by this package.
+	modelEvalDynamicSummaryStart = "<!-- START MODEL EVAL DYNAMIC SUMMARY -->"
+	// modelEvalDynamicSummaryEnd identifies the model eval dynamic summary end constant used by this package.
+	modelEvalDynamicSummaryEnd = "<!-- END MODEL EVAL DYNAMIC SUMMARY -->"
 	// modelEvalMetaResultsStart identifies the model eval meta results start constant used by this package.
 	modelEvalMetaResultsStart = "<!-- START MODEL EVAL META RESULTS -->"
 	// modelEvalMetaResultsEnd identifies the model eval meta results end constant used by this package.
 	modelEvalMetaResultsEnd = "<!-- END MODEL EVAL META RESULTS -->"
-	// modelEvalDynamic3ResultsStart identifies the model eval dynamic 3 results start constant used by this package.
-	modelEvalDynamic3ResultsStart = "<!-- START MODEL EVAL DYNAMIC3 RESULTS -->"
-	// modelEvalDynamic3ResultsEnd identifies the model eval dynamic 3 results end constant used by this package.
-	modelEvalDynamic3ResultsEnd = "<!-- END MODEL EVAL DYNAMIC3 RESULTS -->"
+	// modelEvalDynamicResultsStart identifies the model eval dynamic results start constant used by this package.
+	modelEvalDynamicResultsStart = "<!-- START MODEL EVAL DYNAMIC RESULTS -->"
+	// modelEvalDynamicResultsEnd identifies the model eval dynamic results end constant used by this package.
+	modelEvalDynamicResultsEnd = "<!-- END MODEL EVAL DYNAMIC RESULTS -->"
 	// modelEvalResultsStart identifies the model eval results start constant used by this package.
 	modelEvalResultsStart = "<!-- START MODEL EVAL RESULTS -->"
 	// modelEvalResultsEnd identifies the model eval results end constant used by this package.
 	modelEvalResultsEnd = "<!-- END MODEL EVAL RESULTS -->"
-	// publishProjectResolveAction identifies the publish project resolve action constant used by this package.
-	publishProjectResolveAction = "discover_project.resolve"
-	// publishProjectSearchAction identifies the publish project search action constant used by this package.
-	publishProjectSearchAction = "search.projects"
-	// publishSamplingContinue identifies the publish sampling continue constant used by this package.
-	publishSamplingContinue = "sampling_unsupported_continue"
-	// publishElicitationContinue identifies the publish elicitation continue constant used by this package.
-	publishElicitationContinue = "elicitation_unsupported_continue"
-
 	// publishSectionMeta identifies the publish section meta constant used by this package.
 	publishSectionMeta = "meta"
-	// publishSectionDynamic2 identifies the publish section dynamic 2 constant used by this package.
-	publishSectionDynamic2 = "dynamic2"
-	// publishSectionDynamic3 identifies the publish section dynamic 3 constant used by this package.
-	publishSectionDynamic3 = "dynamic3"
+	// publishSectionDynamic identifies the publish section dynamic constant used by this package.
+	publishSectionDynamic = "dynamic"
 	// publishSectionUnknown identifies the publish section unknown constant used by this package.
 	publishSectionUnknown = "unknown"
 	// maxPublishTraceLineBytes identifies the max publish trace line bytes constant used by this package.
@@ -242,7 +231,7 @@ func publishDocSectionsForReports(reports []publishReport) []publishDocSection {
 		keys[publishSectionForReport(report)] = true
 	}
 	sections := make([]publishDocSection, 0, len(keys))
-	for _, key := range []string{publishSectionMeta, publishSectionDynamic2, publishSectionDynamic3} {
+	for _, key := range []string{publishSectionMeta, publishSectionDynamic} {
 		if keys[key] {
 			sections = append(sections, publishDocSectionForKey(key))
 		}
@@ -267,10 +256,8 @@ func publishSectionForReport(report publishReport) string {
 	switch surface {
 	case "", config.ToolSurfaceMeta:
 		return publishSectionMeta
-	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3:
-		return publishSectionDynamic3
-	case config.ToolSurfaceDynamic2:
-		return publishSectionDynamic2
+	case config.ToolSurfaceDynamic:
+		return publishSectionDynamic
 	default:
 		return publishSectionUnknown
 	}
@@ -279,21 +266,13 @@ func publishSectionForReport(report publishReport) string {
 // publishDocSectionForKey returns marker pairs for a publication section.
 func publishDocSectionForKey(sectionKey string) publishDocSection {
 	switch sectionKey {
-	case publishSectionDynamic2:
+	case publishSectionDynamic:
 		return publishDocSection{
-			Key:                publishSectionDynamic2,
-			ResultsStartMarker: "<!-- START MODEL EVAL DYNAMIC2 RESULTS -->",
-			ResultsEndMarker:   "<!-- END MODEL EVAL DYNAMIC2 RESULTS -->",
-			SummaryStartMarker: "<!-- START MODEL EVAL DYNAMIC2 SUMMARY -->",
-			SummaryEndMarker:   "<!-- END MODEL EVAL DYNAMIC2 SUMMARY -->",
-		}
-	case publishSectionDynamic3:
-		return publishDocSection{
-			Key:                publishSectionDynamic3,
-			ResultsStartMarker: modelEvalDynamic3ResultsStart,
-			ResultsEndMarker:   modelEvalDynamic3ResultsEnd,
-			SummaryStartMarker: modelEvalDynamic3SummaryStart,
-			SummaryEndMarker:   modelEvalDynamic3SummaryEnd,
+			Key:                publishSectionDynamic,
+			ResultsStartMarker: modelEvalDynamicResultsStart,
+			ResultsEndMarker:   modelEvalDynamicResultsEnd,
+			SummaryStartMarker: modelEvalDynamicSummaryStart,
+			SummaryEndMarker:   modelEvalDynamicSummaryEnd,
 		}
 	case publishSectionMeta:
 		return publishDocSection{
@@ -529,7 +508,7 @@ func (a *publishTraceAccumulator) addTrace(trace taskTrace, task evalTask, toolS
 }
 
 // publishEffectiveTraceOutcome publishes effective trace outcome for the main package.
-func publishEffectiveTraceOutcome(trace taskTrace, toolSurface string) (toolOK, actionOK, firstPassOK bool) {
+func publishEffectiveTraceOutcome(trace taskTrace, _ string) (toolOK, actionOK, firstPassOK bool) {
 	if len(trace.Expected) == 0 {
 		return false, false, false
 	}
@@ -537,21 +516,6 @@ func publishEffectiveTraceOutcome(trace taskTrace, toolSurface string) (toolOK, 
 	toolOK = trace.Summary.FirstTool == first.Tool
 	actionOK = trace.Summary.FirstAction == first.Action
 	firstPassOK = trace.Summary.FirstPass
-	if !trace.Summary.FinalSuccess || !isDynamicThreeToolEvalSurface(toolSurface) || !toolOK {
-		return toolOK, actionOK, firstPassOK
-	}
-	if first.Action == publishProjectResolveAction && trace.Summary.FirstAction == publishProjectSearchAction {
-		return true, true, true
-	}
-	if len(trace.Expected) < 2 {
-		return toolOK, actionOK, firstPassOK
-	}
-	if first.Simulation != publishSamplingContinue && first.Simulation != publishElicitationContinue {
-		return toolOK, actionOK, firstPassOK
-	}
-	if trace.Summary.FirstAction == trace.Expected[1].Action {
-		return true, true, true
-	}
 	return toolOK, actionOK, firstPassOK
 }
 

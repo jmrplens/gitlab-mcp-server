@@ -178,6 +178,26 @@ func TestLoad_MetaToolsDynamic(t *testing.T) {
 	}
 }
 
+// TestLoad_DefaultToolSurface verifies the empty selector path uses the
+// low-token dynamic surface while preserving legacy MetaTools truthiness.
+func TestLoad_DefaultToolSurface(t *testing.T) {
+	t.Setenv("GITLAB_URL", testGitLabURL)
+	t.Setenv("GITLAB_TOKEN", testGitLabToken)
+	t.Setenv("TOOL_SURFACE", "")
+	t.Setenv("META_TOOLS", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf(fmtLoadUnexpected, err)
+	}
+	if cfg.ToolSurface != ToolSurfaceDynamic {
+		t.Fatalf("ToolSurface = %q, want %q", cfg.ToolSurface, ToolSurfaceDynamic)
+	}
+	if !cfg.MetaTools {
+		t.Fatal("MetaTools = false, want true for dynamic mode")
+	}
+}
+
 // TestLegacyMetaToolsSelectorInUse verifies that legacy selector detection is
 // limited to configurations that set META_TOOLS without TOOL_SURFACE.
 func TestLegacyMetaToolsSelectorInUse(t *testing.T) {
@@ -214,8 +234,6 @@ func TestLegacyMetaToolsReplacement(t *testing.T) {
 		{value: "true", want: ToolSurfaceMeta},
 		{value: "false", want: ToolSurfaceIndividual},
 		{value: "dynamic", want: ToolSurfaceDynamic},
-		{value: "dynamic-2", want: ToolSurfaceDynamic2},
-		{value: "dynamic-3", want: ToolSurfaceDynamic3},
 		{value: "notabool", want: ""},
 	}
 
@@ -262,8 +280,8 @@ func TestLoad_ToolSurfaceInvalid(t *testing.T) {
 	}
 }
 
-// TestLoad_ToolSurfaceDynamicCandidates verifies that the explicit dynamic
-// candidate selectors are accepted without changing the default surface.
+// TestLoad_ToolSurfaceDynamicCandidates verifies that dynamic selector aliases
+// are accepted as explicit low-token surface spellings.
 func TestLoad_ToolSurfaceDynamicCandidates(t *testing.T) {
 	tests := []struct {
 		value string
@@ -272,8 +290,6 @@ func TestLoad_ToolSurfaceDynamicCandidates(t *testing.T) {
 		{value: "DYNAMIC", want: ToolSurfaceDynamic},
 		{value: " dynamic ", want: ToolSurfaceDynamic},
 		{value: "low-token", want: ToolSurfaceDynamic},
-		{value: ToolSurfaceDynamic2, want: ToolSurfaceDynamic2},
-		{value: ToolSurfaceDynamic3, want: ToolSurfaceDynamic3},
 	}
 
 	for _, tt := range tests {

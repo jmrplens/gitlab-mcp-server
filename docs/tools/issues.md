@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Issues
 > **Individual tools**: 44
-> **Meta-tools**: `gitlab_issue` (default `TOOL_SURFACE=meta` catalog), `gitlab_issue_discussion`, `gitlab_issue_statistics`
+> **Meta-tools**: `gitlab_issue` (`TOOL_SURFACE=meta` catalog), `gitlab_issue_discussion`, `gitlab_issue_statistics`
 > **GitLab API**: [Issues API](https://docs.gitlab.com/ee/api/issues.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The issues domain covers the full lifecycle of GitLab issues: creation, retrieval, listing, updating, deletion, reordering, moving between projects, subscriptions, to-do creation, time tracking, participants, related merge requests, notes (comments), issue links, discussion threads, issue statistics, and work items.
 
-With the default `TOOL_SURFACE=meta` catalog, core issue tools (including notes, links, and work items) are consolidated into a single `gitlab_issue` meta-tool that dispatches by `action` parameter. Discussions and statistics have their own meta-tools: `gitlab_issue_discussion` and `gitlab_issue_statistics`.
+With `TOOL_SURFACE=meta`, core issue tools (including notes, links, and work items) are consolidated into a single `gitlab_issue` meta-tool that dispatches by `action` parameter. Discussions and statistics have their own meta-tools: `gitlab_issue_discussion` and `gitlab_issue_statistics`.
 
 ### Common Questions
 

@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Geo & Model Registry
 > **Individual tools**: 9
-> **Meta-tools**: `gitlab_geo`, `gitlab_model_registry` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tools**: `gitlab_geo`, `gitlab_model_registry` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Geo Sites](https://docs.gitlab.com/ee/api/geo_sites.html) · [Model Registry](https://docs.gitlab.com/ee/api/model_registry.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The Geo & Model Registry domain covers GitLab Geo replication site management (create, list, get, edit, delete, repair, status) and ML model registry file downloads.
 
-With the default `TOOL_SURFACE=meta` catalog, the individual tools below are consolidated into two meta-tools that dispatch by `action` parameter.
+With `TOOL_SURFACE=meta`, the individual tools below are consolidated into two meta-tools that dispatch by `action` parameter.
 
 ### Common Questions
 

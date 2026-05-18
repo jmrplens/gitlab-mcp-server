@@ -14,7 +14,7 @@ superseded_by: ""
 
 Status: Accepted.
 
-This ADR supersedes the runtime registration mechanics described in ADR-0004 and ADR-0005 while preserving their domain package and domain meta-tool decisions. It also refines ADR-0011 by making the canonical action catalog, not `ActionMap` route capture, the source for Dynamic search/describe/execute.
+This ADR supersedes the runtime registration mechanics described in ADR-0004 and ADR-0005 while preserving their domain package and domain meta-tool decisions. It also refines ADR-0011 by making the canonical action catalog, not `ActionMap` route capture, the source for Dynamic controller surfaces.
 
 ## Context
 
@@ -22,8 +22,7 @@ The project now exposes several MCP tool surfaces over the same GitLab API behav
 
 - `meta`: compact domain meta-tools with action dispatch.
 - `individual`: one visible MCP tool per GitLab operation.
-- `dynamic` and `dynamic-3`: search, describe, and execute over the action catalog.
-- `dynamic-2`: experimental find and execute surface.
+- `dynamic`: find and execute over the action catalog.
 - Standalone surface tools for project discovery, interactive elicitation, server maintenance, and other non-standard flows.
 
 Earlier architecture evolved through package-local registration functions and captured meta-tool definitions. That created a hybrid runtime where metadata could drift between individual tools, meta-tools, Dynamic discovery, schema resources, generated LLM files, and audits.
@@ -38,16 +37,16 @@ Root runtime registration is catalog-backed:
 
 - `RegisterAllMeta` registers catalog-projected domain meta-tools plus approved standalone surface specs.
 - `RegisterAll` registers individual tools through catalog projection.
-- Dynamic search/describe/execute builds its registry from the same catalog.
+- Dynamic find/execute builds its registry from the same catalog.
 - Schema resources, LLM files, audits, metrics, and evaluation tooling read the same catalog.
 
 Package-local `RegisterTools` files have been removed from ordinary GitLab API domains. New ordinary GitLab actions must use domain-local `ActionSpecs` and catalog-backed projection rather than introducing package-local registration functions. Package-level `RegisterMeta` is not an approved path for ordinary GitLab API actions.
 
 `TOOL_SURFACE` is the canonical tool selector. `META_TOOLS` remains a deprecated compatibility fallback for one compatibility window when `TOOL_SURFACE` is absent.
 
-`META_PARAM_SCHEMA=opaque|compact|full` remains a meta-tool `tools/list` schema strategy only. It does not change handler validation, schema resources, Dynamic describe output, or individual tool schemas.
+`META_PARAM_SCHEMA=opaque|compact|full` remains a meta-tool `tools/list` schema strategy only. It does not change handler validation, schema resources, dynamic discovery output, or individual tool schemas.
 
-`CAPABILITY_SURFACE=full|minimal` remains a separate resource and prompt exposure axis. `minimal` removes optional resources, prompts, workflow guides, and meta-schema resources while preserving `gitlab://workspace/roots`; Dynamic describe still returns schemas inline.
+`CAPABILITY_SURFACE=full|minimal` remains a separate resource and prompt exposure axis. `minimal` removes optional resources, prompts, workflow guides, and meta-schema resources while preserving `gitlab://workspace/roots`; `gitlab_find_action` still returns schemas inline.
 
 Action-specific aliases and parameter aliases belong to the spec/catalog compatibility policy through `internal/tools/actioncompat`. Dynamic may own generic search, typo tolerance, ranking, and execution flow, but it must not become a second home for action-owned compatibility data.
 

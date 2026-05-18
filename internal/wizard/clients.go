@@ -80,11 +80,9 @@ type ServerConfig struct {
 
 // ToolSurfaceOptions lists the supported MCP tool catalog selectors.
 var ToolSurfaceOptions = []string{
+	config.ToolSurfaceDynamic,
 	config.ToolSurfaceMeta,
 	config.ToolSurfaceIndividual,
-	config.ToolSurfaceDynamic,
-	config.ToolSurfaceDynamic2,
-	config.ToolSurfaceDynamic3,
 }
 
 // CapabilitySurfaceOptions lists the supported resource and prompt catalog selectors.
