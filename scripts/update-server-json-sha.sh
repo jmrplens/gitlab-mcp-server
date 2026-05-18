@@ -9,7 +9,7 @@
 #   1. Sets top-level .version to the given version
 #   2. Sets .packages[].version to the given version
 #   3. Pins .packages[].identifier URLs to /releases/download/v<version>/,
-#      handling both /releases/latest/download/ and prior /releases/download/vX.Y.Z/
+#      handling both /releases/latest/download/ and prior /releases/download/vX.Y.Z[-prerelease]/
 #   4. Sets .fileSha256 for each package matching a checksum entry
 #
 # Steps for .plugin/plugin.json:
@@ -48,11 +48,11 @@ jq --arg v "$VERSION" \
 echo "Per-package version fields set to $VERSION"
 
 # 3. Pin identifier URLs to this release version.
-# Handles both /releases/latest/download/ and previously-pinned /releases/download/vX.Y.Z/
+# Handles both /releases/latest/download/ and previously-pinned /releases/download/vX.Y.Z[-prerelease]/
 jq --arg v "$VERSION" '
   (.packages[].identifier) |=
     (sub("releases/latest/download"; "releases/download/v" + $v)
-     | sub("releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+"; "releases/download/v" + $v))
+  | sub("releases/download/v[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.]+)?"; "releases/download/v" + $v))
 ' "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
 echo "Identifiers pinned to v$VERSION"
 
