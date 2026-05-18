@@ -7111,7 +7111,7 @@ Returns:
 - link_list: array of {id, name, url, link_type, direct_asset_path}.
 - link_create / link_create_batch / link_get / link_update: link object(s).
 - delete / link_delete: {success: bool, message: string}.
-Errors: 404 not found (hint: verify tag_name), 403 forbidden (hint: requires Developer+ for create, Maintainer+ for update/delete), 400 invalid params (hint: link url must be absolute https://).
+Errors: 404 not found (hint: verify tag_name), 403 forbidden (hint: requires Developer+ for create, Maintainer+ for update/delete), 400 invalid params (hint: link url must be absolute (http, https, or ftp)).
 
 Param conventions: * = required. All actions need project_id*. Release actions need tag_name*. Link actions need tag_name* + link_id* (except link_create / link_create_batch / link_list).
 

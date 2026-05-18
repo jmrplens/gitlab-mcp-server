@@ -340,7 +340,7 @@ func shouldConfigureTerminalOutput(opts options) bool {
 	if opts.TerminalLog != "" || opts.PrintOutput {
 		return true
 	}
-	return !opts.CheckDocs
+	return !opts.CheckDocs && len(opts.CheckEfficiency) == 0 && len(opts.CompareTraces) == 0
 }
 
 // stringList holds string list data for the main package.

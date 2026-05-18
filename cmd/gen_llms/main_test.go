@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
 )
@@ -43,7 +45,7 @@ func TestListDynamicTools_ExposesFindAndExecute(t *testing.T) {
 		t.Fatalf("len(listDynamicTools()) = %d, want 2", len(tools))
 	}
 	names := []string{tools[0].Name, tools[1].Name}
-	if names[0] != "gitlab_find_action" || names[1] != "gitlab_execute_tool" {
+	if names[0] != dynamicFindToolName || names[1] != dynamicExecuteToolName {
 		t.Fatalf("dynamic tools = %v, want find before execute", names)
 	}
 
@@ -66,6 +68,26 @@ func TestListDynamicTools_ExposesFindAndExecute(t *testing.T) {
 	}
 	if !slices.Contains(required, any("action")) || !slices.Contains(required, any("params")) {
 		t.Fatalf("execute InputSchema required = %v, want action and params", required)
+	}
+}
+
+func TestValidateDynamicToolContract_RejectsDrift(t *testing.T) {
+	if err := validateDynamicToolContract([]*mcp.Tool{{Name: dynamicFindToolName}, {Name: dynamicExecuteToolName}}); err != nil {
+		t.Fatalf("validateDynamicToolContract() error = %v", err)
+	}
+	if err := validateDynamicToolContract([]*mcp.Tool{{Name: dynamicExecuteToolName}}); err == nil {
+		t.Fatal("validateDynamicToolContract() error = nil, want error")
+	}
+}
+
+func TestReadVersion_UsesProjectRoot(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "VERSION"), []byte("2.1.0\n"), 0o600); err != nil {
+		t.Fatalf("write VERSION: %v", err)
+	}
+
+	if got := readVersion(dir); got != "2.1.0" {
+		t.Fatalf("readVersion() = %q, want 2.1.0", got)
 	}
 }
 

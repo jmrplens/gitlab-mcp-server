@@ -4944,8 +4944,14 @@ func TestConfigureTerminalOutput_WritesLogWithoutEcho(t *testing.T) {
 }
 
 func TestShouldConfigureTerminalOutput_SkipsCheckDocsWithoutExplicitOutput(t *testing.T) {
-	if shouldConfigureTerminalOutput(options{CheckDocs: true}) {
-		t.Fatal("shouldConfigureTerminalOutput() = true, want false")
+	for _, opts := range []options{
+		{CheckDocs: true},
+		{CheckEfficiency: stringList{"dist/evaluation/efficiency.md"}},
+		{CompareTraces: stringList{"dist/evaluation/report.traces"}},
+	} {
+		if shouldConfigureTerminalOutput(opts) {
+			t.Fatalf("shouldConfigureTerminalOutput(%+v) = true, want false", opts)
+		}
 	}
 	for _, opts := range []options{{CheckDocs: true, TerminalLog: "check.log"}, {CheckDocs: true, PrintOutput: true}} {
 		if !shouldConfigureTerminalOutput(opts) {

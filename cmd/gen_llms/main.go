@@ -42,11 +42,13 @@ const (
 	// keep the file scannable. When a description exceeds this limit, generation
 	// falls back to its first sentence; if that is still too long, the text is
 	// hard-truncated at the rune boundary.
-	maxFullDescRunes      = 600
-	llmsFileName          = "llms.txt"
-	llmsFullFileName      = "llms-full.txt"
-	llmsSummaryItemFormat = "- %s: %s\n"
-	llmsBoldTitleFormat   = "**%s**\n\n"
+	maxFullDescRunes       = 600
+	llmsFileName           = "llms.txt"
+	llmsFullFileName       = "llms-full.txt"
+	dynamicFindToolName    = "gitlab_find_action"
+	dynamicExecuteToolName = "gitlab_execute_tool"
+	llmsSummaryItemFormat  = "- %s: %s\n"
+	llmsBoldTitleFormat    = "**%s**\n\n"
 )
 
 type llmsCatalog struct {
@@ -75,6 +77,11 @@ func main() {
 // run introspects the live MCP catalog and regenerates llms.txt and
 // llms-full.txt in the project root.
 func run(checkOnly bool) error {
+	rootDir, err := findProjectRoot()
+	if err != nil {
+		return err
+	}
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -97,7 +104,7 @@ func run(checkOnly bool) error {
 	if err != nil {
 		return fmt.Errorf("create gitlab.com client: %w", err)
 	}
-	version := readVersion()
+	version := readVersion(rootDir)
 	res, resTpl, err := listResources(client)
 	if err != nil {
 		return err
@@ -165,8 +172,14 @@ func run(checkOnly bool) error {
 }
 
 // readVersion reads the VERSION file from the project root.
-func readVersion() string {
-	data, err := os.ReadFile("VERSION")
+func readVersion(rootDir string) string {
+	root, err := os.OpenRoot(rootDir)
+	if err != nil {
+		return "unknown"
+	}
+	defer func() { _ = root.Close() }()
+
+	data, err := root.ReadFile("VERSION")
 	if err != nil {
 		return "unknown"
 	}
@@ -268,13 +281,16 @@ func listDynamicTools(client *gitlabclient.Client) ([]*mcp.Tool, error) {
 		return nil, fmt.Errorf("list dynamic tools: %w", err)
 	}
 	sortDynamicTools(result.Tools)
+	if contractErr := validateDynamicToolContract(result.Tools); contractErr != nil {
+		return nil, contractErr
+	}
 	return result.Tools, nil
 }
 
 func sortDynamicTools(dynamicTools []*mcp.Tool) {
 	order := map[string]int{
-		"gitlab_find_action":  0,
-		"gitlab_execute_tool": 1,
+		dynamicFindToolName:    0,
+		dynamicExecuteToolName: 1,
 	}
 	sort.SliceStable(dynamicTools, func(i, j int) bool {
 		left, leftOK := order[dynamicTools[i].Name]
@@ -287,6 +303,19 @@ func sortDynamicTools(dynamicTools []*mcp.Tool) {
 		}
 		return dynamicTools[i].Name < dynamicTools[j].Name
 	})
+}
+
+func validateDynamicToolContract(dynamicTools []*mcp.Tool) error {
+	expected := []string{dynamicFindToolName, dynamicExecuteToolName}
+	if len(dynamicTools) != len(expected) {
+		return fmt.Errorf("expected %d dynamic tools, got %d", len(expected), len(dynamicTools))
+	}
+	for i, name := range expected {
+		if dynamicTools[i].Name != name {
+			return fmt.Errorf("unexpected dynamic tool %q at position %d", dynamicTools[i].Name, i)
+		}
+	}
+	return nil
 }
 
 // listResources returns the static resources and resource templates advertised
