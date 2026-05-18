@@ -71,6 +71,8 @@ const (
 	usageEstimatedCost = "Estimated cost"
 	// modelEvaluationSuffix identifies the model evaluation suffix constant used by this package.
 	modelEvaluationSuffix = " Model Evaluation"
+	boldIntFormat         = "**%d**"
+	boldStringFormat      = "**%s**"
 )
 
 // fullDockerAttemptsByPreset stores the minimum per-model attempts for complete Docker preset reports.
@@ -892,16 +894,16 @@ func renderModelResultsTable(rows []publishRow, aggregate publishRow) string {
 		"**Aggregate**",
 		"**all selected**",
 		"-",
-		fmt.Sprintf("**%d**", aggregate.Attempts),
-		fmt.Sprintf("**%d**", aggregate.ExpectedOps),
-		fmt.Sprintf("**%d**", aggregate.ModelRequests),
-		fmt.Sprintf("**%d**", aggregate.ToolCalls),
-		fmt.Sprintf("**%s**", formatMetric(aggregate.ToolSelection)),
-		fmt.Sprintf("**%s**", formatMetric(aggregate.ActionSelection)),
-		fmt.Sprintf("**%s**", formatMetric(aggregate.FirstPass)),
-		fmt.Sprintf("**%s**", formatRepairMetric(aggregate)),
-		fmt.Sprintf("**%s**", formatMetric(aggregate.DestructiveSafety)),
-		fmt.Sprintf("**%s**", formatMetric(aggregate.FinalSuccess)),
+		fmt.Sprintf(boldIntFormat, aggregate.Attempts),
+		fmt.Sprintf(boldIntFormat, aggregate.ExpectedOps),
+		fmt.Sprintf(boldIntFormat, aggregate.ModelRequests),
+		fmt.Sprintf(boldIntFormat, aggregate.ToolCalls),
+		fmt.Sprintf(boldStringFormat, formatMetric(aggregate.ToolSelection)),
+		fmt.Sprintf(boldStringFormat, formatMetric(aggregate.ActionSelection)),
+		fmt.Sprintf(boldStringFormat, formatMetric(aggregate.FirstPass)),
+		fmt.Sprintf(boldStringFormat, formatRepairMetric(aggregate)),
+		fmt.Sprintf(boldStringFormat, formatMetric(aggregate.DestructiveSafety)),
+		fmt.Sprintf(boldStringFormat, formatMetric(aggregate.FinalSuccess)),
 		"-",
 		"-",
 	})

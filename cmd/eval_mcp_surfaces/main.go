@@ -147,6 +147,8 @@ const (
 	metricValueTableHeader = "| Metric | Value |\n| --- | ---: |\n"
 	// metricIntegerValueTableRow identifies the metric integer value table row constant used by this package.
 	metricIntegerValueTableRow = "| %s | %d |\n"
+	// timestampLayout identifies the UTC timestamp layout used for generated evaluator artifacts.
+	timestampLayout = "20060102-150405"
 
 	// actionDiscoverProjectResolve identifies the action discover project resolve constant used by this package.
 	actionDiscoverProjectResolve = "discover_project.resolve"
@@ -332,24 +334,6 @@ func configureTerminalOutput(opts options) (options, func() error, error) {
 		commandOutput = terminalOutput{}
 		return file.Close()
 	}, nil
-}
-
-func terminalPrintOutputRequested(args []string) bool {
-	enabled := false
-	for _, arg := range args {
-		name := strings.TrimLeft(arg, "-")
-		value := "true"
-		if before, after, ok := strings.Cut(name, "="); ok {
-			name = before
-			value = after
-		}
-		if name != "print-output" {
-			continue
-		}
-		parsed, err := strconv.ParseBool(value)
-		enabled = err == nil && parsed
-	}
-	return enabled
 }
 
 // stringList holds string list data for the main package.
@@ -643,9 +627,7 @@ type simulationResult struct {
 // main starts the command-line workflow.
 func main() {
 	if err := run(); err != nil {
-		if terminalPrintOutputRequested(os.Args[1:]) {
-			fmt.Fprintf(os.Stderr, "eval_mcp_surfaces: %v\n", err)
-		}
+		fmt.Fprintf(os.Stderr, "eval_mcp_surfaces: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -1513,7 +1495,7 @@ func toolExecutionMode(opts options) string {
 
 // defaultOutputPath returns the default output path.
 func defaultOutputPath(model string) string {
-	stamp := time.Now().UTC().Format("20060102-150405")
+	stamp := time.Now().UTC().Format(timestampLayout)
 	if strings.Contains(model, ",") {
 		model = "multi-model"
 	}
@@ -1523,7 +1505,7 @@ func defaultOutputPath(model string) string {
 
 // defaultComparisonOutputPath returns the default comparison output path.
 func defaultComparisonOutputPath() string {
-	stamp := time.Now().UTC().Format("20060102-150405")
+	stamp := time.Now().UTC().Format(timestampLayout)
 	return filepath.Join(defaultEvalDir, "comparison", fmt.Sprintf("%s-summary.md", stamp))
 }
 
@@ -1538,7 +1520,7 @@ func defaultTraceDir(reportPath string) string {
 
 func defaultTerminalLogPath(outputPath string) string {
 	if strings.TrimSpace(outputPath) == "" {
-		stamp := time.Now().UTC().Format("20060102-150405")
+		stamp := time.Now().UTC().Format(timestampLayout)
 		return filepath.Join(defaultEvalDir, "terminal", fmt.Sprintf("%s.log", stamp))
 	}
 	ext := filepath.Ext(outputPath)
@@ -7421,7 +7403,7 @@ func parseComparisonInput(path string) (comparisonInput, error) {
 		if input.ToolsFile != "" {
 			input.Label = comparisonLabelFromSnapshot(input.ToolsFile, input.Label)
 		}
-	case strings.HasPrefix(content, "# Meta-Tool Anthropic Evaluation"), strings.HasPrefix(content, "# Meta-Tool Model Evaluation"), strings.HasPrefix(content, "# Dynamic Surface Model Evaluation"):
+	case strings.HasPrefix(content, "# Meta-Tool Anthropic Evaluation"), strings.HasPrefix(content, "# Meta-Tool Model Evaluation"), strings.HasPrefix(content, "# Dynamic Surface Model Evaluation"), strings.HasPrefix(content, "# MCP Surface Model Evaluation"):
 		input.Kind = "evaluation"
 		input.Date = firstMetadataValue(content, "Date")
 		input.Mode = firstMetadataValue(content, "Mode")

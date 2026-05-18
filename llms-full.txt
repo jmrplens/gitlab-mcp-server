@@ -58,19 +58,19 @@ Action guidance:
 - deploy_token_delete_project: Use to delete a deploy token owned by a project; pass the deploy token ID, not another token type.
 - token_group_create: Use for GitLab group access tokens; this action creates a group-scoped API token.
 - token_group_get: Use for GitLab group access tokens; this action gets a group-scoped API token.
-- token_group_list: Use for GitLab group access tokens; this action lists a group-scoped API token.
+- token_group_list: Use for GitLab group access tokens; this action lists group-scoped API tokens.
 - token_group_revoke: Use for GitLab group access tokens; this action revokes a group-scoped API token.
 - token_group_rotate: Use for GitLab group access tokens; this action rotates a group-scoped API token.
 - token_group_rotate_self: Use for GitLab group access tokens; this action rotates a group-scoped API token.
 - token_personal_get: Use for GitLab personal access tokens; this action gets a personal-scoped API token.
-- token_personal_list: Use for GitLab personal access tokens; this action lists a personal-scoped API token.
+- token_personal_list: Use for GitLab personal access tokens; this action lists personal-scoped API tokens.
 - token_personal_revoke: Use for GitLab personal access tokens; this action revokes a personal-scoped API token.
 - token_personal_revoke_self: Use for GitLab personal access tokens; this action revokes a personal-scoped API token.
 - token_personal_rotate: Use for GitLab personal access tokens; this action rotates a personal-scoped API token.
 - token_personal_rotate_self: Use for GitLab personal access tokens; this action rotates a personal-scoped API token.
 - token_project_create: Use for GitLab project access tokens; this action creates a project-scoped API token.
 - token_project_get: Use for GitLab project access tokens; this action gets a project-scoped API token.
-- token_project_list: Use for GitLab project access tokens; this action lists a project-scoped API token.
+- token_project_list: Use for GitLab project access tokens; this action lists project-scoped API tokens.
 - token_project_revoke: Use for GitLab project access tokens; this action revokes a project-scoped API token.
 - token_project_rotate: Use for GitLab project access tokens; this action rotates a project-scoped API token.
 - token_project_rotate_self: Use for GitLab project access tokens; this action rotates a project-scoped API token.
@@ -7124,7 +7124,7 @@ Releases:
 
 Asset links:
 - link_create: project_id*, tag_name*, name*, url*, link_type (runbook/package/image/other), filepath, direct_asset_path
-- link_create_batch: project_id*, tag_name*, links* (array of {name, url, link_type, filepath, direct_asset_path})
+- link_create_batch: project_id*, tag_name*, links* (array of {name, url, link_type})
 - link_get: project_id*, tag_name*, link_id*
 - link_list: project_id*, tag_name*, page, per_page
 - link_update: project_id*, tag_name*, link_id*, name, url, filepath, direct_asset_path, link_type

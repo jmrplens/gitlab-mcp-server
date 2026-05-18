@@ -75439,7 +75439,9 @@
             "default",
             "hidden",
             "processing",
-            "error"
+            "error",
+            "pending_destruction",
+            "deprecated"
           ],
           "type": "string"
         }
@@ -96364,6 +96366,8 @@
         },
         "url": {
           "description": "Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.",
+          "format": "uri",
+          "pattern": "^(https?|ftp)://",
           "type": "string"
         }
       },
@@ -96440,7 +96444,9 @@
                 "type": "string"
               },
               "url": {
-                "description": "Absolute URL of the link target. For package assets, use the URL returned by gitlab_package publish actions; do not construct package URLs manually.",
+                "description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL returned by gitlab_package publish actions; do not construct package URLs manually.",
+                "format": "uri",
+                "pattern": "^(https?|ftp)://",
                 "type": "string"
               }
             },
@@ -96878,6 +96884,8 @@
         },
         "url": {
           "description": "Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.",
+          "format": "uri",
+          "pattern": "^(https?|ftp)://",
           "type": "string"
         }
       },

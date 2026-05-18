@@ -70,6 +70,8 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("url", map[string]any{
 				"description": "Absolute http, https, or ftp URL of the link target. Do not use local file paths or relative paths.",
+				"format":      "uri",
+				"pattern":     "^(https?|ftp)://",
 			}),
 			toolutil.SchemaPropertyOverride("link_type", map[string]any{
 				"enum":        []any{"other", "runbook", "image", "package"},
@@ -93,7 +95,11 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		}
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("links", map[string]any{"description": "Array of release asset links. Each item supports only name, url, and link_type."}),
-			toolutil.SchemaPropertyOverride("links.url", map[string]any{"description": "Absolute URL of the link target. For package assets, use the URL returned by gitlab_package publish actions; do not construct package URLs manually."}),
+			toolutil.SchemaPropertyOverride("links.url", map[string]any{
+				"description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL returned by gitlab_package publish actions; do not construct package URLs manually.",
+				"format":      "uri",
+				"pattern":     "^(https?|ftp)://",
+			}),
 			toolutil.SchemaPropertyOverride("links.link_type", map[string]any{"description": "Type of the link: package, runbook, image, or other. Use package for package registry assets."}),
 		}
 	}

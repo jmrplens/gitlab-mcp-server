@@ -42,7 +42,9 @@ const (
 	// keep the file scannable. When a description exceeds this limit, generation
 	// falls back to its first sentence; if that is still too long, the text is
 	// hard-truncated at the rune boundary.
-	maxFullDescRunes = 600
+	maxFullDescRunes      = 600
+	llmsSummaryItemFormat = "- %s: %s\n"
+	llmsBoldTitleFormat   = "**%s**\n\n"
 )
 
 type llmsCatalog struct {
@@ -371,7 +373,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	for _, t := range catalog.Dynamic {
 		desc := firstSentence(t.Description)
 		desc = truncateRunes(desc, 80)
-		fmt.Fprintf(&b, "- %s: %s\n", t.Name, desc)
+		fmt.Fprintf(&b, llmsSummaryItemFormat, t.Name, desc)
 	}
 	b.WriteString("\n")
 
@@ -383,17 +385,17 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	for _, t := range catalog.MetaBase {
 		desc := firstSentence(toolutil.StripMetaToolDescriptionPrefix(t.Description))
 		desc = truncateRunes(desc, 80)
-		fmt.Fprintf(&b, "- %s: %s\n", t.Name, desc)
+		fmt.Fprintf(&b, llmsSummaryItemFormat, t.Name, desc)
 	}
 	b.WriteString("\n")
 
 	b.WriteString("Resources:\n\n")
 	fmt.Fprintf(&b, "%d read-only resources:\n\n", resourceCount)
 	for _, r := range catalog.Resources {
-		fmt.Fprintf(&b, "- %s: %s\n", r.URI, r.Name)
+		fmt.Fprintf(&b, llmsSummaryItemFormat, r.URI, r.Name)
 	}
 	for _, r := range catalog.ResourceTemplates {
-		fmt.Fprintf(&b, "- %s: %s\n", r.URITemplate, r.Name)
+		fmt.Fprintf(&b, llmsSummaryItemFormat, r.URITemplate, r.Name)
 	}
 	b.WriteString("- gitlab://workspace/roots: Workspace Roots\n")
 	b.WriteString("\n")
@@ -403,7 +405,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	for _, p := range catalog.Prompts {
 		desc := firstSentence(p.Description)
 		desc = truncateRunes(desc, 80)
-		fmt.Fprintf(&b, "- %s: %s\n", p.Name, desc)
+		fmt.Fprintf(&b, llmsSummaryItemFormat, p.Name, desc)
 	}
 	b.WriteString("\n")
 
@@ -547,7 +549,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 	for _, t := range catalog.Dynamic {
 		fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
 		if t.Title != "" {
-			fmt.Fprintf(&b, "**%s**\n\n", t.Title)
+			fmt.Fprintf(&b, llmsBoldTitleFormat, t.Title)
 		}
 		b.WriteString(t.Description)
 		b.WriteString("\n\n")
@@ -564,7 +566,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 	for _, t := range catalog.MetaBase {
 		fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
 		if t.Title != "" {
-			fmt.Fprintf(&b, "**%s**\n\n", t.Title)
+			fmt.Fprintf(&b, llmsBoldTitleFormat, t.Title)
 		}
 		b.WriteString(t.Description)
 		b.WriteString("\n\n")
@@ -592,7 +594,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 		for _, t := range enterpriseOnly {
 			fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
 			if t.Title != "" {
-				fmt.Fprintf(&b, "**%s**\n\n", t.Title)
+				fmt.Fprintf(&b, llmsBoldTitleFormat, t.Title)
 			}
 			b.WriteString(t.Description)
 			b.WriteString("\n\n")

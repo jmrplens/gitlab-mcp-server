@@ -4451,6 +4451,19 @@ Task attempts: 3
 		t.Fatalf("dynamic input = %+v", dynamicInput)
 	}
 
+	defaultTitlePath := filepath.Join(tmp, "current-abc123", "default-title.md")
+	defaultTitleReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# MCP Surface Model Evaluation", 1)
+	if writeErr := os.WriteFile(defaultTitlePath, []byte(defaultTitleReport), 0o600); writeErr != nil {
+		t.Fatalf("write default title report: %v", writeErr)
+	}
+	defaultTitleInput, err := parseComparisonInput(defaultTitlePath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(default title) error = %v", err)
+	}
+	if defaultTitleInput.Kind != "evaluation" || defaultTitleInput.TaskAttempts != 3 {
+		t.Fatalf("default title input = %+v", defaultTitleInput)
+	}
+
 	tokenPath := filepath.Join(tmp, "current-abc123", "tokens.md")
 	tokenReport := `# Tools Snapshot Token Audit
 
@@ -4904,22 +4917,9 @@ func TestDefaultTerminalLogPath_ReplacesReportExtension(t *testing.T) {
 // terminal log path stays under ignored evaluation artifacts.
 func TestDefaultTerminalLogPath_UsesIgnoredTerminalDirectory(t *testing.T) {
 	got := defaultTerminalLogPath("")
-	if !strings.HasPrefix(got, "dist/evaluation/mcp-surfaces/terminal/") || !strings.HasSuffix(got, ".log") {
+	expectedPrefix := filepath.Join("dist", "evaluation", "mcp-surfaces", "terminal") + string(filepath.Separator)
+	if !strings.HasPrefix(got, expectedPrefix) || filepath.Ext(got) != ".log" {
 		t.Fatalf("defaultTerminalLogPath() = %q, want ignored terminal log path", got)
-	}
-}
-
-// TestTerminalPrintOutputRequested_ParsesFlagForms verifies explicit terminal
-// echo is opt-in.
-func TestTerminalPrintOutputRequested_ParsesFlagForms(t *testing.T) {
-	if terminalPrintOutputRequested([]string{"--model", "openai:gpt"}) {
-		t.Fatal("terminalPrintOutputRequested() = true without explicit flag")
-	}
-	if !terminalPrintOutputRequested([]string{"--print-output"}) {
-		t.Fatal("terminalPrintOutputRequested() = false for --print-output")
-	}
-	if terminalPrintOutputRequested([]string{"--print-output=false"}) {
-		t.Fatal("terminalPrintOutputRequested() = true for --print-output=false")
 	}
 }
 
