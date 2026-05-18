@@ -82,7 +82,10 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 				"description": "Order by package registry field: created_at, name, version, or type.",
 			}),
 			toolutil.SchemaPropertyOverride("sort", map[string]any{"enum": []any{"asc", "desc"}}),
-			toolutil.SchemaPropertyOverride("status", map[string]any{"enum": []any{"default", "hidden", "processing", "error", "pending_destruction", "deprecated"}}),
+			toolutil.SchemaPropertyOverride("status", map[string]any{
+				"enum":        []any{"default", "hidden", "processing", "error", "pending_destruction", "deprecated"},
+				"description": "Filter by status: default, hidden, processing, error, pending_destruction, or deprecated.",
+			}),
 		}
 	}
 	if actionName == "publish_directory" {

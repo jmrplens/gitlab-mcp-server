@@ -505,7 +505,7 @@ func validateLLMSFileListItem(line string) error {
 		return fmt.Errorf("file-list entries must start with a markdown link, got %q", line)
 	}
 	closeLabel := strings.Index(line, "](")
-	if closeLabel < len("- [") {
+	if closeLabel <= len("- [") {
 		return fmt.Errorf("file-list entry is missing markdown link label, got %q", line)
 	}
 	urlStart := closeLabel + len("](")
@@ -1017,12 +1017,16 @@ func writeGeneratedFile(name, content string, checkOnly bool) error {
 		if readErr != nil {
 			return readErr
 		}
-		if string(existing) != content {
+		if normalizeLineEndings(string(existing)) != normalizeLineEndings(content) {
 			return fmt.Errorf("%s is out of date; run go run ./cmd/gen_llms/", name)
 		}
 		return nil
 	}
 	return root.WriteFile(name, []byte(content), 0o644)
+}
+
+func normalizeLineEndings(s string) string {
+	return strings.ReplaceAll(s, "\r\n", "\n")
 }
 
 func isGeneratedLLMSFile(name string) bool {

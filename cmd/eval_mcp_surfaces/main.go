@@ -336,6 +336,13 @@ func configureTerminalOutput(opts options) (options, func() error, error) {
 	}, nil
 }
 
+func shouldConfigureTerminalOutput(opts options) bool {
+	if opts.TerminalLog != "" || opts.PrintOutput {
+		return true
+	}
+	return !opts.CheckDocs
+}
+
 // stringList holds string list data for the main package.
 type stringList []string
 
@@ -635,11 +642,13 @@ func main() {
 // run runs resources for the main package.
 func run() (runErr error) {
 	opts := parseFlags()
-	var closeTerminalOutput func() error
-	var terminalErr error
-	opts, closeTerminalOutput, terminalErr = configureTerminalOutput(opts)
-	if terminalErr != nil {
-		return terminalErr
+	closeTerminalOutput := func() error { return nil }
+	if shouldConfigureTerminalOutput(opts) {
+		var terminalErr error
+		opts, closeTerminalOutput, terminalErr = configureTerminalOutput(opts)
+		if terminalErr != nil {
+			return terminalErr
+		}
 	}
 	defer func() {
 		if closeErr := closeTerminalOutput(); closeErr != nil {
@@ -730,7 +739,6 @@ func run() (runErr error) {
 			return nil
 		}
 	}
-
 	tasks, parseErr := parseTasksFile(opts.TasksPath)
 	if parseErr != nil {
 		return parseErr
@@ -7919,7 +7927,7 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	writeUsageSummary(&b, opts, results, dryRun)
 	writeFailureDiagnostics(&b, opts, results)
 	writeRepairDiagnostics(&b, opts, results)
-	writeFixtureCoverage(&b, opts, catalog, results, routes)
+	writeFixtureCoverage(&b, catalog, results, routes)
 	fmt.Fprintf(&b, "\n## Task Results\n\n")
 	includeModel := resultsHaveMultipleModels(results)
 	if includeModel {
@@ -7994,7 +8002,7 @@ func writeRepairDiagnostics(b *strings.Builder, opts options, results []taskResu
 	counts := make(map[string]int)
 	examples := make(map[string]string)
 	for _, result := range results {
-		if !result.RepairAttempted || !result.RepairSuccess {
+		if !result.RepairAttempted || !result.RepairSuccess || !result.FinalSuccess {
 			continue
 		}
 		category := failureDiagnosticCategoryForResult(opts, result)
@@ -8221,8 +8229,8 @@ func traceFileName(trace taskTrace) string {
 }
 
 // writeFixtureCoverage writes fixture coverage to disk.
-func writeFixtureCoverage(b *strings.Builder, opts options, catalog []modelTool, results []taskResult, routes map[string]toolutil.ActionMap) {
-	summary := fixtureToolCoverage(opts, catalog, results)
+func writeFixtureCoverage(b *strings.Builder, catalog []modelTool, results []taskResult, routes map[string]toolutil.ActionMap) {
+	summary := fixtureToolCoverage(catalog, results)
 	actionSummary := fixtureActionCoverage(routes, results)
 	fmt.Fprintf(b, "\n## Fixture Tool Coverage\n\n")
 	b.WriteString(metricValueTableHeader)
@@ -8248,16 +8256,13 @@ type fixtureCoverage struct {
 }
 
 // fixtureToolCoverage returns tool coverage fixture content.
-func fixtureToolCoverage(opts options, catalog []modelTool, results []taskResult) fixtureCoverage {
+func fixtureToolCoverage(catalog []modelTool, results []taskResult) fixtureCoverage {
 	catalogNames := make([]string, 0, len(catalog))
 	for _, tool := range catalog {
 		catalogNames = append(catalogNames, tool.Name)
 	}
 	sort.Strings(catalogNames)
 	covered := map[string]bool{}
-	if isDynamicEvalSurface(opts.ToolSurface) {
-		covered[dynamicFindTool] = true
-	}
 	for _, result := range results {
 		for _, step := range taskSteps(result.Task) {
 			covered[step.ExpectedTool] = true

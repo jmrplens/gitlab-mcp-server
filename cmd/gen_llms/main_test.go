@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -128,6 +130,23 @@ func TestValidateLLMSTxt_RejectsNonLinkH2Content(t *testing.T) {
 	}
 }
 
+func TestValidateLLMSTxt_RejectsEmptyFileListLinkLabel(t *testing.T) {
+	content := strings.Join([]string{
+		"# Example",
+		"",
+		"> Short project summary.",
+		"",
+		"## Docs",
+		"",
+		"- [](docs/guide.md)",
+		"",
+	}, "\n")
+
+	if err := validateLLMSTxt(content); err == nil {
+		t.Fatal("validateLLMSTxt() error = nil, want error")
+	}
+}
+
 func TestValidateLLMSFullTxt_RequiresGeneratedSections(t *testing.T) {
 	content := strings.Join([]string{
 		"# Example Full Reference",
@@ -159,6 +178,22 @@ func TestWriteGeneratedFile_RejectsUnexpectedFileName(t *testing.T) {
 				t.Fatal("writeGeneratedFile() error = nil, want error")
 			}
 		})
+	}
+}
+
+func TestWriteGeneratedFile_CheckModeAcceptsCRLFLineEndings(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n"), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	content := "# Example\n\n"
+	if err := os.WriteFile(filepath.Join(dir, llmsFileName), []byte("# Example\r\n\r\n"), 0o600); err != nil {
+		t.Fatalf("write llms.txt: %v", err)
+	}
+	t.Chdir(dir)
+
+	if err := writeGeneratedFile(llmsFileName, content, true); err != nil {
+		t.Fatalf("writeGeneratedFile() error = %v", err)
 	}
 }
 

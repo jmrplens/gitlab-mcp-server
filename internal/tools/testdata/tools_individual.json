@@ -75434,7 +75434,7 @@
           "type": "string"
         },
         "status": {
-          "description": "Filter by status: default, hidden, processing, error",
+          "description": "Filter by status: default, hidden, processing, error, pending_destruction, or deprecated.",
           "enum": [
             "default",
             "hidden",

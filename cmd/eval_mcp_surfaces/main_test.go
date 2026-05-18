@@ -4943,14 +4943,25 @@ func TestConfigureTerminalOutput_WritesLogWithoutEcho(t *testing.T) {
 	requireContainsAll(t, "terminal log", string(data), []string{"eval_mcp_surfaces terminal output", "progress line 1"})
 }
 
-// TestFixtureToolCoverage_DynamicFindActionOptional verifies dynamic discovery
-// does not appear as missing when scenarios execute known actions directly.
-func TestFixtureToolCoverage_DynamicFindActionOptional(t *testing.T) {
-	summary := fixtureToolCoverage(options{ToolSurface: config.ToolSurfaceDynamic}, []modelTool{{Name: dynamicFindTool}, {Name: dynamicExecuteTool}}, []taskResult{{
+func TestShouldConfigureTerminalOutput_SkipsCheckDocsWithoutExplicitOutput(t *testing.T) {
+	if shouldConfigureTerminalOutput(options{CheckDocs: true}) {
+		t.Fatal("shouldConfigureTerminalOutput() = true, want false")
+	}
+	for _, opts := range []options{{CheckDocs: true, TerminalLog: "check.log"}, {CheckDocs: true, PrintOutput: true}} {
+		if !shouldConfigureTerminalOutput(opts) {
+			t.Fatalf("shouldConfigureTerminalOutput(%+v) = false, want true", opts)
+		}
+	}
+}
+
+// TestFixtureToolCoverage_DynamicFindActionRequiresExpectedStep verifies dynamic
+// discovery is counted only when fixtures explicitly expect it.
+func TestFixtureToolCoverage_DynamicFindActionRequiresExpectedStep(t *testing.T) {
+	summary := fixtureToolCoverage([]modelTool{{Name: dynamicFindTool}, {Name: dynamicExecuteTool}}, []taskResult{{
 		Task: evalTask{ExpectedTool: dynamicExecuteTool, ExpectedAction: "user.current"},
 	}})
-	if summary.Covered != 2 || len(summary.Missing) != 0 {
-		t.Fatalf("fixtureToolCoverage() = %+v, want dynamic find treated as covered", summary)
+	if summary.Covered != 1 || len(summary.Missing) != 1 || summary.Missing[0] != dynamicFindTool {
+		t.Fatalf("fixtureToolCoverage() = %+v, want dynamic find reported missing", summary)
 	}
 }
 
@@ -5065,12 +5076,27 @@ func TestWriteRepairDiagnostics_RecordsRecoveredCategory(t *testing.T) {
 		Task:            evalTask{ID: "MT-012"},
 		RepairAttempted: true,
 		RepairSuccess:   true,
+		FinalSuccess:    true,
 		Notes:           []string{diagnosticMissingRequiredParams},
 	}})
 	requireContainsAll(t, "repair diagnostics", b.String(), []string{
 		"## Repaired First-Pass Diagnostics",
 		"| model_parameter_shape_miss | 1 | MT-012 |",
 	})
+}
+
+func TestWriteRepairDiagnostics_IgnoresFailedFinalOutcome(t *testing.T) {
+	var b strings.Builder
+	writeRepairDiagnostics(&b, options{ToolSurface: config.ToolSurfaceMeta}, []taskResult{{
+		Task:            evalTask{ID: "MT-013"},
+		RepairAttempted: true,
+		RepairSuccess:   true,
+		FinalSuccess:    false,
+		Notes:           []string{diagnosticMissingRequiredParams},
+	}})
+	if b.Len() != 0 {
+		t.Fatalf("writeRepairDiagnostics() wrote %q, want empty diagnostics", b.String())
+	}
 }
 
 // TestResolveModelSpecs_UsesEvalModels verifies ResolveModelSpecs uses eval models.

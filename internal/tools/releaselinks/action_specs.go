@@ -50,10 +50,11 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	if actionName == "link_create" || actionName == "link_update" {
-		options.Usage = "Create or update a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url."
 		if actionName == "link_create" {
+			options.Usage = "Create a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url."
 			options.Aliases = []string{"create release link", "add release asset link", "link release asset"}
 		} else {
+			options.Usage = "Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url."
 			options.Aliases = []string{"update release link", "edit release asset link", "modify release asset link"}
 		}
 		options.RelatedActions = []string{"release.create", "release.link_list", "package.publish", "package.publish_directory"}
@@ -66,6 +67,15 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 					"Do not construct package registry URLs manually when a package publish action returned the asset URL.",
 				},
 			},
+		}
+		if actionName == "link_update" {
+			options.ParameterGuidance["link_id"] = toolutil.ParameterGuidance{
+				SemanticRole: "release_asset_link_identifier",
+				ValueSource:  "Use the release link ID returned by release.link_create, release.link_create_batch, or release.link_list.",
+				CommonConfusions: []string{
+					"Do not use link_update to create a new release asset link; call link_create or link_create_batch first.",
+				},
+			}
 		}
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("url", map[string]any{
