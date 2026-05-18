@@ -5,7 +5,7 @@
        mdlint mdlint-fix \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-readme gen-testing-docs \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json gen-readme gen-testing-docs \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -14,6 +14,7 @@
 BINARY_NAME=gitlab-mcp-server
 CMD_PATH=./cmd/server
 PKGS=./cmd/... ./internal/...
+MCP_PUBLISHER_VERSION=v1.7.9
 GO_SOURCE_DIRS=.
 GO_VET_PKGS=./...
 GO_E2E_VET_PKGS=./...
@@ -518,6 +519,10 @@ gen-llms:
 ## check-llms: validate llms.txt/llms-full.txt are current and structurally valid.
 check-llms:
 	go run ./cmd/gen_llms/ --check
+
+## check-server-json: validate server.json with the official MCP Registry publisher.
+check-server-json:
+	go run github.com/modelcontextprotocol/registry/cmd/publisher@$(MCP_PUBLISHER_VERSION) validate server.json
 
 ## gen-readme: auto-generate meta-tool table in README.md from runtime tool definitions.
 gen-readme:
