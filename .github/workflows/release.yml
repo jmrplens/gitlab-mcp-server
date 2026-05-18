@@ -95,7 +95,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - uses: sigstore/cosign-installer@v4.1.1
+      - uses: sigstore/cosign-installer@v4.1.2
 
       - uses: anchore/sbom-action/download-syft@v0
 
@@ -201,7 +201,7 @@ jobs:
         id: version
         run: echo "version=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_OUTPUT"
 
-      - uses: sigstore/cosign-installer@v4.1.1
+      - uses: sigstore/cosign-installer@v4.1.2
 
       - uses: docker/login-action@v4
         with:

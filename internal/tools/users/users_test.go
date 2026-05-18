@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
 )
@@ -150,7 +152,13 @@ func TestGet_UserSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGetUser {
 			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":42,"username":"testuser","name":"Test User","email":"test@example.com","state":"active","bio":"Developer"
+				"id":42,
+				"username":"testuser",
+				"name":"Test User",
+				"email":"test@example.com",
+				"state":"active",
+				"bio":"Developer",
+				"scim_identities":[{"extern_uid":"scim-user-42","group_id":7,"active":true}]
 			}`)
 			return
 		}
@@ -166,6 +174,18 @@ func TestGet_UserSuccess(t *testing.T) {
 	}
 	if out.Bio != "Developer" {
 		t.Errorf("out.Bio = %q, want %q", out.Bio, "Developer")
+	}
+	if len(out.SCIMIdentities) != 1 {
+		t.Fatalf("got %d SCIM identities, want 1", len(out.SCIMIdentities))
+	}
+	if out.SCIMIdentities[0].ExternUID != "scim-user-42" {
+		t.Errorf("SCIMIdentities[0].ExternUID = %q, want %q", out.SCIMIdentities[0].ExternUID, "scim-user-42")
+	}
+	if out.SCIMIdentities[0].GroupID != 7 {
+		t.Errorf("SCIMIdentities[0].GroupID = %d, want 7", out.SCIMIdentities[0].GroupID)
+	}
+	if !out.SCIMIdentities[0].Active {
+		t.Error("SCIMIdentities[0].Active = false, want true")
 	}
 }
 
@@ -190,6 +210,61 @@ func TestGet_UserAPIError(t *testing.T) {
 	_, err := Get(context.Background(), client, GetInput{UserID: 999})
 	if err == nil {
 		t.Fatal(errExpAPIFailure)
+	}
+}
+
+// TestToSCIMIdentityOutputs_MixedInputs_ReturnsExpectedSlices verifies SCIM
+// identity conversion handles valid, empty, and nil-only slices consistently
+// for omitempty output.
+func TestToSCIMIdentityOutputs_MixedInputs_ReturnsExpectedSlices(t *testing.T) {
+	tests := []struct {
+		name       string
+		identities []*gl.SCIMIdentity
+		want       []SCIMIdentityOutput
+	}{
+		{
+			name:       "nil slice",
+			identities: nil,
+			want:       nil,
+		},
+		{
+			name:       "empty slice",
+			identities: []*gl.SCIMIdentity{},
+			want:       nil,
+		},
+		{
+			name:       "nil only",
+			identities: []*gl.SCIMIdentity{nil},
+			want:       nil,
+		},
+		{
+			name: "filters nil identities",
+			identities: []*gl.SCIMIdentity{
+				nil,
+				{ExternUID: "scim-user-42", GroupID: 7, Active: true},
+			},
+			want: []SCIMIdentityOutput{{ExternUID: "scim-user-42", GroupID: 7, Active: true}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := toSCIMIdentityOutputs(tt.identities)
+			if tt.want == nil {
+				if got != nil {
+					t.Fatalf("got non-nil identities %+v, want nil", got)
+				}
+				return
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %d identities, want %d", len(got), len(tt.want))
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("identity[%d] = %+v, want %+v", i, got[i], tt.want[i])
+				}
+			}
+		})
 	}
 }
 
@@ -1067,6 +1142,11 @@ func TestFormatMarkdownString_WithData(t *testing.T) {
 		AvatarURL: "https://gitlab.example.com/alice/avatar.png",
 		IsAdmin:   true,
 		Bio:       "Go developer",
+		SCIMIdentities: []SCIMIdentityOutput{{
+			ExternUID: "scim-alice",
+			GroupID:   9,
+			Active:    true,
+		}},
 	}
 	md := FormatMarkdownString(out)
 
@@ -1078,6 +1158,8 @@ func TestFormatMarkdownString_WithData(t *testing.T) {
 		"**Bio**: Go developer",
 		"**Admin**: true",
 		"**Avatar**: https://gitlab.example.com/alice/avatar.png",
+		"### SCIM Identities",
+		"| scim-alice | 9 | true |",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)

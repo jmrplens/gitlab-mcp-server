@@ -10498,6 +10498,32 @@
         "public_email": {
           "type": "string"
         },
+        "scim_identities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "extern_uid": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "extern_uid",
+              "group_id",
+              "active"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "state": {
           "type": "string"
         },
@@ -10896,6 +10922,32 @@
         },
         "public_email": {
           "type": "string"
+        },
+        "scim_identities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "extern_uid": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "extern_uid",
+              "group_id",
+              "active"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "state": {
           "type": "string"
@@ -28868,6 +28920,32 @@
         },
         "public_email": {
           "type": "string"
+        },
+        "scim_identities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "extern_uid": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "extern_uid",
+              "group_id",
+              "active"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "state": {
           "type": "string"
@@ -61073,6 +61151,32 @@
               "public_email": {
                 "type": "string"
               },
+              "scim_identities": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "active": {
+                      "type": "boolean"
+                    },
+                    "extern_uid": {
+                      "type": "string"
+                    },
+                    "group_id": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "extern_uid",
+                    "group_id",
+                    "active"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "state": {
                 "type": "string"
               },
@@ -62783,6 +62887,32 @@
         },
         "public_email": {
           "type": "string"
+        },
+        "scim_identities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "extern_uid": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "extern_uid",
+              "group_id",
+              "active"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "state": {
           "type": "string"
@@ -113412,6 +113542,32 @@
         },
         "public_email": {
           "type": "string"
+        },
+        "scim_identities": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "active": {
+                "type": "boolean"
+              },
+              "extern_uid": {
+                "type": "string"
+              },
+              "group_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "extern_uid",
+              "group_id",
+              "active"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "state": {
           "type": "string"

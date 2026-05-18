@@ -5,8 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  lodash: '>=4.18.0'
-  yaml: '>=2.8.3'
+  lodash: 4.18.1
+  yaml: 2.9.0
+  yaml-language-server@1.20.0>yaml: 2.9.0
 
 importers:
 
@@ -3562,7 +3563,7 @@ packages:
       sugarss: ^5.0.0
       terser: ^5.16.0
       tsx: ^4.8.1
-      yaml: '>=2.8.3'
+      yaml: 2.9.0
     peerDependenciesMeta:
       '@types/node':
         optional: true
