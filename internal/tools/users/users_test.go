@@ -213,9 +213,10 @@ func TestGet_UserAPIError(t *testing.T) {
 	}
 }
 
-// TestToSCIMIdentityOutputs verifies SCIM identity conversion handles valid,
-// empty, and nil-only slices consistently for omitempty output.
-func TestToSCIMIdentityOutputs(t *testing.T) {
+// TestToSCIMIdentityOutputs_MixedInputs_ReturnsExpectedSlices verifies SCIM
+// identity conversion handles valid, empty, and nil-only slices consistently
+// for omitempty output.
+func TestToSCIMIdentityOutputs_MixedInputs_ReturnsExpectedSlices(t *testing.T) {
 	tests := []struct {
 		name       string
 		identities []*gl.SCIMIdentity
@@ -244,6 +245,12 @@ func TestToSCIMIdentityOutputs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := toSCIMIdentityOutputs(tt.identities)
+			if tt.want == nil {
+				if got != nil {
+					t.Fatalf("got non-nil identities %+v, want nil", got)
+				}
+				return
+			}
 			if len(got) != len(tt.want) {
 				t.Fatalf("got %d identities, want %d", len(got), len(tt.want))
 			}
