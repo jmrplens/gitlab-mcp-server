@@ -1090,73 +1090,6 @@ func TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities(t *testing.T) {
 	}
 }
 
-// TestCreateServer_DynamicTwoToolSurface verifies the experimental two-tool
-// dynamic surface exposes find and execute while retaining catalog schemas.
-func TestCreateServer_DynamicTwoToolSurface(t *testing.T) {
-	client := newMockGitLabClient(t)
-	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic2})
-	session := newInMemorySession(t, server)
-
-	toolsResult, err := session.ListTools(t.Context(), nil)
-	if err != nil {
-		t.Fatalf("ListTools() error = %v", err)
-	}
-	wantTools := map[string]bool{
-		"gitlab_find_action":  false,
-		"gitlab_execute_tool": false,
-	}
-	for _, tool := range toolsResult.Tools {
-		if _, ok := wantTools[tool.Name]; !ok {
-			t.Fatalf("unexpected dynamic-2 tool %q", tool.Name)
-		}
-		wantTools[tool.Name] = true
-	}
-	for name, found := range wantTools {
-		if !found {
-			t.Fatalf("dynamic-2 tool %q was not registered", name)
-		}
-	}
-
-	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
-	if err != nil {
-		t.Fatalf("dynamic-2 surface should expose catalog action schema resources: %v", err)
-	}
-}
-
-// TestCreateServer_DynamicThreeToolSurface verifies the explicit three-tool
-// dynamic selector remains available as TOOL_SURFACE=dynamic-3.
-func TestCreateServer_DynamicThreeToolSurface(t *testing.T) {
-	client := newMockGitLabClient(t)
-	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic3})
-	session := newInMemorySession(t, server)
-
-	toolsResult, err := session.ListTools(t.Context(), nil)
-	if err != nil {
-		t.Fatalf("ListTools() error = %v", err)
-	}
-	wantTools := map[string]bool{
-		"gitlab_search_tools":   false,
-		"gitlab_describe_tools": false,
-		"gitlab_execute_tool":   false,
-	}
-	for _, tool := range toolsResult.Tools {
-		if _, ok := wantTools[tool.Name]; !ok {
-			t.Fatalf("unexpected dynamic-3 tool %q", tool.Name)
-		}
-		wantTools[tool.Name] = true
-	}
-	for name, found := range wantTools {
-		if !found {
-			t.Fatalf("dynamic-3 tool %q was not registered", name)
-		}
-	}
-
-	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
-	if err != nil {
-		t.Fatalf("dynamic-3 surface should expose catalog action schema resources: %v", err)
-	}
-}
-
 // TestCreateServer_CapabilitySurfaceParity verifies that resource, prompt, and
 // meta-schema exposure follows CAPABILITY_SURFACE consistently across
 // catalog-backed tool surfaces.
@@ -1168,16 +1101,11 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 		capabilitySurface string
 		wantFullCatalog   bool
 		wantSchema        bool
-		wantDescribe      bool
 	}{
 		{name: "meta full", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
 		{name: "meta minimal", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceMinimal},
 		{name: "dynamic full", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
 		{name: "dynamic minimal", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceMinimal},
-		{name: "dynamic-2 full", toolSurface: config.ToolSurfaceDynamic2, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
-		{name: "dynamic-2 minimal", toolSurface: config.ToolSurfaceDynamic2, capabilitySurface: config.CapabilitySurfaceMinimal},
-		{name: "dynamic-3 full", toolSurface: config.ToolSurfaceDynamic3, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true, wantDescribe: true},
-		{name: "dynamic-3 minimal", toolSurface: config.ToolSurfaceDynamic3, capabilitySurface: config.CapabilitySurfaceMinimal, wantDescribe: true},
 	}
 
 	for _, tc := range testCases {
@@ -1231,9 +1159,6 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 
 			assertPromptSurface(t, session, tc.wantFullCatalog)
 			assertCompletionHandlerAvailable(t, session)
-			if tc.wantDescribe {
-				assertDynamicDescribeIncludesSchema(t, session)
-			}
 		})
 	}
 }
@@ -1296,30 +1221,6 @@ func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) 
 	}
 	if len(result.Completion.Values) != 0 {
 		t.Fatalf("Complete() values = %v, want empty result for unknown argument", result.Completion.Values)
-	}
-}
-
-func assertDynamicDescribeIncludesSchema(t *testing.T, session *mcp.ClientSession) {
-	t.Helper()
-	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "gitlab_describe_tools",
-		Arguments: map[string]any{"action": "project.get"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool(gitlab_describe_tools) error = %v", err)
-	}
-	if result == nil || result.IsError {
-		t.Fatalf("gitlab_describe_tools result = %+v, want non-error", result)
-	}
-	structured, err := json.Marshal(result.StructuredContent)
-	if err != nil {
-		t.Fatalf("marshal describe structured content: %v", err)
-	}
-	text := string(structured)
-	for _, want := range []string{"project.get", "input_schema", "project_id"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("gitlab_describe_tools structured content missing %q: %s", want, text)
-		}
 	}
 }
 
@@ -2154,6 +2055,28 @@ func TestLogIgnoredRequestOptions(t *testing.T) {
 	logIgnoredRequestOptions("glpat-123456", serverpool.RequestOptions{IgnoredOptions: []string{"GITLAB_URL"}})
 }
 
+// TestLegacyMetaToolsFlagValue_OnlyUsesExplicitFlag verifies HTTP mode does
+// not let the deprecated boolean flag override the default tool surface unless
+// a user explicitly passes --meta-tools.
+func TestLegacyMetaToolsFlagValue_OnlyUsesExplicitFlag(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  httpConfig
+		want string
+	}{
+		{name: "unset", cfg: httpConfig{metaTools: true}, want: ""},
+		{name: "explicit true", cfg: httpConfig{metaToolsSet: true, metaTools: true}, want: "true"},
+		{name: "explicit false", cfg: httpConfig{metaToolsSet: true}, want: "false"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := legacyMetaToolsFlagValue(&tt.cfg); got != tt.want {
+				t.Fatalf("legacyMetaToolsFlagValue() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestDoToolSearch_HonorsToolSurface verifies tool search can inspect each
 // selectable tool surface instead of always searching the legacy meta setting.
 func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
@@ -2165,8 +2088,6 @@ func TestDoToolSearch_HonorsToolSurface(t *testing.T) {
 		{name: "meta", toolSurface: config.ToolSurfaceMeta, query: "project"},
 		{name: "individual", toolSurface: config.ToolSurfaceIndividual, query: "project"},
 		{name: "dynamic", toolSurface: config.ToolSurfaceDynamic, query: "find"},
-		{name: "dynamic-2", toolSurface: config.ToolSurfaceDynamic2, query: "find"},
-		{name: "dynamic-3", toolSurface: config.ToolSurfaceDynamic3, query: "search"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -301,7 +301,7 @@ func TestStepGitLabConfig_TokenEOF(t *testing.T) {
 func TestStepOptions_AllAnswered(t *testing.T) {
 	input := strings.Join([]string{
 		"n",            // skip TLS
-		"3",            // tool surface = dynamic
+		"1",            // tool surface = dynamic
 		"2",            // capability surface = minimal
 		"2",            // meta parameter schema = compact
 		"y",            // enterprise
@@ -536,7 +536,7 @@ func TestRunCLI_AdvancedOptions(t *testing.T) {
 		"test-token-xxxxxxxxxxxxxxxxxxxx",
 		"y",            // yes to advanced options
 		"y",            // skip TLS
-		"3",            // tool surface = dynamic
+		"1",            // tool surface = dynamic
 		"2",            // capability surface = minimal
 		"2",            // meta parameter schema = compact
 		"y",            // enterprise

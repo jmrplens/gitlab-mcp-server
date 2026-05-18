@@ -23,10 +23,8 @@ var searchStopWordsMap = map[string]struct{}{
 }
 
 const (
-	searchToolName   = "gitlab_search_tools"
-	describeToolName = "gitlab_describe_tools"
-	findToolName     = "gitlab_find_action"
-	executeToolName  = "gitlab_execute_tool"
+	findToolName    = "gitlab_find_action"
+	executeToolName = "gitlab_execute_tool"
 
 	defaultLimit     = 20
 	maxLimit         = 50
@@ -56,7 +54,7 @@ const (
 	tagReleaseNotes                 = "release notes"
 )
 
-// SearchInput is the input for gitlab_search_tools.
+// SearchInput is the input for catalog search.
 type SearchInput struct {
 	Query   string `json:"query" jsonschema:"Search terms for GitLab actions, such as project create, merge request approve, pipeline retry, or ci variable."`
 	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum number of matches to return. Defaults to 20 and is capped at 50."`
@@ -65,7 +63,7 @@ type SearchInput struct {
 
 // SearchResult is one matching GitLab catalog action.
 type SearchResult struct {
-	ID             string              `json:"id" jsonschema:"Canonical action ID to pass to gitlab_describe_tools or gitlab_execute_tool."`
+	ID             string              `json:"id" jsonschema:"Canonical action ID to pass to gitlab_execute_tool."`
 	Tool           string              `json:"tool" jsonschema:"Backing meta-tool name."`
 	Domain         string              `json:"domain" jsonschema:"Canonical action domain."`
 	Action         string              `json:"action" jsonschema:"Action name inside the catalog group."`
@@ -81,16 +79,16 @@ type SearchResult struct {
 	AmbiguousWith  []string            `json:"ambiguous_with,omitempty" jsonschema:"Other canonical action IDs that share the exact ambiguous alias used in the query."`
 }
 
-// SearchOutput is the structured output for gitlab_search_tools.
+// SearchOutput is the structured output for catalog search.
 type SearchOutput struct {
 	Query       string         `json:"query" jsonschema:"Original search query."`
 	Count       int            `json:"count" jsonschema:"Number of returned matches."`
 	Results     []SearchResult `json:"results" jsonschema:"Matching GitLab catalog actions."`
 	Suggestions []string       `json:"suggestions,omitempty" jsonschema:"Small set of nearby tokens or common domains to try when no results matched."`
-	NextStep    string         `json:"next_step,omitempty" jsonschema:"Compact instruction for the next Dynamic-3 discovery step after search."`
+	NextStep    string         `json:"next_step,omitempty" jsonschema:"Compact instruction for the next action-selection step after search."`
 }
 
-// DescribeInput is the input for gitlab_describe_tools.
+// DescribeInput identifies catalog actions to describe.
 type DescribeInput struct {
 	Action  string   `json:"action,omitempty" jsonschema:"Canonical action ID to describe, such as project.create. Use either action or actions."`
 	Actions []string `json:"actions,omitempty" jsonschema:"Canonical action IDs to describe in one call."`
@@ -119,7 +117,7 @@ type ActionDescription struct {
 	Example        ActionExample                         `json:"example" jsonschema:"Example gitlab_execute_tool call."`
 }
 
-// DescribeOutput is the structured output for gitlab_describe_tools.
+// DescribeOutput is the structured output for catalog action descriptions.
 type DescribeOutput struct {
 	Count   int                 `json:"count" jsonschema:"Number of described actions."`
 	Actions []ActionDescription `json:"actions" jsonschema:"Detailed action descriptions."`
@@ -162,7 +160,7 @@ type FindOutput struct {
 
 // ExecuteInput is the input for gitlab_execute_tool.
 type ExecuteInput struct {
-	Action  string         `json:"action" jsonschema:"Canonical action ID returned by gitlab_search_tools, gitlab_describe_tools, or gitlab_find_action, such as project.list."`
+	Action  string         `json:"action" jsonschema:"Canonical action ID returned by gitlab_find_action, such as project.list."`
 	Params  map[string]any `json:"params" jsonschema:"Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters."`
 	Confirm bool           `json:"confirm,omitempty" jsonschema:"Set true to explicitly confirm destructive actions."`
 }
@@ -205,42 +203,12 @@ type Registry struct {
 	SearchIndex      searchIndex
 }
 
-// RegisterCatalogTools registers the dynamic search, describe, and execute
-// tools from the canonical action catalog.
-func RegisterCatalogTools(server *mcp.Server, catalog *actioncatalog.Catalog) {
-	registry := NewRegistryFromCatalog(catalog)
-	addSearchTool(server, registry)
-	addDescribeTool(server, registry)
-	addExecuteTool(server, registry)
-}
-
-// RegisterCatalogFindExecuteTools registers the experimental two-tool dynamic
-// catalog from the canonical action catalog.
+// RegisterCatalogFindExecuteTools registers the dynamic find and execute tools
+// from the canonical action catalog.
 func RegisterCatalogFindExecuteTools(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	registry := NewRegistryFromCatalog(catalog)
 	addFindTool(server, registry)
 	addExecuteTool(server, registry)
-}
-
-func addSearchTool(server *mcp.Server, registry *Registry) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:         searchToolName,
-		Title:        "GitLab Search Tools",
-		Description:  "Search the canonical GitLab action catalog for the exact action ID. Use this first whenever the exact action ID is not already known. Search with task keywords such as 'merge request merge', 'discover project from remote url', 'issue notes list', or 'pipeline job list'. Results include required_params and next_step for choosing the next Dynamic-3 discovery step; use gitlab_describe_tools for the selected action when exact schema details are needed. Do NOT invent IDs like merge_request.accept, issue.notes, or pipeline.jobs.",
-		Annotations:  annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Search Tools"),
-		Icons:        toolutil.IconSearch,
-		OutputSchema: nil,
-	}, registry.Search)
-}
-
-func addDescribeTool(server *mcp.Server, registry *Registry) {
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        describeToolName,
-		Title:       "GitLab Describe Tools",
-		Description: "Describe one or more GitLab catalog actions by canonical action ID and return the exact params schema, required params, safety metadata, and an execute example. Use this before gitlab_execute_tool whenever params are not already exact. Rely on the returned schema and example for param names. Do NOT invent alias params or unsupported params.",
-		Annotations: annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Describe Tools"),
-		Icons:       toolutil.IconConfig,
-	}, registry.Describe)
 }
 
 func addFindTool(server *mcp.Server, registry *Registry) {
@@ -260,7 +228,7 @@ func addExecuteTool(server *mcp.Server, registry *Registry) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        executeToolName,
 		Title:       "GitLab Execute Tool",
-		Description: "Execute one GitLab catalog action by canonical action ID (e.g. domain.action). Always include params as an object: {\"action\":\"domain.action\",\"params\":{...}}; use params:{} only for actions with no parameters. For the 3-tool catalog, use gitlab_search_tools and gitlab_describe_tools first unless the exact action ID and all required param names are already known. For the 2-tool catalog, use gitlab_find_action first. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.",
+		Description: "Execute one GitLab catalog action by canonical action ID (e.g. domain.action). Always include params as an object: {\"action\":\"domain.action\",\"params\":{...}}; use params:{} only for actions with no parameters. Use gitlab_find_action first unless the exact action ID and all required param names are already known. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.",
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "GitLab Execute Tool",
 			DestructiveHint: &destructiveHint,
@@ -362,7 +330,7 @@ func (r *Registry) indexAliases(aliasTargets map[string][]string) {
 func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
 	query := strings.TrimSpace(input.Query)
 	if query == "" {
-		return toolutil.ErrorResult("gitlab_search_tools: query is required. Try terms like project create, merge request approve, pipeline retry, or ci variable."), SearchOutput{}, nil
+		return toolutil.ErrorResult("catalog search: query is required. Try terms like project create, merge request approve, pipeline retry, or ci variable."), SearchOutput{}, nil
 	}
 
 	matches := r.searchMatches(query, input.Limit, input.Explain)
@@ -405,14 +373,14 @@ func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input Searc
 func (r *Registry) Describe(_ context.Context, _ *mcp.CallToolRequest, input DescribeInput) (*mcp.CallToolResult, DescribeOutput, error) {
 	ids := normalizeDescribeIDs(input)
 	if len(ids) == 0 {
-		return toolutil.ErrorResult("gitlab_describe_tools: provide action or actions with canonical IDs returned by the registered discovery tool for this surface."), DescribeOutput{}, nil
+		return toolutil.ErrorResult("catalog describe: provide action or actions with canonical IDs returned by the registered discovery tool for this surface."), DescribeOutput{}, nil
 	}
 
 	descriptions := make([]ActionDescription, 0, len(ids))
 	for _, id := range ids {
 		entry, ok := r.resolveAction(id)
 		if !ok {
-			return toolutil.ErrorResult(r.unknownActionMessage("gitlab_describe_tools", id)), DescribeOutput{}, nil
+			return toolutil.ErrorResult(r.unknownActionMessage("catalog describe", id)), DescribeOutput{}, nil
 		}
 		descriptions = append(descriptions, describeEntry(entry))
 	}
@@ -2575,13 +2543,13 @@ func searchNextStep(results []SearchResult) string {
 	}
 	top := results[0]
 	if top.LowConfidence || len(top.AmbiguousWith) > 0 {
-		return fmt.Sprintf("Top result %s needs confirmation; choose the intended canonical action ID, then call gitlab_describe_tools for that action before executing.", backtickString(top.ID))
+		return fmt.Sprintf("Top result %s needs confirmation; choose the intended canonical action ID before executing.", backtickString(top.ID))
 	}
 	if len(top.RequiredParams) == 0 {
-		return fmt.Sprintf("Top result %s has no required params. In Dynamic-3, call gitlab_describe_tools only if optional params or output shape matter; otherwise execute with params:{}.", backtickString(top.ID))
+		return fmt.Sprintf("Top result %s has no required params. Execute with params:{} unless optional params are needed.", backtickString(top.ID))
 	}
 	b := strings.Builder{}
-	fmt.Fprintf(&b, "Top result %s is high confidence. Call gitlab_describe_tools for %s to get exact parameter schema before executing", backtickString(top.ID), backtickString(top.ID))
+	fmt.Fprintf(&b, "Top result %s is high confidence. Use its exact parameter schema before executing", backtickString(top.ID))
 	fmt.Fprintf(&b, "; search only proves required params %s.", compactParamList(top.RequiredParams, 8))
 	if top.Destructive {
 		b.WriteString(" Because this action is destructive, execute later with top-level confirm:true only after explicit user approval.")
@@ -2674,7 +2642,7 @@ func formatSearchOutput(output SearchOutput) string {
 	if output.NextStep != "" {
 		fmt.Fprintf(&b, "\nNext step: %s\n", output.NextStep)
 	} else {
-		b.WriteString("\nUse `gitlab_describe_tools` only when the chosen action's full schema is still needed.\n")
+		b.WriteString("\nUse `gitlab_find_action` when the chosen action's full schema is still needed.\n")
 	}
 	return b.String()
 }

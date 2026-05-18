@@ -31,7 +31,7 @@ Esta debe establecerse para que el servidor arranque en modo stdio:
 | ------------------------ | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `GITLAB_URL`             | `https://gitlab.com` | URL base de la instancia GitLab. Establécela para instancias autogestionadas                                                                                                                                 |
 | `GITLAB_SKIP_TLS_VERIFY` | `false`              | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                                                       |
-| `TOOL_SURFACE`           | `meta`               | Selector canónico del catálogo: `meta`, `individual`, `dynamic`, `dynamic-2` o `dynamic-3`                                                                                                                   |
+| `TOOL_SURFACE`           | `meta`               | Selector canónico del catálogo: `meta`, `individual` o `dynamic`                                                                                                                                             |
 | `META_TOOLS`             | heredado             | Selector de compatibilidad deprecado. `true` mapea a `meta`, `false` mapea a `individual`, y los valores dynamic mapean al `TOOL_SURFACE` equivalente cuando `TOOL_SURFACE` no está definido                 |
 | `CAPABILITY_SURFACE`     | `full`               | Selector del catálogo de recursos y prompts: `full` conserva el catálogo completo; `minimal` mantiene solo `gitlab://workspace/roots` y desactiva recursos opcionales, prompts, guías de flujo y meta-schema |
 | `META_PARAM_SCHEMA`      | `opaque`             | Estrategia de esquema de entrada para meta-herramientas: `opaque` (por defecto), `compact` (6.5x el tamaño opaque) o `full` (11.9x). Solo afecta schemas de meta-herramientas en `tools/list`                |
@@ -45,11 +45,11 @@ Esta debe establecerse para que el servidor arranque en modo stdio:
 :::tip
 **El modo meta-herramientas** (`TOOL_SURFACE=meta`) es altamente recomendado. Agrupa las herramientas por dominio (p. ej., `gitlab_issue` gestiona list, get, create, update, delete) lo que reduce el uso de tokens y mejora la precisión de selección de herramientas por la IA.
 
-Usa `TOOL_SURFACE=dynamic` para el catálogo visible estable más pequeño: solo se exponen `gitlab_search_tools`, `gitlab_describe_tools` y `gitlab_execute_tool`, respaldadas por el mismo catálogo canónico de acciones de GitLab. `TOOL_SURFACE=dynamic-3` selecciona explícitamente esa misma superficie actual de tres herramientas para configuraciones fijadas. Usa `TOOL_SURFACE=dynamic-2` solo cuando quieras intencionadamente la variante experimental find/execute.
+Usa `TOOL_SURFACE=dynamic` para el catálogo visible estable más pequeño: solo se exponen `gitlab_find_action` y `gitlab_execute_tool`, respaldadas por el mismo catálogo canónico de acciones de GitLab.
 
-Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para el flujo buscar, describir y ejecutar.
+Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para el flujo find/execute.
 
-Para despliegues dinámicos donde los recursos y prompts dominan el contexto inicial, usa `CAPABILITY_SURFACE=minimal`. Mantiene `gitlab://workspace/roots` para descubrimiento de proyectos y omite recursos opcionales, prompts, guías de flujo y recursos de meta-schema. Esto no elimina los schemas del descubrimiento dinámico: usa `gitlab_describe_tools` para recuperar schemas exactos antes de llamar a `gitlab_execute_tool`. El valor por defecto sigue siendo `full`; hoy no se expone un modo schemas-only.
+Para despliegues dinámicos donde los recursos y prompts dominan el contexto inicial, usa `CAPABILITY_SURFACE=minimal`. Mantiene `gitlab://workspace/roots` para descubrimiento de proyectos y omite recursos opcionales, prompts, guías de flujo y recursos de meta-schema. Esto no elimina los schemas del descubrimiento dinámico: usa `gitlab_find_action` para recuperar schemas exactos antes de llamar a `gitlab_execute_tool`. El valor por defecto sigue siendo `full`; hoy no se expone un modo schemas-only.
 :::
 
 ## Autoactualización
@@ -261,8 +261,8 @@ Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar
 | `--http-addr`            | `:8080`                      | Dirección y puerto de escucha                                                                                             |
 | `--gitlab-url`           | —                            | URL fija de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición                                   |
 | `--skip-tls-verify`      | `false`                      | Omitir verificación TLS                                                                                                   |
-| `--tool-surface`         | `meta`                       | Selector canónico del catálogo: `meta`, `individual`, `dynamic`, `dynamic-2` o `dynamic-3`                                |
-| `--meta-tools`           | `true`                       | Flag de compatibilidad deprecado. Usa `--tool-surface=individual` en lugar de `--meta-tools=false`                        |
+| `--tool-surface`         | `dynamic`                    | Selector canónico del catálogo: `dynamic`, `meta` o `individual`                                                          |
+| `--meta-tools`           | _(sin definir)_              | Flag de compatibilidad deprecado. Usa `--tool-surface=individual` en lugar de `--meta-tools=false`                        |
 | `--capability-surface`   | `full`                       | Selector del catálogo de recursos y prompts: `full` o `minimal`; minimal omite recursos opcionales, meta-schema y prompts |
 | `--enterprise`           | `false`                      | Forzar herramientas Enterprise/Premium si se establece; omítelo para autodetectar CE/EE por entrada token+URL             |
 | `--read-only`            | `false`                      | Modo solo lectura                                                                                                         |

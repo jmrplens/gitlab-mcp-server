@@ -137,7 +137,7 @@ go test -tags e2e -c -o NUL ./test/e2e/suite/         # Windows
 
 **Extended domains (meta-tool workflow)**: wikis, CI variables, CI lint, environments, issue links, deploy keys, snippets, issue discussions, draft notes, pipeline schedules, badges, access tokens, award emoji
 
-**Dynamic surface workflow**: public tool inventory, search, describe, execute, standalone project discovery, multi-intent search, and destructive-action confirmation guard
+**Dynamic surface workflow**: public tool inventory, find, execute, standalone project discovery, multi-intent discovery, and destructive-action confirmation guard
 
 **Docker-only domains**: pipeline create/get/cancel/retry/delete, job get/log/retry/cancel
 

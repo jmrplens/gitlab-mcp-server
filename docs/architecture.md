@@ -72,7 +72,7 @@ graph TD
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
         IND[individual projection<br/>1014 self-managed / 1019 GitLab.com Enterprise tools]
         META[meta projection<br/>33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise tools]
-        DYN[dynamic projection<br/>3 visible search / describe / execute tools]
+        DYN[dynamic projection<br/>2 visible find / execute tools]
         SAMP[sampling support<br/>11 LLM-assisted actions]
         ELIC[elicitation support<br/>4 interactive actions]
         RES[resources<br/>46 resource handlers]
@@ -161,7 +161,7 @@ Loads settings from environment variables with optional `.env` file support (via
 | `GITLAB_URL`             | No       | `https://gitlab.com` | GitLab instance base URL                             |
 | `GITLAB_TOKEN`           | Stdio    | —       | Personal Access Token with `api` scope               |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `false` | Skip TLS certificate verification                    |
-| `TOOL_SURFACE`           | No       | `meta`  | Canonical tool catalog selector (`meta`, `individual`, `dynamic`, `dynamic-2`, `dynamic-3`) |
+| `TOOL_SURFACE`           | No       | `dynamic` | Canonical tool catalog selector (`dynamic`, `meta`, `individual`) |
 | `META_TOOLS`             | No       | —       | Deprecated compatibility selector mapped to `TOOL_SURFACE` when `TOOL_SURFACE` is absent |
 | `ISSUE_REPORTS`          | No       | `false` | Auto-generate GitLab issues on tool errors            |
 | `YOLO_MODE`              | No       | `false` | Skip destructive action confirmations                |
@@ -295,8 +295,8 @@ sequenceDiagram
 ### Dynamic Toolset (`internal/tools/dynamic`)
 
 The dynamic toolset is a progressive-disclosure layer over the canonical action catalog. Instead of exposing all domain
-meta-tools in `tools/list`, it exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
-The current default remains meta-tools, while dynamic mode is the low-token find/execute alternative. `dynamic-3` remains available for the explicit search/describe/execute variant.
+meta-tools in `tools/list`, it exposes only `gitlab_find_action` and `gitlab_execute_tool`.
+The current default is dynamic find/execute, while meta-tools remain available as the consolidated domain-dispatcher alternative.
 
 For developer guidance on shared catalog ownership, standalone dynamic actions, and registration rules, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 
@@ -311,13 +311,11 @@ flowchart TD
     STANDALONE --> REGISTRY[Catalog-backed action registry]
 
     subgraph Public Dynamic Tools
-        SEARCH[gitlab_search_tools]
-        DESCRIBE[gitlab_describe_tools]
+        FIND[gitlab_find_action]
         EXECUTE[gitlab_execute_tool]
     end
 
-    REGISTRY --> SEARCH
-    REGISTRY --> DESCRIBE
+    REGISTRY --> FIND
     REGISTRY --> EXECUTE
     EXECUTE --> VALIDATE[Validate canonical action and params]
     VALIDATE --> ROUTE[Reuse ActionRoute handler]
@@ -325,7 +323,7 @@ flowchart TD
     HANDLER --> GITLAB[GitLab REST v4 or GraphQL]
 ```
 
-Runtime use follows a search, describe, execute sequence:
+Runtime use follows a find, execute sequence:
 
 ```mermaid
 sequenceDiagram
@@ -334,9 +332,7 @@ sequenceDiagram
     participant TOOL as Domain Handler
     participant GL as GitLab API
 
-    LLM->>DYN: gitlab_search_tools(query)
-    DYN-->>LLM: Candidate action IDs
-    LLM->>DYN: gitlab_describe_tools(actions)
+    LLM->>DYN: gitlab_find_action(query)
     DYN-->>LLM: Input schemas, examples, safety metadata
     LLM->>DYN: gitlab_execute_tool(action, params)
     DYN->>TOOL: Existing handler through ActionRoute

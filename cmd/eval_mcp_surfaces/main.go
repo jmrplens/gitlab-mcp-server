@@ -72,10 +72,6 @@ const (
 	maxResponseBytes = 1 << 20
 	// maxToolResultLen identifies the max tool result len constant used by this package.
 	maxToolResultLen = 20_000
-	// dynamicSearchTool identifies the dynamic search tool constant used by this package.
-	dynamicSearchTool = "gitlab_search_tools"
-	// dynamicDescribeTool identifies the dynamic describe tool constant used by this package.
-	dynamicDescribeTool = "gitlab_describe_tools"
 	// dynamicFindTool identifies the dynamic find tool constant used by this package.
 	dynamicFindTool = "gitlab_find_action"
 	// dynamicExecuteTool identifies the dynamic execute tool constant used by this package.
@@ -828,7 +824,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.ToolsFile, "tools-file", "", "Optional tools/list JSON snapshot to evaluate instead of the live catalog")
 	flag.Var(&opts.CompareReports, "compare", "Evaluation or token report file to include in a comparison summary; repeat for multiple reports")
 	flag.Var(&opts.CheckEfficiency, "check-efficiency", "Trace JSONL path to validate against model-call efficiency gates; repeat for multiple trace files")
-	flag.Var(&opts.CompareTraces, "compare-traces", "Trace JSONL path for direct Dynamic-3 versus meta comparison; provide dynamic trace first and meta trace second")
+	flag.Var(&opts.CompareTraces, "compare-traces", "Trace JSONL path for direct dynamic versus meta comparison; provide dynamic trace first and meta trace second")
 	flag.Var(&opts.EfficiencyAllowTask, "efficiency-allow-task", "Task ID allowed to exceed the per-attempt call budget in --check-efficiency; repeat or comma-separate values")
 	flag.Var(&opts.PublishFrom, "publish-from", "Reviewed evaluation report to publish into docs; repeat for multiple reports")
 	flag.StringVar(&opts.PublishResults, "publish-results-doc", defaultPublishResultsDoc, "Markdown results document updated by --publish-docs")
@@ -837,7 +833,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.PublishMode, "publish-mode", publishModeReplaceCurrent, "Publication mode for model results: append or replace-current")
 	flag.StringVar(&opts.Preset, "preset", "", "Optional evaluation preset: docker-read, docker-mutating-safe, docker-destructive-safe, or schema-enterprise")
 	flag.StringVar(&opts.Partition, "partition", "", "Optional schema fixture partition: base-read, base-mutating, base-destructive, enterprise-read, enterprise-mutating, enterprise-destructive, error-recovery, or capability-fallback")
-	flag.StringVar(&opts.ToolSurface, "tool-surface", config.ToolSurfaceMeta, "Tool catalog surface to evaluate: meta, dynamic, dynamic-3, or dynamic-2")
+	flag.StringVar(&opts.ToolSurface, "tool-surface", config.DefaultToolSurface, "Tool catalog surface to evaluate: dynamic or meta")
 	flag.StringVar(&opts.CoverageReport, "coverage-report", "", "Optional Markdown report listing uncovered high-risk routes after the selected evaluation")
 	flag.StringVar(&opts.Backend, "backend", backendMock, "Live catalog backend: mock or gitlab. gitlab uses GITLAB_URL/GITLAB_TOKEN, optionally loaded from --gitlab-env-file")
 	flag.StringVar(&opts.GitLabEnv, "gitlab-env-file", "", "Optional env file loaded after .env for --backend=gitlab, for example test/e2e/.env.docker")
@@ -1367,44 +1363,24 @@ func normalizedBackend(backend string) string {
 func normalizeEvalToolSurface(toolSurface string) (string, error) {
 	surface := strings.ToLower(strings.TrimSpace(toolSurface))
 	if surface == "" {
-		return config.ToolSurfaceMeta, nil
+		return config.DefaultToolSurface, nil
 	}
 	surface, _, err := config.ParseToolSurface(surface, "true")
 	if err != nil {
 		return "", err
 	}
 	switch surface {
-	case config.ToolSurfaceMeta, config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2, config.ToolSurfaceDynamic3:
+	case config.ToolSurfaceMeta, config.ToolSurfaceDynamic:
 		return surface, nil
 	default:
-		return "", fmt.Errorf("--tool-surface must be %q, %q, %q, or %q, got %q", config.ToolSurfaceMeta, config.ToolSurfaceDynamic, config.ToolSurfaceDynamic3, config.ToolSurfaceDynamic2, toolSurface)
+		return "", fmt.Errorf("--tool-surface must be %q or %q, got %q", config.ToolSurfaceMeta, config.ToolSurfaceDynamic, toolSurface)
 	}
 }
 
 // isDynamicEvalSurface reports whether the selected surface uses dynamic discovery.
 func isDynamicEvalSurface(toolSurface string) bool {
 	switch toolSurface {
-	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2, config.ToolSurfaceDynamic3:
-		return true
-	default:
-		return false
-	}
-}
-
-// isDynamicTwoToolEvalSurface reports whether the selected surface uses the two-tool dynamic mode.
-func isDynamicTwoToolEvalSurface(toolSurface string) bool {
-	switch toolSurface {
-	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2:
-		return true
-	default:
-		return false
-	}
-}
-
-// isDynamicThreeToolEvalSurface reports whether the selected surface uses the three-tool dynamic mode.
-func isDynamicThreeToolEvalSurface(toolSurface string) bool {
-	switch toolSurface {
-	case config.ToolSurfaceDynamic3:
+	case config.ToolSurfaceDynamic:
 		return true
 	default:
 		return false
@@ -4162,7 +4138,7 @@ func newCatalogSession(client *gitlabclient.Client, toolSurface string) (*mcp.Cl
 func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-mcp-surfaces", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
 	switch toolSurface {
-	case config.ToolSurfaceDynamic, config.ToolSurfaceDynamic2:
+	case config.ToolSurfaceDynamic:
 		actionCatalog, catalogErr := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: client.IsEnterprise(), IncludeMCP: true})
 		if catalogErr != nil {
 			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
@@ -4172,17 +4148,6 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 			return nil, nil, nil, nil, fmt.Errorf("add standalone dynamic catalog: %w", catalogErr)
 		}
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
-		routes = dynamicValidationRoutes(actionCatalog.ActionMaps())
-	case config.ToolSurfaceDynamic3:
-		actionCatalog, catalogErr := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: client.IsEnterprise(), IncludeMCP: true})
-		if catalogErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
-		}
-		actionCatalog, catalogErr = dynamictools.AddStandaloneCatalog(actionCatalog, client, dynamictools.StandaloneOptions{})
-		if catalogErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf("add standalone dynamic-3 catalog: %w", catalogErr)
-		}
-		dynamictools.RegisterCatalogTools(server, actionCatalog)
 		routes = dynamicValidationRoutes(actionCatalog.ActionMaps())
 	case config.ToolSurfaceMeta:
 		actionCatalog, catalogErr := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: client.IsEnterprise(), IncludeMCP: true})
@@ -4774,19 +4739,8 @@ func taskToolCallLimit(stepCount int) int {
 }
 
 // taskToolCallLimitForSurface resolves task tool call limit for surface for evaluator execution.
-func taskToolCallLimitForSurface(stepCount int, toolSurface string) int {
-	limit := taskToolCallLimit(stepCount)
-	if !isDynamicThreeToolEvalSurface(toolSurface) {
-		return limit
-	}
-	dynamicLimit := stepCount*4 + 4
-	if dynamicLimit < toolCallLimit {
-		return toolCallLimit
-	}
-	if dynamicLimit > limit {
-		return dynamicLimit
-	}
-	return limit
+func taskToolCallLimitForSurface(stepCount int, _ string) int {
+	return taskToolCallLimit(stepCount)
 }
 
 // taskCallBudget captures task call budget data for one evaluation task.
@@ -4806,18 +4760,8 @@ func callBudgetForTask(task evalTask, toolSurface string) taskCallBudget {
 		AllowedDiscoveryCalls: 0,
 		AllowedRepairCalls:    repairAttemptLimitForTask(toolSurface, len(steps)),
 	}
-	if isDynamicThreeToolEvalSurface(toolSurface) {
-		switch {
-		case exactDynamicCallAvailable(task, steps):
-			budget.AllowedDiscoveryCalls = 0
-			budget.SuppressDiscovery = true
-		case len(steps) == 1:
-			budget.AllowedDiscoveryCalls = 2
-		case dynamicWorkflowPlanPreamble(task) != "":
-			budget.AllowedDiscoveryCalls = 1
-		default:
-			budget.AllowedDiscoveryCalls = len(steps)
-		}
+	if isDynamicEvalSurface(toolSurface) && exactDynamicCallAvailable(task, steps) {
+		budget.SuppressDiscovery = true
 	}
 	budget.MaxCalls = max(budget.ExpectedSteps, budget.ExpectedSteps+budget.AllowedDiscoveryCalls+budget.AllowedRepairCalls)
 	return budget
@@ -4831,13 +4775,13 @@ func discoveryBudgetFeedback(task evalTask, step evalStep, toolUse modelContentB
 	if !exactDynamicCallAvailable(task, []evalStep{step}) {
 		return "", false
 	}
-	return fmt.Sprintf("The exact gitlab_execute_tool call is already complete: action %s has high-confidence values for all required params. Execute it directly now; no search, describe, or schema lookup is needed.", step.ExpectedAction), true
+	return fmt.Sprintf("The exact gitlab_execute_tool call is already complete: action %s has high-confidence values for all required params. Execute it directly now; no discovery or schema lookup is needed.", step.ExpectedAction), true
 }
 
 // isRedundantDiscoveryTool reports whether a tool call repeats avoidable dynamic discovery.
 func isRedundantDiscoveryTool(toolName string) bool {
 	switch toolName {
-	case dynamicSearchTool, dynamicDescribeTool, dynamicFindTool, "gitlab":
+	case dynamicFindTool, "gitlab":
 		return true
 	default:
 		return false
@@ -4858,57 +4802,18 @@ func exactDynamicCallAvailable(task evalTask, steps []evalStep) bool {
 }
 
 // repairAttemptLimitForSurface returns the default repair budget for one tool surface.
-func repairAttemptLimitForSurface(toolSurface string) int {
-	if isDynamicThreeToolEvalSurface(toolSurface) {
-		return 2
-	}
+func repairAttemptLimitForSurface(_ string) int {
 	return 1
 }
 
 // repairAttemptLimitForTask scales the repair budget for multi-step dynamic tasks.
-func repairAttemptLimitForTask(toolSurface string, stepCount int) int {
-	limit := repairAttemptLimitForSurface(toolSurface)
-	if isDynamicThreeToolEvalSurface(toolSurface) && stepCount > limit {
-		return stepCount
-	}
-	return limit
+func repairAttemptLimitForTask(toolSurface string, _ int) int {
+	return repairAttemptLimitForSurface(toolSurface)
 }
 
 // acceptsDynamicPreludeCall accepts discovery calls that correctly precede a dynamic execute call.
-func acceptsDynamicPreludeCall(toolSurface string, step evalStep, validation validationResult) bool {
-	if !isDynamicThreeToolEvalSurface(toolSurface) {
-		return false
-	}
-	if step.ExpectedTool != dynamicExecuteTool || !validation.ToolMatches || validation.ActionMatches {
-		return false
-	}
-	switch {
-	case step.ExpectedAction == actionDiscoverProjectResolve:
-		return validation.Action == actionSearchProjects || validation.Action == actionProjectList || validation.Action == actionProjectGet || validation.Action == "environment.list" || validation.Action == actionEnvironmentProtectedList || validation.Action == "environment.deployment_list"
-	case step.ExpectedAction == "release.link_get" && validation.Action == "release.get":
-		return true
-	case step.ExpectedAction == "environment.protected_get" && validation.Action == actionEnvironmentProtectedList:
-		return true
-	case step.ExpectedAction == "environment.protected_get" && validation.Action == "environment.deployment_list":
-		return true
-	case step.ExpectedAction == "pipeline.trigger_get":
-		return false
-	case strings.HasSuffix(step.ExpectedAction, ".get") && strings.HasSuffix(validation.Action, ".list"):
-		expectedListAction := strings.TrimSuffix(step.ExpectedAction, ".get") + ".list"
-		return validation.Action == expectedListAction
-	case strings.HasSuffix(step.ExpectedAction, "_get") && strings.HasSuffix(validation.Action, "_list"):
-		expectedListAction := strings.TrimSuffix(step.ExpectedAction, "_get") + "_list"
-		return validation.Action == expectedListAction
-	case hasParam(step.RequiredParams, "project_id") && isProjectLookupAction(validation.Action) && !isProjectLookupAction(step.ExpectedAction):
-		return true
-	default:
-		return false
-	}
-}
-
-// isProjectLookupAction reports whether an action can resolve a project identity.
-func isProjectLookupAction(action string) bool {
-	return action == actionProjectList || action == actionProjectGet || action == actionSearchProjects
+func acceptsDynamicPreludeCall(_ string, _ evalStep, _ validationResult) bool {
+	return false
 }
 
 // successfulSimulatedToolContent resolves successful simulated tool content for evaluator execution.
@@ -5469,91 +5374,29 @@ func isSchemaLookup(toolUse modelContentBlock) bool {
 
 // isDynamicDiscovery reports whether a dynamic catalog lookup tool was called.
 func isDynamicDiscovery(toolUse modelContentBlock) bool {
-	return toolUse.Name == dynamicSearchTool || toolUse.Name == dynamicDescribeTool || toolUse.Name == dynamicFindTool
+	return toolUse.Name == dynamicFindTool
 }
 
-// dynamicDiscoveryResult returns simulated discovery output for dynamic search
-// describe, and find calls, keeping evaluation independent from live GitLab state.
+// dynamicDiscoveryResult returns simulated discovery output for dynamic find
+// calls, keeping evaluation independent from live GitLab state.
 func dynamicDiscoveryResult(ctx context.Context, routes map[string]toolutil.ActionMap, toolUse modelContentBlock) (string, error) {
 	switch toolUse.Name {
-	case dynamicSearchTool:
-		query, _ := toolUse.Input["query"].(string)
-		limit := intFromAny(toolUse.Input["limit"], 20)
-		return marshalToolResult(dynamicSearchResult(ctx, routes, query, limit))
 	case dynamicFindTool:
 		query, _ := toolUse.Input["query"].(string)
 		limit := intFromAny(toolUse.Input["limit"], 20)
 		return marshalToolResult(dynamicFindResult(ctx, routes, query, limit))
-	case dynamicDescribeTool:
-		ids := dynamicDescribeIDs(toolUse.Input)
-		if len(ids) == 0 {
-			return "", errors.New("gitlab_describe_tools requires action or actions")
-		}
-		return marshalToolResult(dynamicDescribeResult(ctx, routes, ids))
 	default:
 		return "", fmt.Errorf("unsupported dynamic discovery tool %q", toolUse.Name)
 	}
 }
 
-// dynamicSearchResult searches with the same intent index as the runtime
-// dynamic toolset so model evaluation reflects production discovery behavior.
-func dynamicSearchResult(ctx context.Context, routes map[string]toolutil.ActionMap, query string, limit int) any {
-	registry := dynamictools.NewRegistry(dynamicCatalogRoutesFromValidationRoutes(routes))
-	_, output, err := registry.Search(ctx, nil, dynamictools.SearchInput{Query: query, Limit: limit})
-	if err != nil {
-		return map[string]any{"query": query, "count": 0, "results": []any{}, "error": err.Error()}
-	}
-	return output
-}
-
 // dynamicFindResult searches and describes matches using the same runtime
-// registry as the experimental dynamic-2 toolset.
+// registry as the dynamic toolset.
 func dynamicFindResult(ctx context.Context, routes map[string]toolutil.ActionMap, query string, limit int) any {
 	registry := dynamictools.NewRegistry(dynamicCatalogRoutesFromValidationRoutes(routes))
 	_, output, err := registry.Find(ctx, nil, dynamictools.FindInput{Query: query, Limit: limit})
 	if err != nil {
 		return map[string]any{"query": query, "count": 0, "results": []any{}, "error": err.Error()}
-	}
-	return output
-}
-
-// dynamicDescribeIDs extracts one or many action IDs from describe input.
-func dynamicDescribeIDs(input map[string]any) []string {
-	seen := map[string]struct{}{}
-	var ids []string
-	appendID := func(value any) {
-		id, ok := value.(string)
-		if !ok {
-			return
-		}
-		id = strings.ToLower(strings.TrimSpace(id))
-		if id == "" {
-			return
-		}
-		if _, exists := seen[id]; exists {
-			return
-		}
-		seen[id] = struct{}{}
-		ids = append(ids, id)
-	}
-	appendID(input["action"])
-	if rawActions, ok := input["actions"].([]any); ok {
-		for _, rawAction := range rawActions {
-			appendID(rawAction)
-		}
-	}
-	return ids
-}
-
-// dynamicDescribeResult returns per-action schema information for dynamic mode.
-func dynamicDescribeResult(ctx context.Context, routes map[string]toolutil.ActionMap, ids []string) any {
-	registry := dynamictools.NewRegistry(dynamicCatalogRoutesFromValidationRoutes(routes))
-	result, output, err := registry.Describe(ctx, nil, dynamictools.DescribeInput{Actions: ids})
-	if err != nil {
-		return map[string]any{"count": 0, "actions": []any{}, "error": err.Error()}
-	}
-	if result != nil && result.IsError {
-		return map[string]any{"count": 0, "actions": []any{}, "error": toolResultContent(result)}
 	}
 	return output
 }
@@ -5723,11 +5566,8 @@ func systemPromptForTask(task evalTask, toolSurface string) string {
 }
 
 // dynamicSystemPrompt guides models through the low-token dynamic tool surface.
-func dynamicSystemPrompt(toolSurface string) string {
-	if isDynamicTwoToolEvalSurface(toolSurface) {
-		return `You are evaluating GitLab MCP dynamic-2 tool mode. Use only the provided tools: gitlab_find_action and gitlab_execute_tool. Catalog GitLab operations are not directly visible as individual tools. Use gitlab_find_action before gitlab_execute_tool whenever the exact canonical action ID or exact params schema is not already known from a prior find result. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}} and only parameter names shown in the input_schema. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the exact canonical action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
-	}
-	return `You are evaluating GitLab MCP dynamic-3 tool mode. Use only the provided tools: gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool. Catalog GitLab operations are not directly visible as individual tools. Dynamic-3 has three distinct steps: use gitlab_search_tools to identify the canonical action, gitlab_describe_tools to get the selected action schema when the schema is not already exact, and gitlab_execute_tool to run it. If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools first. After gitlab_search_tools, follow its next_step field; for high-confidence actions with required params, describe the selected action before executing. Do not call gitlab_describe_tools just to reconfirm an exact required call already supplied in the prompt. Canonical action IDs use domain.action without the gitlab_ tool prefix: use server.health_check, issue.create, feature_flags.ff_user_list_create, and admin.settings_get, not gitlab_server.health_check, gitlab_issue.create, feature_flag_user_list.create, or admin.broadcast_message_list for current settings. Do not guess or invent alias action IDs such as merge_request.accept, issue.notes, pipeline.jobs, or runner.delete_registered when the prompt gives numeric runner_id. For examples like merging a merge request, resolving a git remote URL to a project, listing issue notes, listing jobs for a pipeline, downloading one artifact_path from numeric job_id, or reading current instance settings, search first and then describe before executing unless the exact canonical ID and exact required params are already known from the prompt. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}}; params is always required, even when empty. Use only parameter names shown by the prompt, gitlab_search_tools required_params, or gitlab_describe_tools. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the action ID is clear from context, call gitlab_execute_tool directly. Never use angle-bracket placeholder values such as <project_id>; use concrete values from the task. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
+func dynamicSystemPrompt(_ string) string {
+	return `You are evaluating GitLab MCP dynamic tool mode. Use only the provided tools: gitlab_find_action and gitlab_execute_tool. Catalog GitLab operations are not directly visible as individual tools. Use gitlab_find_action before gitlab_execute_tool whenever the exact canonical action ID or exact params schema is not already known from a prior find result. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}} and only parameter names shown in the input_schema. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the exact canonical action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
 }
 
 // taskPromptForSurface returns task guidance for the selected tool catalog.
@@ -5740,12 +5580,8 @@ func taskPromptForSurface(task evalTask, toolSurface string) string {
 	if exactPreamble == "" {
 		exactPreamble = strings.TrimSpace(dynamicFirstStepGuidance(task))
 	}
-	if isDynamicTwoToolEvalSurface(toolSurface) {
-		exactPreamble = joinNonEmpty("\n\n", exactPreamble, dynamicWorkflowPlanPreamble(task))
-		return joinDynamicPrompt(exactPreamble, prompt, "Dynamic-2 mode override: only gitlab_find_action and gitlab_execute_tool are visible. Treat any catalog route as a canonical action ID for gitlab_execute_tool. For multi-step tasks with a Dynamic workflow plan, follow that plan in order and use gitlab_find_action only if an action ID or params schema is absent from the plan. Otherwise, use gitlab_find_action before executing when an action ID or params schema is not exact. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the selected action input_schema. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
-	}
-	exactPreamble = joinNonEmpty("\n\n", exactPreamble, dynamicWorkflowPlanPreamble(task), dynamicCallBudgetPreamble(task, toolSurface))
-	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: only gitlab_search_tools, gitlab_describe_tools, and gitlab_execute_tool are visible. Preserve Dynamic-3 separation: search identifies actions, describe returns the selected action schema, execute runs the action. If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools before gitlab_execute_tool. After search, follow next_step; for high-confidence actions with required params, call gitlab_describe_tools for that selected action before executing. When an exact required call is present above, execute it directly without an extra describe call. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the described input schema, or to the supplied input object when an exact required call is present. Always include top-level params, using params:{} only for actions with no parameters. Canonical action IDs do not include gitlab_ prefixes. Never use angle-bracket placeholder values. Never send confirm:false; omit confirm unless the action is destructive. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
+	exactPreamble = joinNonEmpty("\n\n", exactPreamble, dynamicWorkflowPlanPreamble(task))
+	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible. Treat any catalog route as a canonical action ID for gitlab_execute_tool. For multi-step tasks with a Dynamic workflow plan, follow that plan in order and use gitlab_find_action only if an action ID or params schema is absent from the plan. Otherwise, use gitlab_find_action before executing when an action ID or params schema is not exact. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the selected action input_schema. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
 }
 
 // joinNonEmpty joins non-blank prompt fragments with the requested separator.
@@ -5758,15 +5594,6 @@ func joinNonEmpty(separator string, values ...string) string {
 		}
 	}
 	return strings.Join(parts, separator)
-}
-
-// dynamicCallBudgetPreamble builds dynamic call budget preamble for evaluator prompts.
-func dynamicCallBudgetPreamble(task evalTask, toolSurface string) string {
-	if !isDynamicThreeToolEvalSurface(toolSurface) {
-		return ""
-	}
-	budget := callBudgetForTask(task, toolSurface)
-	return fmt.Sprintf("Dynamic call budget: expected_steps=%d; allowed_discovery_calls=%d; allowed_repair_calls=%d; max_calls=%d.", budget.ExpectedSteps, budget.AllowedDiscoveryCalls, budget.AllowedRepairCalls, budget.MaxCalls)
 }
 
 // dynamicWorkflowPlanPreamble builds dynamic workflow plan preamble for evaluator prompts.
@@ -5793,7 +5620,7 @@ func dynamicWorkflowPlanPreamble(task evalTask) string {
 		}
 		lines = append(lines, fmt.Sprintf("%d. %s", index+1, strings.Join(parts, "; ")))
 	}
-	lines = append(lines, "Use this order. The listed action IDs and required params are the compact schema for this scenario; do not call dynamic discovery tools such as gitlab_find_action, gitlab_search_tools, or gitlab_describe_tools for these planned actions. Execute each action directly when its required values are present. Values named *_id that are produced by earlier steps must be copied from the preceding tool result. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.")
+	lines = append(lines, "Use this order. The listed action IDs and required params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions. Execute each action directly when its required values are present. Values named *_id that are produced by earlier steps must be copied from the preceding tool result. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.")
 	return strings.Join(lines, "\n")
 }
 
@@ -8789,24 +8616,8 @@ func effectiveFirstOutcome(result taskResult) (toolOK, actionOK, firstPassOK boo
 }
 
 // acceptsAlternativeDynamicFirstPath recognizes dynamic first calls that are valid workflow shortcuts.
-func acceptsAlternativeDynamicFirstPath(result taskResult, steps []evalStep) bool {
-	if !isDynamicThreeToolEvalSurface(result.ToolSurface) || len(steps) == 0 {
-		return false
-	}
-	first := steps[0]
-	if result.FirstTool != first.ExpectedTool {
-		return false
-	}
-	if first.ExpectedAction == actionDiscoverProjectResolve && result.FirstAction == actionSearchProjects {
-		return true
-	}
-	if len(steps) < 2 {
-		return false
-	}
-	if first.Simulation != "sampling_unsupported_continue" && first.Simulation != "elicitation_unsupported_continue" {
-		return false
-	}
-	return result.FirstAction == steps[1].ExpectedAction
+func acceptsAlternativeDynamicFirstPath(_ taskResult, _ []evalStep) bool {
+	return false
 }
 
 // percent converts a count and total into a percentage, treating empty samples as complete.

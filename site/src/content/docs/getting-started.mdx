@@ -88,20 +88,20 @@ The plugin uses the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:l
 
 The host must provide these variables before enabling the plugin:
 
-| Variable                 | Required | Description                                                                                                                                         |
-| ------------------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances                                                               |
-| `GITLAB_TOKEN`           | Yes      | Personal Access Token (`glpat-...`)                                                                                                                 |
-| `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)                                                                                                      |
-| `TOOL_SURFACE`           | No       | Canonical tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` (default `meta`)                                      |
-| `META_TOOLS`             | No       | Deprecated compatibility selector: `true` maps to `meta`, `false` maps to `individual`, and dynamic values map to the matching `TOOL_SURFACE` value |
-| `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`)                                                                          |
-| `GITLAB_ENTERPRISE`      | No       | `true` to enable Premium/Ultimate tools (default `false`)                                                                                           |
-| `GITLAB_READ_ONLY`       | No       | `true` to disable mutating tools (default `false`)                                                                                                  |
-| `GITLAB_SAFE_MODE`       | No       | `true` to preview mutating tool inputs (default `false`)                                                                                            |
-| `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)                                                                                                   |
+| Variable                 | Required | Description                                                                                                                          |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances                                                |
+| `GITLAB_TOKEN`           | Yes      | Personal Access Token (`glpat-...`)                                                                                                  |
+| `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)                                                                                       |
+| `TOOL_SURFACE`           | No       | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` (default `dynamic`)                                              |
+| `META_TOOLS`             | No       | Deprecated compatibility selector: `true` maps to `meta`, `false` maps to `individual`, and `dynamic` maps to `TOOL_SURFACE=dynamic` |
+| `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`)                                                           |
+| `GITLAB_ENTERPRISE`      | No       | `true` to enable Premium/Ultimate tools (default `false`)                                                                            |
+| `GITLAB_READ_ONLY`       | No       | `true` to disable mutating tools (default `false`)                                                                                   |
+| `GITLAB_SAFE_MODE`       | No       | `true` to preview mutating tool inputs (default `false`)                                                                             |
+| `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)                                                                                    |
 
-`TOOL_SURFACE` is the canonical selector and takes precedence over `META_TOOLS` when both are set. Use `TOOL_SURFACE=meta` for the default consolidated catalog, `TOOL_SURFACE=individual` for individual tools, and `TOOL_SURFACE=dynamic`, `dynamic-2`, or `dynamic-3` for dynamic surfaces. `META_TOOLS` remains supported for one compatibility window but should be treated as deprecated in favor of the explicit selector.
+`TOOL_SURFACE` is the canonical selector and takes precedence over `META_TOOLS` when both are set. Use `TOOL_SURFACE=dynamic` for the default low-token find/execute surface, `TOOL_SURFACE=meta` for consolidated domain meta-tools, and `TOOL_SURFACE=individual` for individual tools. `META_TOOLS` remains supported for compatibility but should be treated as deprecated in favor of the explicit selector.
 
 ### Prefer a native binary instead of Docker?
 
@@ -470,7 +470,7 @@ If you get connection errors, check:
 
 ## Understanding meta-tools
 
-By default, the server runs in **meta-tool mode** — instead of registering hundreds of individual tools (up to 1019 on GitLab.com Enterprise/Premium), it consolidates them into **33 domain-level meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) that cover 100% of the functionality.
+By default, the server runs in **dynamic find/execute mode** with `gitlab_find_action` and `gitlab_execute_tool`. Set `TOOL_SURFACE=meta` to use **33 domain-level meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) that cover the same functionality through consolidated domain dispatchers.
 
 For example, instead of separate `gitlab_list_issues`, `gitlab_create_issue`, `gitlab_close_issue` tools, there's a single `gitlab_issue` tool with an `action` parameter:
 
@@ -490,9 +490,9 @@ This is transparent to you — your AI client handles the routing automatically.
 :::tip
 Meta-tools reduce token overhead by **96%** while preserving full functionality. See [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) for the complete reference.
 
-For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`, backed by the same canonical GitLab action catalog. `TOOL_SURFACE=dynamic-3` explicitly selects that same three-tool surface, and `TOOL_SURFACE=dynamic-2` is available as an experimental find/execute variant.
+For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_find_action` and `gitlab_execute_tool`, backed by the same canonical GitLab action catalog.
 
-Pair dynamic mode with `CAPABILITY_SURFACE=minimal` to keep only workspace roots and omit optional resources, meta-schema resources, workflow guides, and prompts when you need the smallest initial MCP context. Dynamic keeps inline schemas through `gitlab_describe_tools`.
+Pair dynamic mode with `CAPABILITY_SURFACE=minimal` to keep only workspace roots and omit optional resources, meta-schema resources, workflow guides, and prompts when you need the smallest initial MCP context. Dynamic keeps inline schemas through `gitlab_find_action`.
 :::
 
 ## Next steps

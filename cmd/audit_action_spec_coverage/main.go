@@ -729,7 +729,7 @@ func inspectDomainSource(domainDir, packageName string) (domainSource, error) {
 				source.HasRegisterMeta = true
 			case "ActionSpecs":
 				source.HasActionSpecsFunction = true
-			case "RegisterCatalogTools", "RegisterCatalogFindExecuteTools":
+			case "RegisterCatalogFindExecuteTools":
 				source.HasDynamicCatalogRegistration = true
 			}
 		}
@@ -860,7 +860,7 @@ func collectSurfaceSpecs(client *gitlabclient.Client) []actioncatalog.SurfaceToo
 	specs := make([]actioncatalog.SurfaceToolSpec, 0, 11)
 	specs = append(specs, surfaces.StandaloneToolSpecs(client)...)
 	specs = append(specs, surfaces.ServerMaintenanceToolSpecs(updater)...)
-	specs = append(specs, dynamictools.ControllerSurfaceSpecs(nil, true)...)
+	specs = append(specs, dynamictools.ControllerSurfaceSpecs(nil)...)
 	return specs
 }
 

@@ -604,7 +604,7 @@ func TestNormalizeExpectedDynamicRoute_MapsStandaloneTools(t *testing.T) {
 	}
 }
 
-// TestDynamicDiscoveryResult_UsesRuntimeIntentIndex verifies that dynamic search
+// TestDynamicDiscoveryResult_UsesRuntimeIntentIndex verifies that dynamic find
 // evaluation uses the runtime intent index for natural-language action discovery.
 func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
 	catalogRoutes := map[string]toolutil.ActionMap{
@@ -637,7 +637,7 @@ func TestDynamicDiscoveryResult_UsesRuntimeIntentIndex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
 			content, contentErr := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{
-				Name: dynamicSearchTool,
+				Name: dynamicFindTool,
 				Input: map[string]any{
 					"query": tt.query,
 					"limit": float64(3),
@@ -698,31 +698,25 @@ func TestTaskToolCallLimit_ScalesForLongWorkflows(t *testing.T) {
 	}
 }
 
-// TestTaskToolCallLimitForSurface_GivesDynamic3ExtraHeadroom verifies that the
-// dynamic-3 surface receives extra calls for search and describe prelude steps.
-func TestTaskToolCallLimitForSurface_GivesDynamic3ExtraHeadroom(t *testing.T) {
-	if got := taskToolCallLimitForSurface(4, config.ToolSurfaceDynamic3); got != 20 {
-		t.Fatalf("taskToolCallLimitForSurface(4, dynamic-3) = %d, want 20", got)
+// TestTaskToolCallLimitForSurface_UsesBaseLimit verifies that dynamic and meta
+// use the same task call limit.
+func TestTaskToolCallLimitForSurface_UsesBaseLimit(t *testing.T) {
+	if got := taskToolCallLimitForSurface(4, config.ToolSurfaceDynamic); got != 16 {
+		t.Fatalf("taskToolCallLimitForSurface(4, dynamic) = %d, want 16", got)
 	}
 	if got := taskToolCallLimitForSurface(4, config.ToolSurfaceMeta); got != 16 {
 		t.Fatalf("taskToolCallLimitForSurface(4, meta) = %d, want 16", got)
 	}
 }
 
-// TestRepairAttemptLimitForSurface_Dynamic3AllowsSecondRepair verifies that the
-// dynamic-3 surface gets one additional repair attempt for discovery mistakes.
-func TestRepairAttemptLimitForSurface_Dynamic3AllowsSecondRepair(t *testing.T) {
-	if got := repairAttemptLimitForSurface(config.ToolSurfaceDynamic3); got != 2 {
-		t.Fatalf("repairAttemptLimitForSurface(dynamic-3) = %d, want 2", got)
-	}
-	if got := repairAttemptLimitForTask(config.ToolSurfaceDynamic3, 7); got != 7 {
-		t.Fatalf("repairAttemptLimitForTask(dynamic-3, 7) = %d, want 7", got)
-	}
-	if got := repairAttemptLimitForSurface(config.ToolSurfaceDynamic2); got != 1 {
-		t.Fatalf("repairAttemptLimitForSurface(dynamic-2) = %d, want 1", got)
-	}
+// TestRepairAttemptLimitForSurface_DefaultsToOne verifies the evaluator repair
+// budget remains one retry per surface.
+func TestRepairAttemptLimitForSurface_DefaultsToOne(t *testing.T) {
 	if got := repairAttemptLimitForSurface(config.ToolSurfaceDynamic); got != 1 {
 		t.Fatalf("repairAttemptLimitForSurface(dynamic) = %d, want 1", got)
+	}
+	if got := repairAttemptLimitForTask(config.ToolSurfaceDynamic, 7); got != 1 {
+		t.Fatalf("repairAttemptLimitForTask(dynamic, 7) = %d, want 1", got)
 	}
 	if got := repairAttemptLimitForSurface(config.ToolSurfaceMeta); got != 1 {
 		t.Fatalf("repairAttemptLimitForSurface(meta) = %d, want 1", got)
@@ -850,71 +844,13 @@ func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 	}
 }
 
-// TestBuildCatalogSession_Dynamic3SurfaceExposesRoutes verifies dynamic-3 keeps
-// the explicit three-tool surface and executable validation routes.
-func TestBuildCatalogSession_Dynamic3SurfaceExposesRoutes(t *testing.T) {
-	client := newEvalTestClient(t, false)
-	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic3)
-	if err != nil {
-		t.Fatalf("buildCatalogSession(dynamic-3) error = %v", err)
-	}
-	defer closeSession()
-
-	names := make([]string, 0, len(toolList))
-	for _, tool := range toolList {
-		names = append(names, tool.Name)
-	}
-	sort.Strings(names)
-	if got := strings.Join(names, ","); got != "gitlab_describe_tools,gitlab_execute_tool,gitlab_search_tools" {
-		t.Fatalf("dynamic-3 catalog tools = %q, want search/describe/execute", got)
-	}
-	if _, ok := routes[dynamicExecuteTool]["project.get"]; !ok {
-		t.Fatal("dynamic-3 validation routes missing project.get")
-	}
-	if _, ok := routes[dynamicExecuteTool]["discover_project.resolve"]; !ok {
-		t.Fatal("dynamic-3 validation routes missing discover_project.resolve")
-	}
-	if _, ok := routes["gitlab"]; ok {
-		t.Fatal("dynamic-3 validation routes should not expose the unified gitlab dispatcher")
-	}
-}
-
-// TestBuildCatalogSession_Dynamic2SurfaceExposesFindExecuteRoutes verifies that
-// dynamic-2 exposes only find and execute while preserving catalog execution routes.
-func TestBuildCatalogSession_Dynamic2SurfaceExposesFindExecuteRoutes(t *testing.T) {
-	client := newEvalTestClient(t, false)
-	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic2)
-	if err != nil {
-		t.Fatalf("buildCatalogSession(dynamic-2) error = %v", err)
-	}
-	defer closeSession()
-
-	names := make([]string, 0, len(toolList))
-	for _, tool := range toolList {
-		names = append(names, tool.Name)
-	}
-	sort.Strings(names)
-	if got := strings.Join(names, ","); got != "gitlab_execute_tool,gitlab_find_action" {
-		t.Fatalf("dynamic-2 catalog tools = %q, want find/execute", got)
-	}
-	if _, ok := routes[dynamicExecuteTool]["project.get"]; !ok {
-		t.Fatal("dynamic-2 validation routes missing project.get")
-	}
-	if _, ok := routes[dynamicExecuteTool]["discover_project.resolve"]; !ok {
-		t.Fatal("dynamic-2 validation routes missing discover_project.resolve")
-	}
-	if _, ok := routes["gitlab"]; ok {
-		t.Fatal("dynamic-2 validation routes unexpectedly exposed gitlab dispatcher")
-	}
-}
-
-// TestNormalizeEvalToolSurface_AcceptsDynamicCandidates verifies that all dynamic
-// surface names accepted by configuration normalize to their canonical values.
+// TestNormalizeEvalToolSurface_AcceptsDynamic verifies that supported surface
+// names accepted by configuration normalize to their canonical values.
 func TestNormalizeEvalToolSurface_AcceptsDynamicCandidates(t *testing.T) {
 	tests := map[string]string{
-		"dynamic":   config.ToolSurfaceDynamic,
-		"dynamic-3": config.ToolSurfaceDynamic3,
-		"dynamic-2": config.ToolSurfaceDynamic2,
+		"":        config.ToolSurfaceDynamic,
+		"dynamic": config.ToolSurfaceDynamic,
+		"meta":    config.ToolSurfaceMeta,
 	}
 	for input, want := range tests {
 		t.Run(input, func(t *testing.T) {
@@ -929,28 +865,24 @@ func TestNormalizeEvalToolSurface_AcceptsDynamicCandidates(t *testing.T) {
 	}
 }
 
-// TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute verifies
-// that dynamic-3 prompts instruct models to search and describe before execution.
-func TestDynamic3Prompt_RequiresSearchAndDescribeBeforeUncertainExecute(t *testing.T) {
+// TestDynamicPrompt_RequiresFindBeforeUncertainExecute verifies that dynamic
+// prompts instruct models to find actions before uncertain execution.
+func TestDynamicPrompt_RequiresFindBeforeUncertainExecute(t *testing.T) {
 	task := evalTask{ID: "MS-002", Prompt: "Investigate a pipeline failure for git remote `git@gitlab.example.com:group/project.git` and summarize the failing job."}
 
-	system := systemPromptForTask(task, config.ToolSurfaceDynamic3)
+	system := systemPromptForTask(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "systemPromptForTask()", system, []string{
-		"If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools first.",
-		"After gitlab_search_tools, follow its next_step field; for high-confidence actions with required params, describe the selected action before executing.",
-		"Canonical action IDs use domain.action without the gitlab_ tool prefix",
-		"params is always required, even when empty",
-		"runner.delete_registered when the prompt gives numeric runner_id",
+		"Use only the provided tools: gitlab_find_action and gitlab_execute_tool.",
+		"Use gitlab_find_action before gitlab_execute_tool whenever the exact canonical action ID or exact params schema is not already known",
+		"Destructive actions require top-level confirm:true on gitlab_execute_tool",
 	})
 
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"If the exact canonical action ID is not literally known from the prompt, call gitlab_search_tools before gitlab_execute_tool.",
-		"After search, follow next_step; for high-confidence actions with required params, call gitlab_describe_tools for that selected action before executing.",
-		"params limited to the described input schema",
-		"Always include top-level params",
-		"Canonical action IDs do not include gitlab_ prefixes",
-		"Never send confirm:false",
+		"Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible.",
+		"use gitlab_find_action before executing when an action ID or params schema is not exact",
+		"params limited to the selected action input_schema",
+		"put confirm:true at the top level of gitlab_execute_tool arguments",
 	})
 }
 
@@ -959,7 +891,7 @@ func TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks(t *testing.T)
 	exactTask := evalTask{ID: "MT-066", Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 	}}
-	exactBudget := callBudgetForTask(exactTask, config.ToolSurfaceDynamic3)
+	exactBudget := callBudgetForTask(exactTask, config.ToolSurfaceDynamic)
 	if exactBudget.ExpectedSteps != 1 || exactBudget.AllowedDiscoveryCalls != 0 || !exactBudget.SuppressDiscovery {
 		t.Fatalf("exact budget = %+v, want one-step direct execution with no discovery", exactBudget)
 	}
@@ -967,9 +899,9 @@ func TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks(t *testing.T)
 	ambiguousTask := evalTask{ID: "MT-AMB", Prompt: "Find the right project cleanup action.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "project.delete", RequiredParams: []string{"project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 	}}
-	ambiguousBudget := callBudgetForTask(ambiguousTask, config.ToolSurfaceDynamic3)
-	if ambiguousBudget.AllowedDiscoveryCalls != 2 || ambiguousBudget.SuppressDiscovery {
-		t.Fatalf("ambiguous budget = %+v, want search+describe allowed", ambiguousBudget)
+	ambiguousBudget := callBudgetForTask(ambiguousTask, config.ToolSurfaceDynamic)
+	if ambiguousBudget.AllowedDiscoveryCalls != 0 || ambiguousBudget.SuppressDiscovery {
+		t.Fatalf("ambiguous budget = %+v, want default discovery budget", ambiguousBudget)
 	}
 }
 
@@ -980,31 +912,15 @@ func TestDynamicWorkflowPlanPreamble_ListsActionsAndRequiredParams(t *testing.T)
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.list", RequiredParams: []string{"project_id"}},
 	}}
 
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
 		"Dynamic workflow plan:",
 		"1. action=issue.create; required_params=project_id, title",
 		"2. action=issue.list; required_params=project_id",
-		"Dynamic call budget: expected_steps=2; allowed_discovery_calls=1",
+		"do not call gitlab_find_action for these planned actions",
 	})
-	dynamic2Prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic2)
-	requireContainsAll(t, "taskPromptForSurface(dynamic-2)", dynamic2Prompt, []string{
-		"Dynamic workflow plan:",
-		"1. action=issue.create; required_params=project_id, title",
-		"2. action=issue.list; required_params=project_id",
-		"do not call dynamic discovery tools such as gitlab_find_action",
-	})
-	if strings.Contains(dynamic2Prompt, "Dynamic call budget:") {
-		t.Fatal("Dynamic-2 prompt unexpectedly received Dynamic-3 call budget")
-	}
-	dynamicPrompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	requireContainsAll(t, "taskPromptForSurface(dynamic)", dynamicPrompt, []string{
-		"Dynamic workflow plan:",
-		"Dynamic-2 mode override",
-		"gitlab_find_action and gitlab_execute_tool",
-	})
-	if strings.Contains(dynamicPrompt, "Dynamic call budget:") {
-		t.Fatal("Dynamic prompt unexpectedly received Dynamic-3 call budget")
+	if strings.Contains(prompt, "Dynamic call budget:") {
+		t.Fatal("Dynamic prompt unexpectedly received call budget")
 	}
 }
 
@@ -1014,11 +930,11 @@ func TestDiscoveryBudgetFeedback_BlocksRedundantDiscoveryForExactCall(t *testing
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 	}}
 	step := taskSteps(task)[0]
-	message, blocked := discoveryBudgetFeedback(task, step, modelContentBlock{Name: dynamicDescribeTool}, callBudgetForTask(task, config.ToolSurfaceDynamic3))
+	message, blocked := discoveryBudgetFeedback(task, step, modelContentBlock{Name: dynamicFindTool}, callBudgetForTask(task, config.ToolSurfaceDynamic))
 	if !blocked {
 		t.Fatal("discoveryBudgetFeedback() blocked = false, want true")
 	}
-	requireContainsAll(t, "discoveryBudgetFeedback()", message, []string{"exact gitlab_execute_tool call", "job.token_scope_remove_project", "no search, describe, or schema lookup is needed"})
+	requireContainsAll(t, "discoveryBudgetFeedback()", message, []string{"exact gitlab_execute_tool call", "job.token_scope_remove_project", "no discovery or schema lookup is needed"})
 }
 
 // TestDynamicTaskPrompt_IncludesProviderConfusionGuidance verifies task-level
@@ -1107,7 +1023,7 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic3)
+			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic)
 			requireContainsAll(t, "taskPromptForSurface()", prompt, tt.want)
 		})
 	}
@@ -1174,7 +1090,7 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic3)
+			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic)
 			if strings.Contains(prompt, "confirm:true in params") {
 				t.Fatalf("taskPromptForSurface() = %q, dynamic prompt must not tell models to put confirm in params", prompt)
 			}
@@ -1201,15 +1117,15 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForOptionalOnlyList(t *testing.T) 
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "project.list", OptionalParams: []string{"order_by", "sort", "per_page"}},
 	}}
 
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
 		"Dynamic first-step exact call",
 		`"action":"project.list"`,
 		`"order_by":"updated_at"`,
 		`"sort":"desc"`,
 		`"per_page":10`,
-		"Preserve Dynamic-3 separation",
-		"execute it directly without an extra describe call",
+		"Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible.",
+		"gitlab_find_action and gitlab_execute_tool",
 	})
 }
 
@@ -1219,17 +1135,17 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForSearchProjects(t *testing.T) {
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "search.projects", RequiredParams: []string{"query"}},
 	}}
 
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
 		"Dynamic first-step exact call",
 		`"action":"search.projects"`,
 		`"query":"gitlab-mcp-server"`,
-		"execute it directly without an extra describe call",
+		"Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible.",
 	})
 }
 
-// TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionDescribe verifies DynamicWorkflowPlanPreamble suppresses planned action describe.
-func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionDescribe(t *testing.T) {
+// TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionFind verifies DynamicWorkflowPlanPreamble suppresses planned action find.
+func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionFind(t *testing.T) {
 	task := evalTask{ID: "MS-020", Prompt: "Exercise pipeline schedule CRUD in project `my-org/tools/gitlab-mcp-server`: create inactive schedule `eval-crud-schedule` on `main`, get it, update its cron, create variable `SCHEDULE_CRUD_TOKEN`, update that variable, delete the variable, then delete the schedule.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.schedule_create", RequiredParams: []string{"project_id", "description", "ref", "cron"}, OptionalParams: []string{"active"}},
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.schedule_get", RequiredParams: []string{"project_id", "schedule_id"}},
@@ -1237,13 +1153,13 @@ func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionDescribe(t *testing.
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "pipeline.schedule_delete_variable", RequiredParams: []string{"project_id", "schedule_id", "key"}, Destructive: true},
 	}}
 
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
 		"Dynamic first-step exact call",
 		`"action":"pipeline.schedule_create"`,
 		`"description":"eval-crud-schedule"`,
 		`"active":false`,
-		"The listed action IDs and required params are the compact schema for this scenario; do not call dynamic discovery tools such as gitlab_find_action, gitlab_search_tools, or gitlab_describe_tools for these planned actions.",
+		"The listed action IDs and required params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions.",
 		"Values named *_id that are produced by earlier steps must be copied from the preceding tool result.",
 		"action=pipeline.schedule_delete_variable; required_params=project_id, schedule_id, key; destructive_confirm=true",
 		"For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.",
@@ -1296,7 +1212,7 @@ func TestDynamicExactCallProvenance_BindsRoleSensitiveParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic3)
+			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic)
 			if !strings.Contains(prompt, "Dynamic first-step exact call") && !strings.Contains(prompt, "Dynamic exact call") {
 				t.Fatalf("taskPromptForSurface() = %q, want dynamic exact-call guidance", prompt)
 			}
@@ -1337,13 +1253,13 @@ func TestDynamicExactCallProvenance_UnresolvedRoleSensitiveParamsSuppressExactCa
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic3)
+			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic)
 			for _, unwanted := range tt.absent {
 				if strings.Contains(prompt, unwanted) {
 					t.Fatalf("taskPromptForSurface() = %q, want no unsafe exact-call content %q", prompt, unwanted)
 				}
 			}
-			if !strings.Contains(prompt, "Required parameters for action") && !strings.Contains(prompt, "call gitlab_search_tools") {
+			if !strings.Contains(prompt, "Required parameters for action") && !strings.Contains(prompt, "gitlab_find_action") {
 				t.Fatalf("taskPromptForSurface() = %q, want schema-first or dynamic discovery guidance", prompt)
 			}
 		})
@@ -1358,7 +1274,7 @@ func TestDynamicRepositoryFileCRUDPrompt_UsesFilePathFromOperation(t *testing.T)
 		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "repository.file_get", RequiredParams: []string{"project_id", "file_path", "ref"}},
 	}}
 
-	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic3)
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
 		`"action":"repository.file_create"`,
 		`"file_path":"tmp/eval-crud.txt"`,
@@ -1489,9 +1405,9 @@ func TestValidateActionToolCall_DynamicConfirmTopLevel(t *testing.T) {
 	}
 }
 
-// TestDynamicDiscoveryResult_SearchAndDescribe verifies dynamic discovery
-// tools return enough action metadata for the next execute call.
-func TestDynamicDiscoveryResult_SearchAndDescribe(t *testing.T) {
+// TestDynamicDiscoveryResult_Find verifies dynamic discovery returns enough
+// action metadata for the next execute call.
+func TestDynamicDiscoveryResult_Find(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
 		dynamicExecuteTool: {
 			"project.get": {InputSchema: map[string]any{
@@ -1502,20 +1418,13 @@ func TestDynamicDiscoveryResult_SearchAndDescribe(t *testing.T) {
 		},
 	}
 
-	search, err := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{Name: dynamicSearchTool, Input: map[string]any{"query": "project get"}})
+	find, err := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{Name: dynamicFindTool, Input: map[string]any{"query": "project get"}})
 	if err != nil {
-		t.Fatalf("dynamicDiscoveryResult(search) error = %v", err)
-	}
-	if !strings.Contains(search, "project.get") {
-		t.Fatalf("search result = %s, want project.get", search)
-	}
-	describe, err := dynamicDiscoveryResult(t.Context(), routes, modelContentBlock{Name: dynamicDescribeTool, Input: map[string]any{"action": "project.get"}})
-	if err != nil {
-		t.Fatalf("dynamicDiscoveryResult(describe) error = %v", err)
+		t.Fatalf("dynamicDiscoveryResult(find) error = %v", err)
 	}
 	for _, want := range []string{"project.get", "project_id", dynamicExecuteTool} {
-		if !strings.Contains(describe, want) {
-			t.Fatalf("describe result = %s, want %q", describe, want)
+		if !strings.Contains(find, want) {
+			t.Fatalf("find result = %s, want %q", find, want)
 		}
 	}
 }
@@ -2498,9 +2407,9 @@ func TestTaskPrompt_PackageReleaseWorkflowUsesExactOrder(t *testing.T) {
 	})
 }
 
-// TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic3 verifies package
+// TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic verifies package
 // release guidance is preserved after dynamic action normalization.
-func TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic3(t *testing.T) {
+func TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic(t *testing.T) {
 	task := evalTask{
 		ID:     taskPackageReleaseID,
 		Prompt: "Publish local fixture files to Generic Packages, then create a release, and link each uploaded package file to that release as a package asset.",
@@ -2511,8 +2420,8 @@ func TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic3(t *testing.T) {
 		},
 	}
 
-	prompt := taskPromptForSurface(task, "dynamic-3")
-	requireContainsAll(t, "taskPromptForSurface(dynamic-3)", prompt, []string{
+	prompt := taskPromptForSurface(task, "dynamic")
+	requireContainsAll(t, "taskPromptForSurface(dynamic)", prompt, []string{
 		"Dynamic workflow plan:",
 		"action=package.publish_directory",
 		"Use the returned published[].url values as links[].url",
@@ -4605,70 +4514,6 @@ func TestEvaluateTask_UsesSchemaLookupThenFinalCall(t *testing.T) {
 	if !result.SchemaLookupUsed || !result.FinalSuccess || result.ModelCalls != 2 {
 		t.Fatalf("result = %+v, want schema lookup and final success in two calls", result)
 	}
-}
-
-// TestEvaluateTask_Dynamic3AcceptsProjectSearchPrelude verifies that dynamic-3
-// evaluation accepts a project search prelude before the required discovery action.
-func TestEvaluateTask_Dynamic3AcceptsProjectSearchPrelude(t *testing.T) {
-	runner := newScriptedRunner(t,
-		toolUseResponse("search", dynamicExecuteTool, map[string]any{"action": "search.projects", "params": map[string]any{"query": "my-org/tools/gitlab-mcp-server"}}),
-		toolUseResponse("resolve", dynamicExecuteTool, map[string]any{"action": "discover_project.resolve", "params": map[string]any{"remote_url": "git@gitlab.example.com:my-org/tools/gitlab-mcp-server.git"}}),
-	)
-	runner.toolSurface = config.ToolSurfaceDynamic3
-	task := evalTask{ID: "MS-002", Steps: []evalStep{{ExpectedTool: dynamicExecuteTool, ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}}}}
-	routes := map[string]toolutil.ActionMap{dynamicExecuteTool: {
-		"search.projects":          {},
-		"discover_project.resolve": {},
-	}}
-
-	result := runner.evaluateTask(t.Context(), task, nil, routes)
-
-	if result.RepairAttempted {
-		t.Fatalf("result = %+v, want accepted prelude without repair", result)
-	}
-	if !result.FirstPass || !result.FinalSuccess {
-		t.Fatalf("result = %+v, want accepted prelude and final success", result)
-	}
-	if result.FirstAction != "search.projects" {
-		t.Fatalf("FirstAction = %q, want preserved prelude action", result.FirstAction)
-	}
-}
-
-// TestEffectiveFirstOutcome_AcceptsDynamic3FallbackAndPreludePaths verifies that
-// dynamic-3 first-pass scoring accepts supported prelude and fallback paths.
-func TestEffectiveFirstOutcome_AcceptsDynamic3FallbackAndPreludePaths(t *testing.T) {
-	t.Run("project search prelude", func(t *testing.T) {
-		result := taskResult{
-			Task:         evalTask{ID: "MS-002", Steps: []evalStep{{ExpectedTool: dynamicExecuteTool, ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}}}},
-			ToolSurface:  config.ToolSurfaceDynamic3,
-			FirstTool:    dynamicExecuteTool,
-			FirstAction:  "search.projects",
-			FirstPass:    true,
-			FinalSuccess: false,
-		}
-		toolOK, actionOK, firstPassOK := effectiveFirstOutcome(result)
-		if !toolOK || !actionOK || !firstPassOK {
-			t.Fatalf("effectiveFirstOutcome() = %t, %t, %t, want all true", toolOK, actionOK, firstPassOK)
-		}
-	})
-
-	t.Run("unsupported analyzer fallback", func(t *testing.T) {
-		result := taskResult{
-			Task: evalTask{ID: "MF-004", Steps: []evalStep{
-				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "analyze.issue_summary", RequiredParams: []string{"project_id", "issue_iid"}, Simulation: "sampling_unsupported_continue"},
-				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.get", RequiredParams: []string{"project_id", "issue_iid"}},
-			}},
-			ToolSurface:  config.ToolSurfaceDynamic3,
-			FirstTool:    dynamicExecuteTool,
-			FirstAction:  "issue.get",
-			FirstPass:    false,
-			FinalSuccess: true,
-		}
-		toolOK, actionOK, firstPassOK := effectiveFirstOutcome(result)
-		if !toolOK || !actionOK || !firstPassOK {
-			t.Fatalf("effectiveFirstOutcome() = %t, %t, %t, want all true", toolOK, actionOK, firstPassOK)
-		}
-	})
 }
 
 // TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation verifies EvaluateTask when records trace for prompt tool use and validation.

@@ -207,7 +207,7 @@ func TestRunTraceComparison_WritesReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read comparison report: %v", err)
 	}
-	for _, want := range []string{"# Trace Surface Comparison", "| Comparable rows | 1 |", "## Largest Dynamic-3 Overheads"} {
+	for _, want := range []string{"# Trace Surface Comparison", "| Comparable rows | 1 |", "## Largest Dynamic Overheads"} {
 		if !strings.Contains(string(content), want) {
 			t.Fatalf("comparison report = %q, want %q", string(content), want)
 		}

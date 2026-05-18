@@ -35,11 +35,10 @@ directly exposed tool surface and model-controlled discovery, not a larger upfro
 
 ## Decision
 
-Introduce a new low-token dynamic toolset mode as the primary candidate for further token reduction. The mode will expose
-three plain MCP tools:
+Introduce a new low-token dynamic toolset mode as the primary candidate for further token reduction. The mode exposes
+two plain MCP tools:
 
-- `gitlab_search_tools`: search the canonical GitLab action catalog.
-- `gitlab_describe_tools`: return exact schemas, examples, safety metadata, and output summaries for selected actions.
+- `gitlab_find_action`: search the canonical GitLab action catalog and return exact schemas, examples, safety metadata, and output summaries for matching actions.
 - `gitlab_execute_tool`: execute one selected action by canonical `domain.action` ID with strict runtime validation.
 
 The existing domain meta-tool mode and individual-tool mode remain available. The dynamic toolset mode starts behind an
@@ -98,26 +97,25 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 ## Implementation Notes
 
-- **IMP-001**: Add the dynamic toolset behind the explicit `TOOL_SURFACE=dynamic` / `TOOL_SURFACE=dynamic-3`
+- **IMP-001**: Add the dynamic toolset behind the explicit `TOOL_SURFACE=dynamic`
   selector. Legacy `META_TOOLS=true|false` remains only as a compatibility fallback when `TOOL_SURFACE` is absent.
 - **IMP-002**: Build the dynamic action view from the canonical action catalog shared with meta-tools, then apply
   enterprise, GitLab.com, exclude-tools, token-scope, read-only, and safe-mode behavior without constructing a separate
   MCP server.
 - **IMP-003**: Use canonical `domain.action` IDs and keep aliases searchable but non-canonical.
-- **IMP-004**: Use `toolutil.LookupMetaActionSchema` or equivalent deep-cloned schema lookup for describe output and
+- **IMP-004**: Use `toolutil.LookupMetaActionSchema` or equivalent deep-cloned schema lookup for find output and
   runtime validation.
 - **IMP-005**: Return repairable validation failures as tool results with `isError: true`.
 - **IMP-006**: Require `confirm:true` for destructive execution and preserve safe mode previews.
-- **IMP-007**: Extend `cmd/eval_mcp_surfaces` to compare current meta-tools, dynamic toolset, and unified dispatcher.
-- **IMP-008**: Add observability for search query, selected action, describe usage, validation failure, policy block, and
+- **IMP-007**: Extend `cmd/eval_mcp_surfaces` to compare current meta-tools and the dynamic toolset.
+- **IMP-008**: Add observability for find query, selected action, validation failure, policy block, and
   destructive confirmation events.
 
 ## Compliance Checklist
 
 - **CHK-001**: Existing meta-tool mode remains available.
 - **CHK-002**: Existing individual-tool mode remains available.
-- **CHK-003**: Low-token mode exposes at most 3 tools for `dynamic`/`dynamic-3`, and 2 tools for the experimental
-  `dynamic-2` comparison surface.
+- **CHK-003**: Low-token mode exposes exactly 2 tools for `dynamic`.
 - **CHK-004**: Low-token mode preserves destructive-action safety.
 - **CHK-005**: Low-token mode works over stdio and Streamable HTTP.
 - **CHK-006**: Evaluation shows no more than 2 percentage-point task success regression before default rollout.

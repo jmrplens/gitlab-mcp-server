@@ -40,7 +40,7 @@ This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab 
 | GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v2` v2.24.1        |
 | Self-Update        | `github.com/creativeprojects/go-selfupdate` v1.5.2     |
 | Transport          | stdio (primary), HTTP (optional)                        |
-| Architecture       | 163 domain sub-packages under `internal/tools/`         |
+| Architecture       | 165 domain sub-packages under `internal/tools/`         |
 | Test Infrastructure| `net/http/httptest` mocks, `testutil.NewTestClient`     |
 | Static Analysis    | golangci-lint v2, gosec, staticcheck, govulncheck       |
 

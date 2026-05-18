@@ -38,7 +38,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-http-addr` | string | `:8080` | HTTP listen address (e.g. `localhost:8080`, `:9090`) |
 | `-gitlab-url` | string | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `-skip-tls-verify` | bool | `false` | Skip TLS certificate verification for self-signed certs |
-| `-tool-surface` | string | `meta` | Canonical tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3` |
+| `-tool-surface` | string | `meta` | Canonical tool catalog selector: `meta`, `individual`, or `dynamic` |
 | `-meta-tools` | bool | `true` | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false` |
 | `-capability-surface` | string | `full` | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps only `gitlab://workspace/roots` and disables optional resources, meta-schema resources, workflow guides, and prompts |
 | `-meta-param-schema` | string | `opaque` | Meta-tool input-schema strategy: `opaque` (default), `compact`, or `full`. Applies to meta-tool schemas only. See [env-reference.md](env-reference.md) |
@@ -165,9 +165,6 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=individu
 # Start HTTP server with the dynamic toolset (reduces token usage for LLM context)
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic
 
-# Start HTTP server with the explicit three-tool dynamic variant (dynamic-3)
-gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic-3
-
 # Start HTTP server with the dynamic toolset and reduced non-tool capabilities
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic --capability-surface=minimal
 
@@ -178,7 +175,7 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auto-update=check
 gitlab-mcp-server --shutdown
 ```
 
-See [Dynamic Tools](dynamic-tools.md) for how `dynamic`, `dynamic-2`, and `dynamic-3` relate.
+See [Dynamic Tools](dynamic-tools.md) for how `dynamic` relate.
 
 ---
 

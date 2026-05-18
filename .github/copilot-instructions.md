@@ -43,7 +43,7 @@ gitlab-mcp-server/
 │   ├── tools/              # Tool orchestration layer + 165 domain sub-packages
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
-│   │   ├── dynamic/        # Low-token dynamic find/execute and dynamic-3 search/describe/execute surfaces
+│   │   ├── dynamic/        # Low-token dynamic find/execute surface
 │   │   ├── branches/       # Branch & protected branch tools
 │   │   ├── commits/        # Commit tools
 │   │   ├── issues/         # Issue CRUD tools
@@ -85,8 +85,8 @@ gitlab-mcp-server/
 - Register runtime surfaces from the canonical action catalog only; ordinary GitLab actions must not add package-local `RegisterTools` functions or package-level meta registration paths
 - Resources for read-only data (project info, user info, etc.)
 - Graceful shutdown via signal handling
-- Dynamic mode (`TOOL_SURFACE=dynamic`/`dynamic-2`) exposes `gitlab_find_action` and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. Meta-tools remain the default today; dynamic is the low-token find/execute alternative. Use `dynamic-3` to explicitly select the three-tool search/describe/execute surface.
-- When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic find/execute, dynamic-3 search/describe/execute, schema resources, LLM files, and individual tool projection consume that catalog. Do not add package-local `RegisterTools` functions for ordinary GitLab API actions.
+- Dynamic mode (`TOOL_SURFACE=dynamic`) exposes `gitlab_find_action` and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. It is the default tool surface; set `TOOL_SURFACE=meta` for consolidated domain meta-tools.
+- When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic find/execute, schema resources, LLM files, and individual tool projection consume that catalog. Do not add package-local `RegisterTools` functions for ordinary GitLab API actions.
 - For the detailed developer architecture of individual tools, meta-tools, dynamic mode, and the canonical action core, see `docs/development/tool-surfaces-and-action-core.md`.
 
 ### GitLab Integration
@@ -151,7 +151,7 @@ go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 
 - Requires `.env` with `GITLAB_URL`, `GITLAB_TOKEN` (user needs create/delete project permissions)
 - Two sequential workflows: `TestFullWorkflow` (~174 subtests, individual tools) and `TestMetaToolWorkflow` (~151 subtests, meta-tools)
-- Dynamic surface coverage lives in `TestDynamicToolSurface_*` and validates the default three-tool dynamic workflow against the same E2E GitLab fixture. To run only that workflow in Docker mode, run `set -a && source test/e2e/.env.docker && set +a` after the Docker GitLab setup scripts complete, then use `E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface_' ./test/e2e/suite/`.
+- Dynamic surface coverage lives in `TestDynamicToolSurface_*` and validates the default two-tool find/execute workflow against the same E2E GitLab fixture. To run only that workflow in Docker mode, run `set -a && source test/e2e/.env.docker && set +a` after the Docker GitLab setup scripts complete, then use `E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface_' ./test/e2e/suite/`.
 - Covers: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, wikis, CI variables, environments, issue links, deploy keys, snippets, pipeline schedules, badges, access tokens, award emoji, sampling, elicitation
 - Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies
 - Not covered (needs Docker mode): pipeline CRUD (CI runner), job tools
@@ -192,7 +192,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `GITLAB_TOKEN`           | Personal Access Token (stdio mode) | `glpat-...`        |
 | `GITLAB_SKIP_TLS_VERIFY` | Skip TLS certificate verification | `true`             |
 | `META_TOOLS`             | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs | _(unset)_          |
-| `TOOL_SURFACE`           | Explicit tool catalog selector: `meta`, `individual`, `dynamic`, `dynamic-2`, or `dynamic-3`; overrides legacy `META_TOOLS` | _(empty)_          |
+| `TOOL_SURFACE`           | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; overrides legacy `META_TOOLS` | `dynamic` (default when unset) |
 | `CAPABILITY_SURFACE`     | Resource and prompt catalog selector: `full` or `minimal`; pair `minimal` with dynamic experiments when startup context must be tiny | `full` (default)   |
 | `META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. With `CAPABILITY_SURFACE=full`, per-action schemas are discoverable via `gitlab://schema/meta/{tool}/{action}` resources for meta and dynamic surfaces | `opaque` (default) |
 | `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |

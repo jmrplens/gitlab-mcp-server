@@ -61,15 +61,13 @@
         },
         {
           "name": "TOOL_SURFACE",
-          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
+          "description": "Tool catalog selector: dynamic, meta, or individual (default: dynamic)",
           "isRequired": false,
-          "default": "meta",
+          "default": "dynamic",
           "choices": [
             "meta",
             "individual",
-            "dynamic",
-            "dynamic-2",
-            "dynamic-3"
+            "dynamic"
           ]
         },
         {
@@ -235,15 +233,13 @@
         },
         {
           "name": "TOOL_SURFACE",
-          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
+          "description": "Tool catalog selector: dynamic, meta, or individual (default: dynamic)",
           "isRequired": false,
-          "default": "meta",
+          "default": "dynamic",
           "choices": [
             "meta",
             "individual",
-            "dynamic",
-            "dynamic-2",
-            "dynamic-3"
+            "dynamic"
           ]
         },
         {
@@ -409,15 +405,13 @@
         },
         {
           "name": "TOOL_SURFACE",
-          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
+          "description": "Tool catalog selector: dynamic, meta, or individual (default: dynamic)",
           "isRequired": false,
-          "default": "meta",
+          "default": "dynamic",
           "choices": [
             "meta",
             "individual",
-            "dynamic",
-            "dynamic-2",
-            "dynamic-3"
+            "dynamic"
           ]
         },
         {
@@ -583,15 +577,13 @@
         },
         {
           "name": "TOOL_SURFACE",
-          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
+          "description": "Tool catalog selector: dynamic, meta, or individual (default: dynamic)",
           "isRequired": false,
-          "default": "meta",
+          "default": "dynamic",
           "choices": [
             "meta",
             "individual",
-            "dynamic",
-            "dynamic-2",
-            "dynamic-3"
+            "dynamic"
           ]
         },
         {
@@ -757,15 +749,13 @@
         },
         {
           "name": "TOOL_SURFACE",
-          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
+          "description": "Tool catalog selector: dynamic, meta, or individual (default: dynamic)",
           "isRequired": false,
-          "default": "meta",
+          "default": "dynamic",
           "choices": [
             "meta",
             "individual",
-            "dynamic",
-            "dynamic-2",
-            "dynamic-3"
+            "dynamic"
           ]
         },
         {
@@ -931,15 +921,13 @@
         },
         {
           "name": "TOOL_SURFACE",
-          "description": "Tool catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3 (default: meta)",
+          "description": "Tool catalog selector: dynamic, meta, or individual (default: dynamic)",
           "isRequired": false,
-          "default": "meta",
+          "default": "dynamic",
           "choices": [
             "meta",
             "individual",
-            "dynamic",
-            "dynamic-2",
-            "dynamic-3"
+            "dynamic"
           ]
         },
         {

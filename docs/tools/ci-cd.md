@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: CI/CD (Pipelines, Jobs, Variables, Schedules, Triggers, Lint)
 > **Individual tools**: 59
-> **Meta-tools**: `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable`, `gitlab_instance_variable` (default `TOOL_SURFACE=meta` catalog). Pipeline schedule actions are accessed via `gitlab_pipeline` with `schedule_*` action prefix; trigger actions via `trigger_*` prefix.
+> **Meta-tools**: `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable`, `gitlab_instance_variable` (`TOOL_SURFACE=meta` catalog). Pipeline schedule actions are accessed via `gitlab_pipeline` with `schedule_*` action prefix; trigger actions via `trigger_*` prefix.
 > **GitLab API**: [Pipelines API](https://docs.gitlab.com/ee/api/pipelines.html) · [Jobs API](https://docs.gitlab.com/ee/api/jobs.html) · [CI Variables API](https://docs.gitlab.com/ee/api/project_level_variables.html) · [Pipeline Schedules API](https://docs.gitlab.com/ee/api/pipeline_schedules.html) · [Pipeline Triggers API](https://docs.gitlab.com/ee/api/pipeline_triggers.html) · [Instance Variables API](https://docs.gitlab.com/ee/api/instance_level_ci_variables.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The CI/CD domain covers GitLab's continuous integration and delivery capabilities: pipelines, jobs, CI/CD variables (project and instance level), pipeline schedules, pipeline triggers, and CI configuration linting.
 
-With the default `TOOL_SURFACE=meta` catalog, the 57 individual tools below are consolidated into six meta-tools that dispatch by `action` parameter. CI lint tools are additionally available through the `gitlab_template` meta-tool.
+With `TOOL_SURFACE=meta`, the 57 individual tools below are consolidated into six meta-tools that dispatch by `action` parameter. CI lint tools are additionally available through the `gitlab_template` meta-tool.
 
 ### Common Questions
 

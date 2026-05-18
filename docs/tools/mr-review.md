@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: MR Review
 > **Individual tools**: 23
-> **Meta-tool**: `gitlab_mr_review` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_mr_review` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [MR Notes API](https://docs.gitlab.com/ee/api/notes.html#merge-requests), [MR Discussions API](https://docs.gitlab.com/ee/api/discussions.html#merge-requests), [MR Draft Notes API](https://docs.gitlab.com/ee/api/draft_notes.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The MR review domain covers all comment and review operations on GitLab merge requests: top-level notes (comments), threaded discussions (including inline diff comments), and draft notes (pending review comments that remain private until published).
 
-With the default `TOOL_SURFACE=meta` catalog, all 19 individual tools below are consolidated into a single `gitlab_mr_review` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, all 19 individual tools below are consolidated into a single `gitlab_mr_review` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

@@ -6,7 +6,7 @@ Meta-tools group related GitLab operations under a single MCP tool with an `acti
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`TOOL_SURFACE=meta`, default), the server registers **33 base tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 16 additional enterprise inline meta-tools for **49 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **50 tools**.
+In meta-tool mode (`TOOL_SURFACE=meta`), the server registers **33 base tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 16 additional enterprise inline meta-tools for **49 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **50 tools**. The default tool surface is now dynamic find/execute; set `TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
 
 Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`. HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition.
 
@@ -33,7 +33,7 @@ The dispatcher routes the request to the underlying handler based on the `action
 
 ## Configuration
 
-Meta-tools are **enabled by default**. New configurations should prefer the explicit selector:
+Meta-tools are available as an explicit tool surface. New configurations should use the canonical selector:
 
 ```env
 TOOL_SURFACE=meta
@@ -57,7 +57,7 @@ The old `META_TOOLS=false` spelling still maps to `TOOL_SURFACE=individual` when
 META_TOOLS=false
 ```
 
-Meta-tools remain the default because they are the most broadly compatible consolidated surface.
+Meta-tools remain available because they are the most broadly compatible consolidated surface.
 
 | Mode | Tool Count | Best For |
 | --- | ---: | --- |
@@ -334,7 +334,7 @@ Meta-tools advertise a deliberately compact input schema by default (`META_PARAM
    }
    ```
 
-  These resources are omitted when `CAPABILITY_SURFACE=minimal` is enabled. In that low-token mode, Dynamic surfaces should use `gitlab_describe_tools` or `gitlab_find_action` for inline schemas; meta-tool callers can keep `CAPABILITY_SURFACE=full` or use the inlined schema modes below.
+  These resources are omitted when `CAPABILITY_SURFACE=minimal` is enabled. In that low-token mode, Dynamic surfaces should use `gitlab_find_action` for inline schemas; meta-tool callers can keep `CAPABILITY_SURFACE=full` or use the inlined schema modes below.
 
 1. **Embed schemas in the tool description** — set `META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. Current audit metrics show `full` is 11.9x larger than `opaque`, and `compact` is 6.5x larger, so keep `opaque` unless your MCP client cannot read resources. See [env-reference.md](env-reference.md) for size/cost trade-offs.
 

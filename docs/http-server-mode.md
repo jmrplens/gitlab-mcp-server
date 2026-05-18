@@ -48,8 +48,8 @@ gitlab-mcp-server --http \
 | `--gitlab-url` | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
 | `--http-addr` | `:8080` | HTTP listen address (host:port) |
 | `--skip-tls-verify` | `false` | Skip TLS certificate verification for self-signed certs |
-| `--tool-surface` | `meta` | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options) |
-| `--meta-tools` | `true` | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false` |
+| `--tool-surface` | `dynamic` | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options) |
+| `--meta-tools` | _(unset)_ | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false` |
 | `--capability-surface` | `full` | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options) |
 | `--meta-param-schema` | `opaque` | Meta-tool input schema mode: `opaque`, `compact`, or `full` |
 | `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
@@ -73,13 +73,11 @@ gitlab-mcp-server --http \
 
 `--tool-surface` selects the visible MCP tool catalog for every HTTP server-pool entry:
 
-- `meta`: domain-level meta-tools, the default consolidated catalog.
+- `meta`: domain-level meta-tools, the consolidated catalog.
 - `individual`: every GitLab operation is exposed as its own tool.
 - `dynamic`: the current low-token two-tool surface with `gitlab_find_action` and `gitlab_execute_tool`.
-- `dynamic-2`: explicit selector for the same two-tool dynamic surface, useful for pinned configurations.
-- `dynamic-3`: compatibility selector for the earlier three-tool surface with `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.
 
-`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, meta-schema resources, workflow guides, and prompts, while `minimal` keeps only the workspace roots resource for low-token dynamic deployments. Dynamic schema discovery still works with `minimal` because `gitlab_find_action` and the dynamic-3 `gitlab_describe_tools` return schemas inline.
+`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, meta-schema resources, workflow guides, and prompts, while `minimal` keeps only the workspace roots resource for low-token dynamic deployments. Dynamic schema discovery still works with `minimal` because `gitlab_find_action` returns schemas inline.
 
 `--meta-param-schema` affects visible domain meta-tool `inputSchema` only. Keep the default `opaque` unless a client cannot read schema resources and needs `compact` or `full` schemas in `tools/list`; current audit metrics show `compact` is 6.5x larger than `opaque`, and `full` is 11.9x larger.
 
@@ -427,7 +425,7 @@ The following settings are **server-wide** — they apply to all clients regardl
 | --- | --- | --- |
 | Fixed GitLab URL | `--gitlab-url` | Authoritative GitLab instance for all clients when set. If omitted, clients must send `GITLAB-URL` |
 | TLS verification | `--skip-tls-verify` | Applied to all GitLab client connections |
-| Tool and capability surface | `--meta-tools`, `--tool-surface`, `--capability-surface` | Same tool catalog and resource/prompt exposure for all clients (`meta`/`individual`/`dynamic`/`dynamic-2`/`dynamic-3`; `full`/`minimal` capabilities); scope and CE/EE filtering still happen per server entry |
+| Tool and capability surface | `--meta-tools`, `--tool-surface`, `--capability-surface` | Same tool catalog and resource/prompt exposure for all clients (`meta`/`individual`/`dynamic`; `full`/`minimal` capabilities); scope and CE/EE filtering still happen per server entry |
 | Upload limits | Compile-time defaults | Max file size |
 
 The **GitLab token** always varies per client. The **GitLab URL** can vary per client only when `--gitlab-url` is omitted. Each unique `(token, URL)` pair creates a separate server-pool entry.

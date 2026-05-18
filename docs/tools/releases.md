@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Releases & Release Links
 > **Individual tools**: 12
-> **Meta-tool**: `gitlab_release` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_release` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Releases API](https://docs.gitlab.com/ee/api/releases/) · [Release Links API](https://docs.gitlab.com/ee/api/releases/links.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The releases domain covers the full lifecycle of GitLab releases and their associated asset links: creating releases for existing tags, retrieving release details, listing releases, updating metadata, deleting releases, and managing asset links attached to releases.
 
-With the default `TOOL_SURFACE=meta` catalog, all 11 individual tools below are consolidated into a single `gitlab_release` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, all 11 individual tools below are consolidated into a single `gitlab_release` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

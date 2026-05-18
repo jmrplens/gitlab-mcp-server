@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: CI/CD Catalog
 > **Individual tools**: 2
-> **Meta-tool**: `gitlab_ci_catalog` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_ci_catalog` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [CI/CD Catalog GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#querycicatalogresources)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The CI/CD Catalog domain provides discovery and inspection of reusable CI/CD components published to the GitLab CI/CD Catalog. The Catalog is a GraphQL-only feature with no REST API equivalent. Resources in the catalog are GitLab projects that publish reusable CI/CD components — pipeline templates, jobs, and steps that can be included in `.gitlab-ci.yml` files.
 
-With the default `TOOL_SURFACE=meta` catalog, both individual tools below are consolidated into a single `gitlab_ci_catalog` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, both individual tools below are consolidated into a single `gitlab_ci_catalog` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 

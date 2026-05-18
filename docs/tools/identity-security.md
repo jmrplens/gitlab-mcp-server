@@ -13,7 +13,7 @@
 
 The identity & security domain covers SCIM identity management for groups, SSH certificate management, project and group security settings (secret push protection), custom member roles at instance and group level, group credential inventory (personal access tokens and SSH keys), LDAP group link management, and SAML group link management.
 
-With the default `TOOL_SURFACE=meta` catalog and the Enterprise/Premium catalog is enabled, the 20 individual tools below are consolidated into meta-tools. `gitlab_group_scim` and `gitlab_member_role` are standalone enterprise meta-tools, while SSH certificates, security settings, and group credentials are routes inside `gitlab_group`/`gitlab_project`.
+With `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled, the 20 individual tools below are consolidated into meta-tools. `gitlab_group_scim` and `gitlab_member_role` are standalone enterprise meta-tools, while SSH certificates, security settings, and group credentials are routes inside `gitlab_group`/`gitlab_project`.
 
 ### Common Questions
 

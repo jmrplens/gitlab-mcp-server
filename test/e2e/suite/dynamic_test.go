@@ -27,7 +27,7 @@ import (
 //
 // The test lists tools from [sess.dynamic] and asserts that the visible MCP
 // catalog contains exactly gitlab_find_action and gitlab_execute_tool. It also
-// checks that regular individual, meta, or dynamic-3 discovery tools are not
+// checks that regular individual or meta tools are not
 // exposed directly. This protects the low-token contract for TOOL_SURFACE=dynamic.
 func TestDynamicToolSurface_ExposesFindExecuteOnly(t *testing.T) {
 	t.Parallel()
@@ -51,9 +51,9 @@ func TestDynamicToolSurface_ExposesFindExecuteOnly(t *testing.T) {
 	if !slices.Equal(names, want) {
 		t.Fatalf("dynamic tool names = %v, want %v", names, want)
 	}
-	for _, catalogTool := range []string{"gitlab_project", "gitlab_repository", "gitlab_search_tools", "gitlab_describe_tools"} {
+	for _, catalogTool := range []string{"gitlab_project", "gitlab_repository"} {
 		if slices.Contains(names, catalogTool) {
-			t.Fatalf("dynamic surface exposed catalog or dynamic-3 tool %q in %v", catalogTool, names)
+			t.Fatalf("dynamic surface exposed catalog tool %q in %v", catalogTool, names)
 		}
 	}
 }

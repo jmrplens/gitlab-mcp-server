@@ -13,9 +13,8 @@ GitLab business logic.
 | Surface | Selector | Visible MCP tools | Source of action metadata |
 | --- | --- | ---: | --- |
 | Individual tools | `TOOL_SURFACE=individual` (`META_TOOLS=false` legacy) | One tool per GitLab operation | Canonical action catalog projected by `RegisterIndividualCatalogTools` |
-| Meta-tools | default, `TOOL_SURFACE=meta` | Domain dispatchers with `action` and `params` | Canonical action catalog |
-| Dynamic / dynamic-2 | `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-2` | `gitlab_find_action`, `gitlab_execute_tool` | Canonical action catalog |
-| Dynamic-3 | `TOOL_SURFACE=dynamic-3` | `gitlab_search_tools`, `gitlab_describe_tools`, `gitlab_execute_tool` | Canonical action catalog |
+| Dynamic | default, `TOOL_SURFACE=dynamic` | `gitlab_find_action`, `gitlab_execute_tool` | Canonical action catalog |
+| Meta-tools | `TOOL_SURFACE=meta` | Domain dispatchers with `action` and `params` | Canonical action catalog |
 
 Individual tools, meta-tools, and dynamic tools are now catalog-backed surfaces
 over the same action core. Domain packages still own typed handlers,
@@ -42,7 +41,7 @@ flowchart LR
   individual[Individual tool metadata\nprojection]
         catalog[Canonical action catalog]
         meta[Visible meta-tools\ndomain dispatchers]
-        dynamic[Dynamic tools\nsearch / describe / execute]
+        dynamic[Dynamic tools\nfind / execute]
     schemas[Meta schema resources]
   docs[Generated docs\nLLM indexes and snapshots]
     audits[Catalog audits\nand snapshots]
@@ -70,7 +69,7 @@ The core pieces are:
 | `internal/tools/action_specs.go` | Deterministic collector for domain `ActionSpec` builders, including Enterprise and GitLab.com gating |
 | `internal/tools/action_catalog.go` | Builds the canonical catalog from collected `ActionSpec` groups and the generated manifest |
 | `internal/tools/meta_catalog.go` | Registers visible meta-tools from catalog groups |
-| `internal/tools/dynamic/register.go` | Builds the dynamic registry, search index, describe output, and execute dispatch from the catalog |
+| `internal/tools/dynamic/register.go` | Builds the dynamic registry, find output, internal search/describe helpers, and execute dispatch from the catalog |
 | `internal/tools/dynamic/standalone.go` | Adds dynamic-only catalog actions that do not fit the normal meta route model |
 | `cmd/audit_action_spec_coverage` | Generates source-discovered ActionSpec coverage inventory across individual, meta, dynamic, and standalone surfaces |
 
@@ -84,7 +83,7 @@ and `repository.file_get`.
 Every normal GitLab API action in the catalog is now backed by an `ActionSpec`.
 Every normal individual GitLab API tool derives its MCP metadata from an
 `ActionSpec` projection. The only documented source-level exceptions are the
-dynamic catalog find/execute and dynamic-3 search/describe/execute surfaces and the server auto-update
+dynamic catalog find/execute surface and the server auto-update
 surface, which is wired from `cmd/server` with an updater instead of a GitLab
 client.
 Standalone dynamic actions such as `discover_project.resolve` and interactive
@@ -118,7 +117,7 @@ The catalog-first runtime uses these model terms consistently:
   property owned by the same action.
 - Surface controller: a visible controller tool that orchestrates catalog
   actions rather than representing one GitLab API endpoint, for example Dynamic
-  search/describe/execute.
+  find/execute.
 - Runtime utility: a non-GitLab helper tool that supports the server runtime or
   user workflow. Runtime utilities need explicit surface classification,
   capability requirements when applicable, and guardrail tests.
@@ -147,16 +146,12 @@ flowchart TD
     buildMeta --> registerMeta[internal/tools.RegisterMetaCatalog]
     registerMeta --> metaTools[Visible domain meta-tools]
 
-    selector -->|dynamic or dynamic-3| buildDynamic[cmd/server.buildDynamicActionCatalog]
+    selector -->|dynamic| buildDynamic[cmd/server.buildDynamicActionCatalog]
     buildDynamic --> collectDynamicSpecs[internal/tools.CollectActionSpecs]
     collectDynamicSpecs --> generatedManifest
     buildDynamic --> standalone[dynamic.AddStandaloneCatalog]
-    standalone --> dynamic3[dynamic.RegisterCatalogTools]
-    dynamic3 --> threeTools[gitlab_search_tools\ngitlab_describe_tools\ngitlab_execute_tool]
-
-    selector -->|dynamic-2| buildDynamic2[cmd/server.buildDynamicActionCatalog]
-    buildDynamic2 --> dynamic2[dynamic.RegisterCatalogFindExecuteTools]
-    dynamic2 --> twoTools[gitlab_find_action\ngitlab_execute_tool]
+    standalone --> dynamicTools[dynamic.RegisterCatalogFindExecuteTools]
+    dynamicTools --> twoTools[gitlab_find_action\ngitlab_execute_tool]
 ```
 
 ## Action Spec Builder Ownership
@@ -173,8 +168,7 @@ Target builder rules:
   specs; it must not require a live MCP server to produce routes.
 - Building the catalog must not register MCP tools as a side effect. Visible
   tool registration belongs to `RegisterMetaCatalog` for meta mode and
-  `dynamic.RegisterCatalogTools` / `dynamic.RegisterCatalogFindExecuteTools` for
-  dynamic modes.
+  `dynamic.RegisterCatalogFindExecuteTools` for dynamic mode.
 - Builders may stay in `internal/tools` while they depend on many domain
   packages. Domain-local `ActionSpecs` functions are preferred when one package
   owns the action semantics; central aggregation builders remain appropriate for

@@ -283,7 +283,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	fmt.Fprintf(&b, "gitlab-mcp-server v%s is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.\n", version)
 	fmt.Fprintf(&b, "It provides up to %d individual MCP tools across %d GitLab API domains, %d base meta-tools, %d self-managed enterprise meta-tools, %d GitLab.com Enterprise meta-tools,\n",
 		len(catalog.Individual), countDomains(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise))
-	fmt.Fprintf(&b, "an optional 2-tool dynamic find/execute surface, %d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
+	fmt.Fprintf(&b, "a default 2-tool dynamic find/execute surface, %d resources, %d prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
 		resourceCount, len(catalog.Prompts))
 
 	b.WriteString("## Quick Start\n\n")
@@ -295,7 +295,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: %s; set for self-managed instances)\n", config.DefaultGitLabURL)
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")
 	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
-	b.WriteString("- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic, dynamic-2, or dynamic-3\n")
+	b.WriteString("- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic\n")
 	b.WriteString("- META_TOOLS: Deprecated compatibility selector; prefer TOOL_SURFACE for new configs\n")
 	b.WriteString("- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny\n")
 	b.WriteString("- GITLAB_ENTERPRISE: Enable enterprise/premium tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools (default: false)\n\n")
@@ -305,8 +305,11 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 	b.WriteString(strings.Join(domains, ", "))
 	b.WriteString(".\n\n")
 
-	b.WriteString("## Meta-Tools (default mode)\n\n")
-	fmt.Fprintf(&b, "When TOOL_SURFACE=meta (default), %d domain meta-tools are registered instead of\n", len(catalog.MetaBase))
+	b.WriteString("## Dynamic Toolset (default mode)\n\n")
+	b.WriteString("When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set TOOL_SURFACE=meta to use consolidated domain meta-tools instead.\n\n")
+
+	b.WriteString("## Meta-Tools\n\n")
+	fmt.Fprintf(&b, "When TOOL_SURFACE=meta, %d domain meta-tools are registered instead of\n", len(catalog.MetaBase))
 	fmt.Fprintf(&b, "up to %d individual tools. Enterprise/Premium entries register %d meta-tools on self-managed GitLab,\n", len(catalog.Individual), len(catalog.MetaEnterprise))
 	fmt.Fprintf(&b, "or %d on GitLab.com when Orbit is available. Each meta-tool groups related operations under a single\n", len(catalog.MetaGitLabComEnterprise))
 	b.WriteString("tool with an \"action\" parameter. Key meta-tools:\n\n")
@@ -316,9 +319,6 @@ func writeLLMSTxt(version string, catalog llmsCatalog) error {
 		fmt.Fprintf(&b, "- %s — %s\n", t.Name, desc)
 	}
 	b.WriteString("\n")
-
-	b.WriteString("## Dynamic Toolset\n\n")
-	b.WriteString("Set TOOL_SURFACE=dynamic to expose only gitlab_find_action and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. TOOL_SURFACE=dynamic-2 is an explicit alias for the two-tool surface, while dynamic-3 pins the earlier search/describe/execute variant.\n\n")
 
 	b.WriteString("## Resources\n\n")
 	fmt.Fprintf(&b, "%d read-only resources:\n\n", resourceCount)
@@ -366,11 +366,11 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog) error {
 		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), resourceCount, len(catalog.Prompts))
 
 	b.WriteString("## Dynamic Toolset\n\n")
-	b.WriteString("Dynamic mode is enabled with `TOOL_SURFACE=dynamic` or `TOOL_SURFACE=dynamic-2`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the default meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Meta-tools remain the default today; dynamic is the current low-token candidate for a future default. `dynamic-3` remains an explicit compatibility selector with `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`.\n\n")
+	b.WriteString("Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.\n\n")
 
-	// --- Meta-tools (primary mode) ---
+	// --- Meta-tools ---
 	b.WriteString("## Meta-Tools\n\n")
-	b.WriteString("Meta-tools are the default mode (`TOOL_SURFACE=meta`). Each groups related\n")
+	b.WriteString("Meta-tools are enabled with `TOOL_SURFACE=meta`. Each groups related\n")
 	b.WriteString("operations under a single tool with an `action` parameter.\n\n")
 
 	for _, t := range catalog.MetaBase {

@@ -110,13 +110,13 @@ Every ordinary GitLab operation is defined once in the canonical action catalog.
 
 - **Meta-tools** group related actions behind domain tools such as `gitlab_issue`.
 - **Individual tools** project one visible MCP tool per action for compatibility and testing.
-- **Dynamic tools** search, describe, and execute the same catalog entries with a much smaller visible tool list.
+- **Dynamic tools** find and execute the same catalog entries with a much smaller visible tool list.
 
 Because all surfaces share the same catalog entry, schemas, read-only filtering, destructive-action confirmations, safe-mode previews, scope filtering, Markdown formatting, and JSON output stay consistent across modes.
 
-### Meta-tool mode (default)
+### Meta-tool mode
 
-With `TOOL_SURFACE=meta` (default), the server exposes a baseline of **33 domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add 16 Enterprise/Premium tools for 49 total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for 50 total. Each meta-tool groups related operations:
+With `TOOL_SURFACE=meta`, the server exposes a baseline of **33 domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add 16 Enterprise/Premium tools for 49 total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for 50 total. Each meta-tool groups related operations:
 
 ```mermaid
 graph TD
@@ -152,20 +152,19 @@ With `TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_
 
 ### Dynamic toolset
 
-With `TOOL_SURFACE=dynamic`, the server exposes only `gitlab_search_tools`, `gitlab_describe_tools`, and `gitlab_execute_tool`. The same canonical action catalog remains available and is shared with meta-tools, so dynamic mode changes discovery rather than GitLab behavior.
+With `TOOL_SURFACE=dynamic`, the server exposes only `gitlab_find_action` and `gitlab_execute_tool`. The same canonical action catalog remains available and is shared with meta-tools, so dynamic mode changes discovery rather than GitLab behavior.
 
 ```mermaid
 flowchart TD
     specs[Domain ActionSpecs] --> catalog[Canonical action catalog]
-    catalog --> search[gitlab_search_tools]
-    catalog --> describe[gitlab_describe_tools]
+    catalog --> find[gitlab_find_action]
     catalog --> execute[gitlab_execute_tool]
     execute --> route[Shared ActionRoute]
     route --> handler[Existing typed handler]
     handler --> gitlab[GitLab API]
 ```
 
-Meta-tools remain the default today. Dynamic mode is the low-token alternative and is documented in [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/).
+Dynamic mode is the default low-token surface and is documented in [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/). Meta-tools remain available with `TOOL_SURFACE=meta`.
 
 ## Optional components
 

@@ -7,7 +7,7 @@ description: Herramientas a nivel de dominio que consolidan operaciones relacion
 Para la referencia técnica completa, consulta [`docs/meta-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/meta-tools.md) en el repositorio.
 :::
 
-Las meta-herramientas son el modo de operación predeterminado de GitLab MCP Server. En lugar de exponer cada operación de la API de GitLab como una herramienta MCP separada, las meta-herramientas **agrupan operaciones relacionadas bajo una única herramienta** con un parámetro `action` que despacha al handler correcto.
+Las meta-herramientas son un modo de operación explícito de GitLab MCP Server, habilitado con `TOOL_SURFACE=meta`. En lugar de exponer cada operación de la API de GitLab como una herramienta MCP separada, las meta-herramientas **agrupan operaciones relacionadas bajo una única herramienta** con un parámetro `action` que despacha al handler correcto.
 
 ## ¿Por qué meta-herramientas?
 
@@ -85,7 +85,7 @@ Ejemplos de lectura de recursos:
 }
 ```
 
-La respuesta del schema por acción describe solo `params`. La llamada final a la herramienta sigue usando el sobre de meta-herramienta con `action` y `params`. Estos recursos se omiten cuando `CAPABILITY_SURFACE=minimal` está habilitado. Los despliegues dinámicos pueden seguir usando `gitlab_describe_tools` o `gitlab_find_action` para schemas inline; los despliegues de meta-herramientas pueden mantener `CAPABILITY_SURFACE=full` o configurar `META_PARAM_SCHEMA=compact`/`full` para incluir schemas en `tools/list`. Las métricas actuales muestran que `compact` es 6.5x más grande que `opaque`, y `full` es 11.9x más grande.
+La respuesta del schema por acción describe solo `params`. La llamada final a la herramienta sigue usando el sobre de meta-herramienta con `action` y `params`. Estos recursos se omiten cuando `CAPABILITY_SURFACE=minimal` está habilitado. Los despliegues dinámicos pueden seguir usando `gitlab_find_action` para schemas inline; los despliegues de meta-herramientas pueden mantener `CAPABILITY_SURFACE=full` o configurar `META_PARAM_SCHEMA=compact`/`full` para incluir schemas en `tools/list`. Las métricas actuales muestran que `compact` es 6.5x más grande que `opaque`, y `full` es 11.9x más grande.
 
 ## Ejemplos de uso
 

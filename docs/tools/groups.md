@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Groups
 > **Individual tools**: 61
-> **Meta-tools**: `gitlab_group`, `gitlab_group_member`, `gitlab_group_label`, `gitlab_group_milestone`, `gitlab_group_variable`, `gitlab_group_import_export`, `gitlab_group_board`, `gitlab_group_relations_export`, `gitlab_group_markdown_upload` (default `TOOL_SURFACE=meta` catalog)
+> **Meta-tools**: `gitlab_group`, `gitlab_group_member`, `gitlab_group_label`, `gitlab_group_milestone`, `gitlab_group_variable`, `gitlab_group_import_export`, `gitlab_group_board`, `gitlab_group_relations_export`, `gitlab_group_markdown_upload` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Groups API](https://docs.gitlab.com/ee/api/groups.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The groups domain covers the full lifecycle of GitLab groups: creation, retrieval, listing, updating, deletion, restoration, searching, project transfers, subgroup management, webhooks, members, labels, milestones, CI/CD variables, import/export, issue boards, relations exports, and markdown uploads.
 
-With the default `TOOL_SURFACE=meta` catalog, the 61 individual tools below are consolidated into domain-specific meta-tools that dispatch by `action` parameter.
+With `TOOL_SURFACE=meta`, the 61 individual tools below are consolidated into domain-specific meta-tools that dispatch by `action` parameter.
 
 ### Common Questions
 

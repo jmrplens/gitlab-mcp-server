@@ -47,7 +47,7 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	}
 
 	dynamic := requireDomain(t, report, "dynamic")
-	if dynamic.SurfaceClassification != "dynamic-controller-surface" || !dynamic.HasSurfaceSpecs || dynamic.SurfaceSpecCount != 4 {
+	if dynamic.SurfaceClassification != "dynamic-controller-surface" || !dynamic.HasSurfaceSpecs || dynamic.SurfaceSpecCount != 2 {
 		t.Fatalf("dynamic coverage missing controller surface specs: %+v", dynamic)
 	}
 

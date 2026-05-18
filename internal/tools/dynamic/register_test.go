@@ -135,9 +135,9 @@ func TestSearch_IncludesCuratedRelatedActions(t *testing.T) {
 	}
 }
 
-// TestSearch_ReturnsDynamic3NextStep verifies search results guide the next
-// Dynamic-3 discovery step without replacing the describe tool.
-func TestSearch_ReturnsDynamic3NextStep(t *testing.T) {
+// TestSearch_ReturnsNextStep verifies search results guide the next selection
+// step without forcing extra discovery.
+func TestSearch_ReturnsNextStep(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
 	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "project delete", Limit: 1})
@@ -150,15 +150,15 @@ func TestSearch_ReturnsDynamic3NextStep(t *testing.T) {
 	if output.Count != 1 || output.Results[0].ID != "project.delete" {
 		t.Fatalf("Search() output = %+v, want project.delete", output)
 	}
-	if !strings.Contains(output.NextStep, "Call gitlab_describe_tools") || strings.Contains(output.NextStep, "gitlab_find_action") {
-		t.Fatalf("NextStep = %q, want Dynamic-3 describe guidance", output.NextStep)
+	if !strings.Contains(output.NextStep, "Use its exact parameter schema before executing") {
+		t.Fatalf("NextStep = %q, want schema-aware execution guidance", output.NextStep)
 	}
 	markdown := textContent(result)
 	if !strings.Contains(markdown, "Next step:") {
 		t.Fatalf("Search() markdown = %q, want next step guidance", markdown)
 	}
-	if strings.Contains(markdown, "Call `gitlab_describe_tools` with an action ID before executing it") {
-		t.Fatalf("Search() markdown still forces describe before execute: %s", markdown)
+	if strings.Contains(markdown, "extra discovery") {
+		t.Fatalf("Search() markdown still forces extra discovery: %s", markdown)
 	}
 }
 
@@ -2175,11 +2175,11 @@ func TestExecute_CurrentDestructiveSafetyRemainsStable(t *testing.T) {
 	}
 }
 
-// TestRegisterCatalogTools_ExposesThreeDynamicTools verifies that the full dynamic
-// surface exposes search, describe, and execute through an MCP session.
-func TestRegisterCatalogTools_ExposesThreeDynamicTools(t *testing.T) {
+// TestRegisterCatalogFindExecuteTools_ExposesDynamicTools verifies that the
+// dynamic surface exposes find and execute through an MCP session.
+func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
-	RegisterCatalogTools(server, actioncatalog.FromActionMaps(testRoutes(t)))
+	RegisterCatalogFindExecuteTools(server, actioncatalog.FromActionMaps(testRoutes(t)))
 
 	st, ct := mcp.NewInMemoryTransports()
 	serverSession, err := server.Connect(t.Context(), st, nil)
@@ -2199,8 +2199,8 @@ func TestRegisterCatalogTools_ExposesThreeDynamicTools(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListTools() error = %v", err)
 	}
-	if len(tools.Tools) != 3 {
-		t.Fatalf("tool count = %d, want 3", len(tools.Tools))
+	if len(tools.Tools) != 2 {
+		t.Fatalf("tool count = %d, want 2", len(tools.Tools))
 	}
 	executeSchema := listedToolInputSchema(t, tools.Tools, "gitlab_execute_tool")
 	if !slices.Contains(schemaRequired(executeSchema), "params") {
