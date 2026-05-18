@@ -37,6 +37,14 @@ func FormatMarkdownString(u Output) string {
 	if u.AvatarURL != "" {
 		fmt.Fprintf(&b, "- **Avatar**: %s\n", u.AvatarURL)
 	}
+	if len(u.SCIMIdentities) > 0 {
+		b.WriteString("\n### SCIM Identities\n\n")
+		b.WriteString(toolutil.MarkdownTableHeader("Extern UID", "Group ID", "Active"))
+		for _, identity := range u.SCIMIdentities {
+			fmt.Fprintf(&b, "| %s | %d | %v |\n",
+				toolutil.EscapeMdTableCell(identity.ExternUID), identity.GroupID, identity.Active)
+		}
+	}
 	toolutil.WriteHints(&b,
 		"Use action 'get_status' to check user's current status",
 		"Use action 'ssh_keys' to list SSH keys",

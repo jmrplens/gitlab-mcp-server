@@ -150,7 +150,13 @@ func TestGet_UserSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGetUser {
 			testutil.RespondJSON(w, http.StatusOK, `{
-				"id":42,"username":"testuser","name":"Test User","email":"test@example.com","state":"active","bio":"Developer"
+				"id":42,
+				"username":"testuser",
+				"name":"Test User",
+				"email":"test@example.com",
+				"state":"active",
+				"bio":"Developer",
+				"scim_identities":[{"extern_uid":"scim-user-42","group_id":7,"active":true}]
 			}`)
 			return
 		}
@@ -166,6 +172,18 @@ func TestGet_UserSuccess(t *testing.T) {
 	}
 	if out.Bio != "Developer" {
 		t.Errorf("out.Bio = %q, want %q", out.Bio, "Developer")
+	}
+	if len(out.SCIMIdentities) != 1 {
+		t.Fatalf("got %d SCIM identities, want 1", len(out.SCIMIdentities))
+	}
+	if out.SCIMIdentities[0].ExternUID != "scim-user-42" {
+		t.Errorf("SCIMIdentities[0].ExternUID = %q, want %q", out.SCIMIdentities[0].ExternUID, "scim-user-42")
+	}
+	if out.SCIMIdentities[0].GroupID != 7 {
+		t.Errorf("SCIMIdentities[0].GroupID = %d, want 7", out.SCIMIdentities[0].GroupID)
+	}
+	if !out.SCIMIdentities[0].Active {
+		t.Error("SCIMIdentities[0].Active = false, want true")
 	}
 }
 
@@ -1067,6 +1085,11 @@ func TestFormatMarkdownString_WithData(t *testing.T) {
 		AvatarURL: "https://gitlab.example.com/alice/avatar.png",
 		IsAdmin:   true,
 		Bio:       "Go developer",
+		SCIMIdentities: []SCIMIdentityOutput{{
+			ExternUID: "scim-alice",
+			GroupID:   9,
+			Active:    true,
+		}},
 	}
 	md := FormatMarkdownString(out)
 
@@ -1078,6 +1101,8 @@ func TestFormatMarkdownString_WithData(t *testing.T) {
 		"**Bio**: Go developer",
 		"**Admin**: true",
 		"**Avatar**: https://gitlab.example.com/alice/avatar.png",
+		"### SCIM Identities",
+		"| scim-alice | 9 | true |",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)

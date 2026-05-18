@@ -15,35 +15,43 @@ import (
 // Output represents the current authenticated GitLab user.
 type Output struct {
 	toolutil.HintableOutput
-	ID               int64  `json:"id"`
-	Username         string `json:"username"`
-	Email            string `json:"email"`
-	Name             string `json:"name"`
-	State            string `json:"state"`
-	WebURL           string `json:"web_url"`
-	AvatarURL        string `json:"avatar_url"`
-	IsAdmin          bool   `json:"is_admin"`
-	Bot              bool   `json:"bot"`
-	Bio              string `json:"bio,omitempty"`
-	Location         string `json:"location,omitempty"`
-	JobTitle         string `json:"job_title,omitempty"`
-	Organization     string `json:"organization,omitempty"`
-	CreatedAt        string `json:"created_at,omitempty"`
-	PublicEmail      string `json:"public_email,omitempty"`
-	WebsiteURL       string `json:"website_url,omitempty"`
-	LastActivityOn   string `json:"last_activity_on,omitempty"`
-	TwoFactorEnabled bool   `json:"two_factor_enabled"`
-	External         bool   `json:"external"`
-	Locked           bool   `json:"locked"`
-	PrivateProfile   bool   `json:"private_profile"`
-	CurrentSignInAt  string `json:"current_sign_in_at,omitempty"`
-	ProjectsLimit    int64  `json:"projects_limit"`
-	CanCreateProject bool   `json:"can_create_project"`
-	CanCreateGroup   bool   `json:"can_create_group"`
-	Note             string `json:"note,omitempty"`
-	UsingLicenseSeat bool   `json:"using_license_seat"`
-	ThemeID          int64  `json:"theme_id,omitempty"`
-	ColorSchemeID    int64  `json:"color_scheme_id,omitempty"`
+	ID               int64                `json:"id"`
+	Username         string               `json:"username"`
+	Email            string               `json:"email"`
+	Name             string               `json:"name"`
+	State            string               `json:"state"`
+	WebURL           string               `json:"web_url"`
+	AvatarURL        string               `json:"avatar_url"`
+	IsAdmin          bool                 `json:"is_admin"`
+	Bot              bool                 `json:"bot"`
+	Bio              string               `json:"bio,omitempty"`
+	Location         string               `json:"location,omitempty"`
+	JobTitle         string               `json:"job_title,omitempty"`
+	Organization     string               `json:"organization,omitempty"`
+	CreatedAt        string               `json:"created_at,omitempty"`
+	PublicEmail      string               `json:"public_email,omitempty"`
+	WebsiteURL       string               `json:"website_url,omitempty"`
+	LastActivityOn   string               `json:"last_activity_on,omitempty"`
+	TwoFactorEnabled bool                 `json:"two_factor_enabled"`
+	External         bool                 `json:"external"`
+	Locked           bool                 `json:"locked"`
+	PrivateProfile   bool                 `json:"private_profile"`
+	CurrentSignInAt  string               `json:"current_sign_in_at,omitempty"`
+	ProjectsLimit    int64                `json:"projects_limit"`
+	CanCreateProject bool                 `json:"can_create_project"`
+	CanCreateGroup   bool                 `json:"can_create_group"`
+	Note             string               `json:"note,omitempty"`
+	UsingLicenseSeat bool                 `json:"using_license_seat"`
+	ThemeID          int64                `json:"theme_id,omitempty"`
+	ColorSchemeID    int64                `json:"color_scheme_id,omitempty"`
+	SCIMIdentities   []SCIMIdentityOutput `json:"scim_identities,omitempty"`
+}
+
+// SCIMIdentityOutput represents a SCIM identity associated with a user.
+type SCIMIdentityOutput struct {
+	ExternUID string `json:"extern_uid"`
+	GroupID   int64  `json:"group_id"`
+	Active    bool   `json:"active"`
 }
 
 // CurrentInput is an empty struct for the current user tool (no parameters needed).
@@ -512,6 +520,25 @@ func toOutput(u *gl.User) Output {
 	out.UsingLicenseSeat = u.UsingLicenseSeat
 	out.ThemeID = u.ThemeID
 	out.ColorSchemeID = u.ColorSchemeID
+	out.SCIMIdentities = toSCIMIdentityOutputs(u.SCIMIdentities)
+	return out
+}
+
+func toSCIMIdentityOutputs(identities []*gl.SCIMIdentity) []SCIMIdentityOutput {
+	if len(identities) == 0 {
+		return nil
+	}
+	out := make([]SCIMIdentityOutput, 0, len(identities))
+	for _, identity := range identities {
+		if identity == nil {
+			continue
+		}
+		out = append(out, SCIMIdentityOutput{
+			ExternUID: identity.ExternUID,
+			GroupID:   identity.GroupID,
+			Active:    identity.Active,
+		})
+	}
 	return out
 }
 
