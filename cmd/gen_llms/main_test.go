@@ -152,6 +152,16 @@ func TestValidateLLMSFullTxt_RequiresGeneratedSections(t *testing.T) {
 	}
 }
 
+func TestWriteGeneratedFile_RejectsUnexpectedFileName(t *testing.T) {
+	for _, name := range []string{"README.md", "../llms.txt", "docs/llms.txt"} {
+		t.Run(name, func(t *testing.T) {
+			if err := writeGeneratedFile(name, "content", true); err == nil {
+				t.Fatal("writeGeneratedFile() error = nil, want error")
+			}
+		})
+	}
+}
+
 func TestSchemaTypeLabel_ArrayAndNullableTypes(t *testing.T) {
 	tests := []struct {
 		name   string

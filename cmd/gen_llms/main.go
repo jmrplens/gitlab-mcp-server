@@ -43,6 +43,8 @@ const (
 	// falls back to its first sentence; if that is still too long, the text is
 	// hard-truncated at the rune boundary.
 	maxFullDescRunes      = 600
+	llmsFileName          = "llms.txt"
+	llmsFullFileName      = "llms-full.txt"
 	llmsSummaryItemFormat = "- %s: %s\n"
 	llmsBoldTitleFormat   = "**%s**\n\n"
 )
@@ -424,7 +426,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	writeLLMSLink(&b, "Prompts", "docs/prompts-reference.md", "Reusable MCP prompt templates")
 
 	b.WriteString("\n## Optional\n\n")
-	writeLLMSLink(&b, "Full LLM reference", "llms-full.txt", "Generated companion reference with tool schemas, resource listings, and prompts")
+	writeLLMSLink(&b, "Full LLM reference", llmsFullFileName, "Generated companion reference with tool schemas, resource listings, and prompts")
 	writeLLMSLink(&b, "Architecture", "docs/architecture.md", "Internal architecture and catalog-first runtime overview")
 	writeLLMSLink(&b, "Output format", "docs/output-format.md", "Markdown and structured output conventions")
 	writeLLMSLink(&b, "Troubleshooting", "docs/troubleshooting.md", "Common setup and runtime issues")
@@ -434,7 +436,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	if err := validateLLMSTxt(content); err != nil {
 		return fmt.Errorf("validate llms.txt: %w", err)
 	}
-	if err := writeGeneratedFile("llms.txt", content, checkOnly); err != nil {
+	if err := writeGeneratedFile(llmsFileName, content, checkOnly); err != nil {
 		return fmt.Errorf("write llms.txt: %w", err)
 	}
 	return nil
@@ -698,7 +700,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 	if err := validateLLMSFullTxt(content); err != nil {
 		return fmt.Errorf("validate llms-full.txt: %w", err)
 	}
-	if err := writeGeneratedFile("llms-full.txt", content, checkOnly); err != nil {
+	if err := writeGeneratedFile(llmsFullFileName, content, checkOnly); err != nil {
 		return fmt.Errorf("write llms-full.txt: %w", err)
 	}
 	return nil
@@ -997,13 +999,21 @@ func findSentenceEnd(s string) int {
 
 // writeGeneratedFile writes or checks generated content in the project root.
 func writeGeneratedFile(name, content string, checkOnly bool) error {
+	if !isGeneratedLLMSFile(name) {
+		return fmt.Errorf("unexpected generated file %q", name)
+	}
 	dir, err := findProjectRoot()
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(dir, name)
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+
 	if checkOnly {
-		existing, readErr := os.ReadFile(path)
+		existing, readErr := root.ReadFile(name)
 		if readErr != nil {
 			return readErr
 		}
@@ -1012,7 +1022,16 @@ func writeGeneratedFile(name, content string, checkOnly bool) error {
 		}
 		return nil
 	}
-	return os.WriteFile(path, []byte(content), 0o644) //#nosec G306 -- generated documentation files, not secrets
+	return root.WriteFile(name, []byte(content), 0o644)
+}
+
+func isGeneratedLLMSFile(name string) bool {
+	switch name {
+	case llmsFileName, llmsFullFileName:
+		return true
+	default:
+		return false
+	}
 }
 
 // findProjectRoot walks up from cwd looking for go.mod.
