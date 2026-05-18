@@ -90,9 +90,9 @@ Resource templates use URI variables (e.g., `{project_id}`) that the client fill
 
 | # | Name | URI Template | Description |
 |---|------|--------------|-------------|
-| 41 | `meta_action_schema` | `gitlab://schema/meta/{tool}/{action}` | JSON Schema for the `params` property of a specific meta-tool action. Replace `{tool}` with a meta-tool name (e.g. `gitlab_merge_request`) and `{action}` with one of its actions (e.g. `create`). Use the `gitlab://schema/meta/` index resource to enumerate valid combinations. Available for meta and dynamic surfaces when `CAPABILITY_SURFACE=full`, regardless of `META_PARAM_SCHEMA` mode. |
+| 41 | `meta_action_schema` | `gitlab://schema/meta/{tool}/{action}` | JSON Schema for the `params` property of a specific meta-tool action. Replace `{tool}` with a meta-tool name (e.g. `gitlab_merge_request`) and `{action}` with one of its actions (e.g. `create`). Use the `gitlab://schema/meta/` index resource to enumerate valid combinations. Available for meta surfaces when `CAPABILITY_SURFACE=full` or `minimal`, and for dynamic surfaces when `CAPABILITY_SURFACE=full`, regardless of `META_PARAM_SCHEMA` mode. |
 
-The schema resources are designed for meta-tool clients that keep the default compact schema mode (`META_PARAM_SCHEMA=opaque`). They are intentionally omitted by `CAPABILITY_SURFACE=minimal`; dynamic clients in that mode should use `gitlab_find_action` for inline schemas instead. The normal full-surface discovery flow is:
+The schema resources are designed for meta-tool clients that keep the default compact schema mode (`META_PARAM_SCHEMA=opaque`). They remain available to `TOOL_SURFACE=meta` even when `CAPABILITY_SURFACE=minimal`; dynamic clients in minimal mode should use `gitlab_find_action` for inline schemas instead. The normal schema-resource discovery flow is:
 
 1. Read `gitlab://schema/meta/` to list every registered meta-tool and action available in the current server configuration. The response is a JSON object with `uri_template` and a sorted `tools` array, where each entry contains `tool` and `actions`.
 2. Read `gitlab://schema/meta/{tool}/{action}` for the action you want to call. The response is the JSON Schema for that action's `params` object, not the full `{action, params}` envelope.

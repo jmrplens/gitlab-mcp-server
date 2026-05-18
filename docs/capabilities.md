@@ -46,8 +46,9 @@ The `tools` and `resources` `ListChanged: true` flags are always advertised.
 The `prompts` capability is advertised only when `CAPABILITY_SURFACE=full`.
 `CAPABILITY_SURFACE=minimal` keeps tool execution, logging, completions, roots
 handling, progress handling, and the `gitlab://workspace/roots` resource, but
-omits optional prompts, static GitLab resources, workflow guides, and
-meta-schema resources.
+omits optional prompts, static GitLab resources, and workflow guides. In
+`TOOL_SURFACE=meta`, minimal also keeps the meta-schema resources so callers can
+retrieve exact action parameter schemas without expanding `tools/list`.
 
 The configuration intentionally has only two modes today. `full` is the broad
 compatibility surface; `minimal` is the low-token surface for Dynamic clients

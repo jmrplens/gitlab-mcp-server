@@ -40,7 +40,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-skip-tls-verify` | bool | `false` | Skip TLS certificate verification for self-signed certs |
 | `-tool-surface` | string | `dynamic` | Canonical tool catalog selector: `meta`, `individual`, or `dynamic` |
 | `-meta-tools` | bool | `true` | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false` |
-| `-capability-surface` | string | `full` | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps only `gitlab://workspace/roots` and disables optional resources, meta-schema resources, workflow guides, and prompts |
+| `-capability-surface` | string | `full` | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps `gitlab://workspace/roots`, disables optional resources, workflow guides, and prompts, and keeps meta-schema resources only for `--tool-surface=meta` |
 | `-meta-param-schema` | string | `opaque` | Meta-tool input-schema strategy: `opaque` (default), `compact`, or `full`. Applies to meta-tool schemas only. See [env-reference.md](env-reference.md) |
 | `-enterprise` | bool | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `-read-only` | bool | `false` | Read-only mode: disables all mutating tools. Only tools with `ReadOnlyHint=true` remain available |

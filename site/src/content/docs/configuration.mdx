@@ -33,7 +33,7 @@ This must be set for the server to start in stdio mode:
 | `GITLAB_SKIP_TLS_VERIFY` | `false`              | Skip TLS certificate verification for self-signed certs                                                                                                                                                       |
 | `TOOL_SURFACE`           | `dynamic`            | Canonical tool catalog selector: `dynamic`, `meta`, or `individual`                                                                                                                                           |
 | `META_TOOLS`             | legacy               | Deprecated compatibility selector. `true` maps to `meta`, `false` maps to `individual`, and dynamic values map to the matching `TOOL_SURFACE` value when `TOOL_SURFACE` is absent                             |
-| `CAPABILITY_SURFACE`     | `full`               | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps only `gitlab://workspace/roots` and disables optional resources, prompts, workflow guides, and meta-schema resources |
+| `CAPABILITY_SURFACE`     | `full`               | Resource and prompt catalog selector: `full` keeps the complete catalog; `minimal` keeps `gitlab://workspace/roots`, disables optional resources, prompts, and workflow guides, and keeps meta-schema resources only for `TOOL_SURFACE=meta` |
 | `META_PARAM_SCHEMA`      | `opaque`             | Meta-tool input-schema strategy: `opaque` (default), `compact` (6.5x opaque size), or `full` (11.9x opaque size). Applies to meta-tool `tools/list` schemas only                                              |
 | `GITLAB_ENTERPRISE`      | `false`              | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` can force the catalog; otherwise edition is auto-detected per token+URL entry                                                     |
 | `GITLAB_READ_ONLY`       | `false`              | Disable all mutating tools (create, update, delete)                                                                                                                                                           |
@@ -49,7 +49,7 @@ Use `TOOL_SURFACE=meta` when a client or workflow prefers consolidated domain di
 
 See [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) for the find/execute workflow.
 
-For deployments using the dynamic tool surface where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal`. It keeps `gitlab://workspace/roots` for project discovery and omits optional resources, prompts, workflow guides, and meta-schema resources. This does not remove action schemas from dynamic discovery: use `gitlab_find_action` to retrieve exact schemas inline before calling `gitlab_execute_tool`. The default remains `full`; no schemas-only capability mode is exposed today.
+For deployments using the dynamic tool surface where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal`. It keeps `gitlab://workspace/roots` for project discovery and omits optional resources, prompts, workflow guides, and dynamic meta-schema resources. This does not remove action schemas from dynamic discovery: use `gitlab_find_action` to retrieve exact schemas inline before calling `gitlab_execute_tool`. In `TOOL_SURFACE=meta`, minimal keeps meta-schema resources so callers can keep `META_PARAM_SCHEMA=opaque` without losing exact parameter schemas. The default remains `full`; no schemas-only capability mode is exposed today.
 :::
 
 ## Auto-update
@@ -264,7 +264,7 @@ When running in HTTP mode (`--http`), configuration uses CLI flags instead of en
 | `--tool-surface`         | `dynamic`                    | Canonical tool catalog selector: `dynamic`, `meta`, or `individual`                                                   |
 | `--meta-tools`           | _(unset)_                    | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                        |
 | `--meta-param-schema`    | `opaque`                     | Meta-tool `params` schema mode: `opaque`, `compact`, or `full`; applies to meta-tool schemas only                     |
-| `--capability-surface`   | `full`                       | Resource and prompt catalog selector: `full` or `minimal`; minimal omits optional resources, meta-schema, and prompts |
+| `--capability-surface`   | `full`                       | Resource and prompt catalog selector: `full` or `minimal`; minimal omits optional resources, workflow guides, and prompts, but keeps meta-schema resources for `--tool-surface=meta` |
 | `--enterprise`           | `false`                      | Force Enterprise/Premium tools when explicitly set; omit to auto-detect CE/EE per token+URL entry                     |
 | `--read-only`            | `false`                      | Read-only mode                                                                                                        |
 | `--safe-mode`            | `false`                      | Intercept mutating tools and return a JSON preview instead of executing them                                          |

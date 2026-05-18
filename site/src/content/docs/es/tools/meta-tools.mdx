@@ -85,7 +85,7 @@ Ejemplos de lectura de recursos:
 }
 ```
 
-La respuesta del schema por acción describe solo `params`. La llamada final a la herramienta sigue usando el sobre de meta-herramienta con `action` y `params`. Estos recursos se omiten cuando `CAPABILITY_SURFACE=minimal` está habilitado. Los despliegues dinámicos pueden seguir usando `gitlab_find_action` para schemas inline; los despliegues de meta-herramientas pueden mantener `CAPABILITY_SURFACE=full` o configurar `META_PARAM_SCHEMA=compact`/`full` para incluir schemas en `tools/list`. Las métricas actuales muestran que `compact` es 6.5x más grande que `opaque`, y `full` es 11.9x más grande.
+La respuesta del schema por acción describe solo `params`. La llamada final a la herramienta sigue usando el sobre de meta-herramienta con `action` y `params`. Estos recursos siguen disponibles para meta-herramientas cuando `CAPABILITY_SURFACE=minimal` está habilitado, mientras se omiten recursos opcionales, prompts y guías de flujo. Los despliegues dinámicos pueden seguir usando `gitlab_find_action` para schemas inline; los despliegues de meta-herramientas pueden mantener `META_PARAM_SCHEMA=opaque` y leer estos recursos en vez de incluir schemas en `tools/list`. Las métricas actuales muestran que `compact` es 6.5x más grande que `opaque`, y `full` es 11.9x más grande.
 
 ## Ejemplos de uso
 
@@ -281,7 +281,7 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 | -------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TOOL_SURFACE`       | `meta`         | Selector canónico para este modo: usa `meta` para meta-herramientas. Usa `individual` solo cuando quieras una herramienta MCP por operación de GitLab.                       |
 | `META_TOOLS`         | heredado       | Selector de compatibilidad deprecado: `true` mapea a `meta`, y `false` mapea a `individual` cuando `TOOL_SURFACE` no está definido.                                          |
-| `CAPABILITY_SURFACE` | `full`         | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene solo `gitlab://workspace/roots` y omite recursos opcionales, meta-schema, guías y prompts. |
-| `META_PARAM_SCHEMA`  | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los recursos de schema requieren `CAPABILITY_SURFACE=full`.          |
+| `CAPABILITY_SURFACE` | `full`         | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene `gitlab://workspace/roots`, omite recursos opcionales, guías y prompts, y conserva meta-schema para meta-herramientas. |
+| `META_PARAM_SCHEMA`  | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los recursos de schema de meta-herramientas están disponibles con `CAPABILITY_SURFACE=full` o `minimal`. |
 | `GITLAB_ENTERPRISE`  | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                                                                                       |
 | `--enterprise`       | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                                    |
