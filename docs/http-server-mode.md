@@ -77,9 +77,9 @@ gitlab-mcp-server --http \
 - `individual`: every GitLab operation is exposed as its own tool.
 - `dynamic`: the current low-token two-tool surface with `gitlab_find_action` and `gitlab_execute_tool`.
 
-`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, meta-schema resources, workflow guides, and prompts, while `minimal` keeps the workspace roots resource, omits prompts and optional resources, and keeps meta-schema resources only for `--tool-surface=meta`. Dynamic schema discovery still works with `minimal` because `gitlab_find_action` returns schemas inline.
+`--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, workflow guides, prompts, and the surface-aware `gitlab://tools` manifest, while `minimal` keeps `gitlab://workspace/roots` plus `gitlab://tools` and omits prompts, workflow guides, and optional GitLab data resources. Dynamic schema discovery still works with `minimal` because `gitlab_find_action` returns schemas inline.
 
-`--meta-param-schema` affects visible domain meta-tool `inputSchema` only. Keep the default `opaque` unless a client cannot read schema resources and needs `compact` or `full` schemas in `tools/list`; current audit metrics show `compact` is 6.5x larger than `opaque`, and `full` is 11.9x larger.
+`--meta-param-schema` affects visible domain meta-tool `inputSchema` only. Keep the default `opaque` unless a client needs `compact` or `full` schemas in `tools/list`; exact call shapes remain available through `gitlab://tools/{id}`. Current audit metrics show `compact` is 6.5x larger than `opaque`, and `full` is 11.9x larger.
 
 ### Configuration Precedence
 

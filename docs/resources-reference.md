@@ -1,29 +1,29 @@
 # MCP Resources Reference
 
-This document lists all **46 MCP resources** exposed by gitlab-mcp-server when `CAPABILITY_SURFACE=full`. Resources provide read-only, URI-addressable data that MCP clients can subscribe to or fetch on demand.
+This document lists the MCP resources exposed by gitlab-mcp-server. With the default `TOOL_SURFACE=dynamic` and `CAPABILITY_SURFACE=full`, the server exposes **46 MCP resources**: GitLab data resources, workflow guides, and a surface-aware tool manifest. Meta and individual modes expose the same public resource shape; the `gitlab://tools` manifest adapts its payload to the active tool surface selected at startup.
 
 > **Diátaxis type**: Reference
 > **Audience**: MCP client developers, AI assistant users
 > **Prerequisites**: Understanding of MCP resources concept
 
-GitLab data resources and schema resources return `application/json`. Workflow guide resources return `text/markdown`.
+GitLab data resources and tool manifest resources return `application/json`. Workflow guide resources return `text/markdown`.
 
-MCP separates fixed resources from URI templates. In full mode, `resources/list` exposes 9 fixed URIs: the 4 static resources below plus the 5 workflow guides. `resources/templates/list` exposes the remaining 37 URI templates. Registries that only inspect `resources/list` may therefore report 9 resources statically even though the runtime MCP resource surface contains 46 entries in total.
+MCP separates fixed resources from URI templates. In default dynamic full mode, `resources/list` exposes 9 fixed URIs: the 4 static resources below and the 5 workflow guides. `resources/templates/list` exposes the remaining 37 URI templates. Registries that only inspect `resources/list` may therefore report 9 resources statically even though the runtime MCP resource surface contains 46 entries in total.
 
 ---
 
-## Static Resources (4)
+## Static Resources (4 core)
 
 Static resources have a fixed URI and require no parameters.
 
-| #   | Name                | URI                        | Description                                                                                                                                                                                                                                       |
-| --- | ------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | `current_user`      | `gitlab://user/current`    | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.                                                                                                    |
-| 2   | `groups`            | `gitlab://groups`          | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.                                                                                                |
-| 3   | `workspace_roots`   | `gitlab://workspace/roots` | List workspace root directories provided by the MCP client. Use these paths to locate .git/config files and extract git remote URLs for project discovery via `gitlab_discover_project`.                                                          |
-| 4   | `meta_schema_index` | `gitlab://schema/meta/`    | Catalog of every registered meta-tool and its actions. Available for meta and dynamic surfaces when `CAPABILITY_SURFACE=full`. Use the `gitlab://schema/meta/{tool}/{action}` template to fetch the JSON Schema for a specific action's `params`. |
+| #   | Name              | URI                        | Description                                                                                                                                                                              |
+| --- | ----------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `current_user`    | `gitlab://user/current`    | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.                                           |
+| 2   | `groups`          | `gitlab://groups`          | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.                                       |
+| 3   | `workspace_roots` | `gitlab://workspace/roots` | List workspace root directories provided by the MCP client. Use these paths to locate .git/config files and extract git remote URLs for project discovery via `gitlab_discover_project`. |
+| 4   | `tool_manifest`   | `gitlab://tools`           | Surface-aware manifest of the tools and executable actions available in this server instance. Use `gitlab://tools/{id}` to fetch one entry's accepted call shape and input schema.       |
 
-## Resource Templates (37)
+## Resource Templates (37 core)
 
 Resource templates use URI variables (e.g., `{project_id}`) that the client fills in at request time.
 
@@ -88,19 +88,19 @@ Resource templates use URI variables (e.g., `{project_id}`) that the client fill
 | --- | --------- | ------------------------------- | ---------------------------------------------------------------------------------------- |
 | 40  | `snippet` | `gitlab://snippet/{snippet_id}` | Get a personal (user-scoped) snippet. Returns title, file name, visibility, and web URL. |
 
-### Meta-Tool Schema
+### Tool Manifest Detail
 
-| #   | Name                 | URI Template                           | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| --- | -------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 41  | `meta_action_schema` | `gitlab://schema/meta/{tool}/{action}` | JSON Schema for the `params` property of a specific meta-tool action. Replace `{tool}` with a meta-tool name (e.g. `gitlab_merge_request`) and `{action}` with one of its actions (e.g. `create`). Use the `gitlab://schema/meta/` index resource to enumerate valid combinations. Available for meta surfaces when `CAPABILITY_SURFACE=full` or `minimal`, and for dynamic surfaces when `CAPABILITY_SURFACE=full`, regardless of `META_PARAM_SCHEMA` mode. |
+| #   | Name          | URI Template          | Description                                                                                                                                                                                                                     |
+| --- | ------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 41  | `tool_detail` | `gitlab://tools/{id}` | Accepted call shape and input schema for one entry from `gitlab://tools`. Replace `{id}` with an entry ID such as `project.get` in dynamic mode, `gitlab_project.get` in meta mode, or `gitlab_get_project` in individual mode. |
 
-The schema resources are designed for meta-tool clients that keep the default compact schema mode (`META_PARAM_SCHEMA=opaque`). They remain available to `TOOL_SURFACE=meta` even when `CAPABILITY_SURFACE=minimal`; dynamic clients in minimal mode should use `gitlab_find_action` for inline schemas instead. The normal schema-resource discovery flow is:
+The tool manifest is the public discovery layer for every tool surface. The normal discovery flow is:
 
-1. Read `gitlab://schema/meta/` to list every registered meta-tool and action available in the current server configuration. The response is a JSON object with `uri_template` and a sorted `tools` array, where each entry contains `tool` and `actions`.
-2. Read `gitlab://schema/meta/{tool}/{action}` for the action you want to call. The response is the JSON Schema for that action's `params` object, not the full `{action, params}` envelope.
-3. Call the meta-tool with the shared envelope: `{"action":"create","params":{...}}`.
+1. Read `gitlab://tools` to see the active surface, the tools advertised through `tools/list`, and the executable entries accepted by that surface.
+2. Read `gitlab://tools/{id}` for the chosen entry. The response includes `call`, `input_schema`, destructive metadata, read-only metadata, and required params when they are known.
+3. Call the indicated MCP tool using the returned call shape.
 
-For example, `gitlab://schema/meta/gitlab_merge_request/create` returns the parameter schema for the `create` action of `gitlab_merge_request`. If a route has no captured schema, the template resource returns a permissive object schema with `additionalProperties: true` and a description explaining that `{}` is acceptable or that the meta-tool description should be consulted.
+For example, `gitlab://tools/project.get` describes a dynamic action that calls `gitlab_execute_tool` with `action="project.get"` and params under `params`. `gitlab://tools/gitlab_project.get` describes a meta-tool action that calls `gitlab_project` with `action="get"` and params under `params`. `gitlab://tools/gitlab_get_project` describes an individual tool call where arguments are passed directly to the tool.
 
 ## Workflow Guide Resources (5)
 
@@ -134,4 +134,4 @@ All URI template parameters support intelligent autocomplete via the completions
 
 ## Source
 
-Resources are implemented in [`internal/resources/resources.go`](../internal/resources/resources.go) (GitLab data resources and templates), [`internal/resources/meta_schema.go`](../internal/resources/meta_schema.go) (meta-tool schema resources), [`internal/resources/workspace_roots.go`](../internal/resources/workspace_roots.go) (workspace roots resource), and [`internal/resources/workflow_guides.go`](../internal/resources/workflow_guides.go) (5 workflow guide resources).
+Resources are implemented in [`internal/resources/resources.go`](../internal/resources/resources.go) (GitLab data resources and templates), [`internal/resources/tool_manifest.go`](../internal/resources/tool_manifest.go) (surface-aware tool manifest), [`internal/resources/workspace_roots.go`](../internal/resources/workspace_roots.go) (workspace roots resource), and [`internal/resources/workflow_guides.go`](../internal/resources/workflow_guides.go) (5 workflow guide resources).

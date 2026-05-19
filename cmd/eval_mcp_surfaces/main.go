@@ -44,7 +44,10 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	mcpresources "github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/roots"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	customemoji "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/customemoji"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -77,6 +80,10 @@ const (
 	dynamicFindTool = "gitlab_find_action"
 	// dynamicExecuteTool identifies the dynamic execute tool constant used by this package.
 	dynamicExecuteTool = "gitlab_execute_tool"
+	// resourceListTool identifies the evaluator resource-list bridge tool.
+	resourceListTool = "gitlab_list_resources"
+	// resourceReadTool identifies the evaluator resource-read bridge tool.
+	resourceReadTool = "gitlab_read_resource"
 )
 
 const (
@@ -253,6 +260,7 @@ type options struct {
 	PublishAllowNoise   bool
 	MCPSmoke            bool
 	Execute             bool
+	ExposeResources     bool
 	AllowLive           bool
 	PrepareFixtures     bool
 	FixturesOnly        bool
@@ -485,26 +493,28 @@ type modelError struct {
 
 // taskResult captures task result data for one evaluation task.
 type taskResult struct {
-	Task             evalTask
-	Run              int
-	Model            string
-	ToolSurface      string
-	SchemaLookupUsed bool
-	FirstTool        string
-	FirstAction      string
-	FirstPass        bool
-	RepairAttempted  bool
-	RepairSuccess    bool
-	FinalTool        string
-	FinalAction      string
-	FinalSuccess     bool
-	DestructiveSafe  bool
-	CompletedSteps   int
-	ModelCalls       int
-	ToolCalls        int
-	Usage            modelUsage
-	Notes            []string
-	Trace            taskTrace
+	Task               evalTask
+	Run                int
+	Model              string
+	ToolSurface        string
+	SchemaLookupUsed   bool
+	ResourceLookupUsed bool
+	FirstTool          string
+	FirstAction        string
+	FirstPass          bool
+	RepairAttempted    bool
+	RepairSuccess      bool
+	FinalTool          string
+	FinalAction        string
+	FinalSuccess       bool
+	DestructiveSafe    bool
+	CompletedSteps     int
+	ModelCalls         int
+	ToolCalls          int
+	ResourceCalls      int
+	Usage              modelUsage
+	Notes              []string
+	Trace              taskTrace
 }
 
 // taskTrace records task trace data in evaluation traces.
@@ -594,21 +604,23 @@ type traceValidation struct {
 
 // traceSummary records trace summary data in evaluation traces.
 type traceSummary struct {
-	FirstTool        string `json:"first_tool,omitempty"`
-	FirstAction      string `json:"first_action,omitempty"`
-	FinalTool        string `json:"final_tool,omitempty"`
-	FinalAction      string `json:"final_action,omitempty"`
-	SchemaLookupUsed bool   `json:"schema_lookup_used"`
-	FirstPass        bool   `json:"first_pass"`
-	RepairAttempted  bool   `json:"repair_attempted"`
-	RepairSuccess    bool   `json:"repair_success"`
-	FinalSuccess     bool   `json:"final_success"`
-	DestructiveSafe  bool   `json:"destructive_safe"`
-	CompletedSteps   int    `json:"completed_steps"`
-	ExpectedSteps    int    `json:"expected_steps"`
-	ModelCalls       int    `json:"model_calls"`
-	ToolCalls        int    `json:"tool_calls"`
-	Notes            string `json:"notes,omitempty"`
+	FirstTool          string `json:"first_tool,omitempty"`
+	FirstAction        string `json:"first_action,omitempty"`
+	FinalTool          string `json:"final_tool,omitempty"`
+	FinalAction        string `json:"final_action,omitempty"`
+	SchemaLookupUsed   bool   `json:"schema_lookup_used"`
+	ResourceLookupUsed bool   `json:"resource_lookup_used"`
+	FirstPass          bool   `json:"first_pass"`
+	RepairAttempted    bool   `json:"repair_attempted"`
+	RepairSuccess      bool   `json:"repair_success"`
+	FinalSuccess       bool   `json:"final_success"`
+	DestructiveSafe    bool   `json:"destructive_safe"`
+	CompletedSteps     int    `json:"completed_steps"`
+	ExpectedSteps      int    `json:"expected_steps"`
+	ModelCalls         int    `json:"model_calls"`
+	ToolCalls          int    `json:"tool_calls"`
+	ResourceCalls      int    `json:"resource_calls"`
+	Notes              string `json:"notes,omitempty"`
 }
 
 // validationResult holds validation result data for the main package.
@@ -629,6 +641,47 @@ type simulationResult struct {
 	Injected bool
 	Err      error
 	MCP      *traceMCPExchange
+}
+
+// resourceLookupResult captures one evaluator resource bridge response.
+type resourceLookupResult struct {
+	Content string
+	Err     error
+	MCP     *traceMCPExchange
+}
+
+type evalResourceRef struct {
+	URI         string           `json:"uri"`
+	Name        string           `json:"name,omitempty"`
+	Title       string           `json:"title,omitempty"`
+	Description string           `json:"description,omitempty"`
+	MIMEType    string           `json:"mime_type,omitempty"`
+	Annotations *mcp.Annotations `json:"annotations,omitempty"`
+}
+
+type evalResourceTemplateRef struct {
+	URITemplate string           `json:"uri_template"`
+	Name        string           `json:"name,omitempty"`
+	Title       string           `json:"title,omitempty"`
+	Description string           `json:"description,omitempty"`
+	MIMEType    string           `json:"mime_type,omitempty"`
+	Annotations *mcp.Annotations `json:"annotations,omitempty"`
+}
+
+type evalResourceListOutput struct {
+	Resources         []evalResourceRef         `json:"resources"`
+	ResourceTemplates []evalResourceTemplateRef `json:"resource_templates"`
+}
+
+type evalResourceContent struct {
+	URI      string `json:"uri,omitempty"`
+	MIMEType string `json:"mime_type,omitempty"`
+	Text     string `json:"text,omitempty"`
+}
+
+type evalResourceReadOutput struct {
+	URI      string                `json:"uri"`
+	Contents []evalResourceContent `json:"contents"`
 }
 
 // main starts the command-line workflow.
@@ -848,6 +901,17 @@ func run() (runErr error) {
 		mcpSession = session
 		executionClient = client
 	}
+	if opts.ExposeResources && mcpSession == nil && opts.ToolsFile == "" {
+		session, closeSession, resourceErr := newResourceLookupSession(opts)
+		if resourceErr != nil {
+			return resourceErr
+		}
+		defer closeSession()
+		mcpSession = session
+	}
+	if opts.ExposeResources && mcpSession != nil {
+		catalog = appendResourceBridgeTools(catalog)
+	}
 
 	ctx := context.Background()
 	results := make([]taskResult, 0, len(tasks)*opts.Repeat*len(modelSpecs))
@@ -957,6 +1021,7 @@ func parseFlags() options {
 	flag.BoolVar(&opts.PublishAllowNoise, "publish-allow-harness-noise", false, "Allow publishing reports that explicitly mention unresolved harness noise")
 	flag.BoolVar(&opts.MCPSmoke, "mcp-smoke", false, "Call read-only smoke tools through MCP against --backend=gitlab before evaluation")
 	flag.BoolVar(&opts.Execute, "execute-tools", false, "Execute validated model tool calls through MCP instead of simulated tool results; requires --backend=gitlab and E2E_MODE=docker unless --allow-live-mutations is set")
+	flag.BoolVar(&opts.ExposeResources, "expose-resources", true, "Expose MCP resources/list and resources/read to model providers through evaluator bridge tools")
 	flag.BoolVar(&opts.AllowLive, "allow-live-mutations", false, "Allow --execute-tools against non-Docker GitLab instances; dangerous because evaluation tasks may mutate resources")
 	flag.BoolVar(&opts.PrepareFixtures, "prepare-fixtures", false, "Create or refresh Docker GitLab resources referenced by the evaluation fixture")
 	flag.BoolVar(&opts.FixturesOnly, "fixtures-only", false, "Exit after --prepare-fixtures writes fixture state")
@@ -2164,6 +2229,23 @@ func newExecutionSession(opts options) (*mcp.ClientSession, *gitlabclient.Client
 		return nil, nil, nil, err
 	}
 	return session, client, func() {
+		closeSession()
+		cleanup()
+	}, nil
+}
+
+// newResourceLookupSession constructs a read-only MCP session for resource bridge tools.
+func newResourceLookupSession(opts options) (*mcp.ClientSession, func(), error) {
+	client, cleanup, err := newCatalogGitLabClient(opts)
+	if err != nil {
+		return nil, nil, err
+	}
+	session, closeSession, err := newCatalogSession(client, opts.ToolSurface)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	return session, func() {
 		closeSession()
 		cleanup()
 	}, nil
@@ -4260,6 +4342,7 @@ func newCatalogSession(client *gitlabclient.Client, toolSurface string) (*mcp.Cl
 // buildCatalogSession constructs the request parameters from the input.
 func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-mcp-surfaces", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+	var surfaceCatalog *actioncatalog.Catalog
 	switch toolSurface {
 	case config.ToolSurfaceDynamic:
 		actionCatalog, catalogErr := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: client.IsEnterprise(), IncludeMCP: true})
@@ -4270,6 +4353,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 		if catalogErr != nil {
 			return nil, nil, nil, nil, fmt.Errorf("add standalone dynamic catalog: %w", catalogErr)
 		}
+		surfaceCatalog = actionCatalog
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
 		routes = dynamicValidationRoutes(actionCatalog.ActionMaps())
 	case config.ToolSurfaceMeta:
@@ -4277,6 +4361,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 		if catalogErr != nil {
 			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
 		}
+		surfaceCatalog = actionCatalog
 		tools.RegisterMetaCatalog(server, actionCatalog)
 		tools.RegisterMetaStandaloneTools(server, client)
 		routes = actionCatalog.ActionMaps()
@@ -4284,6 +4369,12 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 		return nil, nil, nil, nil, fmt.Errorf("unsupported tool surface %q", toolSurface)
 	}
 	toolutil.LockdownInputSchemas(server)
+	toolutil.EnrichPaginationConstraints(server)
+	mcpTools, err = inspectEvalTools(server)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	registerEvalResources(server, client, toolSurface, surfaceCatalog, routes, mcpTools)
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -4298,12 +4389,44 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("client connect: %w", err)
 	}
+	return session, func() { _ = session.Close() }, mcpTools, routes, nil
+}
+
+// inspectEvalTools returns the tool list before evaluator resources are attached.
+func inspectEvalTools(server *mcp.Server) ([]*mcp.Tool, error) {
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		return nil, fmt.Errorf("server connect: %w", err)
+	}
+	defer serverSession.Close()
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-mcp-surfaces-inspector", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		return nil, fmt.Errorf("client connect: %w", err)
+	}
+	defer session.Close()
+
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
-		_ = session.Close()
-		return nil, nil, nil, nil, fmt.Errorf("list tools: %w", err)
+		return nil, fmt.Errorf("list tools: %w", err)
 	}
-	return session, func() { _ = session.Close() }, result.Tools, routes, nil
+	return result.Tools, nil
+}
+
+// registerEvalResources mirrors the default full capability resource surface.
+func registerEvalResources(server *mcp.Server, client *gitlabclient.Client, toolSurface string, catalog *actioncatalog.Catalog, routes map[string]toolutil.ActionMap, toolList []*mcp.Tool) {
+	mcpresources.Register(server, client)
+	mcpresources.RegisterWorkspaceRoots(server, roots.NewManager())
+	mcpresources.RegisterWorkflowGuides(server)
+	mcpresources.RegisterToolSurfaceResources(server, mcpresources.ToolSurfaceResourceOptions{
+		Surface:    toolSurface,
+		Tools:      toolList,
+		Catalog:    catalog,
+		MetaRoutes: routes,
+	})
 }
 
 // dynamicValidationRoutes converts action routes into the single
@@ -4507,6 +4630,39 @@ func sortedModelTools(out []modelTool) []modelTool {
 	return out
 }
 
+// appendResourceBridgeTools adds evaluator client-capability tools for MCP resources.
+func appendResourceBridgeTools(catalog []modelTool) []modelTool {
+	out := make([]modelTool, 0, len(catalog)+2)
+	out = append(out, catalog...)
+	out = append(out,
+		modelToolFromParts(resourceListTool, "List MCP resources and resource templates exposed by this GitLab MCP server instance. Use this to discover resource URIs and URI templates before reading them.", resourceListSchema()),
+		modelToolFromParts(resourceReadTool, "Read one MCP resource URI exposed by this GitLab MCP server instance. Use URIs returned by gitlab_list_resources, including gitlab://tools and concrete gitlab://tools/{id} values.", resourceReadSchema()),
+	)
+	return sortedModelTools(out)
+}
+
+func resourceListSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"properties":           map[string]any{},
+		"additionalProperties": false,
+	}
+}
+
+func resourceReadSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"uri": map[string]any{
+				"type":        "string",
+				"description": "MCP resource URI to read, for example gitlab://tools or gitlab://tools/project.get.",
+			},
+		},
+		"required":             []string{"uri"},
+		"additionalProperties": false,
+	}
+}
+
 // catalogToolNames resolves catalog tool names for evaluator execution.
 func catalogToolNames(catalog []modelTool) map[string]bool {
 	names := make(map[string]bool, len(catalog))
@@ -4627,6 +4783,18 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 		repairAlreadySent := repairCount >= repairLimit
 		for _, toolUse := range toolUses {
 			result.Trace.Events = append(result.Trace.Events, traceToolUseEvent(result.ModelCalls, toolUse))
+			if isResourceLookup(toolUse) {
+				result.ResourceLookupUsed = true
+				result.ResourceCalls++
+				resourceResult := r.resourceLookupResult(ctx, toolUse)
+				block := toolResultBlock(toolUse.ID, resourceResult.Content, resourceResult.Err)
+				followups = append(followups, block)
+				result.Trace.Events = append(result.Trace.Events, traceToolResultEventWithMCP(result.ModelCalls, block, resourceResult.MCP))
+				if resourceResult.Err != nil {
+					result.Notes = append(result.Notes, resourceResult.Err.Error())
+				}
+				continue
+			}
 			if isSchemaLookup(toolUse) {
 				result.SchemaLookupUsed = true
 				if stepIndex < len(steps) {
@@ -5259,6 +5427,116 @@ func (r *modelRunner) mcpToolResult(ctx context.Context, toolUse modelContentBlo
 	return simulationResult{Content: content, Advance: true, Injected: true, MCP: exchange}
 }
 
+// resourceLookupResult handles evaluator MCP resource bridge calls.
+func (r *modelRunner) resourceLookupResult(ctx context.Context, toolUse modelContentBlock) resourceLookupResult {
+	if r.mcpSession == nil {
+		err := errors.New("MCP resource lookup is not available in this evaluation run")
+		return resourceLookupResult{Content: err.Error(), Err: err}
+	}
+	callCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	exchange := &traceMCPExchange{Request: traceMCPRequest{Name: toolUse.Name, Arguments: toolUse.Input}}
+	started := time.Now()
+	var content string
+	var err error
+	switch toolUse.Name {
+	case resourceListTool:
+		content, err = r.listResourceLookupContent(callCtx, exchange)
+	case resourceReadTool:
+		content, err = r.readResourceLookupContent(callCtx, toolUse.Input, exchange)
+	default:
+		err = fmt.Errorf("unsupported MCP resource bridge tool %q", toolUse.Name)
+	}
+	exchange.DurationMillis = time.Since(started).Milliseconds()
+	if err != nil {
+		exchange.ProtocolError = err.Error()
+		return resourceLookupResult{Content: content, Err: err, MCP: exchange}
+	}
+	return resourceLookupResult{Content: content, MCP: exchange}
+}
+
+func (r *modelRunner) listResourceLookupContent(ctx context.Context, exchange *traceMCPExchange) (string, error) {
+	resourcesResult, err := r.mcpSession.ListResources(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("list MCP resources: %w", err)
+	}
+	if resourcesResult == nil {
+		return "", errors.New("list MCP resources: empty result")
+	}
+	templatesResult, err := r.mcpSession.ListResourceTemplates(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("list MCP resource templates: %w", err)
+	}
+	if templatesResult == nil {
+		return "", errors.New("list MCP resource templates: empty result")
+	}
+	output := evalResourceListOutput{
+		Resources:         make([]evalResourceRef, 0, len(resourcesResult.Resources)),
+		ResourceTemplates: make([]evalResourceTemplateRef, 0, len(templatesResult.ResourceTemplates)),
+	}
+	for _, resource := range resourcesResult.Resources {
+		output.Resources = append(output.Resources, evalResourceRef{
+			URI:         resource.URI,
+			Name:        resource.Name,
+			Title:       resource.Title,
+			Description: resource.Description,
+			MIMEType:    resource.MIMEType,
+			Annotations: resource.Annotations,
+		})
+	}
+	for _, template := range templatesResult.ResourceTemplates {
+		output.ResourceTemplates = append(output.ResourceTemplates, evalResourceTemplateRef{
+			URITemplate: template.URITemplate,
+			Name:        template.Name,
+			Title:       template.Title,
+			Description: template.Description,
+			MIMEType:    template.MIMEType,
+			Annotations: template.Annotations,
+		})
+	}
+	return marshalResourceBridgeResult(output, exchange)
+}
+
+func (r *modelRunner) readResourceLookupContent(ctx context.Context, input map[string]any, exchange *traceMCPExchange) (string, error) {
+	uri, _ := input["uri"].(string)
+	uri = strings.TrimSpace(uri)
+	if uri == "" {
+		return "", errors.New("gitlab_read_resource requires uri")
+	}
+	result, err := r.mcpSession.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
+	if err != nil {
+		return "", fmt.Errorf("read MCP resource %s: %w", uri, err)
+	}
+	if result == nil {
+		return "", fmt.Errorf("read MCP resource %s: empty result", uri)
+	}
+	output := evalResourceReadOutput{URI: uri, Contents: make([]evalResourceContent, 0, len(result.Contents))}
+	for _, content := range result.Contents {
+		if content == nil {
+			continue
+		}
+		output.Contents = append(output.Contents, evalResourceContent{
+			URI:      content.URI,
+			MIMEType: content.MIMEType,
+			Text:     truncateToolResult(content.Text),
+		})
+	}
+	return marshalResourceBridgeResult(output, exchange)
+}
+
+func marshalResourceBridgeResult(value any, exchange *traceMCPExchange) (string, error) {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return "", fmt.Errorf("marshal MCP resource result: %w", err)
+	}
+	content := truncateToolResult(string(data))
+	if exchange != nil {
+		exchange.Response = append(json.RawMessage(nil), data...)
+		exchange.ResponseText = content
+	}
+	return content, nil
+}
+
 // toolExecutionNote converts the GitLab API response to the tool output format.
 func toolExecutionNote(stepNumber int, step evalStep, err error) string {
 	if step.Simulation != "" {
@@ -5417,21 +5695,23 @@ func (e *traceMCPExchange) setResponse(result *mcp.CallToolResult) {
 // traceSummaryFromResult retrieves the trace of summary from result for the main package.
 func traceSummaryFromResult(result taskResult) traceSummary {
 	return traceSummary{
-		FirstTool:        result.FirstTool,
-		FirstAction:      result.FirstAction,
-		FinalTool:        result.FinalTool,
-		FinalAction:      result.FinalAction,
-		SchemaLookupUsed: result.SchemaLookupUsed,
-		FirstPass:        result.FirstPass,
-		RepairAttempted:  result.RepairAttempted,
-		RepairSuccess:    result.RepairSuccess,
-		FinalSuccess:     result.FinalSuccess,
-		DestructiveSafe:  result.DestructiveSafe,
-		CompletedSteps:   result.CompletedSteps,
-		ExpectedSteps:    len(taskSteps(result.Task)),
-		ModelCalls:       result.ModelCalls,
-		ToolCalls:        result.ToolCalls,
-		Notes:            strings.Join(result.Notes, "; "),
+		FirstTool:          result.FirstTool,
+		FirstAction:        result.FirstAction,
+		FinalTool:          result.FinalTool,
+		FinalAction:        result.FinalAction,
+		SchemaLookupUsed:   result.SchemaLookupUsed,
+		ResourceLookupUsed: result.ResourceLookupUsed,
+		FirstPass:          result.FirstPass,
+		RepairAttempted:    result.RepairAttempted,
+		RepairSuccess:      result.RepairSuccess,
+		FinalSuccess:       result.FinalSuccess,
+		DestructiveSafe:    result.DestructiveSafe,
+		CompletedSteps:     result.CompletedSteps,
+		ExpectedSteps:      len(taskSteps(result.Task)),
+		ModelCalls:         result.ModelCalls,
+		ToolCalls:          result.ToolCalls,
+		ResourceCalls:      result.ResourceCalls,
+		Notes:              strings.Join(result.Notes, "; "),
 	}
 }
 
@@ -5493,6 +5773,11 @@ func isSchemaLookup(toolUse modelContentBlock) bool {
 	}
 	action, _ := toolUse.Input["action"].(string)
 	return action == "schema_get" || action == "schema_index"
+}
+
+// isResourceLookup reports whether a tool call uses MCP resources through the evaluator bridge.
+func isResourceLookup(toolUse modelContentBlock) bool {
+	return toolUse.Name == resourceListTool || toolUse.Name == resourceReadTool
 }
 
 // isDynamicDiscovery reports whether a dynamic catalog lookup tool was called.
@@ -5673,7 +5958,7 @@ func toolResultBlock(toolUseID, content string, err error) modelContentBlock {
 
 // systemPrompt builds system prompt for evaluator prompts.
 func systemPrompt() string {
-	return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. Function-call arguments must be one valid JSON object, never a fragment or a leading comma. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. A unified gitlab dispatcher call with no input is invalid; always include both action and params. If the catalog exposes a unified gitlab dispatcher, use its domain.action values such as project.get or issue.create. Use gitlab_interactive_* only when the task explicitly asks for a guided interactive flow; ordinary create tasks with all fields supplied use the gitlab dispatcher action. If a task asks for server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check; do not call gitlab with action health_check. If a task provides a project ID or namespace path, pass it inside params as project_id; use gitlab_discover_project only for git remote URLs. Standalone tools without an action enum use their input schema directly. Schema lookup counts as an extra tool call in this evaluation: do not use it to confirm an action you already know or a no-parameter action; call gitlab_server schema_index or schema_get only when exact params are ambiguous or after a validation error. For no-parameter list actions, call gitlab directly, for example {"action":"template.dockerfile_list","params":{}}. Schema lookup is itself action-based: call gitlab_server as {"action":"schema_get","params":{"tool":"gitlab","action":"project.get"}} for a unified dispatcher action, or {"action":"schema_index","params":{"tool":"gitlab"}} to inspect available unified actions. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. For subgroup creation with group.create, send params.name, params.path, and params.parent_id. For custom emoji group operations, use custom_emoji.list with params.group_path; do not use group.custom_emoji_list or group_id for a group path. For project access tokens, scope names go in params.scopes as an array, not params.scope, and expiring dates go in params.expires_at. For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id; for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id; use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied. To pause or unpause a runner, use runner.update with params.runner_id and params.paused true or false; do not use project_id, and do not use runner.disable_project unless the user asks to detach a runner from a project. For runner.list_project, use params.project_id by default; add params.status only when the task explicitly asks for online, offline, stale, or never_contacted runners, and never send status all or active. Do not send params.paused, params.type, params.tag_list, or empty filter values for runner.list_project. For broadcast messages, saying maps to params.message, from maps to params.starts_at, and to maps to params.ends_at. For merge request creation, "from" maps to params.source_branch, "into" maps to params.target_branch, and "titled" maps to params.title; never use ref, search, tag_name, to, or value for those fields. For merge request notes or comments, use mr_review.note_create with project_id, merge_request_iid, and body. Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion. For personal snippets, use params.snippet_id; do not use project_id, query, search, sort, or file_path for a personal snippet ID. For job.trace, use params.project_id and params.job_id. For job.play variables, use params.variables as an array like [{"key":"DEPLOY_ENV","value":"staging"}], not an object. For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message; create/update also require params.content. For repository file reads, use repository.file_get with ref; use repository.file_raw only when the user explicitly asks for raw bytes/content. For project badges, "linking to" maps to params.link_url and "with image" maps to params.image_url. When the task only asks for an LLM-assisted analyzer or to analyze why a pipeline failed, call the matching analyze.* action directly without prefetching pipeline, issue, MR, or changes; release notes use analyze.release_notes with project_id, from, and to. If the task asks for inspection, listing, or compare before an analyzer, perform those prerequisites first and call the analyzer last. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true in params when using an action-based tool, or at top level for a standalone destructive tool. If GitLab returns a temporary API/server error, retry the same operation; do not call CI retry actions such as pipeline.retry unless the user asks to rerun failed CI jobs. Return tool calls only; do not answer with explanatory text.`
+	return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. If gitlab_list_resources and gitlab_read_resource are provided, they represent MCP resources/list and resources/read client capabilities and may be used to inspect exposed resources before a final GitLab operation. Function-call arguments must be one valid JSON object, never a fragment or a leading comma. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. A unified gitlab dispatcher call with no input is invalid; always include both action and params. If the catalog exposes a unified gitlab dispatcher, use its domain.action values such as project.get or issue.create. Use gitlab_interactive_* only when the task explicitly asks for a guided interactive flow; ordinary create tasks with all fields supplied use the gitlab dispatcher action. If a task asks for server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check; do not call gitlab with action health_check. If a task provides a project ID or namespace path, pass it inside params as project_id; use gitlab_discover_project only for git remote URLs. Standalone tools without an action enum use their input schema directly. Schema lookup counts as an extra tool call in this evaluation: do not use it to confirm an action you already know or a no-parameter action; call gitlab_server schema_index or schema_get only when exact params are ambiguous or after a validation error. For no-parameter list actions, call gitlab directly, for example {"action":"template.dockerfile_list","params":{}}. Schema lookup is itself action-based: call gitlab_server as {"action":"schema_get","params":{"tool":"gitlab","action":"project.get"}} for a unified dispatcher action, or {"action":"schema_index","params":{"tool":"gitlab"}} to inspect available unified actions. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. For subgroup creation with group.create, send params.name, params.path, and params.parent_id. For custom emoji group operations, use custom_emoji.list with params.group_path; do not use group.custom_emoji_list or group_id for a group path. For project access tokens, scope names go in params.scopes as an array, not params.scope, and expiring dates go in params.expires_at. For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id; for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id; use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied. To pause or unpause a runner, use runner.update with params.runner_id and params.paused true or false; do not use project_id, and do not use runner.disable_project unless the user asks to detach a runner from a project. For runner.list_project, use params.project_id by default; add params.status only when the task explicitly asks for online, offline, stale, or never_contacted runners, and never send status all or active. Do not send params.paused, params.type, params.tag_list, or empty filter values for runner.list_project. For broadcast messages, saying maps to params.message, from maps to params.starts_at, and to maps to params.ends_at. For merge request creation, "from" maps to params.source_branch, "into" maps to params.target_branch, and "titled" maps to params.title; never use ref, search, tag_name, to, or value for those fields. For merge request notes or comments, use mr_review.note_create with project_id, merge_request_iid, and body. Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion. For personal snippets, use params.snippet_id; do not use project_id, query, search, sort, or file_path for a personal snippet ID. For job.trace, use params.project_id and params.job_id. For job.play variables, use params.variables as an array like [{"key":"DEPLOY_ENV","value":"staging"}], not an object. For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message; create/update also require params.content. For repository file reads, use repository.file_get with ref; use repository.file_raw only when the user explicitly asks for raw bytes/content. For project badges, "linking to" maps to params.link_url and "with image" maps to params.image_url. When the task only asks for an LLM-assisted analyzer or to analyze why a pipeline failed, call the matching analyze.* action directly without prefetching pipeline, issue, MR, or changes; release notes use analyze.release_notes with project_id, from, and to. If the task asks for inspection, listing, or compare before an analyzer, perform those prerequisites first and call the analyzer last. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true in params when using an action-based tool, or at top level for a standalone destructive tool. If GitLab returns a temporary API/server error, retry the same operation; do not call CI retry actions such as pipeline.retry unless the user asks to rerun failed CI jobs. Return tool calls only; do not answer with explanatory text.`
 }
 
 // systemPromptForTask builds system prompt for task for evaluator prompts.
@@ -5683,14 +5968,14 @@ func systemPromptForTask(task evalTask, toolSurface string) string {
 	}
 	steps := taskSteps(task)
 	if len(steps) == 1 && (usesCompactExactPrompt(steps[0]) || usesExactSingleToolPrompt(task, steps[0])) {
-		return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. Function-call arguments must be one valid JSON object. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. Use domain.action values with the unified gitlab dispatcher. If a task provides a project ID or namespace path, pass it inside params as project_id. Schema lookup counts as an extra tool call; skip it when the prompt provides the exact action and params. For destructive tasks, include confirm:true in params. Return tool calls only; do not answer with explanatory text.`
+		return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. If gitlab_list_resources and gitlab_read_resource are provided, they expose MCP resources/list and resources/read. Function-call arguments must be one valid JSON object. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. Use domain.action values with the unified gitlab dispatcher. If a task provides a project ID or namespace path, pass it inside params as project_id. Schema lookup counts as an extra tool call; skip it when the prompt provides the exact action and params. For destructive tasks, include confirm:true in params. Return tool calls only; do not answer with explanatory text.`
 	}
 	return systemPrompt()
 }
 
 // dynamicSystemPrompt guides models through the low-token dynamic tool surface.
 func dynamicSystemPrompt(_ string) string {
-	return `You are evaluating GitLab MCP dynamic tool mode. Use only the provided tools: gitlab_find_action and gitlab_execute_tool. Catalog GitLab operations are not directly visible as individual tools. Use gitlab_find_action before gitlab_execute_tool whenever the exact canonical action ID or exact params schema is not already known from a prior find result. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}} and only parameter names shown in the input_schema. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the exact canonical action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
+	return `You are evaluating GitLab MCP dynamic tool mode. Use the provided tools only. GitLab operations are executed through gitlab_find_action and gitlab_execute_tool; if gitlab_list_resources and gitlab_read_resource are provided, they expose MCP resources/list and resources/read for inspecting available resources. Catalog GitLab operations are not directly visible as individual tools. Use gitlab_find_action before gitlab_execute_tool whenever the exact canonical action ID or exact params schema is not already known from a prior find result. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}} and only parameter names shown in the input_schema. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the exact canonical action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
 }
 
 // taskPromptForSurface returns task guidance for the selected tool catalog.
@@ -7914,6 +8199,9 @@ func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	if opts.Partition != "" {
 		fmt.Fprintf(b, "Partition: `%s`\n", opts.Partition)
 	}
+	if opts.ExposeResources {
+		fmt.Fprintf(b, "Resource access: `enabled`\n")
+	}
 }
 
 func reportTitle(toolSurface string) string {
@@ -7958,6 +8246,7 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	fmt.Fprintf(&b, "| Action-selection accuracy | %.1f%% |\n", metrics.ActionSelection)
 	fmt.Fprintf(&b, "| First-call validation pass rate | %.1f%% |\n", metrics.FirstPass)
 	fmt.Fprintf(&b, "| Schema lookup use rate | %.1f%% |\n", metrics.SchemaLookup)
+	fmt.Fprintf(&b, "| Resource lookup use rate | %.1f%% |\n", metrics.ResourceLookup)
 	fmt.Fprintf(&b, "| Repair success rate | %.1f%% |\n", metrics.RepairSuccess)
 	fmt.Fprintf(&b, "| Destructive safety | %.1f%% |\n", metrics.DestructiveSafety)
 	fmt.Fprintf(&b, "| Final task success proxy | %.1f%% |\n", metrics.FinalSuccess)
@@ -7972,11 +8261,11 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	fmt.Fprintf(&b, "\n## Task Results\n\n")
 	includeModel := resultsHaveMultipleModels(results)
 	if includeModel {
-		fmt.Fprintf(&b, "| Model | Run | Task | Expected | First final call | Steps | Schema lookup | First pass | Repair | Final success | Calls | Tool calls | Notes |\n")
-		fmt.Fprintf(&b, "| --- | ---: | --- | --- | --- | ---: | --- | --- | --- | --- | ---: | ---: | --- |\n")
+		fmt.Fprintf(&b, "| Model | Run | Task | Expected | First final call | Steps | Schema lookup | Resource lookup | First pass | Repair | Final success | Calls | Tool calls | Resource calls | Notes |\n")
+		fmt.Fprintf(&b, "| --- | ---: | --- | --- | --- | ---: | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- |\n")
 	} else {
-		fmt.Fprintf(&b, "| Run | Task | Expected | First final call | Steps | Schema lookup | First pass | Repair | Final success | Calls | Tool calls | Notes |\n")
-		fmt.Fprintf(&b, "| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | ---: | ---: | --- |\n")
+		fmt.Fprintf(&b, "| Run | Task | Expected | First final call | Steps | Schema lookup | Resource lookup | First pass | Repair | Final success | Calls | Tool calls | Resource calls | Notes |\n")
+		fmt.Fprintf(&b, "| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- |\n")
 	}
 	for _, result := range results {
 		_, _, effectiveFirstPass := effectiveFirstOutcome(result)
@@ -7989,11 +8278,11 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 			repair = boolText(result.RepairSuccess)
 		}
 		if includeModel {
-			fmt.Fprintf(&b, "| `%s` | %d | %s | %s | %s | %d/%d | %s | %s | %s | %s | %d | %d | %s |\n",
-				escapeTable(result.Model), result.Run, result.Task.ID, escapeTable(expectedDisplay(result.Task)), escapeTable(stepDisplay(result.FirstTool, result.FirstAction)), result.CompletedSteps, len(taskSteps(result.Task)), boolText(result.SchemaLookupUsed), boolText(effectiveFirstPass), repair, boolText(result.FinalSuccess), result.ModelCalls, result.ToolCalls, escapeTable(notes))
+			fmt.Fprintf(&b, "| `%s` | %d | %s | %s | %s | %d/%d | %s | %s | %s | %s | %s | %d | %d | %d | %s |\n",
+				escapeTable(result.Model), result.Run, result.Task.ID, escapeTable(expectedDisplay(result.Task)), escapeTable(stepDisplay(result.FirstTool, result.FirstAction)), result.CompletedSteps, len(taskSteps(result.Task)), boolText(result.SchemaLookupUsed), boolText(result.ResourceLookupUsed), boolText(effectiveFirstPass), repair, boolText(result.FinalSuccess), result.ModelCalls, result.ToolCalls, result.ResourceCalls, escapeTable(notes))
 		} else {
-			fmt.Fprintf(&b, "| %d | %s | %s | %s | %d/%d | %s | %s | %s | %s | %d | %d | %s |\n",
-				result.Run, result.Task.ID, escapeTable(expectedDisplay(result.Task)), escapeTable(stepDisplay(result.FirstTool, result.FirstAction)), result.CompletedSteps, len(taskSteps(result.Task)), boolText(result.SchemaLookupUsed), boolText(effectiveFirstPass), repair, boolText(result.FinalSuccess), result.ModelCalls, result.ToolCalls, escapeTable(notes))
+			fmt.Fprintf(&b, "| %d | %s | %s | %s | %d/%d | %s | %s | %s | %s | %s | %d | %d | %d | %s |\n",
+				result.Run, result.Task.ID, escapeTable(expectedDisplay(result.Task)), escapeTable(stepDisplay(result.FirstTool, result.FirstAction)), result.CompletedSteps, len(taskSteps(result.Task)), boolText(result.SchemaLookupUsed), boolText(result.ResourceLookupUsed), boolText(effectiveFirstPass), repair, boolText(result.FinalSuccess), result.ModelCalls, result.ToolCalls, result.ResourceCalls, escapeTable(notes))
 		}
 	}
 	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
@@ -8567,16 +8856,17 @@ func writePerRunMetrics(b *strings.Builder, results []taskResult) {
 	}
 	sort.Ints(runs)
 	fmt.Fprintf(b, "\n## Per-Run Metrics\n\n")
-	fmt.Fprintf(b, "| Run | Tool | Action | First pass | Schema lookup | Repair success | Destructive safety | Final success |\n")
-	fmt.Fprintf(b, "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	fmt.Fprintf(b, "| Run | Tool | Action | First pass | Schema lookup | Resource lookup | Repair success | Destructive safety | Final success |\n")
+	fmt.Fprintf(b, "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, runIndex := range runs {
 		metrics := calculateMetrics(byRun[runIndex])
-		fmt.Fprintf(b, "| %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
+		fmt.Fprintf(b, "| %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
 			runIndex,
 			metrics.ToolSelection,
 			metrics.ActionSelection,
 			metrics.FirstPass,
 			metrics.SchemaLookup,
+			metrics.ResourceLookup,
 			metrics.RepairSuccess,
 			metrics.DestructiveSafety,
 			metrics.FinalSuccess,
@@ -8592,12 +8882,12 @@ func writePerModelMetrics(b *strings.Builder, results []taskResult) {
 	}
 	models := sortedStringKeys(byModel)
 	fmt.Fprintf(b, "\n## Per-Model Metrics\n\n")
-	fmt.Fprintf(b, "| Model | Attempts | Tool | Action | First pass | Schema lookup | Repair success | Destructive safety | Final success |\n")
-	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	fmt.Fprintf(b, "| Model | Attempts | Tool | Action | First pass | Schema lookup | Resource lookup | Repair success | Destructive safety | Final success |\n")
+	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, model := range models {
 		metrics := calculateMetrics(byModel[model])
-		fmt.Fprintf(b, "| `%s` | %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
-			escapeTable(model), len(byModel[model]), metrics.ToolSelection, metrics.ActionSelection, metrics.FirstPass, metrics.SchemaLookup, metrics.RepairSuccess, metrics.DestructiveSafety, metrics.FinalSuccess)
+		fmt.Fprintf(b, "| `%s` | %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
+			escapeTable(model), len(byModel[model]), metrics.ToolSelection, metrics.ActionSelection, metrics.FirstPass, metrics.SchemaLookup, metrics.ResourceLookup, metrics.RepairSuccess, metrics.DestructiveSafety, metrics.FinalSuccess)
 	}
 }
 
@@ -8611,6 +8901,7 @@ func writeUsageSummary(b *strings.Builder, opts options, results []taskResult, d
 	b.WriteString(metricValueTableHeader)
 	fmt.Fprintf(b, metricIntegerValueTableRow, usageModelRequests, summary.ModelCalls)
 	fmt.Fprintf(b, metricIntegerValueTableRow, usageToolCallsEmitted, summary.ToolCalls)
+	fmt.Fprintf(b, metricIntegerValueTableRow, "Resource calls emitted", summary.ResourceCalls)
 	fmt.Fprintf(b, metricIntegerValueTableRow, usageInputTokens, summary.Usage.InputTokens)
 	fmt.Fprintf(b, metricIntegerValueTableRow, usageOutputTokens, summary.Usage.OutputTokens)
 	fmt.Fprintf(b, "| Cache creation input tokens | %d |\n", summary.Usage.CacheCreationInputTokens)
@@ -8634,8 +8925,8 @@ func writePerModelUsage(b *strings.Builder, opts options, results []taskResult) 
 	}
 	models := sortedStringKeys(byModel)
 	fmt.Fprintf(b, "\n### API Usage By Model\n\n")
-	fmt.Fprintf(b, "| Model | Requests | %s | %s | %s | %s |\n", usageToolCalls, usageInputTokens, usageOutputTokens, usageEstimatedCost)
-	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: |\n")
+	fmt.Fprintf(b, "| Model | Requests | %s | Resource calls | %s | %s | %s |\n", usageToolCalls, usageInputTokens, usageOutputTokens, usageEstimatedCost)
+	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, model := range models {
 		summary := aggregateUsage(byModel[model])
 		pricing := resolvePricingForModel(opts, model)
@@ -8643,15 +8934,16 @@ func writePerModelUsage(b *strings.Builder, opts options, results []taskResult) 
 		if pricing.Source != "" {
 			cost = fmt.Sprintf("$%.4f", estimateCostUSD(summary.Usage, pricing.Pricing))
 		}
-		fmt.Fprintf(b, "| `%s` | %d | %d | %d | %d | %s |\n", escapeTable(model), summary.ModelCalls, summary.ToolCalls, summary.Usage.InputTokens, summary.Usage.OutputTokens, cost)
+		fmt.Fprintf(b, "| `%s` | %d | %d | %d | %d | %d | %s |\n", escapeTable(model), summary.ModelCalls, summary.ToolCalls, summary.ResourceCalls, summary.Usage.InputTokens, summary.Usage.OutputTokens, cost)
 	}
 }
 
 // usageSummary captures usage summary data for evaluation summaries.
 type usageSummary struct {
-	Usage      modelUsage
-	ModelCalls int
-	ToolCalls  int
+	Usage         modelUsage
+	ModelCalls    int
+	ToolCalls     int
+	ResourceCalls int
 }
 
 // aggregateUsage aggregates usage across reports.
@@ -8661,6 +8953,7 @@ func aggregateUsage(results []taskResult) usageSummary {
 		summary.Usage.add(result.Usage)
 		summary.ModelCalls += result.ModelCalls
 		summary.ToolCalls += result.ToolCalls
+		summary.ResourceCalls += result.ResourceCalls
 	}
 	return summary
 }
@@ -8745,6 +9038,7 @@ type metrics struct {
 	ActionSelection   float64
 	FirstPass         float64
 	SchemaLookup      float64
+	ResourceLookup    float64
 	RepairSuccess     float64
 	DestructiveSafety float64
 	FinalSuccess      float64
@@ -8755,7 +9049,7 @@ func calculateMetrics(results []taskResult) metrics {
 	if len(results) == 0 {
 		return metrics{}
 	}
-	var toolOK, actionOK, firstOK, lookupOK, destructiveTotal, destructiveOK, finalOK int
+	var toolOK, actionOK, firstOK, lookupOK, resourceLookupOK, destructiveTotal, destructiveOK, finalOK int
 	var repairTotal, repairOK int
 	for _, result := range results {
 		firstToolOK, firstActionOK, firstPassOK := effectiveFirstOutcome(result)
@@ -8770,6 +9064,9 @@ func calculateMetrics(results []taskResult) metrics {
 		}
 		if result.SchemaLookupUsed {
 			lookupOK++
+		}
+		if result.ResourceLookupUsed {
+			resourceLookupOK++
 		}
 		if result.RepairAttempted {
 			repairTotal++
@@ -8792,6 +9089,7 @@ func calculateMetrics(results []taskResult) metrics {
 		ActionSelection:   percent(actionOK, len(results)),
 		FirstPass:         percent(firstOK, len(results)),
 		SchemaLookup:      percent(lookupOK, len(results)),
+		ResourceLookup:    percent(resourceLookupOK, len(results)),
 		RepairSuccess:     percent(repairOK, repairTotal),
 		DestructiveSafety: percent(destructiveOK, destructiveTotal),
 		FinalSuccess:      percent(finalOK, len(results)),

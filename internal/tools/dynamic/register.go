@@ -35,6 +35,7 @@ const (
 	minSegmentTerms              = 3
 	maxSegmentTerms              = 6
 	segmentTermBoost             = 90
+	toolManifestDetailURIBase    = "gitlab://tools/"
 
 	actionAdminBroadcastMessageList = "admin.broadcast_message_list"
 	actionAdminSettingsGet          = "admin.settings_get"
@@ -287,7 +288,7 @@ func newRegistryFromCatalog(catalog *actioncatalog.Catalog, aliases []actionAlia
 			entryAliases := dedupeStrings(append(action.Aliases, searchableAliasNames(compatibilityAliases)...))
 			canonicalAliases := dedupeStrings(append(action.Aliases, aliasNames(compatibilityAliases)...))
 			tags := dedupeStrings(append(action.Tags, actionTags(id, domain, action.Name, route.InputSchema)...))
-			schemaURI := action.SchemaURI
+			schemaURI := toolDetailURIForID(id)
 			document := buildSearchDocument(id, group.ToolName, domain, action.Name, entryAliases, tags, route.InputSchema)
 			entry := actionEntry{
 				ID:             id,
@@ -1494,7 +1495,7 @@ func normalizedLimit(limit int) int {
 }
 
 func describeEntry(entry actionEntry) ActionDescription {
-	inputSchema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: {entry.Action: entry.Route}}, entry.Tool, entry.Action)
+	inputSchema := dynamicInputSchema(entry)
 	return ActionDescription{
 		ID:             entry.ID,
 		Tool:           entry.Tool,
@@ -1510,6 +1511,35 @@ func describeEntry(entry actionEntry) ActionDescription {
 		OutputSchema:   maps.Clone(entry.Route.OutputSchema),
 		Example:        exampleFor(entry, inputSchema),
 	}
+}
+
+func dynamicInputSchema(entry actionEntry) map[string]any {
+	schema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: {entry.Action: entry.Route}}, entry.Tool, entry.Action)
+	if schema == nil {
+		schema = map[string]any{
+			"type":                 "object",
+			"description":          "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise.",
+			"additionalProperties": true,
+		}
+	}
+	if entry.Route.InputSchema == nil {
+		schema["description"] = "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise."
+	}
+	if entry.Destructive {
+		if properties, ok := schema["properties"].(map[string]any); ok {
+			delete(properties, "confirm")
+		}
+		schema["x_destructive"] = true
+		schema["x_confirmation"] = map[string]any{
+			"location":    "gitlab_execute_tool.confirm",
+			"description": "Set top-level confirm=true on gitlab_execute_tool after explicit user approval; do not put confirm inside params.",
+		}
+	}
+	return schema
+}
+
+func toolDetailURIForID(id string) string {
+	return toolManifestDetailURIBase + id
 }
 
 type actionUXMetadata struct {

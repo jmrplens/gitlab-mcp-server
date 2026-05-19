@@ -42,7 +42,7 @@ flowchart LR
         catalog[Canonical action catalog]
         meta[Visible meta-tools\ndomain dispatchers]
         dynamic[Dynamic tools\nfind / execute]
-    schemas[Meta schema resources]
+    manifest[Tool manifest resources]
   docs[Generated docs\nLLM indexes and snapshots]
     audits[Catalog audits\nand snapshots]
 
@@ -51,7 +51,7 @@ flowchart LR
     specs --> catalog
         catalog --> meta
         catalog --> dynamic
-    catalog --> schemas
+    catalog --> manifest
   specs --> docs
     catalog --> audits
   specs --> audits
@@ -222,20 +222,25 @@ client. The relevant policies are:
 
 Dynamic mode builds a filtered catalog before constructing the dynamic registry,
 so search and execute cannot see hidden actions. Meta mode registers visible
-meta-tools from the filtered catalog and then exposes schema resources for the
-visible route set.
+meta-tools from the filtered catalog. After tools are registered, the server
+exposes `gitlab://tools` and `gitlab://tools/{id}` as the public, surface-aware
+manifest for accepted call shapes and input schemas.
 
-## Schema Resources
+## Tool Manifest Resources
 
-Meta and dynamic modes can register meta-schema resources when the capability
-surface is full. The URI format remains:
+Every runtime tool surface registers the same public manifest resources:
 
 ```text
-gitlab://schema/meta/{tool}/{action}
+gitlab://tools
+gitlab://tools/{id}
 ```
 
-Individual mode does not need these resources for action-specific schemas
-because every individual tool already advertises its own tool input schema.
+The manifest payload adapts to the active surface selected at startup. Dynamic
+entries use canonical `domain.action` IDs such as `project.get`; meta entries
+use `{tool}.{action}` IDs such as `gitlab_project.get`; individual entries use
+the direct tool name such as `gitlab_get_project`. Compatibility helpers for
+older `gitlab://schema/*` resources remain isolated in package tests, but they
+are not registered by the production server.
 
 ## Historical Duplication
 
@@ -333,7 +338,7 @@ or override the metadata for that spec.
 3. Ensure the source-defined builder is present in `action_specs_manifest_gen.go` by running `make gen-action-catalog-manifest` or `go run ./cmd/gen_action_catalog_manifest/`.
 4. Keep destructive classification on route/spec metadata, not in dynamic-only code.
 5. Add dynamic search tags or aliases only when natural language discovery is weak and there is evidence from tests, traces, evaluations, or user prompts.
-6. Update tests, generated docs, and schema resources as required.
+6. Update tests, generated docs, and tool manifest expectations as required.
 
 ## ActionSpec Guardrails
 

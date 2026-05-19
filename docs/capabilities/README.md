@@ -52,8 +52,8 @@ server := mcp.NewServer(
 and registers the full prompt/resource catalog. `CAPABILITY_SURFACE=minimal`
 omits the prompt capability and keeps the workspace roots resource while leaving
 tool execution, completions, roots handling, logging, and progress handling
-available. In `TOOL_SURFACE=meta`, minimal also registers meta-schema resources
-for exact action parameter schemas.
+available. Minimal also registers `gitlab://tools` and `gitlab://tools/{id}`
+for exact action call shapes across every tool surface.
 
 Client capabilities (Roots, Sampling, Elicitation) are not declared by the server — they are advertised by the client during the `initialize` handshake. The server checks for their presence at tool execution time via `FromRequest()` helpers.
 

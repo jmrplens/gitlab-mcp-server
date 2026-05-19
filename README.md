@@ -39,13 +39,13 @@ Measured with `go run ./cmd/gen_readme/` against the current base catalog. Total
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          |             2 |               870 | n/a                 |              2,193 |        18,305 |       20,498 |
-| `dynamic` / `minimal`                                 |             2 |               870 | n/a                 |              2,193 |           184 |        2,377 |
-| `meta` / `full`                                       |            34 |               870 | `opaque`            |             66,206 |        18,305 |       84,511 |
-| `meta` / `minimal`                                    |            34 |               870 | `opaque`            |             66,206 |           760 |       66,966 |
-| `individual` / `full`                                 |           866 |               866 | n/a                 |            473,239 |        17,729 |      490,968 |
+| `dynamic` / `full` (default)                          |             2 |               870 | n/a                 |              2,193 |        18,266 |       20,459 |
+| `dynamic` / `minimal`                                 |             2 |               870 | n/a                 |              2,193 |           722 |        2,915 |
+| `meta` / `full`                                       |            34 |               870 | `opaque`            |             66,119 |        18,266 |       84,385 |
+| `meta` / `minimal`                                    |            34 |               870 | `opaque`            |             66,119 |           722 |       66,841 |
+| `individual` / `full`                                 |           866 |               866 | n/a                 |            473,239 |        18,266 |      491,505 |
 
-Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and individual mode already exposes one schema per tool. In `meta` + `minimal`, shared tokens still include meta-schema resources so opaque meta-tools can look up exact action parameter schemas.
+Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.
 
 <!-- END TOKEN FOOTPRINT -->
 
@@ -56,7 +56,7 @@ Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_P
 - **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. Published summaries appear in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
-- **46 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, commits, file blobs, wiki pages, MR notes, MR discussions, meta-tool JSON Schemas, single-entity templates (issue, MR, branch, tag, release, label, milestone, commit, wiki page, deployment, environment, job, board, snippet, deploy key, feature flag, group label, group milestone), workspace roots, and 5 workflow best-practice guides
+- **48 MCP resources** in default dynamic/full mode — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, commits, file blobs, wiki pages, MR notes, MR discussions, dynamic action catalog JSON Schemas, meta-tool JSON Schemas, single-entity templates (issue, MR, branch, tag, release, label, milestone, commit, wiki page, deployment, environment, job, board, snippet, deploy key, feature flag, group label, group milestone), workspace roots, and 5 workflow best-practice guides
 - **37 MCP prompts** — AI-optimized: code review, pipeline status, risk assessment, release notes, standup, workload, user stats, team management, cross-project dashboards, analytics, milestones, Git workflow quality, audit
 - **6 MCP capabilities** — logging, completions, roots, progress, sampling, elicitation
 - **50 tool icons** — base64-encoded SVG icons (`Sizes: ["any"]`) on all tools, resources, and prompts for visual identification in MCP clients
@@ -250,7 +250,7 @@ Three registration modes, controlled by `TOOL_SURFACE`:
 | **Meta-Tools**                | 33 base GitLab/interactive tools; `gitlab_server` is a separate maintenance helper | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
 | **Individual**                | 866 CE / 1017 self-managed enterprise / 1022 GitLab.com Enterprise                 | Every GitLab operation as a separate MCP tool.                                                                                                                    |
 
-For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Dynamic minimal keeps only `gitlab://workspace/roots`; meta minimal keeps workspace roots plus meta-schema resources so opaque meta-tools can still read exact action schemas. The default remains `full`.
+For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Dynamic minimal keeps `gitlab://workspace/roots` plus dynamic schema resources; meta minimal keeps workspace roots plus meta-schema resources so opaque meta-tools can still read exact action schemas. The default remains `full`.
 
 Dynamic mode is now the default low-token find/execute surface; see [Dynamic Toolset](docs/dynamic-tools.md) for the field-aware ranking model, fuzzy fallback, response shapes, workflow diagrams, and migration guidance. Set `TOOL_SURFACE=meta` to use the consolidated domain meta-tool catalog.
 
@@ -418,39 +418,39 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       855 |     143,307 |
-| Unit tests (`_test.go`)  |       449 |     245,636 |
-| End-to-end tests         |       111 |      24,416 |
-| **Total**                | **1,415** | **413,359** |
+| Source (`.go`, non-test) |       857 |     144,081 |
+| Unit tests (`_test.go`)  |       451 |     245,998 |
+| End-to-end tests         |       111 |      24,452 |
+| **Total**                | **1,419** | **414,531** |
 
 ### Functions
 
-| Category                        | Count |
-| ------------------------------- | ----: |
-| Source functions                | 5,674 |
-| — exported (public)             | 2,398 |
-| — unexported (private)          | 3,276 |
-| Unit test functions (`TestXxx`) | 9,994 |
-| Subtests (`t.Run(...)`)         | 2,194 |
-| End-to-end test functions       |   252 |
+| Category                        |  Count |
+| ------------------------------- | -----: |
+| Source functions                |  5,710 |
+| — exported (public)             |  2,400 |
+| — unexported (private)          |  3,310 |
+| Unit test functions (`TestXxx`) | 10,000 |
+| Subtests (`t.Run(...)`)         |  2,195 |
+| End-to-end test functions       |    252 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.71× more tests than code |
-| Average source file length         |                 ~167 lines |
-| Average test file length           |                 ~547 lines |
-| Comment lines in source            |   11,808 (~8.2% of source) |
+| Average source file length         |                 ~168 lines |
+| Average test file length           |                 ~545 lines |
+| Comment lines in source            |   11,826 (~8.2% of source) |
 | Test functions per source function |                       1.8× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 5,962 |
+| `if err != nil` checks             | 5,975 |
 | `defer` statements                 |   759 |
-| `struct` types defined             | 2,220 |
+| `struct` types defined             | 2,231 |
 | `//nolint` suppressions            |    46 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
@@ -461,7 +461,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   210 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   152 |
+| Git commits                    |   154 |
 | Unique contributors            |     2 |
 
 ### Hall of fame
@@ -475,8 +475,8 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~2,605 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 8,338 (impossible to avoid)                                                                          |
+| Source code printed at 55 lines/page | ~2,619 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 8,361 (impossible to avoid)                                                                          |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

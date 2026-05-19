@@ -183,18 +183,18 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 
 **Orchestration files** in `internal/tools/`:
 
-| File                | Purpose                                                                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `register.go`       | `RegisterAll()` — builds the canonical catalog and registers the individual tool projection                                                |
-| `register_meta.go`  | `RegisterAllMeta()` — builds the canonical catalog and registers visible meta-tool groups plus approved standalone surfaces                |
-| `action_catalog.go` | `BuildActionCatalog()` — builds the canonical action catalog shared by meta-tools, dynamic tools, schema resources, audits, and generators |
-| `meta_catalog.go`   | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog                                                   |
-| `actioncatalog/`    | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters                                                 |
-| `metatool.go`       | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`                                                        |
-| `markdown.go`       | Thin `markdownForResult` delegator to the type-based Markdown registry                                                                     |
-| `pagination.go`     | Shared pagination type aliases                                                                                                             |
-| `errors.go`         | Error helpers (`wrapErr`, `handleGitLabError`)                                                                                             |
-| `logging.go`        | `logToolCall` helper                                                                                                                       |
+| File                | Purpose                                                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `register.go`       | `RegisterAll()` — builds the canonical catalog and registers the individual tool projection                                                 |
+| `register_meta.go`  | `RegisterAllMeta()` — builds the canonical catalog and registers visible meta-tool groups plus approved standalone surfaces                 |
+| `action_catalog.go` | `BuildActionCatalog()` — builds the canonical action catalog shared by meta-tools, dynamic tools, the tool manifest, audits, and generators |
+| `meta_catalog.go`   | `RegisterMetaCatalog()` — registers visible meta-tools from the canonical action catalog                                                    |
+| `actioncatalog/`    | Canonical catalog data model, deterministic ordering, action lookup, adapters, and filters                                                  |
+| `metatool.go`       | Re-exports from `toolutil`: `makeMetaHandler`, `addMetaTool`, `addReadOnlyMetaTool`                                                         |
+| `markdown.go`       | Thin `markdownForResult` delegator to the type-based Markdown registry                                                                      |
+| `pagination.go`     | Shared pagination type aliases                                                                                                              |
+| `errors.go`         | Error helpers (`wrapErr`, `handleGitLabError`)                                                                                              |
+| `logging.go`        | `logToolCall` helper                                                                                                                        |
 
 **Representative `internal/tools` package groups** (172 packages total):
 
@@ -269,7 +269,7 @@ Shared helpers for unit testing with httptest mocks:
 
 The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 29 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 33 base GitLab/interactive tools total. The Enterprise/Premium catalog adds 16 enterprise inline meta-tools, bringing the self-managed total to 49; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 50. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
 
-Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, meta-schema resources, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
+Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, the `gitlab://tools` manifest, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
 
 ```mermaid
 sequenceDiagram
@@ -345,15 +345,15 @@ See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety beha
 
 ### Resources (`internal/resources`)
 
-46 read-only MCP resources accessed by URI templates. Resources provide contextual data without modifying state:
+46 read-only MCP resources in the default dynamic/full surface, accessed by URI templates. Resources provide contextual data without modifying state:
 
 | Resource                       | URI                                          | Description                         |
 | ------------------------------ | -------------------------------------------- | ----------------------------------- |
 | Current User                   | `gitlab://user/current`                      | Authenticated user profile          |
 | Groups                         | `gitlab://groups`                            | Accessible groups list              |
 | Workspace Roots                | `gitlab://workspace/roots`                   | Client workspace root directories   |
-| Meta Schema                    | `gitlab://schema/meta/`                      | Registered meta-tool action index   |
-| Meta Action                    | `gitlab://schema/meta/{tool}/{action}`       | JSON Schema for action params       |
+| Tool Manifest                  | `gitlab://tools`                             | Active surface tool/action manifest |
+| Tool Detail                    | `gitlab://tools/{id}`                        | Call shape and input schema by ID   |
 | Group                          | `gitlab://group/{id}`                        | Group details by ID                 |
 | Group Members                  | `gitlab://group/{id}/members`                | Group members with access levels    |
 | Group Projects                 | `gitlab://group/{id}/projects`               | Projects within a group             |

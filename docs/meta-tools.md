@@ -289,40 +289,42 @@ If the MCP client supports elicitation, the server will ask for user confirmatio
 
 Meta-tools advertise a deliberately compact input schema by default (`META_PARAM_SCHEMA=opaque`): the LLM sees the `action` enum and an opaque `params` object. To discover the exact `params` shape for a chosen action, two mechanisms are available:
 
-1. **MCP Resource** (recommended with `CAPABILITY_SURFACE=full`) — read the per-action JSON Schema:
+1. **MCP Resource** (recommended with `CAPABILITY_SURFACE=full`) — read the per-action call shape and JSON Schema:
 
    ```text
-   gitlab://schema/meta/{tool}/{action}
+   gitlab://tools/{tool}.{action}
    ```
 
-   For example, `gitlab://schema/meta/gitlab_merge_request/create` returns the JSON Schema for the `create` action's `params`. The `gitlab://schema/meta/` index resource enumerates every registered meta-tool and its actions.
+   For example, `gitlab://tools/gitlab_merge_request.create` returns the call shape and JSON Schema for the `create` action's `params`. The `gitlab://tools` manifest enumerates every visible meta-tool action in the active server configuration.
 
-   The index resource returns a JSON object with the URI template and the action catalog visible for the current server configuration:
+   The manifest resource returns a JSON object with the URI template, visible tools, and action entries for the current server configuration:
 
    ```json
    {
-     "uri_template": "gitlab://schema/meta/{tool}/{action}",
-     "tools": [
+     "surface": "meta",
+     "uri_template": "gitlab://tools/{id}",
+     "entries": [
        {
          "tool": "gitlab_merge_request",
-         "actions": ["create", "get", "list", "merge"]
+         "id": "gitlab_merge_request.create",
+         "action": "create"
        }
      ]
    }
    ```
 
-   After choosing a tool/action pair, read the concrete resource for that action. For example:
+   After choosing a tool/action pair, read the concrete detail resource for that action. For example:
 
    ```json
    {
      "method": "resources/read",
      "params": {
-       "uri": "gitlab://schema/meta/gitlab_merge_request/create"
+       "uri": "gitlab://tools/gitlab_merge_request.create"
      }
    }
    ```
 
-   The response content is the JSON Schema for the `params` object only. The final tool call still uses the common meta-tool envelope:
+   The response content includes the JSON Schema for the `params` object and the common meta-tool envelope expected for the final tool call:
 
    ```json
    {
@@ -336,7 +338,7 @@ Meta-tools advertise a deliberately compact input schema by default (`META_PARAM
    }
    ```
 
-  These resources remain available for meta-tools when `CAPABILITY_SURFACE=minimal` is enabled, while optional resources, prompts, and workflow guides are omitted. Dynamic surfaces should use `gitlab_find_action` for inline schemas in minimal mode; meta-tool callers can keep `META_PARAM_SCHEMA=opaque` and read the schema resources below.
+  These resources remain available for meta-tools when `CAPABILITY_SURFACE=minimal` is enabled, while optional GitLab data resources, prompts, and workflow guides are omitted. Dynamic surfaces can use `gitlab_find_action` for inline schemas in minimal mode; meta-tool callers can keep `META_PARAM_SCHEMA=opaque` and read `gitlab://tools/{id}` for exact params.
 
 1. **Embed schemas in the tool description** — set `META_PARAM_SCHEMA=full` (or the lighter `compact` mode) at startup. The meta-tool's `inputSchema` then exposes a `oneOf` discriminating on `action`, with the per-action params shape inlined. Current audit metrics show `full` is 11.9x larger than `opaque`, and `compact` is 6.5x larger, so keep `opaque` unless your MCP client cannot read resources. See [env-reference.md](env-reference.md) for size/cost trade-offs.
 

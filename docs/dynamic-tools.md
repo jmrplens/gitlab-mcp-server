@@ -63,7 +63,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` and omits optional resources, prompts, workflow guides, and meta-schema resources. Dynamic execution still works because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
+`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` plus the surface-aware tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional GitLab data resources, prompts, and workflow guides. Dynamic execution still works without reading resources because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` does not affect the visible dynamic tool schemas; leave it at the default `opaque` for dynamic deployments.
 
 ## User Workflow
 
@@ -108,7 +108,7 @@ Find returns a ranked shortlist of catalog actions with exact schemas inline. Th
       "tool": "gitlab_merge_request",
       "domain": "merge_request",
       "action": "list",
-      "schema_uri": "gitlab://schema/meta/gitlab_merge_request/list",
+      "schema_uri": "gitlab://tools/merge_request.list",
       "destructive": false,
       "required_params": ["project_id"],
       "input_schema": {
@@ -174,6 +174,17 @@ The response is the existing action response: the same Markdown and structured r
 ```
 
 A result contains canonical action IDs such as `merge_request.list`, backing meta-tool names, domains, action names, schema URIs, destructive metadata, required params, usage hints, scores, exact input schemas, and executable examples.
+
+### Optional Action Catalog Resources
+
+Dynamic mode also exposes read-only resources for clients that want a browseable catalog without increasing the visible tool count:
+
+| Resource              | Purpose                                                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab://tools`      | Surface-aware manifest listing the visible dynamic tools and every canonical `domain.action` ID available in the current filtered dynamic catalog |
+| `gitlab://tools/{id}` | Accepted call shape and input schema for one canonical action ID, for example `gitlab://tools/project.get`                                        |
+
+These resources are available for every tool surface, including `CAPABILITY_SURFACE=minimal`; their payload adapts to the active surface selected at startup. They are optional: use `gitlab_find_action` for ranked discovery and inline schemas when the task is expressed in natural language; read `gitlab://tools` when you explicitly need to enumerate available actions.
 
 ### Execute
 
@@ -300,15 +311,15 @@ Prefer compact metadata that teaches the distinction rather than broad synonyms 
 
 ## Dynamic vs Meta-Tools
 
-| Concern              | Meta-tools                                                                       | Dynamic toolset                                    |
-| -------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Initial tool count   | 33/49/50                                                                         | 2                                                  |
-| Model selection      | Choose a domain tool and action                                                  | Find an action with schema, execute                |
-| Schema discovery     | `action` enum plus optional schema resources or `META_PARAM_SCHEMA=compact/full` | `gitlab_find_action` returns action schemas inline |
-| Minimal capabilities | Loses meta-schema resources and prompts                                          | Keeps action schema discovery through find         |
-| Compatibility        | Explicit consolidated-dispatcher mode                                            | Default low-token mode                             |
-| Failure mode         | Wrong domain/action choice                                                       | Skipped find or wrong action ID                    |
-| Rollback             | Switch to `TOOL_SURFACE=meta`                                                    | Default path                                       |
+| Concern              | Meta-tools                                                                   | Dynamic toolset                                    |
+| -------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
+| Initial tool count   | 33/49/50                                                                     | 2                                                  |
+| Model selection      | Choose a domain tool and action                                              | Find an action with schema, execute                |
+| Schema discovery     | `action` enum plus `gitlab://tools/{id}` or `META_PARAM_SCHEMA=compact/full` | `gitlab_find_action` returns action schemas inline |
+| Minimal capabilities | Keeps `gitlab://tools` and omits optional prompts and data resources         | Keeps action schema discovery through find         |
+| Compatibility        | Explicit consolidated-dispatcher mode                                        | Default low-token mode                             |
+| Failure mode         | Wrong domain/action choice                                                   | Skipped find or wrong action ID                    |
+| Rollback             | Switch to `TOOL_SURFACE=meta`                                                | Default path                                       |
 
 Dynamic mode is the default for low-token clients, evaluations, and deployments that benefit from compact progressive discovery. Meta-tools remain available for clients that prefer explicit domain dispatchers.
 
@@ -334,7 +345,7 @@ For the broader developer architecture of individual tools, meta-tools, dynamic 
 
 ### Registering New Actions
 
-Add or change GitLab actions by updating the owning typed handler and its `ActionSpec` entry, using typed route constructors such as `RouteAction`, `RouteActionWithRequest`, `DestructiveAction`, and their void variants. Do not add dynamic-only action definitions for normal GitLab operations. Once the action is in the canonical catalog, meta-tools expose it as a domain `action`, dynamic discovery can find it by canonical `domain.action` ID, `gitlab_find_action` can return its exact schema, and full capability surfaces can expose `gitlab://schema/meta/{tool}/{action}` schema resources.
+Add or change GitLab actions by updating the owning typed handler and its `ActionSpec` entry, using typed route constructors such as `RouteAction`, `RouteActionWithRequest`, `DestructiveAction`, and their void variants. Do not add dynamic-only action definitions for normal GitLab operations. Once the action is in the canonical catalog, meta-tools expose it as a domain `action`, dynamic discovery can find it by canonical `domain.action` ID, `gitlab_find_action` can return its exact schema, and `gitlab://tools` can expose the accepted call shape for the active surface.
 
 Standalone dynamic helpers such as project discovery are the exception: add them in `internal/tools/dynamic/standalone.go` only when they are not normal meta-tool actions.
 

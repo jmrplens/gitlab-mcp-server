@@ -1028,8 +1028,7 @@ func TestCreateServer_MetaToolsEnabled(t *testing.T) {
 }
 
 // TestCreateServer_DynamicToolSurface verifies that the default low-token
-// dynamic surface exposes find and execute while still advertising meta-schema
-// resources for the catalog-backed action registry.
+// dynamic surface exposes find and execute plus surface-aware catalog resources.
 func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	client := newMockGitLabClient(t)
 	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic})
@@ -1055,9 +1054,9 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 		}
 	}
 
-	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/project.get"})
 	if err != nil {
-		t.Fatalf("dynamic surface should expose catalog action schema resources: %v", err)
+		t.Fatalf("dynamic surface should expose tool manifest detail resources: %v", err)
 	}
 }
 
@@ -1107,9 +1106,9 @@ func TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities(t *testing.T) {
 	}
 }
 
-// TestCreateServer_CapabilitySurfaceParity verifies that resource, prompt, and
-// meta-schema exposure follows CAPABILITY_SURFACE consistently across
-// catalog-backed tool surfaces.
+// TestCreateServer_CapabilitySurfaceParity verifies that resource and prompt
+// exposure follows CAPABILITY_SURFACE consistently across catalog-backed tool
+// surfaces while action schemas are served through gitlab://tools.
 func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 	client := newMockGitLabClient(t)
 	testCases := []struct {
@@ -1117,12 +1116,13 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 		toolSurface       string
 		capabilitySurface string
 		wantFullCatalog   bool
-		wantSchema        bool
 	}{
-		{name: "meta full", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
-		{name: "meta minimal", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceMinimal, wantSchema: true},
-		{name: "dynamic full", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true, wantSchema: true},
+		{name: "meta full", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true},
+		{name: "meta minimal", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceMinimal},
+		{name: "dynamic full", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true},
 		{name: "dynamic minimal", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceMinimal},
+		{name: "individual full", toolSurface: config.ToolSurfaceIndividual, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true},
+		{name: "individual minimal", toolSurface: config.ToolSurfaceIndividual, capabilitySurface: config.CapabilitySurfaceMinimal},
 	}
 
 	for _, tc := range testCases {
@@ -1141,6 +1141,9 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 			if !resourceListHasURI(resourcesResult.Resources, "gitlab://workspace/roots") {
 				t.Fatalf("resources = %+v, want workspace roots", resourcesResult.Resources)
 			}
+			if !resourceListHasURI(resourcesResult.Resources, "gitlab://tools") {
+				t.Fatalf("resources = %+v, want tool manifest", resourcesResult.Resources)
+			}
 			if tc.wantFullCatalog {
 				for _, uri := range []string{"gitlab://user/current", "gitlab://guides/git-workflow"} {
 					if !resourceListHasURI(resourcesResult.Resources, uri) {
@@ -1148,40 +1151,41 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 					}
 				}
 			} else {
-				wantResourceCount := 1
-				if tc.wantSchema {
-					wantResourceCount++
-				}
+				wantResourceCount := 2
 				if len(resourcesResult.Resources) != wantResourceCount {
 					t.Fatalf("minimal resources = %+v, want %d resources", resourcesResult.Resources, wantResourceCount)
 				}
+			}
+			if resourceListHasURI(resourcesResult.Resources, "gitlab://schema/meta/") || resourceListHasURI(resourcesResult.Resources, "gitlab://schema/dynamic/") {
+				t.Fatalf("resources should expose gitlab://tools instead of legacy schema indexes: %+v", resourcesResult.Resources)
 			}
 
 			templatesResult, err := session.ListResourceTemplates(t.Context(), nil)
 			if err != nil {
 				t.Fatalf("ListResourceTemplates() error = %v", err)
 			}
-			hasSchemaTemplate := resourceTemplateListHasURI(templatesResult.ResourceTemplates, "gitlab://schema/meta/{tool}/{action}")
-			if tc.wantSchema && !hasSchemaTemplate {
-				t.Fatalf("resource templates missing meta schema template: %+v", templatesResult.ResourceTemplates)
+			if !resourceTemplateListHasURI(templatesResult.ResourceTemplates, "gitlab://tools/{id}") {
+				t.Fatalf("resource templates missing tool manifest template: %+v", templatesResult.ResourceTemplates)
 			}
-			if !tc.wantSchema && hasSchemaTemplate {
-				t.Fatalf("minimal resource templates unexpectedly include meta schema: %+v", templatesResult.ResourceTemplates)
+			if resourceTemplateListHasURI(templatesResult.ResourceTemplates, "gitlab://schema/meta/{tool}/{action}") || resourceTemplateListHasURI(templatesResult.ResourceTemplates, "gitlab://schema/dynamic/{action}") {
+				t.Fatalf("resource templates should expose gitlab://tools/{id} instead of legacy schema templates: %+v", templatesResult.ResourceTemplates)
 			}
-			wantTemplateCount := 0
-			if tc.wantSchema {
-				wantTemplateCount = 1
-			}
+			wantTemplateCount := 1
 			if !tc.wantFullCatalog && len(templatesResult.ResourceTemplates) != wantTemplateCount {
 				t.Fatalf("minimal resource templates = %+v, want %d", templatesResult.ResourceTemplates, wantTemplateCount)
 			}
 
 			_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
-			if tc.wantSchema && err != nil {
-				t.Fatalf("meta-schema resource should be readable: %v", err)
+			if err == nil {
+				t.Fatal("server should omit legacy meta-schema resources")
 			}
-			if !tc.wantSchema && err == nil {
-				t.Fatal("capability surface should omit meta-schema resources")
+			_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/dynamic/project.get"})
+			if err == nil {
+				t.Fatal("server should omit legacy dynamic-schema resources")
+			}
+			_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: manifestDetailURIForSurface(tc.toolSurface)})
+			if err != nil {
+				t.Fatalf("tool manifest detail should be readable: %v", err)
 			}
 
 			assertPromptSurface(t, session, tc.wantFullCatalog)
@@ -1189,39 +1193,6 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 		})
 	}
 }
-
-// TestShouldRegisterMetaSchemaResources verifies meta-schema resources are
-// registered only for catalog surfaces that can execute action routes.
-//
-// The table covers full and minimal capability surfaces across meta, dynamic,
-// and individual tool modes. Meta and dynamic modes should expose schema
-// resources when appropriate; individual mode should not because it already has
-// per-tool schemas.
-func TestShouldRegisterMetaSchemaResources(t *testing.T) {
-	testCases := []struct {
-		name              string
-		capabilitySurface string
-		toolSurface       string
-		want              bool
-	}{
-		{name: "full meta", capabilitySurface: config.CapabilitySurfaceFull, toolSurface: config.ToolSurfaceMeta, want: true},
-		{name: "full dynamic", capabilitySurface: config.CapabilitySurfaceFull, toolSurface: config.ToolSurfaceDynamic, want: true},
-		{name: "full individual", capabilitySurface: config.CapabilitySurfaceFull, toolSurface: config.ToolSurfaceIndividual},
-		{name: "minimal meta", capabilitySurface: config.CapabilitySurfaceMinimal, toolSurface: config.ToolSurfaceMeta, want: true},
-		{name: "minimal dynamic", capabilitySurface: config.CapabilitySurfaceMinimal, toolSurface: config.ToolSurfaceDynamic},
-		{name: "minimal individual", capabilitySurface: config.CapabilitySurfaceMinimal, toolSurface: config.ToolSurfaceIndividual},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := shouldRegisterMetaSchemaResources(tc.capabilitySurface, tc.toolSurface)
-			if got != tc.want {
-				t.Fatalf("shouldRegisterMetaSchemaResources(%q, %q) = %v, want %v", tc.capabilitySurface, tc.toolSurface, got, tc.want)
-			}
-		})
-	}
-}
-
 func resourceListHasURI(items []*mcp.Resource, uri string) bool {
 	for _, item := range items {
 		if item.URI == uri {
@@ -1238,6 +1209,17 @@ func resourceTemplateListHasURI(items []*mcp.ResourceTemplate, uri string) bool 
 		}
 	}
 	return false
+}
+
+func manifestDetailURIForSurface(toolSurface string) string {
+	switch toolSurface {
+	case config.ToolSurfaceDynamic:
+		return "gitlab://tools/project.get"
+	case config.ToolSurfaceMeta:
+		return "gitlab://tools/gitlab_project.get"
+	default:
+		return "gitlab://tools/gitlab_project_get"
+	}
 }
 
 func assertPromptSurface(t *testing.T, session *mcp.ClientSession, wantPrompts bool) {
@@ -1311,9 +1293,10 @@ func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
 	}
 }
 
-// TestCreateServer_MetaSchemaResourcesFollowMetaMode verifies that the
-// per-action schema resources are only advertised when meta-tools are active.
-func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
+// TestCreateServer_ToolManifestResourcesFollowToolMode verifies that the
+// unified tool manifest is advertised for every tool surface while legacy
+// schema templates are not exposed.
+func TestCreateServer_ToolManifestResourcesFollowToolMode(t *testing.T) {
 	client := newMockGitLabClient(t)
 
 	individual := mustCreateServer(t, client, &config.ServerConfig{MetaTools: false})
@@ -1327,6 +1310,9 @@ func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
 			t.Fatal("individual mode should not advertise meta-tool schema resources")
 		}
 	}
+	if !resourceTemplateListHasURI(individualTemplates.ResourceTemplates, "gitlab://tools/{id}") {
+		t.Fatal("individual mode should advertise tool manifest detail resources")
+	}
 
 	meta := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true})
 	metaSession := newInMemorySession(t, meta)
@@ -1334,22 +1320,20 @@ func TestCreateServer_MetaSchemaResourcesFollowMetaMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListResourceTemplates meta: %v", err)
 	}
-	var found bool
 	for _, tpl := range metaTemplates.ResourceTemplates {
 		if tpl.URITemplate == "gitlab://schema/meta/{tool}/{action}" {
-			found = true
-			break
+			t.Fatal("meta mode should not advertise legacy meta-tool schema resources")
 		}
 	}
-	if !found {
-		t.Fatal("meta mode should advertise meta-tool schema resources")
+	if !resourceTemplateListHasURI(metaTemplates.ResourceTemplates, "gitlab://tools/{id}") {
+		t.Fatal("meta mode should advertise tool manifest detail resources")
 	}
 }
 
-// TestCreateServer_MetaSchemaRoutesFollowVisibleTools verifies that schema
-// resources mirror the post-filter tool catalog instead of the global route
+// TestCreateServer_ToolManifestRoutesFollowVisibleTools verifies that manifest
+// entries mirror the post-filter tool catalog instead of the global route
 // registry populated during registration.
-func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
+func TestCreateServer_ToolManifestRoutesFollowVisibleTools(t *testing.T) {
 	client := newMockGitLabClient(t)
 	cfg := &config.ServerConfig{
 		MetaTools:    true,
@@ -1358,47 +1342,47 @@ func TestCreateServer_MetaSchemaRoutesFollowVisibleTools(t *testing.T) {
 	server := mustCreateServer(t, client, cfg)
 	session := newInMemorySession(t, server)
 
-	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/"})
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"})
 	if err != nil {
-		t.Fatalf("ReadResource index: %v", err)
+		t.Fatalf("ReadResource tool manifest: %v", err)
 	}
-	var index resources.MetaSchemaIndex
-	if unmarshalErr := json.Unmarshal([]byte(result.Contents[0].Text), &index); unmarshalErr != nil {
-		t.Fatalf("unmarshal index: %v", unmarshalErr)
+	var manifest resources.ToolSurfaceManifest
+	if unmarshalErr := json.Unmarshal([]byte(result.Contents[0].Text), &manifest); unmarshalErr != nil {
+		t.Fatalf("unmarshal manifest: %v", unmarshalErr)
 	}
-	for _, entry := range index.Tools {
+	for _, entry := range manifest.Entries {
 		if entry.Tool == "gitlab_runner" {
-			t.Fatal("excluded meta-tool should not appear in schema index")
+			t.Fatal("excluded meta-tool should not appear in tool manifest")
 		}
 	}
 
-	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_runner/list"})
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/gitlab_runner.list"})
 	if err == nil {
-		t.Fatal("excluded meta-tool schema should not be readable")
+		t.Fatal("excluded meta-tool manifest detail should not be readable")
 	}
-	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_merge_request/create"})
+	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/gitlab_merge_request.create"})
 	if err != nil {
-		t.Fatalf("visible meta-tool schema should be readable: %v", err)
+		t.Fatalf("visible meta-tool manifest detail should be readable: %v", err)
 	}
 }
 
-// TestCreateServer_MetaSchemaRoutesAreServerScoped verifies that schema
-// resources keep the route set captured for their own server even if another
+// TestCreateServer_ToolManifestRoutesAreServerScoped verifies that manifest
+// entries keep the route set captured for their own server even if another
 // server registers a different CE/Enterprise catalog later in the same process.
-func TestCreateServer_MetaSchemaRoutesAreServerScoped(t *testing.T) {
+func TestCreateServer_ToolManifestRoutesAreServerScoped(t *testing.T) {
 	client := newMockGitLabClient(t)
 	ceServer := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Enterprise: false})
 	ceSession := newInMemorySession(t, ceServer)
 
 	_ = mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, Enterprise: true})
 
-	_, err := ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/push_rule_get"})
+	_, err := ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/gitlab_project.push_rule_get"})
 	if err == nil {
-		t.Fatal("CE server should not expose enterprise-only project action schema")
+		t.Fatal("CE server should not expose enterprise-only project action detail")
 	}
-	_, err = ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
+	_, err = ceSession.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/gitlab_project.get"})
 	if err != nil {
-		t.Fatalf("CE server should still expose common project action schema: %v", err)
+		t.Fatalf("CE server should still expose common project action detail: %v", err)
 	}
 }
 
@@ -1432,10 +1416,10 @@ func TestCreateServer_FilteringModes(t *testing.T) {
 	}
 }
 
-// TestCreateServer_MetaSchemaRouteFilterError verifies createServer remains
-// usable when the best-effort visible-tool inspection for schema resources
+// TestCreateServer_ToolManifestInspectionError verifies createServer remains
+// usable when the best-effort visible-tool inspection for the tool manifest
 // fails, covering the defensive warning path.
-func TestCreateServer_MetaSchemaRouteFilterError(t *testing.T) {
+func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
 	client := newMockGitLabClient(t)
 	original := listRegisteredToolsForInspection
 	listRegisteredToolsForInspection = func(_ *mcp.Server, _ string) ([]*mcp.Tool, error) {
@@ -1445,8 +1429,11 @@ func TestCreateServer_MetaSchemaRouteFilterError(t *testing.T) {
 
 	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true})
 	session := newInMemorySession(t, server)
-	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/"}); err != nil {
-		t.Fatalf("schema index should still be readable after filter error: %v", err)
+	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://workspace/roots"}); err != nil {
+		t.Fatalf("workspace roots should still be readable after manifest inspection error: %v", err)
+	}
+	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"}); err == nil {
+		t.Fatal("tool manifest should be omitted when inspection fails")
 	}
 }
 

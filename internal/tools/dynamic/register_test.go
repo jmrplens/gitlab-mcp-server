@@ -751,8 +751,17 @@ func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 	if _, ok := action.InputSchema["x_destructive"]; !ok {
 		t.Fatalf("InputSchema missing x_destructive: %+v", action.InputSchema)
 	}
+	if confirmation, ok := action.InputSchema["x_confirmation"].(map[string]any); !ok || confirmation["location"] != "gitlab_execute_tool.confirm" {
+		t.Fatalf("InputSchema x_confirmation = %+v, want dynamic top-level confirm guidance", action.InputSchema["x_confirmation"])
+	}
+	if _, hasConfirmParam := schemaProperties(action.InputSchema)["confirm"]; hasConfirmParam {
+		t.Fatalf("InputSchema includes params.confirm for dynamic action: %+v", action.InputSchema)
+	}
 	if action.Example.Arguments["confirm"] != true {
 		t.Fatalf("example missing confirm param: %+v", action.Example)
+	}
+	if action.SchemaURI != "gitlab://tools/project.delete" {
+		t.Fatalf("SchemaURI = %q, want tool detail URI", action.SchemaURI)
 	}
 }
 
@@ -2306,6 +2315,65 @@ func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 		t.Fatalf("gitlab_execute_tool output schema = %v, want open object schema", executeOutputSchema)
 	}
 	assertSchemaHasProperties(t, executeOutputSchema, "next_steps", "pagination")
+}
+
+// TestRegisterCatalogFindExecuteTools_FindAcceptsNaturalLanguageAndReturnsSchema
+// verifies that the registered MCP tool accepts plain search phrases and returns
+// the schema payload needed for the next execute call.
+func TestRegisterCatalogFindExecuteTools_FindAcceptsNaturalLanguageAndReturnsSchema(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
+	RegisterCatalogFindExecuteTools(server, actioncatalog.FromActionMaps(testRoutes(t)))
+
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { serverSession.Close() })
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "dynamic-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: findToolName,
+		Arguments: map[string]any{
+			"query": "please remove a project",
+			"limit": 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(gitlab_find_action) error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("CallTool(gitlab_find_action) result = %+v, want non-error", result)
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("CallTool(gitlab_find_action) StructuredContent is nil")
+	}
+
+	data := unmarshalStructuredContentMap(t, result.StructuredContent)
+	results, ok := data["results"].([]any)
+	if !ok || len(results) == 0 {
+		t.Fatalf("StructuredContent results = %+v, want at least one match", data["results"])
+	}
+	first, ok := results[0].(map[string]any)
+	if !ok {
+		t.Fatalf("first result = %+v, want object", results[0])
+	}
+	if first["id"] != "project.delete" || first["schema_uri"] != "gitlab://tools/project.delete" {
+		t.Fatalf("first result = %+v, want project.delete with tool manifest schema URI", first)
+	}
+	if _, ok := first["input_schema"].(map[string]any); !ok {
+		t.Fatalf("first input_schema = %+v, want schema object", first["input_schema"])
+	}
+	example, ok := first["example"].(map[string]any)
+	if !ok || example["tool"] != executeToolName {
+		t.Fatalf("first example = %+v, want gitlab_execute_tool", first["example"])
+	}
 }
 
 // TestRegisterCatalogFindExecuteTools_ExecuteOutputSchemaAcceptsActionOutput verifies that

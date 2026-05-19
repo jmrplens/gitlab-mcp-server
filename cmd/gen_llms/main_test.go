@@ -109,9 +109,9 @@ func TestReadVersion_UsesProjectRoot(t *testing.T) {
 	}
 }
 
-// TestListResources_IncludesMetaSchemaTemplate verifies llms generation sees
-// the per-action meta-schema resource template alongside regular resources.
-func TestListResources_IncludesMetaSchemaTemplate(t *testing.T) {
+// TestListResources_IncludesToolManifestTemplate verifies llms generation sees
+// the unified tool manifest template alongside regular resources.
+func TestListResources_IncludesToolManifestTemplate(t *testing.T) {
 	resources, templates, err := listResources(newGenLLMSClient(t))
 	if err != nil {
 		t.Fatalf("listResources() error: %v", err)
@@ -119,12 +119,22 @@ func TestListResources_IncludesMetaSchemaTemplate(t *testing.T) {
 	if len(resources) == 0 {
 		t.Fatal("listResources() returned no static resources")
 	}
+	wantTemplates := map[string]bool{
+		"gitlab://tools/{id}": false,
+	}
 	for _, template := range templates {
-		if template.URITemplate == "gitlab://schema/meta/{tool}/{action}" {
-			return
+		if template.URITemplate == "gitlab://schema/meta/{tool}/{action}" || template.URITemplate == "gitlab://schema/dynamic/{action}" {
+			t.Fatalf("listResources() exposed legacy schema template %s: %v", template.URITemplate, templates)
+		}
+		if _, ok := wantTemplates[template.URITemplate]; ok {
+			wantTemplates[template.URITemplate] = true
 		}
 	}
-	t.Fatalf("listResources() templates missing meta-schema template: %v", templates)
+	for uri, found := range wantTemplates {
+		if !found {
+			t.Fatalf("listResources() templates missing %s: %v", uri, templates)
+		}
+	}
 }
 
 // TestValidateLLMSTxt_AcceptsSpecFileListSections verifies llms.txt validation

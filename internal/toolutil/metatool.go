@@ -1970,8 +1970,8 @@ func currentMetaParamSchemaMode() string {
 const (
 	// paramsResourceHint is appended to the description of the params property
 	// in every meta-tool input schema, regardless of mode. It points the LLM at
-	// the per-action JSON Schema available via the gitlab://schema/meta resource.
-	paramsResourceHint = " For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://schema/meta/{tool}/{action}` (replace placeholders with the tool name and the chosen action)."
+	// the per-action detail available via the gitlab://tools resource.
+	paramsResourceHint = " For the JSON Schema of a specific action's `params`, read the MCP resource `gitlab://tools/{tool}.{action}` (replace placeholders with the tool name and the chosen action)."
 
 	// metaToolParamsDescription is the canonical description for the params
 	// property generated in every meta-tool input schema.
@@ -2024,7 +2024,7 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 // MetaToolDescriptionPrefix builds a fixed-format header that should be
 // prepended to a meta-tool's user-supplied description. The header gives
 // LLMs a literal JSON usage example based on a representative action and
-// points at the gitlab://schema/meta resource for per-action params schemas.
+// points at the gitlab://tools resource for per-action params schemas.
 // Returns an empty string when routes is empty so callers degrade gracefully
 // rather than emit a malformed header.
 func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
@@ -2039,7 +2039,7 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	exampleAction := metaToolExampleAction(actions)
 	guidance := metaToolActionGuidanceSummary(routes, actions) + metaToolParameterGuidanceSummary(routes, actions)
 	return fmt.Sprintf(
-		"Use {\"action\":%q,\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/%s/<action>.%s\n\n",
+		"Use {\"action\":%q,\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://tools/%s.<action>.%s\n\n",
 		exampleAction, toolName,
 		guidance,
 	)

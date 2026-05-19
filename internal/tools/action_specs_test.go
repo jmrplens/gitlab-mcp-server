@@ -172,6 +172,11 @@ func TestActionSpecGroupsByTool_RejectsInvalidSpecs(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected grouped validation errors")
 	}
+	for _, want := range []string{"tool name", "action spec name is required", "duplicate action"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want %q", err.Error(), want)
+		}
+	}
 	specs := byTool["gitlab_test"]
 	if len(specs) != 4 {
 		t.Fatalf("gitlab_test specs = %d, want 4", len(specs))
@@ -282,7 +287,7 @@ func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
 	}
 
 	metaPrefix := toolutil.MetaToolDescriptionPrefix("gitlab_project", metaRoutes)
-	if !strings.Contains(metaPrefix, "Action params schema: gitlab://schema/meta/gitlab_project/<action>.") {
+	if !strings.Contains(metaPrefix, "Action params schema: gitlab://tools/gitlab_project.<action>.") {
 		t.Fatalf("meta description prefix missing schema hint: %q", metaPrefix)
 	}
 	if !strings.Contains(metaPrefix, "delete.project_id: gitlab project id; source: prompt project reference") {
@@ -310,7 +315,7 @@ func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
 		t.Fatalf("search result = %+v, want project.delete", searchOutput.Results)
 	}
 	searchResult := searchOutput.Results[0]
-	if searchResult.SchemaURI != "gitlab://schema/meta/gitlab_project/delete" {
+	if searchResult.SchemaURI != "gitlab://tools/project.delete" {
 		t.Fatalf("search schema URI = %q", searchResult.SchemaURI)
 	}
 	if searchResult.Usage != spec.Usage {

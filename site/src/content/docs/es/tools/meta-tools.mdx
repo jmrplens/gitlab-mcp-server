@@ -60,12 +60,12 @@ Las meta-herramientas usan un sobre común:
 }
 ```
 
-Por defecto, `META_PARAM_SCHEMA=opaque` mantiene pequeño el schema de la herramienta: los clientes ven el enum válido de `action`, mientras `params` queda como un objeto específico de la acción. Para descubrir la forma exacta de una acción concreta, lee los recursos de schema cuando `CAPABILITY_SURFACE=full` está habilitado:
+Por defecto, `META_PARAM_SCHEMA=opaque` mantiene pequeño el schema de la herramienta: los clientes ven el enum válido de `action`, mientras `params` queda como un objeto específico de la acción. Para descubrir la forma exacta de una acción concreta, lee el manifiesto de herramientas:
 
-| Recurso                                | Uso                                                                                                              |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `gitlab://schema/meta/`                | Lista todas las meta-herramientas registradas y las acciones disponibles en la configuración actual del servidor |
-| `gitlab://schema/meta/{tool}/{action}` | Devuelve el JSON Schema del objeto `params` de una acción concreta                                               |
+| Recurso               | Uso                                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| `gitlab://tools`      | Lista herramientas visibles y entradas ejecutables para la superficie activa                    |
+| `gitlab://tools/{id}` | Devuelve la forma de llamada aceptada y el JSON Schema de una acción, como `gitlab_project.get` |
 
 Ejemplos de lectura de recursos:
 
@@ -73,7 +73,7 @@ Ejemplos de lectura de recursos:
 {
 	"method": "resources/read",
 	"params": {
-		"uri": "gitlab://schema/meta/"
+		"uri": "gitlab://tools"
 	}
 }
 ```
@@ -82,12 +82,12 @@ Ejemplos de lectura de recursos:
 {
 	"method": "resources/read",
 	"params": {
-		"uri": "gitlab://schema/meta/gitlab_merge_request/create"
+		"uri": "gitlab://tools/gitlab_merge_request.create"
 	}
 }
 ```
 
-La respuesta del schema por acción describe solo `params`. La llamada final a la herramienta sigue usando el sobre de meta-herramienta con `action` y `params`. Estos recursos siguen disponibles para meta-herramientas cuando `CAPABILITY_SURFACE=minimal` está habilitado, mientras se omiten recursos opcionales, prompts y guías de flujo. Los despliegues dinámicos pueden seguir usando `gitlab_find_action` para schemas inline; los despliegues de meta-herramientas pueden mantener `META_PARAM_SCHEMA=opaque` y leer estos recursos en vez de incluir schemas en `tools/list`. Las métricas actuales muestran que `compact` es 6.5x más grande que `opaque`, y `full` es 11.9x más grande.
+La respuesta del detalle por acción incluye el schema de `params` y la forma de llamada final. Estos recursos siguen disponibles para meta-herramientas cuando `CAPABILITY_SURFACE=minimal` está habilitado, mientras se omiten recursos opcionales de GitLab, prompts y guías de flujo. Los despliegues dinámicos pueden seguir usando `gitlab_find_action` para schemas inline; los despliegues de meta-herramientas pueden mantener `META_PARAM_SCHEMA=opaque` y leer `gitlab://tools/{id}` en vez de incluir schemas en `tools/list`. Las métricas actuales muestran que `compact` es 6.5x más grande que `opaque`, y `full` es 11.9x más grande.
 
 ## Ejemplos de uso
 
@@ -279,11 +279,11 @@ Puedes comprobar qué herramientas tiene registradas tu servidor mirando la sali
 
 ## Configuración
 
-| Variable             | Predeterminado | Descripción                                                                                                                                                                                                      |
-| -------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TOOL_SURFACE`       | `meta`         | Selector canónico para este modo: usa `meta` para meta-herramientas. Usa `individual` solo cuando quieras una herramienta MCP por operación de GitLab.                                                           |
-| `META_TOOLS`         | heredado       | Selector de compatibilidad deprecado: `true` mapea a `meta`, y `false` mapea a `individual` cuando `TOOL_SURFACE` no está definido.                                                                              |
-| `CAPABILITY_SURFACE` | `full`         | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene `gitlab://workspace/roots`, omite recursos opcionales, guías y prompts, y conserva meta-schema para meta-herramientas.         |
-| `META_PARAM_SCHEMA`  | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los recursos de schema de meta-herramientas están disponibles con `CAPABILITY_SURFACE=full` o `minimal`. |
-| `GITLAB_ENTERPRISE`  | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                                                                                                                           |
-| `--enterprise`       | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                                                                        |
+| Variable             | Predeterminado | Descripción                                                                                                                                                                    |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TOOL_SURFACE`       | `meta`         | Selector canónico para este modo: usa `meta` para meta-herramientas. Usa `individual` solo cuando quieras una herramienta MCP por operación de GitLab.                         |
+| `META_TOOLS`         | heredado       | Selector de compatibilidad deprecado: `true` mapea a `meta`, y `false` mapea a `individual` cuando `TOOL_SURFACE` no está definido.                                            |
+| `CAPABILITY_SURFACE` | `full`         | Selector del catálogo de recursos y prompts: `full` o `minimal`. Minimal mantiene `gitlab://workspace/roots` y `gitlab://tools`, y omite recursos opcionales, guías y prompts. |
+| `META_PARAM_SCHEMA`  | `opaque`       | Controla cuánto schema de `params` por acción se incluye en `tools/list`: `opaque`, `compact` o `full`. Los schemas exactos están disponibles con `gitlab://tools/{id}`.       |
+| `GITLAB_ENTERPRISE`  | `false`        | Habilitar meta-herramientas solo enterprise en modo stdio (requiere Premium/Ultimate).                                                                                         |
+| `--enterprise`       | `false`        | En modo HTTP, forzar meta-herramientas enterprise; omítelo para autodetectar CE/EE por entrada token+URL.                                                                      |

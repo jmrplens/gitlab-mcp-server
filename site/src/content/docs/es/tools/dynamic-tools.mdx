@@ -71,7 +71,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` mantiene `gitlab://workspace/roots` y omite recursos opcionales, prompts, guías de flujo y recursos de meta-schema. Dynamic conserva el descubrimiento de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. `META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
+`CAPABILITY_SURFACE=minimal` mantiene `gitlab://workspace/roots` y `gitlab://tools`, y omite recursos opcionales, prompts y guías de flujo. Dynamic conserva el descubrimiento de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. `META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
 
 ## Flujo del modelo
 
@@ -209,13 +209,13 @@ Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` para eliminar accione
 
 ## Dinámico vs meta-herramientas
 
-| Pregunta                    | Meta-herramientas                                           | Conjunto dinámico                                         |
-| --------------------------- | ----------------------------------------------------------- | --------------------------------------------------------- |
-| Qué aparece en `tools/list` | 33 a 50 herramientas de dominio                             | 2 herramientas públicas de descubrimiento y ejecución     |
-| Cómo elige el modelo        | Escoge una herramienta de dominio y una acción              | Encuentra una acción con schema y luego la ejecuta        |
-| Dónde están los schemas     | Schema de herramienta o recursos `gitlab://schema/meta/...` | `gitlab_find_action`                                      |
-| Mejor uso actual            | Modo explícito de compatibilidad                            | Descubrimiento de acciones predeterminado de bajo consumo |
-| Vuelta atrás                | Usa `TOOL_SURFACE=meta`                                     | Ruta predeterminada                                       |
+| Pregunta                    | Meta-herramientas                              | Conjunto dinámico                                         |
+| --------------------------- | ---------------------------------------------- | --------------------------------------------------------- |
+| Qué aparece en `tools/list` | 33 a 50 herramientas de dominio                | 2 herramientas públicas de descubrimiento y ejecución     |
+| Cómo elige el modelo        | Escoge una herramienta de dominio y una acción | Encuentra una acción con schema y luego la ejecuta        |
+| Dónde están los schemas     | Schema de herramienta o `gitlab://tools/{id}`  | `gitlab_find_action` o `gitlab://tools/{id}`              |
+| Mejor uso actual            | Modo explícito de compatibilidad               | Descubrimiento de acciones predeterminado de bajo consumo |
+| Vuelta atrás                | Usa `TOOL_SURFACE=meta`                        | Ruta predeterminada                                       |
 
 ## Solución de problemas
 

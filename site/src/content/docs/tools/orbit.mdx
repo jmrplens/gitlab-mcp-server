@@ -55,12 +55,12 @@ Self-managed GitLab instances do not register Orbit tools, even when the Enterpr
 
 In meta-tool mode, action parameter schemas are available through MCP resources:
 
-| Resource                                         | Purpose                                 |
-| ------------------------------------------------ | --------------------------------------- |
-| `gitlab://schema/meta/gitlab_orbit/status`       | Parameters for service health checks    |
-| `gitlab://schema/meta/gitlab_orbit/schema`       | Parameters for ontology inspection      |
-| `gitlab://schema/meta/gitlab_orbit/tools`        | Parameters for query manifest discovery |
-| `gitlab://schema/meta/gitlab_orbit/query`        | Parameters for Knowledge Graph queries  |
-| `gitlab://schema/meta/gitlab_orbit/graph_status` | Parameters for indexing status checks   |
+| Resource                                   | Purpose                                 |
+| ------------------------------------------ | --------------------------------------- |
+| `gitlab://tools/gitlab_orbit.status`       | Parameters for service health checks    |
+| `gitlab://tools/gitlab_orbit.schema`       | Parameters for ontology inspection      |
+| `gitlab://tools/gitlab_orbit.tools`        | Parameters for query manifest discovery |
+| `gitlab://tools/gitlab_orbit.query`        | Parameters for Knowledge Graph queries  |
+| `gitlab://tools/gitlab_orbit.graph_status` | Parameters for indexing status checks   |
 
 These resources remain available with `CAPABILITY_SURFACE=full` regardless of `META_PARAM_SCHEMA` mode. They are omitted with `CAPABILITY_SURFACE=minimal`.

@@ -1,6 +1,6 @@
 // main_test.go contains focused tests for the audit_tokens command. Tests use
 // a local GitLab version mock and exercise the resource token measurement path
-// that depends on registered meta-schema resources.
+// that depends on the surface-aware tool manifest resources.
 package main
 
 import (
@@ -33,28 +33,45 @@ func newAuditTokensClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
-// TestMeasureResources_SeparatesMetaSchema verifies the token audit measures
-// individual-mode resources separately from the additional meta-schema catalog
-// resources that only appear when meta-tools are enabled.
-func TestMeasureResources_SeparatesMetaSchema(t *testing.T) {
+// TestMeasureResources_IncludesToolManifest verifies the token audit measures
+// the surface-aware tool manifest in addition to static resources.
+func TestMeasureResources_IncludesToolManifest(t *testing.T) {
 	client := newAuditTokensClient(t)
-	individualTokens := measureResources(client, nil)
-	metaTokens := measureResources(client, buildMetaActionMaps(client, false))
-	if individualTokens <= 0 {
-		t.Fatalf("measureResources(includeMetaSchema=false) = %d, want positive token estimate", individualTokens)
+	routes := buildMetaActionMaps(client, false)
+	dynamicCatalog := actioncatalog.FromActionMaps(routes)
+	dynamicTools := listDynamicTools(dynamicCatalog)
+	manifestTokens := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
+		ToolManifest:   true,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		ToolList:       dynamicTools,
+		ToolCatalog:    dynamicCatalog,
+		WorkspaceRoots: true,
+	})
+	rootOnlyTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{WorkspaceRoots: true})
+	if rootOnlyTokens <= 0 {
+		t.Fatalf("workspace root tokens = %d, want positive token estimate", rootOnlyTokens)
 	}
-	if metaTokens <= individualTokens {
-		t.Fatalf("measureResources(includeMetaSchema=true) = %d, want greater than individual %d", metaTokens, individualTokens)
+	if manifestTokens <= rootOnlyTokens {
+		t.Fatalf("manifest resource tokens = %d, want greater than roots-only %d", manifestTokens, rootOnlyTokens)
 	}
 }
 
 // TestMeasureResourcesWithOptions_MinimalCandidate verifies the dynamic-minimal
-// candidate keeps a measurable project-discovery resource while dropping the
+// candidate keeps the tool manifest and workspace roots while dropping the
 // heavier optional resource groups.
 func TestMeasureResourcesWithOptions_MinimalCandidate(t *testing.T) {
 	client := newAuditTokensClient(t)
-	fullDynamicTokens := measureResources(client, buildMetaActionMaps(client, false))
-	minimalTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{WorkspaceRoots: true})
+	routes := buildMetaActionMaps(client, false)
+	dynamicCatalog := actioncatalog.FromActionMaps(routes)
+	dynamicTools := listDynamicTools(dynamicCatalog)
+	fullDynamicTokens := measureResources(client, routes, dynamicCatalog, dynamicTools, config.ToolSurfaceDynamic)
+	minimalTokens := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
+		ToolManifest:   true,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		ToolList:       dynamicTools,
+		ToolCatalog:    dynamicCatalog,
+		WorkspaceRoots: true,
+	})
 
 	if minimalTokens <= 0 {
 		t.Fatalf("minimal resource tokens = %d, want positive workspace_roots estimate", minimalTokens)

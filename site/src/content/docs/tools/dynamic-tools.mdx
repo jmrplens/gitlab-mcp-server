@@ -71,7 +71,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` and omits optional resources, prompts, workflow guides, and meta-schema resources. Dynamic still has schema discovery because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
+`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` plus `gitlab://tools`, and omits optional resources, prompts, and workflow guides. Dynamic still has schema discovery because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
 
 ## The model workflow
 
@@ -209,13 +209,13 @@ For safer deployments, use `GITLAB_READ_ONLY=true` to remove mutating actions or
 
 ## Dynamic vs meta-tools
 
-| Question                         | Meta-tools                                          | Dynamic toolset                             |
-| -------------------------------- | --------------------------------------------------- | ------------------------------------------- |
-| What is visible in `tools/list`? | 33 to 50 domain tools                               | 2 public discovery/execution tools          |
-| How does the model choose?       | Pick a domain tool and action                       | Find an action with schema, then execute it |
-| Where are schemas found?         | Tool schema or `gitlab://schema/meta/...` resources | `gitlab_find_action`                        |
-| Best current use                 | Explicit compatibility mode                         | Default low-token action discovery          |
-| Rollback                         | Set `TOOL_SURFACE=meta`                             | Default path                                |
+| Question                         | Meta-tools                           | Dynamic toolset                               |
+| -------------------------------- | ------------------------------------ | --------------------------------------------- |
+| What is visible in `tools/list`? | 33 to 50 domain tools                | 2 public discovery/execution tools            |
+| How does the model choose?       | Pick a domain tool and action        | Find an action with schema, then execute it   |
+| Where are schemas found?         | Tool schema or `gitlab://tools/{id}` | `gitlab_find_action` or `gitlab://tools/{id}` |
+| Best current use                 | Explicit compatibility mode          | Default low-token action discovery            |
+| Rollback                         | Set `TOOL_SURFACE=meta`              | Default path                                  |
 
 ## Troubleshooting
 

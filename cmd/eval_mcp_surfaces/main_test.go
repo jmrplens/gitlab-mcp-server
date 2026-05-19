@@ -872,7 +872,8 @@ func TestDynamicPrompt_RequiresFindBeforeUncertainExecute(t *testing.T) {
 
 	system := systemPromptForTask(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "systemPromptForTask()", system, []string{
-		"Use only the provided tools: gitlab_find_action and gitlab_execute_tool.",
+		"GitLab operations are executed through gitlab_find_action and gitlab_execute_tool",
+		"gitlab_list_resources and gitlab_read_resource",
 		"Use gitlab_find_action before gitlab_execute_tool whenever the exact canonical action ID or exact params schema is not already known",
 		"Destructive actions require top-level confirm:true on gitlab_execute_tool",
 	})
@@ -4588,6 +4589,61 @@ func TestEvaluateTask_UsesSchemaLookupThenFinalCall(t *testing.T) {
 	}
 }
 
+// TestEvaluateTask_UsesResourceLookupThenFinalCall verifies resource bridge calls do not count as final task calls.
+func TestEvaluateTask_UsesResourceLookupThenFinalCall(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("resources", resourceListTool, map[string]any{}),
+		toolUseResponse("tools-detail", resourceReadTool, map[string]any{"uri": "gitlab://tools"}),
+		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
+	)
+	runner.mcpSession = newResourceLookupSessionForTest(t)
+	task := evalTask{ID: "MT-002", ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+	catalog := appendResourceBridgeTools([]modelTool{modelToolFromParts("gitlab_project", "project meta-tool", map[string]any{"type": "object"})})
+
+	result := runner.evaluateTask(t.Context(), task, catalog, routes)
+
+	if !result.ResourceLookupUsed || result.ResourceCalls != 2 {
+		t.Fatalf("resource metrics = used:%t calls:%d, want used with two calls", result.ResourceLookupUsed, result.ResourceCalls)
+	}
+	if result.SchemaLookupUsed {
+		t.Fatalf("SchemaLookupUsed = true, want resource lookups tracked separately")
+	}
+	if !result.FinalSuccess || result.ModelCalls != 3 || result.FirstTool != "gitlab_project" {
+		t.Fatalf("result = %+v, want final project call after resource lookup", result)
+	}
+}
+
+// TestBuildCatalogSession_ExposesFullResourceSurface verifies eval sessions expose normal MCP resources.
+func TestBuildCatalogSession_ExposesFullResourceSurface(t *testing.T) {
+	client, cleanup, clientErr := newMockGitLabClient()
+	if clientErr != nil {
+		t.Fatalf("newMockGitLabClient() error = %v", clientErr)
+	}
+	defer cleanup()
+	session, closeSession, _, _, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic)
+	if sessionErr != nil {
+		t.Fatalf("buildCatalogSession() error = %v", sessionErr)
+	}
+	defer closeSession()
+
+	resourcesResult, resourcesErr := session.ListResources(t.Context(), nil)
+	if resourcesErr != nil {
+		t.Fatalf("ListResources() error = %v", resourcesErr)
+	}
+	if !hasEvalResource(resourcesResult.Resources, "gitlab://tools") || !hasEvalResource(resourcesResult.Resources, "gitlab://workspace/roots") || !hasEvalResource(resourcesResult.Resources, "gitlab://user/current") {
+		t.Fatalf("resources = %+v, want tools, workspace roots, and normal GitLab resources", resourcesResult.Resources)
+	}
+	templatesResult, templatesErr := session.ListResourceTemplates(t.Context(), nil)
+	if templatesErr != nil {
+		t.Fatalf("ListResourceTemplates() error = %v", templatesErr)
+	}
+	if !hasEvalResourceTemplate(templatesResult.ResourceTemplates, "gitlab://tools/{id}") || !hasEvalResourceTemplate(templatesResult.ResourceTemplates, "gitlab://project/{project_id}") {
+		t.Fatalf("resource templates = %+v, want tools detail and normal GitLab templates", templatesResult.ResourceTemplates)
+	}
+	requireReadResource(t, session, "gitlab://tools/project.get")
+}
+
 // TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation verifies EvaluateTask when records trace for prompt tool use and validation.
 func TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation(t *testing.T) {
 	runner := newScriptedRunner(t,
@@ -5635,6 +5691,74 @@ func newProjectGetSession(t *testing.T) *mcp.ClientSession {
 	}
 	t.Cleanup(func() { _ = session.Close() })
 	return session
+}
+
+// newResourceLookupSessionForTest constructs a minimal MCP session with listable resources.
+func newResourceLookupSessionForTest(t *testing.T) *mcp.ClientSession {
+	t.Helper()
+	server := mcp.NewServer(&mcp.Implementation{Name: "eval-resource-test", Version: "0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "gitlab_project", Description: "project meta-tool"}, func(_ context.Context, _ *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
+		params, _ := input["params"].(map[string]any)
+		if params["project_id"] == nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "MCP missing params.project_id"}}}, nil, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "project ok"}}}, nil, nil
+	})
+	server.AddResource(&mcp.Resource{
+		URI:      "gitlab://tools",
+		Name:     "tool_manifest",
+		MIMEType: "application/json",
+	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: "gitlab://tools", MIMEType: "application/json", Text: `{"surface":"meta"}`}}}, nil
+	})
+	server.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "gitlab://tools/{id}",
+		Name:        "tool_detail",
+		MIMEType:    "application/json",
+	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: req.Params.URI, MIMEType: "application/json", Text: `{"id":"gitlab_project.get"}`}}}, nil
+	})
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(t.Context(), serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "eval-resource-test-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
+func hasEvalResource(resources []*mcp.Resource, uri string) bool {
+	for _, resource := range resources {
+		if resource != nil && resource.URI == uri {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEvalResourceTemplate(templates []*mcp.ResourceTemplate, uriTemplate string) bool {
+	for _, template := range templates {
+		if template != nil && template.URITemplate == uriTemplate {
+			return true
+		}
+	}
+	return false
+}
+
+func requireReadResource(t *testing.T, session *mcp.ClientSession, uri string) {
+	t.Helper()
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: uri})
+	if err != nil {
+		t.Fatalf("ReadResource(%s) error = %v", uri, err)
+	}
+	if result == nil {
+		t.Fatalf("ReadResource(%s) returned nil result", uri)
+	}
 }
 
 // toolUseResponse converts the GitLab API response to the tool output format.

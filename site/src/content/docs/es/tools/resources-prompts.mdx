@@ -12,7 +12,7 @@ Los recursos MCP proporcionan **datos de contexto de solo lectura** que los clie
 El servidor expone **46 recursos** en varias categorías:
 
 :::note
-MCP lista por separado los recursos fijos y las plantillas de URI. En modo full, los clientes que solo inspeccionan `resources/list` ven 9 URIs fijas: usuario actual, grupos, raíces del workspace, índice de meta-schema y 5 guías de flujo. Las 37 entradas restantes son plantillas de URI devueltas por `resources/templates/list` y se leen sustituyendo IDs de proyecto, grupo, issue, MR u otros valores en tiempo de ejecución.
+MCP lista por separado los recursos fijos y las plantillas de URI. En modo full, los clientes que solo inspeccionan `resources/list` ven 9 URIs fijas: usuario actual, grupos, raíces del workspace, el manifiesto de herramientas y 5 guías de flujo. Las 37 entradas restantes son plantillas de URI devueltas por `resources/templates/list` y se leen sustituyendo IDs de proyecto, grupo, issue, MR u otros valores en tiempo de ejecución.
 :::
 
 ### Recursos estáticos (4)
@@ -22,21 +22,21 @@ MCP lista por separado los recursos fijos y las plantillas de URI. En modo full,
 | `gitlab://user/current`    | Perfil del usuario autenticado (nombre de usuario, email, estado, administrador)                                          |
 | `gitlab://groups`          | Todos los grupos GitLab accesibles para el usuario autenticado                                                            |
 | `gitlab://workspace/roots` | Directorios raíz del workspace del cliente MCP, para descubrimiento de proyectos vía `gitlab_resolve_project_from_remote` |
-| `gitlab://schema/meta/`    | Catálogo de meta-herramientas registradas y sus acciones                                                                  |
+| `gitlab://tools`           | Manifiesto dependiente de superficie con herramientas visibles y entradas ejecutables                                     |
 
-### Plantilla de recurso de meta-esquema (1)
+### Plantilla de recurso de manifiesto de herramientas (1)
 
-| Recurso                                | Descripción                                                       |
-| -------------------------------------- | ----------------------------------------------------------------- |
-| `gitlab://schema/meta/{tool}/{action}` | JSON Schema para los `params` de una acción concreta de meta-tool |
+| Recurso               | Descripción                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| `gitlab://tools/{id}` | Forma de llamada aceptada y schema de entrada para una entrada de `gitlab://tools` |
 
-Usa los recursos de meta-esquema cuando un cliente necesite la forma exacta de los parámetros de una acción de meta-herramienta sin expandir todos los schemas en `tools/list`.
+Usa el manifiesto de herramientas cuando un cliente necesite la forma exacta de los parámetros de una acción de meta-herramienta sin expandir todos los schemas en `tools/list`, o cuando quiera enumerar entradas dinámicas e individuales con un formato consistente.
 
-1. Lee `gitlab://schema/meta/` para obtener un catálogo JSON con `uri_template` y una lista ordenada de meta-herramientas y acciones registradas.
-2. Sustituye `{tool}` y `{action}` en `gitlab://schema/meta/{tool}/{action}` para leer el JSON Schema del objeto `params` de esa acción.
+1. Lee `gitlab://tools` para obtener la superficie activa, herramientas visibles y entradas ejecutables.
+2. Sustituye `{id}` en `gitlab://tools/{id}` para leer el JSON Schema y la forma de llamada de esa entrada.
 3. Llama a la meta-herramienta con el sobre normal `{ "action": "...", "params": { ... } }`.
 
-Por ejemplo, `gitlab://schema/meta/gitlab_merge_request/create` devuelve el schema de parámetros para la acción `create` de `gitlab_merge_request`. Estos recursos de schema están disponibles para meta-herramientas con `CAPABILITY_SURFACE=full` o `minimal`, sin importar el modo de `META_PARAM_SCHEMA`. Los clientes dinámicos que usan `CAPABILITY_SURFACE=minimal` deben usar `gitlab_find_action` para schemas inline.
+Por ejemplo, `gitlab://tools/gitlab_merge_request.create` devuelve el schema de parámetros y la forma de llamada para la acción `create` de `gitlab_merge_request`. Estos recursos de manifiesto están disponibles con `CAPABILITY_SURFACE=full` o `minimal`, sin importar el modo de `META_PARAM_SCHEMA`. Los clientes dinámicos también pueden usar `gitlab_find_action` para descubrimiento ordenado y schemas inline.
 
 ### Plantillas de recursos de proyecto (23)
 
@@ -136,7 +136,7 @@ Para inspeccionar parámetros de meta-herramientas, lee primero el índice de sc
 {
 	"method": "resources/read",
 	"params": {
-		"uri": "gitlab://schema/meta/"
+		"uri": "gitlab://tools"
 	}
 }
 ```
@@ -145,7 +145,7 @@ Para inspeccionar parámetros de meta-herramientas, lee primero el índice de sc
 {
 	"method": "resources/read",
 	"params": {
-		"uri": "gitlab://schema/meta/gitlab_merge_request/create"
+		"uri": "gitlab://tools/gitlab_merge_request.create"
 	}
 }
 ```
@@ -270,9 +270,9 @@ El servidor devuelve un prompt estructurado con contenido consciente del context
 
 ## Configuración
 
-| Variable             | Predeterminado | Descripción                                                                                                                                                    |
-| -------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CAPABILITY_SURFACE` | `full`         | `full` registra recursos, recursos de meta-schema, guías y prompts; `minimal` mantiene raíces del workspace y, para meta-herramientas, recursos de meta-schema |
+| Variable             | Predeterminado | Descripción                                                                                                             |
+| -------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `CAPABILITY_SURFACE` | `full`         | `full` registra recursos, guías, prompts y `gitlab://tools`; `minimal` mantiene raíces del workspace y `gitlab://tools` |
 
 :::tip
 Los recursos son particularmente útiles para proporcionar contexto del proyecto al inicio de una conversación. Al leer el recurso del proyecto, el LLM obtiene comprensión inmediata del propósito del repositorio, el equipo y el estado actual.

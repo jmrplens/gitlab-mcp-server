@@ -81,8 +81,8 @@ func TestMeasureTokenFootprintRows_BaseCatalog_ReturnsRequestedConfigurations(t 
 	if rows[0].SharedTokens <= rows[1].SharedTokens {
 		t.Fatalf("dynamic full shared tokens = %d, want greater than minimal %d", rows[0].SharedTokens, rows[1].SharedTokens)
 	}
-	if rows[3].SharedTokens <= rows[1].SharedTokens {
-		t.Fatalf("meta minimal shared tokens = %d, want greater than dynamic minimal %d", rows[3].SharedTokens, rows[1].SharedTokens)
+	if rows[3].SharedTokens != rows[1].SharedTokens {
+		t.Fatalf("meta minimal shared tokens = %d, want same as dynamic minimal %d", rows[3].SharedTokens, rows[1].SharedTokens)
 	}
 	if rows[2].MetaParamSchema != config.MetaParamSchemaOpaque || rows[3].MetaParamSchema != config.MetaParamSchemaOpaque {
 		t.Fatalf("meta schema modes = %q/%q, want opaque", rows[2].MetaParamSchema, rows[3].MetaParamSchema)

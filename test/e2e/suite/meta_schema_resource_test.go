@@ -1,7 +1,7 @@
 //go:build e2e
 
-// meta_schema_resource_test.go validates that the gitlab://schema/meta/*
-// resources expose the catalog per-action InputSchemas for real meta-tools.
+// meta_schema_resource_test.go validates that the gitlab://tools manifest
+// exposes catalog per-action InputSchemas for real meta-tools.
 package suite
 
 import (
@@ -12,16 +12,17 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
-// metaSchemaResourceSession registers catalog-backed meta-tools plus the
-// meta-schema resources in a single MCP server, then returns an in-memory
+// toolManifestResourceSession registers catalog-backed meta-tools plus the
+// unified tool manifest resources in a single MCP server, then returns an in-memory
 // client session. It pins mode=full so per-action InputSchemas keep their
 // real structured shape.
-func metaSchemaResourceSession(t *testing.T, client *gitlabclient.Client, enterprise bool) *mcp.ClientSession {
+func toolManifestResourceSession(t *testing.T, client *gitlabclient.Client, enterprise bool) *mcp.ClientSession {
 	t.Helper()
 	t.Cleanup(tools.SetMetaParamSchemaScoped("full"))
 
@@ -31,7 +32,12 @@ func metaSchemaResourceSession(t *testing.T, client *gitlabclient.Client, enterp
 		t.Fatalf("BuildActionCatalog() error = %v", err)
 	}
 	tools.RegisterMetaCatalog(server, catalog)
-	resources.RegisterMetaSchemaResources(server, catalog.ActionMaps())
+	resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
+		Surface:    config.ToolSurfaceMeta,
+		Tools:      listToolsForManifest(t, server),
+		Catalog:    catalog,
+		MetaRoutes: catalog.ActionMaps(),
+	})
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
@@ -47,10 +53,35 @@ func metaSchemaResourceSession(t *testing.T, client *gitlabclient.Client, enterp
 	return session
 }
 
-// TestMetaSchemaResource_ListsTemplate verifies the per-action template URI
+func listToolsForManifest(t *testing.T, server *mcp.Server) []*mcp.Tool {
+	t.Helper()
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect for tool manifest: %v", err)
+	}
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		_ = serverSession.Close()
+		t.Fatalf("client connect for tool manifest: %v", err)
+	}
+	result, err := session.ListTools(ctx, nil)
+	if err != nil {
+		_ = session.Close()
+		_ = serverSession.Close()
+		t.Fatalf("ListTools for tool manifest: %v", err)
+	}
+	_ = session.Close()
+	_ = serverSession.Close()
+	return result.Tools
+}
+
+// TestToolManifestResource_ListsTemplate verifies the per-action template URI
 // is advertised via ListResourceTemplates.
-func TestMetaSchemaResource_ListsTemplate(t *testing.T) {
-	session := metaSchemaResourceSession(t, sess.glClient, sess.enterprise)
+func TestToolManifestResource_ListsTemplate(t *testing.T) {
+	session := toolManifestResourceSession(t, sess.glClient, sess.enterprise)
 
 	result, err := session.ListResourceTemplates(context.Background(), nil)
 	if err != nil {
@@ -58,24 +89,24 @@ func TestMetaSchemaResource_ListsTemplate(t *testing.T) {
 	}
 	var found bool
 	for _, tpl := range result.ResourceTemplates {
-		if tpl.URITemplate == "gitlab://schema/meta/{tool}/{action}" {
+		if tpl.URITemplate == "gitlab://tools/{id}" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("meta-schema template not advertised via ListResourceTemplates")
+		t.Error("tool manifest detail template not advertised via ListResourceTemplates")
 	}
 }
 
-// TestMetaSchemaResource_ReadMergeRequestCreate verifies that the captured
+// TestToolManifestResource_ReadMergeRequestCreate verifies that the captured
 // schema for gitlab_merge_request/create exposes the expected structural
 // fields callers actually need to construct an MR.
-func TestMetaSchemaResource_ReadMergeRequestCreate(t *testing.T) {
-	session := metaSchemaResourceSession(t, sess.glClient, sess.enterprise)
+func TestToolManifestResource_ReadMergeRequestCreate(t *testing.T) {
+	session := toolManifestResourceSession(t, sess.glClient, sess.enterprise)
 
 	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
-		URI: "gitlab://schema/meta/gitlab_merge_request/create",
+		URI: "gitlab://tools/gitlab_merge_request.create",
 	})
 	if err != nil {
 		t.Fatalf("ReadResource: %v", err)
@@ -92,41 +123,46 @@ func TestMetaSchemaResource_ReadMergeRequestCreate(t *testing.T) {
 
 	var schema map[string]any
 	if uErr := json.Unmarshal([]byte(body), &schema); uErr != nil {
-		t.Fatalf("schema is not valid JSON: %v", uErr)
+		t.Fatalf("detail is not valid JSON: %v", uErr)
 	}
-	if schema["type"] != "object" {
-		t.Errorf("type = %v, want object", schema["type"])
+	call, _ := schema["call"].(map[string]any)
+	if call["tool"] != "gitlab_merge_request" || call["action"] != "create" {
+		t.Errorf("call = %v, want gitlab_merge_request/create", call)
+	}
+	inputSchema, _ := schema["input_schema"].(map[string]any)
+	if inputSchema["type"] != "object" {
+		t.Errorf("input_schema.type = %v, want object", inputSchema["type"])
 	}
 }
 
-// TestMetaSchemaResource_NotFound verifies unknown tool/action pairs return
+// TestToolManifestResource_NotFound verifies unknown tool/action pairs return
 // ResourceNotFoundError when looked up via the live registry.
-func TestMetaSchemaResource_NotFound(t *testing.T) {
-	session := metaSchemaResourceSession(t, sess.glClient, sess.enterprise)
+func TestToolManifestResource_NotFound(t *testing.T) {
+	session := toolManifestResourceSession(t, sess.glClient, sess.enterprise)
 
 	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
-		URI: "gitlab://schema/meta/gitlab_merge_request/nonexistent_action",
+		URI: "gitlab://tools/gitlab_merge_request.nonexistent_action",
 	})
 	if err == nil {
 		t.Fatal("expected ResourceNotFoundError")
 	}
 }
 
-// TestMetaSchemaResource_IndexEnumeratesMetaTools verifies the index lists
+// TestToolManifestResource_IndexEnumeratesMetaTools verifies the manifest lists
 // at least the canonical meta-tools wired in RegisterAllMeta.
-func TestMetaSchemaResource_IndexEnumeratesMetaTools(t *testing.T) {
-	session := metaSchemaResourceSession(t, sess.glClient, sess.enterprise)
+func TestToolManifestResource_IndexEnumeratesMetaTools(t *testing.T) {
+	session := toolManifestResourceSession(t, sess.glClient, sess.enterprise)
 
 	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{
-		URI: "gitlab://schema/meta/",
+		URI: "gitlab://tools",
 	})
 	if err != nil {
 		t.Fatalf("ReadResource index: %v", err)
 	}
 	body := result.Contents[0].Text
-	for _, want := range []string{"gitlab_project", "gitlab_merge_request", "gitlab_issue"} {
+	for _, want := range []string{"gitlab_project.get", "gitlab_merge_request.create", "gitlab_issue.get"} {
 		if !strings.Contains(body, want) {
-			t.Errorf("index missing meta-tool %q", want)
+			t.Errorf("manifest missing meta-tool action %q", want)
 		}
 	}
 }
