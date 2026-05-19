@@ -36,6 +36,16 @@ sequenceDiagram
 Las herramientas de análisis requieren que el cliente MCP soporte la **capacidad de sampling**. No todos los clientes MCP implementan esto. Consulta la documentación de tu cliente para verificar el soporte de sampling.
 :::
 
+## Cómo llamar acciones de análisis
+
+El catálogo de análisis está disponible desde cualquier superficie de herramientas:
+
+| Superficie                | Cómo llamar análisis                                                                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dinámica predeterminada   | Usa `gitlab_find_action` para encontrar la acción canónica `analyze.*`, y luego llama a `gitlab_execute_tool` con ese ID de acción y parámetros validados |
+| Meta-herramientas         | Usa la meta-herramienta `gitlab_analyze` con acciones como `pipeline_failure`, `mr_security` o `release_notes`                                            |
+| Herramientas individuales | Llama directamente a la herramienta especializada, como `gitlab_analyze_pipeline_failure`                                                                 |
+
 ## Herramientas de análisis disponibles
 
 ### Análisis de merge requests
@@ -143,4 +153,4 @@ La eliminación de credenciales es una medida de defensa en profundidad. Siempre
 | Token de GitLab | Acceso de lectura a los recursos que se analizan                           |
 | Red             | El servidor debe poder alcanzar tanto la API de GitLab como el cliente MCP |
 
-Las herramientas de análisis se registran tanto en modo individual como en modo meta-herramientas. En modo meta-herramientas, aparecen como herramientas independientes (no agrupadas bajo una meta-herramienta de dominio) porque cada herramienta de análisis tiene un prompt único y especializado.
+En la superficie dinámica predeterminada, el descubrimiento devuelve schemas exactos antes de ejecutar. En modo meta-herramientas, `gitlab_analyze` agrupa las acciones de análisis detrás de un despachador de dominio. En modo individual, cada operación de análisis aparece como su propia herramienta MCP.

@@ -22,13 +22,14 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 
 ### General
 
-| Flag          | Type   | Default | Description                                                          |
-| ------------- | ------ | ------- | -------------------------------------------------------------------- |
-| `-h`          | bool   | `false` | Show full help with flags, environment variables, and JSON examples  |
-| `-version`    | bool   | `false` | Print version and commit hash, then exit                             |
-| `-shutdown`   | bool   | `false` | Terminate all running instances and exit (used by external updaters) |
-| `-setup`      | bool   | `false` | Run the interactive Setup Wizard                                     |
-| `-setup-mode` | string | `auto`  | Setup UI mode: `auto`, `web`, `tui`, `cli`                           |
+| Flag           | Type   | Default   | Description                                                          |
+| -------------- | ------ | --------- | -------------------------------------------------------------------- |
+| `-h`           | bool   | `false`   | Show full help with flags, environment variables, and JSON examples  |
+| `-version`     | bool   | `false`   | Print version and commit hash, then exit                             |
+| `-shutdown`    | bool   | `false`   | Terminate all running instances and exit (used by external updaters) |
+| `-setup`       | bool   | `false`   | Run the interactive Setup Wizard                                     |
+| `-setup-mode`  | string | `auto`    | Setup UI mode: `auto`, `web`, `tui`, `cli`                           |
+| `-tool-search` | string | _(empty)_ | Search registered tools by name or description, then exit            |
 
 ### HTTP Transport Mode
 
@@ -39,7 +40,7 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-gitlab-url`           | string   | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request                                                                                                                                     |
 | `-skip-tls-verify`      | bool     | `false`      | Skip TLS certificate verification for self-signed certs                                                                                                                                                                        |
 | `-tool-surface`         | string   | `dynamic`    | Canonical tool catalog selector: `meta`, `individual`, or `dynamic`                                                                                                                                                            |
-| `-meta-tools`           | bool     | `true`       | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                                                                 |
+| `-meta-tools`           | bool     | `false`      | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                                                                 |
 | `-capability-surface`   | string   | `full`       | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps `gitlab://workspace/roots`, disables optional resources, workflow guides, and prompts, and keeps meta-schema resources only for `--tool-surface=meta` |
 | `-meta-param-schema`    | string   | `opaque`     | Meta-tool input-schema strategy: `opaque` (default), `compact`, or `full`. Applies to meta-tool schemas only. See [env-reference.md](env-reference.md)                                                                         |
 | `-enterprise`           | bool     | `false`      | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version`                                            |

@@ -227,8 +227,24 @@ gitlab_dora_metrics → action: group, group_id: "platform",
 
 Devuelve: métricas agregadas para todo el grupo, útil para dashboards de liderazgo de ingeniería.
 
+## Llamadas CI/CD dinámicas primero
+
+La superficie dinámica predeterminada descubre acciones CI/CD exactas antes de ejecutar:
+
+```text
+gitlab_find_action → query: "estado del último pipeline del proyecto"
+gitlab_execute_tool → action: "pipeline.latest", params: { project_id: "42" }
+```
+
+Para jobs fallidos, descubre primero la acción de log o reintento y luego ejecuta con el schema devuelto:
+
+```text
+gitlab_find_action → query: "obtener trace de job fallido"
+gitlab_execute_tool → action: "job.trace", params: { project_id: "42", job_id: 9876 }
+```
+
 ---
 
 :::tip
-Todos los ejemplos de CI/CD usan el modo meta-tool con `TOOL_SURFACE=meta`. El asistente de IA mapea tu petición en lenguaje natural al parámetro `action` correcto automáticamente.
+Estos prompts CI/CD funcionan con la superficie dinámica predeterminada. Con `TOOL_SURFACE=meta`, el asistente de IA mapea las mismas solicitudes a la meta-herramienta de dominio y al parámetro `action` apropiados.
 :::

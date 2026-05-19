@@ -36,6 +36,16 @@ sequenceDiagram
 Analysis tools require the MCP client to support the **sampling capability**. Not all MCP clients implement this. Check your client's documentation for sampling support.
 :::
 
+## How to call analysis actions
+
+The analysis catalog is available from every tool surface:
+
+| Surface          | How to call analysis                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dynamic default  | Use `gitlab_find_action` to find the canonical `analyze.*` action, then call `gitlab_execute_tool` with that action ID and validated params |
+| Meta-tools       | Use the `gitlab_analyze` meta-tool with actions such as `pipeline_failure`, `mr_security`, or `release_notes`                               |
+| Individual tools | Call the specialized tool directly, such as `gitlab_analyze_pipeline_failure`                                                               |
+
 ## Available analysis tools
 
 ### Merge request analysis
@@ -143,4 +153,4 @@ Credential stripping is a defense-in-depth measure. Always follow the principle 
 | GitLab Token | Read access to the resources being analyzed          |
 | Network      | Server must reach both GitLab API and the MCP client |
 
-Analysis tools are registered in both individual and meta-tool modes. In meta-tool mode, they appear as standalone tools (not grouped under a domain meta-tool) because each analysis tool has a unique, specialized prompt.
+In the default dynamic surface, discovery returns exact schemas before execution. In meta-tool mode, `gitlab_analyze` groups the analysis actions behind one domain dispatcher. In individual mode, each analysis operation appears as its own MCP tool.

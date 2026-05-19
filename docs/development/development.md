@@ -41,7 +41,7 @@ gitlab-mcp-server/
 │   ├── elicitation/             # Interactive user input client
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 165 domain sub-packages
+│   ├── tools/                   # Tool orchestration layer + 172 internal/tools packages
 │   │   ├── register.go          # RegisterAll() — catalog-backed individual tool projection
 │   │   ├── register_meta.go     # RegisterAllMeta() — catalog-backed meta-tool groups and standalone surfaces
 │   │   ├── metatool.go          # Local helpers addMetaTool/addReadOnlyMetaTool wrapping toolutil.DeriveAnnotations + route wrappers
@@ -49,9 +49,9 @@ gitlab-mcp-server/
 │   │   ├── branches/            # Branch management tools (example sub-package)
 │   │   ├── issues/              # Issue CRUD tools
 │   │   ├── mergerequests/       # MR lifecycle tools
-│   │   └── ...                  # 165 domain sub-packages total
+│   │   └── ...                  # 172 internal/tools packages total
 │   ├── resources/               # 46 MCP resource handlers
-│   └── prompts/                 # 38 MCP prompt handlers (12 core + 26 extended)
+│   └── prompts/                 # 37 MCP prompt handlers
 ├── test/e2e/                    # End-to-end integration tests (suite/ + infra)
 ├── docs/                        # Documentation (this directory)
 ├── plan/                        # Implementation plans

@@ -20,7 +20,7 @@ gitlab-mcp-server authenticates to GitLab using a Personal Access Token (PAT) pa
 - **Never hardcode tokens in JSON** — MCP client configuration files (`.vscode/mcp.json`, `.cursor/mcp.json`) are often committed to version control. Use [input variables](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration#_input-variables-for-sensitive-data) (`${input:gitlab-token}`), [environment files](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration#_standard-io-stdio-servers) (`envFile`), or system environment variables instead. See [Configuration — Secure Token Configuration](configuration.md#secure-token-configuration) for examples
 - **Minimum scope** — Use `api` scope only; avoid `admin` scope unless required
 - **Token rotation** — Rotate tokens regularly; use expiring tokens when possible
-- **Secret redaction** — The error reporting system (`issue_report.go`) automatically redacts fields containing: `token`, `password`, `secret`, `key`, `credential`, `auth`, `cookie`, `session`, `private`. Issue report generation is opt-in (`ISSUE_REPORTS=true`); when disabled, errors use the standard Markdown format without input parameter details
+- **Error output minimization** — Error Markdown includes diagnostic fields such as operation name, error class, HTTP status, request ID, and actionable hints. Tool input parameters are not copied into error output
 
 ## TLS
 
@@ -122,7 +122,7 @@ Explicit boundary markers (e.g., `<user_content>...</user_content>`) were evalua
 
 ### Coverage
 
-Escaping is applied to all UGC fields across 165 domain sub-packages. Key field types:
+Escaping is applied to UGC fields across the 172 packages under `internal/tools`. Key field types:
 
 - **Titles/names**: `EscapeMdTableCell()` in table contexts, `EscapeMdHeading()` in heading contexts
 - **Descriptions/bodies**: `WrapGFMBody()` for multi-line GFM content
@@ -135,7 +135,7 @@ The error handling system is designed to be informative for LLMs while avoiding 
 
 - **ClassifyError** returns semantic descriptions, not raw stack traces
 - **DetailedError.Markdown** includes HTTP status and request ID for diagnostics
-- **FormatIssueReport** redacts sensitive input fields before generating bug reports
+- Tool input parameters are not copied into standard error Markdown
 - Internal implementation details are not exposed in error messages
 
 ## Dependencies

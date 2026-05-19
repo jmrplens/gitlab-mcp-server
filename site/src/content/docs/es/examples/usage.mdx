@@ -156,8 +156,24 @@ El servidor llama a `gitlab_member` con `action: list`, devolviendo los miembros
 
 El servidor usa `gitlab_analyze_deployment_history` (sampling), examinando la frecuencia de despliegues, tasas de éxito, patrones de rollback y métricas tipo DORA.
 
+## Flujo de herramientas dinámico primero
+
+El modo dinámico es el predeterminado. Para llamadas concretas, el asistente descubre primero el schema de la acción y luego ejecuta la acción seleccionada:
+
+```text
+gitlab_find_action → query: "listar merge requests abiertas"
+gitlab_execute_tool → action: "merge_request.list", params: { project_id: "42", state: "opened" }
+```
+
+Para tareas de análisis, el mismo flujo descubre acciones canónicas `analyze.*` antes de ejecutar:
+
+```text
+gitlab_find_action → query: "analizar pipeline fallido"
+gitlab_execute_tool → action: "analyze.pipeline_failure", params: { project_id: "42", pipeline_id: 12345 }
+```
+
 ---
 
 :::tip
-Estos ejemplos muestran el modo meta-herramienta con `TOOL_SURFACE=meta`. Cada prompt se mapea a una única llamada de meta-herramienta con el parámetro `action` apropiado. El asistente de IA maneja el mapeo automáticamente — simplemente describe lo que necesitas en lenguaje natural.
+Estos ejemplos funcionan con la superficie dinámica predeterminada. Si configuras explícitamente `TOOL_SURFACE=meta`, el asistente mapea los mismos prompts a meta-herramientas de dominio con el parámetro `action` apropiado.
 :::

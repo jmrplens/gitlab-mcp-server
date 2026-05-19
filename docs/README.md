@@ -10,7 +10,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | [Architecture](architecture.md)                 | System architecture with C4 diagrams, component details, and data flow                            |
 | [Development](development/development.md)       | Developer guide: setup, building, testing, adding new tools                                       |
 | [Configuration](configuration.md)               | Environment variables, transport modes, and `.env` setup                                          |
-| [Error Handling](error-handling.md)             | Error types, classification, Markdown formatting, and issue reporting                             |
+| [Error Handling](error-handling.md)             | Error types, classification, Markdown formatting, and actionable diagnostics                      |
 | [Security](security.md)                         | Authentication, TLS, input validation, and transport security                                     |
 | [HTTP Server Mode](http-server-mode.md)         | Multi-user HTTP transport with per-token+URL server pool                                          |
 | [OAuth App Setup](oauth-app-setup.md)           | Creating GitLab OAuth applications for MCP clients                                                |

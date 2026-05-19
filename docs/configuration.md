@@ -179,12 +179,13 @@ These settings are for operators deploying the server for a team or managing adv
 
 ### Advanced Variables
 
+This table summarizes the most common operational variables. For the complete source-of-truth list, see [Environment Variable Reference](env-reference.md); for HTTP flags, see [CLI Reference](cli-reference.md).
+
 | Variable               | Default                      | Description                                                                                             |
 | ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `AUTO_UPDATE`          | `true`                       | Enable automatic binary updates (`true`/`check`/`false`)                                                |
 | `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                    |
 | `AUTO_UPDATE_INTERVAL` | `1h`                         | Interval between periodic update checks                                                                 |
-| `ISSUE_REPORTS`        | `false`                      | Enable automatic issue report generation on unrecoverable errors                                        |
 | `YOLO_MODE`            | `false`                      | Skip destructive action confirmation prompts                                                            |
 | `AUTOPILOT`            | `false`                      | Same as `YOLO_MODE` — skip confirmation prompts                                                         |
 | `AUTH_MODE`            | `legacy`                     | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification) |
@@ -237,6 +238,7 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--tool-surface`         | `dynamic`                    | Canonical tool catalog selector: `dynamic`, `meta`, or `individual`                                                                                                                 |
 | `--meta-tools`           | *(unset)*                    | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                      |
 | `--capability-surface`   | `full`                       | Resource and prompt catalog selector: `full` or `minimal`                                                                                                                           |
+| `--meta-param-schema`    | `opaque`                     | Meta-tool input-schema strategy: `opaque`, `compact`, or `full`                                                                                                                     |
 | `--enterprise`           | `false`                      | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `--max-http-clients`     | `100`                        | Maximum concurrent client sessions                                                                                                                                                  |
 | `--session-timeout`      | `30m`                        | Idle session timeout                                                                                                                                                                |
@@ -247,8 +249,10 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--auto-update`          | `true`                       | Enable automatic binary updates                                                                                                                                                     |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                                                                                                |
 | `--auto-update-interval` | `1h`                         | Interval between periodic update checks                                                                                                                                             |
+| `--auto-update-timeout`  | `60s`                        | Timeout for pre-start update download (range: 5s–10m)                                                                                                                               |
 | `--read-only`            | `false`                      | Expose only read-only tools                                                                                                                                                         |
 | `--safe-mode`            | `false`                      | Intercept mutating tools, return preview                                                                                                                                            |
+| `--embedded-resources`   | `true`                       | Embed canonical `gitlab://` MCP resource URIs as `EmbeddedResource` content blocks in `gitlab_*_get` tool results                                                                   |
 | `--rate-limit-rps`       | `0`                          | Per-server tools/call rate limit in req/s (`0` = disabled)                                                                                                                          |
 | `--rate-limit-burst`     | `40`                         | Token-bucket burst size when `--rate-limit-rps` > 0                                                                                                                                 |
 | `--exclude-tools`        | *(empty)*                    | Comma-separated tool names to exclude                                                                                                                                               |

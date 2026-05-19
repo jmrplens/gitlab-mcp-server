@@ -9,7 +9,7 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 Para la referencia técnica completa, consulta [`docs/configuration.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/configuration.md) en el repositorio.
 :::
 
-GitLab MCP Server se configura mediante variables de entorno en modo stdio y flags de CLI en modo HTTP. Esta página cubre todas las opciones de configuración.
+GitLab MCP Server se configura mediante variables de entorno en modo stdio y flags de CLI en modo HTTP. Esta página cubre las opciones que la mayoría de usuarios necesita; consulta la [referencia de variables](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/env-reference.md) y la [referencia CLI](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/cli-reference.md) del repositorio para las tablas exhaustivas.
 
 :::tip[Orientación rápida]
 **Modo stdio** (por defecto) — configura mediante variables de entorno o un archivo `.env`. Este es el modo utilizado por las integraciones con IDE (VS Code, Cursor, Claude Desktop, etc.).
@@ -31,21 +31,22 @@ Esta debe establecerse para que el servidor arranque en modo stdio:
 | ------------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GITLAB_URL`             | `https://gitlab.com` | URL base de la instancia GitLab. Establécela para instancias autogestionadas                                                                                                                                                                                |
 | `GITLAB_SKIP_TLS_VERIFY` | `false`              | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                                                                                                      |
-| `TOOL_SURFACE`           | `meta`               | Selector canónico del catálogo: `meta`, `individual` o `dynamic`                                                                                                                                                                                            |
+| `TOOL_SURFACE`           | `dynamic`            | Selector canónico del catálogo: `dynamic`, `meta` o `individual`                                                                                                                                                                                            |
 | `META_TOOLS`             | heredado             | Selector de compatibilidad deprecado. `true` mapea a `meta`, `false` mapea a `individual`, y los valores dynamic mapean al `TOOL_SURFACE` equivalente cuando `TOOL_SURFACE` no está definido                                                                |
 | `CAPABILITY_SURFACE`     | `full`               | Selector del catálogo de recursos y prompts: `full` conserva el catálogo completo; `minimal` mantiene `gitlab://workspace/roots`, desactiva recursos opcionales, prompts y guías de flujo, y conserva recursos de meta-schema solo para `TOOL_SURFACE=meta` |
 | `META_PARAM_SCHEMA`      | `opaque`             | Estrategia de esquema de entrada para meta-herramientas: `opaque` (por defecto), `compact` (6.5x el tamaño opaque) o `full` (11.9x). Solo afecta schemas de meta-herramientas en `tools/list`                                                               |
 | `GITLAB_ENTERPRISE`      | `false`              | Habilitar herramientas Enterprise/Premium en modo stdio. En modo HTTP, `--enterprise` puede forzar el catálogo; si se omite, la edición se autodetecta por entrada token+URL                                                                                |
 | `GITLAB_READ_ONLY`       | `false`              | Desactivar todas las herramientas de escritura (crear, actualizar, eliminar)                                                                                                                                                                                |
 | `GITLAB_SAFE_MODE`       | `false`              | Devolver vista previa JSON estructurada en lugar de ejecutar herramientas de escritura (modo dry-run)                                                                                                                                                       |
+| `EMBEDDED_RESOURCES`     | `true`               | Incrustar URIs MCP canónicas `gitlab://` en resultados de herramientas get; usa `false` para clientes que no toleren bloques de contenido duplicados                                                                                                        |
 | `EXCLUDE_TOOLS`          | —                    | Lista de herramientas a excluir separadas por comas (ej., `gitlab_delete_project,gitlab_admin`)                                                                                                                                                             |
 | `GITLAB_IGNORE_SCOPES`   | `false`              | Omitir detección automática de scopes del PAT — registrar todas las herramientas sin importar los scopes                                                                                                                                                    |
 | `LOG_LEVEL`              | `info`               | Nivel de verbosidad del log: `debug`, `info`, `warn`, `error`                                                                                                                                                                                               |
 
 :::tip
-**El modo meta-herramientas** (`TOOL_SURFACE=meta`) es altamente recomendado. Agrupa las herramientas por dominio (p. ej., `gitlab_issue` gestiona list, get, create, update, delete) lo que reduce el uso de tokens y mejora la precisión de selección de herramientas por la IA.
+**El modo dinámico** (`TOOL_SURFACE=dynamic`) es el predeterminado y el catálogo visible de menor consumo. Expone `gitlab_find_action` y `gitlab_execute_tool`, mientras conserva el mismo catálogo canónico de acciones GitLab.
 
-Usa `TOOL_SURFACE=dynamic` para el catálogo visible estable más pequeño: solo se exponen `gitlab_find_action` y `gitlab_execute_tool`, respaldadas por el mismo catálogo canónico de acciones de GitLab.
+Usa `TOOL_SURFACE=meta` cuando un cliente o flujo de trabajo prefiera despachadores consolidados por dominio con parámetro `action`.
 
 Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para el flujo find/execute.
 
@@ -63,11 +64,13 @@ Para despliegues dinámicos donde los recursos y prompts dominan el contexto ini
 
 ## Opciones de administración
 
-| Variable           | Predeterminado | Descripción                                                     |
-| ------------------ | -------------- | --------------------------------------------------------------- |
-| `YOLO_MODE`        | `false`        | Omitir confirmaciones de acciones destructivas (no recomendado) |
-| `RATE_LIMIT_RPS`   | `0`            | Límite de velocidad por servidor en req/s (`0` = desactivado)   |
-| `RATE_LIMIT_BURST` | `40`           | Tamaño del bucket de tokens cuando `RATE_LIMIT_RPS` > 0         |
+| Variable                         | Predeterminado | Descripción                                                                                                                                         |
+| -------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `YOLO_MODE`                      | `false`        | Omitir confirmaciones de acciones destructivas (no recomendado)                                                                                     |
+| `AUTOPILOT`                      | `false`        | Igual que `YOLO_MODE`: omitir confirmaciones destructivas                                                                                           |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | —              | Directorios adicionales, separados por la lista de rutas del sistema operativo, permitidos para archivos locales de importación de proyectos/grupos |
+| `RATE_LIMIT_RPS`                 | `0`            | Límite de velocidad por servidor en req/s (`0` = desactivado)                                                                                       |
+| `RATE_LIMIT_BURST`               | `40`           | Tamaño del bucket de tokens cuando `RATE_LIMIT_RPS` > 0                                                                                             |
 
 ## Archivo .env de ejemplo
 
@@ -77,7 +80,7 @@ GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 
 # Opcionales
 GITLAB_SKIP_TLS_VERIFY=false
-TOOL_SURFACE=meta
+TOOL_SURFACE=dynamic
 GITLAB_ENTERPRISE=false
 GITLAB_READ_ONLY=false
 GITLAB_SAFE_MODE=false
@@ -263,10 +266,12 @@ Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar
 | `--skip-tls-verify`      | `false`                      | Omitir verificación TLS                                                                                                                                                   |
 | `--tool-surface`         | `dynamic`                    | Selector canónico del catálogo: `dynamic`, `meta` o `individual`                                                                                                          |
 | `--meta-tools`           | _(sin definir)_              | Flag de compatibilidad deprecado. Usa `--tool-surface=individual` en lugar de `--meta-tools=false`                                                                        |
+| `--meta-param-schema`    | `opaque`                     | Modo de schema para `params` de meta-herramientas: `opaque`, `compact` o `full`; solo afecta schemas de meta-herramientas                                                 |
 | `--capability-surface`   | `full`                       | Selector del catálogo de recursos y prompts: `full` o `minimal`; minimal omite recursos opcionales, guías y prompts, pero conserva meta-schema para `--tool-surface=meta` |
 | `--enterprise`           | `false`                      | Forzar herramientas Enterprise/Premium si se establece; omítelo para autodetectar CE/EE por entrada token+URL                                                             |
 | `--read-only`            | `false`                      | Modo solo lectura                                                                                                                                                         |
 | `--safe-mode`            | `false`                      | Intercepta herramientas modificantes y devuelve una vista previa JSON en lugar de ejecutarlas                                                                             |
+| `--embedded-resources`   | `true`                       | Incrustar URIs MCP canónicas en resultados de herramientas get                                                                                                            |
 | `--exclude-tools`        | —                            | Herramientas a excluir separadas por comas                                                                                                                                |
 | `--ignore-scopes`        | `false`                      | Omitir detección de scopes del PAT                                                                                                                                        |
 | `--max-http-clients`     | `100`                        | Máximo de sesiones de clientes simultáneas                                                                                                                                |
