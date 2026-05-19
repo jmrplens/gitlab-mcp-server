@@ -202,9 +202,23 @@ gitlab://group/7/members                           → Group members
 gitlab://group/7/projects                          → Group projects
 ```
 
+## Dynamic Discovery and Execution
+
+Dynamic mode is the default tool surface. The model first searches the canonical action catalog, then executes one validated action with exact parameters:
+
+```text
+Call: gitlab_find_action(query="list open merge requests")
+→ Returns: merge_request.list with input schema, examples, safety metadata, and output summary
+
+Call: gitlab_execute_tool(action="merge_request.list", params={project_id:"42", state:"opened"})
+→ Executes the GitLab API request and returns Markdown plus structured content
+```
+
+Use this flow when startup context or visible tool count matters. It reaches the same catalog as meta-tools and individual tools while exposing only `gitlab_find_action` and `gitlab_execute_tool` in `tools/list`.
+
 ## Meta-Tool Discovery
 
-With `TOOL_SURFACE=meta`, 33 domain-level meta-tools (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) provide guided discovery:
+With `TOOL_SURFACE=meta`, 33 domain-level meta-tools (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) provide domain dispatcher tools:
 
 ```text
 Call: gitlab_project(action="help")

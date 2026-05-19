@@ -21,6 +21,8 @@ LLMs have limited context windows. When an MCP server registers hundreds of indi
 
 Meta-tools reduce the tool count by **more than 95%** while preserving 100% of the functionality. Every individual tool operation is available as an action within one of the domain meta-tools.
 
+The `gitlab_server` update helper can appear separately for server maintenance actions and is not included in the 33/49/50 GitLab action catalog counts.
+
 :::note[Client compatibility]
 Some AI clients impose tool count limits (e.g., JetBrains AI Assistant limits MCP servers to 100 tools). Meta-tool mode (33 base tools, 49 self-managed enterprise tools, or 50 GitLab.com Enterprise tools with Orbit) works within these constraints. If you select individual tools with `TOOL_SURFACE=individual`, clients with such limits will only see a subset of the complete individual tool set.
 :::
@@ -262,7 +264,7 @@ Personal todo/task list.
 
 ## Enterprise mode
 
-The Enterprise/Premium catalog enables 14 additional meta-tools that expose GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_ENTERPRISE=true`; in HTTP mode, use `--enterprise` to force the catalog or omit it to allow CE/EE auto-detection per token+URL entry. Additionally, enterprise-only action routes are added to existing base meta-tools:
+The Enterprise/Premium catalog enables 16 additional meta-tools that expose GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_ENTERPRISE=true`; in HTTP mode, use `--enterprise` to force the catalog or omit it to allow CE/EE auto-detection per token+URL entry. Additionally, enterprise-only action routes are added to existing base meta-tools:
 
 - **Iterations** → routed through `gitlab_issue`
 - **Project mirrors** → routed through `gitlab_project`

@@ -6,7 +6,9 @@ Meta-tools group related GitLab operations under a single MCP tool with an `acti
 > **Audience**: 👤🔧 All users
 > **Prerequisites**: Understanding of MCP protocol and tool concepts
 
-In meta-tool mode (`TOOL_SURFACE=meta`), the server registers **33 base tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 16 additional enterprise inline meta-tools for **49 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **50 tools**. The default tool surface is now dynamic find/execute; set `TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
+In meta-tool mode (`TOOL_SURFACE=meta`), the server registers **33 base GitLab/interactive tools**: 29 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 16 additional enterprise inline meta-tools for **49 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **50 tools**. The default tool surface is now dynamic find/execute; set `TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
+
+The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in the 33/49/50 GitLab action catalog counts.
 
 Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`. HTTP mode can force it with `--enterprise`, and otherwise auto-detects CE/EE per token+URL pool entry when GitLab reports edition.
 

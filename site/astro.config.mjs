@@ -132,7 +132,7 @@ const jsonLd = JSON.stringify({
 			keywords:
 				"Model Context Protocol, MCP, GitLab, AI assistants, developer tools, Go",
 			description:
-				"Model Context Protocol server that exposes up to 1011 GitLab operations as AI-accessible tools.",
+				"Model Context Protocol server that exposes more than 1,000 GitLab operations as AI-accessible tools.",
 			offers: {
 				"@type": "Offer",
 				price: "0",

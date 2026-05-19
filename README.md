@@ -41,9 +41,9 @@ Measured with `go run ./cmd/gen_readme/` against the current base catalog. Total
 | ----------------------------------------------------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
 | `dynamic` / `full` (default)                          |             2 |               870 | n/a                 |              2,193 |        18,305 |       20,498 |
 | `dynamic` / `minimal`                                 |             2 |               870 | n/a                 |              2,193 |           184 |        2,377 |
-| `meta` / `full`                                       |            34 |               870 | `opaque`            |             66,109 |        18,305 |       84,414 |
-| `meta` / `minimal`                                    |            34 |               870 | `opaque`            |             66,109 |           760 |       66,869 |
-| `individual` / `full`                                 |           866 |               866 | n/a                 |            473,192 |        17,729 |      490,921 |
+| `meta` / `full`                                       |            34 |               870 | `opaque`            |             66,206 |        18,305 |       84,511 |
+| `meta` / `minimal`                                    |            34 |               870 | `opaque`            |             66,206 |           760 |       66,966 |
+| `individual` / `full`                                 |           866 |               866 | n/a                 |            473,239 |        17,729 |      490,968 |
 
 Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and individual mode already exposes one schema per tool. In `meta` + `minimal`, shared tokens still include meta-schema resources so opaque meta-tools can look up exact action parameter schemas.
 
@@ -51,7 +51,7 @@ Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_P
 
 ## Highlights
 
-- **1017 MCP tools** on self-managed Enterprise/Premium, or **1022 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 165 domain sub-packages: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security attributes, security categories, templates, admin settings, access tokens, deploy keys, Orbit, and more
+- **1017 MCP tools** on self-managed Enterprise/Premium, or **1022 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 172 packages under `internal/tools`: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security attributes, security categories, templates, admin settings, access tokens, deploy keys, Orbit, and more
 - **Default dynamic toolset** — exposes only `gitlab_find_action` and `gitlab_execute_tool` while keeping the same canonical GitLab action catalog. Optional domain meta-tools remain available with `TOOL_SURFACE=meta`: 33 base, 49 on self-managed Enterprise/Premium, or 50 on GitLab.com Enterprise/Premium
 - **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. Published summaries appear in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
@@ -244,11 +244,11 @@ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/get
 
 Three registration modes, controlled by `TOOL_SURFACE`:
 
-| Mode                          | Tools                                                              | Description                                                                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Dynamic Toolset** (default) | 2 visible tools                                                    | Low-token find/execute surface over the canonical action catalog.                                                                                                 |
-| **Meta-Tools**                | 33 base domain meta-tools plus the `gitlab_server` helper          | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
-| **Individual**                | 866 CE / 1017 self-managed enterprise / 1022 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool.                                                                                                                    |
+| Mode                          | Tools                                                                              | Description                                                                                                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dynamic Toolset** (default) | 2 visible tools                                                                    | Low-token find/execute surface over the canonical action catalog.                                                                                                 |
+| **Meta-Tools**                | 33 base GitLab/interactive tools; `gitlab_server` is a separate maintenance helper | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
+| **Individual**                | 866 CE / 1017 self-managed enterprise / 1022 GitLab.com Enterprise                 | Every GitLab operation as a separate MCP tool.                                                                                                                    |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Dynamic minimal keeps only `gitlab://workspace/roots`; meta minimal keeps workspace roots plus meta-schema resources so opaque meta-tools can still read exact action schemas. The default remains `full`.
 
@@ -311,13 +311,15 @@ The published model-evaluation set covers 536 task attempts and 1024 expected MC
 
 ## Documentation
 
-Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](https://jmrplens.github.io/gitlab-mcp-server/)**.
+Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](https://jmrplens.github.io/gitlab-mcp-server/)**. Use this map when you need the source-of-truth reference for a specific area:
 
 | Document                                             | Description                                                                            |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | [Getting Started](docs/getting-started.md)           | Download, setup wizard, per-client configuration                                       |
 | [IDE Configuration](docs/ide-configuration.md)       | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                 |
 | [Configuration](docs/configuration.md)               | Environment variables, transport modes, TLS                                            |
+| [Environment Variables](docs/env-reference.md)       | Exhaustive environment variable table with defaults and examples                       |
+| [CLI Reference](docs/cli-reference.md)               | All command-line flags, exit codes, and runtime examples                               |
 | [HTTP Server Mode](docs/http-server-mode.md)         | Shared HTTP deployments, authentication, server pool isolation                         |
 | [Tools Reference](docs/tools/README.md)              | All individual tools with input/output schemas, including GitLab.com-only Orbit        |
 | [Meta-Tools](docs/meta-tools.md)                     | 33/49/50 domain meta-tools with action dispatching                                     |
@@ -329,6 +331,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [Security](docs/security.md)                         | Security model, token scopes, input validation                                         |
 | [Architecture](docs/architecture.md)                 | System architecture, component design, data flow                                       |
 | [Development Guide](docs/development/development.md) | Building, testing, CI/CD, contributing                                                 |
+| [Troubleshooting](docs/troubleshooting.md)           | Common startup, token, TLS, transport, and tool-discovery issues                       |
 
 ## Tech Stack
 
@@ -336,7 +339,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.26+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.0  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.27.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.28.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Building from Source
@@ -415,20 +418,20 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       849 |     142,704 |
-| Unit tests (`_test.go`)  |       444 |     243,703 |
+| Source (`.go`, non-test) |       855 |     143,307 |
+| Unit tests (`_test.go`)  |       449 |     245,636 |
 | End-to-end tests         |       111 |      24,416 |
-| **Total**                | **1,404** | **410,823** |
+| **Total**                | **1,415** | **413,359** |
 
 ### Functions
 
 | Category                        | Count |
 | ------------------------------- | ----: |
-| Source functions                | 5,634 |
-| — exported (public)             | 2,392 |
-| — unexported (private)          | 3,242 |
-| Unit test functions (`TestXxx`) | 9,955 |
-| Subtests (`t.Run(...)`)         | 2,191 |
+| Source functions                | 5,674 |
+| — exported (public)             | 2,398 |
+| — unexported (private)          | 3,276 |
+| Unit test functions (`TestXxx`) | 9,994 |
+| Subtests (`t.Run(...)`)         | 2,194 |
 | End-to-end test functions       |   252 |
 
 ### Ratios worth noting
@@ -436,29 +439,29 @@ Numbers nobody asked for, but here they are anyway.
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.71× more tests than code |
-| Average source file length         |                 ~168 lines |
-| Average test file length           |                 ~548 lines |
-| Comment lines in source            |   11,765 (~8.2% of source) |
+| Average source file length         |                 ~167 lines |
+| Average test file length           |                 ~547 lines |
+| Comment lines in source            |   11,808 (~8.2% of source) |
 | Test functions per source function |                       1.8× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 5,929 |
-| `defer` statements                 |   757 |
-| `struct` types defined             | 2,210 |
-| `//nolint` suppressions            |    48 |
+| `if err != nil` checks             | 5,962 |
+| `defer` statements                 |   759 |
+| `struct` types defined             | 2,220 |
+| `//nolint` suppressions            |    46 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   207 |
+| Go packages                    |   210 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   149 |
+| Git commits                    |   152 |
 | Unique contributors            |     2 |
 
 ### Hall of fame
@@ -466,14 +469,14 @@ Numbers nobody asked for, but here they are anyway.
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
 | Longest source file | `cmd/eval_mcp_surfaces/main.go` — 8,841 lines            |
-| Longest test file   | `internal/tools/projects/projects_test.go` — 6,903 lines |
+| Longest test file   | `internal/tools/projects/projects_test.go` — 7,046 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~2,594 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 8,327 (impossible to avoid)                                                                          |
+| Source code printed at 55 lines/page | ~2,605 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 8,338 (impossible to avoid)                                                                          |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

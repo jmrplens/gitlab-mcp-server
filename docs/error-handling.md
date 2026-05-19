@@ -27,7 +27,7 @@ Use when a tool handler needs to report a typed error with optional HTTP status 
 
 ### DetailedError
 
-A richer error type with domain context for diagnostic output and automated issue reporting:
+A richer error type with domain context for diagnostic output:
 
 ```go
 type DetailedError struct {
@@ -196,37 +196,9 @@ result := ErrorResultMarkdown("issues", "list", err)
 
 Renders the `DetailedError` as a Markdown block with all diagnostic fields.
 
-## Automated Issue Reporting
+## Error Result Hygiene
 
-> **Opt-in feature**: Issue report generation is disabled by default. Set `ISSUE_REPORTS=true` to enable it. When disabled, `FormatIssueReport` falls back to `ErrorResultMarkdown` — the standard Markdown error output.
-
-For unrecoverable errors, `FormatIssueReport` generates a complete bug report that can be copied into a GitLab or GitHub issue:
-
-```go
-result := FormatIssueReport("issues", "create", err, inputParams)
-```
-
-### IssueReport Contents
-
-The generated Markdown includes:
-
-| Section            | Content                                              |
-| ------------------ | ---------------------------------------------------- |
-| Environment        | Server version, Go version, OS/Arch, timestamp       |
-| Error Details      | Tool, action, error message, HTTP status, request ID |
-| Input (sanitized)  | All input parameters with secrets redacted           |
-| Steps to Reproduce | Pre-filled reproduction steps                        |
-| Suggested Labels   | `bug`, `mcp-tool`, `automated-report`                |
-
-### Secret Redaction
-
-Input parameters are automatically sanitized before inclusion. Any key containing these substrings (case-insensitive) is replaced with `[REDACTED]`:
-
-`token`, `password`, `secret`, `key`, `credential`, `auth`, `cookie`, `session`, `private`
-
-### Server Version
-
-The report includes the server version, read from the `VERSION` file at package initialization. Override with `SetServerVersion(v)` when the binary runs from a different working directory.
+Error results are designed for LLM self-correction without exposing request bodies or secrets. Handlers return structured diagnostics such as operation name, error class, HTTP status, GitLab request ID, and actionable hints. Input parameters are not copied into error Markdown.
 
 ## Network Error Helpers
 
@@ -286,13 +258,12 @@ testutil.RespondJSON(w, http.StatusBadRequest, map[string]string{
 
 ## File Reference
 
-| File                                | Purpose                                                                                                                                                                           |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `internal/toolutil/errors.go`       | ToolError, DetailedError, WrapErr, WrapErrWithMessage, WrapErrWithHint, WrapErrWithStatusHint, ExtractGitLabMessage, ClassifyError, ClassifyHTTPStatus, IsHTTPStatus, ContainsAny |
-| `internal/toolutil/not_found.go`    | NotFoundResult — informational 404 pattern for get handlers                                                                                                                       |
-| `internal/toolutil/issue_report.go` | IssueReport, FormatIssueReport, secret redaction                                                                                                                                  |
-| `internal/toolutil/confirm.go`      | Destructive action confirmation flow                                                                                                                                              |
-| `internal/toolutil/output.go`       | SuccessResult, ErrorResult helpers                                                                                                                                                |
+| File                             | Purpose                                                                                                                                                                           |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `internal/toolutil/errors.go`    | ToolError, DetailedError, WrapErr, WrapErrWithMessage, WrapErrWithHint, WrapErrWithStatusHint, ExtractGitLabMessage, ClassifyError, ClassifyHTTPStatus, IsHTTPStatus, ContainsAny |
+| `internal/toolutil/not_found.go` | NotFoundResult — informational 404 pattern for get handlers                                                                                                                       |
+| `internal/toolutil/confirm.go`   | Destructive action confirmation flow                                                                                                                                              |
+| `internal/toolutil/output.go`    | SuccessResult, ErrorResult helpers                                                                                                                                                |
 
 ## LLM Ergonomics Hint Rollout
 
@@ -300,15 +271,17 @@ Actionable hints were added across the entire codebase to help LLMs self-correct
 
 ### Coverage
 
-| Metric                                         | Count      |
-| ---------------------------------------------- | ---------- |
-| `WrapErrWithHint` call sites (GraphQL)         | 257        |
-| `WrapErrWithStatusHint` call sites (REST)      | 858        |
-| **Total hinted error sites**                   | **1,115**  |
-| `WrapErrWithMessage` (skip-category, retained) | 344        |
-| `NotFoundResult` (informational 404s)          | 32         |
-| Domain sub-packages with hints                 | 153 of 162 |
-| Source files with hints                        | 171        |
+| Metric                                         | Count                             |
+| ---------------------------------------------- | --------------------------------- |
+| `WrapErrWithHint` call sites (GraphQL)         | 278                               |
+| `WrapErrWithStatusHint` call sites (REST)      | 866                               |
+| **Total hinted error sites**                   | **1,144**                         |
+| `WrapErrWithMessage` (skip-category, retained) | 354                               |
+| `NotFoundResult` (informational 404s)          | 27 handlers; 22 source references |
+| `internal/tools` packages with hints           | 156 of 172                        |
+| Source files with hints                        | 176                               |
+
+The call-site counts above are source-level counts from `rg` over `internal/`; package totals can be verified with `go list ./internal/tools/...`. `NotFoundResult` is listed by handler coverage and source references because shared formatters cover multiple get-handler variants.
 
 ### Skip Categories
 

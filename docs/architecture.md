@@ -67,7 +67,7 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        SPECS[domain ActionSpecs<br/>165 domain sub-packages]
+        SPECS[domain ActionSpecs<br/>172 internal/tools packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
         IND[individual projection<br/>1017 self-managed / 1022 GitLab.com Enterprise tools]
@@ -76,7 +76,7 @@ graph TD
         SAMP[sampling support<br/>11 LLM-assisted actions]
         ELIC[elicitation support<br/>4 interactive actions]
         RES[resources<br/>46 resource handlers]
-        PROMPTS[prompts<br/>38 prompt handlers]
+        PROMPTS[prompts<br/>37 prompt handlers]
         LOG[logging<br/>Session logging]
         COMP[completions<br/>17 completion types]
         ROOTS[roots<br/>Workspace root tracking]
@@ -163,7 +163,6 @@ Loads settings from environment variables with optional `.env` file support (via
 | `GITLAB_SKIP_TLS_VERIFY` | No       | `false`              | Skip TLS certificate verification                                                        |
 | `TOOL_SURFACE`           | No       | `dynamic`            | Canonical tool catalog selector (`dynamic`, `meta`, `individual`)                        |
 | `META_TOOLS`             | No       | —                    | Deprecated compatibility selector mapped to `TOOL_SURFACE` when `TOOL_SURFACE` is absent |
-| `ISSUE_REPORTS`          | No       | `false`              | Auto-generate GitLab issues on tool errors                                               |
 | `YOLO_MODE`              | No       | `false`              | Skip destructive action confirmations                                                    |
 | `UPLOAD_MAX_FILE_SIZE`   | No       | `2GB`                | Maximum allowed upload file size                                                         |
 
@@ -178,7 +177,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package — contains 1017 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1022 total in that catalog, organized across 165 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed.
+The largest package family — contains 1017 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1022 total in that catalog, organized across 172 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 
@@ -197,9 +196,9 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | `errors.go`         | Error helpers (`wrapErr`, `handleGitLabError`)                                                                                             |
 | `logging.go`        | `logToolCall` helper                                                                                                                       |
 
-**Domain sub-packages** (163 total, grouped by category):
+**Representative `internal/tools` package groups** (172 packages total):
 
-| Category          | Sub-packages                                                                               |
+| Category          | Representative packages                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------ |
 | Project lifecycle | `projects`, `members`, `uploads`, `labels`, `milestones`                                   |
 | Source control    | `branches`, `tags`, `commits`, `files`, `repository`                                       |
@@ -268,7 +267,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/metatool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 29 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 33 base tools total. The Enterprise/Premium catalog adds 16 enterprise inline meta-tools, bringing the self-managed total to 49; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 50. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 29 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 33 base GitLab/interactive tools total. The Enterprise/Premium catalog adds 16 enterprise inline meta-tools, bringing the self-managed total to 49; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 50. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
 
 Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, meta-schema resources, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
 
@@ -399,7 +398,7 @@ See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety beha
 
 ### Prompts (`internal/prompts`)
 
-38 AI-optimized prompts (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit) that fetch GitLab data and format it as structured context for LLMs:
+37 AI-optimized prompts (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit) that fetch GitLab data and format it as structured context for LLMs:
 
 | Prompt                      | Description                                 |
 | --------------------------- | ------------------------------------------- |

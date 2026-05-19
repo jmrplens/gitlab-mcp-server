@@ -156,8 +156,24 @@ The server calls `gitlab_member` with `action: list`, returning team members wit
 
 The server uses `gitlab_analyze_deployment_history` (sampling), examining deployment frequency, success rates, rollback patterns, and DORA-like metrics.
 
+## Dynamic-first tool flow
+
+Dynamic mode is the default. For concrete tool calls, the assistant first discovers the action schema, then executes the selected action:
+
+```text
+gitlab_find_action → query: "list open merge requests"
+gitlab_execute_tool → action: "merge_request.list", params: { project_id: "42", state: "opened" }
+```
+
+For analysis tasks, the same flow discovers canonical `analyze.*` actions before execution:
+
+```text
+gitlab_find_action → query: "analyze failed pipeline"
+gitlab_execute_tool → action: "analyze.pipeline_failure", params: { project_id: "42", pipeline_id: 12345 }
+```
+
 ---
 
 :::tip
-These examples show meta-tool mode with `TOOL_SURFACE=meta`. Each prompt maps to a single meta-tool call with the appropriate `action` parameter. The AI assistant handles the mapping automatically — just describe what you need in natural language.
+These examples work with the default dynamic surface. If you explicitly set `TOOL_SURFACE=meta`, the assistant maps the same prompts to domain meta-tools with the appropriate `action` parameter.
 :::

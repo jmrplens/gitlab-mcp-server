@@ -9,7 +9,7 @@ import { Tabs, TabItem } from "@astrojs/starlight/components";
 For the complete technical reference, see [`docs/configuration.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/configuration.md) in the repository.
 :::
 
-GitLab MCP Server is configured through environment variables for stdio mode and CLI flags for HTTP mode. This page covers all configuration options.
+GitLab MCP Server is configured through environment variables for stdio mode and CLI flags for HTTP mode. This page covers the options most users need; see the repository [environment reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/env-reference.md) and [CLI reference](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/cli-reference.md) for the exhaustive tables.
 
 :::tip[Quick orientation]
 **Stdio mode** (default) — configure via environment variables or a `.env` file. This is the mode used by IDE integrations (VS Code, Cursor, Claude Desktop, etc.).
@@ -38,6 +38,7 @@ This must be set for the server to start in stdio mode:
 | `GITLAB_ENTERPRISE`      | `false`              | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` can force the catalog; otherwise edition is auto-detected per token+URL entry                                                                                    |
 | `GITLAB_READ_ONLY`       | `false`              | Disable all mutating tools (create, update, delete)                                                                                                                                                                                          |
 | `GITLAB_SAFE_MODE`       | `false`              | Return structured JSON preview instead of executing mutating tools (dry-run mode)                                                                                                                                                            |
+| `EMBEDDED_RESOURCES`     | `true`               | Embed canonical `gitlab://` MCP resource URIs in get-tool results; set `false` for clients that do not tolerate duplicate content blocks                                                                                                     |
 | `EXCLUDE_TOOLS`          | —                    | Comma-separated list of tool names to exclude (e.g., `gitlab_delete_project,gitlab_admin`)                                                                                                                                                   |
 | `GITLAB_IGNORE_SCOPES`   | `false`              | Skip automatic PAT scope detection — register all tools regardless of token scopes                                                                                                                                                           |
 | `LOG_LEVEL`              | `info`               | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                              |
@@ -63,11 +64,13 @@ For deployments using the dynamic tool surface where resources and prompts domin
 
 ## Admin options
 
-| Variable           | Default | Description                                                |
-| ------------------ | ------- | ---------------------------------------------------------- |
-| `YOLO_MODE`        | `false` | Skip destructive action confirmations (not recommended)    |
-| `RATE_LIMIT_RPS`   | `0`     | Per-server tools/call rate limit in req/s (`0` = disabled) |
-| `RATE_LIMIT_BURST` | `40`    | Token-bucket burst size when `RATE_LIMIT_RPS` > 0          |
+| Variable                         | Default | Description                                                                                   |
+| -------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `YOLO_MODE`                      | `false` | Skip destructive action confirmations (not recommended)                                       |
+| `AUTOPILOT`                      | `false` | Same as `YOLO_MODE` — skip destructive confirmations                                          |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | —       | Additional OS path-list-separated directories allowed for local project/group import archives |
+| `RATE_LIMIT_RPS`                 | `0`     | Per-server tools/call rate limit in req/s (`0` = disabled)                                    |
+| `RATE_LIMIT_BURST`               | `40`    | Token-bucket burst size when `RATE_LIMIT_RPS` > 0                                             |
 
 ## Example .env file
 
@@ -268,6 +271,7 @@ When running in HTTP mode (`--http`), configuration uses CLI flags instead of en
 | `--enterprise`           | `false`                      | Force Enterprise/Premium tools when explicitly set; omit to auto-detect CE/EE per token+URL entry                                                                                    |
 | `--read-only`            | `false`                      | Read-only mode                                                                                                                                                                       |
 | `--safe-mode`            | `false`                      | Intercept mutating tools and return a JSON preview instead of executing them                                                                                                         |
+| `--embedded-resources`   | `true`                       | Embed canonical MCP resource URIs in get-tool results                                                                                                                                |
 | `--exclude-tools`        | —                            | Comma-separated tool names to exclude                                                                                                                                                |
 | `--ignore-scopes`        | `false`                      | Skip PAT scope detection                                                                                                                                                             |
 | `--max-http-clients`     | `100`                        | Maximum concurrent client sessions                                                                                                                                                   |

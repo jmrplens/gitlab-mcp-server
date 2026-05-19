@@ -49,14 +49,14 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 
 | Característica                  | Detalles                                                                                                                                       |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **33/49/50 Meta-herramientas**  | Herramientas agrupadas por dominio que cubren proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases, Orbit y más                |
-| **Conjunto dinámico**           | Modo opcional de bajo consumo con 2 herramientas: encontrar acciones canónicas con schemas exactos y ejecutar acciones canónicas               |
+| **Conjunto dinámico**           | Modo predeterminado de bajo consumo con 2 herramientas: encontrar acciones canónicas con schemas exactos y ejecutar acciones canónicas         |
+| **33/49/50 Meta-herramientas**  | Modo opcional por dominio que cubre proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases, Orbit y más                          |
 | **11 Herramientas de análisis** | Análisis impulsado por IA mediante MCP sampling — diagnóstico de fallos en pipelines, revisión de seguridad de MRs, detección de deuda técnica |
 | **46 Recursos MCP**             | Endpoints de datos de solo lectura para información de proyectos, perfiles de usuario, configuración del servidor y esquemas de meta-tools     |
 | **37 Prompts MCP**              | Plantillas de prompts predefinidas para informes, auditorías, calidad de flujo Git, análisis entre proyectos y flujos de trabajo en equipo     |
 | **Modo HTTP multiusuario**      | Despliega como servidor compartido con aislamiento por token para entornos de equipo                                                           |
 | **GitLab CE y EE**              | Compatible con Community Edition y Enterprise Edition, incluyendo instancias autoalojadas                                                      |
-| **Herramientas Enterprise**     | Catálogo Premium/Ultimate opcional: 15 meta-herramientas autoalojadas, más Orbit Knowledge Graph solo en GitLab.com                            |
+| **Herramientas Enterprise**     | Catálogo Premium/Ultimate opcional: 16 meta-herramientas adicionales autoalojadas, más Orbit Knowledge Graph solo en GitLab.com                |
 | **Autoactualización**           | Mecanismo de autoactualización integrado — ejecuta siempre la última versión                                                                   |
 | **Multiplataforma**             | Binario único para Linux, macOS y Windows (amd64 y arm64)                                                                                      |
 
@@ -88,6 +88,16 @@ El servidor traduce estas solicitudes en llamadas a la API de GitLab, las ejecut
 >
 > La corrección del N+1 cambió la consulta para devolver todos los resultados sin aplicar el límite de paginación predeterminado.
 > **Solución sugerida:** Añadir `.Limit(defaultPageSize)` a la consulta en `user_repository.go:87`.
+
+## Sin vs con GitLab MCP Server
+
+| Flujo de trabajo            | ❌ Sin                                                     | ✅ Con GitLab MCP Server                                        |
+| --------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------- |
+| **Revisión de código**      | Cambiar a la UI de GitLab, leer diffs y comentar a mano    | _"Revisa la seguridad del MR !142 y deja comentarios"_          |
+| **Depuración de pipelines** | Abrir logs, rastrear jobs fallidos y buscar errores        | _"¿Por qué falló el pipeline de feature/auth?"_                 |
+| **Gestión de issues**       | Navegar a Issues, rellenar formularios y asignar etiquetas | _"Crea un bug P1 por la regresión de auth y asígnalo a @alice"_ |
+| **Notas de release**        | Leer cada commit desde el último tag y redactar changelog  | _"Genera notas de release para v2.1.0 vs v2.0.0"_               |
+| **Resumen de proyecto**     | Abrir varias pestañas: MRs, issues, pipelines, milestones  | _"Dame un informe de estado de my-org/backend"_                 |
 
 ## Ejemplos de prompts
 

@@ -320,36 +320,30 @@ For auto-update to work, GitHub releases must follow this structure:
    fedcba0987654321...  gitlab-mcp-server-windows-amd64.exe
    ```
 
-4. **Signature file** (optional): A `checksums.txt.asc` asset containing the detached PGP/GPG signature of `checksums.txt`. Required only when GPG verification is enabled via `AUTO_UPDATE_GPG_KEY`. Generate with: `gpg --detach-sign --armor checksums.txt` (the build scripts do this automatically when `GPG_SIGN=1`).
-
-The Makefile `release` target generates all of these automatically.
+The Makefile `release` target generates the binaries and checksum file automatically.
 
 ## Security Considerations
 
 - **Token scope**: Auto-update uses a dedicated built-in token (injected at build time), separate from the user's `GITLAB_TOKEN`. The built-in token is a GitHub token that needs read access to releases. No additional permissions are required.
 - **TLS verification**: Auto-update always uses TLS verification (hardcoded `SkipTLS: false`) since it connects to GitHub (`github.com`) with a valid certificate. The user's `GITLAB_SKIP_TLS_VERIFY` setting does not affect auto-update.
 - **Binary integrity**: Each downloaded binary is validated against the `checksums.txt` file before replacement. If the checksum does not match, the update is rejected.
-- **GPG signature verification** (optional): When `AUTO_UPDATE_GPG_KEY` (or `--auto-update-gpg-key` in HTTP mode) points to an armored PGP public key file, the server additionally verifies that `checksums.txt` is signed by the expected key. The library downloads `checksums.txt.asc` from the release and validates the signature before trusting the checksums. If the GPG key is malformed or the `.asc` file is missing, the server logs a warning and falls back to checksum-only validation.
 - **Rename-and-rollback**: The old binary is renamed to `.old` before replacement. If the new binary fails to be placed, the `.old` is renamed back to the original path as a rollback.
 - **Development builds**: Binaries built without `-ldflags -X main.version=...` report `version=dev` and auto-update is disabled to prevent accidental overwrites during development.
 
 ## Troubleshooting
 
-| Symptom                                                                        | Cause                                                                | Solution                                                                               |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `autoupdate: current version is required (binary built without -ldflags?)`     | Binary built without version injection                               | Build with `make build` or add `-ldflags "-X main.version=1.2.0"`                      |
-| `autoupdate: repository is required`                                           | `AUTO_UPDATE_REPO` is empty                                          | Set `AUTO_UPDATE_REPO` or use the default                                              |
-| `autoupdate: creating GitHub source`                                           | Network error reaching GitHub API                                    | Verify network connectivity to `github.com`                                            |
-| `autoupdate: detecting latest release`                                         | No releases in repository, or token lacks permissions                | Create a release or check token permissions                                            |
-| `autoupdate: startup check failed`                                             | Network timeout (`AUTO_UPDATE_TIMEOUT`, default 60s)                 | Check network connectivity or increase `AUTO_UPDATE_TIMEOUT`; the server starts anyway |
-| `autoupdate: could not initialize periodic updater`                            | Missing required config in HTTP mode                                 | Verify `--auto-update-repo` flag and network connectivity                              |
-| Update detected but not applied                                                | Mode is `check`                                                      | Set `AUTO_UPDATE=true` to enable automatic application                                 |
-| Server still runs old version after update (Windows)                           | Binary replaced but process not restarted                            | Restart the server process (Windows only — Unix re-execs automatically)                |
-| `autoupdate: exec-self failed`                                                 | `syscall.Exec` failed on Unix                                        | Server continues with old code; restart manually                                       |
-| `autoupdate: skipping update check (just re-executed after update)`            | Normal: re-exec guard preventing loop                                | No action needed — this is expected after a successful update                          |
-| `autoupdate: invalid GPG public key, falling back to checksum-only validation` | Malformed or corrupted PGP key file                                  | Verify the key file is a valid armored PGP public key (`gpg --show-keys key.pub`)      |
-| `autoupdate: GPG key path is not a regular file`                               | Path points to directory, symlink, or device                         | Ensure `AUTO_UPDATE_GPG_KEY` points to a regular file                                  |
-| GPG verification configured but updates still work without `.asc` file         | `checksums.txt.asc` missing in release → falls back to checksum-only | Upload signed checksums to the release (`GPG_SIGN=1 make release`)                     |
+| Symptom                                                                    | Cause                                                 | Solution                                                                               |
+| -------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `autoupdate: current version is required (binary built without -ldflags?)` | Binary built without version injection                | Build with `make build` or add `-ldflags "-X main.version=1.2.0"`                      |
+| `autoupdate: repository is required`                                       | `AUTO_UPDATE_REPO` is empty                           | Set `AUTO_UPDATE_REPO` or use the default                                              |
+| `autoupdate: creating GitHub source`                                       | Network error reaching GitHub API                     | Verify network connectivity to `github.com`                                            |
+| `autoupdate: detecting latest release`                                     | No releases in repository, or token lacks permissions | Create a release or check token permissions                                            |
+| `autoupdate: startup check failed`                                         | Network timeout (`AUTO_UPDATE_TIMEOUT`, default 60s)  | Check network connectivity or increase `AUTO_UPDATE_TIMEOUT`; the server starts anyway |
+| `autoupdate: could not initialize periodic updater`                        | Missing required config in HTTP mode                  | Verify `--auto-update-repo` flag and network connectivity                              |
+| Update detected but not applied                                            | Mode is `check`                                       | Set `AUTO_UPDATE=true` to enable automatic application                                 |
+| Server still runs old version after update (Windows)                       | Binary replaced but process not restarted             | Restart the server process (Windows only — Unix re-execs automatically)                |
+| `autoupdate: exec-self failed`                                             | `syscall.Exec` failed on Unix                         | Server continues with old code; restart manually                                       |
+| `autoupdate: skipping update check (just re-executed after update)`        | Normal: re-exec guard preventing loop                 | No action needed — this is expected after a successful update                          |
 
 ## Disabling Auto-Update
 

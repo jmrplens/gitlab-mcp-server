@@ -227,8 +227,24 @@ gitlab_dora_metrics → action: group, group_id: "platform",
 
 Returns: aggregated metrics for the entire group, useful for engineering leadership dashboards.
 
+## Dynamic-first CI/CD calls
+
+The default dynamic surface discovers exact CI/CD actions before execution:
+
+```text
+gitlab_find_action → query: "latest pipeline status for project"
+gitlab_execute_tool → action: "pipeline.latest", params: { project_id: "42" }
+```
+
+For failed jobs, discover the log or retry action first, then execute with the returned schema:
+
+```text
+gitlab_find_action → query: "get failed job trace"
+gitlab_execute_tool → action: "job.trace", params: { project_id: "42", job_id: 9876 }
+```
+
 ---
 
 :::tip
-All CI/CD examples use meta-tool mode with `TOOL_SURFACE=meta`. The AI assistant maps your natural language request to the correct `action` parameter automatically.
+These CI/CD prompts work with the default dynamic surface. With `TOOL_SURFACE=meta`, the AI assistant maps the same requests to the appropriate domain meta-tool and `action` parameter.
 :::
