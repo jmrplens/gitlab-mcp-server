@@ -17,6 +17,7 @@ func TestFormatLabelMarkdown_AllBranches(t *testing.T) {
 		ClosedIssuesCount:      2,
 		OpenMergeRequestsCount: 1,
 		Priority:               7,
+		PrioritySpecified:      true,
 		IsProjectLabel:         true,
 		Subscribed:             true,
 	}, LabelMarkdownOptions{
@@ -43,6 +44,16 @@ func TestFormatLabelMarkdown_AllBranches(t *testing.T) {
 	}
 }
 
+// TestFormatLabelMarkdown_ZeroPrioritySpecified verifies GitLab priority 0 is
+// rendered when the API explicitly returns it.
+func TestFormatLabelMarkdown_ZeroPrioritySpecified(t *testing.T) {
+	got := FormatLabelMarkdown(LabelMarkdown{ID: 1, Name: "zero", Color: "#111111", PrioritySpecified: true}, LabelMarkdownOptions{DetailTitle: "Label"})
+
+	if !strings.Contains(got, "- **Priority**: 0") {
+		t.Fatalf("FormatLabelMarkdown() did not render explicit zero priority:\n%s", got)
+	}
+}
+
 // TestFormatLabelMarkdown_MinimalUnescaped verifies optional fields are omitted
 // and descriptions can be left unchanged for callers that already handle them.
 func TestFormatLabelMarkdown_MinimalUnescaped(t *testing.T) {
@@ -62,10 +73,17 @@ func TestFormatLabelMarkdown_MinimalUnescaped(t *testing.T) {
 	}
 }
 
-// TestFormatLabelListMarkdown_WithLabels verifies list Markdown renders rows,
-// pagination, escaped table cells, and hints.
-func TestFormatLabelListMarkdown_WithLabels(t *testing.T) {
-	got := FormatLabelListMarkdown([]LabelMarkdown{{
+// TestFormatLabelListMarkdownFunc_WithLabels verifies list Markdown maps domain
+// labels, renders rows, pagination, escaped table cells, and hints.
+func TestFormatLabelListMarkdownFunc_WithLabels(t *testing.T) {
+	type labelOutput struct {
+		Name                   string
+		Color                  string
+		OpenIssuesCount        int64
+		ClosedIssuesCount      int64
+		OpenMergeRequestsCount int64
+	}
+	got := FormatLabelListMarkdownFunc([]labelOutput{{
 		Name:                   "bug|fix",
 		Color:                  "#ff0000",
 		OpenIssuesCount:        3,
@@ -74,6 +92,8 @@ func TestFormatLabelListMarkdown_WithLabels(t *testing.T) {
 	}}, PaginationOutput{Page: 1, PerPage: 20, TotalItems: 1, TotalPages: 1}, LabelMarkdownOptions{
 		ListTitle: "Labels",
 		ListHints: []string{"Use action 'label_get'"},
+	}, func(label labelOutput) LabelMarkdown {
+		return LabelMarkdown{Name: label.Name, Color: label.Color, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount}
 	})
 
 	for _, want := range []string{
@@ -90,15 +110,15 @@ func TestFormatLabelListMarkdown_WithLabels(t *testing.T) {
 }
 
 // TestFormatLabelListMarkdown_Empty verifies empty lists return the configured
-// empty text without rendering a table or hints.
+// empty text and keep follow-up hints without rendering a table.
 func TestFormatLabelListMarkdown_Empty(t *testing.T) {
 	got := FormatLabelListMarkdown(nil, PaginationOutput{}, LabelMarkdownOptions{
 		ListTitle:     "Group Labels",
 		EmptyListText: "No group labels found.",
-		ListHints:     []string{"should not render"},
+		ListHints:     []string{"Use action 'group_label_create'"},
 	})
 
-	if got != "## Group Labels (0)\n\nNo group labels found.\n" {
+	if !strings.Contains(got, "No group labels found.\n") || !strings.Contains(got, "Use action 'group_label_create'") {
 		t.Fatalf("FormatLabelListMarkdown() = %q", got)
 	}
 }

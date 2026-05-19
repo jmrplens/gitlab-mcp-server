@@ -15,6 +15,7 @@ type LabelMarkdown struct {
 	ClosedIssuesCount      int64
 	OpenMergeRequestsCount int64
 	Priority               int64
+	PrioritySpecified      bool
 	IsProjectLabel         bool
 	Subscribed             bool
 }
@@ -42,7 +43,7 @@ func FormatLabelMarkdown(label LabelMarkdown, opts LabelMarkdownOptions) string 
 		}
 		fmt.Fprintf(&b, FmtMdDescription, description)
 	}
-	if label.Priority > 0 {
+	if label.PrioritySpecified || label.Priority != 0 {
 		fmt.Fprintf(&b, "- **Priority**: %d\n", label.Priority)
 	}
 	fmt.Fprintf(&b, "- **Project label**: %v\n", label.IsProjectLabel)
@@ -63,6 +64,7 @@ func FormatLabelListMarkdown(labels []LabelMarkdown, pagination PaginationOutput
 	if len(labels) == 0 {
 		b.WriteString(opts.EmptyListText)
 		b.WriteString("\n")
+		WriteHints(&b, opts.ListHints...)
 		return b.String()
 	}
 	b.WriteString("| Name | Color | Open Issues | Closed Issues | Open MRs |\n")
@@ -74,4 +76,13 @@ func FormatLabelListMarkdown(labels []LabelMarkdown, pagination PaginationOutput
 	WritePagination(&b, pagination)
 	WriteHints(&b, opts.ListHints...)
 	return b.String()
+}
+
+// FormatLabelListMarkdownFunc renders labels after mapping domain-specific outputs to the shared Markdown view.
+func FormatLabelListMarkdownFunc[T any](labels []T, pagination PaginationOutput, opts LabelMarkdownOptions, convert func(T) LabelMarkdown) string {
+	items := make([]LabelMarkdown, len(labels))
+	for i, label := range labels {
+		items[i] = convert(label)
+	}
+	return FormatLabelListMarkdown(items, pagination, opts)
 }

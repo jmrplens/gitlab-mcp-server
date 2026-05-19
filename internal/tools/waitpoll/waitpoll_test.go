@@ -81,6 +81,61 @@ func TestPoll_TerminalFailureAllowed(t *testing.T) {
 	}
 }
 
+// TestPoll_TerminalFailureWithoutCallbackReturnsDefaultError verifies failed
+// terminal states do not panic when the optional failure callback is omitted.
+func TestPoll_TerminalFailureWithoutCallbackReturnsDefaultError(t *testing.T) {
+	opts, _ := pollOptions("failed")
+	opts.FailureError = nil
+	opts.ProgressMessage = nil
+
+	result, err := Poll(context.Background(), opts)
+	if err == nil {
+		t.Fatal("Poll() expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), `terminal status "failed"`) {
+		t.Fatalf("error = %q, want default terminal status error", err.Error())
+	}
+	if result.FinalStatus != "failed" {
+		t.Fatalf("FinalStatus = %q, want failed", result.FinalStatus)
+	}
+}
+
+// TestPoll_MissingRequiredCallbacks verifies required callbacks fail fast with
+// clear errors instead of nil function pointer panics.
+func TestPoll_MissingRequiredCallbacks(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*Options[pollItem])
+		wantErr string
+	}{
+		{
+			name:    "poll",
+			mutate:  func(opts *Options[pollItem]) { opts.Poll = nil },
+			wantErr: "poll callback is required",
+		},
+		{
+			name:    "status",
+			mutate:  func(opts *Options[pollItem]) { opts.Status = nil },
+			wantErr: "status callback is required",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, _ := pollOptions("success")
+			tc.mutate(&opts)
+
+			result, err := Poll(context.Background(), opts)
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("Poll() error = %v, want %q", err, tc.wantErr)
+			}
+			if result != (Result[pollItem]{}) {
+				t.Fatalf("result = %#v, want zero result", result)
+			}
+		})
+	}
+}
+
 // TestPoll_PollError verifies poller errors stop the loop immediately.
 func TestPoll_PollError(t *testing.T) {
 	wantErr := errors.New("poll failed")
@@ -129,6 +184,50 @@ func TestPoll_TimeoutReturnsLastItem(t *testing.T) {
 	}
 	if !result.TimedOut || result.FinalStatus != "running" || result.Item.Value != 1 {
 		t.Fatalf("result = %#v, want timed out running item", result)
+	}
+}
+
+// TestPoll_ImmediateTimeoutReturnsBeforePolling verifies an already expired
+// timeout stops before invoking the poll callback.
+func TestPoll_ImmediateTimeoutReturnsBeforePolling(t *testing.T) {
+	opts, _ := pollOptions("running")
+	opts.IntervalSeconds = 2
+	opts.TimeoutSeconds = 1
+	opts.PollDuration = func(seconds int) time.Duration {
+		if seconds == opts.TimeoutSeconds {
+			return 0
+		}
+		return time.Hour
+	}
+	opts.Poll = func(context.Context) (pollItem, error) {
+		t.Fatal("Poll callback should not run after an immediate timeout")
+		return pollItem{}, nil
+	}
+
+	result, err := Poll(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Poll() unexpected error: %v", err)
+	}
+	if !result.TimedOut || result.PollCount != 0 {
+		t.Fatalf("result = %#v, want timeout before polling", result)
+	}
+}
+
+// TestPoll_PollReceivesTimeoutContext verifies a slow poller receives a context
+// bounded by timeout_seconds and Poll returns a timeout result when it expires.
+func TestPoll_PollReceivesTimeoutContext(t *testing.T) {
+	opts, _ := pollOptions("running")
+	opts.Poll = func(ctx context.Context) (pollItem, error) {
+		<-ctx.Done()
+		return pollItem{}, ctx.Err()
+	}
+
+	result, err := Poll(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("Poll() unexpected error: %v", err)
+	}
+	if !result.TimedOut || result.PollCount != 1 || result.FinalStatus != "" {
+		t.Fatalf("result = %#v, want timeout during first poll", result)
 	}
 }
 

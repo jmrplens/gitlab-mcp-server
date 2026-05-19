@@ -30,7 +30,7 @@ func FormatMarkdown(l Output) string {
 
 // FormatListMarkdownString renders a paginated list of group labels as a Markdown table string.
 func FormatListMarkdownString(out ListOutput) string {
-	return toolutil.FormatLabelListMarkdown(toLabelMarkdownSlice(out.Labels), out.Pagination, labelMarkdownOptions)
+	return toolutil.FormatLabelListMarkdownFunc(out.Labels, out.Pagination, labelMarkdownOptions, toLabelMarkdown)
 }
 
 // FormatListMarkdown renders a paginated list of group labels as an MCP Markdown result.
@@ -44,24 +44,5 @@ func init() {
 }
 
 func toLabelMarkdown(label Output) toolutil.LabelMarkdown {
-	return toolutil.LabelMarkdown{
-		ID:                     label.ID,
-		Name:                   label.Name,
-		Color:                  label.Color,
-		Description:            label.Description,
-		OpenIssuesCount:        label.OpenIssuesCount,
-		ClosedIssuesCount:      label.ClosedIssuesCount,
-		OpenMergeRequestsCount: label.OpenMergeRequestsCount,
-		Priority:               label.Priority,
-		IsProjectLabel:         label.IsProjectLabel,
-		Subscribed:             label.Subscribed,
-	}
-}
-
-func toLabelMarkdownSlice(labels []Output) []toolutil.LabelMarkdown {
-	items := make([]toolutil.LabelMarkdown, len(labels))
-	for i, label := range labels {
-		items[i] = toLabelMarkdown(label)
-	}
-	return items
+	return toolutil.LabelMarkdown{ID: label.ID, Name: label.Name, Color: label.Color, Description: label.Description, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, Priority: label.Priority, PrioritySpecified: label.PrioritySpecified, IsProjectLabel: label.IsProjectLabel, Subscribed: label.Subscribed}
 }

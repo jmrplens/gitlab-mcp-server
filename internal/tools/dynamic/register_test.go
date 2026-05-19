@@ -2786,32 +2786,26 @@ func actionDescriptionByID(t *testing.T, output DescribeOutput, id string) Actio
 	return ActionDescription{}
 }
 
-var (
-	realCatalogRegistryOnce  sync.Once
-	realCatalogRegistryValue *Registry
-	errRealCatalogRegistry   error
-)
+var cachedRealCatalogRegistry = sync.OnceValues(func() (*Registry, error) {
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
+	if err != nil {
+		return nil, fmt.Errorf("BuildActionCatalog() error = %w", err)
+	}
+	catalog, err = AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("AddStandaloneCatalog() error = %w", err)
+	}
+	return NewRegistryFromCatalog(catalog), nil
+})
 
 // realCatalogRegistry supports real catalog registry assertions in dynamic tests.
 func realCatalogRegistry(t *testing.T) *Registry {
 	t.Helper()
-	realCatalogRegistryOnce.Do(func() {
-		catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
-		if err != nil {
-			errRealCatalogRegistry = fmt.Errorf("BuildActionCatalog() error = %w", err)
-			return
-		}
-		catalog, err = AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
-		if err != nil {
-			errRealCatalogRegistry = fmt.Errorf("AddStandaloneCatalog() error = %w", err)
-			return
-		}
-		realCatalogRegistryValue = NewRegistryFromCatalog(catalog)
-	})
-	if errRealCatalogRegistry != nil {
-		t.Fatal(errRealCatalogRegistry)
+	registry, err := cachedRealCatalogRegistry()
+	if err != nil {
+		t.Fatal(err)
 	}
-	return realCatalogRegistryValue
+	return registry
 }
 
 // gitLabDotComEnterpriseRegistry supports GitLab dot com enterprise registry assertions in dynamic tests.
