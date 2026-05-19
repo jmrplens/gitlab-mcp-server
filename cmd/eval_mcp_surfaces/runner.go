@@ -87,13 +87,61 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 		repairAlreadySent := repairCount >= repairLimit
 		for _, toolUse := range toolUses {
 			result.Trace.Events = append(result.Trace.Events, traceToolUseEvent(result.ModelCalls, toolUse))
-			if isCapabilityBridge(toolUse) {
-				result.CapabilityLookupUsed = true
-				result.CapabilityCalls++
-				if isResourceLookup(toolUse) {
-					result.ResourceLookupUsed = true
-					result.ResourceCalls++
+			if stepIndex < len(steps) && expectedCapabilityBridgeStep(steps[stepIndex]) && isCapabilityBridge(toolUse) {
+				validation := validateStepCallWithRoutes(steps[stepIndex], toolUse.Name, toolUse.Input, routes)
+				result.Trace.Events = append(result.Trace.Events, traceValidationEvent(result.ModelCalls, validation))
+				if firstFinalAttempt {
+					result.FirstTool = toolUse.Name
+					result.FirstAction = validation.Action
+					result.FirstPass = validation.Valid
+					firstFinalAttempt = false
 				}
+				result.FinalTool = toolUse.Name
+				result.FinalAction = validation.Action
+				result.DestructiveSafe = result.DestructiveSafe && validation.DestructiveSafe
+				if validation.Valid {
+					lastInvalidFingerprint = ""
+					recordCapabilityBridgeMetrics(&result, toolUse)
+					resourceResult := r.capabilityBridgeResult(ctx, toolUse)
+					block := toolResultBlock(toolUse.ID, resourceResult.Content, resourceResult.Err)
+					followups = append(followups, block)
+					result.Trace.Events = append(result.Trace.Events, traceToolResultEventWithMCP(result.ModelCalls, block, resourceResult.MCP))
+					if resourceResult.Err != nil {
+						result.Notes = append(result.Notes, resourceResult.Err.Error())
+						continue
+					}
+					stepIndex++
+					result.CompletedSteps = stepIndex
+					if repairCount > 0 {
+						result.RepairSuccess = true
+					}
+					if stepIndex == len(steps) {
+						result.FinalSuccess = true
+						return result
+					}
+					continue
+				}
+
+				invalidFingerprint := invalidToolUseFingerprint(toolUse)
+				if invalidFingerprint != "" && invalidFingerprint == lastInvalidFingerprint {
+					result.Notes = append(result.Notes, fmt.Sprintf("step %d repeated invalid retry: %s", stepIndex+1, validation.Message))
+					return result
+				}
+				lastInvalidFingerprint = invalidFingerprint
+				result.Notes = append(result.Notes, fmt.Sprintf("step %d: %s", stepIndex+1, validation.Message))
+				if repairAlreadySent {
+					return result
+				}
+				result.RepairAttempted = true
+				repairCount++
+				repairMessage := validationRepairMessage(task, steps[stepIndex], validation, toolUse.Input)
+				block := toolResultBlock(toolUse.ID, repairMessage, errors.New(repairMessage))
+				followups = append(followups, block)
+				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
+				continue
+			}
+			if isCapabilityBridge(toolUse) {
+				recordCapabilityBridgeMetrics(&result, toolUse)
 				resourceResult := r.capabilityBridgeResult(ctx, toolUse)
 				block := toolResultBlock(toolUse.ID, resourceResult.Content, resourceResult.Err)
 				followups = append(followups, block)
@@ -979,6 +1027,19 @@ func isSchemaLookup(toolUse modelContentBlock) bool {
 // isCapabilityBridge reports whether a tool call uses an MCP capability bridge.
 func isCapabilityBridge(toolUse modelContentBlock) bool {
 	return isCapabilityBridgeName(toolUse.Name)
+}
+
+func expectedCapabilityBridgeStep(step evalStep) bool {
+	return step.ExpectedAction == "" && isCapabilityBridgeName(step.ExpectedTool)
+}
+
+func recordCapabilityBridgeMetrics(result *taskResult, toolUse modelContentBlock) {
+	result.CapabilityLookupUsed = true
+	result.CapabilityCalls++
+	if isResourceLookup(toolUse) {
+		result.ResourceLookupUsed = true
+		result.ResourceCalls++
+	}
 }
 
 func isCapabilityBridgeName(name string) bool {

@@ -141,7 +141,13 @@ func standaloneToolAvailableInLiveEvaluator(tool string) bool {
 		"gitlab_interactive_issue_create",
 		"gitlab_interactive_mr_create",
 		"gitlab_interactive_project_create",
-		"gitlab_interactive_release_create":
+		"gitlab_interactive_release_create",
+		capabilityListTool,
+		resourceListTool,
+		resourceReadTool,
+		promptListTool,
+		promptGetTool,
+		completionTool:
 		return true
 	default:
 		return false
@@ -290,6 +296,8 @@ func taskMatchesPreset(task evalTask, preset string) bool {
 		return !enterprise && mutating && !destructive && !special
 	case presetDockerDestructiveSafe:
 		return !enterprise && destructive && !special
+	case presetDockerCapabilityDiscovery:
+		return taskUsesCapabilityFallback(task)
 	default:
 		return false
 	}
@@ -340,6 +348,9 @@ func taskHasSimulation(task evalTask) bool {
 func taskUsesCapabilityFallback(task evalTask) bool {
 	hasExpectedRoute := false
 	for _, step := range taskSteps(task) {
+		if isCapabilityBridgeName(step.ExpectedTool) {
+			return true
+		}
 		if strings.Contains(step.ExpectedAction, "schema") {
 			return true
 		}

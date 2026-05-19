@@ -50,6 +50,8 @@ const (
 	presetDockerMutatingSafe = "docker-mutating-safe"
 	// presetDockerDestructiveSafe identifies the preset docker destructive safe constant used by this package.
 	presetDockerDestructiveSafe = "docker-destructive-safe"
+	// presetDockerCapabilityDiscovery identifies the Docker-backed MCP capability discovery preset.
+	presetDockerCapabilityDiscovery = "docker-capability-discovery"
 
 	// partitionBaseRead identifies the partition base read constant used by this package.
 	partitionBaseRead = "base-read"

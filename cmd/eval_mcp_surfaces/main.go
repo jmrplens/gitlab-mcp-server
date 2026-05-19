@@ -220,6 +220,14 @@ func run() (runErr error) {
 	}
 
 	if opts.DryRun {
+		if opts.ExposeResources {
+			bridgeSupport := mcpBridgeSupport{Capabilities: true, Resources: true, Prompts: true, Completion: true}
+			catalog = appendCapabilityBridgeTools(catalog, bridgeSupport)
+			opts.CapabilityAccessActive = true
+			opts.ResourceAccessActive = true
+			opts.PromptAccessActive = true
+			opts.CompletionAccessActive = true
+		}
 		toolNames := catalogToolNames(catalog)
 		results := make([]taskResult, 0, len(tasks)*opts.Repeat)
 		for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {

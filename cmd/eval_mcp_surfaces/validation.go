@@ -503,6 +503,24 @@ func roleSensitiveRepairHint(step evalStep) string {
 
 // expectedActionCallExample resolves expected action call example for evaluator execution.
 func expectedActionCallExample(task evalTask, step evalStep, attemptedInput map[string]any) string {
+	if step.ExpectedAction == "" {
+		arguments := map[string]any{}
+		for _, required := range step.RequiredParams {
+			if value, ok := attemptedInput[required]; ok {
+				arguments[required] = value
+				continue
+			}
+			arguments[required] = standaloneExpectedParamValue(required, task.Prompt)
+		}
+		if step.Destructive || hasParam(step.OptionalParams, "confirm") {
+			arguments["confirm"] = true
+		}
+		data, err := json.Marshal(arguments)
+		if err != nil {
+			return "{...}"
+		}
+		return string(data)
+	}
 	params := map[string]any{}
 	attemptedParams, _ := attemptedInput["params"].(map[string]any)
 	allParams := exactCallParamSet(step)
@@ -524,6 +542,66 @@ func expectedActionCallExample(task evalTask, step evalStep, attemptedInput map[
 		return fmt.Sprintf("{\"action\":%q,\"params\":{...}}", step.ExpectedAction)
 	}
 	return string(data)
+}
+
+func standaloneExpectedParamValue(param, prompt string) any {
+	switch param {
+	case "uri":
+		if value, ok := firstBacktickValueWithPrefix(prompt, "gitlab://"); ok {
+			return value
+		}
+		return "gitlab://tools"
+	case "name":
+		if value, ok := firstBacktickValue(prompt); ok {
+			return value
+		}
+		return "my_open_mrs"
+	case "ref_type":
+		return "ref/prompt"
+	case "argument_name":
+		return "project_id"
+	case "argument_value":
+		return "my-org"
+	case "arguments":
+		return map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}
+	default:
+		if value, ok := examplePromptMarkerValue(param, prompt); ok {
+			return value
+		}
+		return fmt.Sprintf("<%s>", param)
+	}
+}
+
+func firstBacktickValue(prompt string) (string, bool) {
+	_, rest, ok := strings.Cut(prompt, "`")
+	if !ok {
+		return "", false
+	}
+	value, _, ok := strings.Cut(rest, "`")
+	if !ok {
+		return "", false
+	}
+	value = strings.TrimSpace(value)
+	return value, value != ""
+}
+
+func firstBacktickValueWithPrefix(prompt, prefix string) (string, bool) {
+	remaining := prompt
+	for {
+		_, rest, ok := strings.Cut(remaining, "`")
+		if !ok {
+			return "", false
+		}
+		value, next, ok := strings.Cut(rest, "`")
+		if !ok {
+			return "", false
+		}
+		value = strings.TrimSpace(value)
+		if strings.HasPrefix(value, prefix) {
+			return value, true
+		}
+		remaining = next
+	}
 }
 
 // validateStandaloneToolCall validates standalone tool call for the main package.

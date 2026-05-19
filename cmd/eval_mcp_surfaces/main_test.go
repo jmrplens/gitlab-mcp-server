@@ -450,6 +450,23 @@ func TestApplyPresetDefaults_UsesDockerReadDefaults(t *testing.T) {
 	}
 }
 
+// TestApplyPresetDefaults_UsesDockerCapabilityDiscoveryDefaults verifies ApplyPresetDefaults uses safe Docker defaults for MCP capability discovery.
+func TestApplyPresetDefaults_UsesDockerCapabilityDiscoveryDefaults(t *testing.T) {
+	opts, err := applyPresetDefaults(options{Preset: presetDockerCapabilityDiscovery, explicitFlags: map[string]bool{}})
+	if err != nil {
+		t.Fatalf("applyPresetDefaults() error = %v", err)
+	}
+	if opts.Backend != backendGitLab {
+		t.Fatalf("Backend = %q, want %q", opts.Backend, backendGitLab)
+	}
+	if opts.Partition != partitionCapabilityFallback {
+		t.Fatalf("Partition = %q, want %q", opts.Partition, partitionCapabilityFallback)
+	}
+	if !opts.Execute || !opts.UseFixtures || !opts.SkipUnavailable || !opts.SkipMutating || !opts.SkipDestructive {
+		t.Fatalf("docker-capability-discovery defaults not fully applied: %+v", opts)
+	}
+}
+
 // TestApplyPresetDefaults_PreservesExplicitFlags verifies ApplyPresetDefaults preserves explicit flags.
 func TestApplyPresetDefaults_PreservesExplicitFlags(t *testing.T) {
 	opts, err := applyPresetDefaults(options{
@@ -491,6 +508,7 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 		{ID: "delete", ExpectedTool: "gitlab", ExpectedAction: "issue.delete", Destructive: true},
 		{ID: "enterprise", ExpectedTool: "gitlab", ExpectedAction: "merge_train.list_project"},
 		{ID: "fallback", ExpectedTool: "gitlab_server", ExpectedAction: "schema_get"},
+		{ID: "capability", Steps: []evalStep{{ExpectedTool: resourceListTool}, {ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}},
 	}
 
 	read, err := filterTasksByPreset(tasks, presetDockerRead)
@@ -520,6 +538,22 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	}
 	if got := taskIDs(enterprise); got != "enterprise" {
 		t.Fatalf("schema-enterprise IDs = %q, want enterprise", got)
+	}
+	capability, err := filterTasksByPreset(tasks, presetDockerCapabilityDiscovery)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-capability-discovery) error = %v", err)
+	}
+	if got := taskIDs(capability); got != "fallback,capability" {
+		t.Fatalf("docker-capability-discovery IDs = %q, want fallback,capability", got)
+	}
+}
+
+// TestStandaloneToolAvailableInLiveEvaluator_IncludesCapabilityBridgeTools verifies live filtering keeps evaluator bridge tasks.
+func TestStandaloneToolAvailableInLiveEvaluator_IncludesCapabilityBridgeTools(t *testing.T) {
+	for _, tool := range []string{capabilityListTool, resourceListTool, resourceReadTool, promptListTool, promptGetTool, completionTool} {
+		if !standaloneToolAvailableInLiveEvaluator(tool) {
+			t.Fatalf("standaloneToolAvailableInLiveEvaluator(%q) = false, want true", tool)
+		}
 	}
 }
 
@@ -880,7 +914,8 @@ func TestDynamicPrompt_RequiresFindBeforeUncertainExecute(t *testing.T) {
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible.",
+		"Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_tool",
+		"Use bridge tools directly for capability, resource, prompt, and completion inspection steps",
 		"use gitlab_find_action before executing when an action ID or params schema is not exact",
 		"params limited to the selected action input_schema",
 		"put confirm:true at the top level of gitlab_execute_tool arguments",
@@ -1125,8 +1160,8 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForOptionalOnlyList(t *testing.T) 
 		`"order_by":"updated_at"`,
 		`"sort":"desc"`,
 		`"per_page":10`,
-		"Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible.",
-		"gitlab_find_action and gitlab_execute_tool",
+		"Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_tool",
+		"gitlab_find_action, gitlab_execute_tool",
 	})
 }
 
@@ -1141,7 +1176,7 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForSearchProjects(t *testing.T) {
 		"Dynamic first-step exact call",
 		`"action":"search.projects"`,
 		`"query":"gitlab-mcp-server"`,
-		"Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible.",
+		"Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_tool",
 	})
 }
 
@@ -4611,6 +4646,34 @@ func TestEvaluateTask_UsesResourceLookupThenFinalCall(t *testing.T) {
 	}
 	if !result.FinalSuccess || result.ModelCalls != 3 || result.FirstTool != "gitlab_project" {
 		t.Fatalf("result = %+v, want final project call after resource lookup", result)
+	}
+}
+
+// TestEvaluateTask_ExpectedResourceBridgeStepAdvancesScenario verifies expected bridge calls count as workflow steps.
+func TestEvaluateTask_ExpectedResourceBridgeStepAdvancesScenario(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("resources", resourceListTool, map[string]any{}),
+		toolUseResponse("tools-detail", resourceReadTool, map[string]any{"uri": "gitlab://tools/project.get"}),
+		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
+	)
+	runner.mcpSession = newResourceLookupSessionForTest(t)
+	task := evalTask{ID: "MS-040", Steps: []evalStep{
+		{ExpectedTool: resourceListTool},
+		{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}},
+		{ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}},
+	}}
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+
+	result := runner.evaluateTask(t.Context(), task, nil, routes)
+
+	if !result.FinalSuccess || result.CompletedSteps != 3 {
+		t.Fatalf("result = %+v, want bridge steps and final project step completed", result)
+	}
+	if !result.FirstPass || result.FirstTool != resourceListTool || result.FirstAction != "" {
+		t.Fatalf("first call = %s/%s pass=%t, want expected resource bridge", result.FirstTool, result.FirstAction, result.FirstPass)
+	}
+	if !result.ResourceLookupUsed || result.ResourceCalls != 2 || result.CapabilityCalls != 2 {
+		t.Fatalf("bridge metrics = resource:%t resource_calls:%d capability_calls:%d, want two resource bridge calls", result.ResourceLookupUsed, result.ResourceCalls, result.CapabilityCalls)
 	}
 }
 

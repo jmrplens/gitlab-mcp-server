@@ -28,7 +28,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.PublishReadme, "publish-readme", defaultPublishReadme, "README updated by --publish-docs")
 	flag.StringVar(&opts.PublishLabel, "publish-label", "", "Human-readable label for the published snapshot")
 	flag.StringVar(&opts.PublishMode, "publish-mode", publishModeReplaceCurrent, "Publication mode for model results: append or replace-current")
-	flag.StringVar(&opts.Preset, "preset", "", "Optional evaluation preset: docker-read, docker-mutating-safe, docker-destructive-safe, or schema-enterprise")
+	flag.StringVar(&opts.Preset, "preset", "", "Optional evaluation preset: docker-read, docker-mutating-safe, docker-destructive-safe, docker-capability-discovery, or schema-enterprise")
 	flag.StringVar(&opts.Partition, "partition", "", "Optional schema fixture partition: base-read, base-mutating, base-destructive, enterprise-read, enterprise-mutating, enterprise-destructive, error-recovery, or capability-fallback")
 	flag.StringVar(&opts.ToolSurface, "tool-surface", config.DefaultToolSurface, "Tool catalog surface to evaluate: dynamic or meta")
 	flag.StringVar(&opts.CoverageReport, "coverage-report", "", "Optional Markdown report listing uncovered high-risk routes after the selected evaluation")
@@ -100,6 +100,10 @@ func applyPresetDefaults(opts options) (options, error) {
 	case presetDockerDestructiveSafe:
 		applyDockerPresetDefaults(&opts, partitionBaseDestructive)
 		setBoolDefault(&opts.OnlyDestructive, opts, "only-destructive")
+	case presetDockerCapabilityDiscovery:
+		applyDockerPresetDefaults(&opts, partitionCapabilityFallback)
+		setBoolDefault(&opts.SkipMutating, opts, "skip-mutating")
+		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	}
 	return opts, nil
 }
@@ -117,7 +121,7 @@ func applyDockerPresetDefaults(opts *options, partition string) {
 // validPreset reports whether valid preset.
 func validPreset(preset string) bool {
 	switch preset {
-	case presetSchemaEnterprise, presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe:
+	case presetSchemaEnterprise, presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe, presetDockerCapabilityDiscovery:
 		return true
 	default:
 		return false

@@ -163,6 +163,39 @@ type modelContentBlock struct {
 	ThoughtSignature string          `json:"-"`
 }
 
+// MarshalJSON preserves Anthropic's required empty input object for tool_use blocks.
+func (b modelContentBlock) MarshalJSON() ([]byte, error) {
+	payload := map[string]any{"type": b.Type}
+	if b.Text != "" {
+		payload["text"] = b.Text
+	}
+	if b.ID != "" {
+		payload["id"] = b.ID
+	}
+	if b.Name != "" {
+		payload["name"] = b.Name
+	}
+	if b.Type == "tool_use" {
+		input := b.Input
+		if input == nil {
+			input = map[string]any{}
+		}
+		payload["input"] = input
+	} else if len(b.Input) > 0 {
+		payload["input"] = b.Input
+	}
+	if b.ToolUseID != "" {
+		payload["tool_use_id"] = b.ToolUseID
+	}
+	if b.Content != "" {
+		payload["content"] = b.Content
+	}
+	if b.IsError {
+		payload["is_error"] = b.IsError
+	}
+	return json.Marshal(payload)
+}
+
 // modelResponse holds model response data for the main package.
 type modelResponse struct {
 	ID            string              `json:"id"`

@@ -418,6 +418,17 @@ These rows are designed for Docker-backed model runs with `--prepare-fixtures --
 | MS-037 | Build a broad read-only Docker inventory for project `my-org/tools/gitlab-mcp-server`: get the project, list branches, list tags, list releases, list the repository tree at `main`, list project CI variables, list deploy keys, list deploy tokens, then list generic packages. | `gitlab_project` / `get` -> `gitlab_branch` / `list` -> `gitlab_tag` / `list` -> `gitlab_release` / `list` -> `gitlab_repository` / `tree` -> `gitlab_ci_variable` / `list` -> `gitlab_access` / `deploy_key_list_project` -> `gitlab_access` / `deploy_token_list_project` -> `gitlab_package` / `list` | `project_id`; `project_id`; `project_id`; `project_id`; `project_id`; `project_id`; `project_id`; `project_id`; `project_id` | none; `per_page`; `per_page`; `per_page`; `ref`, `path`, `per_page`; `page`, `per_page`; `page`, `per_page`; `page`, `per_page`; `package_type`, `per_page` | none | Read-only list/get routes across repository, CI, access, and package domains all use the same project identifier. |
 | MS-038 | Publish the local fixture files `__PACKAGE_RELEASE_FILES__` from directory `__PACKAGE_RELEASE_DIR__` to GitLab Generic Packages in project `my-org/tools/gitlab-mcp-server` as package `__PACKAGE_RELEASE_PACKAGE__` version `__PACKAGE_RELEASE_VERSION__`, then create release `__PACKAGE_RELEASE_TAG__` from ref `main` named `Evaluation package release`, and link each uploaded package file to that release as a package asset. Upload the package files first, then generate the release, then link the returned package URLs; do not construct package URLs manually. | `gitlab_package` / `publish_directory` -> `gitlab_release` / `create` -> `gitlab_release` / `link_create_batch` | `project_id`, `package_name`, `package_version`, `directory_path`; `project_id`, `tag_name`, `ref`; `project_id`, `tag_name`, `links` | `include_pattern`; `name`, `description`; none | none | Multiple local files are uploaded to Generic Packages, the release is created from `main`, and release asset links use the URLs returned by package publishing. |
 
+## MCP Capability Discovery Scenario Fixture
+
+These rows are selected by the `capability-fallback` partition and the `docker-capability-discovery` preset. They intentionally use evaluator bridge tools that expose normal MCP client capabilities to model providers: resources, prompts, completions, and server capability metadata.
+
+| ID | Prompt | Expected sequence | Required params by step | Optional params by step | Destructive steps | Success verifier |
+| --- | --- | --- | --- | --- | --- | --- |
+| MS-039 | Inspect the MCP capability bridge for this GitLab MCP server, list MCP resources, then read the unified tools manifest resource `gitlab://tools`. | `gitlab_list_capabilities` -> `gitlab_list_resources` -> `gitlab_read_resource` | none; none; `uri` | none; none; none | none | Capability metadata, resource listings, and the unified tool manifest are requested through bridge tools. |
+| MS-040 | Discover MCP resources, read the project get schema resource `gitlab://tools/project.get`, then fetch project `my-org/tools/gitlab-mcp-server`. | `gitlab_list_resources` -> `gitlab_read_resource` -> `gitlab_project` / `get` | none; `uri`; `project_id` | none; none; none | none | The model reads a concrete tool schema resource before executing the documented project read. |
+| MS-041 | List MCP prompt templates, then render prompt `my_open_mrs`. | `gitlab_list_prompts` -> `gitlab_get_prompt` | none; `name` | none; none | none | Prompt discovery and prompt rendering are requested through prompt bridge tools. |
+| MS-042 | Request MCP completion for prompt `summarize_open_mrs` argument `project_id` with partial value `my-org`, then render `summarize_open_mrs` for project `my-org/tools/gitlab-mcp-server`. | `gitlab_complete` -> `gitlab_get_prompt` | `ref_type`, `name`, `argument_name`, `argument_value`; `name`, `arguments` | none; none | none | Completion and prompt rendering are both exercised through MCP bridge tools. |
+
 ## Failure Simulation Scenario Fixture
 
 These rows use an extra `Simulation by step` column. The harness validates the model's tool call first, then returns the simulated tool result without executing GitLab.
@@ -435,15 +446,15 @@ These rows use an extra `Simulation by step` column. The harness validates the m
 | Area | Cases |
 | --- | ---: |
 | Single-operation meta-tool cases | 179 |
-| Multi-step workflow scenarios | 38 |
+| Multi-step workflow scenarios | 42 |
 | Failure simulation scenarios | 5 |
-| Total automated cases | 222 |
-| Expected tool operations across all cases | 365 |
+| Total automated cases | 226 |
+| Expected tool operations across all cases | 375 |
 | Catalog tools covered | 48 / 48 |
 
 ## Maintenance Rules
 
-- Keep `MT-*` and `MS-*` fixture rows in the seven-column format shown above; `MF-*` rows may use the eight-column failure-simulation format. The parser reads rows starting with `| MT-`, `| MS-`, or `| MF-`.
+- Keep `MT-*` and `MS-*` fixture rows in the seven-column format shown above; `MF-*` rows may use the eight-column failure-simulation format. The parser reads rows starting with `| MT-`, `| MS-`, or `| MF-`. Capability discovery rows use `MS-*` with standalone bridge tool names in the expected sequence.
 - Add a new `MT-*` row when adding a new meta-tool or materially changing a route description.
 - Add a new `MS-*` row when a user workflow naturally spans domains or requires state from earlier calls.
 - Keep prompts grounded with concrete project, group, issue, MR, pipeline, job, runner, tag, package, or environment identifiers when the expected route needs them.
