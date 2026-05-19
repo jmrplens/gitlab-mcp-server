@@ -2335,6 +2335,42 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 	}
 }
 
+// TestOptionalEnvironmentScopeFromPrompt_IgnoresBlankBacktickScope verifies blank backtick values do not mask later scope hints.
+func TestOptionalEnvironmentScopeFromPrompt_IgnoresBlankBacktickScope(t *testing.T) {
+	tests := []struct {
+		name      string
+		prompt    string
+		wantScope string
+		wantOK    bool
+	}{
+		{
+			name:      "explicit scope",
+			prompt:    "Delete CI variable `EVAL_TOKEN` with environment_scope `review/eval` in project `my-org/tools/gitlab-mcp-server`.",
+			wantScope: "review/eval",
+			wantOK:    true,
+		},
+		{
+			name:      "blank scope falls through to production",
+			prompt:    "Delete CI variable `EVAL_TOKEN` with environment_scope `` from production scope in project `my-org/tools/gitlab-mcp-server`.",
+			wantScope: "production",
+			wantOK:    true,
+		},
+		{
+			name:   "whitespace scope ignored",
+			prompt: "Delete CI variable `EVAL_TOKEN` with environment scope `   ` in project `my-org/tools/gitlab-mcp-server`.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotScope, gotOK := optionalEnvironmentScopeFromPrompt(tt.prompt)
+			if gotScope != tt.wantScope || gotOK != tt.wantOK {
+				t.Fatalf("optionalEnvironmentScopeFromPrompt() = %q, %t; want %q, %t", gotScope, gotOK, tt.wantScope, tt.wantOK)
+			}
+		})
+	}
+}
+
 // TestTaskPrompt_MultiStepAvoidsImplicitPagination verifies TaskPrompt when multi step avoids implicit pagination.
 func TestTaskPrompt_MultiStepAvoidsImplicitPagination(t *testing.T) {
 	task := evalTask{
@@ -2857,7 +2893,7 @@ func TestTaskPrompt_DestructiveScenarioWarningGuidance(t *testing.T) {
 					{ExpectedTool: "gitlab_branch", ExpectedAction: "delete", RequiredParams: []string{"project_id", "branch_name"}, OptionalParams: []string{"confirm"}, Destructive: true},
 				},
 			},
-			wants: []string{"params.push_access_level=40", "params.merge_access_level=40", "After protect succeeds, call get_protected next", "unprotect only uses params.project_id, params.branch_name, and params.confirm=true", "never send allow_force_push to unprotect", `"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}`, `"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}`, "Never put confirm beside action as a top-level field"},
+			wants: []string{"params.push_access_level=40", "params.merge_access_level=40", "After protect succeeds, call get_protected next", "unprotect only uses params.project_id, params.branch_name, and params.confirm=true", "never send allow_force_push to unprotect", "For direct gitlab_branch meta-tool calls", `"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}`, `"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}`, "For dynamic mode with gitlab_execute_tool", "top-level confirm:true"},
 		},
 		{
 			name: "group milestone",

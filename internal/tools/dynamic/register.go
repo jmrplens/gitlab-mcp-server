@@ -29,11 +29,12 @@ const (
 	findToolDescription    = "Search the local GitLab action catalog by domain, resource, verb, or filter keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'); this is read-only and does not call GitLab. Returns matching canonical action IDs with exact input schemas, required params, destructive flags, usage hints, and gitlab_execute_tool examples. Use when the action ID, compatibility alias, or parameter names are unclear; use limit to keep results compact and explain=true only to debug ranking. If no useful result appears, broaden the query by GitLab domain or verb; if the task already names a clear action ID/alias and required params, call gitlab_execute_tool directly."
 	executeToolDescription = "Execute one GitLab catalog action by canonical action ID or supported compatibility alias (e.g. domain.action, issue.close) using the configured GitLab token; the selected action may read or mutate GitLab. Call directly when the action ID/alias and required params are clear from the task; use gitlab_find_action only when action selection or parameter names are uncertain. Always include params as an object, use params:{} only for no-parameter actions, and include only schema-defined param names; destructive actions require top-level confirm=true. Read-only or safe mode can block or preview mutations, and GitLab permission, scope, or rate-limit failures are returned as repairable tool errors. For issue.close/issue.reopen aliases, omit state_event; for issue.update state transitions, include params.state_event."
 
-	defaultLimit     = 20
-	maxLimit         = 50
-	minSegmentTerms  = 3
-	maxSegmentTerms  = 6
-	segmentTermBoost = 90
+	defaultLimit                 = 20
+	maxLimit                     = 50
+	defaultMaxParamGuidanceItems = 2
+	minSegmentTerms              = 3
+	maxSegmentTerms              = 6
+	segmentTermBoost             = 90
 
 	actionAdminBroadcastMessageList = "admin.broadcast_message_list"
 	actionAdminSettingsGet          = "admin.settings_get"
@@ -2742,7 +2743,7 @@ func compactFindGuidance(result FindResult) string {
 	if usage := strings.TrimSpace(result.Usage); usage != "" {
 		parts = append(parts, usage)
 	}
-	if guidance := compactParameterGuidance(result.ParamGuidance, 2); guidance != "" {
+	if guidance := compactParameterGuidance(result.ParamGuidance, defaultMaxParamGuidanceItems); guidance != "" {
 		parts = append(parts, guidance)
 	}
 	if len(parts) == 0 {
