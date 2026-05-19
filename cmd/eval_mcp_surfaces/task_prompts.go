@@ -1,0 +1,1117 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+)
+
+func systemPrompt() string {
+	return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. If MCP capability bridge tools such as gitlab_list_capabilities, gitlab_list_resources, gitlab_read_resource, gitlab_list_prompts, gitlab_get_prompt, or gitlab_complete are provided, they represent client-side MCP capabilities and may be used to inspect the same resources, prompts, completions, and capability metadata exposed by this server before a final GitLab operation. Function-call arguments must be one valid JSON object, never a fragment or a leading comma. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. A unified gitlab dispatcher call with no input is invalid; always include both action and params. If the catalog exposes a unified gitlab dispatcher, use its domain.action values such as project.get or issue.create. Use gitlab_interactive_* only when the task explicitly asks for a guided interactive flow; ordinary create tasks with all fields supplied use the gitlab dispatcher action. If a task asks for server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check; do not call gitlab with action health_check. If a task provides a project ID or namespace path, pass it inside params as project_id; use gitlab_discover_project only for git remote URLs. Standalone tools without an action enum use their input schema directly. Schema lookup counts as an extra tool call in this evaluation: do not use it to confirm an action you already know or a no-parameter action; call gitlab_server schema_index or schema_get only when exact params are ambiguous or after a validation error. For no-parameter list actions, call gitlab directly, for example {"action":"template.dockerfile_list","params":{}}. Schema lookup is itself action-based: call gitlab_server as {"action":"schema_get","params":{"tool":"gitlab","action":"project.get"}} for a unified dispatcher action, or {"action":"schema_index","params":{"tool":"gitlab"}} to inspect available unified actions. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. For subgroup creation with group.create, send params.name, params.path, and params.parent_id. For custom emoji group operations, use custom_emoji.list with params.group_path; do not use group.custom_emoji_list or group_id for a group path. For project access tokens, scope names go in params.scopes as an array, not params.scope, and expiring dates go in params.expires_at. For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id; for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id; use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied. To pause or unpause a runner, use runner.update with params.runner_id and params.paused true or false; do not use project_id, and do not use runner.disable_project unless the user asks to detach a runner from a project. For runner.list_project, use params.project_id by default; add params.status only when the task explicitly asks for online, offline, stale, or never_contacted runners, and never send status all or active. Do not send params.paused, params.type, params.tag_list, or empty filter values for runner.list_project. For broadcast messages, saying maps to params.message, from maps to params.starts_at, and to maps to params.ends_at. For merge request creation, "from" maps to params.source_branch, "into" maps to params.target_branch, and "titled" maps to params.title; never use ref, search, tag_name, to, or value for those fields. For merge request notes or comments, use mr_review.note_create with project_id, merge_request_iid, and body. Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion. For personal snippets, use params.snippet_id; do not use project_id, query, search, sort, or file_path for a personal snippet ID. For job.trace, use params.project_id and params.job_id. For job.play variables, use params.variables as an array like [{"key":"DEPLOY_ENV","value":"staging"}], not an object. For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message; create/update also require params.content. For repository file reads, use repository.file_get with ref; use repository.file_raw only when the user explicitly asks for raw bytes/content. For project badges, "linking to" maps to params.link_url and "with image" maps to params.image_url. When the task only asks for an LLM-assisted analyzer or to analyze why a pipeline failed, call the matching analyze.* action directly without prefetching pipeline, issue, MR, or changes; release notes use analyze.release_notes with project_id, from, and to. If the task asks for inspection, listing, or compare before an analyzer, perform those prerequisites first and call the analyzer last. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true in params when using an action-based tool, or at top level for a standalone destructive tool. If GitLab returns a temporary API/server error, retry the same operation; do not call CI retry actions such as pipeline.retry unless the user asks to rerun failed CI jobs. Return tool calls only; do not answer with explanatory text.`
+}
+
+// systemPromptForTask builds system prompt for task for evaluator prompts.
+func systemPromptForTask(task evalTask, toolSurface string) string {
+	if isDynamicEvalSurface(toolSurface) {
+		return dynamicSystemPrompt(toolSurface)
+	}
+	steps := taskSteps(task)
+	if len(steps) == 1 && (usesCompactExactPrompt(steps[0]) || usesExactSingleToolPrompt(task, steps[0])) {
+		return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. If MCP capability bridge tools are provided, they expose MCP resources, prompts, completions, and capability metadata. Function-call arguments must be one valid JSON object. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. Use domain.action values with the unified gitlab dispatcher. If a task provides a project ID or namespace path, pass it inside params as project_id. Schema lookup counts as an extra tool call; skip it when the prompt provides the exact action and params. For destructive tasks, include confirm:true in params. Return tool calls only; do not answer with explanatory text.`
+	}
+	return systemPrompt()
+}
+
+// dynamicSystemPrompt guides models through the low-token dynamic tool surface.
+func dynamicSystemPrompt(_ string) string {
+	return `You are evaluating GitLab MCP dynamic tool mode. Use the provided tools only. GitLab operations are executed through gitlab_find_action and gitlab_execute_tool; if MCP capability bridge tools are provided, they expose MCP resources, prompts, completions, and capability metadata for inspecting the configured server surface. Catalog GitLab operations are not directly visible as individual tools. Use gitlab_find_action before gitlab_execute_tool whenever the exact canonical action ID or exact params schema is not already known from a prior find result. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}} and only parameter names shown in the input_schema. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the exact canonical action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
+}
+
+// taskPromptForSurface returns task guidance for the selected tool catalog.
+func taskPromptForSurface(task evalTask, toolSurface string) string {
+	if !isDynamicEvalSurface(toolSurface) {
+		return taskPrompt(task)
+	}
+	prompt := dynamicConfirmPrompt(taskPrompt(task))
+	exactPreamble := dynamicExactCallPreamble(task)
+	if exactPreamble == "" {
+		exactPreamble = strings.TrimSpace(dynamicFirstStepGuidance(task))
+	}
+	exactPreamble = joinNonEmpty("\n\n", exactPreamble, dynamicWorkflowPlanPreamble(task))
+	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible. Treat any catalog route as a canonical action ID for gitlab_execute_tool. For multi-step tasks with a Dynamic workflow plan, follow that plan in order and use gitlab_find_action only if an action ID or params schema is absent from the plan. Otherwise, use gitlab_find_action before executing when an action ID or params schema is not exact. The final task operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the selected action input_schema. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
+}
+
+// joinNonEmpty joins non-blank prompt fragments with the requested separator.
+func joinNonEmpty(separator string, values ...string) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			parts = append(parts, value)
+		}
+	}
+	return strings.Join(parts, separator)
+}
+
+// dynamicWorkflowPlanPreamble builds dynamic workflow plan preamble for evaluator prompts.
+func dynamicWorkflowPlanPreamble(task evalTask) string {
+	steps := taskSteps(task)
+	if len(steps) <= 1 {
+		return ""
+	}
+	lines := []string{"Dynamic workflow plan:"}
+	for index, step := range steps {
+		if step.ExpectedTool != dynamicExecuteTool || step.ExpectedAction == "" {
+			return ""
+		}
+		required := "none"
+		if len(step.RequiredParams) > 0 {
+			required = strings.Join(step.RequiredParams, ", ")
+		}
+		parts := []string{
+			fmt.Sprintf("action=%s", step.ExpectedAction),
+			fmt.Sprintf("required_params=%s", required),
+		}
+		if optional := dynamicWorkflowOptionalParams(step.OptionalParams); len(optional) > 0 {
+			parts = append(parts, fmt.Sprintf("optional_params=%s", strings.Join(optional, ", ")))
+		}
+		if step.Destructive {
+			parts = append(parts, "destructive_confirm=true")
+		}
+		lines = append(lines, fmt.Sprintf("%d. %s", index+1, strings.Join(parts, "; ")))
+	}
+	lines = append(lines, "Use this order. The listed action IDs and params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions. Execute each action directly when its required values are present. Include optional params only when the task prompt asks for their behavior. Values named *_id that are produced by earlier steps must be copied from the preceding tool result. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.")
+	return strings.Join(lines, "\n")
+}
+
+func dynamicWorkflowOptionalParams(params []string) []string {
+	optional := make([]string, 0, len(params))
+	for _, param := range params {
+		if param == "confirm" {
+			continue
+		}
+		optional = append(optional, param)
+	}
+	return optional
+}
+
+// joinDynamicPrompt builds join dynamic prompt for evaluator prompts.
+func joinDynamicPrompt(preamble, prompt, override string) string {
+	parts := make([]string, 0, 3)
+	if preamble != "" {
+		parts = append(parts, preamble)
+	}
+	parts = append(parts, prompt, override)
+	return strings.Join(parts, "\n\n")
+}
+
+// dynamicExactCallPreamble builds dynamic exact call preamble for evaluator prompts.
+func dynamicExactCallPreamble(task evalTask) string {
+	steps := taskSteps(task)
+	if len(steps) != 1 || (!usesExactSingleToolPrompt(task, steps[0]) && !usesCompactExactPrompt(steps[0])) {
+		return ""
+	}
+	guidance := strings.TrimSpace(dynamicFirstStepGuidance(task))
+	return strings.Replace(guidance, "Dynamic first-step exact call:", "Dynamic exact call:", 1)
+}
+
+// dynamicConfirmPrompt builds dynamic confirm prompt for evaluator prompts.
+func dynamicConfirmPrompt(prompt string) string {
+	replacer := strings.NewReplacer(
+		"include confirm:true in params for each destructive tool call", "include top-level confirm:true on gitlab_execute_tool for each destructive tool call",
+		"Include confirm:true in params for every destructive tool call", "Include top-level confirm:true on gitlab_execute_tool for every destructive tool call",
+		"require params.confirm=true", "require top-level confirm:true",
+		"requires params.confirm=true", "requires top-level confirm:true",
+		"with params.confirm=true", "with top-level confirm:true",
+		"confirm must be inside params, never a top-level field", "confirm must be top-level on gitlab_execute_tool, never inside params",
+	)
+	return replacer.Replace(prompt)
+}
+
+// dynamicFirstStepGuidance builds dynamic first step guidance for evaluator prompts.
+func dynamicFirstStepGuidance(task evalTask) string {
+	steps := taskSteps(task)
+	if len(steps) == 0 || steps[0].ExpectedTool != dynamicExecuteTool || steps[0].ExpectedAction == "" {
+		return ""
+	}
+	params, provenances := exactCallParams(steps[0], task.Prompt, false)
+	if !exactCallParamsAreSafe(provenances) {
+		return ""
+	}
+	arguments := actionGuidanceExample(steps[0], params)
+	data, err := marshalGuidanceExample(arguments)
+	if err != nil {
+		return ""
+	}
+	return "\n\nDynamic first-step exact call: " + data + ". Use this as the first GitLab operation before any later workflow step; action without params is invalid."
+}
+
+// dynamicExampleParamValue derives dynamic example param value from task and schema inputs.
+func dynamicExampleParamValue(action, param, prompt string) any {
+	if verb, hasFileActionPrefix := strings.CutPrefix(action, "repository.file_"); hasFileActionPrefix {
+		switch param {
+		case "file_path":
+			if value, ok := repositoryFilePathExample(prompt); ok {
+				return value
+			}
+		case "content":
+			if value, ok := examplePromptMarkerValue(param, prompt); ok {
+				return value
+			}
+			if strings.Contains(action, "update") {
+				return "Updated content for repository file CRUD"
+			}
+			return "Initial content for repository file CRUD"
+		case "commit_message":
+			if value, ok := examplePromptMarkerValue(param, prompt); ok {
+				return value
+			}
+			if filePath, ok := repositoryFilePathExample(prompt); ok {
+				return fmt.Sprintf("Evaluation %s %s", verb, filePath)
+			}
+			return fmt.Sprintf("Evaluation %s repository file", verb)
+		}
+	}
+	if strings.HasPrefix(action, "merge_request.") && param == "merge_request_iid" {
+		if value, ok := backtickValueAfter(prompt, "MR "); ok {
+			return numericExampleValue(value)
+		}
+		if value, ok := backtickValueAfter(prompt, promptMarkerMergeRequest); ok {
+			return numericExampleValue(value)
+		}
+	}
+	switch action {
+	case "release.create":
+		switch param {
+		case "tag_name":
+			if value, ok := backtickValueAfter(prompt, "release "); ok {
+				return value
+			}
+		case "name":
+			if value, ok := backtickValueAfter(prompt, "named "); ok {
+				return value
+			}
+		}
+	case "merge_request.time_estimate_set":
+		if param == "duration" {
+			if value, ok := backtickValueAfter(prompt, "estimate "); ok {
+				return value
+			}
+		}
+	case "merge_request.spent_time_add":
+		if param == "duration" {
+			if value, ok := backtickValueAfter(prompt, "spent time "); ok {
+				return value
+			}
+		}
+	case "merge_request.emoji_mr_create":
+		if param == "name" {
+			if value, ok := backtickValueAfter(prompt, "award emoji "); ok {
+				return value
+			}
+		}
+	case "snippet.project_create":
+		if param == "file_name" {
+			if value, ok := backtickValueAfter(prompt, "project snippet "); ok {
+				return value + ".md"
+			}
+		}
+	case "snippet.project_update":
+		if param == "files" {
+			return []map[string]any{{"action": "update", "file_path": "<returned_file_path>", "content": "Updated snippet content"}}
+		}
+	case "feature_flags.ff_user_list_create":
+		switch param {
+		case "name":
+			if value, ok := backtickValueAfter(prompt, "user list "); ok {
+				return value
+			}
+		case "user_xids":
+			if value, ok := backtickValueAfter(prompt, "user IDs "); ok {
+				return value
+			}
+		}
+	case actionIssueCreate:
+		if param == "title" {
+			if value, ok := backtickValueAfter(prompt, "create issue "); ok {
+				return value
+			}
+		}
+	case "pipeline.trigger_create":
+		if param == "description" {
+			if value, ok := backtickValueAfter(prompt, "create trigger "); ok {
+				return value
+			}
+		}
+	case "pipeline.schedule_create":
+		switch param {
+		case "description":
+			for _, marker := range []string{"inactive schedule ", "active schedule ", "create schedule ", "schedule named "} {
+				if value, ok := backtickValueAfter(prompt, marker); ok {
+					return value
+				}
+			}
+		case "active":
+			if strings.Contains(strings.ToLower(prompt), "inactive") {
+				return false
+			}
+		}
+	}
+	return exampleParamValue(param, prompt)
+}
+
+// repositoryFilePathExample handles repository file path example and returns [string].
+func repositoryFilePathExample(prompt string) (string, bool) {
+	for _, marker := range []string{"create file ", "read file ", "update file ", "delete file "} {
+		if value, ok := backtickValueAfter(prompt, marker); ok {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+// taskPrompt builds task prompt for evaluator prompts.
+func taskPrompt(task evalTask) string {
+	destructive := "No"
+	if taskHasDestructiveStep(task) {
+		destructive = "Yes; include confirm:true in params for each destructive tool call."
+	}
+	retryGuidance := ""
+	if taskHasSimulationMode(task, "transient_error_once") {
+		retryGuidance = " If a simulated temporary GitLab server/API error appears, repeat the same validated operation once; do not use GitLab CI retry actions such as pipeline.retry or job.retry unless the task explicitly asks to rerun CI jobs."
+	}
+	if strings.Contains(task.Prompt, "discussion_id") && strings.Contains(task.Prompt, "merge_request_iid") {
+		retryGuidance += ` For discussion_resolve with split meta-tools, emit tool gitlab_mr_review with quoted JSON strings: {"action":"discussion_resolve","params":{"project_id":"<project_id>","merge_request_iid":<merge_request_iid>,"discussion_id":"<discussion_id>","resolved":true}}. If only a unified gitlab dispatcher is available, use action "mr_review.discussion_resolve" instead.`
+	}
+	if strings.Contains(strings.ToLower(task.Prompt), "release") && strings.Contains(strings.ToLower(task.Prompt), "from ref") {
+		retryGuidance += ` For release.create, "from ref X" maps to params.ref; include params.ref when creating a release from a ref.`
+	}
+	if strings.Contains(strings.ToLower(task.Prompt), "project webhook") || strings.Contains(strings.ToLower(task.Prompt), "webhook crud") {
+		retryGuidance += ` For project webhook add/edit, send only requested params such as project_id, url, push_events, and enable_ssl_verification; never send member_events, subgroup_events, or branch_filter_strategy unless explicitly asked, and omit false or null event flags not asked for. If branch_filter_strategy is explicitly requested, use all_branches, wildcard, or regex; never use all.`
+	}
+	if strings.Contains(strings.ToLower(task.Prompt), "project snippet") && strings.Contains(strings.ToLower(task.Prompt), "files") {
+		retryGuidance += ` For project snippet update, put file_path and content only inside params.files[] entries; include files[].action set to "update"; never send params.file_path or params.content at top level when using files[]. Use the path returned in the snippet files array as files[].file_path, not a placeholder. The project_update params should contain project_id, snippet_id, and files, plus only explicitly requested optional fields.`
+	}
+	if strings.Contains(strings.ToLower(task.Prompt), "list mr awards") || strings.Contains(strings.ToLower(task.Prompt), "list merge request awards") {
+		retryGuidance += ` For merge request awards, after creating the award emoji, call merge_request.emoji_mr_list before deleting; do not skip directly from create to delete even if the create result includes a delete hint.`
+	}
+	steps := taskSteps(task)
+	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_mr_review" && steps[0].ExpectedAction == "note_create" {
+		retryGuidance += ` For merge request notes or comments, call gitlab_mr_review with {"action":"note_create","params":{"project_id":"<project_id>","merge_request_iid":<merge_request_iid>,"body":"<body>"}}. Do not use discussion_create unless the task explicitly says threaded discussion or discussion.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_runner" && steps[0].ExpectedAction == "list_project" {
+		retryGuidance += ` For the runner list step, call gitlab_runner with {"action":"list_project","params":{"project_id":"<project_id>"}} unless the task explicitly asks for an online, offline, stale, or never_contacted status filter. Do not send params.paused, params.type, params.tag_list, status all, status active, or empty filter strings for runner.list_project.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_discover_project" {
+		retryGuidance += ` For gitlab_discover_project, call the standalone tool with top-level remote_url only, like {"remote_url":"<remote_url>"}; do not send action, params, project_id, or ref to gitlab_discover_project.`
+		if len(steps) > 2 && steps[1].ExpectedTool == "gitlab_project" && steps[1].ExpectedAction == "get" && steps[2].ExpectedTool == "gitlab_repository" && steps[2].ExpectedAction == "file_get" {
+			retryGuidance += ` After discover_project succeeds, call gitlab_project/get to verify metadata before calling gitlab_repository/file_get; do not skip the project metadata verification step.`
+		}
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_snippet" && steps[0].ExpectedAction == "project_create" {
+		retryGuidance += ` For project snippet CRUD, the first call is gitlab_snippet with action project_create; do not call gitlab_project first. project_create requires params.project_id, params.title, params.file_name, and params.content. Use the returned snippet_id for project_get, project_update, and project_delete.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_repository" && steps[0].ExpectedAction == "file_create" {
+		retryGuidance += ` For repository file CRUD, read the created file with file_get using params.ref set to the branch name; never send params.branch to file_get. After file_update succeeds, call file_delete next with params.project_id, params.file_path, params.branch, params.commit_message, and params.confirm=true; confirm must be inside params, never a top-level field. The delete envelope shape is {"action":"file_delete","params":{"project_id":"<project_id>","file_path":"<file_path>","branch":"<branch>","commit_message":"<commit_message>","confirm":true}}. Do not call file_get again after the update.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_admin" && steps[0].ExpectedAction == "settings_get" {
+		needsBroadcastGuidance := false
+		for _, step := range steps {
+			if step.ExpectedTool == "gitlab_admin" && step.ExpectedAction == "broadcast_message_create" {
+				needsBroadcastGuidance = true
+				break
+			}
+		}
+		if needsBroadcastGuidance {
+			retryGuidance += ` For broadcast message create, use params.message from the prompt and omit params.theme unless explicitly requested; if you include theme, use a GitLab theme name such as indigo, never a hex color. Use valid starts_at and ends_at timestamps with starts_at before ends_at.`
+		}
+	}
+	if len(steps) > 1 && steps[0].ExpectedAction == "admin.settings_get" {
+		retryGuidance += ` For the dynamic settings/broadcast workflow, follow exactly this order: admin.settings_get, admin.broadcast_message_create, admin.broadcast_message_delete. The first call must read current instance settings with params:{}, not list or create broadcast messages. For broadcast_message_create, use params.message from the prompt and omit params.theme unless explicitly requested.`
+	}
+	if len(steps) > 1 && (steps[0].ExpectedAction == "tag.get" || steps[0].ExpectedTool == "gitlab_tag" && steps[0].ExpectedAction == "get") {
+		retryGuidance += ` For release cleanup, follow exactly this order: tag.get, release.get, release.link_list, release.delete, tag.delete. Start with tag.get to verify the tag before any release calls, then list release links before deleting the release.`
+	}
+	if len(steps) > 2 && (steps[0].ExpectedAction == "release.list" || steps[0].ExpectedTool == "gitlab_release" && steps[0].ExpectedAction == "list") {
+		retryGuidance += ` For release inventory plus notes, follow exactly this order: release.list, repository.compare, analyze.release_notes. repository.compare requires params.from and params.to; analyze.release_notes should use the same from/to refs after compare succeeds.`
+	}
+	if len(steps) > 1 && (steps[0].ExpectedAction == actionIssueCreate || steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create") && strings.Contains(strings.ToLower(task.Prompt), "issue link crud") {
+		retryGuidance += ` For issue link CRUD, keep the source issue IID from the first create call. Create the link with issue.link_create, not issue.link. After link_list, call issue.link_delete with params.project_id, params.issue_iid set to the source issue IID, params.issue_link_id from the returned link, and top-level confirm:true on gitlab_execute_tool.`
+	}
+	if len(steps) > 1 && (steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create" || steps[0].ExpectedAction == actionIssueCreate) && strings.Contains(strings.ToLower(task.Prompt), "issue time tracking") {
+		retryGuidance += ` For issue time tracking, follow exactly this order: issue.create, issue.time_estimate_set, issue.spent_time_add, issue.spent_time_reset, issue.time_estimate_reset, issue.delete. After issue.create, use the returned issue_iid for every later issue time-tracking and delete step. Set the estimate before adding spent time; reset spent time before resetting the estimate.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_project" && steps[0].ExpectedAction == "badge_add" {
+		retryGuidance += ` For project badge CRUD, badge_add requires valid absolute params.link_url and params.image_url. If the task does not provide URLs, use https://example.com/eval-badge as link_url and https://example.com/eval-badge.svg as image_url. Use the returned badge_id for badge_get, badge_edit, and badge_delete. badge_edit uses params.name for a new badge name; never send new_name.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_branch" && steps[0].ExpectedAction == "create" && strings.Contains(strings.ToLower(task.Prompt), "protect") {
+		retryGuidance += ` For branch protection lifecycle, follow exactly this order: create, protect, get_protected, update_protected, unprotect, delete. Protecting with Maintainer push and merge access means params.push_access_level=40 and params.merge_access_level=40 on the protect call. After protect succeeds, call get_protected next; do not call protect again. update_protected may use params.allow_force_push=true. unprotect only uses params.project_id, params.branch_name, and params.confirm=true; never send allow_force_push to unprotect. For direct gitlab_branch meta-tool calls, the unprotect envelope shape is {"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}} and the delete envelope shape is {"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. For dynamic mode with gitlab_execute_tool, keep unprotect/delete action params inside params and set top-level confirm:true on the gitlab_execute_tool invocation.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_pipeline" && steps[0].ExpectedAction == "schedule_create" {
+		retryGuidance += ` For pipeline schedule CRUD, the first call is gitlab_pipeline with action schedule_create; do not call gitlab_discover_project or gitlab_project first. schedule_create requires params.project_id, params.description, params.ref, and params.cron, with params.active=false for an inactive schedule. Use description, not name, for the schedule display label. Schedule variables accept params.key, params.value, and optional params.variable_type only; never send masked or protected. If the task gives a variable key but no value, use params.value="schedule-value-1" for schedule_create_variable and params.value="schedule-value-2" for schedule_edit_variable. Use the returned id as params.schedule_id for schedule_get, schedule_update, schedule_create_variable, schedule_edit_variable, schedule_delete_variable, and schedule_delete. Both schedule_delete_variable and schedule_delete are destructive and require confirm:true according to the active tool surface.`
+	}
+	if len(steps) == 9 && steps[0].ExpectedTool == "gitlab_project" && steps[0].ExpectedAction == "get" && strings.Contains(strings.ToLower(task.Prompt), "broad read-only docker inventory") {
+		retryGuidance += ` For broad read-only Docker inventory, follow exactly this order: gitlab_project/get, gitlab_branch/list, gitlab_tag/list, gitlab_release/list, gitlab_repository/tree, gitlab_ci_variable/list, gitlab_access/deploy_key_list_project, gitlab_access/deploy_token_list_project, gitlab_package/list. After tag list, call gitlab_release/list before repository tree. After release list, call repository tree with params.ref="main". Use params.per_page=1 on list/tree/package steps to keep responses small; one page is enough for this evaluation.`
+	}
+	if len(steps) > 1 && (steps[0].ExpectedTool == "gitlab_package" && steps[0].ExpectedAction == "publish_directory" || steps[0].ExpectedAction == "package.publish_directory") {
+		retryGuidance += ` For package-to-release workflows, follow exactly this order: gitlab_package/publish_directory, gitlab_release/create, gitlab_release/link_create_batch. publish_directory requires params.project_id, params.package_name, params.package_version, and params.directory_path. Omit params.include_pattern for this task; if you must filter files, include_pattern is a single glob such as "*" or "*.txt", never a comma-separated file list. Use the returned published[].url values as links[].url, use the matching published[].file_name as links[].name, set each links[].link_type to "package", and do not construct package URLs manually. Create the release from params.ref="main" before link_create_batch. For link_create_batch, each links[] item supports only name, url, and link_type; do not send direct_asset_path or filepath.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_release" && steps[0].ExpectedAction == "create" && strings.Contains(strings.ToLower(task.Prompt), "asset-link crud") {
+		retryGuidance += ` For release asset-link CRUD, the first call is gitlab_release/create; do not call gitlab_project first, do not create the tag separately, and do not pass assets to release.create. Use params.ref="main" on release.create. For link_create, use a valid absolute URL such as https://example.com/eval-crud-link; for link_update, use a valid absolute URL such as https://example.com/eval-crud-link-updated. Use the returned link_id for link_get, link_update, and link_delete before deleting the release and tag.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "time_estimate_set" {
+		retryGuidance += ` For merge request time tracking plus emoji, follow exactly this order: time_estimate_set, spent_time_add, emoji_mr_create, emoji_mr_list, emoji_mr_delete, spent_time_reset, time_estimate_reset. After emoji_mr_create, call emoji_mr_list next even if next_steps mentions delete. Delete the award only after the list step, using the returned award emoji id as params.award_id with params.confirm=true. After emoji_mr_delete, call spent_time_reset before time_estimate_reset.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "get" && steps[1].ExpectedTool == "gitlab_mr_review" && steps[1].ExpectedAction == "changes_get" {
+		retryGuidance += ` For batch MR review, follow exactly this order: gitlab_merge_request/get, gitlab_mr_review/changes_get, gitlab_mr_review/draft_note_create, gitlab_mr_review/draft_note_publish_all. Start by inspecting the MR with merge_request.get; do not start with changes_get.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_mr_review" && steps[0].ExpectedAction == "note_create" {
+		retryGuidance += ` For merge request note CRUD, follow exactly this order: note_create, note_get, note_update, note_delete. After note_create, call note_get next using the returned note id even if next_steps mentions update or delete. After note_get, call note_update with params.body set to the updated note text and without params.confirm. Only note_delete is destructive; call note_delete last with params.confirm=true.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_feature_flags" && steps[0].ExpectedAction == "ff_user_list_create" {
+		retryGuidance += ` For feature flag user-list lifecycle, params.user_xids is a comma-separated string such as "u1,u2", not an array. Use the returned iid as params.user_list_iid for ff_user_list_get, ff_user_list_update, and ff_user_list_delete; do not use the user-list name for those lookup/delete actions. For feature_flag_create and feature_flag_update, omit params.strategies unless the task gives an exact strategies JSON string; if you must send strategies, it must be a JSON string such as "[{\"name\":\"default\"}]", never an array or object.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedAction == "feature_flags.ff_user_list_create" {
+		retryGuidance += ` For feature flag user-list lifecycle, follow exactly this order: feature_flags.ff_user_list_create, feature_flags.ff_user_list_get, feature_flags.ff_user_list_update, feature_flags.feature_flag_create, feature_flags.feature_flag_get, feature_flags.feature_flag_update, feature_flags.feature_flag_delete, feature_flags.ff_user_list_delete. Every step needs params.project_id. Use the returned iid as params.user_list_iid for user-list get, update, and delete; do not use name for those user-list lookup actions. After ff_user_list_update, create the feature flag next; do not fetch the user list again. Feature flag create/get/update/delete use params.name for the feature flag name, never feature_flag_name, and never include user_list_iid unless you are calling an ff_user_list_* action.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_token_create_project" {
+		retryGuidance += ` For project deploy token lifecycle, deploy_token_create_project requires params.project_id, params.name, and params.scopes. Do not add params.expires_at unless the task gives an explicit expiry date; if you send expires_at, it must be YYYY-MM-DD only, never a timestamp.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_key_add" {
+		retryGuidance += ` For project deploy key lifecycle, use gitlab_access actions deploy_key_add, deploy_key_get, deploy_key_update, and deploy_key_delete; do not use gitlab_project for deploy keys. deploy_key_add requires params.project_id, params.title, and params.key. Use the returned deploy_key_id for get, update, and delete.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_group" && steps[0].ExpectedAction == "group_milestone_create" {
+		retryGuidance += ` For group milestone lifecycle, group_milestone_create should use params.group_id, params.title, and params.due_date when the task gives only a due date. Do not invent params.start_date unless the task provides an earlier start date. After create, call group_milestone_get with the returned milestone_iid before any update.`
+	}
+	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "merge" {
+		retryGuidance += ` For merging a merge request when the pipeline succeeds, call gitlab_merge_request with action merge and params.project_id, params.merge_request_iid, and params.confirm=true. Do not call gitlab_pipeline/wait unless the task explicitly asks to wait for a pipeline.`
+	}
+	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_search" && steps[0].ExpectedAction == "projects" {
+		retryGuidance += ` For searching all projects, call gitlab_search with action projects and params.query. Do not call search.code; code search is only for searching file contents.`
+	}
+	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_key_list_project" {
+		retryGuidance += ` Project deploy key operations live under gitlab_access. For listing project deploy keys, call gitlab_access with action deploy_key_list_project and params.project_id; do not call gitlab_project.`
+	}
+	needsPipelineTriggerGuidance := false
+	for _, step := range steps {
+		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {
+			needsPipelineTriggerGuidance = true
+			break
+		}
+	}
+	if needsPipelineTriggerGuidance {
+		retryGuidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
+	}
+	needsProjectHookGuidance := false
+	for _, step := range steps {
+		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "hook_add" {
+			needsProjectHookGuidance = true
+			break
+		}
+	}
+	if needsProjectHookGuidance {
+		retryGuidance += ` For project hook CRUD, use gitlab_project actions hook_add, hook_get, hook_edit, and hook_delete with params.project_id. Do not use gitlab_group hook actions for a project hook workflow.`
+	}
+	if strings.Contains(strings.ToLower(task.Prompt), promptPhraseFailedJobs) && strings.Contains(strings.ToLower(task.Prompt), "pipeline") {
+		hasFailedJobListStep := false
+		hasPipelineGetStep := false
+		for _, step := range steps {
+			if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" {
+				hasFailedJobListStep = true
+				break
+			}
+			if step.ExpectedAction == actionPipelineGet || step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "get" {
+				hasPipelineGetStep = true
+			}
+		}
+		if hasPipelineGetStep {
+			retryGuidance += ` For failed pipeline investigation, follow exactly this order when requested: discover_project.resolve, pipeline.get, job.list, job.trace, analyze.pipeline_failure. Inspecting one known pipeline ID means pipeline.get with params.pipeline_id; do not substitute pipeline.list.`
+		}
+		if hasFailedJobListStep {
+			retryGuidance += ` For listing failed jobs in a pipeline, call gitlab_job with {"action":"list","params":{"project_id":"<project_id>","pipeline_id":<pipeline_id>,"scope":"failed"}}; do not call gitlab_pipeline list with pipeline_id.`
+		}
+	}
+	if len(steps) == 1 && (steps[0].ExpectedAction == "admin.settings_get" || steps[0].ExpectedTool == "gitlab_admin" && steps[0].ExpectedAction == "settings_get") {
+		retryGuidance += ` For instance application settings, call gitlab_admin with {"action":"settings_get","params":{}}; do not call metadata_get, gitlab_server, or schema lookup.`
+	}
+	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_job" && steps[0].ExpectedAction == "download_single_artifact" {
+		retryGuidance += ` For a prompt like "Download artifact <artifact_path> from job <numeric job_id>", call gitlab_job with {"action":"download_single_artifact","params":{"project_id":"<project_id>","job_id":<job_id>,"artifact_path":"<artifact_path>"}}; do not use download_artifacts, artifacts, or download_single_artifact_by_ref.`
+	}
+	if len(steps) == 1 && usesCompactExactPrompt(steps[0]) {
+		return compactExactTaskPrompt(task, destructive, steps[0])
+	}
+	if len(steps) == 1 && usesExactSingleToolPrompt(task, steps[0]) {
+		return exactToolTaskPrompt(task, destructive, steps[0])
+	}
+	if len(steps) == 1 && isAnalyzerStep(steps[0]) {
+		return exactToolTaskPrompt(task, destructive, steps[0])
+	}
+	if len(steps) == 1 && steps[0].ExpectedAction == "search.code" {
+		retryGuidance += ` For search.code, call gitlab with {"action":"search.code","params":{"query":"<query>","project_id":"<project_id>"}}; a namespace path like group/project is already project_id, never remote_url.`
+	}
+	if len(steps) > 1 {
+		return fmt.Sprintf("Task %s: %s\nDestructive: %s\nPerform the full scenario in the requested order. The first tool call must perform the first requested operation, not schema lookup, project verification, or the final analyzer. Emit only the next single MCP tool call, wait for its result, then continue with the next required GitLab operation until the scenario is complete. Tool-result next_steps are optional suggestions; do not let them override the requested order. In this evaluation, one successful list response completes a list step; do not fetch additional pagination pages unless the task explicitly asks for every page, all results, or complete pagination. For action-based tools, keep all action-specific fields under params. Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow. In these tasks, MR `N` means params.merge_request_iid:N. For runner.list_project, use params.project_id by default and omit filter params unless the task explicitly asks for them. For runner jobs, use runner.jobs with params.runner_id only; do not add project_id. For job trace, use job.trace with params.project_id and params.job_id. For runner pause or unpause, use runner.update with params.runner_id and params.paused true or false. Do not look up schemas for ordinary parameter names already supplied by the task prompt, and do not add any params that the task did not ask for. Use action snippet.content for raw personal snippet content, snippet.delete for personal snippet deletion, branch.delete for branch deletion, tag.delete only when deleting a Git tag, release.delete when deleting a GitLab release, and mr_review.draft_note_create for merge request draft notes. For project milestones, use action project.milestone_delete and params.milestone_iid. For project hooks, use action project.hook_delete and params.hook_id; do not invent project_hook.delete. For project badges, linking to a URL means params.link_url and image means params.image_url.%s Include confirm:true in params for every destructive tool call.", task.ID, task.Prompt, destructive, retryGuidance)
+	}
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nThis single-operation fixture expects exactly one tool call when the action and params are clear from the prompt and tool catalog. A schema lookup before the task call is a failure unless the prompt is missing a required value or a previous validation error occurred. Choose the single MCP tool call needed to perform this task. For action-based tools, keep all action-specific fields under params and never call gitlab without an input object containing action and params. If the task asks for server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check; do not call gitlab with action health_check. Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow. In these tasks, MR `N` means params.merge_request_iid:N. A value like group/project is params.project_id, not remote_url; do not call gitlab_discover_project unless the task gives a git remote URL. For merge request creation, from is params.source_branch, into is params.target_branch, and titled is params.title. Do not use ref, search, tag_name, to, or value for merge request create branch/title fields. For merge request notes or comments, use mr_review.note_create with project_id, merge_request_iid, and body. For merge request draft notes, use mr_review.draft_note_create, not mr_review.note_create. Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion. For personal snippets, snippet ID is params.snippet_id, not project_id, query, search, sort, or file_path; get raw content with action snippet.content, not snippet.raw; delete them with action snippet.delete, not personal_snippet.delete. For custom emoji group operations, use custom_emoji.list with params.group_path, not group.custom_emoji_list or group_id. For project access tokens, scope names go in params.scopes as an array, not params.scope, and expiring dates go in params.expires_at. For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id; for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id; use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied. For runner.list_project, use params.project_id by default; add params.status only when the task explicitly asks for online, offline, stale, or never_contacted runners, and never send status all or active. Do not send params.paused, params.type, params.tag_list, or empty filter values for runner.list_project. For runner pause or unpause, use runner.update with params.runner_id and params.paused true or false; do not use project_id, and runner.disable_project only detaches a runner from a project. For broadcast messages, saying maps to params.message, from maps to params.starts_at, and to maps to params.ends_at. For job.play variables, use params.variables as an array like [{\"key\":\"DEPLOY_ENV\",\"value\":\"staging\"}], not an object. Do not look up schemas for ordinary parameter names already supplied by the task prompt, and do not add any params that the task did not ask for. For subgroup creation with group.create, use params.name, params.path, and params.parent_id. For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message; create/update also require params.content. For branch deletion, use action branch.delete, not repository.delete_branch. For GitLab release deletion, use action release.delete; use action tag.delete only when deleting a Git tag, not a release. For CI variables, variable name maps to params.key, value maps to params.value, and environment_scope or production scope maps to params.environment_scope; for group variables use params.group_id and ci_variable.group_* actions, not project actions. For project milestones, use action project.milestone_delete and params.milestone_iid. For project hooks, use action project.hook_delete and params.hook_id; do not invent project_hook.delete. For project badges, linking to a URL means params.link_url and image means params.image_url. For pipeline lists, latest pipelines plural means pipeline.list; use pipeline.latest only for one single latest pipeline. Omit optional params that are not needed; do not add sorting/filter params unless the user asks for them, and do not send empty arrays or objects. If the task needs no input values, call the selected action with params:{}. The final task call should perform the requested GitLab operation.%s", task.ID, task.Prompt, destructive, retryGuidance)
+}
+
+// isAnalyzerStep reports whether a task step invokes an LLM-assisted analyzer.
+func isAnalyzerStep(step evalStep) bool {
+	return step.ExpectedTool == "gitlab_analyze" || strings.HasPrefix(step.ExpectedAction, "analyze.")
+}
+
+// usesExactSingleToolPrompt builds uses exact single tool prompt for evaluator prompts.
+func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
+	lowerPrompt := strings.ToLower(task.Prompt)
+	if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" && strings.Contains(lowerPrompt, promptPhraseFailedJobs) && strings.Contains(lowerPrompt, "pipeline") {
+		return true
+	}
+	if step.ExpectedTool == dynamicExecuteTool {
+		switch step.ExpectedAction {
+		case "job.download_single_artifact", "runner.remove":
+			return true
+		}
+	}
+	switch step.ExpectedTool + "/" + step.ExpectedAction {
+	case "gitlab_job/download_single_artifact",
+		"gitlab_job/delete_artifacts",
+		"gitlab_ci_variable/instance_create",
+		"gitlab_mr_review/discussion_resolve",
+		"gitlab_user/block",
+		"gitlab_merge_request/emoji_mr_delete",
+		"gitlab_wiki/delete",
+		"gitlab_repository/commit_discussion_delete_note",
+		"gitlab_repository/file_create",
+		"gitlab_project/archive":
+		return true
+	default:
+		return false
+	}
+}
+
+// exactToolTaskPrompt builds exact tool task prompt for evaluator prompts.
+func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) string {
+	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
+		destructive = "Yes; include top-level confirm:true on gitlab_execute_tool."
+	}
+	params, provenances := exactCallParams(step, task.Prompt, true)
+	if !exactCallParamsAreSafe(provenances) {
+		return schemaFirstTaskPrompt(task, destructive, step)
+	}
+
+	example := actionGuidanceExample(step, params)
+	data, err := marshalGuidanceExample(example)
+	toolName := step.ExpectedTool
+	if toolName == "" {
+		toolName = "gitlab"
+	}
+	if err != nil {
+		return fmt.Sprintf("Task %s: %s\nDestructive: %s\nUse the %s tool once with action %s and the params named in the task. Do not answer in text, do not call schema lookup, do not prefetch related resources, and do not use params:{}.", task.ID, task.Prompt, destructive, toolName, step.ExpectedAction)
+	}
+	toolDisambiguation := ""
+	if step.ExpectedTool == "gitlab_merge_request" && step.ExpectedAction == "emoji_mr_delete" {
+		toolDisambiguation = " The exact tool name is gitlab_merge_request; do not use gitlab_mr_review, which is for MR notes, discussions, and diffs."
+	}
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nExact required call: use the %s tool once with input %s.%s Return exactly one tool call and no text answer. Do not call schema lookup, do not call gitlab_discover_project, do not prefetch issue, merge request, pipeline, changes, commits, files, or refs first, and do not use params:{} or omit any field shown in the exact input object. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, toolName, data, toolDisambiguation)
+}
+
+// actionGuidanceExample builds an action+params example for task prompts.
+func actionGuidanceExample(step evalStep, params map[string]any) map[string]any {
+	arguments := map[string]any{"action": step.ExpectedAction, "params": params}
+	if step.ExpectedTool == dynamicExecuteTool {
+		if step.Destructive || isTruthy(params["confirm"]) {
+			delete(params, "confirm")
+			arguments["confirm"] = true
+		}
+	}
+	return arguments
+}
+
+// usesCompactExactPrompt builds uses compact exact prompt for evaluator prompts.
+func usesCompactExactPrompt(step evalStep) bool {
+	switch step.ExpectedAction {
+	case "pipeline.trigger_delete", "pipeline.schedule_delete", "user.block", "user.disable_two_factor", "feature_flags.feature_flag_delete", "wiki.delete", "merge_request.emoji_mr_delete", "issue.emoji_issue_delete", "access.deploy_key_delete", "access.deploy_token_delete_project", "repository.commit_discussion_delete_note", "attestation.download", "audit_event.get_instance", "audit_event.list_project", "compliance_policy.update", "dependency.export_create", "dependency.export_download", "dora_metrics.group", "enterprise_user.get", "enterprise_user.disable_2fa", "external_status_check.create_project", "external_status_check.set_project_mr_status", "external_status_check.delete_project", "geo.get", "geo.create", "geo.delete", "group.credential_list_pats", "group.credential_revoke_pat", "group.epic_board_list", "group.epic_list", "group.epic_create", "group.epic_update", "group.epic_delete", "group.epic_issue_assign":
+		return true
+	default:
+		return false
+	}
+}
+
+// compactExactTaskPrompt builds compact exact task prompt for evaluator prompts.
+func compactExactTaskPrompt(task evalTask, destructive string, step evalStep) string {
+	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
+		destructive = "Yes; include top-level confirm:true on gitlab_execute_tool."
+	}
+	params, provenances := exactCallParams(step, task.Prompt, false)
+	if !exactCallParamsAreSafe(provenances) {
+		return schemaFirstTaskPrompt(task, destructive, step)
+	}
+	if slices.Contains(step.OptionalParams, "confirm") {
+		params["confirm"] = true
+	}
+	for _, param := range step.OptionalParams {
+		value, ok := exampleOptionalParamValue(param, task.Prompt)
+		if ok {
+			params[param] = value
+		}
+	}
+	example := actionGuidanceExample(step, params)
+	data, err := marshalGuidanceExample(example)
+	if err != nil {
+		return fmt.Sprintf("Task %s: %s\nDestructive: %s\nUse the gitlab tool once with action %s and the params named in the task. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, step.ExpectedAction)
+	}
+	if step.ExpectedAction == "group.credential_revoke_pat" {
+		return fmt.Sprintf("Task %s: Exact required call: %s. Call the gitlab tool once with this exact JSON object.\nDestructive: %s. The action value is the string literal group.credential_revoke_pat and the params are already complete. Do not infer a different action from nearby action enum names. The final task call should perform the requested GitLab operation.", task.ID, data, destructive)
+	}
+	if step.ExpectedAction == "group.epic_create" {
+		return fmt.Sprintf("Exact required call: %s. Call the gitlab tool once with this exact JSON object.\nDestructive: %s. The action value is group.epic_create and params.title is already complete. The final task call should perform the requested GitLab operation.", data, destructive)
+	}
+	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
+		return fmt.Sprintf("Task %s: %s\nDestructive: %s Exact required call: %s. A gitlab_execute_tool call with only action and confirm is invalid; copy the params object exactly, including every required ID.\nUse gitlab_execute_tool once with exactly that action envelope. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, data)
+	}
+	mapping := "The supplied values map to the matching params in that JSON envelope."
+	if compactExactPromptUsesID(step.RequiredParams) {
+		mapping = "The supplied ID maps to the matching *_id param in that JSON envelope."
+	}
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s Exact required call: %s. %s\nUse the gitlab tool once with exactly that action envelope. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, data, mapping)
+}
+
+// compactExactPromptUsesID builds compact exact prompt uses ID for evaluator prompts.
+func compactExactPromptUsesID(requiredParams []string) bool {
+	for _, param := range requiredParams {
+		if strings.HasSuffix(param, "_id") && param != "project_id" && param != "group_id" {
+			return true
+		}
+	}
+	return false
+}
+
+// paramProvenance records where an exact-call parameter value came from.
+type paramProvenance struct {
+	ParamName    string
+	Value        any
+	SourceText   string
+	SourceMarker string
+	SemanticRole string
+	Confidence   float64
+}
+
+// exactCallParams handles exact call params and returns [map[string]any].
+func exactCallParams(step evalStep, prompt string, includeOptional bool) (map[string]any, []paramProvenance) {
+	allParams := exactCallParamSet(step)
+	params := make(map[string]any, len(step.RequiredParams)+len(step.OptionalParams))
+	provenances := make([]paramProvenance, 0, len(step.RequiredParams)+len(step.OptionalParams))
+	for _, param := range step.RequiredParams {
+		provenance := resolveExactParamProvenance(step.ExpectedAction, param, prompt, allParams)
+		params[param] = provenance.Value
+		provenances = append(provenances, provenance)
+	}
+	for _, param := range step.OptionalParams {
+		if value, ok := exampleOptionalParamValue(param, prompt); ok {
+			params[param] = value
+			provenances = append(provenances, paramProvenance{ParamName: param, Value: value, SourceText: fmt.Sprint(value), SourceMarker: "optional-prompt", SemanticRole: paramSemanticRole(param), Confidence: 0.9})
+			continue
+		}
+		if !includeOptional {
+			continue
+		}
+		provenance := resolveExactParamProvenance(step.ExpectedAction, param, prompt, allParams)
+		params[param] = provenance.Value
+		provenances = append(provenances, provenance)
+	}
+	return params, provenances
+}
+
+// exactCallParamSet derives exact call param set from task and schema inputs.
+func exactCallParamSet(step evalStep) map[string]bool {
+	allParams := make(map[string]bool, len(step.RequiredParams)+len(step.OptionalParams))
+	for _, param := range step.RequiredParams {
+		allParams[param] = true
+	}
+	for _, param := range step.OptionalParams {
+		allParams[param] = true
+	}
+	return allParams
+}
+
+// resolveExactParamProvenance resolves exact param provenance for the main package.
+func resolveExactParamProvenance(action, param, prompt string, allParams map[string]bool) paramProvenance {
+	if provenance, ok := roleParamProvenance(param, prompt, allParams); ok {
+		return provenance
+	}
+	if exactParamNeedsResolvedRole(param, allParams) {
+		return fallbackParamProvenance(param)
+	}
+	value := dynamicExampleParamValue(action, param, prompt)
+	return paramProvenance{ParamName: param, Value: value, SourceText: fmt.Sprint(value), SourceMarker: "inferred", SemanticRole: paramSemanticRole(param), Confidence: 0.7}
+}
+
+// roleParamProvenance handles role param provenance and returns [paramProvenance].
+func roleParamProvenance(param, prompt string, allParams map[string]bool) (paramProvenance, bool) {
+	switch param {
+	case "project_id":
+		if allParams["target_project_id"] {
+			return firstProjectIDProvenance(param, prompt, "scope_owner_project", []string{promptMarkerAllowlistProject, "of project ", "source project ", "owning project ", "in project ", "from project ", "on project "})
+		}
+		return firstProjectIDProvenance(param, prompt, "scope_owner_project", []string{"in project ", "from project ", "on project "})
+	case "target_project_id":
+		return firstBacktickProvenance(param, prompt, "target_project", []string{"target project ID ", "target project ", "project ID ", "remove project ID "}, true)
+	case "target_group_id":
+		return firstBacktickProvenance(param, prompt, "target_group", []string{"target group ID ", "target group "}, true)
+	case "issue_iid":
+		if allParams["target_issue_iid"] {
+			return firstBacktickProvenance(param, prompt, "source_issue", []string{"source issue IID ", "source issue ", promptMarkerIssueIID, promptMarkerIssue}, true)
+		}
+	case "target_issue_iid":
+		return firstBacktickProvenance(param, prompt, "target_issue", []string{"target issue IID ", "target issue "}, true)
+	case "child_iid":
+		return firstBacktickProvenance(param, prompt, "child_issue", []string{"child issue IID ", promptMarkerIssueIID}, true)
+	case "source_branch":
+		return firstBacktickProvenance(param, prompt, "source_branch", []string{promptMarkerFrom, "source branch "}, false)
+	case "target_branch":
+		return firstBacktickProvenance(param, prompt, "target_branch", []string{" into ", "target branch ", "against "}, false)
+	case "full_path":
+		return firstBacktickProvenance(param, prompt, "parent_group_path", []string{"group full path ", "parent group full path ", promptMarkerGroupPath}, false)
+	case "child_project_path":
+		return firstBacktickProvenance(param, prompt, "child_project_path", []string{"child project path "}, false)
+	case "parent_id":
+		return firstBacktickProvenance(param, prompt, "parent_group_id", []string{"under group ID ", "parent group ID ", "group ID "}, true)
+	}
+	return paramProvenance{}, false
+}
+
+// firstBacktickProvenance handles first backtick provenance and returns [paramProvenance].
+func firstBacktickProvenance(param, prompt, role string, markers []string, numeric bool) (paramProvenance, bool) {
+	for _, marker := range markers {
+		value, ok := backtickValueAfter(prompt, marker)
+		if !ok {
+			continue
+		}
+		var parsed any = value
+		if numeric {
+			number, err := strconv.Atoi(value)
+			if err != nil {
+				return paramProvenance{}, false
+			}
+			parsed = number
+		}
+		return paramProvenance{ParamName: param, Value: parsed, SourceText: value, SourceMarker: marker, SemanticRole: role, Confidence: 1}, true
+	}
+	return paramProvenance{}, false
+}
+
+// firstProjectIDProvenance handles first project ID provenance and returns [paramProvenance].
+func firstProjectIDProvenance(param, prompt, role string, markers []string) (paramProvenance, bool) {
+	for _, marker := range markers {
+		value, ok := backtickValueAfter(prompt, marker)
+		if !ok {
+			continue
+		}
+		var parsed any = value
+		if _, err := strconv.Atoi(value); err == nil {
+			parsed = numericExampleValue(value)
+		}
+		return paramProvenance{ParamName: param, Value: parsed, SourceText: value, SourceMarker: marker, SemanticRole: role, Confidence: 1}, true
+	}
+	return paramProvenance{}, false
+}
+
+// fallbackParamProvenance derives fallback param provenance from task and schema inputs.
+func fallbackParamProvenance(param string) paramProvenance {
+	value := fallbackExampleParamValue(param)
+	return paramProvenance{ParamName: param, Value: value, SourceText: fmt.Sprint(value), SourceMarker: "fallback", SemanticRole: paramSemanticRole(param), Confidence: 0}
+}
+
+// exactParamNeedsResolvedRole derives exact param needs resolved role from task and schema inputs.
+func exactParamNeedsResolvedRole(param string, allParams map[string]bool) bool {
+	switch param {
+	case "target_project_id", "target_group_id", "target_issue_iid", "source_branch", "target_branch", "full_path", "child_project_path", "parent_id", "child_iid":
+		return true
+	case "project_id":
+		return allParams["target_project_id"] || allParams["target_issue_iid"]
+	case "issue_iid":
+		return allParams["target_issue_iid"]
+	default:
+		return false
+	}
+}
+
+// paramSemanticRole derives param semantic role from task and schema inputs.
+func paramSemanticRole(param string) string {
+	switch param {
+	case "project_id":
+		return "scope_owner_project"
+	case "target_project_id":
+		return "target_project"
+	case "group_id", "full_path":
+		return "group_scope"
+	case "target_group_id":
+		return "target_group"
+	case "issue_iid", "child_iid":
+		return "source_issue"
+	case "target_issue_iid":
+		return "target_issue"
+	case "source_branch":
+		return "source_branch"
+	case "target_branch":
+		return "target_branch"
+	case "child_project_path":
+		return "child_project_path"
+	default:
+		return param
+	}
+}
+
+// exactCallParamsAreSafe derives exact call params are safe from task and schema inputs.
+func exactCallParamsAreSafe(provenances []paramProvenance) bool {
+	allParams := make(map[string]bool, len(provenances))
+	for _, provenance := range provenances {
+		allParams[provenance.ParamName] = true
+	}
+	for _, provenance := range provenances {
+		if exactParamValueIsPlaceholder(provenance.Value) {
+			return false
+		}
+		if exactParamNeedsResolvedRole(provenance.ParamName, allParams) && provenance.Confidence <= 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// exactParamValueIsPlaceholder derives exact param value is placeholder from task and schema inputs.
+func exactParamValueIsPlaceholder(value any) bool {
+	switch typed := value.(type) {
+	case nil:
+		return true
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		return trimmed == "" || trimmed == "..." || strings.Contains(trimmed, "<") && strings.Contains(trimmed, ">")
+	case []map[string]any:
+		return slices.ContainsFunc(typed, func(item map[string]any) bool {
+			return exactParamValueIsPlaceholder(item)
+		})
+	case []any:
+		return slices.ContainsFunc(typed, exactParamValueIsPlaceholder)
+	case map[string]any:
+		for _, item := range typed {
+			if exactParamValueIsPlaceholder(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// schemaFirstTaskPrompt builds schema first task prompt for evaluator prompts.
+func schemaFirstTaskPrompt(task evalTask, destructive string, step evalStep) string {
+	toolName := step.ExpectedTool
+	if toolName == "" {
+		toolName = "gitlab"
+	}
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nRequired parameters for action %s could not be resolved safely from the task text. Do not use placeholder values. Look up or describe the action schema first, bind only concrete values from the prompt or prior tool results, then call %s with action %s and the required params.", task.ID, task.Prompt, destructive, step.ExpectedAction, toolName, step.ExpectedAction)
+}
+
+// marshalGuidanceExample handles marshal guidance example and returns [string].
+func marshalGuidanceExample(value any) (string, error) {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(buffer.String()), nil
+}
+
+// numericExampleParamMarkers stores the package-level numeric example param markers state.
+var numericExampleParamMarkers = map[string][]string{
+	"id":                       {"Geo site ID "},
+	"attestation_iid":          {"attestation IID "},
+	"event_id":                 {"event ID "},
+	"external_status_check_id": {"external status check ID "},
+	"check_id":                 {"external project status check ID ", "external status check ID "},
+	"csp_namespace_id":         {"namespace ID "},
+	"export_id":                {"export ID "},
+	"epic_iid":                 {"epic IID "},
+	"child_iid":                {promptMarkerIssueIID},
+	"token_id":                 {"personal access token ID ", "token ID "},
+	"issue_iid":                {promptMarkerIssue},
+	"merge_request_iid":        {"merge_request_iid ", promptMarkerMergeRequest, "MR "},
+	"note_id":                  {"note ", "discussion note "},
+	"pipeline_id":              {"pipeline ID ", "pipeline "},
+	"job_id":                   {"job ID ", "job "},
+	"runner_id":                {"runner ID ", "runner_id "},
+	"schedule_id":              {"pipeline schedule ID "},
+	"trigger_id":               {"pipeline trigger token ID "},
+	"user_id":                  {"user ID "},
+	"award_id":                 {promptMarkerAwardEmojiID},
+	"deploy_key_id":            {"deploy key ID "},
+	"deploy_token_id":          {"deploy token ID ", "project deploy token ID "},
+}
+
+// stringExampleParamMarkers stores the package-level string example param markers state.
+var stringExampleParamMarkers = map[string][]string{
+	"external_url":       {"pointing at "},
+	"artifact_path":      {"artifact "},
+	"group_id":           {" in group ", promptMarkerGroupPath, "group "},
+	"full_path":          {"group full path ", promptMarkerGroupPath},
+	"child_project_path": {"child project path "},
+	"start_date":         {promptMarkerFrom},
+	"end_date":           {" to "},
+	"sha":                {"SHA "},
+	"url":                {"URL "},
+	"remote_url":         {"remote URL "},
+	"commit_sha":         {"on commit "},
+	"discussion_id":      {"discussion_id ", "from discussion "},
+	"name":               {"named ", "deploy token ", "status check ", "feature flag "},
+	"key":                {"public key ", "variable key ", "create variable ", "variable "},
+	"value":              {"value "},
+	"query":              {"for "},
+	"title":              {"titled "},
+	"user_xids":          {"user IDs ", "user_xids "},
+	"version":            {"version "},
+	"slug":               {"wiki page "},
+	"from":               {promptMarkerFrom},
+	"to":                 {" to "},
+	"content_ref":        {promptMarkerBranch, " ref "},
+	"ref":                {promptMarkerBranch, " ref "},
+	"branch":             {promptMarkerBranch},
+	"file_path":          {"file "},
+	"content":            {"content "},
+	"commit_message":     {"commit_message "},
+}
+
+// exampleParamValue derives example param value from task and schema inputs.
+func exampleParamValue(param, prompt string) any {
+	if value, ok := examplePromptMarkerValue(param, prompt); ok {
+		return value
+	}
+	lowerPrompt := strings.ToLower(prompt)
+	switch param {
+	case "metric":
+		if strings.Contains(lowerPrompt, "lead time") {
+			return "lead_time_for_changes"
+		}
+	case "status":
+		if strings.Contains(lowerPrompt, "passed") {
+			return "passed"
+		}
+	case "scope":
+		if strings.Contains(lowerPrompt, promptPhraseFailedJobs) {
+			return "failed"
+		}
+	case "scopes":
+		if strings.Contains(lowerPrompt, "read_api") {
+			return []string{"read_api"}
+		}
+		if strings.Contains(lowerPrompt, "read_repository") {
+			return []string{"read_repository"}
+		}
+	case "access_level":
+		if strings.Contains(lowerPrompt, "reporter") {
+			return 20
+		}
+		if strings.Contains(lowerPrompt, "developer") {
+			return 30
+		}
+		if strings.Contains(lowerPrompt, "maintainer") {
+			return 40
+		}
+	case "paused":
+		if strings.Contains(lowerPrompt, "paused=true") {
+			return true
+		}
+		if strings.Contains(lowerPrompt, "paused=false") {
+			return false
+		}
+	case "project_id":
+		if value, ok := exampleProjectIDValue(prompt); ok {
+			return value
+		}
+	case "masked", "protected":
+		return false
+	}
+	return fallbackExampleParamValue(param)
+}
+
+// examplePromptMarkerValue handles example prompt marker value and returns [any].
+func examplePromptMarkerValue(param, prompt string) (any, bool) {
+	if markers, ok := numericExampleParamMarkers[param]; ok {
+		for _, marker := range markers {
+			if value, found := backtickValueAfter(prompt, marker); found {
+				return numericExampleValue(value), true
+			}
+		}
+	}
+	if markers, ok := stringExampleParamMarkers[param]; ok {
+		for _, marker := range markers {
+			if value, found := backtickValueAfter(prompt, marker); found {
+				return value, true
+			}
+		}
+	}
+	return nil, false
+}
+
+// fallbackExampleParamValue derives fallback example param value from task and schema inputs.
+func fallbackExampleParamValue(param string) any {
+	switch param {
+	case "id", "attestation_iid", "event_id", "external_status_check_id", "check_id", "csp_namespace_id", "export_id", "issue_iid", "merge_request_iid", "pipeline_id", "job_id", "runner_id", "schedule_id", "trigger_id", "user_id", "award_id", "deploy_key_id", "deploy_token_id", "token_id", "epic_iid", "child_iid", "note_id":
+		return 123
+	case "confirm", "resolved", "paused":
+		return true
+	case "access_level":
+		return 30
+	case "cron":
+		return "0 2 * * 1"
+	case "ref", "content_ref":
+		return "main"
+	case "link_url":
+		return "https://example.com/eval-crud-badge"
+	case "image_url":
+		return "https://example.com/eval-crud-badge.svg"
+	case "scopes":
+		return []string{"read_api"}
+	case "key":
+		return "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq4vQEiXKlQSp6jT+AOHzGznV6ToZBap9i1dulyV8EX eval@example.com"
+	default:
+		return fmt.Sprintf("<%s>", param)
+	}
+}
+
+// exampleOptionalParamValue handles example optional param value and returns [any].
+func exampleOptionalParamValue(param, prompt string) (any, bool) {
+	start, end, hasMonth := monthRangeFromPrompt(prompt)
+	switch param {
+	case "created_after":
+		return start, hasMonth
+	case "created_before":
+		return end, hasMonth
+	case "start_date":
+		if value, ok := backtickValueAfter(prompt, promptMarkerFrom); ok {
+			return value, true
+		}
+	case "end_date":
+		if value, ok := backtickValueAfter(prompt, " to "); ok {
+			return value, true
+		}
+	case "state":
+		if strings.Contains(strings.ToLower(prompt), "active") {
+			return "active", true
+		}
+	case "state_event":
+		if strings.Contains(strings.ToLower(prompt), "close") {
+			return "close", true
+		}
+		if strings.Contains(strings.ToLower(prompt), "reopen") {
+			return "reopen", true
+		}
+	case "environment_scope":
+		return optionalEnvironmentScopeFromPrompt(prompt)
+	case "push_access_level":
+		if strings.Contains(strings.ToLower(prompt), "maintainer push") || strings.Contains(strings.ToLower(prompt), "maintainer push and merge") {
+			return 40, true
+		}
+		if strings.Contains(strings.ToLower(prompt), "developer push") || strings.Contains(strings.ToLower(prompt), "developer push and merge") {
+			return 30, true
+		}
+	case "merge_access_level":
+		if strings.Contains(strings.ToLower(prompt), "maintainer merge") || strings.Contains(strings.ToLower(prompt), "maintainer push and merge") {
+			return 40, true
+		}
+		if strings.Contains(strings.ToLower(prompt), "developer merge") || strings.Contains(strings.ToLower(prompt), "developer push and merge") {
+			return 30, true
+		}
+	case "include_descendants":
+		if strings.Contains(strings.ToLower(prompt), "descendant") {
+			return true, true
+		}
+	case "enabled":
+		if strings.Contains(strings.ToLower(prompt), "disabled") {
+			return false, true
+		}
+	case "active":
+		if strings.Contains(strings.ToLower(prompt), "inactive") {
+			return false, true
+		}
+	case "order_by":
+		if strings.Contains(strings.ToLower(prompt), "recently updated") || strings.Contains(strings.ToLower(prompt), "updated") {
+			return "updated_at", true
+		}
+	case "sort":
+		if strings.Contains(strings.ToLower(prompt), "most recently") || strings.Contains(strings.ToLower(prompt), "latest") || strings.Contains(strings.ToLower(prompt), "recently updated") {
+			return "desc", true
+		}
+	case "per_page":
+		if strings.Contains(strings.ToLower(prompt), "10 most") || strings.Contains(strings.ToLower(prompt), "most recently updated projects") {
+			return 10, true
+		}
+	case "primary":
+		if strings.Contains(strings.ToLower(prompt), "secondary") {
+			return false, true
+		}
+	default:
+		return nil, false
+	}
+	return nil, false
+}
+
+// monthRangeFromPrompt handles month range from prompt and returns [string].
+func monthRangeFromPrompt(prompt string) (startDate, endDate string, ok bool) {
+	lower := strings.ToLower(prompt)
+	for month := time.January; month <= time.December; month++ {
+		marker := strings.ToLower(month.String()) + " "
+		_, remaining, found := strings.Cut(lower, marker)
+		if !found {
+			continue
+		}
+		fields := strings.Fields(remaining)
+		if len(fields) == 0 {
+			continue
+		}
+		yearText := strings.Trim(fields[0], ".,;:")
+		year, err := strconv.Atoi(yearText)
+		if err != nil {
+			continue
+		}
+		start := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
+		end := start.AddDate(0, 1, 0)
+		return start.Format(time.DateOnly), end.Format(time.DateOnly), true
+	}
+	return "", "", false
+}
+
+// exampleProjectIDValue extracts the project identifier embedded in an example prompt.
+func exampleProjectIDValue(prompt string) (string, bool) {
+	for _, marker := range []string{" from project ", " in project ", " on project ", " project "} {
+		if value, ok := backtickValueAfter(prompt, marker); ok {
+			return value, true
+		}
+	}
+	return backtickValueAfter(prompt, promptMarkerProject)
+}
+
+// numericExampleValue parses numeric prompt examples with a stable fallback ID.
+func numericExampleValue(value string) any {
+	number, err := strconv.Atoi(value)
+	if err != nil {
+		return 123
+	}
+	return number
+}
+
+// taskHasSimulationMode reports whether task has simulation mode.
+func taskHasSimulationMode(task evalTask, simulation string) bool {
+	for _, step := range taskSteps(task) {
+		if step.Simulation == simulation {
+			return true
+		}
+	}
+	return false
+}
+
+// validateToolCall validates tool call for the main package.
