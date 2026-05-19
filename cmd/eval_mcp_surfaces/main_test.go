@@ -551,9 +551,11 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 // TestStandaloneToolAvailableInLiveEvaluator_IncludesCapabilityBridgeTools verifies live filtering keeps evaluator bridge tasks.
 func TestStandaloneToolAvailableInLiveEvaluator_IncludesCapabilityBridgeTools(t *testing.T) {
 	for _, tool := range []string{capabilityListTool, resourceListTool, resourceReadTool, promptListTool, promptGetTool, completionTool} {
-		if !standaloneToolAvailableInLiveEvaluator(tool) {
-			t.Fatalf("standaloneToolAvailableInLiveEvaluator(%q) = false, want true", tool)
-		}
+		t.Run(tool, func(t *testing.T) {
+			if !standaloneToolAvailableInLiveEvaluator(tool) {
+				t.Fatalf("standaloneToolAvailableInLiveEvaluator(%q) = false, want true", tool)
+			}
+		})
 	}
 }
 
@@ -4718,10 +4720,14 @@ func TestBuildCatalogSession_ExposesFullCapabilitySurface(t *testing.T) {
 	if len(promptsResult.Prompts) == 0 {
 		t.Fatal("ListPrompts() returned no prompts, want normal prompt surface")
 	}
+	promptName, argumentName, ok := promptCompletionTarget(promptsResult.Prompts)
+	if !ok {
+		t.Fatalf("ListPrompts() = %+v, want at least one prompt argument supported by completion", promptsResult.Prompts)
+	}
 	completeResult, completeErr := session.Complete(t.Context(), &mcp.CompleteParams{
-		Ref: &mcp.CompleteReference{Type: "ref/prompt", Name: promptsResult.Prompts[0].Name},
+		Ref: &mcp.CompleteReference{Type: "ref/prompt", Name: promptName},
 		Argument: mcp.CompleteParamsArgument{
-			Name:  "unknown_argument",
+			Name:  argumentName,
 			Value: "",
 		},
 	})
@@ -5901,6 +5907,29 @@ func hasEvalResourceTemplate(templates []*mcp.ResourceTemplate, uriTemplate stri
 		}
 	}
 	return false
+}
+
+func promptCompletionTarget(prompts []*mcp.Prompt) (string, string, bool) {
+	for _, prompt := range prompts {
+		if prompt == nil {
+			continue
+		}
+		for _, argument := range prompt.Arguments {
+			if argument != nil && promptArgumentSupportsCompletion(argument.Name) {
+				return prompt.Name, argument.Name, true
+			}
+		}
+	}
+	return "", "", false
+}
+
+func promptArgumentSupportsCompletion(name string) bool {
+	switch name {
+	case "project_id", "group_id", "merge_request_iid", "issue_iid", "username", "from", "to", "ref", "tag", "pipeline_id", "sha", "branch", "source_branch", "target_branch", "label", "milestone_id", "milestone", "job_id":
+		return true
+	default:
+		return false
+	}
 }
 
 func requireReadResource(t *testing.T, session *mcp.ClientSession, uri string) {

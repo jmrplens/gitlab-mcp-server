@@ -432,8 +432,8 @@ func routeLooksMutating(tool, action string) bool {
 	return false
 }
 
-// normalizedBackend normalizes backend for stable comparisons.
-
+// parseTasksFile keeps file I/O separate from markdown normalization so tests
+// can exercise parser invariants without touching the filesystem.
 func parseTasksFile(path string) ([]evalTask, error) {
 	data, err := os.ReadFile(path) // #nosec G304 -- task corpus path is an explicit evaluator input.
 	if err != nil {

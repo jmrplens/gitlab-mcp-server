@@ -276,171 +276,9 @@ func repositoryFilePathExample(prompt string) (string, bool) {
 
 // taskPrompt builds task prompt for evaluator prompts.
 func taskPrompt(task evalTask) string {
-	destructive := "No"
-	if taskHasDestructiveStep(task) {
-		destructive = "Yes; include confirm:true in params for each destructive tool call."
-	}
-	retryGuidance := ""
-	if taskHasSimulationMode(task, "transient_error_once") {
-		retryGuidance = " If a simulated temporary GitLab server/API error appears, repeat the same validated operation once; do not use GitLab CI retry actions such as pipeline.retry or job.retry unless the task explicitly asks to rerun CI jobs."
-	}
-	if strings.Contains(task.Prompt, "discussion_id") && strings.Contains(task.Prompt, "merge_request_iid") {
-		retryGuidance += ` For discussion_resolve with split meta-tools, emit tool gitlab_mr_review with quoted JSON strings: {"action":"discussion_resolve","params":{"project_id":"<project_id>","merge_request_iid":<merge_request_iid>,"discussion_id":"<discussion_id>","resolved":true}}. If only a unified gitlab dispatcher is available, use action "mr_review.discussion_resolve" instead.`
-	}
-	if strings.Contains(strings.ToLower(task.Prompt), "release") && strings.Contains(strings.ToLower(task.Prompt), "from ref") {
-		retryGuidance += ` For release.create, "from ref X" maps to params.ref; include params.ref when creating a release from a ref.`
-	}
-	if strings.Contains(strings.ToLower(task.Prompt), "project webhook") || strings.Contains(strings.ToLower(task.Prompt), "webhook crud") {
-		retryGuidance += ` For project webhook add/edit, send only requested params such as project_id, url, push_events, and enable_ssl_verification; never send member_events, subgroup_events, or branch_filter_strategy unless explicitly asked, and omit false or null event flags not asked for. If branch_filter_strategy is explicitly requested, use all_branches, wildcard, or regex; never use all.`
-	}
-	if strings.Contains(strings.ToLower(task.Prompt), "project snippet") && strings.Contains(strings.ToLower(task.Prompt), "files") {
-		retryGuidance += ` For project snippet update, put file_path and content only inside params.files[] entries; include files[].action set to "update"; never send params.file_path or params.content at top level when using files[]. Use the path returned in the snippet files array as files[].file_path, not a placeholder. The project_update params should contain project_id, snippet_id, and files, plus only explicitly requested optional fields.`
-	}
-	if strings.Contains(strings.ToLower(task.Prompt), "list mr awards") || strings.Contains(strings.ToLower(task.Prompt), "list merge request awards") {
-		retryGuidance += ` For merge request awards, after creating the award emoji, call merge_request.emoji_mr_list before deleting; do not skip directly from create to delete even if the create result includes a delete hint.`
-	}
+	destructive := taskDestructiveGuidance(task)
 	steps := taskSteps(task)
-	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_mr_review" && steps[0].ExpectedAction == "note_create" {
-		retryGuidance += ` For merge request notes or comments, call gitlab_mr_review with {"action":"note_create","params":{"project_id":"<project_id>","merge_request_iid":<merge_request_iid>,"body":"<body>"}}. Do not use discussion_create unless the task explicitly says threaded discussion or discussion.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_runner" && steps[0].ExpectedAction == "list_project" {
-		retryGuidance += ` For the runner list step, call gitlab_runner with {"action":"list_project","params":{"project_id":"<project_id>"}} unless the task explicitly asks for an online, offline, stale, or never_contacted status filter. Do not send params.paused, params.type, params.tag_list, status all, status active, or empty filter strings for runner.list_project.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_discover_project" {
-		retryGuidance += ` For gitlab_discover_project, call the standalone tool with top-level remote_url only, like {"remote_url":"<remote_url>"}; do not send action, params, project_id, or ref to gitlab_discover_project.`
-		if len(steps) > 2 && steps[1].ExpectedTool == "gitlab_project" && steps[1].ExpectedAction == "get" && steps[2].ExpectedTool == "gitlab_repository" && steps[2].ExpectedAction == "file_get" {
-			retryGuidance += ` After discover_project succeeds, call gitlab_project/get to verify metadata before calling gitlab_repository/file_get; do not skip the project metadata verification step.`
-		}
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_snippet" && steps[0].ExpectedAction == "project_create" {
-		retryGuidance += ` For project snippet CRUD, the first call is gitlab_snippet with action project_create; do not call gitlab_project first. project_create requires params.project_id, params.title, params.file_name, and params.content. Use the returned snippet_id for project_get, project_update, and project_delete.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_repository" && steps[0].ExpectedAction == "file_create" {
-		retryGuidance += ` For repository file CRUD, read the created file with file_get using params.ref set to the branch name; never send params.branch to file_get. After file_update succeeds, call file_delete next with params.project_id, params.file_path, params.branch, params.commit_message, and params.confirm=true; confirm must be inside params, never a top-level field. The delete envelope shape is {"action":"file_delete","params":{"project_id":"<project_id>","file_path":"<file_path>","branch":"<branch>","commit_message":"<commit_message>","confirm":true}}. Do not call file_get again after the update.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_admin" && steps[0].ExpectedAction == "settings_get" {
-		needsBroadcastGuidance := false
-		for _, step := range steps {
-			if step.ExpectedTool == "gitlab_admin" && step.ExpectedAction == "broadcast_message_create" {
-				needsBroadcastGuidance = true
-				break
-			}
-		}
-		if needsBroadcastGuidance {
-			retryGuidance += ` For broadcast message create, use params.message from the prompt and omit params.theme unless explicitly requested; if you include theme, use a GitLab theme name such as indigo, never a hex color. Use valid starts_at and ends_at timestamps with starts_at before ends_at.`
-		}
-	}
-	if len(steps) > 1 && steps[0].ExpectedAction == "admin.settings_get" {
-		retryGuidance += ` For the dynamic settings/broadcast workflow, follow exactly this order: admin.settings_get, admin.broadcast_message_create, admin.broadcast_message_delete. The first call must read current instance settings with params:{}, not list or create broadcast messages. For broadcast_message_create, use params.message from the prompt and omit params.theme unless explicitly requested.`
-	}
-	if len(steps) > 1 && (steps[0].ExpectedAction == "tag.get" || steps[0].ExpectedTool == "gitlab_tag" && steps[0].ExpectedAction == "get") {
-		retryGuidance += ` For release cleanup, follow exactly this order: tag.get, release.get, release.link_list, release.delete, tag.delete. Start with tag.get to verify the tag before any release calls, then list release links before deleting the release.`
-	}
-	if len(steps) > 2 && (steps[0].ExpectedAction == "release.list" || steps[0].ExpectedTool == "gitlab_release" && steps[0].ExpectedAction == "list") {
-		retryGuidance += ` For release inventory plus notes, follow exactly this order: release.list, repository.compare, analyze.release_notes. repository.compare requires params.from and params.to; analyze.release_notes should use the same from/to refs after compare succeeds.`
-	}
-	if len(steps) > 1 && (steps[0].ExpectedAction == actionIssueCreate || steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create") && strings.Contains(strings.ToLower(task.Prompt), "issue link crud") {
-		retryGuidance += ` For issue link CRUD, keep the source issue IID from the first create call. Create the link with issue.link_create, not issue.link. After link_list, call issue.link_delete with params.project_id, params.issue_iid set to the source issue IID, params.issue_link_id from the returned link, and top-level confirm:true on gitlab_execute_tool.`
-	}
-	if len(steps) > 1 && (steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create" || steps[0].ExpectedAction == actionIssueCreate) && strings.Contains(strings.ToLower(task.Prompt), "issue time tracking") {
-		retryGuidance += ` For issue time tracking, follow exactly this order: issue.create, issue.time_estimate_set, issue.spent_time_add, issue.spent_time_reset, issue.time_estimate_reset, issue.delete. After issue.create, use the returned issue_iid for every later issue time-tracking and delete step. Set the estimate before adding spent time; reset spent time before resetting the estimate.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_project" && steps[0].ExpectedAction == "badge_add" {
-		retryGuidance += ` For project badge CRUD, badge_add requires valid absolute params.link_url and params.image_url. If the task does not provide URLs, use https://example.com/eval-badge as link_url and https://example.com/eval-badge.svg as image_url. Use the returned badge_id for badge_get, badge_edit, and badge_delete. badge_edit uses params.name for a new badge name; never send new_name.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_branch" && steps[0].ExpectedAction == "create" && strings.Contains(strings.ToLower(task.Prompt), "protect") {
-		retryGuidance += ` For branch protection lifecycle, follow exactly this order: create, protect, get_protected, update_protected, unprotect, delete. Protecting with Maintainer push and merge access means params.push_access_level=40 and params.merge_access_level=40 on the protect call. After protect succeeds, call get_protected next; do not call protect again. update_protected may use params.allow_force_push=true. unprotect only uses params.project_id, params.branch_name, and params.confirm=true; never send allow_force_push to unprotect. For direct gitlab_branch meta-tool calls, the unprotect envelope shape is {"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}} and the delete envelope shape is {"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. For dynamic mode with gitlab_execute_tool, keep unprotect/delete action params inside params and set top-level confirm:true on the gitlab_execute_tool invocation.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_pipeline" && steps[0].ExpectedAction == "schedule_create" {
-		retryGuidance += ` For pipeline schedule CRUD, the first call is gitlab_pipeline with action schedule_create; do not call gitlab_discover_project or gitlab_project first. schedule_create requires params.project_id, params.description, params.ref, and params.cron, with params.active=false for an inactive schedule. Use description, not name, for the schedule display label. Schedule variables accept params.key, params.value, and optional params.variable_type only; never send masked or protected. If the task gives a variable key but no value, use params.value="schedule-value-1" for schedule_create_variable and params.value="schedule-value-2" for schedule_edit_variable. Use the returned id as params.schedule_id for schedule_get, schedule_update, schedule_create_variable, schedule_edit_variable, schedule_delete_variable, and schedule_delete. Both schedule_delete_variable and schedule_delete are destructive and require confirm:true according to the active tool surface.`
-	}
-	if len(steps) == 9 && steps[0].ExpectedTool == "gitlab_project" && steps[0].ExpectedAction == "get" && strings.Contains(strings.ToLower(task.Prompt), "broad read-only docker inventory") {
-		retryGuidance += ` For broad read-only Docker inventory, follow exactly this order: gitlab_project/get, gitlab_branch/list, gitlab_tag/list, gitlab_release/list, gitlab_repository/tree, gitlab_ci_variable/list, gitlab_access/deploy_key_list_project, gitlab_access/deploy_token_list_project, gitlab_package/list. After tag list, call gitlab_release/list before repository tree. After release list, call repository tree with params.ref="main". Use params.per_page=1 on list/tree/package steps to keep responses small; one page is enough for this evaluation.`
-	}
-	if len(steps) > 1 && (steps[0].ExpectedTool == "gitlab_package" && steps[0].ExpectedAction == "publish_directory" || steps[0].ExpectedAction == "package.publish_directory") {
-		retryGuidance += ` For package-to-release workflows, follow exactly this order: gitlab_package/publish_directory, gitlab_release/create, gitlab_release/link_create_batch. publish_directory requires params.project_id, params.package_name, params.package_version, and params.directory_path. Omit params.include_pattern for this task; if you must filter files, include_pattern is a single glob such as "*" or "*.txt", never a comma-separated file list. Use the returned published[].url values as links[].url, use the matching published[].file_name as links[].name, set each links[].link_type to "package", and do not construct package URLs manually. Create the release from params.ref="main" before link_create_batch. For link_create_batch, each links[] item supports only name, url, and link_type; do not send direct_asset_path or filepath.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_release" && steps[0].ExpectedAction == "create" && strings.Contains(strings.ToLower(task.Prompt), "asset-link crud") {
-		retryGuidance += ` For release asset-link CRUD, the first call is gitlab_release/create; do not call gitlab_project first, do not create the tag separately, and do not pass assets to release.create. Use params.ref="main" on release.create. For link_create, use a valid absolute URL such as https://example.com/eval-crud-link; for link_update, use a valid absolute URL such as https://example.com/eval-crud-link-updated. Use the returned link_id for link_get, link_update, and link_delete before deleting the release and tag.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "time_estimate_set" {
-		retryGuidance += ` For merge request time tracking plus emoji, follow exactly this order: time_estimate_set, spent_time_add, emoji_mr_create, emoji_mr_list, emoji_mr_delete, spent_time_reset, time_estimate_reset. After emoji_mr_create, call emoji_mr_list next even if next_steps mentions delete. Delete the award only after the list step, using the returned award emoji id as params.award_id with params.confirm=true. After emoji_mr_delete, call spent_time_reset before time_estimate_reset.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "get" && steps[1].ExpectedTool == "gitlab_mr_review" && steps[1].ExpectedAction == "changes_get" {
-		retryGuidance += ` For batch MR review, follow exactly this order: gitlab_merge_request/get, gitlab_mr_review/changes_get, gitlab_mr_review/draft_note_create, gitlab_mr_review/draft_note_publish_all. Start by inspecting the MR with merge_request.get; do not start with changes_get.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_mr_review" && steps[0].ExpectedAction == "note_create" {
-		retryGuidance += ` For merge request note CRUD, follow exactly this order: note_create, note_get, note_update, note_delete. After note_create, call note_get next using the returned note id even if next_steps mentions update or delete. After note_get, call note_update with params.body set to the updated note text and without params.confirm. Only note_delete is destructive; call note_delete last with params.confirm=true.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_feature_flags" && steps[0].ExpectedAction == "ff_user_list_create" {
-		retryGuidance += ` For feature flag user-list lifecycle, params.user_xids is a comma-separated string such as "u1,u2", not an array. Use the returned iid as params.user_list_iid for ff_user_list_get, ff_user_list_update, and ff_user_list_delete; do not use the user-list name for those lookup/delete actions. For feature_flag_create and feature_flag_update, omit params.strategies unless the task gives an exact strategies JSON string; if you must send strategies, it must be a JSON string such as "[{\"name\":\"default\"}]", never an array or object.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedAction == "feature_flags.ff_user_list_create" {
-		retryGuidance += ` For feature flag user-list lifecycle, follow exactly this order: feature_flags.ff_user_list_create, feature_flags.ff_user_list_get, feature_flags.ff_user_list_update, feature_flags.feature_flag_create, feature_flags.feature_flag_get, feature_flags.feature_flag_update, feature_flags.feature_flag_delete, feature_flags.ff_user_list_delete. Every step needs params.project_id. Use the returned iid as params.user_list_iid for user-list get, update, and delete; do not use name for those user-list lookup actions. After ff_user_list_update, create the feature flag next; do not fetch the user list again. Feature flag create/get/update/delete use params.name for the feature flag name, never feature_flag_name, and never include user_list_iid unless you are calling an ff_user_list_* action.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_token_create_project" {
-		retryGuidance += ` For project deploy token lifecycle, deploy_token_create_project requires params.project_id, params.name, and params.scopes. Do not add params.expires_at unless the task gives an explicit expiry date; if you send expires_at, it must be YYYY-MM-DD only, never a timestamp.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_key_add" {
-		retryGuidance += ` For project deploy key lifecycle, use gitlab_access actions deploy_key_add, deploy_key_get, deploy_key_update, and deploy_key_delete; do not use gitlab_project for deploy keys. deploy_key_add requires params.project_id, params.title, and params.key. Use the returned deploy_key_id for get, update, and delete.`
-	}
-	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_group" && steps[0].ExpectedAction == "group_milestone_create" {
-		retryGuidance += ` For group milestone lifecycle, group_milestone_create should use params.group_id, params.title, and params.due_date when the task gives only a due date. Do not invent params.start_date unless the task provides an earlier start date. After create, call group_milestone_get with the returned milestone_iid before any update.`
-	}
-	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "merge" {
-		retryGuidance += ` For merging a merge request when the pipeline succeeds, call gitlab_merge_request with action merge and params.project_id, params.merge_request_iid, and params.confirm=true. Do not call gitlab_pipeline/wait unless the task explicitly asks to wait for a pipeline.`
-	}
-	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_search" && steps[0].ExpectedAction == "projects" {
-		retryGuidance += ` For searching all projects, call gitlab_search with action projects and params.query. Do not call search.code; code search is only for searching file contents.`
-	}
-	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_key_list_project" {
-		retryGuidance += ` Project deploy key operations live under gitlab_access. For listing project deploy keys, call gitlab_access with action deploy_key_list_project and params.project_id; do not call gitlab_project.`
-	}
-	needsPipelineTriggerGuidance := false
-	for _, step := range steps {
-		if step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "trigger_create" {
-			needsPipelineTriggerGuidance = true
-			break
-		}
-	}
-	if needsPipelineTriggerGuidance {
-		retryGuidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
-	}
-	needsProjectHookGuidance := false
-	for _, step := range steps {
-		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "hook_add" {
-			needsProjectHookGuidance = true
-			break
-		}
-	}
-	if needsProjectHookGuidance {
-		retryGuidance += ` For project hook CRUD, use gitlab_project actions hook_add, hook_get, hook_edit, and hook_delete with params.project_id. Do not use gitlab_group hook actions for a project hook workflow.`
-	}
-	if strings.Contains(strings.ToLower(task.Prompt), promptPhraseFailedJobs) && strings.Contains(strings.ToLower(task.Prompt), "pipeline") {
-		hasFailedJobListStep := false
-		hasPipelineGetStep := false
-		for _, step := range steps {
-			if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" {
-				hasFailedJobListStep = true
-				break
-			}
-			if step.ExpectedAction == actionPipelineGet || step.ExpectedTool == "gitlab_pipeline" && step.ExpectedAction == "get" {
-				hasPipelineGetStep = true
-			}
-		}
-		if hasPipelineGetStep {
-			retryGuidance += ` For failed pipeline investigation, follow exactly this order when requested: discover_project.resolve, pipeline.get, job.list, job.trace, analyze.pipeline_failure. Inspecting one known pipeline ID means pipeline.get with params.pipeline_id; do not substitute pipeline.list.`
-		}
-		if hasFailedJobListStep {
-			retryGuidance += ` For listing failed jobs in a pipeline, call gitlab_job with {"action":"list","params":{"project_id":"<project_id>","pipeline_id":<pipeline_id>,"scope":"failed"}}; do not call gitlab_pipeline list with pipeline_id.`
-		}
-	}
-	if len(steps) == 1 && (steps[0].ExpectedAction == "admin.settings_get" || steps[0].ExpectedTool == "gitlab_admin" && steps[0].ExpectedAction == "settings_get") {
-		retryGuidance += ` For instance application settings, call gitlab_admin with {"action":"settings_get","params":{}}; do not call metadata_get, gitlab_server, or schema lookup.`
-	}
-	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_job" && steps[0].ExpectedAction == "download_single_artifact" {
-		retryGuidance += ` For a prompt like "Download artifact <artifact_path> from job <numeric job_id>", call gitlab_job with {"action":"download_single_artifact","params":{"project_id":"<project_id>","job_id":<job_id>,"artifact_path":"<artifact_path>"}}; do not use download_artifacts, artifacts, or download_single_artifact_by_ref.`
-	}
+	retryGuidance := taskRetryGuidance(task, steps)
 	if len(steps) == 1 && usesCompactExactPrompt(steps[0]) {
 		return compactExactTaskPrompt(task, destructive, steps[0])
 	}
@@ -451,11 +289,291 @@ func taskPrompt(task evalTask) string {
 		return exactToolTaskPrompt(task, destructive, steps[0])
 	}
 	if len(steps) == 1 && steps[0].ExpectedAction == "search.code" {
-		retryGuidance += ` For search.code, call gitlab with {"action":"search.code","params":{"query":"<query>","project_id":"<project_id>"}}; a namespace path like group/project is already project_id, never remote_url.`
+		retryGuidance = appendSearchCodeGuidance(task, steps, retryGuidance)
 	}
 	if len(steps) > 1 {
-		return fmt.Sprintf("Task %s: %s\nDestructive: %s\nPerform the full scenario in the requested order. The first tool call must perform the first requested operation, not schema lookup, project verification, or the final analyzer. Emit only the next single MCP tool call, wait for its result, then continue with the next required GitLab operation until the scenario is complete. Tool-result next_steps are optional suggestions; do not let them override the requested order. In this evaluation, one successful list response completes a list step; do not fetch additional pagination pages unless the task explicitly asks for every page, all results, or complete pagination. For action-based tools, keep all action-specific fields under params. Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow. In these tasks, MR `N` means params.merge_request_iid:N. For runner.list_project, use params.project_id by default and omit filter params unless the task explicitly asks for them. For runner jobs, use runner.jobs with params.runner_id only; do not add project_id. For job trace, use job.trace with params.project_id and params.job_id. For runner pause or unpause, use runner.update with params.runner_id and params.paused true or false. Do not look up schemas for ordinary parameter names already supplied by the task prompt, and do not add any params that the task did not ask for. Use action snippet.content for raw personal snippet content, snippet.delete for personal snippet deletion, branch.delete for branch deletion, tag.delete only when deleting a Git tag, release.delete when deleting a GitLab release, and mr_review.draft_note_create for merge request draft notes. For project milestones, use action project.milestone_delete and params.milestone_iid. For project hooks, use action project.hook_delete and params.hook_id; do not invent project_hook.delete. For project badges, linking to a URL means params.link_url and image means params.image_url.%s Include confirm:true in params for every destructive tool call.", task.ID, task.Prompt, destructive, retryGuidance)
+		return multiStepTaskPrompt(task, destructive, retryGuidance)
 	}
+	return singleStepTaskPrompt(task, destructive, retryGuidance)
+}
+
+type taskPromptRule func(evalTask, []evalStep, string) string
+
+func taskDestructiveGuidance(task evalTask) string {
+	if taskHasDestructiveStep(task) {
+		return "Yes; include confirm:true in params for each destructive tool call."
+	}
+	return "No"
+}
+
+func taskRetryGuidance(task evalTask, steps []evalStep) string {
+	retryGuidance := ""
+	rules := []taskPromptRule{
+		appendSimulationGuidance,
+		appendMRDiscussionGuidance,
+		appendReleaseGuidance,
+		appendWebhookGuidance,
+		appendSnippetGuidance,
+		appendRunnerGuidance,
+		appendDiscoveryGuidance,
+		appendRepositoryGuidance,
+		appendAdminGuidance,
+		appendIssueGuidance,
+		appendProjectLifecycleGuidance,
+		appendPipelineGuidance,
+		appendPackageGuidance,
+		appendMergeRequestGuidance,
+		appendFeatureFlagGuidance,
+		appendAccessGuidance,
+		appendGroupGuidance,
+		appendSingleOperationGuidance,
+	}
+	for _, rule := range rules {
+		retryGuidance = rule(task, steps, retryGuidance)
+	}
+	return retryGuidance
+}
+
+func appendSimulationGuidance(task evalTask, _ []evalStep, guidance string) string {
+	if taskHasSimulationMode(task, "transient_error_once") {
+		return guidance + " If a simulated temporary GitLab server/API error appears, repeat the same validated operation once; do not use GitLab CI retry actions such as pipeline.retry or job.retry unless the task explicitly asks to rerun CI jobs."
+	}
+	return guidance
+}
+
+func appendMRDiscussionGuidance(task evalTask, steps []evalStep, guidance string) string {
+	if strings.Contains(task.Prompt, "discussion_id") && strings.Contains(task.Prompt, "merge_request_iid") {
+		guidance += ` For discussion_resolve with split meta-tools, emit tool gitlab_mr_review with quoted JSON strings: {"action":"discussion_resolve","params":{"project_id":"<project_id>","merge_request_iid":<merge_request_iid>,"discussion_id":"<discussion_id>","resolved":true}}. If only a unified gitlab dispatcher is available, use action "mr_review.discussion_resolve" instead.`
+	}
+	if len(steps) == 1 && steps[0].ExpectedTool == "gitlab_mr_review" && steps[0].ExpectedAction == "note_create" {
+		guidance += ` For merge request notes or comments, call gitlab_mr_review with {"action":"note_create","params":{"project_id":"<project_id>","merge_request_iid":<merge_request_iid>,"body":"<body>"}}. Do not use discussion_create unless the task explicitly says threaded discussion or discussion.`
+	}
+	return guidance
+}
+
+func appendReleaseGuidance(task evalTask, steps []evalStep, guidance string) string {
+	lowerPrompt := strings.ToLower(task.Prompt)
+	if strings.Contains(lowerPrompt, "release") && strings.Contains(lowerPrompt, "from ref") {
+		guidance += ` For release.create, "from ref X" maps to params.ref; include params.ref when creating a release from a ref.`
+	}
+	if len(steps) > 1 && (steps[0].ExpectedAction == "tag.get" || steps[0].ExpectedTool == "gitlab_tag" && steps[0].ExpectedAction == "get") {
+		guidance += ` For release cleanup, follow exactly this order: tag.get, release.get, release.link_list, release.delete, tag.delete. Start with tag.get to verify the tag before any release calls, then list release links before deleting the release.`
+	}
+	if len(steps) > 2 && (steps[0].ExpectedAction == "release.list" || steps[0].ExpectedTool == "gitlab_release" && steps[0].ExpectedAction == "list") {
+		guidance += ` For release inventory plus notes, follow exactly this order: release.list, repository.compare, analyze.release_notes. repository.compare requires params.from and params.to; analyze.release_notes should use the same from/to refs after compare succeeds.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_release" && steps[0].ExpectedAction == "create" && strings.Contains(lowerPrompt, "asset-link crud") {
+		guidance += ` For release asset-link CRUD, the first call is gitlab_release/create; do not call gitlab_project first, do not create the tag separately, and do not pass assets to release.create. Use params.ref="main" on release.create. For link_create, use a valid absolute URL such as https://example.com/eval-crud-link; for link_update, use a valid absolute URL such as https://example.com/eval-crud-link-updated. Use the returned link_id for link_get, link_update, and link_delete before deleting the release and tag.`
+	}
+	return guidance
+}
+
+func appendWebhookGuidance(task evalTask, steps []evalStep, guidance string) string {
+	lowerPrompt := strings.ToLower(task.Prompt)
+	if strings.Contains(lowerPrompt, "project webhook") || strings.Contains(lowerPrompt, "webhook crud") {
+		guidance += ` For project webhook add/edit, send only requested params such as project_id, url, push_events, and enable_ssl_verification; never send member_events, subgroup_events, or branch_filter_strategy unless explicitly asked, and omit false or null event flags not asked for. If branch_filter_strategy is explicitly requested, use all_branches, wildcard, or regex; never use all.`
+	}
+	if taskHasStep(steps, "gitlab_project", "hook_add") {
+		guidance += ` For project hook CRUD, use gitlab_project actions hook_add, hook_get, hook_edit, and hook_delete with params.project_id. Do not use gitlab_group hook actions for a project hook workflow.`
+	}
+	return guidance
+}
+
+func appendSnippetGuidance(task evalTask, steps []evalStep, guidance string) string {
+	lowerPrompt := strings.ToLower(task.Prompt)
+	if strings.Contains(lowerPrompt, "project snippet") && strings.Contains(lowerPrompt, "files") {
+		guidance += ` For project snippet update, put file_path and content only inside params.files[] entries; include files[].action set to "update"; never send params.file_path or params.content at top level when using files[]. Use the path returned in the snippet files array as files[].file_path, not a placeholder. The project_update params should contain project_id, snippet_id, and files, plus only explicitly requested optional fields.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_snippet" && steps[0].ExpectedAction == "project_create" {
+		guidance += ` For project snippet CRUD, the first call is gitlab_snippet with action project_create; do not call gitlab_project first. project_create requires params.project_id, params.title, params.file_name, and params.content. Use the returned snippet_id for project_get, project_update, and project_delete.`
+	}
+	return guidance
+}
+
+func appendRunnerGuidance(_ evalTask, steps []evalStep, guidance string) string {
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_runner" && steps[0].ExpectedAction == "list_project" {
+		return guidance + ` For the runner list step, call gitlab_runner with {"action":"list_project","params":{"project_id":"<project_id>"}} unless the task explicitly asks for an online, offline, stale, or never_contacted status filter. Do not send params.paused, params.type, params.tag_list, status all, status active, or empty filter strings for runner.list_project.`
+	}
+	return guidance
+}
+
+func appendDiscoveryGuidance(_ evalTask, steps []evalStep, guidance string) string {
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_discover_project" {
+		guidance += ` For gitlab_discover_project, call the standalone tool with top-level remote_url only, like {"remote_url":"<remote_url>"}; do not send action, params, project_id, or ref to gitlab_discover_project.`
+		if len(steps) > 2 && steps[1].ExpectedTool == "gitlab_project" && steps[1].ExpectedAction == "get" && steps[2].ExpectedTool == "gitlab_repository" && steps[2].ExpectedAction == "file_get" {
+			guidance += ` After discover_project succeeds, call gitlab_project/get to verify metadata before calling gitlab_repository/file_get; do not skip the project metadata verification step.`
+		}
+	}
+	return guidance
+}
+
+func appendRepositoryGuidance(task evalTask, steps []evalStep, guidance string) string {
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_repository" && steps[0].ExpectedAction == "file_create" {
+		guidance += ` For repository file CRUD, read the created file with file_get using params.ref set to the branch name; never send params.branch to file_get. After file_update succeeds, call file_delete next with params.project_id, params.file_path, params.branch, params.commit_message, and params.confirm=true; confirm must be inside params, never a top-level field. The delete envelope shape is {"action":"file_delete","params":{"project_id":"<project_id>","file_path":"<file_path>","branch":"<branch>","commit_message":"<commit_message>","confirm":true}}. Do not call file_get again after the update.`
+	}
+	if len(steps) == 9 && steps[0].ExpectedTool == "gitlab_project" && steps[0].ExpectedAction == "get" && strings.Contains(strings.ToLower(task.Prompt), "broad read-only docker inventory") {
+		guidance += ` For broad read-only Docker inventory, follow exactly this order: gitlab_project/get, gitlab_branch/list, gitlab_tag/list, gitlab_release/list, gitlab_repository/tree, gitlab_ci_variable/list, gitlab_access/deploy_key_list_project, gitlab_access/deploy_token_list_project, gitlab_package/list. After tag list, call gitlab_release/list before repository tree. After release list, call repository tree with params.ref="main". Use params.per_page=1 on list/tree/package steps to keep responses small; one page is enough for this evaluation.`
+	}
+	return guidance
+}
+
+func appendAdminGuidance(_ evalTask, steps []evalStep, guidance string) string {
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_admin" && steps[0].ExpectedAction == "settings_get" && taskHasStep(steps, "gitlab_admin", "broadcast_message_create") {
+		guidance += ` For broadcast message create, use params.message from the prompt and omit params.theme unless explicitly requested; if you include theme, use a GitLab theme name such as indigo, never a hex color. Use valid starts_at and ends_at timestamps with starts_at before ends_at.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedAction == "admin.settings_get" {
+		guidance += ` For the dynamic settings/broadcast workflow, follow exactly this order: admin.settings_get, admin.broadcast_message_create, admin.broadcast_message_delete. The first call must read current instance settings with params:{}, not list or create broadcast messages. For broadcast_message_create, use params.message from the prompt and omit params.theme unless explicitly requested.`
+	}
+	return guidance
+}
+
+func appendIssueGuidance(task evalTask, steps []evalStep, guidance string) string {
+	lowerPrompt := strings.ToLower(task.Prompt)
+	firstCreatesIssue := len(steps) > 1 && (steps[0].ExpectedAction == actionIssueCreate || steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create")
+	if firstCreatesIssue && strings.Contains(lowerPrompt, "issue link crud") {
+		guidance += ` For issue link CRUD, keep the source issue IID from the first create call. Create the link with issue.link_create, not issue.link. After link_list, call issue.link_delete with params.project_id, params.issue_iid set to the source issue IID, params.issue_link_id from the returned link, and top-level confirm:true on gitlab_execute_tool.`
+	}
+	if firstCreatesIssue && strings.Contains(lowerPrompt, "issue time tracking") {
+		guidance += ` For issue time tracking, follow exactly this order: issue.create, issue.time_estimate_set, issue.spent_time_add, issue.spent_time_reset, issue.time_estimate_reset, issue.delete. After issue.create, use the returned issue_iid for every later issue time-tracking and delete step. Set the estimate before adding spent time; reset spent time before resetting the estimate.`
+	}
+	return guidance
+}
+
+func appendProjectLifecycleGuidance(task evalTask, steps []evalStep, guidance string) string {
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_project" && steps[0].ExpectedAction == "badge_add" {
+		guidance += ` For project badge CRUD, badge_add requires valid absolute params.link_url and params.image_url. If the task does not provide URLs, use https://example.com/eval-badge as link_url and https://example.com/eval-badge.svg as image_url. Use the returned badge_id for badge_get, badge_edit, and badge_delete. badge_edit uses params.name for a new badge name; never send new_name.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_branch" && steps[0].ExpectedAction == "create" && strings.Contains(strings.ToLower(task.Prompt), "protect") {
+		guidance += ` For branch protection lifecycle, follow exactly this order: create, protect, get_protected, update_protected, unprotect, delete. Protecting with Maintainer push and merge access means params.push_access_level=40 and params.merge_access_level=40 on the protect call. After protect succeeds, call get_protected next; do not call protect again. update_protected may use params.allow_force_push=true. unprotect only uses params.project_id, params.branch_name, and params.confirm=true; never send allow_force_push to unprotect. For direct gitlab_branch meta-tool calls, the unprotect envelope shape is {"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}} and the delete envelope shape is {"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. For dynamic mode with gitlab_execute_tool, keep unprotect/delete action params inside params and set top-level confirm:true on the gitlab_execute_tool invocation.`
+	}
+	return guidance
+}
+
+func appendPipelineGuidance(task evalTask, steps []evalStep, guidance string) string {
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_pipeline" && steps[0].ExpectedAction == "schedule_create" {
+		guidance += ` For pipeline schedule CRUD, the first call is gitlab_pipeline with action schedule_create; do not call gitlab_discover_project or gitlab_project first. schedule_create requires params.project_id, params.description, params.ref, and params.cron, with params.active=false for an inactive schedule. Use description, not name, for the schedule display label. Schedule variables accept params.key, params.value, and optional params.variable_type only; never send masked or protected. If the task gives a variable key but no value, use params.value="schedule-value-1" for schedule_create_variable and params.value="schedule-value-2" for schedule_edit_variable. Use the returned id as params.schedule_id for schedule_get, schedule_update, schedule_create_variable, schedule_edit_variable, schedule_delete_variable, and schedule_delete. Both schedule_delete_variable and schedule_delete are destructive and require confirm:true according to the active tool surface.`
+	}
+	if taskHasStep(steps, "gitlab_pipeline", "trigger_create") {
+		guidance += ` For pipeline trigger CRUD, trigger_create accepts only params.project_id and params.description; never send params.ref for trigger_create. Ref belongs to trigger_run or pipeline.create, not trigger_create. Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete; trigger_delete also requires params.confirm=true.`
+	}
+	return appendFailedPipelineGuidance(task, steps, guidance)
+}
+
+func appendPackageGuidance(_ evalTask, steps []evalStep, guidance string) string {
+	if len(steps) > 1 && (steps[0].ExpectedTool == "gitlab_package" && steps[0].ExpectedAction == "publish_directory" || steps[0].ExpectedAction == "package.publish_directory") {
+		guidance += ` For package-to-release workflows, follow exactly this order: gitlab_package/publish_directory, gitlab_release/create, gitlab_release/link_create_batch. publish_directory requires params.project_id, params.package_name, params.package_version, and params.directory_path. Omit params.include_pattern for this task; if you must filter files, include_pattern is a single glob such as "*" or "*.txt", never a comma-separated file list. Use the returned published[].url values as links[].url, use the matching published[].file_name as links[].name, set each links[].link_type to "package", and do not construct package URLs manually. Create the release from params.ref="main" before link_create_batch. For link_create_batch, each links[] item supports only name, url, and link_type; do not send direct_asset_path or filepath.`
+	}
+	return guidance
+}
+
+func appendMergeRequestGuidance(task evalTask, steps []evalStep, guidance string) string {
+	lowerPrompt := strings.ToLower(task.Prompt)
+	if strings.Contains(lowerPrompt, "list mr awards") || strings.Contains(lowerPrompt, "list merge request awards") {
+		guidance += ` For merge request awards, after creating the award emoji, call merge_request.emoji_mr_list before deleting; do not skip directly from create to delete even if the create result includes a delete hint.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "time_estimate_set" {
+		guidance += ` For merge request time tracking plus emoji, follow exactly this order: time_estimate_set, spent_time_add, emoji_mr_create, emoji_mr_list, emoji_mr_delete, spent_time_reset, time_estimate_reset. After emoji_mr_create, call emoji_mr_list next even if next_steps mentions delete. Delete the award only after the list step, using the returned award emoji id as params.award_id with params.confirm=true. After emoji_mr_delete, call spent_time_reset before time_estimate_reset.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "get" && steps[1].ExpectedTool == "gitlab_mr_review" && steps[1].ExpectedAction == "changes_get" {
+		guidance += ` For batch MR review, follow exactly this order: gitlab_merge_request/get, gitlab_mr_review/changes_get, gitlab_mr_review/draft_note_create, gitlab_mr_review/draft_note_publish_all. Start by inspecting the MR with merge_request.get; do not start with changes_get.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_mr_review" && steps[0].ExpectedAction == "note_create" {
+		guidance += ` For merge request note CRUD, follow exactly this order: note_create, note_get, note_update, note_delete. After note_create, call note_get next using the returned note id even if next_steps mentions update or delete. After note_get, call note_update with params.body set to the updated note text and without params.confirm. Only note_delete is destructive; call note_delete last with params.confirm=true.`
+	}
+	return guidance
+}
+
+func appendFeatureFlagGuidance(_ evalTask, steps []evalStep, guidance string) string {
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_feature_flags" && steps[0].ExpectedAction == "ff_user_list_create" {
+		guidance += ` For feature flag user-list lifecycle, params.user_xids is a comma-separated string such as "u1,u2", not an array. Use the returned iid as params.user_list_iid for ff_user_list_get, ff_user_list_update, and ff_user_list_delete; do not use the user-list name for those lookup/delete actions. For feature_flag_create and feature_flag_update, omit params.strategies unless the task gives an exact strategies JSON string; if you must send strategies, it must be a JSON string such as "[{\"name\":\"default\"}]", never an array or object.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedAction == "feature_flags.ff_user_list_create" {
+		guidance += ` For feature flag user-list lifecycle, follow exactly this order: feature_flags.ff_user_list_create, feature_flags.ff_user_list_get, feature_flags.ff_user_list_update, feature_flags.feature_flag_create, feature_flags.feature_flag_get, feature_flags.feature_flag_update, feature_flags.feature_flag_delete, feature_flags.ff_user_list_delete. Every step needs params.project_id. Use the returned iid as params.user_list_iid for user-list get, update, and delete; do not use name for those user-list lookup actions. After ff_user_list_update, create the feature flag next; do not fetch the user list again. Feature flag create/get/update/delete use params.name for the feature flag name, never feature_flag_name, and never include user_list_iid unless you are calling an ff_user_list_* action.`
+	}
+	return guidance
+}
+
+func appendAccessGuidance(_ evalTask, steps []evalStep, guidance string) string {
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_token_create_project" {
+		guidance += ` For project deploy token lifecycle, deploy_token_create_project requires params.project_id, params.name, and params.scopes. Do not add params.expires_at unless the task gives an explicit expiry date; if you send expires_at, it must be YYYY-MM-DD only, never a timestamp.`
+	}
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_key_add" {
+		guidance += ` For project deploy key lifecycle, use gitlab_access actions deploy_key_add, deploy_key_get, deploy_key_update, and deploy_key_delete; do not use gitlab_project for deploy keys. deploy_key_add requires params.project_id, params.title, and params.key. Use the returned deploy_key_id for get, update, and delete.`
+	}
+	return guidance
+}
+
+func appendGroupGuidance(_ evalTask, steps []evalStep, guidance string) string {
+	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_group" && steps[0].ExpectedAction == "group_milestone_create" {
+		return guidance + ` For group milestone lifecycle, group_milestone_create should use params.group_id, params.title, and params.due_date when the task gives only a due date. Do not invent params.start_date unless the task provides an earlier start date. After create, call group_milestone_get with the returned milestone_iid before any update.`
+	}
+	return guidance
+}
+
+func appendSingleOperationGuidance(_ evalTask, steps []evalStep, guidance string) string {
+	if len(steps) != 1 {
+		return guidance
+	}
+	switch {
+	case steps[0].ExpectedTool == "gitlab_merge_request" && steps[0].ExpectedAction == "merge":
+		return guidance + ` For merging a merge request when the pipeline succeeds, call gitlab_merge_request with action merge and params.project_id, params.merge_request_iid, and params.confirm=true. Do not call gitlab_pipeline/wait unless the task explicitly asks to wait for a pipeline.`
+	case steps[0].ExpectedTool == "gitlab_search" && steps[0].ExpectedAction == "projects":
+		return guidance + ` For searching all projects, call gitlab_search with action projects and params.query. Do not call search.code; code search is only for searching file contents.`
+	case steps[0].ExpectedTool == "gitlab_access" && steps[0].ExpectedAction == "deploy_key_list_project":
+		return guidance + ` Project deploy key operations live under gitlab_access. For listing project deploy keys, call gitlab_access with action deploy_key_list_project and params.project_id; do not call gitlab_project.`
+	case steps[0].ExpectedAction == "admin.settings_get" || steps[0].ExpectedTool == "gitlab_admin" && steps[0].ExpectedAction == "settings_get":
+		return guidance + ` For instance application settings, call gitlab_admin with {"action":"settings_get","params":{}}; do not call metadata_get, gitlab_server, or schema lookup.`
+	case steps[0].ExpectedTool == "gitlab_job" && steps[0].ExpectedAction == "download_single_artifact":
+		return guidance + ` For a prompt like "Download artifact <artifact_path> from job <numeric job_id>", call gitlab_job with {"action":"download_single_artifact","params":{"project_id":"<project_id>","job_id":<job_id>,"artifact_path":"<artifact_path>"}}; do not use download_artifacts, artifacts, or download_single_artifact_by_ref.`
+	default:
+		return guidance
+	}
+}
+
+func appendSearchCodeGuidance(_ evalTask, steps []evalStep, guidance string) string {
+	if len(steps) == 1 && steps[0].ExpectedAction == "search.code" {
+		return guidance + ` For search.code, call gitlab with {"action":"search.code","params":{"query":"<query>","project_id":"<project_id>"}}; a namespace path like group/project is already project_id, never remote_url.`
+	}
+	return guidance
+}
+
+func appendFailedPipelineGuidance(task evalTask, steps []evalStep, guidance string) string {
+	lowerPrompt := strings.ToLower(task.Prompt)
+	if !strings.Contains(lowerPrompt, promptPhraseFailedJobs) || !strings.Contains(lowerPrompt, "pipeline") {
+		return guidance
+	}
+	if taskHasStep(steps, "gitlab_pipeline", "get") || taskHasAction(steps, actionPipelineGet) {
+		guidance += ` For failed pipeline investigation, follow exactly this order when requested: discover_project.resolve, pipeline.get, job.list, job.trace, analyze.pipeline_failure. Inspecting one known pipeline ID means pipeline.get with params.pipeline_id; do not substitute pipeline.list.`
+	}
+	if taskHasStep(steps, "gitlab_job", "list") {
+		guidance += ` For listing failed jobs in a pipeline, call gitlab_job with {"action":"list","params":{"project_id":"<project_id>","pipeline_id":<pipeline_id>,"scope":"failed"}}; do not call gitlab_pipeline list with pipeline_id.`
+	}
+	return guidance
+}
+
+func taskHasStep(steps []evalStep, tool, action string) bool {
+	for _, step := range steps {
+		if step.ExpectedTool == tool && step.ExpectedAction == action {
+			return true
+		}
+	}
+	return false
+}
+
+func taskHasAction(steps []evalStep, action string) bool {
+	for _, step := range steps {
+		if step.ExpectedAction == action {
+			return true
+		}
+	}
+	return false
+}
+
+func multiStepTaskPrompt(task evalTask, destructive, retryGuidance string) string {
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nPerform the full scenario in the requested order. The first tool call must perform the first requested operation, not schema lookup, project verification, or the final analyzer. Emit only the next single MCP tool call, wait for its result, then continue with the next required GitLab operation until the scenario is complete. Tool-result next_steps are optional suggestions; do not let them override the requested order. In this evaluation, one successful list response completes a list step; do not fetch additional pagination pages unless the task explicitly asks for every page, all results, or complete pagination. For action-based tools, keep all action-specific fields under params. Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow. In these tasks, MR `N` means params.merge_request_iid:N. For runner.list_project, use params.project_id by default and omit filter params unless the task explicitly asks for them. For runner jobs, use runner.jobs with params.runner_id only; do not add project_id. For job trace, use job.trace with params.project_id and params.job_id. For runner pause or unpause, use runner.update with params.runner_id and params.paused true or false. Do not look up schemas for ordinary parameter names already supplied by the task prompt, and do not add any params that the task did not ask for. Use action snippet.content for raw personal snippet content, snippet.delete for personal snippet deletion, branch.delete for branch deletion, tag.delete only when deleting a Git tag, release.delete when deleting a GitLab release, and mr_review.draft_note_create for merge request draft notes. For project milestones, use action project.milestone_delete and params.milestone_iid. For project hooks, use action project.hook_delete and params.hook_id; do not invent project_hook.delete. For project badges, linking to a URL means params.link_url and image means params.image_url.%s Include confirm:true in params for every destructive tool call.", task.ID, task.Prompt, destructive, retryGuidance)
+}
+
+func singleStepTaskPrompt(task evalTask, destructive, retryGuidance string) string {
 	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nThis single-operation fixture expects exactly one tool call when the action and params are clear from the prompt and tool catalog. A schema lookup before the task call is a failure unless the prompt is missing a required value or a previous validation error occurred. Choose the single MCP tool call needed to perform this task. For action-based tools, keep all action-specific fields under params and never call gitlab without an input object containing action and params. If the task asks for server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check; do not call gitlab with action health_check. Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow. In these tasks, MR `N` means params.merge_request_iid:N. A value like group/project is params.project_id, not remote_url; do not call gitlab_discover_project unless the task gives a git remote URL. For merge request creation, from is params.source_branch, into is params.target_branch, and titled is params.title. Do not use ref, search, tag_name, to, or value for merge request create branch/title fields. For merge request notes or comments, use mr_review.note_create with project_id, merge_request_iid, and body. For merge request draft notes, use mr_review.draft_note_create, not mr_review.note_create. Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion. For personal snippets, snippet ID is params.snippet_id, not project_id, query, search, sort, or file_path; get raw content with action snippet.content, not snippet.raw; delete them with action snippet.delete, not personal_snippet.delete. For custom emoji group operations, use custom_emoji.list with params.group_path, not group.custom_emoji_list or group_id. For project access tokens, scope names go in params.scopes as an array, not params.scope, and expiring dates go in params.expires_at. For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id; for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id; use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied. For runner.list_project, use params.project_id by default; add params.status only when the task explicitly asks for online, offline, stale, or never_contacted runners, and never send status all or active. Do not send params.paused, params.type, params.tag_list, or empty filter values for runner.list_project. For runner pause or unpause, use runner.update with params.runner_id and params.paused true or false; do not use project_id, and runner.disable_project only detaches a runner from a project. For broadcast messages, saying maps to params.message, from maps to params.starts_at, and to maps to params.ends_at. For job.play variables, use params.variables as an array like [{\"key\":\"DEPLOY_ENV\",\"value\":\"staging\"}], not an object. Do not look up schemas for ordinary parameter names already supplied by the task prompt, and do not add any params that the task did not ask for. For subgroup creation with group.create, use params.name, params.path, and params.parent_id. For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message; create/update also require params.content. For branch deletion, use action branch.delete, not repository.delete_branch. For GitLab release deletion, use action release.delete; use action tag.delete only when deleting a Git tag, not a release. For CI variables, variable name maps to params.key, value maps to params.value, and environment_scope or production scope maps to params.environment_scope; for group variables use params.group_id and ci_variable.group_* actions, not project actions. For project milestones, use action project.milestone_delete and params.milestone_iid. For project hooks, use action project.hook_delete and params.hook_id; do not invent project_hook.delete. For project badges, linking to a URL means params.link_url and image means params.image_url. For pipeline lists, latest pipelines plural means pipeline.list; use pipeline.latest only for one single latest pipeline. Omit optional params that are not needed; do not add sorting/filter params unless the user asks for them, and do not send empty arrays or objects. If the task needs no input values, call the selected action with params:{}. The final task call should perform the requested GitLab operation.%s", task.ID, task.Prompt, destructive, retryGuidance)
 }
 

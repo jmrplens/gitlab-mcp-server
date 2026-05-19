@@ -20,7 +20,10 @@ func (out *terminalOutput) Write(p []byte) (int, error) {
 		}
 	}
 	if out.echo {
-		_, _ = os.Stdout.Write(p)
+		n, err := os.Stdout.Write(p)
+		if err != nil {
+			return n, err
+		}
 	}
 	return len(p), nil
 }
@@ -29,7 +32,9 @@ var commandOutput terminalOutput
 
 func terminalPrintf(format string, args ...any) {
 	if commandOutput.file != nil {
-		_, _ = fmt.Fprintf(commandOutput.file, format, args...)
+		if _, err := fmt.Fprintf(commandOutput.file, format, args...); err != nil {
+			reportTerminalWriteError("terminalPrintf", err)
+		}
 	}
 	if commandOutput.echo {
 		fmt.Printf(format, args...)
@@ -38,7 +43,9 @@ func terminalPrintf(format string, args ...any) {
 
 func terminalPrint(content string) {
 	if commandOutput.file != nil {
-		_, _ = fmt.Fprint(commandOutput.file, content)
+		if _, err := fmt.Fprint(commandOutput.file, content); err != nil {
+			reportTerminalWriteError("terminalPrint", err)
+		}
 	}
 	if commandOutput.echo {
 		fmt.Print(content)
@@ -47,8 +54,14 @@ func terminalPrint(content string) {
 
 func terminalLogPrintf(format string, args ...any) {
 	if commandOutput.file != nil {
-		_, _ = fmt.Fprintf(commandOutput.file, format, args...)
+		if _, err := fmt.Fprintf(commandOutput.file, format, args...); err != nil {
+			reportTerminalWriteError("terminalLogPrintf", err)
+		}
 	}
+}
+
+func reportTerminalWriteError(function string, err error) {
+	fmt.Fprintf(os.Stderr, "%s: write terminal log: %v\n", function, err)
 }
 
 func configureTerminalOutput(opts options) (options, func() error, error) {

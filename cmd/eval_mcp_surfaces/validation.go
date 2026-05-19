@@ -297,6 +297,8 @@ func requiredParamPresent(params map[string]any, required string) bool {
 		return true
 	}
 	if required == "labels" {
+		// GitLab update semantics allow params.add_labels to satisfy callers that
+		// require labels-like input while preserving additive label behavior.
 		_, hasAddLabels := params["add_labels"]
 		return hasAddLabels
 	}
@@ -533,8 +535,11 @@ func expectedActionCallExample(task evalTask, step evalStep, attemptedInput map[
 	}
 	arguments := map[string]any{"action": step.ExpectedAction, "params": params}
 	if step.ExpectedTool == dynamicExecuteTool && (step.Destructive || hasParam(step.OptionalParams, "confirm")) {
+		// gitlab_execute_tool expects confirm beside action and params, not inside
+		// params, because the dynamic executor owns destructive confirmation.
 		arguments["confirm"] = true
 	} else if step.Destructive || hasParam(step.OptionalParams, "confirm") {
+		// Direct/meta tools receive confirm as an action parameter.
 		params["confirm"] = true
 	}
 	data, err := json.Marshal(arguments)

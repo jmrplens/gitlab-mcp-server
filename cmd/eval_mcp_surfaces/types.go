@@ -178,19 +178,24 @@ func (b modelContentBlock) MarshalJSON() ([]byte, error) {
 	if b.Type == "tool_use" {
 		input := b.Input
 		if input == nil {
+			// Anthropic rejects tool_use blocks with null or omitted input; an
+			// empty object preserves no-argument tool calls during replay.
 			input = map[string]any{}
 		}
 		payload["input"] = input
 	} else if len(b.Input) > 0 {
+		// Non-tool blocks only include input when a provider returned one.
 		payload["input"] = b.Input
 	}
 	if b.ToolUseID != "" {
+		// tool_result blocks use tool_use_id to connect results to requests.
 		payload["tool_use_id"] = b.ToolUseID
 	}
 	if b.Content != "" {
 		payload["content"] = b.Content
 	}
 	if b.IsError {
+		// Downstream providers need is_error to treat failed tool results correctly.
 		payload["is_error"] = b.IsError
 	}
 	return json.Marshal(payload)
