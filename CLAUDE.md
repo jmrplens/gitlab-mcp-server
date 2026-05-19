@@ -11,10 +11,10 @@
 | ------------- | --------------------------------------------------- |
 | Language      | Go 1.26+                                            |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.24.1       |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.27.1       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 2.0.1                                               |
+| Version       | 2.0.2                                               |
 
 ### Scale
 
@@ -24,7 +24,7 @@
 | Meta-mode tools           | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise (Orbit)                                    |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_tool`) — see Dynamic toolset mode below |
 | MCP Resources             | 46                                                                                                           |
-| MCP Prompts               | 38 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 5 audit)      |
+| MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 6 (logging, progress, roots, sampling, elicitation, completions)                                             |
 | MCP Icons                 | 50 domain SVG icons (base64 data URIs, `Sizes: ["any"]`) on all tools, resources, and prompts                |
@@ -133,7 +133,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (2.0.1)
+└── VERSION                      # Semantic version (2.0.2)
 ```
 
 ## Key Development Patterns
