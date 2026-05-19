@@ -24,9 +24,9 @@ With `TOOL_SURFACE=meta`, both individual tools below are consolidated into a si
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description              |
+| ---------- | :------: | :---------: | :--------: | ------------------------ |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation |
 
 ---
 
@@ -39,13 +39,13 @@ Search and list CI/CD Catalog resources. Supports text search, scope filtering, 
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `search` | string | No | Search resources by name or description |
-| `scope` | string | No | Filter scope: `ALL` (default) or `NAMESPACED` |
-| `sort` | string | No | Sort order: `NAME_ASC` (default), `NAME_DESC`, `LATEST_RELEASED_AT_ASC`, `LATEST_RELEASED_AT_DESC`, `STAR_COUNT_ASC`, `STAR_COUNT_DESC` |
-| `first` | int | No | Number of items per page (default: 20) |
-| `after` | string | No | Cursor for forward pagination |
+| Parameter | Type   | Required | Description                                                                                                                             |
+| --------- | ------ | :------: | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `search`  | string |    No    | Search resources by name or description                                                                                                 |
+| `scope`   | string |    No    | Filter scope: `ALL` (default) or `NAMESPACED`                                                                                           |
+| `sort`    | string |    No    | Sort order: `NAME_ASC` (default), `NAME_DESC`, `LATEST_RELEASED_AT_ASC`, `LATEST_RELEASED_AT_DESC`, `STAR_COUNT_ASC`, `STAR_COUNT_DESC` |
+| `first`   | int    |    No    | Number of items per page (default: 20)                                                                                                  |
+| `after`   | string |    No    | Cursor for forward pagination                                                                                                           |
 
 ### `gitlab_get_catalog_resource`
 
@@ -54,42 +54,42 @@ Get full details of a CI/CD Catalog resource by GID or project full path. Return
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `id` | string | No | Resource GID (e.g. `gid://gitlab/Ci::Catalog::Resource/1`) |
-| `full_path` | string | No | Project full path (e.g. `my-group/my-catalog-project`) |
+| Parameter   | Type   | Required | Description                                                |
+| ----------- | ------ | :------: | ---------------------------------------------------------- |
+| `id`        | string |    No    | Resource GID (e.g. `gid://gitlab/Ci::Catalog::Resource/1`) |
+| `full_path` | string |    No    | Project full path (e.g. `my-group/my-catalog-project`)     |
 
 > **Note**: At least one of `id` or `full_path` must be provided.
 
 ### Output fields (detail)
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `id` | string | Resource GID |
-| `name` | string | Resource name |
-| `description` | string | Resource description |
-| `icon` | string | Resource icon |
-| `full_path` | string | Project full path |
-| `web_url` | string | URL to the resource in GitLab |
-| `star_count` | int | Number of stars |
-| `forks_count` | int | Number of forks |
-| `open_issues_count` | int | Open issue count |
-| `open_merge_requests_count` | int | Open MR count |
-| `latest_released_at` | string | Date of latest release |
-| `readme_html` | string | Rendered README content |
-| `versions` | array | Released versions with components |
-| `components` | array | Components in the latest version |
+| Field                       | Type   | Description                       |
+| --------------------------- | ------ | --------------------------------- |
+| `id`                        | string | Resource GID                      |
+| `name`                      | string | Resource name                     |
+| `description`               | string | Resource description              |
+| `icon`                      | string | Resource icon                     |
+| `full_path`                 | string | Project full path                 |
+| `web_url`                   | string | URL to the resource in GitLab     |
+| `star_count`                | int    | Number of stars                   |
+| `forks_count`               | int    | Number of forks                   |
+| `open_issues_count`         | int    | Open issue count                  |
+| `open_merge_requests_count` | int    | Open MR count                     |
+| `latest_released_at`        | string | Date of latest release            |
+| `readme_html`               | string | Rendered README content           |
+| `versions`                  | array  | Released versions with components |
+| `components`                | array  | Components in the latest version  |
 
 ### Component structure
 
 Each component includes:
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `name` | string | Component name |
-| `description` | string | Component description |
-| `include_path` | string | Path to include in `.gitlab-ci.yml` |
-| `inputs` | array | Input parameters (name, type, required, default, description) |
+| Field          | Type   | Description                                                   |
+| -------------- | ------ | ------------------------------------------------------------- |
+| `name`         | string | Component name                                                |
+| `description`  | string | Component description                                         |
+| `include_path` | string | Path to include in `.gitlab-ci.yml`                           |
+| `inputs`       | array  | Input parameters (name, type, required, default, description) |
 
 ---
 

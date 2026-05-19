@@ -30,11 +30,11 @@ requests, and diffs, then produces polished release notes.
 
 The skill documents three complementary approaches:
 
-| Approach | Tool | Requires | Best For |
-| -------- | ---- | -------- | -------- |
-| **A. LLM-Assisted** | `gitlab_generate_release_notes` | MCP Sampling | Fully automated, categorized notes |
-| **B. Manual** | `gitlab_repository` + `gitlab_merge_request` | Nothing extra | Full control, no LLM needed |
-| **C. Prompt-Based** | `generate_release_notes` prompt | LLM client | Editable LLM-enriched context |
+| Approach            | Tool                                         | Requires      | Best For                           |
+| ------------------- | -------------------------------------------- | ------------- | ---------------------------------- |
+| **A. LLM-Assisted** | `gitlab_generate_release_notes`              | MCP Sampling  | Fully automated, categorized notes |
+| **B. Manual**       | `gitlab_repository` + `gitlab_merge_request` | Nothing extra | Full control, no LLM needed        |
+| **C. Prompt-Based** | `generate_release_notes` prompt              | LLM client    | Editable LLM-enriched context      |
 
 ## Categories
 

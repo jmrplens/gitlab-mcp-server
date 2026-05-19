@@ -9,11 +9,11 @@ Retrieve counts of recently created issues, merge requests, and new members for 
 
 ### Tools
 
-| Tool | Description | Annotations |
-| --- | --- | --- |
-| `gitlab_get_recently_created_issues_count` | Get count of recently created issues (last 90 days) | Read-only |
-| `gitlab_get_recently_created_mr_count` | Get count of recently created merge requests (last 90 days) | Read-only |
-| `gitlab_get_recently_added_members_count` | Get count of recently added members (last 90 days) | Read-only |
+| Tool                                       | Description                                                 | Annotations |
+| ------------------------------------------ | ----------------------------------------------------------- | ----------- |
+| `gitlab_get_recently_created_issues_count` | Get count of recently created issues (last 90 days)         | Read-only   |
+| `gitlab_get_recently_created_mr_count`     | Get count of recently created merge requests (last 90 days) | Read-only   |
+| `gitlab_get_recently_added_members_count`  | Get count of recently added members (last 90 days)          | Read-only   |
 
 ### Meta-tool
 
@@ -54,9 +54,9 @@ Get recently added members count:
 
 All three tools share the same parameter:
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `group_path` | string | Yes | Full path of the group (e.g. `my-group` or `parent/child`) |
+| Parameter    | Type   | Required | Description                                                |
+| ------------ | ------ | -------- | ---------------------------------------------------------- |
+| `group_path` | string | Yes      | Full path of the group (e.g. `my-group` or `parent/child`) |
 
 ---
 
@@ -67,10 +67,10 @@ instance-wide settings that control the compliance security policy project names
 
 ### Tools
 
-| Tool | Description | Annotations |
-| --- | --- | --- |
-| `gitlab_get_compliance_policy_settings` | Get compliance policy settings | Read-only |
-| `gitlab_update_compliance_policy_settings` | Update compliance policy settings | Update |
+| Tool                                       | Description                       | Annotations |
+| ------------------------------------------ | --------------------------------- | ----------- |
+| `gitlab_get_compliance_policy_settings`    | Get compliance policy settings    | Read-only   |
+| `gitlab_update_compliance_policy_settings` | Update compliance policy settings | Update      |
 
 ### Meta-tool
 
@@ -105,9 +105,9 @@ No parameters required.
 
 #### Update
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `csp_namespace_id` | int | No | Namespace ID for the compliance security policy project |
+| Parameter          | Type | Required | Description                                             |
+| ------------------ | ---- | -------- | ------------------------------------------------------- |
+| `csp_namespace_id` | int  | No       | Namespace ID for the compliance security policy project |
 
 ---
 
@@ -118,12 +118,12 @@ alternative names, providing a convenient shortcut. All operations require admin
 
 ### Tools
 
-| Tool | Description | Annotations |
-| --- | --- | --- |
-| `gitlab_list_project_aliases` | List all project aliases | Read-only |
-| `gitlab_get_project_alias` | Get a specific project alias by name | Read-only |
-| `gitlab_create_project_alias` | Create a new project alias | Create |
-| `gitlab_delete_project_alias` | Delete a project alias by name | Destructive |
+| Tool                          | Description                          | Annotations |
+| ----------------------------- | ------------------------------------ | ----------- |
+| `gitlab_list_project_aliases` | List all project aliases             | Read-only   |
+| `gitlab_get_project_alias`    | Get a specific project alias by name | Read-only   |
+| `gitlab_create_project_alias` | Create a new project alias           | Create      |
+| `gitlab_delete_project_alias` | Delete a project alias by name       | Destructive |
 
 ### Meta-tool
 
@@ -177,16 +177,16 @@ No parameters required.
 
 #### Get / Delete
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `name` | string | Yes | The alias name |
+| Parameter | Type   | Required | Description    |
+| --------- | ------ | -------- | -------------- |
+| `name`    | string | Yes      | The alias name |
 
 #### Create
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `name` | string | Yes | The alias name to create |
-| `project_id` | int | Yes | The numeric project ID to alias |
+| Parameter    | Type   | Required | Description                     |
+| ------------ | ------ | -------- | ------------------------------- |
+| `name`       | string | Yes      | The alias name to create        |
+| `project_id` | int    | Yes      | The numeric project ID to alias |
 
 ---
 
@@ -198,10 +198,10 @@ restore service, and change failure rate. Requires GitLab Premium / Ultimate.
 
 ### Tools
 
-| Tool | Description | Annotations |
-| --- | --- | --- |
-| `gitlab_get_project_dora_metrics` | Get DORA metrics for a project | Read-only |
-| `gitlab_get_group_dora_metrics` | Get DORA metrics for a group | Read-only |
+| Tool                              | Description                    | Annotations |
+| --------------------------------- | ------------------------------ | ----------- |
+| `gitlab_get_project_dora_metrics` | Get DORA metrics for a project | Read-only   |
+| `gitlab_get_group_dora_metrics`   | Get DORA metrics for a group   | Read-only   |
 
 ### Meta-tool
 
@@ -211,14 +211,14 @@ Actions: `project`, `group`
 
 ### Parameters
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `project_id` / `group_id` | string | Yes | Project or group ID / URL-encoded path |
-| `metric` | string | Yes | `deployment_frequency`, `lead_time_for_changes`, `time_to_restore_service`, `change_failure_rate` |
-| `start_date` | string | No | Start date (`YYYY-MM-DD`) |
-| `end_date` | string | No | End date (`YYYY-MM-DD`) |
-| `interval` | string | No | Aggregation: `daily`, `monthly`, `all` (default: `daily`) |
-| `environment_tiers` | []string | No | Filter by tiers (e.g. `production`, `staging`) |
+| Parameter                 | Type     | Required | Description                                                                                       |
+| ------------------------- | -------- | -------- | ------------------------------------------------------------------------------------------------- |
+| `project_id` / `group_id` | string   | Yes      | Project or group ID / URL-encoded path                                                            |
+| `metric`                  | string   | Yes      | `deployment_frequency`, `lead_time_for_changes`, `time_to_restore_service`, `change_failure_rate` |
+| `start_date`              | string   | No       | Start date (`YYYY-MM-DD`)                                                                         |
+| `end_date`                | string   | No       | End date (`YYYY-MM-DD`)                                                                           |
+| `interval`                | string   | No       | Aggregation: `daily`, `monthly`, `all` (default: `daily`)                                         |
+| `environment_tiers`       | []string | No       | Filter by tiers (e.g. `production`, `staging`)                                                    |
 
 ---
 
@@ -226,12 +226,12 @@ Actions: `project`, `group`
 
 ### Tools
 
-| Tool | Description | Annotations |
-| --- | --- | --- |
-| `gitlab_get_project_statistics` | Get project fetch statistics for the last 30 days | Read-only |
+| Tool                            | Description                                       | Annotations |
+| ------------------------------- | ------------------------------------------------- | ----------- |
+| `gitlab_get_project_statistics` | Get project fetch statistics for the last 30 days | Read-only   |
 
 ### Parameters
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `project_id` | string | Yes | Project ID or URL-encoded path |
+| Parameter    | Type   | Required | Description                    |
+| ------------ | ------ | -------- | ------------------------------ |
+| `project_id` | string | Yes      | Project ID or URL-encoded path |

@@ -17,25 +17,25 @@ These are the settings every user needs to get started.
 
 ### Required Variables
 
-| Variable | Description | Example |
-| --- | --- | --- |
+| Variable       | Description                            | Example                      |
+| -------------- | -------------------------------------- | ---------------------------- |
 | `GITLAB_TOKEN` | Personal Access Token with `api` scope | `glpat-xxxxxxxxxxxxxxxxxxxx` |
 
 ### Common Options
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `GITLAB_URL` | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances |
-| `GITLAB_SKIP_TLS_VERIFY` | `false` | Skip TLS certificate verification for self-signed certs |
-| `TOOL_SURFACE` | `dynamic` | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` |
-| `META_TOOLS` | *(legacy)* | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, and `dynamic` -> `dynamic`. Ignored when `TOOL_SURFACE` is set |
-| `CAPABILITY_SURFACE` | `full` | Resource and prompt catalog selector: `full` preserves all resources, meta-schema resources, workflow guides, and prompts; `minimal` keeps `gitlab://workspace/roots` and, in `TOOL_SURFACE=meta`, meta-schema resources |
-| `GITLAB_ENTERPRISE` | `false` | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
-| `GITLAB_READ_ONLY` | `false` | Read-only mode: disables all mutating tools at startup |
-| `GITLAB_SAFE_MODE` | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence |
-| `EXCLUDE_TOOLS` | *(empty)* | Comma-separated list of tool names to exclude from registration |
-| `GITLAB_IGNORE_SCOPES` | `false` | Skip PAT scope detection and register all tools regardless of token permissions |
-| `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
+| Variable                 | Default              | Description                                                                                                                                                                                                                                  |
+| ------------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_URL`             | `https://gitlab.com` | GitLab instance base URL. Set this for self-managed instances                                                                                                                                                                                |
+| `GITLAB_SKIP_TLS_VERIFY` | `false`              | Skip TLS certificate verification for self-signed certs                                                                                                                                                                                      |
+| `TOOL_SURFACE`           | `dynamic`            | Canonical tool catalog selector: `dynamic`, `meta`, or `individual`                                                                                                                                                                          |
+| `META_TOOLS`             | *(legacy)*           | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, and `dynamic` -> `dynamic`. Ignored when `TOOL_SURFACE` is set                                                          |
+| `CAPABILITY_SURFACE`     | `full`               | Resource and prompt catalog selector: `full` preserves all resources, meta-schema resources, workflow guides, and prompts; `minimal` keeps `gitlab://workspace/roots` and, in `TOOL_SURFACE=meta`, meta-schema resources                     |
+| `GITLAB_ENTERPRISE`      | `false`              | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
+| `GITLAB_READ_ONLY`       | `false`              | Read-only mode: disables all mutating tools at startup                                                                                                                                                                                       |
+| `GITLAB_SAFE_MODE`       | `false`              | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence                                                                         |
+| `EXCLUDE_TOOLS`          | *(empty)*            | Comma-separated list of tool names to exclude from registration                                                                                                                                                                              |
+| `GITLAB_IGNORE_SCOPES`   | `false`              | Skip PAT scope detection and register all tools regardless of token permissions                                                                                                                                                              |
+| `LOG_LEVEL`              | `info`               | Logging verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                          |
 
 ### .env File Example
 
@@ -179,28 +179,28 @@ These settings are for operators deploying the server for a team or managing adv
 
 ### Advanced Variables
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `AUTO_UPDATE` | `true` | Enable automatic binary updates (`true`/`check`/`false`) |
-| `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
-| `AUTO_UPDATE_INTERVAL` | `1h` | Interval between periodic update checks |
-| `ISSUE_REPORTS` | `false` | Enable automatic issue report generation on unrecoverable errors |
-| `YOLO_MODE` | `false` | Skip destructive action confirmation prompts |
-| `AUTOPILOT` | `false` | Same as `YOLO_MODE` — skip confirmation prompts |
-| `AUTH_MODE` | `legacy` | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification) |
-| `OAUTH_CACHE_TTL` | `15m` | TTL for verified OAuth token identity cache (min 1m, max 2h) |
-| `RATE_LIMIT_RPS` | `0` | Per-server tools/call rate limit in requests/second (`0` = disabled) |
-| `RATE_LIMIT_BURST` | `40` | Token-bucket burst size when `RATE_LIMIT_RPS` > 0 |
+| Variable               | Default                      | Description                                                                                             |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `AUTO_UPDATE`          | `true`                       | Enable automatic binary updates (`true`/`check`/`false`)                                                |
+| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                    |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Interval between periodic update checks                                                                 |
+| `ISSUE_REPORTS`        | `false`                      | Enable automatic issue report generation on unrecoverable errors                                        |
+| `YOLO_MODE`            | `false`                      | Skip destructive action confirmation prompts                                                            |
+| `AUTOPILOT`            | `false`                      | Same as `YOLO_MODE` — skip confirmation prompts                                                         |
+| `AUTH_MODE`            | `legacy`                     | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification) |
+| `OAUTH_CACHE_TTL`      | `15m`                        | TTL for verified OAuth token identity cache (min 1m, max 2h)                                            |
+| `RATE_LIMIT_RPS`       | `0`                          | Per-server tools/call rate limit in requests/second (`0` = disabled)                                    |
+| `RATE_LIMIT_BURST`     | `40`                         | Token-bucket burst size when `RATE_LIMIT_RPS` > 0                                                       |
 
 See [Auto-Update](auto-update.md) for detailed documentation on update modes, MCP tools, release requirements, and troubleshooting.
 
 ### Tool Modes
 
-| Mode | Variable | Tools Exposed | Best For |
-| --- | --- | --- | --- |
-| **Dynamic toolset** (default) | `TOOL_SURFACE=dynamic` | `gitlab_find_action`, `gitlab_execute_tool` | Most users — lowest startup context while retaining full catalog reachability |
-| **Meta-tools** | `TOOL_SURFACE=meta` | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Clients that prefer consolidated domain dispatchers with `action` parameters |
-| **Individual tools** | `TOOL_SURFACE=individual` | 866 CE / 1017 self-managed enterprise / 1022 GitLab.com Enterprise | Clients that need granular tool selection |
+| Mode                          | Variable                  | Tools Exposed                                                      | Best For                                                                      |
+| ----------------------------- | ------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| **Dynamic toolset** (default) | `TOOL_SURFACE=dynamic`    | `gitlab_find_action`, `gitlab_execute_tool`                        | Most users — lowest startup context while retaining full catalog reachability |
+| **Meta-tools**                | `TOOL_SURFACE=meta`       | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise    | Clients that prefer consolidated domain dispatchers with `action` parameters  |
+| **Individual tools**          | `TOOL_SURFACE=individual` | 866 CE / 1017 self-managed enterprise / 1022 GitLab.com Enterprise | Clients that need granular tool selection                                     |
 
 Use the default dynamic surface for normal low-token deployments. Set `TOOL_SURFACE=meta` only when a client or workflow prefers domain meta-tools. `META_TOOLS` remains accepted for compatibility only and should appear only in migration guidance.
 
@@ -210,11 +210,11 @@ See [Meta-Tools](meta-tools.md) for the complete domain-action mapping and [Dyna
 
 `META_PARAM_SCHEMA` controls only the visible `inputSchema` of meta-tool dispatchers in `tools/list`. It does not change handler validation, execution, dynamic find output, or schema resource contents.
 
-| Tool surface | Visible tool schema impact | Schema resource availability | Dynamic describe behavior | Token impact | Recommended use |
-| --- | --- | --- | --- | --- | --- |
-| `meta` | Applies to every visible domain meta-tool. `opaque` shows `{action, params}`; `compact` and `full` inline per-action `oneOf` schemas | Available when `CAPABILITY_SURFACE=full` or `CAPABILITY_SURFACE=minimal` | Not applicable | `full` is 11.9x larger than `opaque`; `compact` is 6.5x larger | Keep `opaque`; use schema resources for exact params |
-| `dynamic` | Does not change the two dynamic tool schemas | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal` | `gitlab_find_action` returns discovery and schema details inline | No practical startup benefit for Dynamic tool schemas | Keep `opaque`; use find |
-| `individual` | Ignored because individual tools expose one operation per tool with direct typed schemas | Meta-schema resources are not registered in individual mode | Not applicable | None | Leave unset |
+| Tool surface | Visible tool schema impact                                                                                                           | Schema resource availability                                             | Dynamic describe behavior                                        | Token impact                                                   | Recommended use                                      |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------- |
+| `meta`       | Applies to every visible domain meta-tool. `opaque` shows `{action, params}`; `compact` and `full` inline per-action `oneOf` schemas | Available when `CAPABILITY_SURFACE=full` or `CAPABILITY_SURFACE=minimal` | Not applicable                                                   | `full` is 11.9x larger than `opaque`; `compact` is 6.5x larger | Keep `opaque`; use schema resources for exact params |
+| `dynamic`    | Does not change the two dynamic tool schemas                                                                                         | Available when `CAPABILITY_SURFACE=full`; omitted when `minimal`         | `gitlab_find_action` returns discovery and schema details inline | No practical startup benefit for Dynamic tool schemas          | Keep `opaque`; use find                              |
+| `individual` | Ignored because individual tools expose one operation per tool with direct typed schemas                                             | Meta-schema resources are not registered in individual mode              | Not applicable                                                   | None                                                           | Leave unset                                          |
 
 The evaluated modes remain `opaque`, `compact`, and `full`. The setting name remains valid for the final architecture because it describes the meta-tool dispatcher envelope, while the action catalog remains the source of the underlying per-action schemas.
 
@@ -228,31 +228,31 @@ Measured startup context is the reason this setting keeps only two modes for now
 
 When running the server for multiple users, use HTTP mode. Configuration comes from CLI flags instead of environment variables:
 
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--http` | *(off)* | Enable HTTP transport mode |
-| `--http-addr` | `:8080` | HTTP listen address |
-| `--gitlab-url` | *(optional)* | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
-| `--skip-tls-verify` | `false` | Skip TLS certificate verification |
-| `--tool-surface` | `dynamic` | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` |
-| `--meta-tools` | *(unset)* | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false` |
-| `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
-| `--enterprise` | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
-| `--max-http-clients` | `100` | Maximum concurrent client sessions |
-| `--session-timeout` | `30m` | Idle session timeout |
-| `--auth-mode` | `legacy` | Authentication mode: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification) |
-| `--oauth-cache-ttl` | `15m` | TTL for verified OAuth token cache (1m–2h) |
-| `--revalidate-interval` | `15m` | Interval for OAuth token re-validation against GitLab (`0` disables; upper bound 24h) |
-| `--trusted-proxy-header` | *(empty)* | Header containing the real client IP when behind a reverse proxy (e.g. `Fly-Client-IP`, `X-Real-IP`, `X-Forwarded-For`). Used by the per-IP auth rate limiter |
-| `--auto-update` | `true` | Enable automatic binary updates |
-| `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
-| `--auto-update-interval` | `1h` | Interval between periodic update checks |
-| `--read-only` | `false` | Expose only read-only tools |
-| `--safe-mode` | `false` | Intercept mutating tools, return preview |
-| `--rate-limit-rps` | `0` | Per-server tools/call rate limit in req/s (`0` = disabled) |
-| `--rate-limit-burst` | `40` | Token-bucket burst size when `--rate-limit-rps` > 0 |
-| `--exclude-tools` | *(empty)* | Comma-separated tool names to exclude |
-| `--ignore-scopes` | `false` | Skip PAT scope detection |
+| Flag                     | Default                      | Description                                                                                                                                                                         |
+| ------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--http`                 | *(off)*                      | Enable HTTP transport mode                                                                                                                                                          |
+| `--http-addr`            | `:8080`                      | HTTP listen address                                                                                                                                                                 |
+| `--gitlab-url`           | *(optional)*                 | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request                                                                                          |
+| `--skip-tls-verify`      | `false`                      | Skip TLS certificate verification                                                                                                                                                   |
+| `--tool-surface`         | `dynamic`                    | Canonical tool catalog selector: `dynamic`, `meta`, or `individual`                                                                                                                 |
+| `--meta-tools`           | *(unset)*                    | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                      |
+| `--capability-surface`   | `full`                       | Resource and prompt catalog selector: `full` or `minimal`                                                                                                                           |
+| `--enterprise`           | `false`                      | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
+| `--max-http-clients`     | `100`                        | Maximum concurrent client sessions                                                                                                                                                  |
+| `--session-timeout`      | `30m`                        | Idle session timeout                                                                                                                                                                |
+| `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification)                                                                                  |
+| `--oauth-cache-ttl`      | `15m`                        | TTL for verified OAuth token cache (1m–2h)                                                                                                                                          |
+| `--revalidate-interval`  | `15m`                        | Interval for OAuth token re-validation against GitLab (`0` disables; upper bound 24h)                                                                                               |
+| `--trusted-proxy-header` | *(empty)*                    | Header containing the real client IP when behind a reverse proxy (e.g. `Fly-Client-IP`, `X-Real-IP`, `X-Forwarded-For`). Used by the per-IP auth rate limiter                       |
+| `--auto-update`          | `true`                       | Enable automatic binary updates                                                                                                                                                     |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                                                                                                |
+| `--auto-update-interval` | `1h`                         | Interval between periodic update checks                                                                                                                                             |
+| `--read-only`            | `false`                      | Expose only read-only tools                                                                                                                                                         |
+| `--safe-mode`            | `false`                      | Intercept mutating tools, return preview                                                                                                                                            |
+| `--rate-limit-rps`       | `0`                          | Per-server tools/call rate limit in req/s (`0` = disabled)                                                                                                                          |
+| `--rate-limit-burst`     | `40`                         | Token-bucket burst size when `--rate-limit-rps` > 0                                                                                                                                 |
+| `--exclude-tools`        | *(empty)*                    | Comma-separated tool names to exclude                                                                                                                                               |
+| `--ignore-scopes`        | `false`                      | Skip PAT scope detection                                                                                                                                                            |
 
 No `GITLAB_TOKEN` is needed at startup — each client provides its own token per-request via `PRIVATE-TOKEN` header or `Authorization: Bearer`. Clients can specify a `GITLAB-URL` header only when the server starts without `--gitlab-url`; when `--gitlab-url` is configured, it is authoritative and client-provided `GITLAB-URL` values are ignored and logged.
 
@@ -284,12 +284,12 @@ See [HTTP Server Mode](http-server-mode.md) for architecture and deployment deta
 
 These features are always active and require no configuration:
 
-| Feature | Description |
-| --- | --- |
+| Feature                 | Description                                                                                                                                                                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Content annotations** | All Markdown content is annotated with `audience` and `priority` — `ContentList` (priority 0.4), `ContentDetail` (0.6), `ContentMutate` (0.8). This helps MCP clients optimize display and prevents raw Markdown from duplicating the JSON output |
-| **Clickable links** | List results in 14 domains include `[text](url)` links to GitLab entities (MRs, issues, pipelines, etc.) |
-| **Next-step hints** | Every list/detail/mutation response includes `💡 Next steps` suggestions. In meta-tool mode, these are also injected into the JSON `structuredContent` as a `next_steps` array |
-| **Formatted dates** | All timestamps are displayed in readable format (`2025-01-15 10:30`) instead of raw ISO 8601 |
+| **Clickable links**     | List results in 14 domains include `[text](url)` links to GitLab entities (MRs, issues, pipelines, etc.)                                                                                                                                          |
+| **Next-step hints**     | Every list/detail/mutation response includes `💡 Next steps` suggestions. In meta-tool mode, these are also injected into the JSON `structuredContent` as a `next_steps` array                                                                     |
+| **Formatted dates**     | All timestamps are displayed in readable format (`2025-01-15 10:30`) instead of raw ISO 8601                                                                                                                                                      |
 
 See [Output Format](output-format.md) for details.
 

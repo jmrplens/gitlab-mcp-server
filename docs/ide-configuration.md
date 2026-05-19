@@ -10,19 +10,19 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 
 ## OAuth Support Matrix
 
-| IDE / Client | Stdio | HTTP Legacy | HTTP OAuth | Official MCP Docs |
-| --- | :---: | :---: | :---: | --- |
-| VS Code (GitHub Copilot) | ✅ | ✅ | ✅ | [VS Code MCP docs](https://code.visualstudio.com/docs/copilot/chat/mcp-servers) |
-| Claude Desktop | ✅ | ✅ | — | [Claude Desktop MCP docs](https://modelcontextprotocol.io/quickstart/user) |
-| Claude Code | ✅ | ✅ | ✅ | [Claude Code MCP docs](https://docs.anthropic.com/en/docs/claude-code/mcp) |
-| Cursor | ✅ | ✅ | ✅ | [Cursor MCP docs](https://docs.cursor.com/context/model-context-protocol) |
-| Windsurf | ✅ | ✅ | — | [Windsurf MCP docs](https://docs.windsurf.com/windsurf/cascade/mcp) |
-| JetBrains IDEs | ✅ | ✅ | — | [JetBrains MCP docs](https://www.jetbrains.com/help/ai-assistant/mcp.html) |
-| Zed | ✅ | ✅ | — | [Zed MCP docs](https://zed.dev/docs/ai/mcp) |
-| Kiro | ✅ | ✅ | — | [Kiro MCP docs](https://kiro.dev/docs/mcp/) |
-| OpenCode | ✅ | ✅ | — | [OpenCode GitHub](https://github.com/anomalyco/opencode) |
-| Cline | ✅ | ✅ | — | [Cline MCP docs](https://docs.cline.bot/mcp-servers/overview) |
-| Roo Code | ✅ | ✅ | — | [Roo Code MCP docs](https://docs.roocode.com/features/mcp/using-mcp-in-roo) |
+| IDE / Client             | Stdio | HTTP Legacy | HTTP OAuth | Official MCP Docs                                                               |
+| ------------------------ | :---: | :---------: | :--------: | ------------------------------------------------------------------------------- |
+| VS Code (GitHub Copilot) |   ✅   |      ✅      |     ✅      | [VS Code MCP docs](https://code.visualstudio.com/docs/copilot/chat/mcp-servers) |
+| Claude Desktop           |   ✅   |      ✅      |     —      | [Claude Desktop MCP docs](https://modelcontextprotocol.io/quickstart/user)      |
+| Claude Code              |   ✅   |      ✅      |     ✅      | [Claude Code MCP docs](https://docs.anthropic.com/en/docs/claude-code/mcp)      |
+| Cursor                   |   ✅   |      ✅      |     ✅      | [Cursor MCP docs](https://docs.cursor.com/context/model-context-protocol)       |
+| Windsurf                 |   ✅   |      ✅      |     —      | [Windsurf MCP docs](https://docs.windsurf.com/windsurf/cascade/mcp)             |
+| JetBrains IDEs           |   ✅   |      ✅      |     —      | [JetBrains MCP docs](https://www.jetbrains.com/help/ai-assistant/mcp.html)      |
+| Zed                      |   ✅   |      ✅      |     —      | [Zed MCP docs](https://zed.dev/docs/ai/mcp)                                     |
+| Kiro                     |   ✅   |      ✅      |     —      | [Kiro MCP docs](https://kiro.dev/docs/mcp/)                                     |
+| OpenCode                 |   ✅   |      ✅      |     —      | [OpenCode GitHub](https://github.com/anomalyco/opencode)                        |
+| Cline                    |   ✅   |      ✅      |     —      | [Cline MCP docs](https://docs.cline.bot/mcp-servers/overview)                   |
+| Roo Code                 |   ✅   |      ✅      |     —      | [Roo Code MCP docs](https://docs.roocode.com/features/mcp/using-mcp-in-roo)     |
 
 > **Note**: "—" indicates the client does not support `clientId` configuration for OAuth. These clients rely on Dynamic Client Registration (DCR), which GitLab assigns the `mcp` scope instead of `api`, making most server operations non-functional. Use stdio or HTTP legacy with `PRIVATE-TOKEN` header for those clients.
 
@@ -30,11 +30,11 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 
 ## Configuration Modes
 
-| Mode | Transport | Token Management | Best For |
-| --- | --- | --- | --- |
-| **Stdio** | stdin/stdout | `GITLAB_TOKEN` env var or `.env` file | Single user, local development |
-| **HTTP Legacy** | HTTP | `PRIVATE-TOKEN` header per-request | Multi-user, simple setup |
-| **HTTP OAuth** | HTTP | Automatic OAuth 2.1 flow via [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery | Multi-user, production, zero-config tokens |
+| Mode            | Transport    | Token Management                                                                                 | Best For                                   |
+| --------------- | ------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| **Stdio**       | stdin/stdout | `GITLAB_TOKEN` env var or `.env` file                                                            | Single user, local development             |
+| **HTTP Legacy** | HTTP         | `PRIVATE-TOKEN` header per-request                                                               | Multi-user, simple setup                   |
+| **HTTP OAuth**  | HTTP         | Automatic OAuth 2.1 flow via [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery | Multi-user, production, zero-config tokens |
 
 > **Tip**: In HTTP modes, clients send a `GITLAB-URL` header only when the server was started without `--gitlab-url`. If `--gitlab-url` is configured, it is authoritative and client-provided `GITLAB-URL` values are ignored and logged.
 > **Docker note**: The published Docker image starts in HTTP mode by default. If an IDE launches Docker as a stdio MCP process, pass `--http=false` after the image name and keep `docker run -i`; do not publish port 8080 in that mode.

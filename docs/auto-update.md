@@ -55,11 +55,11 @@ The update mechanism uses [creativeprojects/go-selfupdate](https://github.com/cr
 
 The `AUTO_UPDATE` variable controls behaviour:
 
-| Value | Mode | Behaviour |
-| --- | --- | --- |
-| `true` (default) | Auto | Detect and apply updates automatically |
-| `check` | Check-only | Detect updates and log availability, but do not apply |
-| `false` | Disabled | Skip all update checks entirely |
+| Value            | Mode       | Behaviour                                             |
+| ---------------- | ---------- | ----------------------------------------------------- |
+| `true` (default) | Auto       | Detect and apply updates automatically                |
+| `check`          | Check-only | Detect updates and log availability, but do not apply |
+| `false`          | Disabled   | Skip all update checks entirely                       |
 
 Accepted aliases: `1`/`yes` for true, `0`/`no` for false. The value is case-insensitive.
 
@@ -124,23 +124,23 @@ When running as an HTTP server (`--http`), auto-update runs as a **background pe
 
 ### Environment Variables (Stdio Mode)
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `AUTO_UPDATE` | `true` | Update mode: `true`, `check`, or `false` |
-| `AUTO_UPDATE_REPO` | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets |
-| `AUTO_UPDATE_INTERVAL` | `1h` | Check interval (used by HTTP mode periodic checks) |
-| `AUTO_UPDATE_TIMEOUT` | `60s` | Timeout for pre-start update download (range: 5s–10m) |
+| Variable               | Default                      | Description                                            |
+| ---------------------- | ---------------------------- | ------------------------------------------------------ |
+| `AUTO_UPDATE`          | `true`                       | Update mode: `true`, `check`, or `false`               |
+| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Check interval (used by HTTP mode periodic checks)     |
+| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout for pre-start update download (range: 5s–10m)  |
 
 Auto-update uses the GitHub Releases API via `AUTO_UPDATE_REPO`. It does **not** use the user's `GITLAB_URL`, `GITLAB_TOKEN`, or `GITLAB_SKIP_TLS_VERIFY`.
 
 ### CLI Flags (HTTP Mode)
 
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--auto-update` | `true` | Update mode: `true`, `check`, or `false` |
-| `--auto-update-repo` | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets |
-| `--auto-update-interval` | `1h` | Interval between periodic update checks |
-| `--auto-update-timeout` | `60s` | Timeout for pre-start update download (range: 5s–10m) |
+| Flag                     | Default                      | Description                                            |
+| ------------------------ | ---------------------------- | ------------------------------------------------------ |
+| `--auto-update`          | `true`                       | Update mode: `true`, `check`, or `false`               |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets |
+| `--auto-update-interval` | `1h`                         | Interval between periodic update checks                |
+| `--auto-update-timeout`  | `60s`                        | Timeout for pre-start update download (range: 5s–10m)  |
 
 Auto-update uses the GitHub Releases API, so `--gitlab-url` and `--skip-tls-verify` do **not** affect auto-update behaviour.
 
@@ -193,14 +193,14 @@ Check if a newer version of the MCP server is available.
 
 **Output**:
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `update_available` | boolean | Whether a newer version exists |
-| `current_version` | string | Currently running version |
-| `latest_version` | string | Latest release version (if available) |
-| `release_url` | string | URL to the release page |
-| `release_notes` | string | Release notes content |
-| `mode` | string | Current auto-update mode |
+| Field              | Type    | Description                           |
+| ------------------ | ------- | ------------------------------------- |
+| `update_available` | boolean | Whether a newer version exists        |
+| `current_version`  | string  | Currently running version             |
+| `latest_version`   | string  | Latest release version (if available) |
+| `release_url`      | string  | URL to the release page               |
+| `release_notes`    | string  | Release notes content                 |
+| `mode`             | string  | Current auto-update mode              |
 
 **Annotations**: Read-only (`readOnlyHint: true`, `idempotentHint: true`).
 
@@ -227,12 +227,12 @@ Download and apply the latest MCP server update. The binary is replaced using th
 
 **Output**:
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `applied` | boolean | Whether the update was applied (binary replaced on disk) |
-| `previous_version` | string | Version before the update |
-| `new_version` | string | Version after applying the update |
-| `message` | string | Human-readable status message |
+| Field              | Type    | Description                                              |
+| ------------------ | ------- | -------------------------------------------------------- |
+| `applied`          | boolean | Whether the update was applied (binary replaced on disk) |
+| `previous_version` | string  | Version before the update                                |
+| `new_version`      | string  | Version after applying the update                        |
+| `message`          | string  | Human-readable status message                            |
 
 **Annotations**: Destructive (`destructiveHint: true`) — replaces the server binary.
 
@@ -292,14 +292,14 @@ graph TD
 
 ### Package Responsibilities
 
-| Package | Role |
-| --- | --- |
-| `internal/autoupdate` | Core update logic: detect releases, download, rename trick replacement, re-exec (Unix), old binary cleanup. Transport-agnostic. |
-| `internal/autoupdate/exec_unix.go` | `ExecSelf()` — `syscall.Exec` to re-exec the process (same PID, same FDs). Build tag: `!windows`. |
-| `internal/autoupdate/exec_windows.go` | `ExecSelf()` — stub returning an error (exec not supported). Build tag: `windows`. |
-| `internal/autoupdate/prestart.go` | `PreStartUpdate()` — pre-start flow: check → download → rename → exec/log. |
-| `internal/tools/serverupdate` | MCP tool wrappers exposing `Check` and `Apply` as MCP tools with Markdown formatting. |
-| `cmd/server/main.go` | Wiring: calls `CleanupOldBinary()` and `preStartAutoUpdate` (stdio), `startAutoUpdate` (HTTP), `newUpdaterForTools` (MCP tools). |
+| Package                               | Role                                                                                                                             |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `internal/autoupdate`                 | Core update logic: detect releases, download, rename trick replacement, re-exec (Unix), old binary cleanup. Transport-agnostic.  |
+| `internal/autoupdate/exec_unix.go`    | `ExecSelf()` — `syscall.Exec` to re-exec the process (same PID, same FDs). Build tag: `!windows`.                                |
+| `internal/autoupdate/exec_windows.go` | `ExecSelf()` — stub returning an error (exec not supported). Build tag: `windows`.                                               |
+| `internal/autoupdate/prestart.go`     | `PreStartUpdate()` — pre-start flow: check → download → rename → exec/log.                                                       |
+| `internal/tools/serverupdate`         | MCP tool wrappers exposing `Check` and `Apply` as MCP tools with Markdown formatting.                                            |
+| `cmd/server/main.go`                  | Wiring: calls `CleanupOldBinary()` and `preStartAutoUpdate` (stdio), `startAutoUpdate` (HTTP), `newUpdaterForTools` (MCP tools). |
 
 ## Release Requirements
 
@@ -335,21 +335,21 @@ The Makefile `release` target generates all of these automatically.
 
 ## Troubleshooting
 
-| Symptom | Cause | Solution |
-| --- | --- | --- |
-| `autoupdate: current version is required (binary built without -ldflags?)` | Binary built without version injection | Build with `make build` or add `-ldflags "-X main.version=1.2.0"` |
-| `autoupdate: repository is required` | `AUTO_UPDATE_REPO` is empty | Set `AUTO_UPDATE_REPO` or use the default |
-| `autoupdate: creating GitHub source` | Network error reaching GitHub API | Verify network connectivity to `github.com` |
-| `autoupdate: detecting latest release` | No releases in repository, or token lacks permissions | Create a release or check token permissions |
-| `autoupdate: startup check failed` | Network timeout (`AUTO_UPDATE_TIMEOUT`, default 60s) | Check network connectivity or increase `AUTO_UPDATE_TIMEOUT`; the server starts anyway |
-| `autoupdate: could not initialize periodic updater` | Missing required config in HTTP mode | Verify `--auto-update-repo` flag and network connectivity |
-| Update detected but not applied | Mode is `check` | Set `AUTO_UPDATE=true` to enable automatic application |
-| Server still runs old version after update (Windows) | Binary replaced but process not restarted | Restart the server process (Windows only — Unix re-execs automatically) |
-| `autoupdate: exec-self failed` | `syscall.Exec` failed on Unix | Server continues with old code; restart manually |
-| `autoupdate: skipping update check (just re-executed after update)` | Normal: re-exec guard preventing loop | No action needed — this is expected after a successful update |
-| `autoupdate: invalid GPG public key, falling back to checksum-only validation` | Malformed or corrupted PGP key file | Verify the key file is a valid armored PGP public key (`gpg --show-keys key.pub`) |
-| `autoupdate: GPG key path is not a regular file` | Path points to directory, symlink, or device | Ensure `AUTO_UPDATE_GPG_KEY` points to a regular file |
-| GPG verification configured but updates still work without `.asc` file | `checksums.txt.asc` missing in release → falls back to checksum-only | Upload signed checksums to the release (`GPG_SIGN=1 make release`) |
+| Symptom                                                                        | Cause                                                                | Solution                                                                               |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `autoupdate: current version is required (binary built without -ldflags?)`     | Binary built without version injection                               | Build with `make build` or add `-ldflags "-X main.version=1.2.0"`                      |
+| `autoupdate: repository is required`                                           | `AUTO_UPDATE_REPO` is empty                                          | Set `AUTO_UPDATE_REPO` or use the default                                              |
+| `autoupdate: creating GitHub source`                                           | Network error reaching GitHub API                                    | Verify network connectivity to `github.com`                                            |
+| `autoupdate: detecting latest release`                                         | No releases in repository, or token lacks permissions                | Create a release or check token permissions                                            |
+| `autoupdate: startup check failed`                                             | Network timeout (`AUTO_UPDATE_TIMEOUT`, default 60s)                 | Check network connectivity or increase `AUTO_UPDATE_TIMEOUT`; the server starts anyway |
+| `autoupdate: could not initialize periodic updater`                            | Missing required config in HTTP mode                                 | Verify `--auto-update-repo` flag and network connectivity                              |
+| Update detected but not applied                                                | Mode is `check`                                                      | Set `AUTO_UPDATE=true` to enable automatic application                                 |
+| Server still runs old version after update (Windows)                           | Binary replaced but process not restarted                            | Restart the server process (Windows only — Unix re-execs automatically)                |
+| `autoupdate: exec-self failed`                                                 | `syscall.Exec` failed on Unix                                        | Server continues with old code; restart manually                                       |
+| `autoupdate: skipping update check (just re-executed after update)`            | Normal: re-exec guard preventing loop                                | No action needed — this is expected after a successful update                          |
+| `autoupdate: invalid GPG public key, falling back to checksum-only validation` | Malformed or corrupted PGP key file                                  | Verify the key file is a valid armored PGP public key (`gpg --show-keys key.pub`)      |
+| `autoupdate: GPG key path is not a regular file`                               | Path points to directory, symlink, or device                         | Ensure `AUTO_UPDATE_GPG_KEY` points to a regular file                                  |
+| GPG verification configured but updates still work without `.asc` file         | `checksums.txt.asc` missing in release → falls back to checksum-only | Upload signed checksums to the release (`GPG_SIGN=1 make release`)                     |
 
 ## Disabling Auto-Update
 

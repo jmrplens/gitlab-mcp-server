@@ -79,13 +79,13 @@ When migrating:
 
 Current priority queue based on known deprecation timelines:
 
-| Priority | Domain | Trigger | Timeline |
-| -------- | ------ | ------- | -------- |
-| ✅ | Epics (6 tools) | REST deprecated 17.0, removal 19.0 | Migrated to Work Items API via client-go `WorkItems` service |
-| ✅ | Epic Issues (4 tools) | REST deprecated 17.0, removal 19.0 | Migrated to Work Items children/parent widgets |
-| ✅ | Epic Notes (5 tools) | REST deprecated 17.0, removal 19.0 | Migrated to Work Items notes widgets |
-| ✅ | Epic Discussions (7 tools) | REST deprecated 17.0, removal 19.0 | Migrated to Work Items discussions widgets |
-| P3 | Iterations | Feature gap | Migrate when client-go adds GraphQL wrapper |
+| Priority | Domain                     | Trigger                            | Timeline                                                     |
+| -------- | -------------------------- | ---------------------------------- | ------------------------------------------------------------ |
+| ✅        | Epics (6 tools)            | REST deprecated 17.0, removal 19.0 | Migrated to Work Items API via client-go `WorkItems` service |
+| ✅        | Epic Issues (4 tools)      | REST deprecated 17.0, removal 19.0 | Migrated to Work Items children/parent widgets               |
+| ✅        | Epic Notes (5 tools)       | REST deprecated 17.0, removal 19.0 | Migrated to Work Items notes widgets                         |
+| ✅        | Epic Discussions (7 tools) | REST deprecated 17.0, removal 19.0 | Migrated to Work Items discussions widgets                   |
+| P3       | Iterations                 | Feature gap                        | Migrate when client-go adds GraphQL wrapper                  |
 
 ## References
 

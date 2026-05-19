@@ -235,11 +235,11 @@ func TestCreate_Success(t *testing.T) {
 
 #### Shared helpers (`internal/testutil/`)
 
-| Helper                                  | Purpose                                      |
-| --------------------------------------- | -------------------------------------------- |
-| `testutil.NewTestClient(t)`             | Creates mock GitLab client + httptest mux     |
-| `testutil.RespondJSON(w, code, body)`   | Writes JSON response with status code         |
-| `testutil.RespondJSONWithPagination()`  | Writes JSON response with pagination headers  |
+| Helper                                 | Purpose                                      |
+| -------------------------------------- | -------------------------------------------- |
+| `testutil.NewTestClient(t)`            | Creates mock GitLab client + httptest mux    |
+| `testutil.RespondJSON(w, code, body)`  | Writes JSON response with status code        |
+| `testutil.RespondJSONWithPagination()` | Writes JSON response with pagination headers |
 
 ### End-to-End Tests
 
@@ -276,11 +276,11 @@ GITLAB_SKIP_TLS_VERIFY=true
 
 #### E2E Test Structure
 
-| File                                 | Description                                                        |
-| ------------------------------------ | ------------------------------------------------------------------ |
-| `test/e2e/suite/setup_test.go`       | Shared state, MCP server setup, helpers, drainSidekiq              |
-| `test/e2e/suite/fixture_test.go`     | Self-contained GitLab resource builders                             |
-| `test/e2e/suite/*_test.go`           | 91 domain-specific test files (individual + meta)                   |
+| File                             | Description                                           |
+| -------------------------------- | ----------------------------------------------------- |
+| `test/e2e/suite/setup_test.go`   | Shared state, MCP server setup, helpers, drainSidekiq |
+| `test/e2e/suite/fixture_test.go` | Self-contained GitLab resource builders               |
+| `test/e2e/suite/*_test.go`       | 91 domain-specific test files (individual + meta)     |
 
 ## MCP Inspector
 
@@ -320,12 +320,12 @@ flowchart TD
 
 ### Quick reference
 
-| Function | When to use | Includes GitLab detail | Includes hint |
-| --- | --- | --- | --- |
-| `WrapErr` | Read-only operations | No | No |
-| `WrapErrWithMessage` | Mutating operations (default) | Yes | No |
-| `WrapErrWithHint` | Specific error with known fix | Yes | Yes |
-| `WrapErrWithStatusHint` | Status-specific hint (combines `IsHTTPStatus` + `WrapErrWithHint`) | Yes | Yes (for matching status) |
+| Function                | When to use                                                        | Includes GitLab detail | Includes hint             |
+| ----------------------- | ------------------------------------------------------------------ | ---------------------- | ------------------------- |
+| `WrapErr`               | Read-only operations                                               | No                     | No                        |
+| `WrapErrWithMessage`    | Mutating operations (default)                                      | Yes                    | No                        |
+| `WrapErrWithHint`       | Specific error with known fix                                      | Yes                    | Yes                       |
+| `WrapErrWithStatusHint` | Status-specific hint (combines `IsHTTPStatus` + `WrapErrWithHint`) | Yes                    | Yes (for matching status) |
 
 ### Pattern: Status-specific hints
 
@@ -461,19 +461,19 @@ Install the Go extension and add to `.vscode/mcp.json`:
 
 ## Dependencies
 
-| Dependency                               | Version | Purpose                          |
-| ---------------------------------------- | ------- | -------------------------------- |
-| `github.com/modelcontextprotocol/go-sdk` | v1.6.0  | MCP server framework             |
-| `gitlab.com/gitlab-org/api/client-go/v2`  | v2.24.1  | Official GitLab REST API client  |
-| `github.com/joho/godotenv`               | v1.5.1  | .env file loading for dev        |
+| Dependency                               | Version | Purpose                         |
+| ---------------------------------------- | ------- | ------------------------------- |
+| `github.com/modelcontextprotocol/go-sdk` | v1.6.0  | MCP server framework            |
+| `gitlab.com/gitlab-org/api/client-go/v2` | v2.24.1 | Official GitLab REST API client |
+| `github.com/joho/godotenv`               | v1.5.1  | .env file loading for dev       |
 
 ## External References
 
-| Resource | URL |
-| --- | --- |
+| Resource                       | URL                                                         |
+| ------------------------------ | ----------------------------------------------------------- |
 | MCP Specification (2025-11-25) | <https://modelcontextprotocol.io/specification/2025-11-25/> |
-| MCP Go SDK (pkg.go.dev) | <https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk> |
-| MCP Go SDK Repository | <https://github.com/modelcontextprotocol/go-sdk> |
-| GitLab REST API v4 | <https://docs.gitlab.com/ee/api/rest/> |
-| GitLab Go Client (pkg.go.dev) | <https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2> |
-| GitLab Go Client Repository | <https://gitlab.com/gitlab-org/api/client-go> |
+| MCP Go SDK (pkg.go.dev)        | <https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk> |
+| MCP Go SDK Repository          | <https://github.com/modelcontextprotocol/go-sdk>            |
+| GitLab REST API v4             | <https://docs.gitlab.com/ee/api/rest/>                      |
+| GitLab Go Client (pkg.go.dev)  | <https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2> |
+| GitLab Go Client Repository    | <https://gitlab.com/gitlab-org/api/client-go>               |

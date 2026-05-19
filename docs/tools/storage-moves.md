@@ -25,10 +25,10 @@ With `TOOL_SURFACE=meta`, repository storage move tools are consolidated into a 
 
 ### Annotation Legend
 
-| Annotation   | ReadOnly | Destructive | Idempotent | Description                     |
-| ------------ | :------: | :---------: | :--------: | ------------------------------- |
-| **Read**     |   Yes    |     No      |    Yes     | Safe read-only operation        |
-| **Create**   |    —     |     No      |     —      | Schedules a new storage move    |
+| Annotation | ReadOnly | Destructive | Idempotent | Description                  |
+| ---------- | :------: | :---------: | :--------: | ---------------------------- |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation     |
+| **Create** |    —     |     No      |     —      | Schedules a new storage move |
 
 ---
 
@@ -38,10 +38,10 @@ With `TOOL_SURFACE=meta`, repository storage move tools are consolidated into a 
 
 Retrieve all project repository storage moves (admin only). Returns a paginated list of all project storage moves across the instance.
 
-| Parameter  | Type | Required | Description          |
-| ---------- | ---- | :------: | -------------------- |
-| `page`     | int  |    —     | Page number          |
-| `per_page` | int  |    —     | Results per page     |
+| Parameter  | Type | Required | Description      |
+| ---------- | ---- | :------: | ---------------- |
+| `page`     | int  |    —     | Page number      |
+| `per_page` | int  |    —     | Results per page |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -63,9 +63,9 @@ Retrieve all repository storage moves for a specific project (admin only).
 
 Get a single project repository storage move by ID (admin only).
 
-| Parameter | Type | Required | Description       |
-| --------- | ---- | :------: | ----------------- |
-| `id`      | int  |   Yes    | Storage move ID   |
+| Parameter | Type | Required | Description     |
+| --------- | ---- | :------: | --------------- |
+| `id`      | int  |   Yes    | Storage move ID |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -74,10 +74,10 @@ Get a single project repository storage move by ID (admin only).
 
 Get a single repository storage move for a specific project (admin only).
 
-| Parameter    | Type | Required | Description      |
-| ------------ | ---- | :------: | ---------------- |
-| `project_id` | int  |   Yes    | Project ID       |
-| `id`         | int  |   Yes    | Storage move ID  |
+| Parameter    | Type | Required | Description     |
+| ------------ | ---- | :------: | --------------- |
+| `project_id` | int  |   Yes    | Project ID      |
+| `id`         | int  |   Yes    | Storage move ID |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -86,10 +86,10 @@ Get a single repository storage move for a specific project (admin only).
 
 Schedule a repository storage move for a project (admin only). Optionally specify a destination storage name.
 
-| Parameter                    | Type   | Required | Description                    |
-| ---------------------------- | ------ | :------: | ------------------------------ |
-| `project_id`                 | int    |   Yes    | Project ID                     |
-| `destination_storage_name`   | string |    —     | Target storage shard name      |
+| Parameter                  | Type   | Required | Description               |
+| -------------------------- | ------ | :------: | ------------------------- |
+| `project_id`               | int    |   Yes    | Project ID                |
+| `destination_storage_name` | string |    —     | Target storage shard name |
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -98,10 +98,10 @@ Schedule a repository storage move for a project (admin only). Optionally specif
 
 Schedule repository storage moves for all projects (admin only). Migrates all projects from one storage shard to another.
 
-| Parameter                    | Type   | Required | Description                    |
-| ---------------------------- | ------ | :------: | ------------------------------ |
-| `source_storage_name`        | string |    —     | Source storage shard name      |
-| `destination_storage_name`   | string |    —     | Target storage shard name      |
+| Parameter                  | Type   | Required | Description               |
+| -------------------------- | ------ | :------: | ------------------------- |
+| `source_storage_name`      | string |    —     | Source storage shard name |
+| `destination_storage_name` | string |    —     | Target storage shard name |
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -114,10 +114,10 @@ Schedule repository storage moves for all projects (admin only). Migrates all pr
 
 Retrieve all group repository storage moves (admin only). Returns a paginated list of all group storage moves across the instance.
 
-| Parameter  | Type | Required | Description          |
-| ---------- | ---- | :------: | -------------------- |
-| `page`     | int  |    —     | Page number          |
-| `per_page` | int  |    —     | Results per page     |
+| Parameter  | Type | Required | Description      |
+| ---------- | ---- | :------: | ---------------- |
+| `page`     | int  |    —     | Page number      |
+| `per_page` | int  |    —     | Results per page |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -139,9 +139,9 @@ Retrieve all repository storage moves for a specific group (admin only).
 
 Get a single group repository storage move by ID (admin only).
 
-| Parameter | Type | Required | Description       |
-| --------- | ---- | :------: | ----------------- |
-| `id`      | int  |   Yes    | Storage move ID   |
+| Parameter | Type | Required | Description     |
+| --------- | ---- | :------: | --------------- |
+| `id`      | int  |   Yes    | Storage move ID |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -150,10 +150,10 @@ Get a single group repository storage move by ID (admin only).
 
 Get a single repository storage move for a specific group (admin only).
 
-| Parameter  | Type | Required | Description      |
-| ---------- | ---- | :------: | ---------------- |
-| `group_id` | int  |   Yes    | Group ID         |
-| `id`       | int  |   Yes    | Storage move ID  |
+| Parameter  | Type | Required | Description     |
+| ---------- | ---- | :------: | --------------- |
+| `group_id` | int  |   Yes    | Group ID        |
+| `id`       | int  |   Yes    | Storage move ID |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -162,10 +162,10 @@ Get a single repository storage move for a specific group (admin only).
 
 Schedule a repository storage move for a group (admin only). Optionally specify a destination storage name.
 
-| Parameter                    | Type   | Required | Description                    |
-| ---------------------------- | ------ | :------: | ------------------------------ |
-| `group_id`                   | int    |   Yes    | Group ID                       |
-| `destination_storage_name`   | string |    —     | Target storage shard name      |
+| Parameter                  | Type   | Required | Description               |
+| -------------------------- | ------ | :------: | ------------------------- |
+| `group_id`                 | int    |   Yes    | Group ID                  |
+| `destination_storage_name` | string |    —     | Target storage shard name |
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -174,10 +174,10 @@ Schedule a repository storage move for a group (admin only). Optionally specify 
 
 Schedule repository storage moves for all groups (admin only). Migrates all groups from one storage shard to another.
 
-| Parameter                    | Type   | Required | Description                    |
-| ---------------------------- | ------ | :------: | ------------------------------ |
-| `source_storage_name`        | string |    —     | Source storage shard name      |
-| `destination_storage_name`   | string |    —     | Target storage shard name      |
+| Parameter                  | Type   | Required | Description               |
+| -------------------------- | ------ | :------: | ------------------------- |
+| `source_storage_name`      | string |    —     | Source storage shard name |
+| `destination_storage_name` | string |    —     | Target storage shard name |
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -190,10 +190,10 @@ Schedule repository storage moves for all groups (admin only). Migrates all grou
 
 Retrieve all snippet repository storage moves (admin only). Returns a paginated list of all snippet storage moves across the instance.
 
-| Parameter  | Type | Required | Description          |
-| ---------- | ---- | :------: | -------------------- |
-| `page`     | int  |    —     | Page number          |
-| `per_page` | int  |    —     | Results per page     |
+| Parameter  | Type | Required | Description      |
+| ---------- | ---- | :------: | ---------------- |
+| `page`     | int  |    —     | Page number      |
+| `per_page` | int  |    —     | Results per page |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -215,9 +215,9 @@ Retrieve all repository storage moves for a specific snippet (admin only).
 
 Get a single snippet repository storage move by ID (admin only).
 
-| Parameter | Type | Required | Description       |
-| --------- | ---- | :------: | ----------------- |
-| `id`      | int  |   Yes    | Storage move ID   |
+| Parameter | Type | Required | Description     |
+| --------- | ---- | :------: | --------------- |
+| `id`      | int  |   Yes    | Storage move ID |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -226,10 +226,10 @@ Get a single snippet repository storage move by ID (admin only).
 
 Get a single repository storage move for a specific snippet (admin only).
 
-| Parameter    | Type | Required | Description      |
-| ------------ | ---- | :------: | ---------------- |
-| `snippet_id` | int  |   Yes    | Snippet ID       |
-| `id`         | int  |   Yes    | Storage move ID  |
+| Parameter    | Type | Required | Description     |
+| ------------ | ---- | :------: | --------------- |
+| `snippet_id` | int  |   Yes    | Snippet ID      |
+| `id`         | int  |   Yes    | Storage move ID |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -238,10 +238,10 @@ Get a single repository storage move for a specific snippet (admin only).
 
 Schedule a repository storage move for a snippet (admin only). Optionally specify a destination storage name.
 
-| Parameter                    | Type   | Required | Description                    |
-| ---------------------------- | ------ | :------: | ------------------------------ |
-| `snippet_id`                 | int    |   Yes    | Snippet ID                     |
-| `destination_storage_name`   | string |    —     | Target storage shard name      |
+| Parameter                  | Type   | Required | Description               |
+| -------------------------- | ------ | :------: | ------------------------- |
+| `snippet_id`               | int    |   Yes    | Snippet ID                |
+| `destination_storage_name` | string |    —     | Target storage shard name |
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -250,10 +250,10 @@ Schedule a repository storage move for a snippet (admin only). Optionally specif
 
 Schedule repository storage moves for all snippets (admin only). Migrates all snippets from one storage shard to another.
 
-| Parameter                    | Type   | Required | Description                    |
-| ---------------------------- | ------ | :------: | ------------------------------ |
-| `source_storage_name`        | string |    —     | Source storage shard name      |
-| `destination_storage_name`   | string |    —     | Target storage shard name      |
+| Parameter                  | Type   | Required | Description               |
+| -------------------------- | ------ | :------: | ------------------------- |
+| `source_storage_name`      | string |    —     | Source storage shard name |
+| `destination_storage_name` | string |    —     | Target storage shard name |
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -266,23 +266,23 @@ With `TOOL_SURFACE=meta`, storage move tools are available through a single `git
 
 ### Action Mapping
 
-| Action                     | Equivalent Tool                                    |
-| -------------------------- | -------------------------------------------------- |
-| `retrieve_all_project`     | `gitlab_retrieve_all_project_storage_moves`        |
-| `retrieve_project`         | `gitlab_retrieve_project_storage_moves`            |
-| `get_project`              | `gitlab_get_project_storage_move`                  |
-| `get_project_for_project`  | `gitlab_get_project_storage_move_for_project`      |
-| `schedule_project`         | `gitlab_schedule_project_storage_move`             |
-| `schedule_all_project`     | `gitlab_schedule_all_project_storage_moves`        |
-| `retrieve_all_group`       | `gitlab_retrieve_all_group_storage_moves`          |
-| `retrieve_group`           | `gitlab_retrieve_group_storage_moves`              |
-| `get_group`                | `gitlab_get_group_storage_move`                    |
-| `get_group_for_group`      | `gitlab_get_group_storage_move_for_group`          |
-| `schedule_group`           | `gitlab_schedule_group_storage_move`               |
-| `schedule_all_group`       | `gitlab_schedule_all_group_storage_moves`          |
-| `retrieve_all_snippet`     | `gitlab_retrieve_all_snippet_storage_moves`        |
-| `retrieve_snippet`         | `gitlab_retrieve_snippet_storage_moves`            |
-| `get_snippet`              | `gitlab_get_snippet_storage_move`                  |
-| `get_snippet_for_snippet`  | `gitlab_get_snippet_storage_move_for_snippet`      |
-| `schedule_snippet`         | `gitlab_schedule_snippet_storage_move`             |
-| `schedule_all_snippet`     | `gitlab_schedule_all_snippet_storage_moves`        |
+| Action                    | Equivalent Tool                               |
+| ------------------------- | --------------------------------------------- |
+| `retrieve_all_project`    | `gitlab_retrieve_all_project_storage_moves`   |
+| `retrieve_project`        | `gitlab_retrieve_project_storage_moves`       |
+| `get_project`             | `gitlab_get_project_storage_move`             |
+| `get_project_for_project` | `gitlab_get_project_storage_move_for_project` |
+| `schedule_project`        | `gitlab_schedule_project_storage_move`        |
+| `schedule_all_project`    | `gitlab_schedule_all_project_storage_moves`   |
+| `retrieve_all_group`      | `gitlab_retrieve_all_group_storage_moves`     |
+| `retrieve_group`          | `gitlab_retrieve_group_storage_moves`         |
+| `get_group`               | `gitlab_get_group_storage_move`               |
+| `get_group_for_group`     | `gitlab_get_group_storage_move_for_group`     |
+| `schedule_group`          | `gitlab_schedule_group_storage_move`          |
+| `schedule_all_group`      | `gitlab_schedule_all_group_storage_moves`     |
+| `retrieve_all_snippet`    | `gitlab_retrieve_all_snippet_storage_moves`   |
+| `retrieve_snippet`        | `gitlab_retrieve_snippet_storage_moves`       |
+| `get_snippet`             | `gitlab_get_snippet_storage_move`             |
+| `get_snippet_for_snippet` | `gitlab_get_snippet_storage_move_for_snippet` |
+| `schedule_snippet`        | `gitlab_schedule_snippet_storage_move`        |
+| `schedule_all_snippet`    | `gitlab_schedule_all_snippet_storage_moves`   |

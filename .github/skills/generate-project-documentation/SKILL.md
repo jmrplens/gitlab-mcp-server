@@ -266,6 +266,7 @@ MCP Client → MCP Server → Tool Handler → GitLab Client → GitLab API → 
 6. **No placeholders**: Final output must have no TBD, TODO, or placeholder text
 7. **Consistent terminology**: Use the same names as the source code
 8. **Pagination**: Document pagination patterns once and reference from each list tool
+9. **Markdown tables**: When generated content creates or edits pipe tables in `README.md` or `docs/`, run `go run ./cmd/format_md_tables/` and verify with `go run ./cmd/format_md_tables/ --check` before markdownlint
 
 ## Quality Checklist
 
@@ -277,6 +278,6 @@ Before considering documentation complete, verify:
 - [ ] All cross-reference links are valid
 - [ ] No TBD/TODO placeholders remain
 - [ ] Code examples are syntactically valid
-- [ ] Tables are properly formatted
+- [ ] Tables in `README.md` and `docs/` are normalized with `go run ./cmd/format_md_tables/ --check`
 - [ ] English language used throughout
 - [ ] Progressive disclosure: overview → details → advanced topics

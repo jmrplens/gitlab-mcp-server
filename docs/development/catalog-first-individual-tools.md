@@ -17,10 +17,10 @@ removing duplicated metadata from hundreds of former registration call sites.
 
 Individual tool registration has two layers:
 
-| Layer | Owner | Policy |
-| --- | --- | --- |
-| Handler behavior | Typed domain handlers and `ActionSpec.Route` | Keep explicit closures for logging, request-aware handlers, not-found conversion, embedded resources, rich results, and compatibility behavior |
-| Visible tool metadata | `ActionSpec` projection | Derive title, description, icons, input/output schemas, annotations, and compatibility metadata from specs |
+| Layer                 | Owner                                        | Policy                                                                                                                                         |
+| --------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Handler behavior      | Typed domain handlers and `ActionSpec.Route` | Keep explicit closures for logging, request-aware handlers, not-found conversion, embedded resources, rich results, and compatibility behavior |
+| Visible tool metadata | `ActionSpec` projection                      | Derive title, description, icons, input/output schemas, annotations, and compatibility metadata from specs                                     |
 
 `RegisterAll` calls `RegisterIndividualCatalogTools`, which projects eligible
 catalog actions into individual MCP tools. Projection fails fast when an action
@@ -29,9 +29,9 @@ has no individual tool policy or when spec metadata cannot produce a valid
 
 Documented source-level exceptions are intentionally narrow:
 
-| Package | Reason |
-| --- | --- |
-| `internal/tools/dynamic/register.go` | Registers the dynamic find/execute controller surface generated from the canonical catalog, not individual GitLab API tools |
+| Package                                       | Reason                                                                                                                                            |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `internal/tools/dynamic/register.go`          | Registers the dynamic find/execute controller surface generated from the canonical catalog, not individual GitLab API tools                       |
 | `internal/tools/serverupdate/action_specs.go` | Defines updater tool handlers that are registered from catalog surface specs with `*autoupdate.Updater`, outside the GitLab client action catalog |
 
 ## Parity Checklist
@@ -100,14 +100,14 @@ notes, but the runtime mechanics remain in domain code.
 
 The migration is enforced by tests and audits:
 
-| Guardrail | What it proves |
-| --- | --- |
-| `TestRegisterAllDoesNotUseDomainRegisterTools` | Root individual registration cannot regress to per-domain `RegisterTools` loops |
-| `TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection` | Source registration files do not reintroduce manual individual `mcp.Tool` metadata outside documented exceptions |
-| `TestIndividualToolProjection_GoldenSnapshotParity` | Projected metadata matches `internal/tools/testdata/tools_individual.json` except explicit, reviewed gaps |
-| `TestIndividualToolMetadata_CatalogBackedCoverage` | Every catalog-backed spec references a registered individual tool, and every individual tool without a spec is an explicit standalone exception |
-| `cmd/audit_action_spec_coverage` | Every source domain is classified across individual, meta, dynamic, and standalone surfaces |
-| `TestActionSpecCoverage_AllCatalogRoutesClassified` | Every GitLab.com Enterprise dynamic catalog route is spec-backed |
+| Guardrail                                                               | What it proves                                                                                                                                  |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TestRegisterAllDoesNotUseDomainRegisterTools`                          | Root individual registration cannot regress to per-domain `RegisterTools` loops                                                                 |
+| `TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection` | Source registration files do not reintroduce manual individual `mcp.Tool` metadata outside documented exceptions                                |
+| `TestIndividualToolProjection_GoldenSnapshotParity`                     | Projected metadata matches `internal/tools/testdata/tools_individual.json` except explicit, reviewed gaps                                       |
+| `TestIndividualToolMetadata_CatalogBackedCoverage`                      | Every catalog-backed spec references a registered individual tool, and every individual tool without a spec is an explicit standalone exception |
+| `cmd/audit_action_spec_coverage`                                        | Every source domain is classified across individual, meta, dynamic, and standalone surfaces                                                     |
+| `TestActionSpecCoverage_AllCatalogRoutesClassified`                     | Every GitLab.com Enterprise dynamic catalog route is spec-backed                                                                                |
 
 Run the focused checks before changing individual registration policy:
 

@@ -18,13 +18,13 @@ The upstream Orbit API is moving quickly. This MCP surface follows the latest Gi
 
 With `TOOL_SURFACE=meta`, all five individual tools below are consolidated into the `gitlab_orbit` meta-tool with an `action` parameter.
 
-| Meta-tool Action | Individual Tool | Purpose |
-| --- | --- | --- |
-| `status` | `gitlab_orbit_status` | Check Orbit service health and backend components |
-| `schema` | `gitlab_orbit_schema` | Inspect the graph ontology and optionally expand node definitions |
-| `tools` | `gitlab_orbit_tools` | Discover the live Orbit query manifest |
-| `query` | `gitlab_orbit_query` | Run a read-only Knowledge Graph query object |
-| `graph_status` | `gitlab_orbit_graph_status` | Inspect indexing status for one namespace, project, or full path |
+| Meta-tool Action | Individual Tool             | Purpose                                                           |
+| ---------------- | --------------------------- | ----------------------------------------------------------------- |
+| `status`         | `gitlab_orbit_status`       | Check Orbit service health and backend components                 |
+| `schema`         | `gitlab_orbit_schema`       | Inspect the graph ontology and optionally expand node definitions |
+| `tools`          | `gitlab_orbit_tools`        | Discover the live Orbit query manifest                            |
+| `query`          | `gitlab_orbit_query`        | Run a read-only Knowledge Graph query object                      |
+| `graph_status`   | `gitlab_orbit_graph_status` | Inspect indexing status for one namespace, project, or full path  |
 
 ### Common Questions
 
@@ -34,9 +34,9 @@ With `TOOL_SURFACE=meta`, all five individual tools below are consolidated into 
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description              |
+| ---------- | :------: | :---------: | :--------: | ------------------------ |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation |
 
 All Orbit tools are read-only.
 

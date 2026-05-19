@@ -30,6 +30,8 @@ gitlab-mcp-server/
 │   │   └── main.go         # Audits MCP tool metrics (tool count, resource count, etc.)
 │   ├── audit_test_names/
 │   │   └── main.go         # Audits test function naming convention compliance
+│   ├── format_md_tables/
+│   │   └── main.go         # Formats Markdown pipe tables in README.md and docs/
 │   ├── gen_llms/
 │   │   └── main.go         # Generates llms.txt and llms-full.txt for LLM discovery
 │   └── find_dupes/
@@ -117,10 +119,15 @@ golangci-lint run ./internal/tools/{domain}/
 
 # Markdown files — run on specific changed .md files
 npx markdownlint-cli2 path/to/changed.md
+
+# README.md/docs tables — normalize pipe tables, or verify with --check
+go run ./cmd/format_md_tables/
+go run ./cmd/format_md_tables/ --check
 ```
 
 - 9 analysis tools available: `goimports`, `gofmt`, `go vet`, `modernize`, `golangci-lint` (v2), `gosec`, `staticcheck`, `govulncheck`, `markdownlint-cli2`
 - Configuration: `.golangci.yml` (Go linters), `.markdownlint-cli2.jsonc` (Markdown rules)
+- Markdown table formatting: when creating or editing pipe tables in `README.md` or `docs/`, use `go run ./cmd/format_md_tables/` to normalize column padding and alignment markers, then verify with `go run ./cmd/format_md_tables/ --check`
 - Formatting: always run `make analyze-fix` before committing to apply `goimports` + `gofmt` standard formatting
 - Full project: `make analyze` (all tools), `make analyze-fix` (auto-fix), `make analyze-report` (LLM report)
 - See `docs/development/static-analysis.md` for full documentation

@@ -23,11 +23,11 @@ With `TOOL_SURFACE=meta`, all 9 individual tools below are consolidated into a s
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
-| **Create** | — | No | — | Creates a new resource |
-| **Delete** | — | Yes | Yes | Destroys a resource; protected by confirmation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description                                    |
+| ---------- | :------: | :---------: | :--------: | ---------------------------------------------- |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation                       |
+| **Create** |    —     |     No      |     —      | Creates a new resource                         |
+| **Delete** |    —     |     Yes     |    Yes     | Destroys a resource; protected by confirmation |
 
 Tools marked **Delete** require user confirmation before execution.
 

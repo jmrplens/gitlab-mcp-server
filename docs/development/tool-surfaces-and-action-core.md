@@ -10,11 +10,11 @@ GitLab business logic.
 
 ## Tool Surfaces
 
-| Surface | Selector | Visible MCP tools | Source of action metadata |
-| --- | --- | ---: | --- |
-| Individual tools | `TOOL_SURFACE=individual` (`META_TOOLS=false` legacy) | One tool per GitLab operation | Canonical action catalog projected by `RegisterIndividualCatalogTools` |
-| Dynamic | default, `TOOL_SURFACE=dynamic` | `gitlab_find_action`, `gitlab_execute_tool` | Canonical action catalog |
-| Meta-tools | `TOOL_SURFACE=meta` | Domain dispatchers with `action` and `params` | Canonical action catalog |
+| Surface          | Selector                                              |                             Visible MCP tools | Source of action metadata                                              |
+| ---------------- | ----------------------------------------------------- | --------------------------------------------: | ---------------------------------------------------------------------- |
+| Individual tools | `TOOL_SURFACE=individual` (`META_TOOLS=false` legacy) |                 One tool per GitLab operation | Canonical action catalog projected by `RegisterIndividualCatalogTools` |
+| Dynamic          | default, `TOOL_SURFACE=dynamic`                       |   `gitlab_find_action`, `gitlab_execute_tool` | Canonical action catalog                                               |
+| Meta-tools       | `TOOL_SURFACE=meta`                                   | Domain dispatchers with `action` and `params` | Canonical action catalog                                               |
 
 Individual tools, meta-tools, and dynamic tools are now catalog-backed surfaces
 over the same action core. Domain packages still own typed handlers,
@@ -59,19 +59,19 @@ flowchart LR
 
 The core pieces are:
 
-| File | Responsibility |
-| --- | --- |
-| `internal/toolutil/action_spec.go` | Canonical per-action metadata model, validation, defensive cloning, compatibility policy, and route/catalog projection |
-| `internal/toolutil/action_spec_individual.go` | `ActionSpec` projection into individual `mcp.Tool` metadata and schema/annotation policy |
-| `internal/toolutil/metatool.go` | Route primitives such as `ActionRoute`, `ActionMap`, schema helpers, destructive confirmation dispatch, and `MakeMetaHandler` |
-| `internal/tools/actioncatalog/catalog.go` | Canonical action catalog data model, deterministic ordering, filters, and `domain.action` IDs |
-| `internal/tools/actioncatalog/group_spec.go` | `CatalogGroupSpec`, `SurfaceKind`, group validation, group option projection, and compatibility alias conflict checks |
-| `internal/tools/action_specs.go` | Deterministic collector for domain `ActionSpec` builders, including Enterprise and GitLab.com gating |
-| `internal/tools/action_catalog.go` | Builds the canonical catalog from collected `ActionSpec` groups and the generated manifest |
-| `internal/tools/meta_catalog.go` | Registers visible meta-tools from catalog groups |
-| `internal/tools/dynamic/register.go` | Builds the dynamic registry, find output, internal search/describe helpers, and execute dispatch from the catalog |
-| `internal/tools/dynamic/standalone.go` | Adds dynamic-only catalog actions that do not fit the normal meta route model |
-| `cmd/audit_action_spec_coverage` | Generates source-discovered ActionSpec coverage inventory across individual, meta, dynamic, and standalone surfaces |
+| File                                          | Responsibility                                                                                                                |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `internal/toolutil/action_spec.go`            | Canonical per-action metadata model, validation, defensive cloning, compatibility policy, and route/catalog projection        |
+| `internal/toolutil/action_spec_individual.go` | `ActionSpec` projection into individual `mcp.Tool` metadata and schema/annotation policy                                      |
+| `internal/toolutil/metatool.go`               | Route primitives such as `ActionRoute`, `ActionMap`, schema helpers, destructive confirmation dispatch, and `MakeMetaHandler` |
+| `internal/tools/actioncatalog/catalog.go`     | Canonical action catalog data model, deterministic ordering, filters, and `domain.action` IDs                                 |
+| `internal/tools/actioncatalog/group_spec.go`  | `CatalogGroupSpec`, `SurfaceKind`, group validation, group option projection, and compatibility alias conflict checks         |
+| `internal/tools/action_specs.go`              | Deterministic collector for domain `ActionSpec` builders, including Enterprise and GitLab.com gating                          |
+| `internal/tools/action_catalog.go`            | Builds the canonical catalog from collected `ActionSpec` groups and the generated manifest                                    |
+| `internal/tools/meta_catalog.go`              | Registers visible meta-tools from catalog groups                                                                              |
+| `internal/tools/dynamic/register.go`          | Builds the dynamic registry, find output, internal search/describe helpers, and execute dispatch from the catalog             |
+| `internal/tools/dynamic/standalone.go`        | Adds dynamic-only catalog actions that do not fit the normal meta route model                                                 |
+| `cmd/audit_action_spec_coverage`              | Generates source-discovered ActionSpec coverage inventory across individual, meta, dynamic, and standalone surfaces           |
 
 The catalog stores executable routes with input schemas, output schemas,
 destructive flags, read-only status, icons, descriptions, aliases, tags, usage
@@ -245,22 +245,22 @@ bridge has now been removed from active runtime registration.
 
 Current baseline for delegated meta ownership:
 
-| Metric | Count |
-| --- | ---: |
-| Package-level `RegisterMeta` definitions under `internal/tools/*` | 0 |
-| Delegated `RegisterMeta` calls referenced from `internal/tools/register_meta.go` | 0 |
-| Apparent legacy `RegisterMeta` definitions requiring verification | 0 |
+| Metric                                                                           | Count |
+| -------------------------------------------------------------------------------- | ----: |
+| Package-level `RegisterMeta` definitions under `internal/tools/*`                |     0 |
+| Delegated `RegisterMeta` calls referenced from `internal/tools/register_meta.go` |     0 |
+| Apparent legacy `RegisterMeta` definitions requiring verification                |     0 |
 
 Historical names still handled as compatibility aliases:
 
-| Historical name | Current visible surface |
-| --- | --- |
-| `gitlab_feature_flag` | `gitlab_feature_flags` |
-| `gitlab_ff_user_list` | `gitlab_feature_flags` |
-| `gitlab_registry` | `gitlab_package` |
-| `gitlab_registry_protection` | `gitlab_package` |
-| `gitlab_access_request` | `gitlab_access` |
-| `gitlab_project_snippet` | `gitlab_snippet` |
+| Historical name              | Current visible surface |
+| ---------------------------- | ----------------------- |
+| `gitlab_feature_flag`        | `gitlab_feature_flags`  |
+| `gitlab_ff_user_list`        | `gitlab_feature_flags`  |
+| `gitlab_registry`            | `gitlab_package`        |
+| `gitlab_registry_protection` | `gitlab_package`        |
+| `gitlab_access_request`      | `gitlab_access`         |
+| `gitlab_project_snippet`     | `gitlab_snippet`        |
 
 Package-level `RegisterMeta` functions are now treated as audit violations.
 Former delegated groups such as `gitlab_search`, `gitlab_runner`,

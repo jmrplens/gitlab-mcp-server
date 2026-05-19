@@ -24,9 +24,9 @@ This tool complements the existing REST-based branch protection tools (`gitlab_b
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description              |
+| ---------- | :------: | :---------: | :--------: | ------------------------ |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation |
 
 ---
 
@@ -39,48 +39,48 @@ List branch rules for a project. Returns a paginated list of all branch rules wi
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_path` | string | Yes | Full path of the project (e.g. `my-group/my-project`) |
-| `first` | int | No | Number of items per page (default: 20) |
-| `after` | string | No | Cursor for forward pagination |
+| Parameter      | Type   | Required | Description                                           |
+| -------------- | ------ | :------: | ----------------------------------------------------- |
+| `project_path` | string |   Yes    | Full path of the project (e.g. `my-group/my-project`) |
+| `first`        | int    |    No    | Number of items per page (default: 20)                |
+| `after`        | string |    No    | Cursor for forward pagination                         |
 
 ### Output fields
 
 Each branch rule includes:
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `name` | string | Branch name or pattern (e.g. `main`, `release/*`) |
-| `is_default` | bool | Whether this is the default branch |
-| `is_protected` | bool | Whether the branch is protected |
-| `matching_branches_count` | int | Number of branches matching this rule |
-| `created_at` | string | Rule creation timestamp |
-| `updated_at` | string | Rule last update timestamp |
-| `branch_protection` | object | Protection settings (see below) |
-| `approval_rules` | array | Associated approval rules (see below) |
-| `external_status_checks` | array | External status checks (see below) |
+| Field                     | Type   | Description                                       |
+| ------------------------- | ------ | ------------------------------------------------- |
+| `name`                    | string | Branch name or pattern (e.g. `main`, `release/*`) |
+| `is_default`              | bool   | Whether this is the default branch                |
+| `is_protected`            | bool   | Whether the branch is protected                   |
+| `matching_branches_count` | int    | Number of branches matching this rule             |
+| `created_at`              | string | Rule creation timestamp                           |
+| `updated_at`              | string | Rule last update timestamp                        |
+| `branch_protection`       | object | Protection settings (see below)                   |
+| `approval_rules`          | array  | Associated approval rules (see below)             |
+| `external_status_checks`  | array  | External status checks (see below)                |
 
 ### Branch protection settings
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `allow_force_push` | bool | Whether force push is allowed |
+| Field                          | Type | Description                             |
+| ------------------------------ | ---- | --------------------------------------- |
+| `allow_force_push`             | bool | Whether force push is allowed           |
 | `code_owner_approval_required` | bool | Whether code owner approval is required |
 
 ### Approval rules
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `name` | string | Approval rule name |
-| `approvals_required` | int | Number of required approvals |
-| `type` | string | Rule type (e.g. `REGULAR`, `CODE_OWNER`) |
+| Field                | Type   | Description                              |
+| -------------------- | ------ | ---------------------------------------- |
+| `name`               | string | Approval rule name                       |
+| `approvals_required` | int    | Number of required approvals             |
+| `type`               | string | Rule type (e.g. `REGULAR`, `CODE_OWNER`) |
 
 ### External status checks
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `name` | string | Check name |
+| Field          | Type   | Description                 |
+| -------------- | ------ | --------------------------- |
+| `name`         | string | Check name                  |
 | `external_url` | string | URL of the external service |
 
 ---

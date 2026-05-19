@@ -23,11 +23,11 @@ With `TOOL_SURFACE=meta`, all 3 individual tools below are consolidated into a s
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
-| **Create** | — | No | — | Creates a new resource |
-| **Delete** | — | Yes | Yes | Destroys a resource; protected by confirmation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description                                    |
+| ---------- | :------: | :---------: | :--------: | ---------------------------------------------- |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation                       |
+| **Create** |    —     |     No      |     —      | Creates a new resource                         |
+| **Delete** |    —     |     Yes     |    Yes     | Destroys a resource; protected by confirmation |
 
 Tools marked **Delete** require user confirmation before execution.
 
@@ -42,11 +42,11 @@ List all custom emoji for a GitLab group. Returns a paginated list with ID, name
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_path` | string | Yes | Group full path (e.g. `my-group`) |
-| `first` | int | No | Number of items per page (default: 20) |
-| `after` | string | No | Cursor for forward pagination |
+| Parameter    | Type   | Required | Description                            |
+| ------------ | ------ | :------: | -------------------------------------- |
+| `group_path` | string |   Yes    | Group full path (e.g. `my-group`)      |
+| `first`      | int    |    No    | Number of items per page (default: 20) |
+| `after`      | string |    No    | Cursor for forward pagination          |
 
 ### `gitlab_create_custom_emoji`
 
@@ -55,11 +55,11 @@ Create a custom emoji in a GitLab group. Requires the group path, emoji name (wi
 | Annotation | **Create** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_path` | string | Yes | Group full path (e.g. `my-group`) |
-| `name` | string | Yes | Emoji name without colons (e.g. `party_parrot`) |
-| `url` | string | Yes | URL to the emoji image (PNG or GIF recommended) |
+| Parameter    | Type   | Required | Description                                     |
+| ------------ | ------ | :------: | ----------------------------------------------- |
+| `group_path` | string |   Yes    | Group full path (e.g. `my-group`)               |
+| `name`       | string |   Yes    | Emoji name without colons (e.g. `party_parrot`) |
+| `url`        | string |   Yes    | URL to the emoji image (PNG or GIF recommended) |
 
 ### `gitlab_delete_custom_emoji`
 
@@ -68,9 +68,9 @@ Delete a custom emoji from a GitLab group. Requires the emoji GID.
 | Annotation | **Delete** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `id` | string | Yes | Custom emoji GID (e.g. `gid://gitlab/CustomEmoji/1`) |
+| Parameter | Type   | Required | Description                                          |
+| --------- | ------ | :------: | ---------------------------------------------------- |
+| `id`      | string |   Yes    | Custom emoji GID (e.g. `gid://gitlab/CustomEmoji/1`) |
 
 > **Destructive**: Requires user confirmation before execution. The emoji will be removed from all projects in the group.
 

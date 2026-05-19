@@ -44,6 +44,7 @@ gitlab-mcp-server/
 │   ├── audit_metrics/main.go   # Audits MCP tool metrics (tool count, resource count, etc.)
 │   ├── audit_tools/main.go     # Audits MCP tool metadata violations (naming, annotations)
 │   ├── audit_test_names/main.go # Audits test function naming convention compliance
+│   ├── format_md_tables/main.go # Formats Markdown pipe tables in README.md and docs/
 │   ├── gen_llms/main.go        # Generates llms.txt and llms-full.txt for LLM discovery
 │   └── find_dupes/main.go      # Finds duplicated string literals missing constants
 ├── internal/
@@ -218,6 +219,10 @@ golangci-lint run ./internal/tools/branches/   # lint on changed package
 npx markdownlint-cli2 docs/auto-update.md README.md  # lint specific .md files
 npx markdownlint-cli2 --fix docs/auto-update.md      # auto-fix specific .md files
 
+# README.md/docs tables — normalize pipe tables, or verify with --check
+go run ./cmd/format_md_tables/
+go run ./cmd/format_md_tables/ --check
+
 # MCP Inspector (interactive tool testing UI at http://127.0.0.1:6274)
 make inspector                             # compile + launch Inspector via stdio
 make inspector-stop                        # stop Inspector and clean up
@@ -229,6 +234,8 @@ make analyze-report                        # generate LLM-consumable report
 ```
 
 **Static analysis tools** (9 total): `goimports`, `gofmt`, `go vet`, `modernize`, `golangci-lint` (v2, 25+ linters), `gosec`, `staticcheck`, `govulncheck`, `markdownlint-cli2`. Configuration: `.golangci.yml`, `.markdownlint-cli2.jsonc`. Full docs: `docs/development/static-analysis.md`.
+
+**Markdown table formatter**: When creating or editing pipe tables in `README.md` or `docs/`, run `go run ./cmd/format_md_tables/` to normalize source-readable padding and left/right/center alignment markers, then verify with `go run ./cmd/format_md_tables/ --check` before markdownlint.
 
 **Formatting tools**: Before committing, always run `make analyze-fix` to apply `goimports` (import grouping) and `gofmt` (standard formatting). These are the Go equivalents of `clang-format` — all Go code must pass both.
 

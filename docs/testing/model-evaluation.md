@@ -22,22 +22,22 @@ The evaluator uses natural-language tasks from
 the expected tool, action, required parameters, whether the task is destructive,
 and the success condition.
 
-| Case type | Prefix | Purpose |
-| --- | --- | --- |
-| Single operation | `MT-` | One clear user task should usually require one model call and one MCP tool call. |
-| Multi-step workflow | `MS-` | The model must sequence multiple MCP calls in the requested order. |
-| Failure simulation | `MF-` | The model must recover from injected failures or unsafe output. |
+| Case type           | Prefix | Purpose                                                                          |
+| ------------------- | ------ | -------------------------------------------------------------------------------- |
+| Single operation    | `MT-`  | One clear user task should usually require one model call and one MCP tool call. |
+| Multi-step workflow | `MS-`  | The model must sequence multiple MCP calls in the requested order.               |
+| Failure simulation  | `MF-`  | The model must recover from injected failures or unsafe output.                  |
 
 The current automated corpus contains 159 cases and 300 expected tool
 operations:
 
-| Area | Count |
-| --- | ---: |
-| Single-operation cases | 117 |
-| Multi-step workflow scenarios | 37 |
-| Failure simulation scenarios | 5 |
-| Total cases | 159 |
-| Expected tool operations | 300 |
+| Area                          | Count |
+| ----------------------------- | ----: |
+| Single-operation cases        |   117 |
+| Multi-step workflow scenarios |    37 |
+| Failure simulation scenarios  |     5 |
+| Total cases                   |   159 |
+| Expected tool operations      |   300 |
 
 ## Evaluation Modes
 
@@ -69,10 +69,10 @@ state, permissions, or fixture gaps.
 
 Docker evaluation is split into safe presets:
 
-| Preset | Scope | Mutation policy |
-| --- | --- | --- |
-| `docker-read` | Read-only tasks | No mutating or destructive operations. |
-| `docker-mutating-safe` | Safe create/update tasks | Mutates disposable Docker fixtures. |
+| Preset                    | Scope                     | Mutation policy                                                              |
+| ------------------------- | ------------------------- | ---------------------------------------------------------------------------- |
+| `docker-read`             | Read-only tasks           | No mutating or destructive operations.                                       |
+| `docker-mutating-safe`    | Safe create/update tasks  | Mutates disposable Docker fixtures.                                          |
 | `docker-destructive-safe` | Safe delete/archive tasks | Uses disposable or just-in-time fixtures and requires confirmation metadata. |
 
 The Docker fixture base must contain all resources needed by successful tasks.
@@ -81,17 +81,17 @@ as harness noise and should be fixed in fixtures before judging the model.
 
 ## Core Metrics
 
-| Metric | Meaning |
-| --- | --- |
-| Tool-selection accuracy | The first or final model call selected the expected MCP tool name. |
-| Action-selection accuracy | The selected action matched the expected action inside an action-based meta-tool. |
-| First-call validation pass rate | The first emitted tool call matched schema, required params, and destructive-safety requirements. |
-| Schema lookup use rate | Percentage of attempts where the model used schema lookup before or during the task. Low is better for clear single-operation tasks. |
-| Repair success rate | Percentage of invalid first calls that were corrected after the tool returned an error. |
-| Destructive safety | Destructive calls included the required confirmation and used the expected destructive route. |
-| Final task success proxy | The evaluator's final success signal after validation and optional MCP execution. |
-| Model requests | Number of provider calls made by the evaluator. |
-| Tool calls emitted | Number of tool calls emitted by the model. |
+| Metric                          | Meaning                                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Tool-selection accuracy         | The first or final model call selected the expected MCP tool name.                                                                   |
+| Action-selection accuracy       | The selected action matched the expected action inside an action-based meta-tool.                                                    |
+| First-call validation pass rate | The first emitted tool call matched schema, required params, and destructive-safety requirements.                                    |
+| Schema lookup use rate          | Percentage of attempts where the model used schema lookup before or during the task. Low is better for clear single-operation tasks. |
+| Repair success rate             | Percentage of invalid first calls that were corrected after the tool returned an error.                                              |
+| Destructive safety              | Destructive calls included the required confirmation and used the expected destructive route.                                        |
+| Final task success proxy        | The evaluator's final success signal after validation and optional MCP execution.                                                    |
+| Model requests                  | Number of provider calls made by the evaluator.                                                                                      |
+| Tool calls emitted              | Number of tool calls emitted by the model.                                                                                           |
 
 For clear single-operation tasks, the target is `model_calls=1` and
 `tool_calls=1`. Extra calls are acceptable only when the prompt is genuinely
@@ -102,15 +102,15 @@ ambiguous, the task is multi-step, or a real GitLab error requires recovery.
 Failures are useful only after separating model behavior from harness noise.
 Use these categories when triaging traces:
 
-| Category | Meaning | Typical fix |
-| --- | --- | --- |
-| Model route miss | The model chose the wrong tool or action. | Improve descriptions, action names, examples, or aliases. |
-| Model parameter shape miss | The model chose the right route but emitted invalid params. | Strengthen schema descriptions or add safe alias normalization. |
-| Provider adapter issue | The provider API transformed or rejected a valid MCP schema. | Fix the provider adapter without changing the global MCP contract. |
-| Sampling unsupported | The evaluator client did not advertise MCP sampling. | Add a deterministic `CreateMessageHandler` for evaluator clients. |
-| Fixture gap | Docker GitLab lacks a resource the task expects. | Add initial or just-in-time fixture setup. |
-| GitLab limitation | The Docker GitLab edition does not support the API. | Filter or mark the route unavailable for that edition. |
-| MCP implementation bug | The MCP handler fails despite valid model input and valid fixture state. | Fix the handler and add unit/E2E coverage. |
+| Category                   | Meaning                                                                  | Typical fix                                                        |
+| -------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Model route miss           | The model chose the wrong tool or action.                                | Improve descriptions, action names, examples, or aliases.          |
+| Model parameter shape miss | The model chose the right route but emitted invalid params.              | Strengthen schema descriptions or add safe alias normalization.    |
+| Provider adapter issue     | The provider API transformed or rejected a valid MCP schema.             | Fix the provider adapter without changing the global MCP contract. |
+| Sampling unsupported       | The evaluator client did not advertise MCP sampling.                     | Add a deterministic `CreateMessageHandler` for evaluator clients.  |
+| Fixture gap                | Docker GitLab lacks a resource the task expects.                         | Add initial or just-in-time fixture setup.                         |
+| GitLab limitation          | The Docker GitLab edition does not support the API.                      | Filter or mark the route unavailable for that edition.             |
+| MCP implementation bug     | The MCP handler fails despite valid model input and valid fixture state. | Fix the handler and add unit/E2E coverage.                         |
 
 ## Compatibility Expectations
 
@@ -118,14 +118,14 @@ The evaluator supports several provider families through adapters. A model is
 compatible when it can receive the tool catalog, emit tool calls, preserve tool
 call IDs across repair turns, and accept MCP-shaped JSON Schema.
 
-| Provider | Example model | Compatibility expectation |
-| --- | --- | --- |
-| Anthropic | `anthropic:claude-sonnet-4-6` | Supported. |
-| Anthropic | `anthropic:claude-haiku-4-5-20251001` | Supported. |
-| Google | `google:gemini-3.1-flash-lite-preview` | Supported with validated function-calling mode. |
-| OpenAI | `openai:gpt-5.4-mini` | Supported. |
-| OpenAI | `openai:gpt-5.4-nano` | Supported. |
-| Qwen | `qwen:qwen3.6-flash` | Supported through the OpenAI-compatible adapter using `QWEN_API_KEY`. |
+| Provider  | Example model                          | Compatibility expectation                                             |
+| --------- | -------------------------------------- | --------------------------------------------------------------------- |
+| Anthropic | `anthropic:claude-sonnet-4-6`          | Supported.                                                            |
+| Anthropic | `anthropic:claude-haiku-4-5-20251001`  | Supported.                                                            |
+| Google    | `google:gemini-3.1-flash-lite-preview` | Supported with validated function-calling mode.                       |
+| OpenAI    | `openai:gpt-5.4-mini`                  | Supported.                                                            |
+| OpenAI    | `openai:gpt-5.4-nano`                  | Supported.                                                            |
+| Qwen      | `qwen:qwen3.6-flash`                   | Supported through the OpenAI-compatible adapter using `QWEN_API_KEY`. |
 
 Published percentages belong in [AI Model Evaluation Results](model-results.md),
 not in this conceptual guide.

@@ -103,13 +103,13 @@ Prefer one canonical `doc.go` package comment, then remove package-adjacent file
 go run ./cmd/audit_godocs/ [flags]
 ```
 
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--format` | `markdown` | Report format: `markdown` or `json` |
-| `--output` | stdout | Write the report to a file |
-| `--include-tests` | `false` | Include `Test`, `Benchmark`, `Fuzz`, and `Example` functions |
-| `--fail-on-findings` | `false` | Exit non-zero when findings are present |
-| `--ignore-internal` | `false` | Skip packages whose import path contains `/internal/` |
+| Flag                 | Default    | Description                                                  |
+| -------------------- | ---------- | ------------------------------------------------------------ |
+| `--format`           | `markdown` | Report format: `markdown` or `json`                          |
+| `--output`           | stdout     | Write the report to a file                                   |
+| `--include-tests`    | `false`    | Include `Test`, `Benchmark`, `Fuzz`, and `Example` functions |
+| `--fail-on-findings` | `false`    | Exit non-zero when findings are present                      |
+| `--ignore-internal`  | `false`    | Skip packages whose import path contains `/internal/`        |
 
 The non-failing target is intended for remediation work while a baseline exists. The check target is intended for
 future CI gating once the baseline is cleared.

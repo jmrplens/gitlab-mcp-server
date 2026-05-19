@@ -13,10 +13,10 @@ How to use gitlab-mcp-server in CI/CD pipelines for automated GitLab operations 
 
 gitlab-mcp-server can run inside CI/CD jobs just like any other CLI tool. Two usage modes are available:
 
-| Mode | LLM Required | Use Case | Determinism |
-| --- | :---: | --- | :---: |
-| **Deterministic** (JSON-RPC) | No | Scripted operations: list issues, post comments, create releases | ✅ Fully deterministic |
-| **LLM-driven** (headless MCP client) | Yes | Intelligent workflows: code review, issue triage, MR analysis | ❌ Non-deterministic |
+| Mode                                 | LLM Required | Use Case                                                         |      Determinism      |
+| ------------------------------------ | :----------: | ---------------------------------------------------------------- | :-------------------: |
+| **Deterministic** (JSON-RPC)         |      No      | Scripted operations: list issues, post comments, create releases | ✅ Fully deterministic |
+| **LLM-driven** (headless MCP client) |     Yes      | Intelligent workflows: code review, issue triage, MR analysis    |  ❌ Non-deterministic  |
 
 Both modes authenticate with a **Personal Access Token** (PAT) or **Project Access Token**. Enterprise/Premium deployments using a token with `api` scope have access to the full tool surface. GitLab.com deployments have access to the core tool set plus additional Orbit-specific tools.
 
@@ -55,8 +55,8 @@ Create a **Project Access Token** (recommended over personal PATs for CI):
 
 **GitLab CI**: Go to **Settings > CI/CD > Variables** and add:
 
-| Variable | Value | Properties |
-| --- | --- | --- |
+| Variable  | Value           | Properties                   |
+| --------- | --------------- | ---------------------------- |
 | `MCP_PAT` | `glpat-xxxx...` | Masked, Protected (optional) |
 
 **GitHub Actions**: Go to **Settings > Secrets and variables > Actions** and add a repository secret named `MCP_PAT`.
@@ -480,24 +480,24 @@ jobs:
 
 ### Token Management
 
-| Practice | Recommendation |
-| --- | --- |
+| Practice   | Recommendation                                                   |
+| ---------- | ---------------------------------------------------------------- |
 | Token type | **Project Access Token** — scoped to a single project, auditable |
-| Scope | `api` for full access, `read_api` for read-only workflows |
-| Expiration | Set to 90 days maximum, rotate before expiry |
-| Storage | **Masked CI/CD variable** — never commit to repository |
-| Visibility | Use "Protected" flag if only needed on protected branches |
+| Scope      | `api` for full access, `read_api` for read-only workflows        |
+| Expiration | Set to 90 days maximum, rotate before expiry                     |
+| Storage    | **Masked CI/CD variable** — never commit to repository           |
+| Visibility | Use "Protected" flag if only needed on protected branches        |
 
 ### Minimal Scope Strategy
 
 Match the token scope to your workflow:
 
-| Workflow | Required Scope |
-| --- | --- |
-| List issues, MRs, pipelines | `read_api` |
-| Post comments, create issues | `api` |
-| Manage releases, packages | `api` |
-| Full MR review workflow | `api` |
+| Workflow                     | Required Scope |
+| ---------------------------- | -------------- |
+| List issues, MRs, pipelines  | `read_api`     |
+| Post comments, create issues | `api`          |
+| Manage releases, packages    | `api`          |
+| Full MR review workflow      | `api`          |
 
 ### Group Access Tokens
 

@@ -24,12 +24,12 @@ With `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled, the 7 indiv
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
-| **Create** | — | No | — | Creates a new resource |
-| **Update** | — | No | Yes | Modifies an existing resource |
-| **Delete** | — | Yes | Yes | Destroys a resource; protected by confirmation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description                                    |
+| ---------- | :------: | :---------: | :--------: | ---------------------------------------------- |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation                       |
+| **Create** |    —     |     No      |     —      | Creates a new resource                         |
+| **Update** |    —     |     No      |    Yes     | Modifies an existing resource                  |
+| **Delete** |    —     |     Yes     |    Yes     | Destroys a resource; protected by confirmation |
 
 Tools marked **Delete** require user confirmation before execution.
 

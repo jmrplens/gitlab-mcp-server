@@ -23,12 +23,12 @@ With `TOOL_SURFACE=meta`, feature flag and feature-flag user-list actions are co
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
-| **Create** | — | No | — | Creates a new resource |
-| **Update** | — | No | Yes | Modifies an existing resource |
-| **Delete** | — | Yes | Yes | Destroys a resource; protected by confirmation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description                                    |
+| ---------- | :------: | :---------: | :--------: | ---------------------------------------------- |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation                       |
+| **Create** |    —     |     No      |     —      | Creates a new resource                         |
+| **Update** |    —     |     No      |    Yes     | Modifies an existing resource                  |
+| **Delete** |    —     |     Yes     |    Yes     | Destroys a resource; protected by confirmation |
 
 Tools marked **Delete** require user confirmation before execution.
 
@@ -231,12 +231,12 @@ Delete a metric image from a GitLab alert.
 
 List all impersonation tokens for a GitLab user by user ID. Optionally filter by state.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `user_id` | int | Yes | GitLab user ID |
-| `state` | string | No | Filter by state: `all`/`active`/`inactive` |
-| `page` | int | No | Page number for pagination |
-| `per_page` | int | No | Items per page (max 100) |
+| Parameter  | Type   | Required | Description                                |
+| ---------- | ------ | :------: | ------------------------------------------ |
+| `user_id`  | int    |   Yes    | GitLab user ID                             |
+| `state`    | string |    No    | Filter by state: `all`/`active`/`inactive` |
+| `page`     | int    |    No    | Page number for pagination                 |
+| `per_page` | int    |    No    | Items per page (max 100)                   |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -245,10 +245,10 @@ List all impersonation tokens for a GitLab user by user ID. Optionally filter by
 
 Retrieve a specific impersonation token by user ID and token ID.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `user_id` | int | Yes | GitLab user ID |
-| `token_id` | int | Yes | Impersonation token ID |
+| Parameter  | Type | Required | Description            |
+| ---------- | ---- | :------: | ---------------------- |
+| `user_id`  | int  |   Yes    | GitLab user ID         |
+| `token_id` | int  |   Yes    | Impersonation token ID |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -257,12 +257,12 @@ Retrieve a specific impersonation token by user ID and token ID.
 
 Create an impersonation token for a GitLab user (admin only). Requires user ID, token name, and scopes.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `user_id` | int | Yes | GitLab user ID |
-| `name` | string | Yes | Name of the impersonation token |
-| `scopes` | []string | Yes | Array of scopes (api, read_user, read_api, read_repository, write_repository, etc.) |
-| `expires_at` | string | No | Token expiration date (YYYY-MM-DD) |
+| Parameter    | Type     | Required | Description                                                                         |
+| ------------ | -------- | :------: | ----------------------------------------------------------------------------------- |
+| `user_id`    | int      |   Yes    | GitLab user ID                                                                      |
+| `name`       | string   |   Yes    | Name of the impersonation token                                                     |
+| `scopes`     | []string |   Yes    | Array of scopes (api, read_user, read_api, read_repository, write_repository, etc.) |
+| `expires_at` | string   |    No    | Token expiration date (YYYY-MM-DD)                                                  |
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -271,10 +271,10 @@ Create an impersonation token for a GitLab user (admin only). Requires user ID, 
 
 Revoke an impersonation token for a GitLab user (admin only).
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `user_id` | int | Yes | GitLab user ID |
-| `token_id` | int | Yes | Impersonation token ID to revoke |
+| Parameter  | Type | Required | Description                      |
+| ---------- | ---- | :------: | -------------------------------- |
+| `user_id`  | int  |   Yes    | GitLab user ID                   |
+| `token_id` | int  |   Yes    | Impersonation token ID to revoke |
 
 | Annotation | **Delete** |
 | ---------- | ---------- |
@@ -285,13 +285,13 @@ Revoke an impersonation token for a GitLab user (admin only).
 
 Create a personal access token for a specific GitLab user (admin only). Requires user ID, token name, and scopes.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `user_id` | int | Yes | GitLab user ID |
-| `name` | string | Yes | Name of the personal access token |
-| `scopes` | []string | Yes | Array of scopes |
-| `description` | string | No | Description for the token |
-| `expires_at` | string | No | Token expiration date (YYYY-MM-DD) |
+| Parameter     | Type     | Required | Description                        |
+| ------------- | -------- | :------: | ---------------------------------- |
+| `user_id`     | int      |   Yes    | GitLab user ID                     |
+| `name`        | string   |   Yes    | Name of the personal access token  |
+| `scopes`      | []string |   Yes    | Array of scopes                    |
+| `description` | string   |    No    | Description for the token          |
+| `expires_at`  | string   |    No    | Token expiration date (YYYY-MM-DD) |
 
 | Annotation | **Create** |
 | ---------- | ---------- |

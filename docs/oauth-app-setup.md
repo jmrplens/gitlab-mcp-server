@@ -90,12 +90,12 @@ Each MCP client has its own redirect URI scheme. Configure **all** redirect URIs
 
 ### Redirect URIs per IDE
 
-| IDE / Client | Redirect URI | Notes |
-| --- | --- | --- |
-| VS Code / GitHub Copilot | `http://localhost` | VS Code opens a local HTTP server on a random port; GitLab matches the host only |
-| VS Code (Codespaces / Remote) | `https://insiders.vscode.dev/redirect` | For remote development environments |
-| Cursor | `http://localhost` | VS Code fork — same redirect URI scheme |
-| Claude Code (CLI) | `http://localhost` | CLI-based OAuth callback (default port configurable via `--callback-port`) |
+| IDE / Client                  | Redirect URI                           | Notes                                                                            |
+| ----------------------------- | -------------------------------------- | -------------------------------------------------------------------------------- |
+| VS Code / GitHub Copilot      | `http://localhost`                     | VS Code opens a local HTTP server on a random port; GitLab matches the host only |
+| VS Code (Codespaces / Remote) | `https://insiders.vscode.dev/redirect` | For remote development environments                                              |
+| Cursor                        | `http://localhost`                     | VS Code fork — same redirect URI scheme                                          |
+| Claude Code (CLI)             | `http://localhost`                     | CLI-based OAuth callback (default port configurable via `--callback-port`)       |
 
 > **Multiple URIs**: GitLab allows multiple redirect URIs separated by newlines in the application form. Add all URIs your team needs.
 
@@ -178,13 +178,13 @@ claude mcp add gitlab \
 
 ## Token Lifecycle
 
-| Event | Behavior |
-| --- | --- |
-| First request | Token verified against GitLab `/api/v4/user`, result cached |
+| Event                            | Behavior                                                    |
+| -------------------------------- | ----------------------------------------------------------- |
+| First request                    | Token verified against GitLab `/api/v4/user`, result cached |
 | Subsequent requests (within TTL) | Token served from SHA-256 hashed cache — no GitLab API call |
-| Cache TTL expires | Token re-verified on next request |
-| Token revoked on GitLab | Next request after cache expiry returns 401 |
-| Background cleanup | Expired cache entries evicted every 30 seconds |
+| Cache TTL expires                | Token re-verified on next request                           |
+| Token revoked on GitLab          | Next request after cache expiry returns 401                 |
+| Background cleanup               | Expired cache entries evicted every 30 seconds              |
 
 ---
 
@@ -200,13 +200,13 @@ claude mcp add gitlab \
 
 ## Troubleshooting
 
-| Issue | Solution |
-| --- | --- |
-| "redirect_uri_mismatch" from GitLab | Add the exact redirect URI used by your IDE to the GitLab OAuth Application. See [Redirect URIs per IDE](#redirect-uris-per-ide) |
-| OAuth flow does not start | Verify `--auth-mode=oauth` is set and `/.well-known/oauth-protected-resource` returns metadata |
-| "invalid_client" error | The `clientId` in MCP client config does not match the GitLab Application ID. Copy the exact value |
-| Token works with curl but not from IDE | The IDE may not be sending the token as `Authorization: Bearer`. Check IDE MCP logs |
-| "access_denied" after authorization | The GitLab OAuth Application may not have the `api` scope. Recreate with correct scopes |
+| Issue                                  | Solution                                                                                                                         |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| "redirect_uri_mismatch" from GitLab    | Add the exact redirect URI used by your IDE to the GitLab OAuth Application. See [Redirect URIs per IDE](#redirect-uris-per-ide) |
+| OAuth flow does not start              | Verify `--auth-mode=oauth` is set and `/.well-known/oauth-protected-resource` returns metadata                                   |
+| "invalid_client" error                 | The `clientId` in MCP client config does not match the GitLab Application ID. Copy the exact value                               |
+| Token works with curl but not from IDE | The IDE may not be sending the token as `Authorization: Bearer`. Check IDE MCP logs                                              |
+| "access_denied" after authorization    | The GitLab OAuth Application may not have the `api` scope. Recreate with correct scopes                                          |
 
 ---
 

@@ -59,10 +59,10 @@ META_TOOLS=false
 
 Meta-tools remain available because they are the most broadly compatible consolidated surface.
 
-| Mode | Tool Count | Best For |
-| --- | ---: | --- |
-| Meta-tools | 33 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
-| Individual tools | 866 CE / 1017 self-managed Enterprise/Premium / 1022 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation |
+| Mode             |                                                                         Tool Count | Best For                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------: | -------------------------------------------------------------------------- |
+| Meta-tools       |    33 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
+| Individual tools | 866 CE / 1017 self-managed Enterprise/Premium / 1022 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation                |
 
 ---
 
@@ -70,76 +70,76 @@ Meta-tools remain available because they are the most broadly compatible consoli
 
 ### Core Inline Meta-Tools (17)
 
-| # | Tool Name               | Actions | Domain                                    |
-|---|-------------------------|---------|-------------------------------------------|
-| 1 | `gitlab_project`        | ~92     | Projects, uploads, hooks, badges, boards, import/export, statistics, pages |
-| 2 | `gitlab_branch`         | 11      | Branches, protected branches, branch rules |
-| 3 | `gitlab_tag`            | 9       | Tags, protected tags                      |
-| 4 | `gitlab_release`        | 11      | Releases, release links                   |
-| 5 | `gitlab_merge_request`  | ~46     | MR CRUD, approvals, context-commits, MR emoji, MR resource events |
-| 6 | `gitlab_mr_review`      | ~22     | MR notes, discussions, drafts, changes    |
-| 7 | `gitlab_repository`     | ~40     | Repository tree/compare, commit discussions, files, submodules, markdown |
-| 8 | `gitlab_group`          | ~64     | Groups, members, labels, milestones, boards, uploads, import/export, epic discussions |
-| 9 | `gitlab_issue`          | ~55     | Issues, notes, discussions, links, statistics, issue emoji, issue resource events |
-| 10 | `gitlab_pipeline`      | ~34     | Pipelines, pipeline triggers, pipeline schedules, wait |
-| 11 | `gitlab_job`           | ~25     | Jobs, job token scope, wait               |
-| 12 | `gitlab_user`          | ~29     | Users, events, notifications, keys, namespaces, avatar |
-| 13 | `gitlab_wiki`          | 6       | Project/group wikis                       |
-| 14 | `gitlab_environment`   | ~23     | Environments, protected envs, freeze periods, deployments |
-| 15 | `gitlab_ci_variable`   | ~15     | CI/CD variables (project, group, instance) |
-| 16 | `gitlab_template`      | 12      | CI/CD, Dockerfile, gitignore templates    |
-| 17 | `gitlab_admin`         | ~82     | Server settings, broadcast messages, features, license, system hooks, error tracking, alert management, secure files, terraform states, cluster agents, dependency proxy, import service |
+| #   | Tool Name              | Actions | Domain                                                                                                                                                                                   |
+| --- | ---------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `gitlab_project`       | ~92     | Projects, uploads, hooks, badges, boards, import/export, statistics, pages                                                                                                               |
+| 2   | `gitlab_branch`        | 11      | Branches, protected branches, branch rules                                                                                                                                               |
+| 3   | `gitlab_tag`           | 9       | Tags, protected tags                                                                                                                                                                     |
+| 4   | `gitlab_release`       | 11      | Releases, release links                                                                                                                                                                  |
+| 5   | `gitlab_merge_request` | ~46     | MR CRUD, approvals, context-commits, MR emoji, MR resource events                                                                                                                        |
+| 6   | `gitlab_mr_review`     | ~22     | MR notes, discussions, drafts, changes                                                                                                                                                   |
+| 7   | `gitlab_repository`    | ~40     | Repository tree/compare, commit discussions, files, submodules, markdown                                                                                                                 |
+| 8   | `gitlab_group`         | ~64     | Groups, members, labels, milestones, boards, uploads, import/export, epic discussions                                                                                                    |
+| 9   | `gitlab_issue`         | ~55     | Issues, notes, discussions, links, statistics, issue emoji, issue resource events                                                                                                        |
+| 10  | `gitlab_pipeline`      | ~34     | Pipelines, pipeline triggers, pipeline schedules, wait                                                                                                                                   |
+| 11  | `gitlab_job`           | ~25     | Jobs, job token scope, wait                                                                                                                                                              |
+| 12  | `gitlab_user`          | ~29     | Users, events, notifications, keys, namespaces, avatar                                                                                                                                   |
+| 13  | `gitlab_wiki`          | 6       | Project/group wikis                                                                                                                                                                      |
+| 14  | `gitlab_environment`   | ~23     | Environments, protected envs, freeze periods, deployments                                                                                                                                |
+| 15  | `gitlab_ci_variable`   | ~15     | CI/CD variables (project, group, instance)                                                                                                                                               |
+| 16  | `gitlab_template`      | 12      | CI/CD, Dockerfile, gitignore templates                                                                                                                                                   |
+| 17  | `gitlab_admin`         | ~82     | Server settings, broadcast messages, features, license, system hooks, error tracking, alert management, secure files, terraform states, cluster agents, dependency proxy, import service |
 
 ### Consolidated Inline Meta-Tools (4)
 
-| # | Tool Name               | Actions | Sources                                   |
-|---|-------------------------|---------|-------------------------------------------|
-| 18 | `gitlab_access`        | ~48     | Access tokens, deploy tokens, deploy keys, access requests, invites |
-| 19 | `gitlab_package`       | ~20     | Packages, container registry              |
-| 20 | `gitlab_snippet`       | ~30     | Snippets, snippet discussions, snippet emoji |
-| 21 | `gitlab_feature_flags` | ~10     | Feature flags, feature flag user lists    |
+| #   | Tool Name              | Actions | Sources                                                             |
+| --- | ---------------------- | ------- | ------------------------------------------------------------------- |
+| 18  | `gitlab_access`        | ~48     | Access tokens, deploy tokens, deploy keys, access requests, invites |
+| 19  | `gitlab_package`       | ~20     | Packages, container registry                                        |
+| 20  | `gitlab_snippet`       | ~30     | Snippets, snippet discussions, snippet emoji                        |
+| 21  | `gitlab_feature_flags` | ~10     | Feature flags, feature flag user lists                              |
 
 ### Always-Registered Meta-Tools (3)
 
-| # | Tool Name               | Actions | Source                                    |
-|---|-------------------------|---------|-------------------------------------------|
-| 22 | `gitlab_model_registry` | 1      | ML model registry package download        |
-| 23 | `gitlab_ci_catalog`    | 2       | CI/CD Catalog resource discovery (GraphQL) |
-| 24 | `gitlab_custom_emoji`  | 3       | Group-level custom emoji management (GraphQL) |
+| #   | Tool Name               | Actions | Source                                        |
+| --- | ----------------------- | ------- | --------------------------------------------- |
+| 22  | `gitlab_model_registry` | 1       | ML model registry package download            |
+| 23  | `gitlab_ci_catalog`     | 2       | CI/CD Catalog resource discovery (GraphQL)    |
+| 24  | `gitlab_custom_emoji`   | 3       | Group-level custom emoji management (GraphQL) |
 
 ### Delegated Meta-Tools (2)
 
-| # | Tool Name               | Actions | Source                                    |
-|---|-------------------------|---------|-------------------------------------------|
-| 25 | `gitlab_search`        | 10      | Global, project, group search             |
-| 26 | `gitlab_runner`        | 34      | Runners, runner management, runner controllers |
+| #   | Tool Name       | Actions | Source                                         |
+| --- | --------------- | ------- | ---------------------------------------------- |
+| 25  | `gitlab_search` | 10      | Global, project, group search                  |
+| 26  | `gitlab_runner` | 34      | Runners, runner management, runner controllers |
 
 ### Sampling Tools (1)
 
-| # | Tool Name               | Actions | Source                                    |
-|---|-------------------------|---------|-------------------------------------------|
-| 27 | `gitlab_analyze`       | 11      | LLM-powered analysis via MCP sampling (MR changes, issues, pipelines, security, deployments, CI config, milestones, release notes, technical debt) |
+| #   | Tool Name        | Actions | Source                                                                                                                                             |
+| --- | ---------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 27  | `gitlab_analyze` | 11      | LLM-powered analysis via MCP sampling (MR changes, issues, pipelines, security, deployments, CI config, milestones, release notes, technical debt) |
 
 ### Standalone Tools (1)
 
-| # | Tool Name               | Actions | Source                                    |
-|---|-------------------------|---------|-------------------------------------------|
-| 28 | `gitlab_discover_project` | 1 | Git remote URL to GitLab project resolution |
+| #   | Tool Name                 | Actions | Source                                      |
+| --- | ------------------------- | ------- | ------------------------------------------- |
+| 28  | `gitlab_discover_project` | 1       | Git remote URL to GitLab project resolution |
 
 ### Interactive Elicitation Tools (4)
 
-| # | Tool Name | Actions | Domain/Source |
-|---|-----------|---------|---------------|
-| 29 | `gitlab_interactive_issue_create` | Guided prompts for issue fields with final confirmation | GitLab |
-| 30 | `gitlab_interactive_mr_create` | Guided prompts for branch, title, metadata, and confirmation | GitLab |
-| 31 | `gitlab_interactive_project_create` | Guided prompts for name, visibility, initialization, and confirmation | GitLab |
-| 32 | `gitlab_interactive_release_create` | Guided prompts for tag, name, notes, and confirmation | GitLab |
+| #   | Tool Name                           | Actions                                                               | Domain/Source |
+| --- | ----------------------------------- | --------------------------------------------------------------------- | ------------- |
+| 29  | `gitlab_interactive_issue_create`   | Guided prompts for issue fields with final confirmation               | GitLab        |
+| 30  | `gitlab_interactive_mr_create`      | Guided prompts for branch, title, metadata, and confirmation          | GitLab        |
+| 31  | `gitlab_interactive_project_create` | Guided prompts for name, visibility, initialization, and confirmation | GitLab        |
+| 32  | `gitlab_interactive_release_create` | Guided prompts for tag, name, notes, and confirmation                 | GitLab        |
 
 ### GitLab.com Enterprise/Premium Meta-Tools (1)
 
-| # | Tool Name | Actions | Source |
-|---|-----------|---------|--------|
-| 33 | `gitlab_orbit` | 5 | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `query`, `graph_status`) |
+| #   | Tool Name      | Actions | Source                                                                                                   |
+| --- | -------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| 33  | `gitlab_orbit` | 5       | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `query`, `graph_status`) |
 
 ---
 
