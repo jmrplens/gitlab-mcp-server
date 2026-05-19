@@ -48,8 +48,8 @@ importers:
         specifier: ^1.7.0
         version: 1.7.0(eslint@10.4.0)
       html-validate:
-        specifier: ^11.1.0
-        version: 11.1.0
+        specifier: ^11.2.0
+        version: 11.2.0
       htmlhint:
         specifier: ^1.9.2
         version: 1.9.2
@@ -833,8 +833,8 @@ packages:
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
 
-  '@sidvind/better-ajv-errors@6.0.0':
-    resolution: {integrity: sha512-FwR0Pm0tAZhoy/6HjgwWo1mV8MvGckxUDM7aaOI0/U1Dt4c4ekKRcGudrKJRLDK2Tijg9dqb8U9yZRiIYQ2GvQ==}
+  '@sidvind/better-ajv-errors@7.0.0':
+    resolution: {integrity: sha512-imVsp5D3KxJ8+uUmu2dsLKnFg3qdX952v/L1gZoCa0NO2ivhQWHMpYM2KmpFrRXHWFjlqkNZ/935nxiTqXEi1A==}
     engines: {node: ^22.12 || >= 24.0}
     peerDependencies:
       ajv: ^8.0.0
@@ -2187,22 +2187,22 @@ packages:
   html-escaper@3.0.3:
     resolution: {integrity: sha512-RuMffC89BOWQoY0WKGpIhn5gX3iI54O6nRA0yC124NYVtzjmFWBIiFd8M0x+ZdX0P9R4lADg1mgP8C7PxGOWuQ==}
 
-  html-validate@11.1.0:
-    resolution: {integrity: sha512-Crv2oW+xHO7g9b5q+uP9+xJQplOy1IzF+W8rK4tpRNXbfJ3aUt2gp9faFXQpozFFKd4kUqnMNuWxZuUGrUKgZg==}
+  html-validate@11.2.0:
+    resolution: {integrity: sha512-6aHphdi3SPs4CbliRNjoXUVgn23yeUvnQMIzy/W9Stq0MbLOXe2M97gsdpIIQpgeReQFoEaYnhYFqVTA4j7v/w==}
     engines: {node: ^22.17.0 || >= 24.0.0}
     hasBin: true
     peerDependencies:
       '@jest/globals': ^29.0.3 || ^30.0.0
+      '@vitest/expect': ^3.0.0 || ^4.0.1
       jest: ^29.0.3 || ^30.0.0
-      jest-diff: ^29.0.3 || ^30.0.0
       jest-snapshot: ^29.0.3 || ^30.0.0
       vitest: ^3.0.0 || ^4.0.1
     peerDependenciesMeta:
       '@jest/globals':
         optional: true
-      jest:
+      '@vitest/expect':
         optional: true
-      jest-diff:
+      jest:
         optional: true
       jest-snapshot:
         optional: true
@@ -4497,10 +4497,9 @@ snapshots:
 
   '@shikijs/vscode-textmate@10.0.2': {}
 
-  '@sidvind/better-ajv-errors@6.0.0(ajv@8.20.0)':
+  '@sidvind/better-ajv-errors@7.0.0(ajv@8.20.0)':
     dependencies:
       ajv: 8.20.0
-      kleur: 4.1.5
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
@@ -6205,10 +6204,10 @@ snapshots:
 
   html-escaper@3.0.3: {}
 
-  html-validate@11.1.0:
+  html-validate@11.2.0:
     dependencies:
       '@html-validate/stylish': 6.0.0
-      '@sidvind/better-ajv-errors': 6.0.0(ajv@8.20.0)
+      '@sidvind/better-ajv-errors': 7.0.0(ajv@8.20.0)
       ajv: 8.20.0
       kleur: 4.1.5
       prompts: 2.4.2
