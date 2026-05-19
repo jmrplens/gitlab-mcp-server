@@ -12,7 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/waitpoll"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -50,60 +50,40 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 		return WaitOutput{}, toolutil.ErrRequiredInt64("jobWait", "job_id")
 	}
 
-	interval := toolutil.ClampPollInterval(input.IntervalSeconds)
-	timeout := toolutil.ClampPollTimeout(input.TimeoutSeconds)
-	failOnError := true
-	if input.FailOnError != nil {
-		failOnError = *input.FailOnError
+	result, err := waitpoll.Poll(ctx, waitpoll.Options[Output]{
+		Request:         req,
+		IntervalSeconds: input.IntervalSeconds,
+		TimeoutSeconds:  input.TimeoutSeconds,
+		FailOnError:     input.FailOnError,
+		PollDuration:    pollDuration,
+		ProgressMessage: func(attempt int) string {
+			return fmt.Sprintf("Polling job #%d (attempt %d, status check)…", input.JobID, attempt)
+		},
+		Poll: func(pollCtx context.Context) (Output, error) {
+			j, _, err := client.GL().Jobs.GetJob(string(input.ProjectID), input.JobID, gl.WithContext(pollCtx))
+			if err != nil {
+				return Output{}, toolutil.WrapErrWithStatusHint("jobWait", err, http.StatusNotFound,
+					"verify project_id and job_id with gitlab_job_list; the job may have been deleted or expired during polling")
+			}
+			return ToOutput(j), nil
+		},
+		Status: func(out Output) string { return out.Status },
+		FailureError: func(out Output) error {
+			return fmt.Errorf("jobWait: job #%d finished with status %q", input.JobID, out.Status)
+		},
+	})
+	if err != nil {
+		return waitOutputFromResult(result), err
 	}
+	return waitOutputFromResult(result), nil
+}
 
-	tracker := progress.FromRequest(req)
-	deadline := time.After(pollDuration(timeout))
-	ticker := time.NewTicker(pollDuration(interval))
-	defer ticker.Stop()
-
-	startTime := time.Now()
-	pollCount := 0
-
-	for {
-		pollCount++
-		tracker.Update(ctx, float64(pollCount), 0, fmt.Sprintf("Polling job #%d (attempt %d, status check)…", input.JobID, pollCount))
-
-		j, _, err := client.GL().Jobs.GetJob(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
-		if err != nil {
-			return WaitOutput{}, toolutil.WrapErrWithStatusHint("jobWait", err, http.StatusNotFound,
-				"verify project_id and job_id with gitlab_job_list; the job may have been deleted or expired during polling")
-		}
-
-		out := ToOutput(j)
-		if toolutil.IsTerminalStatus(out.Status) {
-			elapsed := time.Since(startTime).Round(time.Second)
-			result := WaitOutput{
-				Job:         out,
-				WaitedFor:   elapsed.String(),
-				PollCount:   pollCount,
-				FinalStatus: out.Status,
-			}
-			if failOnError && (out.Status == "failed" || out.Status == "canceled") {
-				return result, fmt.Errorf("jobWait: job #%d finished with status %q", input.JobID, out.Status)
-			}
-			return result, nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return WaitOutput{}, ctx.Err()
-		case <-deadline:
-			elapsed := time.Since(startTime).Round(time.Second)
-			return WaitOutput{
-				Job:         out,
-				WaitedFor:   elapsed.String(),
-				PollCount:   pollCount,
-				FinalStatus: out.Status,
-				TimedOut:    true,
-			}, nil
-		case <-ticker.C:
-			// Continue polling
-		}
+func waitOutputFromResult(result waitpoll.Result[Output]) WaitOutput {
+	return WaitOutput{
+		Job:         result.Item,
+		WaitedFor:   result.WaitedFor,
+		PollCount:   result.PollCount,
+		FinalStatus: result.FinalStatus,
+		TimedOut:    result.TimedOut,
 	}
 }

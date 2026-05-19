@@ -1,63 +1,36 @@
 package grouplabels
 
 import (
-	"fmt"
-	"strings"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// FormatMarkdown renders a single group label as a Markdown summary.
-func FormatMarkdown(l Output) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Group Label: %s\n\n", toolutil.EscapeMdHeading(l.Name))
-	fmt.Fprintf(&b, toolutil.FmtMdID, l.ID)
-	fmt.Fprintf(&b, "- **Color**: %s\n", l.Color)
-	if l.Description != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdDescription, l.Description)
-	}
-	if l.Priority > 0 {
-		fmt.Fprintf(&b, "- **Priority**: %d\n", l.Priority)
-	}
-	fmt.Fprintf(&b, "- **Project label**: %v\n", l.IsProjectLabel)
-	fmt.Fprintf(&b, "- **Subscribed**: %v\n", l.Subscribed)
-	if l.OpenIssuesCount > 0 || l.ClosedIssuesCount > 0 || l.OpenMergeRequestsCount > 0 {
-		fmt.Fprintf(&b, "- **Issues**: %d open, %d closed\n", l.OpenIssuesCount, l.ClosedIssuesCount)
-		fmt.Fprintf(&b, "- **Open MRs**: %d\n", l.OpenMergeRequestsCount)
-	}
-	toolutil.WriteHints(&b,
+var labelMarkdownOptions = toolutil.LabelMarkdownOptions{
+	DetailTitle:   "Group Label",
+	ListTitle:     "Group Labels",
+	EmptyListText: "No group labels found.",
+	DetailHints: []string{
 		"If the workflow asks to fetch/get before update or delete, use the selected tool surface's group-label get action with the same group_id and this label_id next",
 		"Use the selected tool surface's group-label update action with the same group_id and this label_id to modify this label",
 		"Use the selected tool surface's group-label delete action with the same group_id, this label_id, and explicit confirm=true to remove this label",
 		"Use the selected tool surface's group-label subscribe or unsubscribe actions with the same group_id and this label_id to follow or unfollow",
-	)
-	return b.String()
+	},
+	ListHints: []string{
+		toolutil.HintPreserveLinks,
+		"Use the selected tool surface's group-label get action with the same group_id and label_id for full details before update/delete workflows",
+		"Use the selected tool surface's group-label create action with group_id to add a new group label",
+	},
+}
+
+// FormatMarkdown renders a single group label as a Markdown summary.
+func FormatMarkdown(l Output) string {
+	return toolutil.FormatLabelMarkdown(toLabelMarkdown(l), labelMarkdownOptions)
 }
 
 // FormatListMarkdownString renders a paginated list of group labels as a Markdown table string.
 func FormatListMarkdownString(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Group Labels (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Labels), out.Pagination)
-	if len(out.Labels) == 0 {
-		b.WriteString("No group labels found.\n")
-		return b.String()
-	}
-	b.WriteString("| Name | Color | Open Issues | Closed Issues | Open MRs |\n")
-	b.WriteString("|------|-------|-------------|---------------|----------|\n")
-	for _, l := range out.Labels {
-		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d |\n",
-			toolutil.EscapeMdTableCell(l.Name), toolutil.EscapeMdTableCell(l.Color), l.OpenIssuesCount, l.ClosedIssuesCount, l.OpenMergeRequestsCount)
-	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
-		toolutil.HintPreserveLinks,
-		"Use the selected tool surface's group-label get action with the same group_id and label_id for full details before update/delete workflows",
-		"Use the selected tool surface's group-label create action with group_id to add a new group label",
-	)
-	return b.String()
+	return toolutil.FormatLabelListMarkdown(toLabelMarkdownSlice(out.Labels), out.Pagination, labelMarkdownOptions)
 }
 
 // FormatListMarkdown renders a paginated list of group labels as an MCP Markdown result.
@@ -68,4 +41,27 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 func init() {
 	toolutil.RegisterMarkdown(FormatMarkdown)
 	toolutil.RegisterMarkdown(FormatListMarkdownString)
+}
+
+func toLabelMarkdown(label Output) toolutil.LabelMarkdown {
+	return toolutil.LabelMarkdown{
+		ID:                     label.ID,
+		Name:                   label.Name,
+		Color:                  label.Color,
+		Description:            label.Description,
+		OpenIssuesCount:        label.OpenIssuesCount,
+		ClosedIssuesCount:      label.ClosedIssuesCount,
+		OpenMergeRequestsCount: label.OpenMergeRequestsCount,
+		Priority:               label.Priority,
+		IsProjectLabel:         label.IsProjectLabel,
+		Subscribed:             label.Subscribed,
+	}
+}
+
+func toLabelMarkdownSlice(labels []Output) []toolutil.LabelMarkdown {
+	items := make([]toolutil.LabelMarkdown, len(labels))
+	for i, label := range labels {
+		items[i] = toLabelMarkdown(label)
+	}
+	return items
 }

@@ -18,15 +18,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"sort"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -44,18 +41,11 @@ func main() {
 // compares the generated action parameter schemas across all supported
 // META_PARAM_SCHEMA modes.
 func run() error {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{GitLabURL: srv.URL, GitLabToken: "spike-token"}
-	client, err := gitlabclient.NewClient(cfg)
+	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
 		return fmt.Errorf("client: %w", err)
 	}
+	defer cleanup()
 
 	// Build the action catalog, then register meta catalog routes on the server.
 	server := mcp.NewServer(&mcp.Implementation{Name: "spike", Version: "0"}, &mcp.ServerOptions{PageSize: 2000})
