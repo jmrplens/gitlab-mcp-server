@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const registerDepListJSON = `[{"name":"rails","version":"7.0.0","package_manager":"bundler","dependency_file_path":"Gemfile.lock"}]`

@@ -21,8 +21,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
 // captureSlogMu serializes CaptureSlog calls to prevent concurrent tests

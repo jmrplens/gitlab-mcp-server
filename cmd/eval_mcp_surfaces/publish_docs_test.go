@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // TestReadPublishReport_ParsesSingleModelReport verifies ReadPublishReport parses single model report.

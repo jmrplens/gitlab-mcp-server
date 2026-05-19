@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const registerEventJSON = `{"id":1,"author_id":10,"entity_id":42,"entity_type":"Project","details":{"change":"updated"},"created_at":"2026-01-01T00:00:00Z"}`

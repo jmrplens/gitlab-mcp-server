@@ -9,8 +9,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const actionSpecScheduleJSON = `{"id":1,"description":"Nightly","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,"owner":{"username":"admin"}}`

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrchanges"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdraftnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrchanges"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrdraftnotes"
 )
 
 // TestMeta_MRReviewChanges exercises changes_get, diff_versions_list, and

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestActionSpecs_MetadataInvariants verifies every admin action carries the shared

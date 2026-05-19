@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const memberRoleJSON = `{"id":1,"name":"custom-dev","description":"Custom developer","group_id":100,"base_access_level":30,"read_code":true,"admin_merge_request":false}`

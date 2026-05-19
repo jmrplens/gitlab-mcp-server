@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const regIterationEventJSON = `{"id":1,"action":"add","user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"iteration":{"id":5,"title":"Sprint 1","iid":1},"created_at":"2026-01-01T00:00:00Z"}`

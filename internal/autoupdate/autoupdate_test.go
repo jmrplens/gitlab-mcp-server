@@ -17,7 +17,7 @@ import (
 
 	"github.com/creativeprojects/go-selfupdate"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 // Mock types for selfupdate.Source, SourceRelease, SourceAsset.

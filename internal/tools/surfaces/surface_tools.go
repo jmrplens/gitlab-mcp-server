@@ -7,14 +7,14 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncompat"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/elicitationtools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectdiscovery"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/serverupdate"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncompat"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/elicitationtools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectdiscovery"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/serverupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (

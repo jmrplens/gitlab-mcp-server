@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 // TestActionSpecs_CallRouteErrors validates plan limit route error paths.

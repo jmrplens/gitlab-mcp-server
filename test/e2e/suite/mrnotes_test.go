@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrnotes"
 )
 
 // TestIndividual_MRNotes exercises the MR note lifecycle using individual tools:

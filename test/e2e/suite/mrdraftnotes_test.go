@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdraftnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrdraftnotes"
 )
 
 // TestIndividual_MRDraftNotes exercises the MR draft note lifecycle using individual tools:

@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accessrequests"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/accesstokens"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploykeys"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploytokens"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/invites"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accessrequests"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accesstokens"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploykeys"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploytokens"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/invites"
 )
 
 // TestMeta_AccessTokensProject exercises project access token CRUD via gitlab_access.

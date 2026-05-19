@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
 // TestApplyLiveFixtureState_ReplacesPromptPlaceholders verifies ApplyLiveFixtureState when replaces prompt placeholders.

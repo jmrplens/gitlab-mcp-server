@@ -8,9 +8,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestFormatCheckMarkdownString_UpdateAvailable verifies Markdown output

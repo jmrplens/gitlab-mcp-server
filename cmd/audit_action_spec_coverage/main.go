@@ -23,14 +23,14 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncompat"
-	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/surfaces"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncompat"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/surfaces"
 )
 
 const (

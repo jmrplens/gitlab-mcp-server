@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/freezeperiods"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/freezeperiods"
 )
 
 // TestMeta_FreezePeriods exercises freeze period CRUD via the gitlab_environment meta-tool.

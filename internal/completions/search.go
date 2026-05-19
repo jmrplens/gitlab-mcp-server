@@ -8,7 +8,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
 // searchPerPage is intentionally larger than maxCompletionResults (10) so

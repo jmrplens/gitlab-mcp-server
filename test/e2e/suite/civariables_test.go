@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/civariables"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/civariables"
 )
 
 // TestIndividual_CIVariables exercises the project CI variable lifecycle

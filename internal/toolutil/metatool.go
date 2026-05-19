@@ -19,7 +19,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
 // maxInt is the maximum int value; used for overflow-safe capacity calculations.
@@ -2198,12 +2198,9 @@ func resolveTopLevelRef(s map[string]any) map[string]any {
 	return target
 }
 
-// MetaToolOutputSchema returns a permissive JSON Schema describing the result
-// envelope returned by every meta-tool. The exact shape varies per action and
-// matches the chosen action's typed output, so the schema is intentionally
-// open (additionalProperties: true) but it documents the cross-cutting fields
-// the LLM should look for: `next_steps` and `pagination`.
-func MetaToolOutputSchema() map[string]any {
+// ActionDispatchOutputSchema returns a permissive JSON Schema for tools whose
+// exact structured result depends on the selected catalog action.
+func ActionDispatchOutputSchema() map[string]any {
 	return map[string]any{
 		"type":                 "object",
 		"description":          "Result envelope. Top-level shape varies per action and matches the chosen action's typed output. Includes optional cross-cutting fields documented below.",
@@ -2230,6 +2227,12 @@ func MetaToolOutputSchema() map[string]any {
 			},
 		},
 	}
+}
+
+// MetaToolOutputSchema returns the shared action-dispatch output schema used by
+// meta-tools.
+func MetaToolOutputSchema() map[string]any {
+	return ActionDispatchOutputSchema()
 }
 
 // DeriveAnnotations computes tool-level MCP annotations from the route map.

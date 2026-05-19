@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestNormalizeParamsWithExplanation_CompatibilityBranches verifies dynamic parameter compatibility rules across legacy action spellings.

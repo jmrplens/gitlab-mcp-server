@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // ActionSpecs returns canonical specs for project, group, and personal access token actions.

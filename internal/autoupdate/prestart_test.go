@@ -13,7 +13,7 @@ import (
 
 	"github.com/creativeprojects/go-selfupdate"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 // TestJustUpdated_Default verifies JustUpdated returns false when the

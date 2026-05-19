@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 // TestActionSpecs_DeleteError verifies that the delete route returns an error when the GitLab API fails.

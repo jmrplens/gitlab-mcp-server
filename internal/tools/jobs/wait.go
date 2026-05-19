@@ -11,9 +11,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/progress"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // WaitInput defines parameters for waiting on a job to complete.

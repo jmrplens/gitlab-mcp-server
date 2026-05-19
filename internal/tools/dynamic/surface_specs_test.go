@@ -1,9 +1,10 @@
 package dynamic
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 )
 
 // TestControllerSurfaceSpecs_ClassifyDynamicControllers verifies ControllerSurfaceSpecs when classify dynamic controllers.
@@ -25,10 +26,16 @@ func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	if !execute.Destructive || execute.ReadOnly || execute.Route.OutputSchema == nil {
 		t.Fatalf("execute spec = %+v, want potentially destructive controller with generic output schema", execute)
 	}
+	if execute.Description != executeToolDescription || !strings.Contains(execute.Description, "confirm=true") {
+		t.Fatalf("execute description = %q, want shared confirmation guidance", execute.Description)
+	}
 
 	find := findDynamicSurfaceSpec(t, specs, findToolName)
 	if !find.ReadOnly || find.Destructive {
 		t.Fatalf("find spec = %+v, want read-only controller", find)
+	}
+	if find.Description != findToolDescription || !strings.Contains(find.Description, "no GitLab API call") || !strings.Contains(find.Description, "execute examples") {
+		t.Fatalf("find description = %q, want shared lookup guidance", find.Description)
 	}
 }
 

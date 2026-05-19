@@ -12,9 +12,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
 // metaSchemaResourceSession registers catalog-backed meta-tools plus the

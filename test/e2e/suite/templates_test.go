@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
-	markdowntool "github.com/jmrplens/gitlab-mcp-server/internal/tools/markdown"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/gitignoretemplates"
+	markdowntool "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/markdown"
 )
 
 // TestMeta_Templates exercises template listing via the gitlab_template meta-tool.

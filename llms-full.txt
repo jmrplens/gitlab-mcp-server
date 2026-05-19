@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.0.1 | up to 1019 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 38 prompts
+> Version 2.0.2 | up to 1019 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -10,13 +10,13 @@ Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It
 
 **GitLab Find Action**
 
-Find GitLab catalog actions by searching with domain keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'). Returns exact schemas, required params, safety metadata, and execute examples. ALWAYS use this before gitlab_execute_tool when the canonical action ID or params schema is not already known; do NOT invent action IDs.
+Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples.
 
 **Parameters:**
 
 - `explain` (boolean): When true, include deterministic scoring reasons for each returned action. Defaults to false to keep responses compact.
 - `limit` (integer): Maximum number of matches to return. Defaults to 20 and is capped at 50.
-- `query` (string) (required): Search terms for GitLab actions, such as project create, merge request approve, pipeline retry, or ci variable.
+- `query` (string) (required): Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -24,12 +24,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **GitLab Execute Tool**
 
-Execute one GitLab catalog action by canonical action ID (e.g. domain.action). Always include params as an object: {"action":"domain.action","params":{...}}; use params:{} only for actions with no parameters. Use gitlab_find_action first unless the exact action ID and all required param names are already known. Do NOT guess or invent action IDs. Include ONLY the exact param names from the action schema; do NOT invent extra params. Destructive actions require confirm=true.
+Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear.
 
 **Parameters:**
 
-- `action` (string) (required): Canonical action ID returned by gitlab_find_action, such as project.list.
-- `confirm` (boolean): Set true to explicitly confirm destructive actions.
+- `action` (string) (required): Canonical action ID returned by gitlab_find_action, or a supported compatibility alias, such as project.list, issue.update, or issue.close.
+- `confirm` (boolean): Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_tool.
 - `params` (object) (required): Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters.
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
@@ -3656,7 +3656,7 @@ Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://schema/meta/gitlab_issue/<action>.
 Action guidance:
 - link_create: Use to create a relationship from a source issue to a target issue, optionally across projects.
-- update: Update issue fields. To close or reopen an issue, set params.state_event to close or reopen; do not omit state_event when the task asks for an issue state transition.
+- update: Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen; dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically.
 Parameter guidance:
 - link_create.issue_iid: source_issue; source: IID of the source issue receiving the link.; avoid: Do not use the target issue IID here.
 - link_create.project_id: source_project; source: Project that owns the source issue.; avoid: Use target_project_id for the linked issue's project when it differs.
@@ -24235,35 +24235,21 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Prompts
 
-38 prompt templates for AI-assisted GitLab workflows.
+37 prompt templates for AI-assisted GitLab workflows.
 
-### audit_branch_protection
+### audit_commit_hygiene
 
-Audit branch protection rules for a GitLab project. Lists all protected branches with push/merge access levels and code owner approval settings. Identifies whether the default branch is protected and highlights potential security gaps.
-
-**Arguments:**
-
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-
-### audit_project_access
-
-Audit user access and permissions for a GitLab project. Lists all members (direct and inherited) with their access levels, identifies users with elevated privileges (Maintainer/Owner), and flags inactive or blocked accounts.
+Audit commit message quality between two refs. Scores Conventional Commit usage, merge commits, breaking-change markers, body/detail quality, and linked work references for release and contribution readiness.
 
 **Arguments:**
 
 - `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `from` (required): Starting ref: tag name, branch name, or commit SHA
+- `to`: Ending ref: tag name, branch name, or commit SHA (defaults to HEAD if omitted)
 
 ### audit_project_full
 
 Run a comprehensive audit of a GitLab project covering settings, branch protection, access management, labels, milestones, and templates in a single report. Use this for a complete project health assessment with actionable recommendations.
-
-**Arguments:**
-
-- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
-
-### audit_project_settings
-
-Audit a GitLab project's core settings. Reviews visibility, merge strategy, CI/CD configuration, default branch, wiki/issues/snippets toggles, and push rules. Use this to identify misconfigurations or deviations from best practices.
 
 **Arguments:**
 
@@ -24289,7 +24275,7 @@ List all MRs targeting a specific branch in a project. Shows readiness summary w
 
 ### compare_branches
 
-Compare two Git branches or refs showing commit differences and file changes between them. Useful for understanding divergence before merging or releasing.
+Compare commit and file differences between two Git refs. Use for release branch preparation, feature branch divergence analysis, or deciding whether a merge/backport needs deeper review.
 
 **Arguments:**
 
@@ -24324,6 +24310,16 @@ Track milestone progress across all projects in a group. Shows issue/MR completi
 
 - `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
 
+### group_mr_dashboard
+
+List merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.
+
+**Arguments:**
+
+- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
+- `state`: State filter: opened, closed, merged, all (default: opened)
+- `target_branch`: Target branch name to filter MRs (e.g. 'develop_5.4.0')
+
 ### label_distribution
 
 Analyze label usage distribution in a project. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond label list.
@@ -24350,9 +24346,18 @@ Track milestone progress for a project. Shows issue/MR completion, progress bar,
 - `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
 - `milestone`: Specific milestone title (omit for all active)
 
-### mr_review_status
+### mr_description_quality
 
-Analyze the discussion health of open MRs in a project. Shows unresolved thread counts per MR to identify items needing attention.
+Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether changed files suggest missing screenshots or migration notes.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
+
+### mr_discussion_health
+
+Analyze unresolved discussion threads across open MRs in a project. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.
 
 **Arguments:**
 
@@ -24446,7 +24451,7 @@ Check readiness of a release branch by analyzing open MRs targeting it, draft/co
 
 ### review_mr
 
-Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics and a review plan. Full diffs are included without truncation.
+Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. Full diffs are included without truncation.
 
 **Arguments:**
 
@@ -24472,7 +24477,7 @@ Find MRs and issues in a project that haven't been updated for a configurable nu
 
 ### suggest_mr_reviewers
 
-Suggest suitable merge request reviewers based on the files changed and the list of active project members. Excludes the MR author from suggestions.
+Suggest suitable merge request reviewers based on the files changed and the list of active project members. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.
 
 **Arguments:**
 
@@ -24490,7 +24495,7 @@ Summarize the changed files and key modifications in a merge request. Lists each
 
 ### summarize_open_mrs
 
-Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) that need attention.
+Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.
 
 **Arguments:**
 
@@ -24513,16 +24518,6 @@ Generate a comprehensive workload summary for a specific team member over a conf
 - `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
 - `username` (required): GitLab username of the team member to analyze
 - `days`: Number of days to look back for activity (default: 7)
-
-### team_mr_dashboard
-
-List all merge requests for a GitLab group with optional state and target branch filters. Shows MRs grouped by project with summary statistics.
-
-**Arguments:**
-
-- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
-- `state`: State filter: opened, closed, merged, all (default: opened)
-- `target_branch`: Target branch name to filter MRs (e.g. 'develop_5.4.0')
 
 ### team_overview
 

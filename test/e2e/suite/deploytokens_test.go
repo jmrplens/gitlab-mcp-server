@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deploytokens"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploytokens"
 )
 
 // TestMeta_DeployTokens exercises project deploy token CRUD via the gitlab_access meta-tool.

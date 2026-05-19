@@ -11,11 +11,11 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // hintVerifyMR is the 404 hint shared by MR tools.

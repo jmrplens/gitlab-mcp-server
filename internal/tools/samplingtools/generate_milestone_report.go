@@ -8,11 +8,11 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/progress"
-	"github.com/jmrplens/gitlab-mcp-server/internal/sampling"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/sampling"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/milestones"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // GenerateMilestoneReportInput defines parameters for LLM-assisted milestone reporting.

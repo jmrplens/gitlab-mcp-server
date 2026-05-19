@@ -15,7 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/search"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/search"
 )
 
 // TestSearchType_BasicSearchWorks verifies search_type=basic is accepted by

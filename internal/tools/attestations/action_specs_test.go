@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const registerAttestationsJSON = `[{"iid":1,"bundle":{"mediaType":"application/vnd.in-toto+json","content":{"_type":"https://in-toto.io/Statement/v1"}}}]`

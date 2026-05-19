@@ -15,14 +15,14 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/milestones"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

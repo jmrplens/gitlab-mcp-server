@@ -1,6 +1,6 @@
 package commitdiscussions
 
-import "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+import "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 var markdownRenderer = toolutil.NewDiscussionRenderer("Commit Discussions", "No commit discussions found.\n", "Use `gitlab_get_commit_discussion` to view full discussion details", "Use `gitlab_add_commit_discussion_note` to reply to this discussion", "Use `gitlab_update_commit_discussion_note` to edit this note")
 

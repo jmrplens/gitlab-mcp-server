@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/wikis"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/wikis"
 )
 
 // TestIndividual_Wikis exercises wiki page CRUD using individual MCP tools.

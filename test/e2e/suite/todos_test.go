@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/todos"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/todos"
 )
 
 // TestIndividual_Todos exercises the todo tools via individual MCP tools:

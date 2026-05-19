@@ -9,7 +9,7 @@ import (
 	"context"
 	"testing"
 
-	markdowntools "github.com/jmrplens/gitlab-mcp-server/internal/tools/markdown"
+	markdowntools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/markdown"
 )
 
 // TestIndividual_MarkdownRender exercises the gitlab_render_markdown individual tool.

@@ -134,6 +134,97 @@ func TestMarkdownTableRow(t *testing.T) {
 	}
 }
 
+// TestFormatStorageMoveDetailMarkdown verifies the shared storage move detail
+// renderer used by group and snippet storage move tools.
+func TestFormatStorageMoveDetailMarkdown(t *testing.T) {
+	move := StorageMoveMarkdown{
+		ID:                     7,
+		State:                  "finished",
+		SourceStorageName:      "default|primary",
+		DestinationStorageName: "storage2",
+		CreatedAt:              time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC),
+		Entity: &StorageMoveEntityMarkdown{
+			Label: "Group",
+			Name:  "team|ops",
+			URL:   "https://gitlab.example.com/groups/team-ops",
+			ID:    42,
+		},
+	}
+
+	md := FormatStorageMoveDetailMarkdown(move, "Group Storage Move", "Use action 'retrieve_all' to monitor progress")
+	for _, want := range []string{
+		"## Group Storage Move #7",
+		"| **Source** | default&#124;primary |",
+		"| **Created** | 2026-01-15 10:30:00 |",
+		"| **Group** | [team&#124;ops](https://gitlab.example.com/groups/team-ops) (ID: 42) |",
+		"Use action 'retrieve_all' to monitor progress",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatStorageMoveListMarkdown verifies the shared storage move list
+// renderer handles empty lists, entity links, and pagination consistently.
+func TestFormatStorageMoveListMarkdown(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		md := FormatStorageMoveListMarkdown(nil, StorageMoveListMarkdownOptions{
+			Title:        "Snippet Storage Moves",
+			EmptyMessage: "No snippet storage moves found.",
+			EntityColumn: "Snippet",
+		})
+		for _, want := range []string{
+			"## Snippet Storage Moves",
+			"No snippet storage moves found.",
+			HintPreserveLinks,
+		} {
+			if !strings.Contains(md, want) {
+				t.Errorf("empty markdown missing %q:\n%s", want, md)
+			}
+		}
+		if strings.Contains(md, "| ID | State |") {
+			t.Errorf("empty markdown should not include table:\n%s", md)
+		}
+	})
+
+	t.Run("with moves", func(t *testing.T) {
+		moves := []StorageMoveMarkdown{
+			{
+				ID:                     1,
+				State:                  "finished",
+				SourceStorageName:      "default",
+				DestinationStorageName: "storage2",
+				CreatedAt:              time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC),
+				Entity: &StorageMoveEntityMarkdown{
+					Label: "Snippet",
+					Name:  "example",
+					URL:   "https://gitlab.example.com/snippets/1",
+					ID:    55,
+				},
+			},
+			{ID: 2, State: "started"},
+		}
+
+		md := FormatStorageMoveListMarkdown(moves, StorageMoveListMarkdownOptions{
+			Title:        "Snippet Storage Moves",
+			EmptyMessage: "No snippet storage moves found.",
+			EntityColumn: "Snippet",
+			Pagination:   PaginationOutput{Page: 2},
+		})
+		for _, want := range []string{
+			"| ID | State | Source | Destination | Snippet | Created |",
+			"| 1 | finished | default | storage2 | [example](https://gitlab.example.com/snippets/1) | 2026-06-01 12:00:00 |",
+			"| 2 | started |",
+			"_Page 2, 2 moves shown._",
+		} {
+			if !strings.Contains(md, want) {
+				t.Errorf("list markdown missing %q:\n%s", want, md)
+			}
+		}
+	})
+}
+
 // TestFormatCICDVariableMarkdown verifies the shared CI/CD variable detail renderer.
 func TestFormatCICDVariableMarkdown(t *testing.T) {
 	md := FormatCICDVariableMarkdown(CICDVariableMarkdown{

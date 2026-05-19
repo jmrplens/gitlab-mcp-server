@@ -1,6 +1,6 @@
 package issuediscussions
 
-import "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+import "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 // FormatListMarkdownString renders discussions list as Markdown.
 func FormatListMarkdownString(out ListOutput) string {

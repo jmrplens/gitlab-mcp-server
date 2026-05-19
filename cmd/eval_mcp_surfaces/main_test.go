@@ -20,10 +20,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // requireContainsAll returns contains all test data or fails the test.
@@ -1159,7 +1159,8 @@ func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionFind(t *testing.T) {
 		`"action":"pipeline.schedule_create"`,
 		`"description":"eval-crud-schedule"`,
 		`"active":false`,
-		"The listed action IDs and required params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions.",
+		"optional_params=active",
+		"The listed action IDs and params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions.",
 		"Values named *_id that are produced by earlier steps must be copied from the preceding tool result.",
 		"action=pipeline.schedule_delete_variable; required_params=project_id, schedule_id, key; destructive_confirm=true",
 		"For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.",
@@ -1207,6 +1208,14 @@ func TestDynamicExactCallProvenance_BindsRoleSensitiveParams(t *testing.T) {
 				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "access.deploy_token_delete_project", RequiredParams: []string{"project_id", "deploy_token_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
 			want: []string{`"action":"access.deploy_token_delete_project"`, `"confirm":true`, `"deploy_token_id":66`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
+		},
+		{
+			name: "group ci variable environment scope",
+			task: evalTask{ID: "MS-026", Prompt: "Exercise scoped group CI variable CRUD in group `my-org`: create variable `GROUP_EVAL_CRUD_TOKEN` with value `group-crud-value-1` and environment scope `review/eval`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "ci_variable.group_create", RequiredParams: []string{"group_id", "key", "value"}, OptionalParams: []string{"environment_scope", "masked"}},
+				{ExpectedTool: dynamicExecuteTool, ExpectedAction: "ci_variable.group_get", RequiredParams: []string{"group_id", "key"}, OptionalParams: []string{"environment_scope"}},
+			}},
+			want: []string{`"action":"ci_variable.group_create"`, `"environment_scope":"review/eval"`, `"group_id":"my-org"`, `"key":"GROUP_EVAL_CRUD_TOKEN"`, `"value":"group-crud-value-1"`},
 		},
 	}
 
@@ -2326,6 +2335,42 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 	}
 }
 
+// TestOptionalEnvironmentScopeFromPrompt_IgnoresBlankBacktickScope verifies blank backtick values do not mask later scope hints.
+func TestOptionalEnvironmentScopeFromPrompt_IgnoresBlankBacktickScope(t *testing.T) {
+	tests := []struct {
+		name      string
+		prompt    string
+		wantScope string
+		wantOK    bool
+	}{
+		{
+			name:      "explicit scope",
+			prompt:    "Delete CI variable `EVAL_TOKEN` with environment_scope `review/eval` in project `my-org/tools/gitlab-mcp-server`.",
+			wantScope: "review/eval",
+			wantOK:    true,
+		},
+		{
+			name:      "blank scope falls through to production",
+			prompt:    "Delete CI variable `EVAL_TOKEN` with environment_scope `` from production scope in project `my-org/tools/gitlab-mcp-server`.",
+			wantScope: "production",
+			wantOK:    true,
+		},
+		{
+			name:   "whitespace scope ignored",
+			prompt: "Delete CI variable `EVAL_TOKEN` with environment scope `   ` in project `my-org/tools/gitlab-mcp-server`.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotScope, gotOK := optionalEnvironmentScopeFromPrompt(tt.prompt)
+			if gotScope != tt.wantScope || gotOK != tt.wantOK {
+				t.Fatalf("optionalEnvironmentScopeFromPrompt() = %q, %t; want %q, %t", gotScope, gotOK, tt.wantScope, tt.wantOK)
+			}
+		})
+	}
+}
+
 // TestTaskPrompt_MultiStepAvoidsImplicitPagination verifies TaskPrompt when multi step avoids implicit pagination.
 func TestTaskPrompt_MultiStepAvoidsImplicitPagination(t *testing.T) {
 	task := evalTask{
@@ -2848,7 +2893,7 @@ func TestTaskPrompt_DestructiveScenarioWarningGuidance(t *testing.T) {
 					{ExpectedTool: "gitlab_branch", ExpectedAction: "delete", RequiredParams: []string{"project_id", "branch_name"}, OptionalParams: []string{"confirm"}, Destructive: true},
 				},
 			},
-			wants: []string{"unprotect only uses params.project_id, params.branch_name, and params.confirm=true", "never send allow_force_push to unprotect", `"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}`, `"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}`, "Never put confirm beside action as a top-level field"},
+			wants: []string{"params.push_access_level=40", "params.merge_access_level=40", "After protect succeeds, call get_protected next", "unprotect only uses params.project_id, params.branch_name, and params.confirm=true", "never send allow_force_push to unprotect", "For direct gitlab_branch meta-tool calls", `"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}`, `"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}`, "For dynamic mode with gitlab_execute_tool", "top-level confirm:true"},
 		},
 		{
 			name: "group milestone",

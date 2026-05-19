@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/awardemoji"
 )
 
 // TestIndividual_AwardEmoji exercises the issue award emoji lifecycle using

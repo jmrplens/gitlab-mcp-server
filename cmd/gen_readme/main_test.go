@@ -8,7 +8,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // TestRenderTokenFootprint_IncludesOrderedConfigurationRows verifies the README

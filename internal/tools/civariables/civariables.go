@@ -6,8 +6,8 @@ import (
 
 	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Operation names used by error wrappers (kept as constants to satisfy S1192).

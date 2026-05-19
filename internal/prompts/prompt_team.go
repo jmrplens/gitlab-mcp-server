@@ -11,8 +11,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 func registerTeamPrompts(server *mcp.Server, client *gitlabclient.Client) {
 	registerUserActivityReportPrompt(server, client)
 	registerTeamOverviewPrompt(server, client)
-	registerTeamMRDashboardPrompt(server, client)
+	registerGroupMRDashboardPrompt(server, client)
 	registerReviewerWorkloadPrompt(server, client)
 }
 
@@ -278,12 +278,12 @@ func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *m
 	return promptResult(b.String()), nil
 }
 
-// registerTeamMRDashboardPrompt registers the team_mr_dashboard prompt.
-func registerTeamMRDashboardPrompt(server *mcp.Server, client *gitlabclient.Client) {
+// registerGroupMRDashboardPrompt registers the group_mr_dashboard prompt.
+func registerGroupMRDashboardPrompt(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddPrompt(&mcp.Prompt{
-		Name:        "team_mr_dashboard",
-		Title:       toolutil.TitleFromName("team_mr_dashboard"),
-		Description: "List all merge requests for a GitLab group with optional state and target branch filters. Shows MRs grouped by project with summary statistics.",
+		Name:        "group_mr_dashboard",
+		Title:       toolutil.TitleFromName("group_mr_dashboard"),
+		Description: "List merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			groupIDArg(),
@@ -291,15 +291,15 @@ func registerTeamMRDashboardPrompt(server *mcp.Server, client *gitlabclient.Clie
 			targetBranchArg(false),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleTeamMRDashboard(ctx, client, req)
+		return handleGroupMRDashboard(ctx, client, req)
 	})
 }
 
-// handleTeamMRDashboard handles handle team MR dashboard and returns [*mcp.GetPromptResult].
-func handleTeamMRDashboard(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+// handleGroupMRDashboard handles handle group MR dashboard and returns [*mcp.GetPromptResult].
+func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("team_mr_dashboard: group_id is required")
+		return nil, errors.New("group_mr_dashboard: group_id is required")
 	}
 
 	state := getArgOr(req.Params.Arguments, argState, "opened")
@@ -313,7 +313,7 @@ func handleTeamMRDashboard(ctx context.Context, client *gitlabclient.Client, req
 
 	mrs, _, err := client.GL().MergeRequests.ListGroupMergeRequests(groupID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("team_mr_dashboard: %w", err)
+		return nil, fmt.Errorf("group_mr_dashboard: %w", err)
 	}
 
 	var b strings.Builder

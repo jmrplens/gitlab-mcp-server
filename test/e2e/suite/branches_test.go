@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branches"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branches"
 )
 
 // TestIndividual_Branches exercises the branch lifecycle using individual

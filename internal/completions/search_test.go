@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 // Shared test assertion messages and subtest names for search tests.

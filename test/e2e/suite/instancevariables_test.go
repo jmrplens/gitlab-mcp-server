@@ -8,7 +8,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/instancevariables"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/instancevariables"
 )
 
 // TestMeta_CIVariablesInstance exercises instance-level CI variable CRUD via the gitlab_ci_variable meta-tool.

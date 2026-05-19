@@ -16,10 +16,10 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/files"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectdiscovery"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/files"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectdiscovery"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 )
 
 // TestDynamicToolSurface_ExposesFindExecuteOnly verifies that the dynamic E2E

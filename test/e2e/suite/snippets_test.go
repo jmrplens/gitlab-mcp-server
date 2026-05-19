@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippets"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippets"
 )
 
 // TestIndividual_Snippets exercises the personal snippet lifecycle via individual MCP tools:

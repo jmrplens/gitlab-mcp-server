@@ -120,18 +120,17 @@
 
       <g>
         <rect x="0" y="0" width="188" height="54" rx="10" fill="url(#meta-grad)" stroke="#7C67D9" stroke-width="0.8"/>
-        <rect x="12" y="10" width="48" height="17" rx="8.5" fill="#1A1145" stroke="#8B7FC7" stroke-width="0.55"/>
-        <text x="36" y="22" text-anchor="middle" font-size="8.8" font-weight="800" fill="#C4B5FD">DEFAULT</text>
-        <text x="72" y="22" font-size="14.5" font-weight="760" fill="#F5F3FF">Meta-tools</text>
+        <text x="14" y="22" font-size="14.5" font-weight="760" fill="#F5F3FF">Meta-tools</text>
         <text x="14" y="44" font-size="17" font-weight="800" fill="#FCA326">33 / 49 / 50</text>
         <text x="112" y="43" font-size="11.5" font-weight="620" fill="#DDD6FE">tools</text>
       </g>
 
       <g transform="translate(201 0)">
         <rect x="0" y="0" width="188" height="54" rx="10" fill="url(#dynamic-grad)" stroke="#38BDF8" stroke-width="0.8"/>
-        <text x="14" y="22" font-size="14.5" font-weight="760" fill="#F5F3FF">Dynamic</text>
-        <text x="112" y="22" font-size="15" font-weight="800" fill="#67E8F9">2 tools</text>
-        <text x="14" y="43" font-size="11.7" font-weight="650" fill="#BAE6FD">find / execute</text>
+        <rect x="12" y="10" width="48" height="17" rx="8.5" fill="#0E2438" stroke="#38BDF8" stroke-width="0.55"/>
+        <text x="36" y="22" text-anchor="middle" font-size="8.8" font-weight="800" fill="#BAE6FD">DEFAULT</text>
+        <text x="72" y="22" font-size="14.5" font-weight="760" fill="#F5F3FF">Dynamic</text>
+        <text x="14" y="43" font-size="11.7" font-weight="650" fill="#BAE6FD">2 tools · find / execute</text>
       </g>
 
       <g transform="translate(402 0)">

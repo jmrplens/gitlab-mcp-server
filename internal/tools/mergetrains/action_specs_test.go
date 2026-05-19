@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const registerTrainJSON = `{"id":1,"merge_request":{"iid":10,"title":"MR","web_url":"https://gl.example.com/mr/10"},"pipeline":{"id":100},"target_branch":"main","status":"idle"}`

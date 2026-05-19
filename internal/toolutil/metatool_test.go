@@ -15,7 +15,7 @@ import (
 	"strings"
 	"testing"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

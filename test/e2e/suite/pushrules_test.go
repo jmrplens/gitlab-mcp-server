@@ -9,7 +9,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 )
 
 // TestIndividual_PushRules exercises push rule CRUD via individual MCP tools.

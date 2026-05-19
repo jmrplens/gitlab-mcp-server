@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/milestones"
 )
 
 // TestIndividual_Milestones exercises milestone CRUD using individual MCP tools.

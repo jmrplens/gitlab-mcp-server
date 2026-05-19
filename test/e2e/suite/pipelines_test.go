@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/commits"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobs"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 )
 
 // pipelineCIYAML is a minimal .gitlab-ci.yml that runs a single fast job

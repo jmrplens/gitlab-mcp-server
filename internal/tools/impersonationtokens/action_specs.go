@@ -1,8 +1,8 @@
 package impersonationtokens
 
 import (
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // ActionSpecs returns canonical specs for impersonation and user PAT actions exposed through gitlab_user.

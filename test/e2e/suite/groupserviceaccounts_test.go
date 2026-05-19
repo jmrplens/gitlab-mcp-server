@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupserviceaccounts"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupserviceaccounts"
 )
 
 // TestMeta_GroupServiceAccounts exercises the service account CRUD and PAT

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const registerStorageMoveJSON = `[{"id":1,"state":"finished","group":{"id":42,"web_url":"https://gitlab.example.com/groups/test","full_path":"test"},"source_storage_name":"default","destination_storage_name":"storage2"}]`

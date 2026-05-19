@@ -8,8 +8,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/elicitationtools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/elicitationtools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 )
 
 // TestElicitation exercises the interactive elicitation tools via the

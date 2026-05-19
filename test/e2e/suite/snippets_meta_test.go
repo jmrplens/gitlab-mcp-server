@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetdiscussions"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippetnotes"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/snippets"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/awardemoji"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippetdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippetnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippets"
 )
 
 // TestMeta_SnippetsPersonal exercises personal snippet actions not covered by snippets_test.go.

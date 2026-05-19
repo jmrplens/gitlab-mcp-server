@@ -11,7 +11,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 // testMinimalWorkItem is a bare-minimum WorkItem for toOutput converter tests.

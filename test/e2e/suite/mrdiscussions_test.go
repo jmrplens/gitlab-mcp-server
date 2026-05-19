@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrdiscussions"
 )
 
 // TestIndividual_MRDiscussions exercises the MR discussion lifecycle using individual tools:

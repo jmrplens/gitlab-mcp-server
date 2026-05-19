@@ -35,7 +35,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )

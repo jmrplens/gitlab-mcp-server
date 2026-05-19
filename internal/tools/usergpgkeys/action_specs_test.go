@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const registerGPGKeyJSON = `{"id":1,"primary_key_id":1,"key_id":"ABC123","public_key":"-----BEGIN PGP PUBLIC KEY BLOCK-----","created_at":"2026-01-01T00:00:00Z","user":{"id":1,"username":"admin"}}`

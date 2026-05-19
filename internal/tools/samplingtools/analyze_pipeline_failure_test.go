@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/sampling"
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/jobs"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/sampling"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

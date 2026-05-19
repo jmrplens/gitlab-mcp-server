@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -165,6 +166,141 @@ func MarkdownTableRow(cells ...string) string {
 		return ""
 	}
 	return markdownTableLine(cells)
+}
+
+// StorageMoveEntityMarkdown carries the optional GitLab resource associated
+// with a repository storage move.
+type StorageMoveEntityMarkdown struct {
+	Label string
+	Name  string
+	URL   string
+	ID    int64
+}
+
+// StorageMoveMarkdown carries the common fields rendered by repository storage
+// move tools at group, snippet, and other resource scopes.
+type StorageMoveMarkdown struct {
+	ID                     int64
+	State                  string
+	SourceStorageName      string
+	DestinationStorageName string
+	CreatedAt              time.Time
+	Entity                 *StorageMoveEntityMarkdown
+}
+
+// NewStorageMoveEntityMarkdown builds the optional entity view model for a
+// repository storage move.
+func NewStorageMoveEntityMarkdown(label, name, url string, id int64) *StorageMoveEntityMarkdown {
+	return &StorageMoveEntityMarkdown{
+		Label: label,
+		Name:  name,
+		URL:   url,
+		ID:    id,
+	}
+}
+
+// NewStorageMoveMarkdown builds a shared repository storage move Markdown view
+// model without forcing tool packages to duplicate composite literals.
+func NewStorageMoveMarkdown(id int64, state, sourceStorageName, destinationStorageName string, createdAt time.Time, entity *StorageMoveEntityMarkdown) StorageMoveMarkdown {
+	return StorageMoveMarkdown{
+		ID:                     id,
+		State:                  state,
+		SourceStorageName:      sourceStorageName,
+		DestinationStorageName: destinationStorageName,
+		CreatedAt:              createdAt,
+		Entity:                 entity,
+	}
+}
+
+// StorageMoveMarkdowns maps package-specific storage move outputs to the
+// shared Markdown view model.
+func StorageMoveMarkdowns[T any](moves []T, convert func(T) StorageMoveMarkdown) []StorageMoveMarkdown {
+	out := make([]StorageMoveMarkdown, 0, len(moves))
+	for _, move := range moves {
+		out = append(out, convert(move))
+	}
+	return out
+}
+
+// StorageMoveListMarkdownOptions configures the shared storage move list
+// renderer.
+type StorageMoveListMarkdownOptions struct {
+	Title        string
+	EmptyMessage string
+	EntityColumn string
+	Pagination   PaginationOutput
+}
+
+// FormatStorageMoveDetailMarkdown renders one repository storage move as a
+// Markdown detail table.
+func FormatStorageMoveDetailMarkdown(move StorageMoveMarkdown, title string, hints ...string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s #%d\n\n", title, move.ID)
+	b.WriteString(TblFieldValue)
+	fmt.Fprintf(&b, "| **ID** | %d |\n", move.ID)
+	fmt.Fprintf(&b, "| **State** | %s |\n", EscapeMdTableCell(move.State))
+	fmt.Fprintf(&b, "| **Source** | %s |\n", EscapeMdTableCell(move.SourceStorageName))
+	fmt.Fprintf(&b, "| **Destination** | %s |\n", EscapeMdTableCell(move.DestinationStorageName))
+	fmt.Fprintf(&b, "| **Created** | %s |\n", move.CreatedAt.Format("2006-01-02 15:04:05"))
+	if move.Entity != nil {
+		fmt.Fprintf(&b, "| **%s** | %s |\n", EscapeMdTableCell(move.Entity.Label), storageMoveEntityCell(*move.Entity, true))
+	}
+	WriteHints(&b, hints...)
+	return b.String()
+}
+
+// FormatStorageMoveListMarkdown renders repository storage moves as a Markdown
+// table with the domain-specific entity column supplied by the caller.
+func FormatStorageMoveListMarkdown(moves []StorageMoveMarkdown, opts StorageMoveListMarkdownOptions) string {
+	var b strings.Builder
+	WriteHints(&b, HintPreserveLinks)
+	fmt.Fprintf(&b, FmtMdH2, opts.Title)
+	if len(moves) == 0 {
+		b.WriteString(opts.EmptyMessage)
+		b.WriteByte('\n')
+		return b.String()
+	}
+	b.WriteString(MarkdownTableHeader("ID", "State", "Source", "Destination", opts.EntityColumn, "Created"))
+	for _, move := range moves {
+		entity := ""
+		if move.Entity != nil {
+			entity = storageMoveEntityCell(*move.Entity, false)
+		}
+		b.WriteString(MarkdownTableRow(
+			strconv.FormatInt(move.ID, 10),
+			EscapeMdTableCell(move.State),
+			EscapeMdTableCell(move.SourceStorageName),
+			EscapeMdTableCell(move.DestinationStorageName),
+			entity,
+			move.CreatedAt.Format("2006-01-02 15:04:05"),
+		))
+	}
+	if opts.Pagination.Page != 0 {
+		fmt.Fprintf(&b, "\n_Page %d, %d moves shown._\n", opts.Pagination.Page, len(moves))
+	}
+	return b.String()
+}
+
+// FormatStorageMoveCollectionMarkdown maps package-specific storage moves and
+// renders them as a shared Markdown list.
+func FormatStorageMoveCollectionMarkdown[T any](moves []T, pagination PaginationOutput, convert func(T) StorageMoveMarkdown, title, emptyMessage, entityColumn string) string {
+	return FormatStorageMoveListMarkdown(StorageMoveMarkdowns(moves, convert), StorageMoveListMarkdownOptions{
+		Title:        title,
+		EmptyMessage: emptyMessage,
+		EntityColumn: entityColumn,
+		Pagination:   pagination,
+	})
+}
+
+func storageMoveEntityCell(entity StorageMoveEntityMarkdown, includeID bool) string {
+	name := EscapeMdTableCell(entity.Name)
+	if entity.URL != "" {
+		name = fmt.Sprintf("[%s](%s)", name, entity.URL)
+	}
+	if includeID {
+		return fmt.Sprintf("%s (ID: %d)", name, entity.ID)
+	}
+	return name
 }
 
 // CICDVariableMarkdown carries the common fields rendered by GitLab CI/CD

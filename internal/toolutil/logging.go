@@ -7,7 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/logging"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/logging"
 )
 
 // LogToolCall logs a structured message after a tool handler completes.

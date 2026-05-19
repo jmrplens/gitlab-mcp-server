@@ -1,6 +1,6 @@
 # MCP Prompts Reference
 
-This document lists all **38 MCP prompts** exposed by gitlab-mcp-server. Prompts are AI-optimized templates that generate structured summaries, reviews, and assessments from GitLab project data.
+This document lists all **37 MCP prompts** exposed by gitlab-mcp-server. Prompts are AI-optimized templates that generate structured summaries, reviews, and assessments from GitLab project data.
 
 > **Diátaxis type**: Reference
 > **Audience**: MCP client developers, AI assistant users
@@ -60,7 +60,7 @@ Group-level team management prompts. Registered in `internal/prompts/prompt_team
 |---|------|-----------|-------------|
 | 17 | `user_activity_report` | `group_id`*, `username`*, `days` | Generate a detailed activity report for a specific user. Designed for managers to review team member productivity. |
 | 18 | `team_overview` | `group_id`* | Generate a team dashboard showing all group members with their open MR counts and recently merged MRs. Includes workload pie chart. |
-| 19 | `team_mr_dashboard` | `group_id`*, `state`, `target_branch` | List all merge requests for a GitLab group with optional state and target branch filters. Grouped by project. |
+| 19 | `group_mr_dashboard` | `group_id`*, `state`, `target_branch` | List merge requests across a GitLab group with optional state and target branch filters. Grouped by project with blocker and readiness summary statistics. |
 | 20 | `reviewer_workload` | `group_id`* | Analyze review distribution across group members. Shows how many open MRs each member is reviewing and identifies imbalances. |
 
 ## Project Report Prompts (5)
@@ -71,7 +71,7 @@ Project-level analysis prompts. Registered in `internal/prompts/prompt_project_r
 |---|------|-----------|-------------|
 | 21 | `branch_mr_summary` | `project_id`*, `target_branch`* | List all MRs targeting a specific branch. Shows readiness summary with conflict/draft/approval counts. |
 | 22 | `project_activity_report` | `project_id`*, `days` | Generate a project activity report including recent events, merged MRs, and open issues. Shows daily activity chart. |
-| 23 | `mr_review_status` | `project_id`* | Analyze discussion health of open MRs. Shows unresolved thread counts per MR to identify items needing attention. |
+| 23 | `mr_discussion_health` | `project_id`* | Analyze unresolved discussion threads across open MRs. Use for review follow-up and merge-readiness cleanup, not approval-rule status. |
 | 24 | `unassigned_items` | `project_id`* | Find open MRs and issues that have no assignee. Helps identify ownership gaps. |
 | 25 | `stale_items_report` | `project_id`*, `stale_days` | Find MRs and issues that haven't been updated for a configurable number of days. Default: 14 days. |
 
@@ -97,17 +97,39 @@ Milestone tracking, label analysis, and contributor ranking. Registered in `inte
 | 32 | `group_milestone_progress` | `group_id`* | Track milestone progress across all projects in a group. Shows issue/MR completion per milestone with progress bars. |
 | 33 | `project_contributors` | `project_id`* | Rank project contributors by commits, additions, and deletions using the repository contributors API. |
 
-## Project Audit Prompts (5)
+## Git Workflow Prompts (2)
+
+Commit history and MR authoring quality prompts. Registered in `internal/prompts/prompt_git_workflow.go`.
+
+| # | Name | Arguments | Description |
+|---|------|-----------|-------------|
+| 34 | `audit_commit_hygiene` | `project_id`*, `from`*, `to` | Audit commit message quality between two refs. Scores Conventional Commit usage, merge commits, breaking-change markers, body/detail quality, and linked work references for release and contribution readiness. |
+| 35 | `mr_description_quality` | `project_id`*, `merge_request_iid`* | Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and changed-file cues for missing screenshots or migration notes. |
+
+## Project Audit Prompts (2)
 
 Project configuration audit prompts. Registered in `internal/prompts/prompt_audit.go`.
 
 | # | Name | Arguments | Description |
 |---|------|-----------|-------------|
-| 34 | `audit_project_settings` | `project_id`* | Audit core project settings: visibility, merge strategy, CI/CD, push rules, feature toggles, and storage statistics. Identifies misconfigurations. |
-| 35 | `audit_branch_protection` | `project_id`* | Audit branch protection rules: protected branches, push/merge access levels, code owner approvals. Checks if the default branch is protected. |
-| 36 | `audit_project_access` | `project_id`* | Audit user access: members by access level, blocked/inactive accounts, elevated privileges, shared groups. Follows least-privilege principle. |
-| 37 | `audit_project_workflow` | `project_id`* | Audit workflow configuration: labels (with description gaps), milestones (active/closed, due dates), issue and MR templates. |
-| 38 | `audit_project_full` | `project_id`* | Comprehensive project audit combining settings, branch protection, access, labels, milestones, templates, webhooks, and push rules with a quick scorecard. |
+| 36 | `audit_project_workflow` | `project_id`* | Audit workflow configuration: labels (with description gaps), milestones (active/closed, due dates), issue and MR templates. |
+| 37 | `audit_project_full` | `project_id`* | Comprehensive project audit combining settings, branch protection, access, labels, milestones, templates, webhooks, and push rules with a quick scorecard. |
+
+## Prompt Selection Guide
+
+| Goal | Use |
+|------|-----|
+| Review code changes deeply | `review_mr` |
+| Check whether an MR description is ready for reviewers | `mr_description_quality` |
+| Find suitable reviewers | `suggest_mr_reviewers` |
+| Track unresolved MR review threads | `mr_discussion_health` |
+| Summarize all project MRs | `summarize_open_mrs` |
+| Summarize MRs for one target branch | `branch_mr_summary` |
+| Review group-wide MR status | `group_mr_dashboard` |
+| Generate release notes | `generate_release_notes` |
+| Check commit message/history quality before release | `audit_commit_hygiene` |
+| Audit project governance comprehensively | `audit_project_full` |
+| Audit labels, milestones, and templates only | `audit_project_workflow` |
 
 ## Common Arguments
 
@@ -139,4 +161,5 @@ All prompt arguments support intelligent autocomplete via the completions handle
 | [`prompt_project_reports.go`](../internal/prompts/prompt_project_reports.go) | 5 project report prompts |
 | [`prompt_analytics.go`](../internal/prompts/prompt_analytics.go) | 4 analytics prompts (incl. `weekly_team_recap`) |
 | [`prompt_milestone_label.go`](../internal/prompts/prompt_milestone_label.go) | 4 milestone & label prompts |
-| [`prompt_audit.go`](../internal/prompts/prompt_audit.go) | 5 project audit prompts |
+| [`prompt_git_workflow.go`](../internal/prompts/prompt_git_workflow.go) | 2 Git workflow quality prompts |
+| [`prompt_audit.go`](../internal/prompts/prompt_audit.go) | 2 project audit prompts |

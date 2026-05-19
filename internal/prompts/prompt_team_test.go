@@ -161,7 +161,7 @@ func TestTeamMRDashboard_GroupsByProject(t *testing.T) {
 
 	session := newMCPSession(t, mux)
 	result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-		Name:      "team_mr_dashboard",
+		Name:      "group_mr_dashboard",
 		Arguments: map[string]string{"group_id": "mygroup"},
 	})
 	if err != nil {
@@ -180,8 +180,8 @@ func TestTeamMRDashboard_GroupsByProject(t *testing.T) {
 	}
 }
 
-// TestTeamMRDashboard_TargetBranchFilter verifies TeamMRDashboard when target branch filter.
-func TestTeamMRDashboard_TargetBranchFilter(t *testing.T) {
+// TestGroupMRDashboard_TargetBranchFilter verifies GroupMRDashboard when target branch filter.
+func TestGroupMRDashboard_TargetBranchFilter(t *testing.T) {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/v4/groups/mygroup/merge_requests", func(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +193,7 @@ func TestTeamMRDashboard_TargetBranchFilter(t *testing.T) {
 
 	session := newMCPSession(t, mux)
 	result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-		Name:      "team_mr_dashboard",
+		Name:      "group_mr_dashboard",
 		Arguments: map[string]string{"group_id": "mygroup", "target_branch": "develop"},
 	})
 	if err != nil {
@@ -206,8 +206,8 @@ func TestTeamMRDashboard_TargetBranchFilter(t *testing.T) {
 	}
 }
 
-// TestTeamMRDashboard_EmptyResult verifies TeamMRDashboard when empty result.
-func TestTeamMRDashboard_EmptyResult(t *testing.T) {
+// TestGroupMRDashboard_EmptyResult verifies GroupMRDashboard when empty result.
+func TestGroupMRDashboard_EmptyResult(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/mygroup/merge_requests", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -215,7 +215,7 @@ func TestTeamMRDashboard_EmptyResult(t *testing.T) {
 
 	session := newMCPSession(t, mux)
 	result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-		Name:      "team_mr_dashboard",
+		Name:      "group_mr_dashboard",
 		Arguments: map[string]string{"group_id": "mygroup"},
 	})
 	if err != nil {

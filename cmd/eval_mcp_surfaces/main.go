@@ -42,12 +42,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
-	customemoji "github.com/jmrplens/gitlab-mcp-server/internal/tools/customemoji"
-	dynamictools "github.com/jmrplens/gitlab-mcp-server/internal/tools/dynamic"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	customemoji "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/customemoji"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -2713,13 +2713,24 @@ func ensureLiveProjectVariableTarget(ctx context.Context, client *gitlabclient.C
 
 // projectVariableEnvironmentScope extracts the environment scope expected by a variable task prompt.
 func projectVariableEnvironmentScope(prompt string) string {
-	if environmentScope, ok := backtickValueAfter(prompt, "environment_scope "); ok {
+	if environmentScope, ok := optionalEnvironmentScopeFromPrompt(prompt); ok {
 		return environmentScope
 	}
-	if strings.Contains(strings.ToLower(prompt), "production scope") {
-		return "production"
-	}
 	return "*"
+}
+
+func optionalEnvironmentScopeFromPrompt(prompt string) (string, bool) {
+	for _, marker := range []string{"environment_scope ", "environment scope "} {
+		if environmentScope, ok := backtickValueAfter(prompt, marker); ok {
+			if environmentScope = strings.TrimSpace(environmentScope); environmentScope != "" {
+				return environmentScope, true
+			}
+		}
+	}
+	if strings.Contains(strings.ToLower(prompt), "production scope") {
+		return "production", true
+	}
+	return "", false
 }
 
 // ensureLiveRepositoryFileDeleteTarget ensures live repository file delete target exists for live evaluation.
@@ -5727,13 +5738,27 @@ func dynamicWorkflowPlanPreamble(task evalTask) string {
 			fmt.Sprintf("action=%s", step.ExpectedAction),
 			fmt.Sprintf("required_params=%s", required),
 		}
+		if optional := dynamicWorkflowOptionalParams(step.OptionalParams); len(optional) > 0 {
+			parts = append(parts, fmt.Sprintf("optional_params=%s", strings.Join(optional, ", ")))
+		}
 		if step.Destructive {
 			parts = append(parts, "destructive_confirm=true")
 		}
 		lines = append(lines, fmt.Sprintf("%d. %s", index+1, strings.Join(parts, "; ")))
 	}
-	lines = append(lines, "Use this order. The listed action IDs and required params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions. Execute each action directly when its required values are present. Values named *_id that are produced by earlier steps must be copied from the preceding tool result. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.")
+	lines = append(lines, "Use this order. The listed action IDs and params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions. Execute each action directly when its required values are present. Include optional params only when the task prompt asks for their behavior. Values named *_id that are produced by earlier steps must be copied from the preceding tool result. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.")
 	return strings.Join(lines, "\n")
+}
+
+func dynamicWorkflowOptionalParams(params []string) []string {
+	optional := make([]string, 0, len(params))
+	for _, param := range params {
+		if param == "confirm" {
+			continue
+		}
+		optional = append(optional, param)
+	}
+	return optional
 }
 
 // joinDynamicPrompt builds join dynamic prompt for evaluator prompts.
@@ -5986,7 +6011,7 @@ func taskPrompt(task evalTask) string {
 		retryGuidance += ` For project badge CRUD, badge_add requires valid absolute params.link_url and params.image_url. If the task does not provide URLs, use https://example.com/eval-badge as link_url and https://example.com/eval-badge.svg as image_url. Use the returned badge_id for badge_get, badge_edit, and badge_delete. badge_edit uses params.name for a new badge name; never send new_name.`
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_branch" && steps[0].ExpectedAction == "create" && strings.Contains(strings.ToLower(task.Prompt), "protect") {
-		retryGuidance += ` For branch protection lifecycle, follow exactly this order: create, protect, get_protected, update_protected, unprotect, delete. update_protected may use params.allow_force_push=true. unprotect only uses params.project_id, params.branch_name, and params.confirm=true; never send allow_force_push to unprotect. The unprotect envelope shape is {"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. The delete envelope shape is {"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. Never put confirm beside action as a top-level field.`
+		retryGuidance += ` For branch protection lifecycle, follow exactly this order: create, protect, get_protected, update_protected, unprotect, delete. Protecting with Maintainer push and merge access means params.push_access_level=40 and params.merge_access_level=40 on the protect call. After protect succeeds, call get_protected next; do not call protect again. update_protected may use params.allow_force_push=true. unprotect only uses params.project_id, params.branch_name, and params.confirm=true; never send allow_force_push to unprotect. For direct gitlab_branch meta-tool calls, the unprotect envelope shape is {"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}} and the delete envelope shape is {"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. For dynamic mode with gitlab_execute_tool, keep unprotect/delete action params inside params and set top-level confirm:true on the gitlab_execute_tool invocation.`
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_pipeline" && steps[0].ExpectedAction == "schedule_create" {
 		retryGuidance += ` For pipeline schedule CRUD, the first call is gitlab_pipeline with action schedule_create; do not call gitlab_discover_project or gitlab_project first. schedule_create requires params.project_id, params.description, params.ref, and params.cron, with params.active=false for an inactive schedule. Use description, not name, for the schedule display label. Schedule variables accept params.key, params.value, and optional params.variable_type only; never send masked or protected. If the task gives a variable key but no value, use params.value="schedule-value-1" for schedule_create_variable and params.value="schedule-value-2" for schedule_edit_variable. Use the returned id as params.schedule_id for schedule_get, schedule_update, schedule_create_variable, schedule_edit_variable, schedule_delete_variable, and schedule_delete. Both schedule_delete_variable and schedule_delete are destructive and require confirm:true according to the active tool surface.`
@@ -6505,7 +6530,7 @@ var stringExampleParamMarkers = map[string][]string{
 	"commit_sha":         {"on commit "},
 	"discussion_id":      {"discussion_id ", "from discussion "},
 	"name":               {"named ", "deploy token ", "status check ", "feature flag "},
-	"key":                {"public key ", "variable "},
+	"key":                {"public key ", "variable key ", "create variable ", "variable "},
 	"value":              {"value "},
 	"query":              {"for "},
 	"title":              {"titled "},
@@ -6646,6 +6671,22 @@ func exampleOptionalParamValue(param, prompt string) (any, bool) {
 		}
 		if strings.Contains(strings.ToLower(prompt), "reopen") {
 			return "reopen", true
+		}
+	case "environment_scope":
+		return optionalEnvironmentScopeFromPrompt(prompt)
+	case "push_access_level":
+		if strings.Contains(strings.ToLower(prompt), "maintainer push") || strings.Contains(strings.ToLower(prompt), "maintainer push and merge") {
+			return 40, true
+		}
+		if strings.Contains(strings.ToLower(prompt), "developer push") || strings.Contains(strings.ToLower(prompt), "developer push and merge") {
+			return 30, true
+		}
+	case "merge_access_level":
+		if strings.Contains(strings.ToLower(prompt), "maintainer merge") || strings.Contains(strings.ToLower(prompt), "maintainer push and merge") {
+			return 40, true
+		}
+		if strings.Contains(strings.ToLower(prompt), "developer merge") || strings.Contains(strings.ToLower(prompt), "developer push and merge") {
+			return 30, true
 		}
 	case "include_descendants":
 		if strings.Contains(strings.ToLower(prompt), "descendant") {

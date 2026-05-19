@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelines"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourcegroups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourcegroups"
 )
 
 // TestMeta_PipelinesExtended exercises pipeline meta-tool actions not covered

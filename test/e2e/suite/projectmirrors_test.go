@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projectmirrors"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectmirrors"
 )
 
 // TestMeta_ProjectRemoteMirrors exercises the remote mirror CRUD actions

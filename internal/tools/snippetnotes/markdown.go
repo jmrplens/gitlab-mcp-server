@@ -1,6 +1,6 @@
 package snippetnotes
 
-import "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+import "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 // FormatOutputMarkdown renders a single snippet note as a Markdown summary.
 func FormatOutputMarkdown(n Output) string {
