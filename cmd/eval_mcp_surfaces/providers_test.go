@@ -217,6 +217,29 @@ func TestAnthropicProviderCallOnce_SerializesEmptyToolUseInput(t *testing.T) {
 	}
 }
 
+// TestDeepCloneMap_DoesNotShareNestedContainers verifies OpenAI schema cloning
+// can mutate retry hints without altering the catalog schema.
+func TestDeepCloneMap_DoesNotShareNestedContainers(t *testing.T) {
+	original := map[string]any{
+		"properties": map[string]any{"params": map[string]any{"type": "object"}},
+		"required":   []any{"action"},
+		"unchanged":  "value",
+	}
+	cloned := deepCloneMap(original)
+	cloned["properties"].(map[string]any)["params"].(map[string]any)["description"] = "hint"
+	cloned["required"].([]any)[0] = "params"
+
+	if _, ok := original["properties"].(map[string]any)["params"].(map[string]any)["description"]; ok {
+		t.Fatalf("original properties mutated: %#v", original)
+	}
+	if original["required"].([]any)[0] != "action" {
+		t.Fatalf("original required mutated: %#v", original["required"])
+	}
+	if deepCloneMap(nil) != nil || deepCloneAny("plain") != "plain" {
+		t.Fatal("deep clone nil/scalar behavior changed")
+	}
+}
+
 // TestParseOpenAIToolArguments_WrapsMissingOpeningBrace verifies ParseOpenAIToolArguments when wraps missing opening brace.
 func TestParseOpenAIToolArguments_WrapsMissingOpeningBrace(t *testing.T) {
 	input, err := parseOpenAIToolArguments(`"project_id":"42"}`)

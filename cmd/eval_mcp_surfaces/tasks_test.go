@@ -1,0 +1,113 @@
+package main
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+)
+
+// TestFilterTasks_SelectsCommaSeparatedIDs verifies explicit task filters keep
+// requested task order from the corpus and ignore unknown IDs.
+func TestFilterTasks_SelectsCommaSeparatedIDs(t *testing.T) {
+	tasks := []evalTask{{ID: "A"}, {ID: "B"}, {ID: "C"}}
+	filtered := filterTasks(tasks, " C, A, missing ")
+	if got := taskIDs(filtered); got != "A,C" {
+		t.Fatalf("filterTasks() IDs = %q, want A,C", got)
+	}
+}
+
+// TestTaskRoutePredicates_ClassifyEnterpriseMutationAndDestruction verifies
+// route string heuristics used for partitioning cover important token shapes.
+func TestTaskRoutePredicates_ClassifyEnterpriseMutationAndDestruction(t *testing.T) {
+	if !routeLooksDestructive("gitlab_project.archive") || !routeLooksDestructive("mr_review.draft_note_publish_all") {
+		t.Fatal("routeLooksDestructive() missed archive or publish_all")
+	}
+	if !routeLooksMutating("gitlab_runner", "runner.update") || routeLooksMutating("gitlab_project", "get") {
+		t.Fatal("routeLooksMutating() did not classify update/read correctly")
+	}
+	if !routeLooksEnterprise("gitlab_merge_train", "list_project") || !routeUnavailableOnCE("gitlab_environment", "deployment_approve_or_reject") {
+		t.Fatal("enterprise/CE route predicates missed known routes")
+	}
+}
+
+// TestTaskUsesCapabilityFallback_DetectsBridgeAndPromptOnlyTasks verifies the
+// capability fallback partition only selects tasks that need MCP capability access.
+func TestTaskUsesCapabilityFallback_DetectsBridgeAndPromptOnlyTasks(t *testing.T) {
+	if !taskUsesCapabilityFallback(evalTask{Steps: []evalStep{{ExpectedTool: resourceReadTool}}}) {
+		t.Fatal("taskUsesCapabilityFallback(bridge step) = false, want true")
+	}
+	if !taskUsesCapabilityFallback(evalTask{Prompt: "inspect schema fallback"}) {
+		t.Fatal("taskUsesCapabilityFallback(prompt-only schema) = false, want true")
+	}
+	if taskUsesCapabilityFallback(evalTask{ExpectedTool: "gitlab_project", ExpectedAction: "get"}) {
+		t.Fatal("taskUsesCapabilityFallback(route task) = true, want false")
+	}
+}
+
+// TestTaskRoutesAvailable_HandlesStandaloneBridgeAndMissingRoutes verifies route
+// availability accepts evaluator bridge tools and rejects unknown catalog routes.
+func TestTaskRoutesAvailable_HandlesStandaloneBridgeAndMissingRoutes(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": toolutil.ActionRoute{}}}
+	if !taskRoutesAvailable(evalTask{Steps: []evalStep{{ExpectedTool: resourceListTool}}}, routes, false) {
+		t.Fatal("taskRoutesAvailable(resourceListTool) = false, want true")
+	}
+	if taskRoutesAvailable(evalTask{ExpectedTool: "gitlab_project", ExpectedAction: "missing"}, routes, false) {
+		t.Fatal("taskRoutesAvailable(missing route) = true, want false")
+	}
+	if taskRoutesAvailable(evalTask{ID: "MT-105", ExpectedTool: "gitlab_project", ExpectedAction: "get"}, routes, false) {
+		t.Fatal("taskRoutesAvailable(unavailable task) = true, want false")
+	}
+}
+
+// TestNormalizeExpectedRoutes_RewritesMetaAndDynamicRoutes verifies task route
+// normalization maps unified and dynamic catalogs to the executable route shape.
+func TestNormalizeExpectedRoutes_RewritesMetaAndDynamicRoutes(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab":           {"project.get": toolutil.ActionRoute{}},
+		dynamicExecuteTool: {"project.get": toolutil.ActionRoute{}},
+	}
+	if toolName, action := normalizeExpectedRoute("gitlab_project", "get", routes); toolName != "gitlab" || action != "project.get" {
+		t.Fatalf("normalizeExpectedRoute() = %s/%s, want gitlab/project.get", toolName, action)
+	}
+	if toolName, action := normalizeExpectedDynamicRoute("gitlab_project", "get", routes); toolName != dynamicExecuteTool || action != "project.get" {
+		t.Fatalf("normalizeExpectedDynamicRoute() = %s/%s, want execute/project.get", toolName, action)
+	}
+	if got := canonicalRouteID("gitlab_project", "get"); got != "project.get" {
+		t.Fatalf("canonicalRouteID() = %q, want project.get", got)
+	}
+	if got := superDispatcherAction("gitlab_project", "get"); got != "project.get" {
+		t.Fatalf("superDispatcherAction() = %q, want project.get", got)
+	}
+}
+
+// TestNormalizeTasksForCatalog_RewritesTopLevelAndStepRoutes verifies catalog
+// normalization clones nested steps while preserving the original fixture.
+func TestNormalizeTasksForCatalog_RewritesTopLevelAndStepRoutes(t *testing.T) {
+	tasks := []evalTask{{
+		ID: "MT-1", ExpectedTool: "gitlab_project", ExpectedAction: "get",
+		Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}, {ExpectedTool: "gitlab_discover_project"}},
+	}}
+	dynamicRoutes := map[string]toolutil.ActionMap{dynamicExecuteTool: {"project.get": toolutil.ActionRoute{}, actionDiscoverProjectResolve: toolutil.ActionRoute{}}}
+	dynamic := normalizeTasksForCatalog(tasks, dynamicRoutes, "dynamic")
+	if dynamic[0].ExpectedTool != dynamicExecuteTool || dynamic[0].ExpectedAction != "project.get" || dynamic[0].Steps[1].ExpectedAction != actionDiscoverProjectResolve {
+		t.Fatalf("dynamic normalized = %+v", dynamic[0])
+	}
+	if tasks[0].Steps[0].ExpectedTool != "gitlab_project" {
+		t.Fatalf("original task mutated = %+v", tasks[0])
+	}
+	metaRoutes := map[string]toolutil.ActionMap{"gitlab": {"project.get": toolutil.ActionRoute{}}}
+	meta := normalizeTasksForCatalog(tasks, metaRoutes, "meta")
+	if meta[0].ExpectedTool != "gitlab" || meta[0].ExpectedAction != "project.get" {
+		t.Fatalf("meta normalized = %+v", meta[0])
+	}
+}
+
+// TestParseTaskRow_ReportsColumnErrors verifies malformed task rows produce
+// actionable parse errors instead of silently building partial scenarios.
+func TestParseTaskRow_ReportsColumnErrors(t *testing.T) {
+	_, err := parseTaskRow([]string{"MT-1", "Prompt", "`gitlab_project` / `get` -> `gitlab_issue` / `create`", "`project_id`", "none; none", "none", "ok"})
+	if err == nil || !strings.Contains(err.Error(), "required params") {
+		t.Fatalf("parseTaskRow() error = %v, want required params error", err)
+	}
+}
