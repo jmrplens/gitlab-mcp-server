@@ -212,8 +212,8 @@ func callTestTool(t *testing.T, session *mcp.ClientSession) {
 	}
 }
 
-// drainLogs collects log entries from the channel until the timeout elapses.
-func drainLogs(ch <-chan logEntry, timeout time.Duration) []logEntry {
+// collectLogsUntil collects log entries until done reports success or the timeout elapses.
+func collectLogsUntil(ch <-chan logEntry, timeout time.Duration, done func([]logEntry) bool) []logEntry {
 	var entries []logEntry
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -221,6 +221,9 @@ func drainLogs(ch <-chan logEntry, timeout time.Duration) []logEntry {
 		select {
 		case e := <-ch:
 			entries = append(entries, e)
+			if done(entries) {
+				return entries
+			}
 		case <-timer.C:
 			return entries
 		}
@@ -290,7 +293,9 @@ func TestSessionLogger_LevelsViaIntegration(t *testing.T) {
 			}
 
 			callTestTool(t, session)
-			entries := drainLogs(logs, 2*time.Second)
+			entries := collectLogsUntil(logs, time.Second, func(entries []logEntry) bool {
+				return findLogEntryByLevel(t, entries, tt.level)
+			})
 
 			if len(entries) == 0 {
 				t.Fatal("expected at least one log entry, got none")
@@ -317,7 +322,10 @@ func TestSessionLogger_LogToolCallSuccess(t *testing.T) {
 	}
 
 	callTestTool(t, session)
-	entries := drainLogs(logs, 2*time.Second)
+	entries := collectLogsUntil(logs, time.Second, func(entries []logEntry) bool {
+		_, found := findToolLogEntry(entries, "info", "my_tool")
+		return found
+	})
 
 	if len(entries) == 0 {
 		t.Fatal(errExpLogEntries)
@@ -347,7 +355,10 @@ func TestSessionLogger_LogToolCallError(t *testing.T) {
 	}
 
 	callTestTool(t, session)
-	entries := drainLogs(logs, 2*time.Second)
+	entries := collectLogsUntil(logs, time.Second, func(entries []logEntry) bool {
+		_, found := findToolLogEntry(entries, "error", "failing_tool")
+		return found
+	})
 
 	if len(entries) == 0 {
 		t.Fatal(errExpLogEntries)
@@ -380,7 +391,16 @@ func TestSessionLogger_WithMapData(t *testing.T) {
 	}
 
 	callTestTool(t, session)
-	entries := drainLogs(logs, 2*time.Second)
+	entries := collectLogsUntil(logs, time.Second, func(entries []logEntry) bool {
+		for _, e := range entries {
+			if m, ok := e.Data.(map[string]any); ok {
+				if m["project"] == "test-project" && m["message"] == "structured" {
+					return true
+				}
+			}
+		}
+		return false
+	})
 
 	if len(entries) == 0 {
 		t.Fatal(errExpLogEntries)
