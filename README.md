@@ -262,7 +262,7 @@ The detailed meta-tool catalog now lives in [Meta-Tools Reference](docs/meta-too
 |----------------|---------|
 | **Tools** | Up to 1019 individual / 33–50 meta |
 | **Resources** | 46 (static + templates) |
-| **Prompts** | 38 templates |
+| **Prompts** | 37 templates |
 | **Completions** | Project, user, group, branch, tag |
 | **Logging** | Structured (text/JSON) + MCP notifications |
 | **Progress** | Tool execution progress reporting |

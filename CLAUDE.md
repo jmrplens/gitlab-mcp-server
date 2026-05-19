@@ -103,7 +103,7 @@ gitlab-mcp-server/
 │   │   ├── users/               # User tools
 │   │   └── wikis/               # Wiki tools
 │   ├── resources/               # 46 MCP resource implementations
-│   ├── prompts/                 # 38 MCP prompt implementations
+│   ├── prompts/                 # 37 MCP prompt implementations
 │   ├── completions/             # 17 argument completion types
 │   ├── logging/                 # MCP logging capability
 │   ├── progress/                # MCP progress notifications

@@ -26,8 +26,8 @@ const (
 	findToolName    = "gitlab_find_action"
 	executeToolName = "gitlab_execute_tool"
 
-	findToolDescription    = "Search the local GitLab action catalog by domain, resource, verb, or filter keywords (e.g. 'project create', 'merge request approve', 'pipeline retry', 'issue delete', 'ci variable'); this is read-only and does not call GitLab. Returns matching canonical action IDs with exact input schemas, required params, destructive flags, usage hints, and gitlab_execute_tool examples. Use when the action ID, compatibility alias, or parameter names are unclear; use limit to keep results compact and explain=true only to debug ranking. If no useful result appears, broaden the query by GitLab domain or verb; if the task already names a clear action ID/alias and required params, call gitlab_execute_tool directly."
-	executeToolDescription = "Execute one GitLab catalog action by canonical action ID or supported compatibility alias (e.g. domain.action, issue.close) using the configured GitLab token; the selected action may read or mutate GitLab. Call directly when the action ID/alias and required params are clear from the task; use gitlab_find_action only when action selection or parameter names are uncertain. Always include params as an object, use params:{} only for no-parameter actions, and include only schema-defined param names; destructive actions require top-level confirm=true. Read-only or safe mode can block or preview mutations, and GitLab permission, scope, or rate-limit failures are returned as repairable tool errors. For issue.close/issue.reopen aliases, omit state_event; for issue.update state transitions, include params.state_event."
+	findToolDescription    = "Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples."
+	executeToolDescription = "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear."
 
 	defaultLimit                 = 20
 	maxLimit                     = 50
@@ -2743,7 +2743,7 @@ func compactFindGuidance(result FindResult) string {
 	if usage := strings.TrimSpace(result.Usage); usage != "" {
 		parts = append(parts, usage)
 	}
-	if guidance := compactParameterGuidance(result.ParamGuidance, defaultMaxParamGuidanceItems); guidance != "" {
+	if guidance := compactParameterGuidance(result.ParamGuidance, defaultMaxParamGuidanceItems, result.RequiredParams...); guidance != "" {
 		parts = append(parts, guidance)
 	}
 	if len(parts) == 0 {
@@ -2752,22 +2752,43 @@ func compactFindGuidance(result FindResult) string {
 	return toolutil.EscapeMdTableCell(strings.Join(parts, " "))
 }
 
-func compactParameterGuidance(guidance map[string]toolutil.ParameterGuidance, limit int) string {
+func compactParameterGuidance(guidance map[string]toolutil.ParameterGuidance, limit int, requiredParams ...string) string {
 	if len(guidance) == 0 || limit == 0 {
 		return ""
+	}
+	required := make(map[string]struct{}, len(requiredParams))
+	for _, name := range requiredParams {
+		required[name] = struct{}{}
 	}
 	names := make([]string, 0, len(guidance))
 	for name := range guidance {
 		names = append(names, name)
 	}
-	sort.Strings(names)
+	sort.Slice(names, func(i, j int) bool {
+		_, leftRequired := required[names[i]]
+		_, rightRequired := required[names[j]]
+		if leftRequired != rightRequired {
+			return leftRequired
+		}
+		left := guidance[names[i]]
+		right := guidance[names[j]]
+		if len(left.CommonConfusions) != len(right.CommonConfusions) {
+			return len(left.CommonConfusions) > len(right.CommonConfusions)
+		}
+		return names[i] < names[j]
+	})
+	truncated := 0
 	if limit > 0 && len(names) > limit {
+		truncated = len(names) - limit
 		names = names[:limit]
 	}
 	parts := make([]string, 0, len(names))
 	for _, name := range names {
 		item := guidance[name]
 		parts = append(parts, compactParameterGuidanceItem(name, item))
+	}
+	if truncated > 0 {
+		parts = append(parts, fmt.Sprintf("...and %d more params.", truncated))
 	}
 	return strings.Join(parts, " ")
 }

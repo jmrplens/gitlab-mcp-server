@@ -26,15 +26,15 @@ func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	if !execute.Destructive || execute.ReadOnly || execute.Route.OutputSchema == nil {
 		t.Fatalf("execute spec = %+v, want potentially destructive controller with generic output schema", execute)
 	}
-	if execute.Description != executeToolDescription || !strings.Contains(execute.Description, "Call directly") {
-		t.Fatalf("execute description = %q, want shared direct-execution guidance", execute.Description)
+	if execute.Description != executeToolDescription || !strings.Contains(execute.Description, "confirm=true") {
+		t.Fatalf("execute description = %q, want shared confirmation guidance", execute.Description)
 	}
 
 	find := findDynamicSurfaceSpec(t, specs, findToolName)
 	if !find.ReadOnly || find.Destructive {
 		t.Fatalf("find spec = %+v, want read-only controller", find)
 	}
-	if find.Description != findToolDescription || !strings.Contains(find.Description, "does not call GitLab") || !strings.Contains(find.Description, "explain=true") {
+	if find.Description != findToolDescription || !strings.Contains(find.Description, "no GitLab API call") || !strings.Contains(find.Description, "execute examples") {
 		t.Fatalf("find description = %q, want shared lookup guidance", find.Description)
 	}
 }

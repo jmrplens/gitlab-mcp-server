@@ -169,8 +169,8 @@ func TestProjectActivityReport_MissingProjectID(t *testing.T) {
 
 // mr_discussion_health.
 
-// TestMRReviewStatus_UnresolvedThreads verifies MRReviewStatus when unresolved threads.
-func TestMRReviewStatus_UnresolvedThreads(t *testing.T) {
+// TestMRDiscussionHealth_UnresolvedThreads verifies mr_discussion_health when unresolved threads.
+func TestMRDiscussionHealth_UnresolvedThreads(t *testing.T) {
 	created := time.Now().Add(-24 * time.Hour)
 	mux := http.NewServeMux()
 
