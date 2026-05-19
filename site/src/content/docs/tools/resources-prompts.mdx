@@ -11,6 +11,10 @@ MCP resources provide **read-only context data** that clients can request at any
 
 The server exposes **46 resources** across several categories:
 
+:::note
+MCP lists fixed resources and URI templates separately. In full mode, clients that only inspect `resources/list` see 9 fixed URIs: current user, groups, workspace roots, the meta-schema index, and 5 workflow guides. The remaining 37 entries are URI templates returned by `resources/templates/list` and are read by substituting project, group, issue, MR, or other IDs at runtime.
+:::
+
 ### Static resources (4)
 
 | Resource                   | Description                                                                                                    |

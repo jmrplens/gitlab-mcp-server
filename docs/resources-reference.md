@@ -6,7 +6,9 @@ This document lists all **46 MCP resources** exposed by gitlab-mcp-server when `
 > **Audience**: MCP client developers, AI assistant users
 > **Prerequisites**: Understanding of MCP resources concept
 
-All resources return `application/json` MIME type.
+GitLab data resources and schema resources return `application/json`. Workflow guide resources return `text/markdown`.
+
+MCP separates fixed resources from URI templates. In full mode, `resources/list` exposes 9 fixed URIs: the 4 static resources below plus the 5 workflow guides. `resources/templates/list` exposes the remaining 37 URI templates. Registries that only inspect `resources/list` may therefore report 9 resources statically even though the runtime MCP resource surface contains 46 entries in total.
 
 ---
 
@@ -132,4 +134,4 @@ All URI template parameters support intelligent autocomplete via the completions
 
 ## Source
 
-Resources are implemented in [`internal/resources/resources.go`](../internal/resources/resources.go) (18 core resources), [`internal/resources/workspace_roots.go`](../internal/resources/workspace_roots.go) (workspace roots resource), and [`internal/resources/workflow_guides.go`](../internal/resources/workflow_guides.go) (5 workflow guide resources).
+Resources are implemented in [`internal/resources/resources.go`](../internal/resources/resources.go) (GitLab data resources and templates), [`internal/resources/meta_schema.go`](../internal/resources/meta_schema.go) (meta-tool schema resources), [`internal/resources/workspace_roots.go`](../internal/resources/workspace_roots.go) (workspace roots resource), and [`internal/resources/workflow_guides.go`](../internal/resources/workflow_guides.go) (5 workflow guide resources).

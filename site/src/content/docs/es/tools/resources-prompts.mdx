@@ -11,6 +11,10 @@ Los recursos MCP proporcionan **datos de contexto de solo lectura** que los clie
 
 El servidor expone **46 recursos** en varias categorías:
 
+:::note
+MCP lista por separado los recursos fijos y las plantillas de URI. En modo full, los clientes que solo inspeccionan `resources/list` ven 9 URIs fijas: usuario actual, grupos, raíces del workspace, índice de meta-schema y 5 guías de flujo. Las 37 entradas restantes son plantillas de URI devueltas por `resources/templates/list` y se leen sustituyendo IDs de proyecto, grupo, issue, MR u otros valores en tiempo de ejecución.
+:::
+
 ### Recursos estáticos (4)
 
 | Recurso                    | Descripción                                                                                                               |
