@@ -26,7 +26,7 @@ const (
 func registerProjectReportPrompts(server *mcp.Server, client *gitlabclient.Client) {
 	registerBranchMRSummaryPrompt(server, client)
 	registerProjectActivityReportPrompt(server, client)
-	registerMRReviewStatusPrompt(server, client)
+	registerMRDiscussionHealthPrompt(server, client)
 	registerUnassignedItemsPrompt(server, client)
 	registerStaleItemsReportPrompt(server, client)
 }
@@ -192,18 +192,18 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 	return promptResult(b.String()), nil
 }
 
-// registerMRReviewStatusPrompt registers the mr_review_status prompt.
-func registerMRReviewStatusPrompt(server *mcp.Server, client *gitlabclient.Client) {
+// registerMRDiscussionHealthPrompt registers the mr_discussion_health prompt.
+func registerMRDiscussionHealthPrompt(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddPrompt(&mcp.Prompt{
-		Name:        "mr_review_status",
-		Title:       toolutil.TitleFromName("mr_review_status"),
-		Description: "Analyze the discussion health of open MRs in a project. Shows unresolved thread counts per MR to identify items needing attention.",
+		Name:        "mr_discussion_health",
+		Title:       toolutil.TitleFromName("mr_discussion_health"),
+		Description: "Analyze unresolved discussion threads across open MRs in a project. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleMRReviewStatus(ctx, client, req)
+		return handleMRDiscussionHealth(ctx, client, req)
 	})
 }
 
@@ -216,11 +216,11 @@ type mrDiscussionInfo struct {
 	unresolved int
 }
 
-// handleMRReviewStatus handles handle MR review status and returns [*mcp.GetPromptResult].
-func handleMRReviewStatus(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+// handleMRDiscussionHealth handles handle MR discussion health and returns [*mcp.GetPromptResult].
+func handleMRDiscussionHealth(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("mr_review_status: project_id is required")
+		return nil, errors.New("mr_discussion_health: project_id is required")
 	}
 
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
@@ -228,13 +228,13 @@ func handleMRReviewStatus(ctx context.Context, client *gitlabclient.Client, req 
 		ListOptions: gl.ListOptions{PerPage: 20},
 	}, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("mr_review_status: %w", err)
+		return nil, fmt.Errorf("mr_discussion_health: %w", err)
 	}
 
 	infos := collectMRDiscussionInfos(ctx, client, projectID, mrs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MR Review Status — %s (%d open MRs)\n\n", projectID, len(mrs))
+	fmt.Fprintf(&b, "# MR Discussion Health — %s (%d open MRs)\n\n", projectID, len(mrs))
 
 	if len(infos) == 0 {
 		b.WriteString("No open merge requests found.\n")

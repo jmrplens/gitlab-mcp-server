@@ -46,30 +46,8 @@ func isDefaultBranchProtected(branches []*gl.ProtectedBranch, defaultBranch stri
 
 // registerAuditPrompts registers all project audit prompts.
 func registerAuditPrompts(server *mcp.Server, client *gitlabclient.Client) {
-	registerAuditProjectSettingsPrompt(server, client)
-	registerAuditBranchProtectionPrompt(server, client)
-	registerAuditProjectAccessPrompt(server, client)
 	registerAuditProjectWorkflowPrompt(server, client)
 	registerAuditProjectFullPrompt(server, client)
-}
-
-// audit_project_settings.
-
-// registerAuditProjectSettingsPrompt registers the audit_project_settings prompt.
-func registerAuditProjectSettingsPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
-		Name:  "audit_project_settings",
-		Title: toolutil.TitleFromName("audit_project_settings"),
-		Description: "Audit a GitLab project's core settings. Reviews visibility, merge strategy, " +
-			"CI/CD configuration, default branch, wiki/issues/snippets toggles, and push rules. " +
-			"Use this to identify misconfigurations or deviations from best practices.",
-		Icons: toolutil.IconSecurity,
-		Arguments: []*mcp.PromptArgument{
-			projectIDArg(),
-		},
-	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleAuditProjectSettings(ctx, client, req)
-	})
 }
 
 // handleAuditProjectSettings handles handle audit project settings and returns [*mcp.GetPromptResult].
@@ -172,25 +150,6 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	return promptResult(b.String()), nil
 }
 
-// audit_branch_protection.
-
-// registerAuditBranchProtectionPrompt registers the audit_branch_protection prompt.
-func registerAuditBranchProtectionPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
-		Name:  "audit_branch_protection",
-		Title: toolutil.TitleFromName("audit_branch_protection"),
-		Description: "Audit branch protection rules for a GitLab project. Lists all protected branches " +
-			"with push/merge access levels and code owner approval settings. Identifies whether the " +
-			"default branch is protected and highlights potential security gaps.",
-		Icons: toolutil.IconSecurity,
-		Arguments: []*mcp.PromptArgument{
-			projectIDArg(),
-		},
-	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleAuditBranchProtection(ctx, client, req)
-	})
-}
-
 // handleAuditBranchProtection handles handle audit branch protection and returns [*mcp.GetPromptResult].
 func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
@@ -279,25 +238,6 @@ func formatBranchAccessLevel(al *gl.BranchAccessDescription) string {
 		return fmt.Sprintf("Group #%d (%s)", al.GroupID, name)
 	}
 	return name
-}
-
-// audit_project_access.
-
-// registerAuditProjectAccessPrompt registers the audit_project_access prompt.
-func registerAuditProjectAccessPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
-		Name:  "audit_project_access",
-		Title: toolutil.TitleFromName("audit_project_access"),
-		Description: "Audit user access and permissions for a GitLab project. Lists all members " +
-			"(direct and inherited) with their access levels, identifies users with elevated " +
-			"privileges (Maintainer/Owner), and flags inactive or blocked accounts.",
-		Icons: toolutil.IconSecurity,
-		Arguments: []*mcp.PromptArgument{
-			projectIDArg(),
-		},
-	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-		return handleAuditProjectAccess(ctx, client, req)
-	})
 }
 
 // memberGroups holds members classified by access level and state.

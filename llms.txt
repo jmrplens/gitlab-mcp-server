@@ -4,7 +4,7 @@
 
 gitlab-mcp-server v2.0.1 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
 It provides up to 1019 individual MCP tools across 98 GitLab API domains, 33 base meta-tools, 49 self-managed enterprise meta-tools, 50 GitLab.com Enterprise meta-tools,
-a default 2-tool dynamic find/execute surface, 46 resources, 38 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
+a default 2-tool dynamic find/execute surface, 46 resources, 37 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 Quick start:
 
@@ -127,22 +127,22 @@ Resources:
 
 Prompts:
 
-38 prompts:
+37 prompts:
 
-- audit_branch_protection: Audit branch protection rules for a GitLab project.
-- audit_project_access: Audit user access and permissions for a GitLab project.
+- audit_commit_hygiene: Audit commit message quality between two refs.
 - audit_project_full: Run a comprehensive audit of a GitLab project covering settings, branch protecti...
-- audit_project_settings: Audit a GitLab project's core settings.
 - audit_project_workflow: Audit workflow configuration for a GitLab project: labels (names, colors, descri...
 - branch_mr_summary: List all MRs targeting a specific branch in a project.
-- compare_branches: Compare two Git branches or refs showing commit differences and file changes bet...
+- compare_branches: Compare commit and file differences between two Git refs.
 - daily_standup: Generate a daily standup summary based on the user's GitLab activity in the last...
 - generate_release_notes: Generate comprehensive release notes from commits, merge requests, and file chan...
 - group_milestone_progress: Track milestone progress across all projects in a group.
+- group_mr_dashboard: List merge requests across a GitLab group with optional state and target branch ...
 - label_distribution: Analyze label usage distribution in a project.
 - merge_velocity: Analyze MR throughput metrics for a project.
 - milestone_progress: Track milestone progress for a project.
-- mr_review_status: Analyze the discussion health of open MRs in a project.
+- mr_description_quality: Score a merge request description for reviewer readiness.
+- mr_discussion_health: Analyze unresolved discussion threads across open MRs in a project.
 - mr_risk_assessment: Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request based on siz...
 - my_activity_summary: Generate a personal activity summary for a configurable time period.
 - my_issues: Show all issues assigned to you across all projects.
@@ -161,7 +161,6 @@ Prompts:
 - summarize_open_mrs: Summarize all open merge requests in a project including title, author, branches...
 - summarize_pipeline_status: Summarize the latest CI/CD pipeline status for a project.
 - team_member_workload: Generate a comprehensive workload summary for a specific team member over a conf...
-- team_mr_dashboard: List all merge requests for a GitLab group with optional state and target branch...
 - team_overview: Generate a team dashboard showing all group members with their open MR counts an...
 - unassigned_items: Find open MRs and issues in a project that have no assignee.
 - user_activity_report: Generate a detailed activity report for a specific user: contribution events, me...

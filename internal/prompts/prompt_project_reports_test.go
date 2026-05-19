@@ -167,7 +167,7 @@ func TestProjectActivityReport_MissingProjectID(t *testing.T) {
 	}
 }
 
-// mr_review_status.
+// mr_discussion_health.
 
 // TestMRReviewStatus_UnresolvedThreads verifies MRReviewStatus when unresolved threads.
 func TestMRReviewStatus_UnresolvedThreads(t *testing.T) {
@@ -211,7 +211,7 @@ func TestMRReviewStatus_UnresolvedThreads(t *testing.T) {
 
 	session := newMCPSession(t, mux)
 	result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-		Name:      "mr_review_status",
+		Name:      "mr_discussion_health",
 		Arguments: map[string]string{"project_id": "mygroup/myproject"},
 	})
 	if err != nil {
@@ -227,8 +227,8 @@ func TestMRReviewStatus_UnresolvedThreads(t *testing.T) {
 	}
 }
 
-// TestMRReviewStatus_NoOpenMRs verifies MRReviewStatus when no open MRs.
-func TestMRReviewStatus_NoOpenMRs(t *testing.T) {
+// TestMRDiscussionHealth_NoOpenMRs verifies MRDiscussionHealth when no open MRs.
+func TestMRDiscussionHealth_NoOpenMRs(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -236,7 +236,7 @@ func TestMRReviewStatus_NoOpenMRs(t *testing.T) {
 
 	session := newMCPSession(t, mux)
 	result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-		Name:      "mr_review_status",
+		Name:      "mr_discussion_health",
 		Arguments: map[string]string{"project_id": "mygroup/myproject"},
 	})
 	if err != nil {
@@ -249,11 +249,11 @@ func TestMRReviewStatus_NoOpenMRs(t *testing.T) {
 	}
 }
 
-// TestMRReviewStatus_MissingProjectID verifies MRReviewStatus when missing project ID.
-func TestMRReviewStatus_MissingProjectID(t *testing.T) {
+// TestMRDiscussionHealth_MissingProjectID verifies MRDiscussionHealth when missing project ID.
+func TestMRDiscussionHealth_MissingProjectID(t *testing.T) {
 	session := newMCPSession(t, http.NewServeMux())
 	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-		Name: "mr_review_status",
+		Name: "mr_discussion_health",
 	})
 	if err == nil {
 		t.Fatal("expected error for missing project_id")

@@ -150,7 +150,7 @@ To inspect meta-tool parameters, read the schema index first and then the action
 
 MCP prompts are **reusable templates** that guide AI assistants through common workflows. The server collects relevant data from GitLab and returns structured context that the LLM uses to produce high-quality outputs.
 
-The server provides **38 prompt templates** organized into categories:
+The server provides **37 prompt templates** organized into categories:
 
 ### Core prompts (12)
 
@@ -190,7 +190,7 @@ Group-level team management prompts.
 | ---------------------- | ------------------------------------------------------------ |
 | `user_activity_report` | Detailed activity report for a specific user (for managers)  |
 | `team_overview`        | Team dashboard with open MR counts and workload pie chart    |
-| `team_mr_dashboard`    | All MRs for a group with state and target branch filters     |
+| `group_mr_dashboard`   | All MRs for a group with state and target branch filters     |
 | `reviewer_workload`    | Review distribution analysis to identify workload imbalances |
 
 ### Project report prompts (5)
@@ -201,7 +201,7 @@ Project-level analysis and reporting.
 | ------------------------- | ---------------------------------------------------------------- |
 | `branch_mr_summary`       | All MRs targeting a branch with readiness summary                |
 | `project_activity_report` | Project activity report with events, merged MRs, and open issues |
-| `mr_review_status`        | Discussion health of open MRs (unresolved thread counts)         |
+| `mr_discussion_health`    | Discussion health of open MRs (unresolved thread counts)         |
 | `unassigned_items`        | Find open MRs and issues without assignees                       |
 | `stale_items_report`      | MRs and issues not updated for N days (default: 14)              |
 
@@ -227,17 +227,23 @@ Milestone tracking and label analysis.
 | `group_milestone_progress` | Milestone progress across all projects in a group                 |
 | `project_contributors`     | Rank contributors by commits, additions, and deletions            |
 
-### Audit prompts (5)
+### Git workflow prompts (2)
+
+Commit history and MR authoring quality.
+
+| Prompt                   | Description                                                           |
+| ------------------------ | --------------------------------------------------------------------- |
+| `audit_commit_hygiene`   | Commit message and history quality between two Git refs               |
+| `mr_description_quality` | MR description readiness: context, linked work, tests, and risk notes |
+
+### Audit prompts (2)
 
 Project configuration audit prompts.
 
-| Prompt                    | Description                                                          |
-| ------------------------- | -------------------------------------------------------------------- |
-| `audit_project_settings`  | Audit visibility, merge strategy, CI/CD, push rules, feature toggles |
-| `audit_branch_protection` | Audit protected branches, access levels, code owner approvals        |
-| `audit_project_access`    | Audit user access, blocked accounts, elevated privileges             |
-| `audit_project_workflow`  | Audit labels, milestones, issue/MR templates                         |
-| `audit_project_full`      | Comprehensive audit combining all categories with a scorecard        |
+| Prompt                   | Description                                                   |
+| ------------------------ | ------------------------------------------------------------- |
+| `audit_project_workflow` | Audit labels, milestones, issue/MR templates                  |
+| `audit_project_full`     | Comprehensive audit combining all categories with a scorecard |
 
 ### Using prompts
 

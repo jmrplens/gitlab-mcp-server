@@ -150,7 +150,7 @@ Para inspeccionar parámetros de meta-herramientas, lee primero el índice de sc
 
 Los prompts MCP son **plantillas reutilizables** que guían a los asistentes de IA a través de flujos de trabajo comunes. El servidor recopila datos relevantes de GitLab y devuelve contexto estructurado que el LLM usa para producir salidas de alta calidad.
 
-El servidor proporciona **38 plantillas de prompts** organizadas en categorías:
+El servidor proporciona **37 plantillas de prompts** organizadas en categorías:
 
 ### Prompts principales (12)
 
@@ -190,7 +190,7 @@ Prompts de gestión de equipos a nivel de grupo.
 | ---------------------- | ------------------------------------------------------------------------- |
 | `user_activity_report` | Informe detallado de actividad de un usuario específico (para managers)   |
 | `team_overview`        | Panel de equipo con conteos de MRs abiertas y gráfico de carga de trabajo |
-| `team_mr_dashboard`    | Todas las MRs de un grupo con filtros de estado y rama destino            |
+| `group_mr_dashboard`   | Todas las MRs de un grupo con filtros de estado y rama destino            |
 | `reviewer_workload`    | Análisis de distribución de revisiones para identificar desequilibrios    |
 
 ### Prompts de informes de proyecto (5)
@@ -201,7 +201,7 @@ Análisis e informes a nivel de proyecto.
 | ------------------------- | --------------------------------------------------------------------- |
 | `branch_mr_summary`       | Todas las MRs dirigidas a una rama con resumen de preparación         |
 | `project_activity_report` | Informe de actividad del proyecto con eventos, MRs mergeadas e issues |
-| `mr_review_status`        | Salud de discusiones de MRs abiertas (conteo de hilos sin resolver)   |
+| `mr_discussion_health`    | Salud de discusiones de MRs abiertas (conteo de hilos sin resolver)   |
 | `unassigned_items`        | Encontrar MRs e issues abiertas sin asignar                           |
 | `stale_items_report`      | MRs e issues sin actualizar durante N días (predeterminado: 14)       |
 
@@ -227,17 +227,23 @@ Seguimiento de milestones y análisis de etiquetas.
 | `group_milestone_progress` | Progreso de milestones en todos los proyectos de un grupo                     |
 | `project_contributors`     | Ranking de contribuidores por commits, adiciones y eliminaciones              |
 
-### Prompts de auditoría (5)
+### Prompts de flujo Git (2)
+
+Calidad del historial de commits y preparación de descripciones de MR.
+
+| Prompt                   | Descripción                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| `audit_commit_hygiene`   | Calidad de mensajes de commit e historial entre dos refs de Git                   |
+| `mr_description_quality` | Preparación de la descripción de MR: contexto, trabajo vinculado, tests y riesgos |
+
+### Prompts de auditoría (2)
 
 Prompts de auditoría de configuración de proyectos.
 
-| Prompt                    | Descripción                                                              |
-| ------------------------- | ------------------------------------------------------------------------ |
-| `audit_project_settings`  | Auditar visibilidad, estrategia de merge, CI/CD, push rules, toggles     |
-| `audit_branch_protection` | Auditar ramas protegidas, niveles de acceso, aprobaciones de code owners |
-| `audit_project_access`    | Auditar acceso de usuarios, cuentas bloqueadas, privilegios elevados     |
-| `audit_project_workflow`  | Auditar etiquetas, milestones, plantillas de issues/MRs                  |
-| `audit_project_full`      | Auditoría completa combinando todas las categorías con un scorecard      |
+| Prompt                   | Descripción                                                         |
+| ------------------------ | ------------------------------------------------------------------- |
+| `audit_project_workflow` | Auditar etiquetas, milestones, plantillas de issues/MRs             |
+| `audit_project_full`     | Auditoría completa combinando todas las categorías con un scorecard |
 
 ### Uso de prompts
 

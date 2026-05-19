@@ -49,6 +49,10 @@ func assertContainsAll(t *testing.T, text string, checks []string) {
 	}
 }
 
+func testPromptRequest(args map[string]string) *mcp.GetPromptRequest {
+	return &mcp.GetPromptRequest{Params: &mcp.GetPromptParams{Arguments: args}}
+}
+
 // TestAuditProject_Settings verifies AuditProject when settings.
 func TestAuditProject_Settings(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
@@ -88,11 +92,8 @@ func TestAuditProject_Settings(t *testing.T) {
 			}`)
 		})
 
-		session := newMCPSession(t, mux)
-		result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-			Name:      "audit_project_settings",
-			Arguments: map[string]string{"project_id": "42"},
-		})
+		client := newTestClient(t, mux)
+		result, err := handleAuditProjectSettings(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
 		if err != nil {
 			t.Fatalf(errMsgUnexpected, err)
 		}
@@ -119,11 +120,8 @@ func TestAuditProject_Settings(t *testing.T) {
 	})
 
 	t.Run("MissingProjectID", func(t *testing.T) {
-		session := newMCPSession(t, http.NewServeMux())
-		_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-			Name:      "audit_project_settings",
-			Arguments: map[string]string{},
-		})
+		client := newTestClient(t, http.NewServeMux())
+		_, err := handleAuditProjectSettings(t.Context(), client, testPromptRequest(map[string]string{}))
 		if err == nil {
 			t.Fatal(errMsgMissingID)
 		}
@@ -134,11 +132,8 @@ func TestAuditProject_Settings(t *testing.T) {
 		mux.HandleFunc(routeProject, func(w http.ResponseWriter, r *http.Request) {
 			respondJSON(w, http.StatusNotFound, `{"message": "404 Not Found"}`)
 		})
-		session := newMCPSession(t, mux)
-		_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-			Name:      "audit_project_settings",
-			Arguments: map[string]string{"project_id": "999"},
-		})
+		client := newTestClient(t, mux)
+		_, err := handleAuditProjectSettings(t.Context(), client, testPromptRequest(map[string]string{"project_id": "999"}))
 		if err == nil {
 			t.Fatal("expected error for non-existent project")
 		}
@@ -160,11 +155,8 @@ func TestAuditProject_Settings(t *testing.T) {
 			respondJSON(w, http.StatusForbidden, `{"message": "403 Forbidden"}`)
 		})
 
-		session := newMCPSession(t, mux)
-		result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-			Name:      "audit_project_settings",
-			Arguments: map[string]string{"project_id": "42"},
-		})
+		client := newTestClient(t, mux)
+		result, err := handleAuditProjectSettings(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
 		if err != nil {
 			t.Fatalf(errMsgUnexpected, err)
 		}
@@ -214,11 +206,8 @@ func TestAuditBranch_Protection(t *testing.T) {
 			respondJSON(w, http.StatusOK, string(data))
 		})
 
-		session := newMCPSession(t, mux)
-		result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-			Name:      "audit_branch_protection",
-			Arguments: map[string]string{"project_id": "42"},
-		})
+		client := newTestClient(t, mux)
+		result, err := handleAuditBranchProtection(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
 		if err != nil {
 			t.Fatalf(errMsgUnexpected, err)
 		}
@@ -258,11 +247,8 @@ func TestAuditBranch_Protection(t *testing.T) {
 			respondJSON(w, http.StatusOK, `[]`)
 		})
 
-		session := newMCPSession(t, mux)
-		result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-			Name:      "audit_branch_protection",
-			Arguments: map[string]string{"project_id": "42"},
-		})
+		client := newTestClient(t, mux)
+		result, err := handleAuditBranchProtection(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
 		if err != nil {
 			t.Fatalf(errMsgUnexpected, err)
 		}
@@ -277,11 +263,8 @@ func TestAuditBranch_Protection(t *testing.T) {
 	})
 
 	t.Run("MissingProjectID", func(t *testing.T) {
-		session := newMCPSession(t, http.NewServeMux())
-		_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-			Name:      "audit_branch_protection",
-			Arguments: map[string]string{},
-		})
+		client := newTestClient(t, http.NewServeMux())
+		_, err := handleAuditBranchProtection(t.Context(), client, testPromptRequest(map[string]string{}))
 		if err == nil {
 			t.Fatal(errMsgMissingID)
 		}
@@ -316,11 +299,8 @@ func TestAuditProject_Access(t *testing.T) {
 			respondJSON(w, http.StatusOK, string(data))
 		})
 
-		session := newMCPSession(t, mux)
-		result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-			Name:      "audit_project_access",
-			Arguments: map[string]string{"project_id": "42"},
-		})
+		client := newTestClient(t, mux)
+		result, err := handleAuditProjectAccess(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
 		if err != nil {
 			t.Fatalf(errMsgUnexpected, err)
 		}
@@ -349,11 +329,8 @@ func TestAuditProject_Access(t *testing.T) {
 	})
 
 	t.Run("MissingProjectID", func(t *testing.T) {
-		session := newMCPSession(t, http.NewServeMux())
-		_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-			Name:      "audit_project_access",
-			Arguments: map[string]string{},
-		})
+		client := newTestClient(t, http.NewServeMux())
+		_, err := handleAuditProjectAccess(t.Context(), client, testPromptRequest(map[string]string{}))
 		if err == nil {
 			t.Fatal(errMsgMissingID)
 		}
@@ -371,11 +348,8 @@ func TestAuditProject_Access(t *testing.T) {
 			respondJSON(w, http.StatusOK, `[]`)
 		})
 
-		session := newMCPSession(t, mux)
-		result, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{
-			Name:      "audit_project_access",
-			Arguments: map[string]string{"project_id": "42"},
-		})
+		client := newTestClient(t, mux)
+		result, err := handleAuditProjectAccess(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
 		if err != nil {
 			t.Fatalf(errMsgUnexpected, err)
 		}

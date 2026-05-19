@@ -77,7 +77,10 @@ func Register(server *mcp.Server, client *gitlabclient.Client) {
 	// Milestone, label, and contributor prompts
 	registerMilestoneLabelPrompts(server, client)
 
-	// Project audit prompts (settings, branch protection, access, workflow)
+	// Git workflow prompts (commit and MR authoring quality)
+	registerGitWorkflowPrompts(server, client)
+
+	// Project audit prompts (workflow and comprehensive governance)
 	registerAuditPrompts(server, client)
 }
 
@@ -126,7 +129,7 @@ func registerReviewMRPrompt(server *mcp.Server, client *gitlabclient.Client) {
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "review_mr",
 		Title:       toolutil.TitleFromName("review_mr"),
-		Description: "Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics and a review plan. Full diffs are included without truncation.",
+		Description: "Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. Full diffs are included without truncation.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -284,7 +287,7 @@ func registerSuggestMRReviewersPrompt(server *mcp.Server, client *gitlabclient.C
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "suggest_mr_reviewers",
 		Title:       toolutil.TitleFromName("suggest_mr_reviewers"),
-		Description: "Suggest suitable merge request reviewers based on the files changed and the list of active project members. Excludes the MR author from suggestions.",
+		Description: "Suggest suitable merge request reviewers based on the files changed and the list of active project members. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -511,7 +514,7 @@ func registerSummarizeOpenMRsPrompt(server *mcp.Server, client *gitlabclient.Cli
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "summarize_open_mrs",
 		Title:       toolutil.TitleFromName("summarize_open_mrs"),
-		Description: "Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) that need attention.",
+		Description: "Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.",
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
@@ -666,7 +669,7 @@ func registerCompareBranchesPrompt(server *mcp.Server, client *gitlabclient.Clie
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "compare_branches",
 		Title:       toolutil.TitleFromName("compare_branches"),
-		Description: "Compare two Git branches or refs showing commit differences and file changes between them. Useful for understanding divergence before merging or releasing.",
+		Description: "Compare commit and file differences between two Git refs. Use for release branch preparation, feature branch divergence analysis, or deciding whether a merge/backport needs deeper review.",
 		Icons:       toolutil.IconBranch,
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),

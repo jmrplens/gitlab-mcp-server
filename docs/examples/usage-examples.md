@@ -160,7 +160,7 @@ Prompt: daily_standup(project_id="42") → Your standup summary
 ```text
 Prompt: team_overview(group_id="7")        → Team member workloads
 Prompt: reviewer_workload(group_id="7")    → Review distribution analysis
-Prompt: team_mr_dashboard(group_id="7")    → All group MRs with filters
+Prompt: group_mr_dashboard(group_id="7")   → All group MRs with filters
 Prompt: user_activity_report(group_id="7", username="johndoe") → Individual report
 ```
 

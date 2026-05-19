@@ -57,7 +57,7 @@ Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_P
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
 - **46 MCP resources** — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, commits, file blobs, wiki pages, MR notes, MR discussions, meta-tool JSON Schemas, single-entity templates (issue, MR, branch, tag, release, label, milestone, commit, wiki page, deployment, environment, job, board, snippet, deploy key, feature flag, group label, group milestone), workspace roots, and 5 workflow best-practice guides
-- **38 MCP prompts** — AI-optimized: code review, pipeline status, risk assessment, release notes, standup, workload, user stats, team management, cross-project dashboards, analytics, milestones, audit
+- **37 MCP prompts** — AI-optimized: code review, pipeline status, risk assessment, release notes, standup, workload, user stats, team management, cross-project dashboards, analytics, milestones, Git workflow quality, audit
 - **6 MCP capabilities** — logging, completions, roots, progress, sampling, elicitation
 - **50 tool icons** — base64-encoded SVG icons (`Sizes: ["any"]`) on all tools, resources, and prompts for visual identification in MCP clients
 - **Pagination** on all list endpoints with metadata (total items, pages, next/prev)
@@ -323,7 +323,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | [Meta-Tools](docs/meta-tools.md) | 33/49/50 domain meta-tools with action dispatching |
 | [Dynamic Toolset](docs/dynamic-tools.md) | 2-tool low-token mode with canonical action catalog, safety model, and examples |
 | [Resources](docs/resources-reference.md) | All 46 resources with URI templates |
-| [Prompts](docs/prompts-reference.md) | All 38 prompts with arguments and output format |
+| [Prompts](docs/prompts-reference.md) | All 37 prompts with arguments and output format |
 | [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |
 | [Testing](docs/testing/README.md) | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results |
 | [Security](docs/security.md) | Security model, token scopes, input validation |
