@@ -2364,8 +2364,11 @@ func TestRegisterCatalogFindExecuteTools_FindAcceptsNaturalLanguageAndReturnsSch
 	if !ok {
 		t.Fatalf("first result = %+v, want object", results[0])
 	}
-	if first["id"] != "project.delete" || first["schema_uri"] != "gitlab://tools/project.delete" {
-		t.Fatalf("first result = %+v, want project.delete with tool manifest schema URI", first)
+	if first["id"] != "project.delete" {
+		t.Fatalf("first id = %v, want project.delete", first["id"])
+	}
+	if first["schema_uri"] != "gitlab://tools/project.delete" {
+		t.Fatalf("first schema_uri = %v, want gitlab://tools/project.delete", first["schema_uri"])
 	}
 	if _, ok := first["input_schema"].(map[string]any); !ok {
 		t.Fatalf("first input_schema = %+v, want schema object", first["input_schema"])

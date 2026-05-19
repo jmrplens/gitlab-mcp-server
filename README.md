@@ -250,7 +250,7 @@ Three registration modes, controlled by `TOOL_SURFACE`:
 | **Meta-Tools**                | 33 base GitLab/interactive tools; `gitlab_server` is a separate maintenance helper | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
 | **Individual**                | 866 CE / 1017 self-managed enterprise / 1022 GitLab.com Enterprise                 | Every GitLab operation as a separate MCP tool.                                                                                                                    |
 
-For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Dynamic minimal keeps `gitlab://workspace/roots` plus dynamic schema resources; meta minimal keeps workspace roots plus meta-schema resources so opaque meta-tools can still read exact action schemas. The default remains `full`.
+For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Minimal keeps `gitlab://workspace/roots` plus the surface-aware `gitlab://tools` manifest so dynamic, meta, and individual deployments can still read accepted call shapes. The default remains `full`.
 
 Dynamic mode is now the default low-token find/execute surface; see [Dynamic Toolset](docs/dynamic-tools.md) for the field-aware ranking model, fuzzy fallback, response shapes, workflow diagrams, and migration guidance. Set `TOOL_SURFACE=meta` to use the consolidated domain meta-tool catalog.
 

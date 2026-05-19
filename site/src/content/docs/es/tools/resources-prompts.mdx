@@ -34,7 +34,7 @@ Usa el manifiesto de herramientas cuando un cliente necesite la forma exacta de 
 
 1. Lee `gitlab://tools` para obtener la superficie activa, herramientas visibles y entradas ejecutables.
 2. Sustituye `{id}` en `gitlab://tools/{id}` para leer el JSON Schema y la forma de llamada de esa entrada.
-3. Llama a la meta-herramienta con el sobre normal `{ "action": "...", "params": { ... } }`.
+3. Llama a la meta-herramienta con la estructura normal `{ "action": "...", "params": { ... } }`.
 
 Por ejemplo, `gitlab://tools/gitlab_merge_request.create` devuelve el schema de parámetros y la forma de llamada para la acción `create` de `gitlab_merge_request`. Estos recursos de manifiesto están disponibles con `CAPABILITY_SURFACE=full` o `minimal`, sin importar el modo de `META_PARAM_SCHEMA`. Los clientes dinámicos también pueden usar `gitlab_find_action` para descubrimiento ordenado y schemas inline.
 

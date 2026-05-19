@@ -126,3 +126,20 @@ func TestDynamicSchemaTemplate_NotFound(t *testing.T) {
 		})
 	}
 }
+
+func TestDynamicRequiredParams_IncludesAnyOfAndOneOf(t *testing.T) {
+	schema := map[string]any{
+		"anyOf": []any{
+			map[string]any{"required": []any{"project_id"}},
+		},
+		"oneOf": []any{
+			map[string]any{"required": []any{"branch"}},
+		},
+	}
+
+	got := dynamicRequiredParams(schema)
+	want := []string{"branch", "project_id"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("dynamicRequiredParams() = %v, want %v", got, want)
+	}
+}

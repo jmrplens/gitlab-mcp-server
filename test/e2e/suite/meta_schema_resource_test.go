@@ -53,28 +53,44 @@ func toolManifestResourceSession(t *testing.T, client *gitlabclient.Client, ente
 	return session
 }
 
+// listToolsForManifest creates a temporary in-memory client/server session to
+// inspect the server tools available during resource registration.
 func listToolsForManifest(t *testing.T, server *mcp.Server) []*mcp.Tool {
 	t.Helper()
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
+	var closeClientSession func() error
+	var closeServerSession func() error
+	closed := false
+	cleanupSessions := func() {
+		if closed {
+			return
+		}
+		closed = true
+		if closeClientSession != nil {
+			_ = closeClientSession()
+		}
+		if closeServerSession != nil {
+			_ = closeServerSession()
+		}
+	}
+	t.Cleanup(cleanupSessions)
 	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
 		t.Fatalf("server connect for tool manifest: %v", err)
 	}
+	closeServerSession = serverSession.Close
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		_ = serverSession.Close()
 		t.Fatalf("client connect for tool manifest: %v", err)
 	}
+	closeClientSession = session.Close
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
-		_ = session.Close()
-		_ = serverSession.Close()
 		t.Fatalf("ListTools for tool manifest: %v", err)
 	}
-	_ = session.Close()
-	_ = serverSession.Close()
+	cleanupSessions()
 	return result.Tools
 }
 

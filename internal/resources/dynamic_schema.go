@@ -208,7 +208,6 @@ func appendDynamicAlternativeRequiredParams(names []string, schema map[string]an
 			}
 			names = appendDynamicRequiredParamNames(names, alternative["required"])
 		}
-		return names
 	}
 	return names
 }
