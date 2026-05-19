@@ -147,7 +147,9 @@ func TestCompactParameterGuidance_PrioritizesRequiredParamsAndShowsTruncation(t 
 	if !strings.Contains(got, "`project_id`: Use the project ID or URL-encoded path.") {
 		t.Fatalf("compactParameterGuidance() = %q, want common confusion included", got)
 	}
-	if strings.Index(got, "`branch`") > strings.Index(got, "`project_id`") {
+	branchIdx := strings.Index(got, "`branch`")
+	projectIDIdx := strings.Index(got, "`project_id`")
+	if branchIdx == -1 || projectIDIdx == -1 || branchIdx > projectIDIdx {
 		t.Fatalf("compactParameterGuidance() = %q, want required params before confused params", got)
 	}
 	if strings.Contains(got, "`zeta`") {
@@ -155,6 +157,29 @@ func TestCompactParameterGuidance_PrioritizesRequiredParamsAndShowsTruncation(t 
 	}
 	if !strings.Contains(got, "...and 1 more params.") {
 		t.Fatalf("compactParameterGuidance() = %q, want truncation indicator", got)
+	}
+}
+
+// TestCompactParameterGuidanceItem_FormatsAvailableHints verifies each parameter guidance hint source has a compact Markdown form.
+func TestCompactParameterGuidanceItem_FormatsAvailableHints(t *testing.T) {
+	tests := []struct {
+		name string
+		item toolutil.ParameterGuidance
+		want string
+	}{
+		{name: "example binding", item: toolutil.ParameterGuidance{ExampleBinding: "from `project_id`"}, want: "`param` example from `project_id`."},
+		{name: "value source", item: toolutil.ParameterGuidance{ValueSource: "provided by GitLab"}, want: "`param`: provided by GitLab."},
+		{name: "semantic role", item: toolutil.ParameterGuidance{SemanticRole: "target branch"}, want: "`param`: target branch."},
+		{name: "common confusion", item: toolutil.ParameterGuidance{CommonConfusions: []string{"Use the URL-encoded path."}}, want: "`param`: Use the URL-encoded path."},
+		{name: "fallback", item: toolutil.ParameterGuidance{}, want: "`param` has action-specific guidance."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := compactParameterGuidanceItem("param", tt.item); got != tt.want {
+				t.Fatalf("compactParameterGuidanceItem() = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
