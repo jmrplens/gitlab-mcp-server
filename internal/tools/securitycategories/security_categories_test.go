@@ -1,4 +1,8 @@
 // security_categories_test.go contains unit tests for GitLab security category operations.
+//
+// The tests mock GitLab GraphQL mutations with [testutil.GraphQLHandler], then
+// call handlers directly to verify request payloads, validation, error wrapping,
+// output conversion, markdown rendering, and ActionSpec metadata.
 package securitycategories
 
 import (
@@ -29,10 +33,14 @@ const sampleCategory = `{
 	}]
 }`
 
+// categoryGraphQLMux returns a GraphQL test handler for security category
+// mutations keyed by operation name.
 func categoryGraphQLMux(handlers map[string]http.HandlerFunc) http.Handler {
 	return testutil.GraphQLHandler(handlers)
 }
 
+// graphQLInput parses the GraphQL input variables from r and fails the calling
+// test if the request does not contain the expected input object.
 func graphQLInput(t *testing.T, r *http.Request) map[string]any {
 	t.Helper()
 	vars, err := testutil.ParseGraphQLVariables(r)
@@ -46,6 +54,12 @@ func graphQLInput(t *testing.T, r *http.Request) map[string]any {
 	return input
 }
 
+// TestCreate_Success verifies that Create sends the expected GraphQL input and
+// converts the returned security category and attribute IDs.
+//
+// The mocked securityCategoryCreate mutation asserts namespace, name,
+// description, and multiple-selection fields before returning a category with a
+// nested attribute. The expected output preserves parsed IDs and template type.
 func TestCreate_Success(t *testing.T) {
 	description := "Business impact labels"
 	multipleSelection := true
@@ -89,6 +103,12 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
+// TestHandlers_ReturnContextErrors verifies that all security category handlers
+// propagate a cancelled context without masking it as a GitLab API error.
+//
+// The test cancels the context before invoking create, update, and delete paths.
+// Each subtest expects [context.Canceled], preserving caller cancellation
+// semantics across GraphQL mutations.
 func TestHandlers_ReturnContextErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -131,6 +151,12 @@ func TestHandlers_ReturnContextErrors(t *testing.T) {
 	}
 }
 
+// TestHandlers_WrapGitLabErrors verifies that GraphQL mutation errors embedded
+// in successful HTTP responses are surfaced to callers.
+//
+// Each subtest returns a domain-level errors array from the corresponding
+// security category mutation. The expected result is an error containing the
+// GitLab message instead of a successful zero-value output.
 func TestHandlers_WrapGitLabErrors(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -184,6 +210,12 @@ func TestHandlers_WrapGitLabErrors(t *testing.T) {
 	}
 }
 
+// TestHandlers_WrapTopLevelGraphQLErrors verifies that top-level GraphQL errors
+// are returned consistently across security category handlers.
+//
+// The mock responds with a GraphQL errors envelope for every mutation route. The
+// test expects each handler to preserve the top-level error text so callers can
+// distinguish transport success from GraphQL execution failure.
 func TestHandlers_WrapTopLevelGraphQLErrors(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -233,6 +265,11 @@ func TestHandlers_WrapTopLevelGraphQLErrors(t *testing.T) {
 	}
 }
 
+// TestHandlers_WrapTransportErrors verifies that non-2xx HTTP responses from the
+// GraphQL endpoint are wrapped with the transport status.
+//
+// Each subtest returns HTTP 403 for a different mutation. The expected error
+// includes the status code, protecting the shared transport error path.
 func TestHandlers_WrapTransportErrors(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -270,18 +307,24 @@ func TestHandlers_WrapTransportErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := categoryGraphQLMux(map[string]http.HandlerFunc{
 				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
-					http.Error(w, "boom", http.StatusInternalServerError)
+					http.Error(w, "boom", http.StatusForbidden)
 				},
 			})
 			client := testutil.NewTestClient(t, handler)
 			err := tt.call(client)
-			if err == nil || !strings.Contains(err.Error(), "500") {
-				t.Fatalf("handler error = %v, want HTTP 500", err)
+			if err == nil || !strings.Contains(err.Error(), "403") {
+				t.Fatalf("handler error = %v, want HTTP 403", err)
 			}
 		})
 	}
 }
 
+// TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload verifies that empty mutation
+// payloads are treated as missing GitLab resources.
+//
+// The table covers null category nodes and null payloads for create, update, and
+// delete. Each case expects a Not Found error instead of silently accepting a
+// partial GraphQL response.
 func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -354,6 +397,12 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 	}
 }
 
+// TestHandlers_ReturnErrorOnMalformedGraphQLIDs verifies that malformed GraphQL
+// global IDs in security category responses fail during output conversion.
+//
+// The mock replaces valid category or attribute GIDs with invalid strings and
+// expects parse-specific errors. This protects callers from receiving outputs
+// with ambiguous numeric IDs.
 func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -389,6 +438,12 @@ func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 	}
 }
 
+// TestUpdate_Success verifies that Update sends the selected fields to GraphQL
+// and converts the returned security category.
+//
+// The mock checks the category GID, namespace GID, name, and description before
+// returning a sample category. The expected output contains the parsed category
+// ID from the GraphQL node.
 func TestUpdate_Success(t *testing.T) {
 	name := "Application tier"
 	description := "Updated description"
@@ -421,6 +476,12 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestUpdate_RequiresChanges verifies that Update rejects requests with no
+// mutable fields before calling GitLab.
+//
+// The input contains valid IDs but no name, description, or multiple-selection
+// change. The expected validation error preserves the contract that update
+// actions must carry at least one mutation.
 func TestUpdate_RequiresChanges(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	_, err := Update(context.Background(), client, UpdateInput{CategoryID: 7, NamespaceID: 101})
@@ -429,6 +490,12 @@ func TestUpdate_RequiresChanges(t *testing.T) {
 	}
 }
 
+// TestCreate_ValidatesInputBeforeRequest verifies Create validation for the
+// namespace ID and required category name.
+//
+// Each table case uses a not-found handler as a guard and expects a local
+// validation error, proving invalid category creation requests do not reach
+// GraphQL.
 func TestCreate_ValidatesInputBeforeRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	tests := []struct {
@@ -450,6 +517,12 @@ func TestCreate_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
+// TestUpdate_ValidatesInputBeforeRequest verifies Update validation for IDs,
+// required changes, and non-blank names.
+//
+// The table covers invalid category and namespace IDs, missing changes, and a
+// blank name. Each case expects the field-specific validation message before any
+// network request is attempted.
 func TestUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	name := " "
@@ -474,6 +547,11 @@ func TestUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
+// TestDelete_Success verifies that Delete sends the category GID to the
+// securityCategoryDestroy mutation and reports a successful deletion.
+//
+// The mock asserts the encoded GraphQL ID and returns an empty errors array. The
+// test expects a success status and a message that names the deleted category.
 func TestDelete_Success(t *testing.T) {
 	handler := categoryGraphQLMux(map[string]http.HandlerFunc{
 		"securityCategoryDestroy": func(w http.ResponseWriter, r *http.Request) {
@@ -495,6 +573,11 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_ValidatesInputBeforeRequest verifies that Delete rejects an invalid
+// category ID before calling GitLab.
+//
+// A not-found handler guards against accidental transport use; the expected
+// result is the local validation error for category_id.
 func TestDelete_ValidatesInputBeforeRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	_, err := Delete(context.Background(), client, DeleteInput{CategoryID: 0})
@@ -503,6 +586,12 @@ func TestDelete_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_WithAttributes_RendersTable verifies security
+// category markdown escapes table cells and includes nested attributes.
+//
+// The rendered output contains pipe characters in category and attribute names.
+// The test expects escaped table cells plus multiple-selection, template type,
+// and attribute rows so pkgsite-visible examples remain stable.
 func TestFormatOutputMarkdown_WithAttributes_RendersTable(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:                7,
@@ -525,12 +614,24 @@ func TestFormatOutputMarkdown_WithAttributes_RendersTable(t *testing.T) {
 	}
 }
 
+// TestOutputHelpers_HandleNilValues_ReturnZeroValues verifies nil GraphQL nodes
+// convert to zero-value category outputs without panicking.
+//
+// The helper should return an empty category output and no attributes, keeping
+// defensive conversion behavior stable for partial GraphQL responses.
 func TestOutputHelpers_HandleNilValues_ReturnZeroValues(t *testing.T) {
 	if out, err := categoryNodeOutput(nil); err != nil || out.ID != 0 || len(out.SecurityAttributes) != 0 {
 		t.Fatalf("categoryNodeOutput(nil) = %#v", out)
 	}
 }
 
+// TestActionSpecs_Metadata_ExpectedResult verifies the canonical security
+// category ActionSpecs expose expected mutation metadata and schemas.
+//
+// The test checks destructive flags, individual tool names, create schema
+// constraints, boolean typing, and update anyOf requirements. This protects
+// dynamic, meta, and individual surfaces from drifting away from the security
+// category contract.
 func TestActionSpecs_Metadata_ExpectedResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	specs := ActionSpecs(client)

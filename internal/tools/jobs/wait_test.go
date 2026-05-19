@@ -15,6 +15,13 @@ import (
 
 const pathWaitJob = "/api/v4/projects/42/jobs/100"
 
+func useFastJobPollDuration(t *testing.T) {
+	t.Helper()
+	original := pollDuration
+	pollDuration = func(seconds int) time.Duration { return time.Duration(seconds) * time.Millisecond }
+	t.Cleanup(func() { pollDuration = original })
+}
+
 func jobWithStatus(status string) string {
 	return `{
 		"id":100,"name":"build","stage":"build","status":"` + status + `",
@@ -122,6 +129,8 @@ func TestJobWait_FailedJob_NoFailOnError(t *testing.T) {
 // TestJobWait_Timeout verifies that Wait returns TimedOut=true when the
 // job stays in a running state and the timeout expires.
 func TestJobWait_Timeout(t *testing.T) {
+	useFastJobPollDuration(t)
+
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathWaitJob {
 			testutil.RespondJSON(w, http.StatusOK, jobWithStatus("running"))
@@ -150,6 +159,8 @@ func TestJobWait_Timeout(t *testing.T) {
 // TestJobWait_PollingTransition verifies that Wait polls multiple times
 // before the job transitions from running to success.
 func TestJobWait_PollingTransition(t *testing.T) {
+	useFastJobPollDuration(t)
+
 	var callCount atomic.Int32
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathWaitJob {
@@ -325,7 +336,9 @@ func TestJobWait_ManualJob(t *testing.T) {
 // Uses a short-lived context that expires after the first poll but before
 // the ticker (5 s min), ensuring the select picks ctx.Done deterministically.
 func TestJobWait_ContextCanceledDuringPoll(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	useFastJobPollDuration(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Millisecond)
 	defer cancel()
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

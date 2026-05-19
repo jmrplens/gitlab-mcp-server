@@ -90,9 +90,10 @@ func NewTestClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{
-		GitLabURL:     srv.URL,
-		GitLabToken:   "test-token",
-		SkipTLSVerify: false,
+		GitLabURL:      srv.URL,
+		GitLabToken:    "test-token",
+		SkipTLSVerify:  false,
+		DisableRetries: true,
 	}
 
 	client, err := gitlabclient.NewClient(cfg)

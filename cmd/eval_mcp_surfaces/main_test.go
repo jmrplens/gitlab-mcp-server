@@ -844,8 +844,8 @@ func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 	}
 }
 
-// TestNormalizeEvalToolSurface_AcceptsDynamic verifies that supported surface
-// names accepted by configuration normalize to their canonical values.
+// TestNormalizeEvalToolSurface_AcceptsDynamicCandidates verifies that supported
+// surface names accepted by configuration normalize to their canonical values.
 func TestNormalizeEvalToolSurface_AcceptsDynamicCandidates(t *testing.T) {
 	tests := map[string]string{
 		"":        config.ToolSurfaceDynamic,
@@ -4988,6 +4988,12 @@ func TestConfigureTerminalOutput_WritesLogWithoutEcho(t *testing.T) {
 	requireContainsAll(t, "terminal log", string(data), []string{"eval_mcp_surfaces terminal output", "progress line 1"})
 }
 
+// TestShouldConfigureTerminalOutput_SkipsCheckDocsWithoutExplicitOutput verifies
+// report-checking modes avoid terminal log setup unless output is requested.
+//
+// The test covers check-docs, efficiency checks, and trace comparisons as quiet
+// modes, then asserts that an explicit log path or print flag re-enables terminal
+// output. This keeps validation commands from creating unnecessary artifacts.
 func TestShouldConfigureTerminalOutput_SkipsCheckDocsWithoutExplicitOutput(t *testing.T) {
 	for _, opts := range []options{
 		{CheckDocs: true},
@@ -5136,6 +5142,12 @@ func TestWriteRepairDiagnostics_RecordsRecoveredCategory(t *testing.T) {
 	})
 }
 
+// TestWriteRepairDiagnostics_IgnoresFailedFinalOutcome verifies repair
+// diagnostics omit attempts whose final evaluation result still failed.
+//
+// The task is marked as repaired on the retry but unsuccessful overall. The
+// expected output is empty so reports do not count unrecovered failures as
+// successful repaired categories.
 func TestWriteRepairDiagnostics_IgnoresFailedFinalOutcome(t *testing.T) {
 	var b strings.Builder
 	writeRepairDiagnostics(&b, options{ToolSurface: config.ToolSurfaceMeta}, []taskResult{{

@@ -13,8 +13,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,6 +21,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
@@ -45,29 +44,19 @@ const (
 // main builds the audit client, gathers runtime counts from the registered MCP
 // surface, and prints the metrics report to stdout.
 func main() {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{
-		GitLabURL:   srv.URL,
-		GitLabToken: "audit-token",
-	}
-	client, err := gitlabclient.NewClient(cfg)
+	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
+		os.Exit(1)
 	}
+	defer cleanup()
 	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, audit-only dummy token
 		GitLabURL:   config.DefaultGitLabURL,
 		GitLabToken: "audit-token",
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create gitlab.com client: %v\n", err)
-		os.Exit(1)
+		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit.
 	}
 
 	individualTools := listServerTools(client, false, false)

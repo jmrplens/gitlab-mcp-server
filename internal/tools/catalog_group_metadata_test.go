@@ -6,6 +6,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// TestLoadCatalogMetaToolDescriptions_SkipsIncompleteSnapshots verifies meta
+// tool description loading ignores snapshot rows without names or descriptions.
+//
+// The test temporarily replaces the embedded snapshot JSON and expects only the
+// complete gitlab_project entry to be returned, preserving robust catalog startup
+// when generated snapshot rows are incomplete.
 func TestLoadCatalogMetaToolDescriptions_SkipsIncompleteSnapshots(t *testing.T) {
 	original := metaToolSnapshotJSON
 	t.Cleanup(func() { metaToolSnapshotJSON = original })
@@ -25,6 +31,12 @@ func TestLoadCatalogMetaToolDescriptions_SkipsIncompleteSnapshots(t *testing.T) 
 	}
 }
 
+// TestLoadCatalogIndividualToolDescriptions_SkipsIncompleteSnapshots verifies
+// individual tool description loading ignores incomplete snapshot rows.
+//
+// The test replaces the embedded individual snapshot with one complete entry and
+// two incomplete entries. The loader should return only gitlab_get_project with
+// its stored description.
 func TestLoadCatalogIndividualToolDescriptions_SkipsIncompleteSnapshots(t *testing.T) {
 	original := individualToolSnapshotJSON
 	t.Cleanup(func() { individualToolSnapshotJSON = original })
@@ -44,6 +56,12 @@ func TestLoadCatalogIndividualToolDescriptions_SkipsIncompleteSnapshots(t *testi
 	}
 }
 
+// TestCatalogGroupDescription_StripsStoredMetaPrefix verifies generated meta
+// descriptions do not duplicate the runtime action-envelope preamble.
+//
+// The stored description includes the usage and schema prefix already added at
+// runtime. The expected result keeps only the base domain description so tool
+// help remains concise and avoids repeated instructions.
 func TestCatalogGroupDescription_StripsStoredMetaPrefix(t *testing.T) {
 	original := catalogMetaToolDescriptions
 	t.Cleanup(func() { catalogMetaToolDescriptions = original })
@@ -58,6 +76,12 @@ func TestCatalogGroupDescription_StripsStoredMetaPrefix(t *testing.T) {
 	}
 }
 
+// TestLoadCatalogToolDescriptions_PanicOnInvalidJSON verifies embedded catalog
+// description snapshots fail fast when their JSON is invalid.
+//
+// The meta and individual subtests temporarily corrupt their snapshot bytes and
+// expect the loader to panic, making generated-data corruption visible during
+// tests instead of silently omitting descriptions.
 func TestLoadCatalogToolDescriptions_PanicOnInvalidJSON(t *testing.T) {
 	t.Run("meta", func(t *testing.T) {
 		original := metaToolSnapshotJSON

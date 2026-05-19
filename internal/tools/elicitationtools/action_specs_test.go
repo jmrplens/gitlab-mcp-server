@@ -93,16 +93,32 @@ func contentText(res *mcp.CallToolResult) string {
 	return b.String()
 }
 
+// TestCancelledOutput_SurfaceToolTextOnly verifies cancelledOutput exposes a
+// text-only representation for catalog-backed surface tools.
+//
+// The method has no return value, so the test ensures it remains callable for
+// the formatter path that converts elicitation cancellations into text content.
 func TestCancelledOutput_SurfaceToolTextOnly(t *testing.T) {
 	cancelledOutput{}.SurfaceToolTextOnly()
 }
 
+// TestFormatResult_DefaultUnknown verifies FormatResult ignores unsupported
+// output types.
+//
+// Passing an anonymous struct should return nil, keeping the shared formatter
+// from producing misleading content for unknown elicitation results.
 func TestFormatResult_DefaultUnknown(t *testing.T) {
 	if result := FormatResult(struct{}{}); result != nil {
 		t.Fatalf("FormatResult() = %#v, want nil for unknown type", result)
 	}
 }
 
+// TestElicitationRoute_UnmarshalError verifies catalog-backed elicitation routes
+// return decode errors for malformed input parameters.
+//
+// The test calls the raw route handler with project_id as a string slice instead
+// of a scalar. The expected error proves route decoding happens before the
+// interactive flow begins.
 func TestElicitationRoute_UnmarshalError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	byTool := elicitationSpecsByTool(t, ActionSpecs(client))

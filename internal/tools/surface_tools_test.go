@@ -61,6 +61,11 @@ func TestRegisterServerMaintenanceSurfaceTools_SafeModeWrapsMutatingSpec(t *test
 	}
 }
 
+// TestRegisterSurfaceTools_InvalidSpecPanics verifies malformed surface tool
+// specs are rejected during registration.
+//
+// The test passes a spec with a name but no route or schema metadata and expects
+// a panic. Failing early prevents partial MCP surfaces from being exposed.
 func TestRegisterSurfaceTools_InvalidSpecPanics(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	assertPanics(t, func() {

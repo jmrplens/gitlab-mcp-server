@@ -449,6 +449,12 @@ func TestFormatHookMarkdown(t *testing.T) {
 	}
 }
 
+// TestFormatHookMarkdown_URLVariablesRedacted verifies system hook markdown
+// includes URL variable names while redacting their values.
+//
+// The formatter receives a hook with token metadata and one URL variable. The
+// expected output includes hook details plus REDACTED variable text, preserving
+// operational context without leaking webhook secrets.
 func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
 	result := FormatHookMarkdown(HookItem{
 		ID:           1,

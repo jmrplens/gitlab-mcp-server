@@ -2919,6 +2919,12 @@ func TestInputSchemaForType_SecretFieldsWriteOnly(t *testing.T) {
 	}
 }
 
+// TestInputSchemaForType_UnsupportedTypeReturnsNil verifies schema generation
+// returns nil for input types that jsonschema cannot represent.
+//
+// The unsupported struct contains a channel field. The expected nil schema keeps
+// callers from registering incomplete MCP input schemas for unsupported Go
+// shapes.
 func TestInputSchemaForType_UnsupportedTypeReturnsNil(t *testing.T) {
 	type unsupportedInput struct {
 		Ch chan int `json:"ch"`
@@ -2929,6 +2935,12 @@ func TestInputSchemaForType_UnsupportedTypeReturnsNil(t *testing.T) {
 	}
 }
 
+// TestInputSchemaForType_PointerInputCacheHit verifies pointer input schemas are
+// cached and still mark secret fields write-only.
+//
+// The same pointer type is requested twice and should return the same cached map
+// instance. The test also checks the token field metadata so cache hits do not
+// bypass secret-field decoration.
 func TestInputSchemaForType_PointerInputCacheHit(t *testing.T) {
 	type pointerSecretInput struct {
 		Token string `json:"token,omitempty"`
@@ -2949,6 +2961,11 @@ func TestInputSchemaForType_PointerInputCacheHit(t *testing.T) {
 	}
 }
 
+// TestMarkWriteOnlySecretFields_IgnoresMissingProperties verifies secret-field
+// marking leaves schemas without a properties map unchanged.
+//
+// The test passes a primitive schema and expects no writeOnly flag to be added,
+// preserving non-object schemas generated for unusual inputs.
 func TestMarkWriteOnlySecretFields_IgnoresMissingProperties(t *testing.T) {
 	schema := map[string]any{"type": "string"}
 	markWriteOnlySecretFields(schema, reflect.TypeFor[string]())
@@ -2958,6 +2975,12 @@ func TestMarkWriteOnlySecretFields_IgnoresMissingProperties(t *testing.T) {
 	}
 }
 
+// TestMarkWriteOnlySecretFields_IgnoresNonSchemaProperties verifies secret-field
+// marking skips properties that are not schema maps.
+//
+// The token property is intentionally a string value. The helper should not
+// mutate it, avoiding panics or type corruption when schema generation returns
+// unexpected property metadata.
 func TestMarkWriteOnlySecretFields_IgnoresNonSchemaProperties(t *testing.T) {
 	type secretInput struct {
 		Token string `json:"token,omitempty"`
@@ -2971,6 +2994,12 @@ func TestMarkWriteOnlySecretFields_IgnoresNonSchemaProperties(t *testing.T) {
 	}
 }
 
+// TestSecretJSONFieldNames_EdgeCases verifies secret JSON field discovery handles
+// pointers, embedded structs, ignored tags, and unexported fields.
+//
+// The test expects no fields for a non-struct pointer and only signing_token plus
+// token for the struct with an embedded pointer. Ignored and private fields must
+// not be reported as schema secrets.
 func TestSecretJSONFieldNames_EdgeCases(t *testing.T) {
 	type embeddedSecret struct {
 		SigningToken string `json:"signing_token,omitempty"`

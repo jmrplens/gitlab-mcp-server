@@ -15,6 +15,13 @@ import (
 
 const pathWaitPipeline = "/api/v4/projects/42/pipelines/10"
 
+func useFastPipelinePollDuration(t *testing.T) {
+	t.Helper()
+	original := pollDuration
+	pollDuration = func(seconds int) time.Duration { return time.Duration(seconds) * time.Millisecond }
+	t.Cleanup(func() { pollDuration = original })
+}
+
 func pipelineJSON(status string) string {
 	return `{
 		"id":10,"iid":10,"project_id":42,"status":"` + status + `","source":"push",
@@ -115,6 +122,8 @@ func TestWait_FailedPipeline_NoFailOnError(t *testing.T) {
 // TestWait_Timeout verifies that Wait returns TimedOut=true when the
 // pipeline stays in a running state and the timeout expires.
 func TestWait_Timeout(t *testing.T) {
+	useFastPipelinePollDuration(t)
+
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathWaitPipeline {
 			testutil.RespondJSON(w, http.StatusOK, pipelineJSON("running"))
@@ -143,6 +152,8 @@ func TestWait_Timeout(t *testing.T) {
 // TestWait_PollingTransition verifies that Wait polls multiple times
 // before the pipeline transitions from running to success.
 func TestWait_PollingTransition(t *testing.T) {
+	useFastPipelinePollDuration(t)
+
 	var callCount atomic.Int32
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathWaitPipeline {
@@ -318,7 +329,9 @@ func TestWait_ManualPipeline(t *testing.T) {
 // Uses a short-lived context that expires after the first poll but before
 // the ticker (5 s min), ensuring the select picks ctx.Done deterministically.
 func TestWait_ContextCanceledDuringPoll(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	useFastPipelinePollDuration(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Millisecond)
 	defer cancel()
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

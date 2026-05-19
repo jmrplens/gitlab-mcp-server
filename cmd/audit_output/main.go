@@ -11,15 +11,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -34,22 +32,12 @@ type finding struct {
 
 // main runs the MCP tool output audit and prints a report.
 func main() {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{
-		GitLabURL:   srv.URL,
-		GitLabToken: "audit-token",
-	}
-	client, err := gitlabclient.NewClient(cfg)
+	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit
+		os.Exit(1)
 	}
+	defer cleanup()
 
 	individual := listTools(client, false)
 	meta := listTools(client, true)

@@ -207,6 +207,12 @@ func TestJobTrace_Success(t *testing.T) {
 	}
 }
 
+// TestJobTrace_Truncated verifies Trace caps large job logs at maxTraceBytes and
+// marks the output as truncated.
+//
+// The mock returns a trace slightly larger than the configured limit. The test
+// expects the trace length to equal maxTraceBytes and Truncated to be true,
+// protecting clients from unbounded job-log responses.
 func TestJobTrace_Truncated(t *testing.T) {
 	traceContent := strings.Repeat("x", maxTraceBytes+10)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

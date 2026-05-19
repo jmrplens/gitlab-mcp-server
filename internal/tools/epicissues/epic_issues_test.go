@@ -353,6 +353,12 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestList_SkipsWidgetsWithoutChildren verifies List ignores Work Item widgets
+// that do not contain hierarchy children.
+//
+// The mocked GraphQL response includes one unrelated widget before the children
+// widget. The expected output is an empty issue list, proving the parser selects
+// the hierarchy payload without treating other widgets as errors.
 func TestList_SkipsWidgetsWithoutChildren(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondGraphQL(w, http.StatusOK, `{
@@ -499,6 +505,13 @@ func TestAssign_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestAssign_ChildResolutionAndMutationErrors verifies Assign reports failures
+// after the parent epic resolves but child resolution or mutation execution
+// fails.
+//
+// The table covers a missing child work item GID and an HTTP error from the
+// workItemUpdate mutation. Each case expects the operation-specific error text
+// so callers can distinguish resolution failures from mutation failures.
 func TestAssign_ChildResolutionAndMutationErrors(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -658,6 +671,12 @@ func TestRemove_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestRemove_EpicResolutionAndMutationErrors verifies Remove reports failures
+// from parent epic resolution and mutation execution.
+//
+// The first case returns a null namespace while resolving the epic GID; the
+// second resolves IDs but makes workItemUpdate return HTTP 403. Both paths should
+// surface actionable operation-specific errors.
 func TestRemove_EpicResolutionAndMutationErrors(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -878,6 +897,12 @@ func TestUpdateOrder_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestUpdateOrder_MutationAPIError verifies UpdateOrder wraps HTTP errors from
+// the reorder mutation endpoint.
+//
+// The parent work item resolves successfully, then workItemUpdate returns HTTP
+// 403. The expected error contains epicIssueUpdate so callers can identify the
+// failing reorder operation.
 func TestUpdateOrder_MutationAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{
 		"workItem(iid": func(w http.ResponseWriter, _ *http.Request) {

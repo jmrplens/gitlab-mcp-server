@@ -12,9 +12,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/waitpoll"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+var pollDuration = func(seconds int) time.Duration { return time.Duration(seconds) * time.Second }
 
 // WaitInput defines parameters for waiting on a pipeline to complete.
 type WaitInput struct {
@@ -48,59 +50,39 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 		return WaitOutput{}, toolutil.ErrRequiredInt64("pipelineWait", "pipeline_id")
 	}
 
-	interval := toolutil.ClampPollInterval(input.IntervalSeconds)
-	timeout := toolutil.ClampPollTimeout(input.TimeoutSeconds)
-	failOnError := true
-	if input.FailOnError != nil {
-		failOnError = *input.FailOnError
+	result, err := waitpoll.Poll(ctx, waitpoll.Options[DetailOutput]{
+		Request:         req,
+		IntervalSeconds: input.IntervalSeconds,
+		TimeoutSeconds:  input.TimeoutSeconds,
+		FailOnError:     input.FailOnError,
+		PollDuration:    pollDuration,
+		ProgressMessage: func(attempt int) string {
+			return fmt.Sprintf("Polling pipeline #%d (attempt %d, status check)…", input.PipelineID, attempt)
+		},
+		Poll: func(pollCtx context.Context) (DetailOutput, error) {
+			p, _, err := client.GL().Pipelines.GetPipeline(string(input.ProjectID), input.PipelineID, gl.WithContext(pollCtx))
+			if err != nil {
+				return DetailOutput{}, toolutil.WrapErrWithStatusHint("pipelineWait", err, http.StatusNotFound, "verify project_id and pipeline_id with gitlab_pipeline_list")
+			}
+			return DetailToOutput(p), nil
+		},
+		Status: func(detail DetailOutput) string { return detail.Status },
+		FailureError: func(detail DetailOutput) error {
+			return fmt.Errorf("pipelineWait: pipeline #%d finished with status %q", input.PipelineID, detail.Status)
+		},
+	})
+	if err != nil {
+		return waitOutputFromResult(result), err
 	}
+	return waitOutputFromResult(result), nil
+}
 
-	tracker := progress.FromRequest(req)
-	deadline := time.After(time.Duration(timeout) * time.Second)
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
-	defer ticker.Stop()
-
-	startTime := time.Now()
-	pollCount := 0
-
-	for {
-		pollCount++
-		tracker.Update(ctx, float64(pollCount), 0, fmt.Sprintf("Polling pipeline #%d (attempt %d, status check)…", input.PipelineID, pollCount))
-
-		p, _, err := client.GL().Pipelines.GetPipeline(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
-		if err != nil {
-			return WaitOutput{}, toolutil.WrapErrWithStatusHint("pipelineWait", err, http.StatusNotFound, "verify project_id and pipeline_id with gitlab_pipeline_list")
-		}
-
-		detail := DetailToOutput(p)
-		if toolutil.IsTerminalStatus(detail.Status) {
-			elapsed := time.Since(startTime).Round(time.Second)
-			out := WaitOutput{
-				Pipeline:    detail,
-				WaitedFor:   elapsed.String(),
-				PollCount:   pollCount,
-				FinalStatus: detail.Status,
-			}
-			if failOnError && (detail.Status == "failed" || detail.Status == "canceled") {
-				return out, fmt.Errorf("pipelineWait: pipeline #%d finished with status %q", input.PipelineID, detail.Status)
-			}
-			return out, nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return WaitOutput{}, ctx.Err()
-		case <-deadline:
-			elapsed := time.Since(startTime).Round(time.Second)
-			return WaitOutput{
-				Pipeline:    detail,
-				WaitedFor:   elapsed.String(),
-				PollCount:   pollCount,
-				FinalStatus: detail.Status,
-				TimedOut:    true,
-			}, nil
-		case <-ticker.C:
-			// Continue polling
-		}
+func waitOutputFromResult(result waitpoll.Result[DetailOutput]) WaitOutput {
+	return WaitOutput{
+		Pipeline:    result.Item,
+		WaitedFor:   result.WaitedFor,
+		PollCount:   result.PollCount,
+		FinalStatus: result.FinalStatus,
+		TimedOut:    result.TimedOut,
 	}
 }

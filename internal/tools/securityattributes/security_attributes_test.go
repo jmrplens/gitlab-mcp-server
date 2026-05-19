@@ -1,4 +1,8 @@
 // security_attributes_test.go contains unit tests for GitLab security attribute operations.
+//
+// The tests mock GitLab GraphQL mutations with [testutil.GraphQLHandler], then
+// call handlers directly to verify request payloads, validation, error wrapping,
+// output conversion, markdown rendering, and ActionSpec metadata.
 package securityattributes
 
 import (
@@ -31,10 +35,14 @@ const sampleAttribute = `{
 	}
 }`
 
+// attributeGraphQLMux returns a GraphQL test handler for security attribute
+// mutations keyed by operation name.
 func attributeGraphQLMux(handlers map[string]http.HandlerFunc) http.Handler {
 	return testutil.GraphQLHandler(handlers)
 }
 
+// attributeGraphQLInput parses the GraphQL input variables from r and fails the
+// calling test if the request does not contain the expected input object.
 func attributeGraphQLInput(t *testing.T, r *http.Request) map[string]any {
 	t.Helper()
 	vars, err := testutil.ParseGraphQLVariables(r)
@@ -48,6 +56,13 @@ func attributeGraphQLInput(t *testing.T, r *http.Request) map[string]any {
 	return input
 }
 
+// TestCreate_Success verifies that Create sends the expected GraphQL input and
+// converts the returned security attribute and category IDs.
+//
+// The mocked securityAttributeCreate mutation asserts that namespace, category,
+// and attribute fields are normalized before request dispatch, then returns a
+// populated attribute node. The test expects the output to preserve the parsed
+// attribute ID, category ID, and template type.
 func TestCreate_Success(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"securityAttributeCreate": func(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +105,11 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
+// TestCreate_RequiresAttributes verifies that Create rejects an empty attribute
+// list before it reaches the GraphQL transport.
+//
+// The test uses a not-found handler as a guard: a successful validation failure
+// returns an "attributes is required" error without issuing any HTTP request.
 func TestCreate_RequiresAttributes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, CategoryID: 7})
@@ -98,6 +118,12 @@ func TestCreate_RequiresAttributes(t *testing.T) {
 	}
 }
 
+// TestCreate_ValidatesInputBeforeRequest verifies Create validation for IDs and
+// required attribute fields.
+//
+// Each table case uses an invalid input shape and expects the specific
+// validation message for that field. The not-found handler ensures the test
+// fails if validation accidentally allows a network call.
 func TestCreate_ValidatesInputBeforeRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	tests := []struct {
@@ -147,6 +173,12 @@ func TestCreate_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
+// TestHandlers_ReturnContextErrors verifies that all security attribute handlers
+// propagate a cancelled context without masking it as a GitLab API error.
+//
+// The test cancels the context before invoking create, update, delete, project
+// update, and bulk update paths. Each subtest expects [context.Canceled], which
+// preserves caller cancellation semantics.
 func TestHandlers_ReturnContextErrors(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -203,6 +235,12 @@ func TestHandlers_ReturnContextErrors(t *testing.T) {
 	}
 }
 
+// TestHandlers_WrapGitLabErrors verifies that GraphQL mutation errors embedded
+// in successful HTTP responses are surfaced to callers.
+//
+// Each subtest returns a domain-level errors array from the corresponding
+// security attribute mutation. The expected result is an error containing the
+// GitLab message instead of a successful zero-value output.
 func TestHandlers_WrapGitLabErrors(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -274,6 +312,12 @@ func TestHandlers_WrapGitLabErrors(t *testing.T) {
 	}
 }
 
+// TestHandlers_WrapTopLevelGraphQLErrors verifies that top-level GraphQL errors
+// are returned consistently across security attribute handlers.
+//
+// The mock responds with a GraphQL errors envelope for every mutation route. The
+// test expects each handler to preserve the top-level error text so callers can
+// distinguish transport success from GraphQL execution failure.
 func TestHandlers_WrapTopLevelGraphQLErrors(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -343,6 +387,12 @@ func TestHandlers_WrapTopLevelGraphQLErrors(t *testing.T) {
 	}
 }
 
+// TestHandlers_WrapTransportErrors verifies that non-2xx HTTP responses from the
+// GraphQL endpoint are wrapped with the transport status.
+//
+// Each subtest returns HTTP 403 for a different mutation. The expected error
+// includes the status code, protecting the shared error path used by all
+// security attribute operations.
 func TestHandlers_WrapTransportErrors(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -396,18 +446,24 @@ func TestHandlers_WrapTransportErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
-					http.Error(w, "boom", http.StatusInternalServerError)
+					http.Error(w, "boom", http.StatusForbidden)
 				},
 			})
 			client := testutil.NewTestClient(t, handler)
 			err := tt.call(client)
-			if err == nil || !strings.Contains(err.Error(), "500") {
-				t.Fatalf("handler error = %v, want HTTP 500", err)
+			if err == nil || !strings.Contains(err.Error(), "403") {
+				t.Fatalf("handler error = %v, want HTTP 403", err)
 			}
 		})
 	}
 }
 
+// TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload verifies that empty mutation
+// payloads are treated as missing GitLab resources.
+//
+// The table covers null payloads and empty node results for create, update,
+// delete, project update, and bulk update. Each case expects a Not Found error
+// instead of silently accepting a partial GraphQL response.
 func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -498,6 +554,12 @@ func TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload(t *testing.T) {
 	}
 }
 
+// TestHandlers_ReturnErrorOnMalformedGraphQLIDs verifies that malformed GraphQL
+// global IDs in security attribute responses fail during output conversion.
+//
+// The mock replaces valid category or attribute GIDs with invalid strings and
+// expects parse-specific errors. This protects callers from receiving outputs
+// with ambiguous numeric IDs.
 func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -555,6 +617,12 @@ func TestHandlers_ReturnErrorOnMalformedGraphQLIDs(t *testing.T) {
 	}
 }
 
+// TestUpdate_Success verifies that Update sends the selected fields to GraphQL
+// and converts the returned security attribute.
+//
+// The mock checks the attribute GID, name, description, and color values before
+// returning a sample attribute node. The expected output contains the parsed
+// attribute ID and a non-nil category summary.
 func TestUpdate_Success(t *testing.T) {
 	name := "Critical"
 	description := "Critical impact"
@@ -582,6 +650,12 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestUpdate_ValidatesInputBeforeRequest verifies Update validation for the
+// attribute ID, required change set, name, and color format.
+//
+// The table uses invalid inputs against a not-found handler and expects the
+// specific validation message for each failure, ensuring bad requests are
+// rejected locally before GraphQL execution.
 func TestUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	name := " "
@@ -607,6 +681,11 @@ func TestUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
+// TestDelete_Success verifies that Delete sends the attribute GID to the
+// securityAttributeDestroy mutation and reports a successful deletion.
+//
+// The mock asserts the encoded GraphQL ID and returns an empty errors array. The
+// test expects a success status and a message that names the deleted attribute.
 func TestDelete_Success(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"securityAttributeDestroy": func(w http.ResponseWriter, r *http.Request) {
@@ -628,6 +707,11 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
+// TestDelete_ValidatesInputBeforeRequest verifies that Delete rejects an invalid
+// attribute ID before calling GitLab.
+//
+// A not-found handler guards against accidental transport use; the expected
+// result is the local validation error for attribute_id.
 func TestDelete_ValidatesInputBeforeRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	_, err := Delete(context.Background(), client, DeleteInput{AttributeID: 0})
@@ -636,6 +720,12 @@ func TestDelete_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
+// TestProjectUpdate_Success verifies that ProjectUpdate encodes project and
+// attribute IDs as GraphQL global IDs.
+//
+// The mocked mutation checks the projectId, addAttributeIds, and
+// removeAttributeIds fields, then returns added and removed counts. The handler
+// output must preserve those counts for callers.
 func TestProjectUpdate_Success(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"securityAttributeProjectUpdate": func(w http.ResponseWriter, r *http.Request) {
@@ -663,6 +753,11 @@ func TestProjectUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestProjectUpdate_ValidatesInputBeforeRequest verifies ProjectUpdate rejects
+// invalid project IDs, empty operations, and invalid attribute IDs locally.
+//
+// Each table case expects a field-specific validation message and uses a
+// not-found handler to prove the request never reaches the GraphQL transport.
 func TestProjectUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	tests := []struct {
@@ -686,6 +781,12 @@ func TestProjectUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
+// TestBulkUpdate_Success verifies that BulkUpdate builds the combined item list
+// and requested mutation mode for groups and projects.
+//
+// The mock checks that group and project targets are encoded in order, attribute
+// IDs are encoded as security attribute GIDs, and REPLACE is forwarded as the
+// mutation mode. The output should report success with the same mode.
 func TestBulkUpdate_Success(t *testing.T) {
 	handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 		"bulkUpdateSecurityAttributes": func(w http.ResponseWriter, r *http.Request) {
@@ -720,6 +821,11 @@ func TestBulkUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestBulkUpdate_InvalidMode verifies that BulkUpdate rejects modes outside the
+// GitLab-supported ADD, REMOVE, and REPLACE values.
+//
+// The invalid UPSERT mode should fail validation before any request is sent,
+// keeping unsupported destructive operations away from GitLab.
 func TestBulkUpdate_InvalidMode(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	_, err := BulkUpdate(context.Background(), client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: "UPSERT"})
@@ -728,6 +834,12 @@ func TestBulkUpdate_InvalidMode(t *testing.T) {
 	}
 }
 
+// TestBulkUpdate_ValidatesInputBeforeRequest verifies BulkUpdate validation for
+// targets, attributes, and positive numeric IDs.
+//
+// Each table case uses a malformed target or attribute set and expects the
+// corresponding validation message. The not-found handler makes an unexpected
+// network call visible as a test failure.
 func TestBulkUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	tests := []struct {
@@ -752,6 +864,11 @@ func TestBulkUpdate_ValidatesInputBeforeRequest(t *testing.T) {
 	}
 }
 
+// TestBulkUpdateSecurityAttributes_ValidatesOptions verifies the lower-level
+// GraphQL bulk update helper requires attributes and mode.
+//
+// The helper receives partially populated client-go options and should return
+// local validation errors before building the mutation request.
 func TestBulkUpdateSecurityAttributes_ValidatesOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	mode := glBulkMode(BulkUpdateModeAdd)
@@ -775,6 +892,12 @@ func TestBulkUpdateSecurityAttributes_ValidatesOptions(t *testing.T) {
 	}
 }
 
+// TestMarkdown_EscapesTableCells_PreservesLinkHint verifies security attribute
+// markdown escapes table separators and preserves link guidance.
+//
+// The test renders values containing pipe characters through create and detail
+// formatters, then asserts escaped cells, editable-state output, and the
+// preserve-link hint used by catalog responses.
 func TestMarkdown_EscapesTableCells_PreservesLinkHint(t *testing.T) {
 	attribute := Output{
 		ID:               9,
@@ -800,6 +923,11 @@ func TestMarkdown_EscapesTableCells_PreservesLinkHint(t *testing.T) {
 	}
 }
 
+// TestFormatCreateMarkdown_Empty verifies that FormatCreateMarkdown reports an
+// empty creation response clearly.
+//
+// The test passes a zero-value CreateOutput and expects the fallback message
+// rather than an empty table, which keeps generated tool output understandable.
 func TestFormatCreateMarkdown_Empty(t *testing.T) {
 	md := FormatCreateMarkdown(CreateOutput{})
 	if !strings.Contains(md, "No security attributes returned.") {
@@ -807,6 +935,12 @@ func TestFormatCreateMarkdown_Empty(t *testing.T) {
 	}
 }
 
+// TestMarkdownFormatsProjectAndBulkUpdates verifies the project and bulk update
+// markdown formatters expose their operational counts and selections.
+//
+// The test checks added and removed project counts, bulk mode, attribute IDs,
+// group IDs, and project IDs so regressions in compact mutation summaries are
+// caught by unit tests.
 func TestMarkdownFormatsProjectAndBulkUpdates(t *testing.T) {
 	projectMarkdown := FormatProjectUpdateMarkdown(ProjectUpdateOutput{AddedCount: 2, RemovedCount: 1})
 	if !strings.Contains(projectMarkdown, "| Added | `2` |") || !strings.Contains(projectMarkdown, "| Removed | `1` |") {
@@ -826,6 +960,11 @@ func TestMarkdownFormatsProjectAndBulkUpdates(t *testing.T) {
 	}
 }
 
+// TestOutputHelpers_HandleNilValues_ReturnZeroValues verifies nil GraphQL nodes
+// convert to zero-value outputs without panicking.
+//
+// The test exercises attribute, category summary, and attribute slice helpers to
+// keep defensive conversion behavior stable for partial GraphQL responses.
 func TestOutputHelpers_HandleNilValues_ReturnZeroValues(t *testing.T) {
 	if out, err := attributeNodeOutput(nil); err != nil || out.ID != 0 || out.SecurityCategory != nil {
 		t.Fatalf("attributeNodeOutput(nil) = %#v", out)
@@ -842,6 +981,13 @@ func glBulkMode(mode BulkUpdateMode) gl.SecurityAttributeBulkUpdateMode {
 	return gl.SecurityAttributeBulkUpdateMode(mode)
 }
 
+// TestActionSpecs_Metadata_ExpectedResult verifies the canonical security
+// attribute ActionSpecs expose expected mutation metadata and schemas.
+//
+// The test checks destructive flags, individual tool names, related actions,
+// description text, schema minItems, color pattern, anyOf target requirements,
+// and mode enum values. This protects dynamic, meta, and individual surfaces
+// from drifting away from the security attribute contract.
 func TestActionSpecs_Metadata_ExpectedResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	specs := ActionSpecs(client)

@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+// TestFormatMarkdownTables_TableDriven verifies Markdown table normalization
+// across formatting, skip, line-ending, and malformed-input scenarios.
+//
+// The table covers ordinary pipe tables, fenced code blocks, escaped and code
+// pipes, missing trailing newlines, CRLF input, ragged rows, table termination,
+// idempotent formatted content, empty content, and invalid separators. Each
+// case asserts both rendered output and whether a change was reported.
 func TestFormatMarkdownTables_TableDriven(t *testing.T) {
 	formattedTable := RenderMarkdownTable(
 		[]string{"Name", "Count"},
@@ -211,6 +218,12 @@ func TestFormatMarkdownTables_TableDriven(t *testing.T) {
 	}
 }
 
+// TestMarkdownTableHelpers_EdgeCases verifies low-level table helper behavior
+// for invalid separators and line-ending preservation.
+//
+// The test rejects zero-column separators and checks that rendered trailing
+// newlines are kept or trimmed based on the source table metadata, preserving the
+// formatter's exact-file behavior.
 func TestMarkdownTableHelpers_EdgeCases(t *testing.T) {
 	if _, ok := parseMarkdownTableSeparator("| --- |", 0); ok {
 		t.Fatal("parseMarkdownTableSeparator accepted zero columns")

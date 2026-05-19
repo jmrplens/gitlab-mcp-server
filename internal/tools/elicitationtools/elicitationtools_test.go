@@ -1569,6 +1569,13 @@ func stepHandlerErrorOnConfirm(accepts []map[string]any, confirmErr error) func(
 	}
 }
 
+// TestInteractiveCreate_FinalConfirmUnexpectedError verifies interactive create
+// flows wrap transport failures from the final confirmation prompt.
+//
+// Each table case accepts all field prompts for one interactive tool, then makes
+// the final confirm elicitation return an unexpected error. The expected handler
+// error includes both the tool-specific confirmation context and the underlying
+// transport error text.
 func TestInteractiveCreate_FinalConfirmUnexpectedError(t *testing.T) {
 	confirmErr := errors.New("elicitation transport failed")
 	tests := []struct {

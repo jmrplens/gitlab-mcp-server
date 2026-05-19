@@ -8,6 +8,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -381,10 +382,11 @@ func TestDynamicSearchCorpus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddStandaloneCatalog() error = %v", err)
 	}
+	baseRegistry := NewRegistryFromCatalog(baseCatalog)
 
 	for _, tc := range cases {
 		t.Run(tc.Category, func(t *testing.T) {
-			registry := NewRegistryFromCatalog(baseCatalog)
+			registry := baseRegistry
 			if len(tc.CustomAliases) > 0 {
 				aliases := append([]actionAlias(nil), actionAliases()...)
 				for _, customAlias := range tc.CustomAliases {
@@ -2784,18 +2786,26 @@ func actionDescriptionByID(t *testing.T, output DescribeOutput, id string) Actio
 	return ActionDescription{}
 }
 
-// realCatalogRegistry supports real catalog registry assertions in dynamic tests.
-func realCatalogRegistry(t *testing.T) *Registry {
-	t.Helper()
+var cachedRealCatalogRegistry = sync.OnceValues(func() (*Registry, error) {
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
 	if err != nil {
-		t.Fatalf("BuildActionCatalog() error = %v", err)
+		return nil, fmt.Errorf("BuildActionCatalog() error = %w", err)
 	}
 	catalog, err = AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
 	if err != nil {
-		t.Fatalf("AddStandaloneCatalog() error = %v", err)
+		return nil, fmt.Errorf("AddStandaloneCatalog() error = %w", err)
 	}
-	return NewRegistryFromCatalog(catalog)
+	return NewRegistryFromCatalog(catalog), nil
+})
+
+// realCatalogRegistry supports real catalog registry assertions in dynamic tests.
+func realCatalogRegistry(t *testing.T) *Registry {
+	t.Helper()
+	registry, err := cachedRealCatalogRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return registry
 }
 
 // gitLabDotComEnterpriseRegistry supports GitLab dot com enterprise registry assertions in dynamic tests.

@@ -576,9 +576,10 @@ func TestServeHTTP_PortConflict(t *testing.T) {
 }
 
 // TestRun_GitLabConnectionFailure verifies that [run] returns an error when the
-// GitLab instance is unreachable (connectivity ping failure).
+// GitLab connectivity ping returns a failure status.
 func TestRun_GitLabConnectionFailure(t *testing.T) {
-	t.Setenv("GITLAB_URL", "http://127.0.0.1:1") // unreachable
+	srv := newFailingGitLabServer(t, http.StatusForbidden)
+	t.Setenv("GITLAB_URL", srv.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
 	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
 
@@ -596,6 +597,21 @@ func newMockGitLabServer(t *testing.T) *httptest.Server {
 		if r.URL.Path == "/api/v4/version" {
 			w.Header().Set(hdrContentType, mimeJSON)
 			_ = json.NewEncoder(w).Encode(map[string]string{"version": "16.0.0", "revision": "test"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func newFailingGitLabServer(t *testing.T, status int) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/version" {
+			w.Header().Set(hdrContentType, mimeJSON)
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte(`{"message":"error"}`))
 			return
 		}
 		http.NotFound(w, r)
@@ -700,9 +716,10 @@ func TestRunWithContext_InvalidConfig(t *testing.T) {
 }
 
 // TestRunWithContext_PingFailure verifies that [runWithContext] returns an error
-// when the GitLab connectivity ping fails due to an unreachable host.
+// when the GitLab connectivity ping returns a failure status.
 func TestRunWithContext_PingFailure(t *testing.T) {
-	t.Setenv("GITLAB_URL", "http://127.0.0.1:1") // unreachable
+	srv := newFailingGitLabServer(t, http.StatusForbidden)
+	t.Setenv("GITLAB_URL", srv.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
 	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
 
@@ -1173,6 +1190,13 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 	}
 }
 
+// TestShouldRegisterMetaSchemaResources verifies meta-schema resources are
+// registered only for catalog surfaces that can execute action routes.
+//
+// The table covers full and minimal capability surfaces across meta, dynamic,
+// and individual tool modes. Meta and dynamic modes should expose schema
+// resources when appropriate; individual mode should not because it already has
+// per-tool schemas.
 func TestShouldRegisterMetaSchemaResources(t *testing.T) {
 	testCases := []struct {
 		name              string

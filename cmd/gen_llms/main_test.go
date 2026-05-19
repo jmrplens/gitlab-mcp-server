@@ -36,6 +36,12 @@ func newGenLLMSClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
+// TestListDynamicTools_ExposesFindAndExecute verifies dynamic llms generation
+// exposes only the find and execute tools in deterministic order.
+//
+// The test builds a mock GitLab-backed client, lists dynamic tools, and checks
+// the execute input schema for action, params, and confirm fields. This protects
+// the low-token dynamic contract consumed by generated LLM discovery files.
 func TestListDynamicTools_ExposesFindAndExecute(t *testing.T) {
 	tools, err := listDynamicTools(newGenLLMSClient(t))
 	if err != nil {
@@ -71,6 +77,12 @@ func TestListDynamicTools_ExposesFindAndExecute(t *testing.T) {
 	}
 }
 
+// TestValidateDynamicToolContract_RejectsDrift verifies the generated dynamic
+// tool contract fails when the expected find/execute pair changes.
+//
+// The happy-path assertion accepts the canonical two-tool list, while the drift
+// assertion removes find and expects validation to fail. This keeps accidental
+// dynamic surface changes visible during llms generation.
 func TestValidateDynamicToolContract_RejectsDrift(t *testing.T) {
 	if err := validateDynamicToolContract([]*mcp.Tool{{Name: dynamicFindToolName}, {Name: dynamicExecuteToolName}}); err != nil {
 		t.Fatalf("validateDynamicToolContract() error = %v", err)
@@ -80,6 +92,12 @@ func TestValidateDynamicToolContract_RejectsDrift(t *testing.T) {
 	}
 }
 
+// TestReadVersion_UsesProjectRoot verifies readVersion reads VERSION from the
+// supplied project root and trims trailing whitespace.
+//
+// The test writes a temporary VERSION file and expects the exact semantic
+// version string. This prevents generation from depending on the process working
+// directory when a root is supplied.
 func TestReadVersion_UsesProjectRoot(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "VERSION"), []byte("2.1.0\n"), 0o600); err != nil {
@@ -109,6 +127,12 @@ func TestListResources_IncludesMetaSchemaTemplate(t *testing.T) {
 	t.Fatalf("listResources() templates missing meta-schema template: %v", templates)
 }
 
+// TestValidateLLMSTxt_AcceptsSpecFileListSections verifies llms.txt validation
+// accepts H2 sections made of Markdown file-list entries.
+//
+// The content includes prose before the generated sections and both linked docs
+// with and without descriptions. The expected result is no error, matching the
+// public llms.txt shape documented by the generator.
 func TestValidateLLMSTxt_AcceptsSpecFileListSections(t *testing.T) {
 	content := strings.Join([]string{
 		"# Example",
@@ -135,6 +159,11 @@ func TestValidateLLMSTxt_AcceptsSpecFileListSections(t *testing.T) {
 	}
 }
 
+// TestValidateLLMSTxt_RejectsNonLinkH2Content verifies llms.txt H2 sections must
+// contain file-list link entries rather than arbitrary prose.
+//
+// The test places plain text under a Docs section and expects validation to
+// fail, keeping generated discovery files machine-readable for model consumers.
 func TestValidateLLMSTxt_RejectsNonLinkH2Content(t *testing.T) {
 	content := strings.Join([]string{
 		"# Example",
@@ -152,6 +181,11 @@ func TestValidateLLMSTxt_RejectsNonLinkH2Content(t *testing.T) {
 	}
 }
 
+// TestValidateLLMSTxt_RejectsEmptyFileListLinkLabel verifies llms.txt validation
+// rejects Markdown links without visible labels.
+//
+// Empty labels produce poor LLM context and broken human navigation, so the test
+// expects a validation error for a file-list entry using [](...).
 func TestValidateLLMSTxt_RejectsEmptyFileListLinkLabel(t *testing.T) {
 	content := strings.Join([]string{
 		"# Example",
@@ -169,6 +203,12 @@ func TestValidateLLMSTxt_RejectsEmptyFileListLinkLabel(t *testing.T) {
 	}
 }
 
+// TestValidateLLMSFullTxt_RequiresGeneratedSections verifies llms-full.txt
+// validation requires all generated catalog sections.
+//
+// The first fixture includes Dynamic Toolset, Meta-Tools, Individual Tools,
+// Resources, and Prompts and should pass. The second fixture omits most sections
+// and should fail so partial generated files are caught before writing.
 func TestValidateLLMSFullTxt_RequiresGeneratedSections(t *testing.T) {
 	content := strings.Join([]string{
 		"# Example Full Reference",
@@ -193,6 +233,12 @@ func TestValidateLLMSFullTxt_RequiresGeneratedSections(t *testing.T) {
 	}
 }
 
+// TestWriteGeneratedFile_RejectsUnexpectedFileName verifies generated llms files
+// can only be written to the supported top-level artifact names.
+//
+// The test attempts README.md, a parent-directory escape, and a docs path in
+// check mode. Each should fail to prevent accidental writes outside the intended
+// llms.txt and llms-full.txt outputs.
 func TestWriteGeneratedFile_RejectsUnexpectedFileName(t *testing.T) {
 	for _, name := range []string{"README.md", "../llms.txt", "docs/llms.txt"} {
 		t.Run(name, func(t *testing.T) {
@@ -203,6 +249,12 @@ func TestWriteGeneratedFile_RejectsUnexpectedFileName(t *testing.T) {
 	}
 }
 
+// TestWriteGeneratedFile_CheckModeAcceptsCRLFLineEndings verifies check mode
+// treats CRLF and LF generated files as equivalent.
+//
+// The test writes llms.txt with Windows line endings, then checks the same
+// content with LF endings. A nil error prevents cross-platform line ending
+// differences from causing false generation drift.
 func TestWriteGeneratedFile_CheckModeAcceptsCRLFLineEndings(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n"), 0o600); err != nil {
@@ -219,6 +271,12 @@ func TestWriteGeneratedFile_CheckModeAcceptsCRLFLineEndings(t *testing.T) {
 	}
 }
 
+// TestSchemaTypeLabel_ArrayAndNullableTypes verifies schemaTypeLabel summarizes
+// nullable, array, nested-array, object, and untyped schemas.
+//
+// The table covers common JSON Schema shapes emitted for tool inputs. Expected
+// labels are human-readable phrases used in generated llms-full.txt parameter
+// references.
 func TestSchemaTypeLabel_ArrayAndNullableTypes(t *testing.T) {
 	tests := []struct {
 		name   string

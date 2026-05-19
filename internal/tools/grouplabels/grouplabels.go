@@ -71,6 +71,7 @@ type Output struct {
 	ClosedIssuesCount      int64  `json:"closed_issues_count"`
 	OpenMergeRequestsCount int64  `json:"open_merge_requests_count"`
 	Priority               int64  `json:"priority"`
+	PrioritySpecified      bool   `json:"-"`
 	IsProjectLabel         bool   `json:"is_project_label"`
 	Subscribed             bool   `json:"subscribed"`
 }
@@ -248,6 +249,7 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Subscri
 
 // toOutput converts a GitLab API [gl.GroupLabel] to MCP output format.
 func toOutput(l *gl.GroupLabel) Output {
+	priority, prioritySpecified := priorityFromNullable(l.Priority)
 	return Output{
 		ID:                     l.ID,
 		Name:                   l.Name,
@@ -257,16 +259,17 @@ func toOutput(l *gl.GroupLabel) Output {
 		OpenIssuesCount:        l.OpenIssuesCount,
 		ClosedIssuesCount:      l.ClosedIssuesCount,
 		OpenMergeRequestsCount: l.OpenMergeRequestsCount,
-		Priority:               priorityFromNullable(l.Priority),
+		Priority:               priority,
+		PrioritySpecified:      prioritySpecified,
 		IsProjectLabel:         l.IsProjectLabel,
 		Subscribed:             l.Subscribed,
 	}
 }
 
-// priorityFromNullable extracts the int64 value from a Nullable[int64], returning 0 if unset.
-func priorityFromNullable(n gl.Nullable[int64]) int64 {
+// priorityFromNullable extracts the int64 value and whether GitLab returned priority.
+func priorityFromNullable(n gl.Nullable[int64]) (int64, bool) {
 	if !n.IsSpecified() || n.IsNull() {
-		return 0
+		return 0, false
 	}
-	return n.MustGet()
+	return n.MustGet(), true
 }
