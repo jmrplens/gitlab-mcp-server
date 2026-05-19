@@ -984,7 +984,7 @@ func TestMergeRequestDiscussionsResource_Success(t *testing.T) {
 // from the discussions endpoint propagates as an error.
 func TestMergeRequestDiscussionsResource_APIError(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusForbidden)
 	}))
 
 	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/mr/7/discussions"})
@@ -2115,7 +2115,7 @@ func noAPICallHandler(t *testing.T) http.HandlerFunc {
 // TestReleaseResource_APIError verifies that the release resource returns an
 // error when the GitLab API responds with a failure status.
 func TestReleaseResource_APIError(t *testing.T) {
-	session := newMCPSession(t, errAPIHandler(http.StatusInternalServerError))
+	session := newMCPSession(t, errAPIHandler(http.StatusForbidden))
 	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/release/v1.0.0"})
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
@@ -2155,7 +2155,7 @@ func TestLabelResource_APIError(t *testing.T) {
 // TestMilestoneResource_APIError verifies that the milestone resource
 // returns an error when the GitLab API list call fails.
 func TestMilestoneResource_APIError(t *testing.T) {
-	session := newMCPSession(t, errAPIHandler(http.StatusInternalServerError))
+	session := newMCPSession(t, errAPIHandler(http.StatusForbidden))
 	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://project/42/milestone/3"})
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)
@@ -2275,7 +2275,7 @@ func TestBoardResource_APIError(t *testing.T) {
 // TestGroupMilestoneResource_APIError verifies that the group_milestone
 // resource returns an error when the GitLab API list call fails.
 func TestGroupMilestoneResource_APIError(t *testing.T) {
-	session := newMCPSession(t, errAPIHandler(http.StatusInternalServerError))
+	session := newMCPSession(t, errAPIHandler(http.StatusForbidden))
 	_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://group/10/milestone/3"})
 	if err == nil {
 		t.Fatal(msgExpectedAPIErr)

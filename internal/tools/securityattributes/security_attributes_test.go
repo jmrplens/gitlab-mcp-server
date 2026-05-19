@@ -396,13 +396,13 @@ func TestHandlers_WrapTransportErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
 				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
-					http.Error(w, "boom", http.StatusInternalServerError)
+					http.Error(w, "boom", http.StatusForbidden)
 				},
 			})
 			client := testutil.NewTestClient(t, handler)
 			err := tt.call(client)
-			if err == nil || !strings.Contains(err.Error(), "500") {
-				t.Fatalf("handler error = %v, want HTTP 500", err)
+			if err == nil || !strings.Contains(err.Error(), "403") {
+				t.Fatalf("handler error = %v, want HTTP 403", err)
 			}
 		})
 	}

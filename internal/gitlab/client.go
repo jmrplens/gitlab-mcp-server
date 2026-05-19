@@ -124,10 +124,17 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		},
 	}
 
-	inner, err := gl.NewClient(
-		cfg.GitLabToken,
+	options := []gl.ClientOptionFunc{
 		gl.WithBaseURL(cfg.GitLabURL),
 		gl.WithHTTPClient(sdkHTTPClient),
+	}
+	if cfg.DisableRetries {
+		options = append(options, gl.WithoutRetries())
+	}
+
+	inner, err := gl.NewClient(
+		cfg.GitLabToken,
+		options...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating gitlab client: %w", err)

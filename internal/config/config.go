@@ -112,6 +112,7 @@ type Config struct {
 	GitLabURL            string
 	GitLabToken          string
 	SkipTLSVerify        bool
+	DisableRetries       bool // Disable GitLab client retries for unit tests.
 	MetaTools            bool
 	ToolSurface          string
 	CapabilitySurface    string
