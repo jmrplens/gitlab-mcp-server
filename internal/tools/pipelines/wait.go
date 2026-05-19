@@ -16,6 +16,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+var pollDuration = func(seconds int) time.Duration { return time.Duration(seconds) * time.Second }
+
 // WaitInput defines parameters for waiting on a pipeline to complete.
 type WaitInput struct {
 	ProjectID       toolutil.StringOrInt `json:"project_id"                jsonschema:"Project ID or URL-encoded path,required"`
@@ -56,8 +58,8 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 	}
 
 	tracker := progress.FromRequest(req)
-	deadline := time.After(time.Duration(timeout) * time.Second)
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+	deadline := time.After(pollDuration(timeout))
+	ticker := time.NewTicker(pollDuration(interval))
 	defer ticker.Stop()
 
 	startTime := time.Now()
