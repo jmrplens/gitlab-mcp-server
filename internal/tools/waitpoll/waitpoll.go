@@ -86,6 +86,9 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 				TimedOut:    true,
 			}, nil
 		}
+		if err := ctx.Err(); err != nil {
+			return Result[T]{}, err
+		}
 
 		pollCount++
 		tracker.Update(ctx, float64(pollCount), 0, progressMessage(pollCount))
@@ -94,7 +97,7 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 		item, err := opts.Poll(pollCtx)
 		cancel()
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil && !time.Now().Before(deadlineAt) {
 				return Result[T]{
 					Item:        lastItem,
 					WaitedFor:   time.Since(startTime).Round(time.Second).String(),

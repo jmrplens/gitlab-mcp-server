@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,230 |
-| Unit test functions                                   |  9,979 |
+| Total test functions                                  | 10,232 |
+| Unit test functions                                   |  9,981 |
 | E2E test functions                                    |    251 |
 | cmd test functions                                    |    535 |
 | Test files (internal/)                                |    426 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,172 | 89.7% |
+| `TestFunc_Scenario` (2-part)           | 9,174 | 89.7% |
 | `TestFunc` (no underscore)             |   768 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   290 |  2.8% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,743 |         83 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (171) |          7,417 |        331 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (171) |          7,419 |        331 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            535 |         23 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,230** |    **558** |                                                                                                 |
+| **Total**               |     **10,232** |    **558** |                                                                                                 |
 
 ### Core Packages
 
@@ -281,10 +281,10 @@
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
 | users                   |       186 |          7 |   100.0% |        36 |
 | vulnerabilities         |        57 |          3 |   100.0% |         8 |
-| waitpoll                |        11 |          1 |   100.0% |         0 |
+| waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,417** |    **331** |          | **1,118** |
+| **Total**               | **7,419** |    **331** |          | **1,118** |
 
 </details>
 

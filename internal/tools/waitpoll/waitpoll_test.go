@@ -231,6 +231,31 @@ func TestPoll_PollReceivesTimeoutContext(t *testing.T) {
 	}
 }
 
+// TestPoll_CallbackDeadlineExceededBeforeTimeoutReturnsError verifies a poller
+// owned deadline error is not converted into the global wait timeout.
+func TestPoll_CallbackDeadlineExceededBeforeTimeoutReturnsError(t *testing.T) {
+	opts, _ := pollOptions("running")
+	opts.IntervalSeconds = 60
+	opts.TimeoutSeconds = 1
+	opts.PollDuration = func(seconds int) time.Duration {
+		if seconds == opts.TimeoutSeconds {
+			return 50 * time.Millisecond
+		}
+		return time.Hour
+	}
+	opts.Poll = func(context.Context) (pollItem, error) {
+		return pollItem{}, context.DeadlineExceeded
+	}
+
+	result, err := Poll(context.Background(), opts)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Poll() error = %v, want context.DeadlineExceeded", err)
+	}
+	if result != (Result[pollItem]{}) {
+		t.Fatalf("result = %#v, want zero result", result)
+	}
+}
+
 // TestPoll_ContextCanceled verifies context cancellation returns ctx.Err after
 // the first non-terminal poll.
 func TestPoll_ContextCanceled(t *testing.T) {
@@ -239,6 +264,26 @@ func TestPoll_ContextCanceled(t *testing.T) {
 	opts.Poll = func(context.Context) (pollItem, error) {
 		cancel()
 		return pollItem{Status: "running"}, nil
+	}
+
+	result, err := Poll(ctx, opts)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Poll() error = %v, want context.Canceled", err)
+	}
+	if result != (Result[pollItem]{}) {
+		t.Fatalf("result = %#v, want zero result", result)
+	}
+}
+
+// TestPoll_ContextCanceledBeforeFirstPoll verifies a pre-canceled context fails
+// before invoking the poll callback.
+func TestPoll_ContextCanceledBeforeFirstPoll(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	opts, _ := pollOptions("running")
+	opts.Poll = func(context.Context) (pollItem, error) {
+		t.Fatal("Poll callback should not run with a pre-canceled context")
+		return pollItem{}, nil
 	}
 
 	result, err := Poll(ctx, opts)
