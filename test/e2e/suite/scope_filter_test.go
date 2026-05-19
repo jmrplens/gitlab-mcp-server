@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/impersonationtokens"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/users"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/impersonationtokens"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

@@ -13,15 +13,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/awardemoji"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/labels"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrapprovals"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrcontextcommits"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mrnotes"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourceevents"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/awardemoji"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/labels"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/milestones"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrapprovals"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrcontextcommits"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourceevents"
 )
 
 // TestMeta_MRDeep exercises gitlab_merge_request meta-tool actions not covered

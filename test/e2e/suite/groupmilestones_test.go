@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupmilestones"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmilestones"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestMeta_GroupMilestones exercises group milestone CRUD via the gitlab_group meta-tool.

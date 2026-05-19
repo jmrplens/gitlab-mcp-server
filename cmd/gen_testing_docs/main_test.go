@@ -12,22 +12,22 @@ import (
 // coverage data.
 func TestParsePackageCoverages_ExtractsGoTestCoverage(t *testing.T) {
 	output := strings.Join([]string{
-		"ok  github.com/jmrplens/gitlab-mcp-server/internal/toolutil 0.018s coverage: 96.6% of statements",
-		"ok  github.com/jmrplens/gitlab-mcp-server/cmd/server (cached) coverage: 62.5% of statements",
-		"?   github.com/jmrplens/gitlab-mcp-server/cmd/add_docs [no test files]",
+		"ok  github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil 0.018s coverage: 96.6% of statements",
+		"ok  github.com/jmrplens/gitlab-mcp-server/v2/cmd/server (cached) coverage: 62.5% of statements",
+		"?   github.com/jmrplens/gitlab-mcp-server/v2/cmd/add_docs [no test files]",
 	}, "\n")
 
 	coverages, err := parsePackageCoverages(output)
 	if err != nil {
 		t.Fatalf("parsePackageCoverages() error = %v", err)
 	}
-	if got := coverages["github.com/jmrplens/gitlab-mcp-server/internal/toolutil"].Percent; got != 96.6 {
+	if got := coverages["github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"].Percent; got != 96.6 {
 		t.Fatalf("toolutil coverage = %.1f, want 96.6", got)
 	}
-	if got := coverages["github.com/jmrplens/gitlab-mcp-server/cmd/server"].Percent; got != 62.5 {
+	if got := coverages["github.com/jmrplens/gitlab-mcp-server/v2/cmd/server"].Percent; got != 62.5 {
 		t.Fatalf("cmd/server coverage = %.1f, want 62.5", got)
 	}
-	if _, ok := coverages["github.com/jmrplens/gitlab-mcp-server/cmd/add_docs"]; ok {
+	if _, ok := coverages["github.com/jmrplens/gitlab-mcp-server/v2/cmd/add_docs"]; ok {
 		t.Fatal("package without coverage should be ignored")
 	}
 }

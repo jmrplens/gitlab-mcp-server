@@ -9,7 +9,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/elicitation"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
 )
 
 // IsYOLOMode returns true when destructive action confirmation should be

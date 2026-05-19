@@ -12,16 +12,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/avatar"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/events"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/impersonationtokens"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/keys"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/namespaces"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/notifications"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/todos"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/useremails"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/usergpgkeys"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/avatar"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/events"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/impersonationtokens"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/keys"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/namespaces"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/notifications"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/todos"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/useremails"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/usergpgkeys"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
 )
 
 // TestMeta_UserSelf exercises gitlab_user meta-tool actions that operate on the current user:

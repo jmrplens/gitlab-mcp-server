@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/milestones"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/samplingtools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/milestones"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/samplingtools"
 )
 
 // TestSampling exercises all 11 sampling tools via the sampling-enabled session.

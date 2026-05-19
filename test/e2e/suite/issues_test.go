@@ -13,8 +13,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuenotes"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuenotes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 )
 
 // TestIndividual_Issues exercises the issue lifecycle using individual MCP tools.

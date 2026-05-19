@@ -1,7 +1,7 @@
 package dockerfiletemplates
 
 import (
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 var markdownRenderer = toolutil.NewTemplateRenderer("Dockerfile Templates", "No templates found.\n", "Use `gitlab_get_dockerfile_template` to view a specific template", "Dockerfile Template", "dockerfile", "Copy this template to your Dockerfile and customize it")

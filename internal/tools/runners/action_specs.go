@@ -3,11 +3,11 @@ package runners
 import (
 	"context"
 
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollers"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollerscopes"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/runnercontrollertokens"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runnercontrollers"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runnercontrollerscopes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runnercontrollertokens"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // ActionSpecs returns canonical specs for runner and runner controller actions.

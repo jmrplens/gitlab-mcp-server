@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issuelinks"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuelinks"
 )
 
 // TestIndividual_IssueLinks exercises issue link CRUD using individual tools:

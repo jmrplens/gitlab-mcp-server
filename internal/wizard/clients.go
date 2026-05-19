@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // ClientID identifies a supported MCP client.

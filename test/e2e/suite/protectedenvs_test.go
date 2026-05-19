@@ -9,7 +9,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/protectedenvs"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/protectedenvs"
 )
 
 // TestMeta_ProtectedEnvs exercises protected environment CRUD via the

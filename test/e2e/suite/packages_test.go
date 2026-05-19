@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/packages"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/packages"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // i64soi converts an int64 to a StringOrInt for use in package tool inputs.

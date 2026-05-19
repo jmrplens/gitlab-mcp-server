@@ -1,4 +1,4 @@
-module github.com/jmrplens/gitlab-mcp-server
+module github.com/jmrplens/gitlab-mcp-server/v2
 
 go 1.26.3
 

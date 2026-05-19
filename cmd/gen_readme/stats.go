@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
 )
 
 // Marker constants for the stats section of README.md.

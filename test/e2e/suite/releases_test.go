@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releaselinks"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/releases"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releaselinks"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releases"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
 )
 
 // TestIndividual_Releases exercises the release lifecycle using individual MCP tools.

@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/notifications"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/notifications"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )

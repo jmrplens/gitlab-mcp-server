@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/badges"
 )
 
 // TestIndividual_Badges exercises the project badge lifecycle using

@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicdiscussions"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicissues"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epicnotes"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/epics"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epicdiscussions"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epicissues"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epicnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epics"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 )
 
 // TestMeta_Epics exercises epic CRUD via the gitlab_group meta-tool.

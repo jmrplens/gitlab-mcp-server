@@ -10,10 +10,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/branchrules"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/cicatalog"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/deployments"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/featureflags"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branchrules"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/cicatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/featureflags"
 )
 
 // TestMeta_FeatureFlags exercises feature flag listing via the gitlab_feature_flags meta-tool.

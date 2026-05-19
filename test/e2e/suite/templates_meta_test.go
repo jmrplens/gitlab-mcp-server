@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/ciyamltemplates"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/dockerfiletemplates"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/gitignoretemplates"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/licensetemplates"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projecttemplates"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/ciyamltemplates"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dockerfiletemplates"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/gitignoretemplates"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/licensetemplates"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projecttemplates"
 )
 
 // TestMeta_TemplatesCIYml exercises CI YAML template list/get actions.

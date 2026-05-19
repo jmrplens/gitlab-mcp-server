@@ -8,7 +8,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/tags"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
 )
 
 // TestMeta_ProtectedTags exercises protected tag CRUD via the gitlab_tag meta-tool.

@@ -1,7 +1,7 @@
 package gitignoretemplates
 
 import (
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 var markdownRenderer = toolutil.NewTemplateRenderer("Gitignore Templates", "No templates found.\n", "Use `gitlab_get_gitignore_template` to view a specific template", "Gitignore Template", "gitignore", "Copy this template to your `.gitignore` file and customize it")

@@ -14,8 +14,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
-	"github.com/jmrplens/gitlab-mcp-server/internal/progress"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
 )
 
 // DefaultMaxFileSize re-exports the upload size limit from config as the single

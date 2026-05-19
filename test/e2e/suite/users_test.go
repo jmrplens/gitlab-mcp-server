@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/users"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
 )
 
 // TestIndividual_Users exercises user tools via individual MCP tools:

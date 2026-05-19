@@ -13,7 +13,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/roots"
 )
 
 // newWorkspaceRootsMCPSession creates an in-memory MCP session with only the

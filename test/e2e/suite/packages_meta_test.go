@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/containerregistry"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/protectedpackages"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/containerregistry"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/protectedpackages"
 )
 
 // TestMeta_PackagesRegistry exercises container registry actions via gitlab_package.

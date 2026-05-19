@@ -9,7 +9,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
 )
 
 // TestIndividual_MRApproval exercises the MR approval/merge lifecycle via individual tools.

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/repository"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repository"
 )
 
 // TestIndividual_Repository exercises repository tree and compare operations

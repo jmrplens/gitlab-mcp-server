@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/badges"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupboards"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/grouplabels"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupmembers"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groupmilestones"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/badges"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupboards"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouplabels"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmembers"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmilestones"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 )
 
 // TestMeta_GroupDeep exercises gitlab_group meta-tool actions not covered by

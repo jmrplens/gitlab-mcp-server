@@ -1,6 +1,6 @@
 package snippetdiscussions
 
-import "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+import "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 var markdownRenderer = toolutil.NewDiscussionRenderer("Snippet Discussions", "No snippet discussions found.\n", "Use `gitlab_get_snippet_discussion` to view full discussion details", "Use `gitlab_add_snippet_discussion_note` to reply to this discussion", "Use `gitlab_update_snippet_discussion_note` to edit this note")
 

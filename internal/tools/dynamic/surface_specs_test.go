@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/actioncatalog"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 )
 
 // TestControllerSurfaceSpecs_ClassifyDynamicControllers verifies ControllerSurfaceSpecs when classify dynamic controllers.

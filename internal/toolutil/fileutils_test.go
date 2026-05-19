@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/progress"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
 )
 
 // TestOpenAndValidateFile_RegularFile verifies that a regular file is accepted.

@@ -9,7 +9,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/vulnerabilities"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/vulnerabilities"
 )
 
 // TestIndividual_Vulnerabilities exercises vulnerability GraphQL tools

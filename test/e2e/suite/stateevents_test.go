@@ -9,8 +9,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/issues"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/resourceevents"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourceevents"
 )
 
 // TestMeta_StateEvents exercises issue/MR state event listing via meta-tools.

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/pipelineschedules"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelineschedules"
 )
 
 // TestMeta_PipelineSchedulesExtended exercises actions not covered by pipelineschedules_test.go:

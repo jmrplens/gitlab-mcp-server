@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const registerBoardJSON = `{"id":1,"name":"Board","labels":[{"name":"bug"},null],"lists":[{"id":1,"position":0,"label":{"id":10,"name":"To Do"}},{"id":2,"position":1,"label":null},null]}`

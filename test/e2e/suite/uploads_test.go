@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/uploads"
 )
 
 // TestIndividual_Uploads exercises the project upload tools via individual MCP tools:

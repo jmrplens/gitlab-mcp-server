@@ -24,12 +24,12 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/completions"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/internal/prompts"
-	"github.com/jmrplens/gitlab-mcp-server/internal/resources"
-	"github.com/jmrplens/gitlab-mcp-server/internal/roots"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/completions"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/roots"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
 // capabilitiesSession bundles a dedicated server-client pair built exactly

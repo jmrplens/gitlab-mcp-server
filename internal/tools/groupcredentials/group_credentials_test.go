@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const patJSON = `[{"id":1,"name":"my-token","revoked":false,"created_at":"2026-01-01T00:00:00Z","description":"desc","scopes":["api"],"user_id":10,"active":true,"expires_at":"2026-01-01"}]`

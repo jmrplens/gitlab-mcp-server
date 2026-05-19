@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/autoupdate"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/projects"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/uploads"
-	"github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/uploads"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // writeEnvFileFn is the function used to write the env file.

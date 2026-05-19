@@ -31,8 +31,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/docgen"
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
 const (

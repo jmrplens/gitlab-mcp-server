@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/internal/tools/clusteragents"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/clusteragents"
 )
 
 // TestIndividual_ClusterAgents exercises the cluster agent lifecycle using
