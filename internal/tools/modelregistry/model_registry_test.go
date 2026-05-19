@@ -259,6 +259,11 @@ func TestDownload(t *testing.T) {
 	}
 }
 
+// TestDownloadOutput_ReadError verifies downloadOutput returns reader failures
+// instead of producing partial base64 content.
+//
+// The test injects a reader that always fails and expects a non-nil error,
+// protecting ML model downloads from silently accepting corrupted file streams.
 func TestDownloadOutput_ReadError(t *testing.T) {
 	_, err := downloadOutput(DownloadInput{
 		ProjectID:      toolutil.StringOrInt("42"),

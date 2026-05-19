@@ -135,6 +135,11 @@ func TestFilterScopeFilteredCatalog_MissingAdminMode(t *testing.T) {
 	})
 }
 
+// TestFilterScopeFilteredCatalog_NilCatalog verifies scope filtering handles a
+// nil source catalog by returning an empty catalog.
+//
+// The test expects no error, a non-nil result, and zero groups or actions. This
+// keeps callers safe when filtering is invoked before catalog construction.
 func TestFilterScopeFilteredCatalog_NilCatalog(t *testing.T) {
 	filtered, err := FilterScopeFilteredCatalog(nil, []string{"read_api"})
 	if err != nil {

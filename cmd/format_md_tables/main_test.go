@@ -9,6 +9,13 @@ import (
 	"testing"
 )
 
+// TestRun_TableDriven verifies the Markdown table formatter CLI handles default
+// discovery, check mode, explicit paths, and invalid arguments.
+//
+// Each subtest builds a temporary repository root, writes only the files needed
+// for the scenario, runs [run], and asserts stdout, file rewrites, or expected
+// errors. This protects both the developer workflow and the non-mutating
+// --check mode used by CI.
 func TestRun_TableDriven(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -123,6 +130,12 @@ func TestRun_TableDriven(t *testing.T) {
 	}
 }
 
+// TestDiscoverMarkdownFiles_SortsMarkdownFiles verifies recursive discovery
+// returns only Markdown files in deterministic order.
+//
+// The test creates two docs files and one ignored text file, then expects the
+// result to contain the .md paths sorted lexically. Stable ordering keeps CLI
+// output and formatting diffs predictable.
 func TestDiscoverMarkdownFiles_SortsMarkdownFiles(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "docs", "b.md"), "# B\n")
@@ -147,6 +160,12 @@ func TestDiscoverMarkdownFiles_SortsMarkdownFiles(t *testing.T) {
 	}
 }
 
+// TestRun_RejectsSymlinkEscapingRoot verifies the formatter refuses symlinked
+// Markdown files that resolve outside the configured repository root.
+//
+// The test creates a docs symlink pointing to a file in another temporary
+// directory and expects [run] to report the escaping link. This guards the
+// command against path traversal through Markdown discovery.
 func TestRun_RejectsSymlinkEscapingRoot(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()
@@ -169,6 +188,12 @@ func TestRun_RejectsSymlinkEscapingRoot(t *testing.T) {
 	}
 }
 
+// TestRun_ReturnsStdoutWriteErrors verifies CLI status output write failures are
+// returned to the caller.
+//
+// The test uses an [errWriter] after creating an otherwise valid root. The
+// expected error includes "write stdout", proving that output failures are not
+// silently ignored after formatting completes.
 func TestRun_ReturnsStdoutWriteErrors(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "README.md"), "# Title\n")

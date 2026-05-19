@@ -468,6 +468,12 @@ func TestProjectDelete_PermanentlyRemove(t *testing.T) {
 	}
 }
 
+// TestProjectDelete_PermanentlyRemoveTwoStep verifies permanent deletion retries
+// through GitLab's mark-then-remove flow.
+//
+// The first DELETE returns GitLab's "must be marked for deletion first" error;
+// the handler should mark the project, retry permanent removal, and report a
+// permanently removed result after three delete calls.
 func TestProjectDelete_PermanentlyRemoveTwoStep(t *testing.T) {
 	calls := 0
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -639,6 +645,12 @@ func TestProjectCreate_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestProjectHandlers_ContextCancelled verifies project handlers return context
+// cancellation errors without dispatching HTTP requests.
+//
+// The table covers read, write, hook, approval-rule, fork, avatar,
+// housekeeping, and user-project paths. A failing mock handler ensures each
+// operation observes the cancelled context before touching GitLab.
 func TestProjectHandlers_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("API should not be called with canceled context: %s %s", r.Method, r.URL.Path)
@@ -757,6 +769,13 @@ func TestProjectHandlers_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestProjectHandlers_StatusSpecificErrors verifies project handlers propagate
+// representative GitLab HTTP failures.
+//
+// Each table case returns a status code associated with a specific operation,
+// including forbidden, not found, bad request, conflict, and unprocessable
+// entity responses. The test expects errors for every case, preserving
+// operation-specific wrapping and hints.
 func TestProjectHandlers_StatusSpecificErrors(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -900,6 +919,12 @@ func TestProjectHandlers_StatusSpecificErrors(t *testing.T) {
 	}
 }
 
+// TestProjectHandlers_ValidationErrors verifies project handlers reject missing
+// required inputs before making API calls.
+//
+// The table covers missing project IDs and missing hook key fields. The mock
+// handler fails on any request, proving validation protects GitLab from malformed
+// calls.
 func TestProjectHandlers_ValidationErrors(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatalf("API should not be called for validation errors: %s %s", r.Method, r.URL.Path)
@@ -934,6 +959,12 @@ func TestProjectHandlers_ValidationErrors(t *testing.T) {
 	}
 }
 
+// TestBuildUpdateOpts_MergeRequestTitleRegexOptions verifies project update
+// options include merge request title regex settings.
+//
+// The test builds update options with a regex and description, then checks both
+// pointers are populated with the requested values. This protects Premium push
+// rule metadata from being dropped during option conversion.
 func TestBuildUpdateOpts_MergeRequestTitleRegexOptions(t *testing.T) {
 	opts := buildUpdateOpts(UpdateInput{
 		MergeRequestTitleRegex:            testCommitRegex,
@@ -1660,6 +1691,12 @@ func TestProjectListHooks_Success(t *testing.T) {
 	}
 }
 
+// TestProjectHookCustomHeadersToOutput_SkipsNilEntries verifies custom hook
+// header conversion drops nil entries while preserving real keys.
+//
+// The first assertion keeps a single non-nil header after a nil entry; the second
+// expects nil when every source entry is nil. This prevents empty redacted header
+// rows from appearing in hook output.
 func TestProjectHookCustomHeadersToOutput_SkipsNilEntries(t *testing.T) {
 	headers := projectHookCustomHeadersToOutput([]*gl.HookCustomHeader{
 		nil,

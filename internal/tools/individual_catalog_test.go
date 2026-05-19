@@ -236,6 +236,13 @@ func TestRegisterIndividualCatalogTools_EditionFilters(t *testing.T) {
 	}
 }
 
+// TestRegisterIndividualCatalogTools_AllowExcludeAndDuplicateTools verifies
+// allow lists, exclude lists, and duplicate individual tool names are resolved
+// deterministically.
+//
+// The catalog contains keep, skip, excluded, and duplicate actions. Registration
+// should include allowed tools, remove explicitly excluded tools, and register a
+// duplicate tool name only once.
 func TestRegisterIndividualCatalogTools_AllowExcludeAndDuplicateTools(t *testing.T) {
 	newSpec := func(actionName, toolName string) toolutil.ActionSpec {
 		return toolutil.NewActionSpec(actionName, toolutil.RouteAction(nil,
@@ -270,6 +277,13 @@ func TestRegisterIndividualCatalogTools_AllowExcludeAndDuplicateTools(t *testing
 	}
 }
 
+// TestRegisterIndividualCatalogTools_SkipsIneligibleGroup verifies individual
+// projection ignores catalog groups that are not eligible for the selected
+// surface.
+//
+// The test builds a runtime utility group without standalone utility opt-in and
+// expects no tools to be registered. This prevents internal maintenance surfaces
+// from leaking into individual mode by default.
 func TestRegisterIndividualCatalogTools_SkipsIneligibleGroup(t *testing.T) {
 	spec := toolutil.NewActionSpec("runtime", toolutil.RouteAction(nil,
 		func(_ context.Context, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
@@ -301,6 +315,12 @@ func TestRegisterIndividualCatalogTools_SkipsIneligibleGroup(t *testing.T) {
 	}
 }
 
+// TestRegisterIndividualCatalogTools_DestructiveConfirmationDeclined verifies a
+// declined elicitation prevents destructive catalog handlers from executing.
+//
+// The in-memory MCP client always declines the confirmation request. The test
+// expects cancellation text and asserts the destructive handler was never called,
+// preserving the safety guard for individual tool projection.
 func TestRegisterIndividualCatalogTools_DestructiveConfirmationDeclined(t *testing.T) {
 	called := false
 	spec := toolutil.NewActionSpec("delete", toolutil.RouteAction(nil,
@@ -349,6 +369,12 @@ func TestRegisterIndividualCatalogTools_DestructiveConfirmationDeclined(t *testi
 	}
 }
 
+// TestMustIndividualToolFromCatalogAction_DescriptionFallbacks verifies
+// individual tool descriptions use callbacks, usage text, then title fallback.
+//
+// Each table case constructs a catalog action with different description inputs
+// and expects the projected MCP tool description to follow the fallback order
+// used by generated individual tools.
 func TestMustIndividualToolFromCatalogAction_DescriptionFallbacks(t *testing.T) {
 	newAction := func(name, usage string) actioncatalog.Action {
 		return actioncatalog.Action{
@@ -403,6 +429,11 @@ func TestMustIndividualToolFromCatalogAction_DescriptionFallbacks(t *testing.T) 
 	}
 }
 
+// TestMustIndividualToolFromCatalogAction_InvalidActionPanics verifies invalid
+// catalog actions fail during individual tool projection.
+//
+// The action lacks an output schema, so projection should panic instead of
+// registering a malformed MCP tool that would fail later at runtime.
 func TestMustIndividualToolFromCatalogAction_InvalidActionPanics(t *testing.T) {
 	action := actioncatalog.Action{
 		Name: "broken",
@@ -416,6 +447,12 @@ func TestMustIndividualToolFromCatalogAction_InvalidActionPanics(t *testing.T) {
 	assertPanics(t, func() { _ = mustIndividualToolFromCatalogAction(action, nil, IndividualCatalogRegisterOptions{}) })
 }
 
+// TestIndividualCatalogActionReadOnly_AnnotationOverride verifies individual
+// annotation overrides can mark an otherwise mutating action as read-only.
+//
+// The action metadata is mutating, but the individual tool override sets
+// ReadOnly to true. The helper should honor that override because it controls
+// MCP annotations exposed by individual tools.
 func TestIndividualCatalogActionReadOnly_AnnotationOverride(t *testing.T) {
 	readOnly := true
 	action := actioncatalog.Action{

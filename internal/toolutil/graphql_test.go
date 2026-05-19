@@ -117,6 +117,12 @@ func TestParseGID_Roundtrip(t *testing.T) {
 	}
 }
 
+// TestGraphQLTopLevelError verifies top-level GraphQL errors are joined into an
+// operation-specific error message.
+//
+// The test covers nil errors, multiple trimmed messages, and blank messages. It
+// expects nil for no errors and descriptive fallback text when GitLab returns an
+// errors array without useful messages.
 func TestGraphQLTopLevelError(t *testing.T) {
 	if err := GraphQLTopLevelError("securityAttributeCreate", nil); err != nil {
 		t.Fatalf("GraphQLTopLevelError(nil) = %v, want nil", err)
@@ -133,6 +139,12 @@ func TestGraphQLTopLevelError(t *testing.T) {
 	}
 }
 
+// TestGraphQLMutationError verifies mutation-level GraphQL error arrays are
+// joined into an operation-specific error message.
+//
+// The test covers nil mutation errors, multiple trimmed messages, and blank
+// messages. This keeps GraphQL mutation handlers from dropping GitLab-provided
+// diagnostics or returning empty error text.
 func TestGraphQLMutationError(t *testing.T) {
 	if err := GraphQLMutationError("securityAttributeCreate", nil); err != nil {
 		t.Fatalf("GraphQLMutationError(nil) = %v, want nil", err)

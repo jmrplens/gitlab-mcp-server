@@ -1190,6 +1190,13 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 	}
 }
 
+// TestShouldRegisterMetaSchemaResources verifies meta-schema resources are
+// registered only for catalog surfaces that can execute action routes.
+//
+// The table covers full and minimal capability surfaces across meta, dynamic,
+// and individual tool modes. Meta and dynamic modes should expose schema
+// resources when appropriate; individual mode should not because it already has
+// per-tool schemas.
 func TestShouldRegisterMetaSchemaResources(t *testing.T) {
 	testCases := []struct {
 		name              string

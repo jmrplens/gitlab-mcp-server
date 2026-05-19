@@ -1,4 +1,3 @@
-// Package securityattributes provides handlers for GitLab security attribute tools.
 package securityattributes
 
 import (

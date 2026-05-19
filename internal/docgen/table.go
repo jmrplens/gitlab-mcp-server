@@ -1,4 +1,3 @@
-// Package docgen contains helpers for generated project documentation.
 package docgen
 
 import (

@@ -369,6 +369,12 @@ func TestGetHook_URLVariables(t *testing.T) {
 	}
 }
 
+// TestFormatHookMarkdown_URLVariablesRedacted verifies group hook markdown shows
+// URL variable names without exposing secret values.
+//
+// The formatter receives a hook with token metadata and one URL variable. The
+// expected output includes hook details and REDACTED variable display, preserving
+// useful diagnostics without leaking sensitive webhook configuration.
 func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
 	text := FormatHookMarkdown(HookOutput{
 		ID:                  10,
@@ -391,6 +397,12 @@ func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
 	}
 }
 
+// TestEnabledEvents_AllEvents verifies enabledEvents renders every supported
+// group hook event flag.
+//
+// The hook output enables legacy and newer event fields, including milestone,
+// feature flag, subgroup, member, and vulnerability events. The expected string
+// contains each event name so markdown summaries do not silently omit flags.
 func TestEnabledEvents_AllEvents(t *testing.T) {
 	text := enabledEvents(HookOutput{
 		PushEvents:          true,

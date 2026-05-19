@@ -291,6 +291,12 @@ func TestActionSpecValidate_RejectsInvalidInputSchemaOverride(t *testing.T) {
 	}
 }
 
+// TestSchemaAnyOfRequired_RejectsEmptyPropertyNames verifies anyOf schema
+// requirements cannot be created from blank property names.
+//
+// The test builds an update action with an empty SchemaAnyOfRequired override and
+// expects validation to reject it. This prevents generated input schemas from
+// containing impossible required-property alternatives.
 func TestSchemaAnyOfRequired_RejectsEmptyPropertyNames(t *testing.T) {
 	spec := NewActionSpec("update", ActionRoute{InputSchema: testActionSpecSchema("name")}, ActionSpecOptions{
 		InputSchemaOverrides: []InputSchemaOverride{SchemaAnyOfRequired(" ", "")},

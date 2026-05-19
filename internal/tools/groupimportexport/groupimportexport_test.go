@@ -223,6 +223,11 @@ func TestExportDownload_ReadAllError(t *testing.T) {
 	}
 }
 
+// TestExportDownload_HTTPShortBodyError verifies ExportDownload returns an error
+// when GitLab advertises a longer archive body than it sends.
+//
+// The mock sets Content-Length to 10 but writes only five bytes. The expected
+// read error protects callers from receiving truncated base64 archive content.
 func TestExportDownload_HTTPShortBodyError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/1/export/download" && r.Method == http.MethodGet {
