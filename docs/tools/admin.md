@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Administration
-> **Individual tools**: 83
+> **Individual tools**: 86
 > **Meta-tools**: `gitlab_admin` (consolidated, covers 15 sub-packages), `gitlab_page`, `gitlab_terraform_state`, `gitlab_cluster_agent`, `gitlab_avatar`, `gitlab_dependency_proxy` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Settings](https://docs.gitlab.com/ee/api/settings.html) · [Appearance](https://docs.gitlab.com/ee/api/appearance.html) · [Broadcast Messages](https://docs.gitlab.com/ee/api/broadcast_messages.html) · [Features](https://docs.gitlab.com/ee/api/features.html) · [License](https://docs.gitlab.com/ee/api/license.html) · [System Hooks](https://docs.gitlab.com/ee/api/system_hooks.html) · [Sidekiq](https://docs.gitlab.com/ee/api/sidekiq_metrics.html) · [Plan Limits](https://docs.gitlab.com/ee/api/plan_limits.html) · [Usage Data](https://docs.gitlab.com/ee/api/usage_data.html) · [Pages](https://docs.gitlab.com/ee/api/pages.html) · [Terraform States](https://docs.gitlab.com/ee/api/terraform_state.html) · [Cluster Agents](https://docs.gitlab.com/ee/api/cluster_agents.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -190,9 +190,16 @@ Get a system hook by ID (admin).
 
 ### `gitlab_add_system_hook`
 
-Add a new system hook (admin). Requires URL. Optionally configure event subscriptions and SSL verification.
+Add a new system hook (admin). Requires URL. Optionally configure event subscriptions, SSL verification, payload token, and write-only signing token.
 
 | Annotation | **Create** |
+| ---------- | ---------- |
+
+### `gitlab_edit_system_hook`
+
+Edit an existing system hook by ID (admin). Supports URL, metadata, event subscriptions, SSL verification, payload token, and write-only signing token updates.
+
+| Annotation | **Update** |
 | ---------- | ---------- |
 
 ### `gitlab_test_system_hook`
@@ -201,6 +208,22 @@ Test a system hook by ID (admin). Triggers a test event and returns the result.
 
 | Annotation | **Read** |
 | ---------- | -------- |
+
+### `gitlab_set_system_hook_url_variable`
+
+Create or update a URL variable for a system hook (admin). Variables can be referenced as placeholders in the hook URL.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_delete_system_hook_url_variable`
+
+Delete a URL variable from a system hook (admin).
+
+| Annotation | **Delete** |
+| ---------- | ---------- |
+
+> **Destructive**: Protected by confirmation prompt.
 
 ### `gitlab_delete_system_hook`
 
@@ -752,70 +775,73 @@ Download and apply the latest MCP server update. On Linux/macOS the binary is re
 | 17 | `gitlab_list_system_hooks` | System Hooks | Read |
 | 18 | `gitlab_get_system_hook` | System Hooks | Read |
 | 19 | `gitlab_add_system_hook` | System Hooks | Create |
-| 20 | `gitlab_test_system_hook` | System Hooks | Read |
-| 21 | `gitlab_delete_system_hook` | System Hooks | Delete |
-| 22 | `gitlab_get_sidekiq_queue_metrics` | Sidekiq | Read |
-| 23 | `gitlab_get_sidekiq_process_metrics` | Sidekiq | Read |
-| 24 | `gitlab_get_sidekiq_job_stats` | Sidekiq | Read |
-| 25 | `gitlab_get_sidekiq_compound_metrics` | Sidekiq | Read |
-| 26 | `gitlab_get_plan_limits` | Plan Limits | Read |
-| 27 | `gitlab_change_plan_limits` | Plan Limits | Update |
-| 28 | `gitlab_get_service_ping` | Usage Data | Read |
-| 29 | `gitlab_get_non_sql_metrics` | Usage Data | Read |
-| 30 | `gitlab_get_usage_queries` | Usage Data | Read |
-| 31 | `gitlab_get_metric_definitions` | Usage Data | Read |
-| 32 | `gitlab_track_event` | Usage Data | Create |
-| 33 | `gitlab_track_events` | Usage Data | Create |
-| 34 | `gitlab_mark_migration` | DB Migrations | Update |
-| 35 | `gitlab_list_applications` | Applications | Read |
-| 36 | `gitlab_create_application` | Applications | Create |
-| 37 | `gitlab_delete_application` | Applications | Delete |
-| 38 | `gitlab_get_application_statistics` | Statistics | Read |
-| 39 | `gitlab_get_metadata` | Metadata | Read |
-| 40 | `gitlab_list_custom_attributes` | Custom Attributes | Read |
-| 41 | `gitlab_get_custom_attribute` | Custom Attributes | Read |
-| 42 | `gitlab_set_custom_attribute` | Custom Attributes | Create |
-| 43 | `gitlab_delete_custom_attribute` | Custom Attributes | Delete |
-| 44 | `gitlab_start_bulk_import` | Bulk Imports | Create |
-| 45 | `gitlab_list_bulk_imports` | Bulk Imports | Read |
-| 46 | `gitlab_get_bulk_import` | Bulk Imports | Read |
-| 47 | `gitlab_cancel_bulk_import` | Bulk Imports | Update |
-| 48 | `gitlab_list_bulk_import_entities` | Bulk Imports | Read |
-| 49 | `gitlab_get_bulk_import_entity` | Bulk Imports | Read |
-| 50 | `gitlab_list_bulk_import_entity_failures` | Bulk Imports | Read |
-| 51 | `gitlab_get_avatar` | Avatar | Read |
-| 52 | `gitlab_purge_dependency_proxy` | Dependency Proxy | Delete |
-| 53 | `gitlab_pages_get` | Pages | Read |
-| 54 | `gitlab_pages_update` | Pages | Update |
-| 55 | `gitlab_pages_unpublish` | Pages | Delete |
-| 56 | `gitlab_pages_domain_list_all` | Pages | Read |
-| 57 | `gitlab_pages_domain_list` | Pages | Read |
-| 58 | `gitlab_pages_domain_get` | Pages | Read |
-| 59 | `gitlab_pages_domain_create` | Pages | Create |
-| 60 | `gitlab_pages_domain_update` | Pages | Update |
-| 61 | `gitlab_pages_domain_delete` | Pages | Delete |
-| 62 | `gitlab_list_terraform_states` | Terraform States | Read |
-| 63 | `gitlab_get_terraform_state` | Terraform States | Read |
-| 64 | `gitlab_delete_terraform_state` | Terraform States | Delete |
-| 65 | `gitlab_delete_terraform_state_version` | Terraform States | Delete |
-| 66 | `gitlab_lock_terraform_state` | Terraform States | Update |
-| 67 | `gitlab_unlock_terraform_state` | Terraform States | Update |
-| 68 | `gitlab_list_cluster_agents` | Cluster Agents | Read |
-| 69 | `gitlab_get_cluster_agent` | Cluster Agents | Read |
-| 70 | `gitlab_register_cluster_agent` | Cluster Agents | Create |
-| 71 | `gitlab_delete_cluster_agent` | Cluster Agents | Delete |
-| 72 | `gitlab_list_cluster_agent_tokens` | Cluster Agents | Read |
-| 73 | `gitlab_get_cluster_agent_token` | Cluster Agents | Read |
-| 74 | `gitlab_create_cluster_agent_token` | Cluster Agents | Create |
-| 75 | `gitlab_revoke_cluster_agent_token` | Cluster Agents | Delete |
-| 76 | `gitlab_list_instance_audit_events` | Audit Events | Read |
-| 77 | `gitlab_get_instance_audit_event` | Audit Events | Read |
-| 78 | `gitlab_list_group_audit_events` | Audit Events | Read |
-| 79 | `gitlab_get_group_audit_event` | Audit Events | Read |
-| 80 | `gitlab_list_project_audit_events` | Audit Events | Read |
-| 81 | `gitlab_get_project_audit_event` | Audit Events | Read |
-| 82 | `gitlab_server_check_update` | Server Update | Read |
-| 83 | `gitlab_server_apply_update` | Server Update | Update |
+| 20 | `gitlab_edit_system_hook` | System Hooks | Update |
+| 21 | `gitlab_test_system_hook` | System Hooks | Read |
+| 22 | `gitlab_set_system_hook_url_variable` | System Hooks | Update |
+| 23 | `gitlab_delete_system_hook_url_variable` | System Hooks | Delete |
+| 24 | `gitlab_delete_system_hook` | System Hooks | Delete |
+| 25 | `gitlab_get_sidekiq_queue_metrics` | Sidekiq | Read |
+| 26 | `gitlab_get_sidekiq_process_metrics` | Sidekiq | Read |
+| 27 | `gitlab_get_sidekiq_job_stats` | Sidekiq | Read |
+| 28 | `gitlab_get_sidekiq_compound_metrics` | Sidekiq | Read |
+| 29 | `gitlab_get_plan_limits` | Plan Limits | Read |
+| 30 | `gitlab_change_plan_limits` | Plan Limits | Update |
+| 31 | `gitlab_get_service_ping` | Usage Data | Read |
+| 32 | `gitlab_get_non_sql_metrics` | Usage Data | Read |
+| 33 | `gitlab_get_usage_queries` | Usage Data | Read |
+| 34 | `gitlab_get_metric_definitions` | Usage Data | Read |
+| 35 | `gitlab_track_event` | Usage Data | Create |
+| 36 | `gitlab_track_events` | Usage Data | Create |
+| 37 | `gitlab_mark_migration` | DB Migrations | Update |
+| 38 | `gitlab_list_applications` | Applications | Read |
+| 39 | `gitlab_create_application` | Applications | Create |
+| 40 | `gitlab_delete_application` | Applications | Delete |
+| 41 | `gitlab_get_application_statistics` | Statistics | Read |
+| 42 | `gitlab_get_metadata` | Metadata | Read |
+| 43 | `gitlab_list_custom_attributes` | Custom Attributes | Read |
+| 44 | `gitlab_get_custom_attribute` | Custom Attributes | Read |
+| 45 | `gitlab_set_custom_attribute` | Custom Attributes | Create |
+| 46 | `gitlab_delete_custom_attribute` | Custom Attributes | Delete |
+| 47 | `gitlab_start_bulk_import` | Bulk Imports | Create |
+| 48 | `gitlab_list_bulk_imports` | Bulk Imports | Read |
+| 49 | `gitlab_get_bulk_import` | Bulk Imports | Read |
+| 50 | `gitlab_cancel_bulk_import` | Bulk Imports | Update |
+| 51 | `gitlab_list_bulk_import_entities` | Bulk Imports | Read |
+| 52 | `gitlab_get_bulk_import_entity` | Bulk Imports | Read |
+| 53 | `gitlab_list_bulk_import_entity_failures` | Bulk Imports | Read |
+| 54 | `gitlab_get_avatar` | Avatar | Read |
+| 55 | `gitlab_purge_dependency_proxy` | Dependency Proxy | Delete |
+| 56 | `gitlab_pages_get` | Pages | Read |
+| 57 | `gitlab_pages_update` | Pages | Update |
+| 58 | `gitlab_pages_unpublish` | Pages | Delete |
+| 59 | `gitlab_pages_domain_list_all` | Pages | Read |
+| 60 | `gitlab_pages_domain_list` | Pages | Read |
+| 61 | `gitlab_pages_domain_get` | Pages | Read |
+| 62 | `gitlab_pages_domain_create` | Pages | Create |
+| 63 | `gitlab_pages_domain_update` | Pages | Update |
+| 64 | `gitlab_pages_domain_delete` | Pages | Delete |
+| 65 | `gitlab_list_terraform_states` | Terraform States | Read |
+| 66 | `gitlab_get_terraform_state` | Terraform States | Read |
+| 67 | `gitlab_delete_terraform_state` | Terraform States | Delete |
+| 68 | `gitlab_delete_terraform_state_version` | Terraform States | Delete |
+| 69 | `gitlab_lock_terraform_state` | Terraform States | Update |
+| 70 | `gitlab_unlock_terraform_state` | Terraform States | Update |
+| 71 | `gitlab_list_cluster_agents` | Cluster Agents | Read |
+| 72 | `gitlab_get_cluster_agent` | Cluster Agents | Read |
+| 73 | `gitlab_register_cluster_agent` | Cluster Agents | Create |
+| 74 | `gitlab_delete_cluster_agent` | Cluster Agents | Delete |
+| 75 | `gitlab_list_cluster_agent_tokens` | Cluster Agents | Read |
+| 76 | `gitlab_get_cluster_agent_token` | Cluster Agents | Read |
+| 77 | `gitlab_create_cluster_agent_token` | Cluster Agents | Create |
+| 78 | `gitlab_revoke_cluster_agent_token` | Cluster Agents | Delete |
+| 79 | `gitlab_list_instance_audit_events` | Audit Events | Read |
+| 80 | `gitlab_get_instance_audit_event` | Audit Events | Read |
+| 81 | `gitlab_list_group_audit_events` | Audit Events | Read |
+| 82 | `gitlab_get_group_audit_event` | Audit Events | Read |
+| 83 | `gitlab_list_project_audit_events` | Audit Events | Read |
+| 84 | `gitlab_get_project_audit_event` | Audit Events | Read |
+| 85 | `gitlab_server_check_update` | Server Update | Read |
+| 86 | `gitlab_server_apply_update` | Server Update | Update |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -824,6 +850,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - `gitlab_delete_broadcast_message` — deletes a broadcast message
 - `gitlab_delete_feature_flag` — deletes an admin feature flag
 - `gitlab_delete_license` — deletes a GitLab license
+- `gitlab_delete_system_hook_url_variable` — deletes a system hook URL variable
 - `gitlab_delete_system_hook` — deletes a system hook
 - `gitlab_delete_application` — deletes an OAuth2 application
 - `gitlab_delete_custom_attribute` — deletes a custom attribute

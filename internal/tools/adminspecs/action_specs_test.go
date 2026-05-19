@@ -76,6 +76,9 @@ func TestActionSpecs_SelectedActionSemantics(t *testing.T) {
 		{name: "topic_delete", destructive: true, idempotent: true, individualTool: "gitlab_delete_topic"},
 		{name: "feature_set", idempotent: true, individualTool: "gitlab_set_feature_flag", individualIdempotent: new(false)},
 		{name: "db_migration_mark", destructive: true, idempotent: true, individualTool: "gitlab_mark_migration", individualDestructive: new(false)},
+		{name: "system_hook_edit", idempotent: true, individualTool: "gitlab_edit_system_hook"},
+		{name: "system_hook_set_url_variable", idempotent: true, individualTool: "gitlab_set_system_hook_url_variable"},
+		{name: "system_hook_delete_url_variable", destructive: true, idempotent: true, individualTool: "gitlab_delete_system_hook_url_variable"},
 		{name: "system_hook_test", individualTool: "gitlab_test_system_hook", individualReadOnly: new(true), individualIdempotent: new(true)},
 	}
 

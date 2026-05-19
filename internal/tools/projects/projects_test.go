@@ -96,6 +96,20 @@ const (
 	headerXPerPage    = "X-Per-Page"
 )
 
+func assertJSONKeys(t *testing.T, body string, keys ...string) {
+	t.Helper()
+
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("request body is not valid JSON: %v", err)
+	}
+	for _, key := range keys {
+		if _, ok := payload[key]; !ok {
+			t.Errorf("request body missing field %q", key)
+		}
+	}
+}
+
 // TestProjectCreate_Success verifies that Create creates a project and
 // returns the correct ID, name, path, and visibility. The mock returns
 // HTTP 201 with a valid project JSON response.
@@ -1587,7 +1601,7 @@ func TestProjectGetLanguages_EmptyProjectID(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // hookJSON stores the package-level hook JSON state.
-var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"enable_ssl_verification":true,"created_at":"2026-01-01T00:00:00Z"}`
+var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"resource_deploy_token_events":true,"vulnerability_events":true,"enable_ssl_verification":true,"disabled_until":"2026-01-02T00:00:00Z","url_variables":[{"key":"env","value":"prod"}],"custom_headers":[null,{"key":"X-Env","value":"prod"}],"token_present":true,"signing_token_present":true,"created_at":"2026-01-01T00:00:00Z"}`
 
 // TestProjectListHooks_Success verifies ProjectListHooks when success.
 func TestProjectListHooks_Success(t *testing.T) {
@@ -1618,6 +1632,61 @@ func TestProjectListHooks_Success(t *testing.T) {
 	}
 	if !out.Hooks[0].EnableSSLVerification {
 		t.Error("EnableSSLVerification = false, want true")
+	}
+	if !out.Hooks[0].TokenPresent || !out.Hooks[0].SigningTokenPresent {
+		t.Error("expected token presence flags to be true")
+	}
+	if !out.Hooks[0].MilestoneEvents || !out.Hooks[0].FeatureFlagEvents || !out.Hooks[0].VulnerabilityEvents {
+		t.Error("expected milestone, feature flag, and vulnerability events to be true")
+	}
+	if !out.Hooks[0].ResourceDeployTokenEvents {
+		t.Error("ResourceDeployTokenEvents = false, want true")
+	}
+	if out.Hooks[0].DisabledUntil == "" {
+		t.Error("DisabledUntil is empty, want timestamp")
+	}
+	if len(out.Hooks[0].URLVariables) != 1 || out.Hooks[0].URLVariables[0].Key != "env" {
+		t.Fatalf("unexpected URL variables: %+v", out.Hooks[0].URLVariables)
+	}
+	if len(out.Hooks[0].CustomHeaders) != 1 || out.Hooks[0].CustomHeaders[0].Key != "X-Env" {
+		t.Fatalf("unexpected custom headers: %+v", out.Hooks[0].CustomHeaders)
+	}
+	encodedHook, err := json.Marshal(out.Hooks[0])
+	if err != nil {
+		t.Fatalf("marshal hook output: %v", err)
+	}
+	if strings.Contains(string(encodedHook), `"value"`) || strings.Contains(string(encodedHook), "prod") {
+		t.Fatalf("hook output exposed secret-bearing values: %s", encodedHook)
+	}
+}
+
+func TestProjectHookCustomHeadersToOutput_SkipsNilEntries(t *testing.T) {
+	headers := projectHookCustomHeadersToOutput([]*gl.HookCustomHeader{
+		nil,
+		{Key: "X-Env", Value: "prod"},
+	})
+	if len(headers) != 1 || headers[0].Key != "X-Env" {
+		t.Fatalf("unexpected custom headers: %+v", headers)
+	}
+
+	if out := projectHookCustomHeadersToOutput([]*gl.HookCustomHeader{nil}); out != nil {
+		t.Fatalf("expected nil when all custom headers are nil, got %+v", out)
+	}
+}
+
+// TestDoProjectHookRequest_NewRequestError verifies request construction errors
+// are returned before the GitLab client attempts an HTTP call.
+func TestDoProjectHookRequest_NewRequestError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler should not be called when request construction fails")
+	}))
+
+	_, resp, err := doProjectHookRequest[projectHookAPI](context.Background(), client, "bad method", pathProject42Hooks, nil)
+	if err == nil {
+		t.Fatal("expected request construction error")
+	}
+	if resp != nil {
+		t.Fatalf("response = %+v, want nil", resp)
 	}
 }
 
@@ -1653,8 +1722,14 @@ func TestProjectGetHook_Success(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf(fmtIDWant1, out.ID)
 	}
+	if !out.ResourceDeployTokenEvents {
+		t.Error("ResourceDeployTokenEvents = false, want true")
+	}
 	if out.Name != testMyHook {
 		t.Errorf(fmtNameWantQ, out.Name, testMyHook)
+	}
+	if !out.TokenPresent || !out.SigningTokenPresent {
+		t.Error("expected token presence flags to be true")
 	}
 }
 
@@ -1695,9 +1770,11 @@ func TestProjectAddHook_Success(t *testing.T) {
 	}))
 
 	out, err := AddHook(context.Background(), client, AddHookInput{
-		ProjectID:  "42",
-		URL:        testHookURL,
-		PushEvents: new(true),
+		ProjectID: "42",
+		URL:       testHookURL,
+		HookOptionsInput: HookOptionsInput{
+			PushEvents: new(true),
+		},
 	})
 	if err != nil {
 		t.Fatalf("AddHook() unexpected error: %v", err)
@@ -2904,36 +2981,43 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 				t.Fatalf("read request body: %v", err)
 			}
 			capturedBody = string(body)
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"issues_events":true,"merge_requests_events":true,"tag_push_events":true,"note_events":true,"confidential_note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"emoji_events":true,"resource_access_token_events":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"issues_events":true,"merge_requests_events":true,"tag_push_events":true,"note_events":true,"confidential_note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"emoji_events":true,"resource_access_token_events":true,"resource_deploy_token_events":true,"vulnerability_events":true,"token_present":true,"signing_token_present":true}`)
 			return
 		}
 		http.NotFound(w, r)
 	}))
 
 	out, err := AddHook(context.Background(), client, AddHookInput{
-		ProjectID:                 "42",
-		URL:                       testHookURL,
-		Name:                      "full-hook",
-		Description:               "all events",
-		Token:                     "secret",
-		PushEvents:                new(true),
-		PushEventsBranchFilter:    "main",
-		IssuesEvents:              new(true),
-		ConfidentialIssuesEvents:  new(true),
-		MergeRequestsEvents:       new(true),
-		TagPushEvents:             new(true),
-		NoteEvents:                new(true),
-		ConfidentialNoteEvents:    new(true),
-		JobEvents:                 new(true),
-		PipelineEvents:            new(true),
-		WikiPageEvents:            new(true),
-		DeploymentEvents:          new(true),
-		ReleasesEvents:            new(true),
-		EmojiEvents:               new(true),
-		ResourceAccessTokenEvents: new(true),
-		EnableSSLVerification:     new(true),
-		CustomWebhookTemplate:     "tpl",
-		BranchFilterStrategy:      "all",
+		ProjectID: "42",
+		URL:       testHookURL,
+		HookOptionsInput: HookOptionsInput{
+			Name:                      "full-hook",
+			Description:               "all events",
+			Token:                     "secret",
+			SigningToken:              "signing-secret",
+			PushEvents:                new(true),
+			PushEventsBranchFilter:    "main",
+			IssuesEvents:              new(true),
+			ConfidentialIssuesEvents:  new(true),
+			MergeRequestsEvents:       new(true),
+			TagPushEvents:             new(true),
+			NoteEvents:                new(true),
+			ConfidentialNoteEvents:    new(true),
+			JobEvents:                 new(true),
+			PipelineEvents:            new(true),
+			WikiPageEvents:            new(true),
+			DeploymentEvents:          new(true),
+			ReleasesEvents:            new(true),
+			MilestoneEvents:           new(true),
+			FeatureFlagEvents:         new(true),
+			EmojiEvents:               new(true),
+			ResourceAccessTokenEvents: new(true),
+			ResourceDeployTokenEvents: new(true),
+			VulnerabilityEvents:       new(true),
+			EnableSSLVerification:     new(true),
+			CustomWebhookTemplate:     "tpl",
+			BranchFilterStrategy:      "all",
+		},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -2941,11 +3025,20 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf(fmtIDWant1, out.ID)
 	}
-	for _, want := range []string{"url", "token", "push_events_branch_filter", "custom_webhook_template", "branch_filter_strategy", "emoji_events", "resource_access_token_events"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
-	}
+	assertJSONKeys(t, capturedBody,
+		"url",
+		"token",
+		"signing_token",
+		"push_events_branch_filter",
+		"custom_webhook_template",
+		"branch_filter_strategy",
+		"emoji_events",
+		"resource_access_token_events",
+		"resource_deploy_token_events",
+		"milestone_events",
+		"feature_flag_events",
+		"vulnerability_events",
+	)
 }
 
 // TestEditHook_WithAllEvents verifies EditHook when with all events.
@@ -2965,30 +3058,37 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 	}))
 
 	out, err := EditHook(context.Background(), client, EditHookInput{
-		ProjectID:                 "42",
-		HookID:                    1,
-		URL:                       "https://example.com/hook-updated",
-		Name:                      "updated-hook",
-		Description:               "updated",
-		Token:                     "new-secret",
-		PushEvents:                new(true),
-		PushEventsBranchFilter:    testBranchDevelop,
-		IssuesEvents:              new(false),
-		ConfidentialIssuesEvents:  new(false),
-		MergeRequestsEvents:       new(true),
-		TagPushEvents:             new(true),
-		NoteEvents:                new(true),
-		ConfidentialNoteEvents:    new(false),
-		JobEvents:                 new(true),
-		PipelineEvents:            new(true),
-		WikiPageEvents:            new(false),
-		DeploymentEvents:          new(true),
-		ReleasesEvents:            new(false),
-		EmojiEvents:               new(true),
-		ResourceAccessTokenEvents: new(false),
-		EnableSSLVerification:     new(false),
-		CustomWebhookTemplate:     "new-tpl",
-		BranchFilterStrategy:      "regex",
+		ProjectID: "42",
+		HookID:    1,
+		URL:       "https://example.com/hook-updated",
+		HookOptionsInput: HookOptionsInput{
+			Name:                      "updated-hook",
+			Description:               "updated",
+			Token:                     "new-secret",
+			SigningToken:              "new-signing-secret",
+			PushEvents:                new(true),
+			PushEventsBranchFilter:    testBranchDevelop,
+			IssuesEvents:              new(false),
+			ConfidentialIssuesEvents:  new(false),
+			MergeRequestsEvents:       new(true),
+			TagPushEvents:             new(true),
+			NoteEvents:                new(true),
+			ConfidentialNoteEvents:    new(false),
+			JobEvents:                 new(true),
+			PipelineEvents:            new(true),
+			WikiPageEvents:            new(false),
+			DeploymentEvents:          new(true),
+			ReleasesEvents:            new(false),
+			MilestoneEvents:           new(true),
+			FeatureFlagEvents:         new(false),
+			EmojiEvents:               new(true),
+			ResourceAccessTokenEvents: new(false),
+			ResourceDeployTokenEvents: new(true),
+			VulnerabilityEvents:       new(true),
+			EnableSSLVerification:     new(false),
+			CustomWebhookTemplate:     "new-tpl",
+			BranchFilterStrategy:      "regex",
+		},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -2996,11 +3096,19 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 	if out.URL != "https://example.com/hook-updated" {
 		t.Errorf("URL = %q, want updated URL", out.URL)
 	}
-	for _, want := range []string{"url", "token", "push_events_branch_filter", "custom_webhook_template", "branch_filter_strategy", "emoji_events"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
-	}
+	assertJSONKeys(t, capturedBody,
+		"url",
+		"token",
+		"signing_token",
+		"push_events_branch_filter",
+		"custom_webhook_template",
+		"branch_filter_strategy",
+		"emoji_events",
+		"resource_deploy_token_events",
+		"milestone_events",
+		"feature_flag_events",
+		"vulnerability_events",
+	)
 }
 
 // ---------------------------------------------------------------------------
@@ -3273,16 +3381,19 @@ func TestFormatListHooksMarkdown_HookWithoutName(t *testing.T) {
 // TestFormatHookMarkdown_WithName verifies FormatHookMarkdown when with name.
 func TestFormatHookMarkdown_WithName(t *testing.T) {
 	out := HookOutput{
-		ID:                    1,
-		URL:                   testHookURL,
-		Name:                  "deploy-hook",
-		PushEvents:            true,
-		IssuesEvents:          true,
-		MergeRequestsEvents:   false,
-		EnableSSLVerification: true,
+		ID:                        1,
+		URL:                       testHookURL,
+		Name:                      "deploy-hook",
+		PushEvents:                true,
+		IssuesEvents:              true,
+		MergeRequestsEvents:       false,
+		EnableSSLVerification:     true,
+		ResourceDeployTokenEvents: true,
+		URLVariables:              []HookURLVariable{{Key: "secret_env"}},
+		CustomHeaders:             []HookCustomHeader{{Key: "X-Secret"}},
 	}
 	md := FormatHookMarkdown(out)
-	for _, want := range []string{"Webhook #1", "deploy-hook", testHookURL, "SSL Verification", "Event Triggers", "Push", "Issues", "Merge Requests"} {
+	for _, want := range []string{"Webhook #1", "deploy-hook", testHookURL, "SSL Verification", "Event Triggers", "Push", "Issues", "Merge Requests", "Resource Deploy Token", "REDACTED"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("FormatHookMarkdown missing %q", want)
 		}
@@ -3847,29 +3958,31 @@ func TestProjectAddHook_AllOptionalEvents(t *testing.T) {
 	}))
 
 	out, err := AddHook(context.Background(), client, AddHookInput{
-		ProjectID:                 "42",
-		URL:                       testHookURL,
-		Name:                      testHookName,
-		Description:               "A test webhook",
-		Token:                     "secret",
-		PushEvents:                &pushEvents,
-		PushEventsBranchFilter:    "main",
-		IssuesEvents:              &issuesEvents,
-		ConfidentialIssuesEvents:  &confidentialIssues,
-		MergeRequestsEvents:       &mrEvents,
-		TagPushEvents:             &tagPush,
-		NoteEvents:                &noteEvents,
-		ConfidentialNoteEvents:    &confidentialNote,
-		JobEvents:                 &jobEvents,
-		PipelineEvents:            &pipelineEvents,
-		WikiPageEvents:            &wikiEvents,
-		DeploymentEvents:          &deploymentEvents,
-		ReleasesEvents:            &releasesEvents,
-		EmojiEvents:               &emojiEvents,
-		ResourceAccessTokenEvents: &resourceTokenEvents,
-		EnableSSLVerification:     &sslVerify,
-		CustomWebhookTemplate:     `{"text":"{{event}}"}`,
-		BranchFilterStrategy:      "wildcard",
+		ProjectID: "42",
+		URL:       testHookURL,
+		HookOptionsInput: HookOptionsInput{
+			Name:                      testHookName,
+			Description:               "A test webhook",
+			Token:                     "secret",
+			PushEvents:                &pushEvents,
+			PushEventsBranchFilter:    "main",
+			IssuesEvents:              &issuesEvents,
+			ConfidentialIssuesEvents:  &confidentialIssues,
+			MergeRequestsEvents:       &mrEvents,
+			TagPushEvents:             &tagPush,
+			NoteEvents:                &noteEvents,
+			ConfidentialNoteEvents:    &confidentialNote,
+			JobEvents:                 &jobEvents,
+			PipelineEvents:            &pipelineEvents,
+			WikiPageEvents:            &wikiEvents,
+			DeploymentEvents:          &deploymentEvents,
+			ReleasesEvents:            &releasesEvents,
+			EmojiEvents:               &emojiEvents,
+			ResourceAccessTokenEvents: &resourceTokenEvents,
+			EnableSSLVerification:     &sslVerify,
+			CustomWebhookTemplate:     `{"text":"{{event}}"}`,
+			BranchFilterStrategy:      "wildcard",
+		},
 	})
 	if err != nil {
 		t.Fatalf("AddHook() unexpected error: %v", err)
@@ -3911,30 +4024,32 @@ func TestProjectEditHook_AllOptionalEvents(t *testing.T) {
 	}))
 
 	out, err := EditHook(context.Background(), client, EditHookInput{
-		ProjectID:                 "42",
-		HookID:                    5,
-		URL:                       "https://example.com/updated",
-		Name:                      "updated-hook",
-		Description:               "Updated hook",
-		Token:                     "new-secret",
-		PushEvents:                &pushEvents,
-		PushEventsBranchFilter:    testBranchDevelop,
-		IssuesEvents:              &issuesEvents,
-		ConfidentialIssuesEvents:  &confidentialIssues,
-		MergeRequestsEvents:       &mrEvents,
-		TagPushEvents:             &tagPush,
-		NoteEvents:                &noteEvents,
-		ConfidentialNoteEvents:    &confidentialNote,
-		JobEvents:                 &jobEvents,
-		PipelineEvents:            &pipelineEvents,
-		WikiPageEvents:            &wikiEvents,
-		DeploymentEvents:          &deploymentEvents,
-		ReleasesEvents:            &releasesEvents,
-		EmojiEvents:               &emojiEvents,
-		ResourceAccessTokenEvents: &resourceTokenEvents,
-		EnableSSLVerification:     &sslVerify,
-		CustomWebhookTemplate:     `{"text":"updated"}`,
-		BranchFilterStrategy:      "regex",
+		ProjectID: "42",
+		HookID:    5,
+		URL:       "https://example.com/updated",
+		HookOptionsInput: HookOptionsInput{
+			Name:                      "updated-hook",
+			Description:               "Updated hook",
+			Token:                     "new-secret",
+			PushEvents:                &pushEvents,
+			PushEventsBranchFilter:    testBranchDevelop,
+			IssuesEvents:              &issuesEvents,
+			ConfidentialIssuesEvents:  &confidentialIssues,
+			MergeRequestsEvents:       &mrEvents,
+			TagPushEvents:             &tagPush,
+			NoteEvents:                &noteEvents,
+			ConfidentialNoteEvents:    &confidentialNote,
+			JobEvents:                 &jobEvents,
+			PipelineEvents:            &pipelineEvents,
+			WikiPageEvents:            &wikiEvents,
+			DeploymentEvents:          &deploymentEvents,
+			ReleasesEvents:            &releasesEvents,
+			EmojiEvents:               &emojiEvents,
+			ResourceAccessTokenEvents: &resourceTokenEvents,
+			EnableSSLVerification:     &sslVerify,
+			CustomWebhookTemplate:     `{"text":"updated"}`,
+			BranchFilterStrategy:      "regex",
+		},
 	})
 	if err != nil {
 		t.Fatalf("EditHook() unexpected error: %v", err)
@@ -5847,6 +5962,21 @@ func TestDownloadAvatar_APIError(t *testing.T) {
 	}
 }
 
+type downloadAvatarFailingReader struct{}
+
+func (downloadAvatarFailingReader) Read(_ []byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+// TestDownloadAvatarOutputFromReader_ReadError verifies avatar response read
+// failures are surfaced with operation context.
+func TestDownloadAvatarOutputFromReader_ReadError(t *testing.T) {
+	_, err := downloadAvatarOutputFromReader(downloadAvatarFailingReader{})
+	if err == nil || !strings.Contains(err.Error(), "projectDownloadAvatar: reading response") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 // TestStartHousekeeping_Success verifies StartHousekeeping succeeds when the GitLab housekeeping endpoint returns 201.
 func TestStartHousekeeping_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -6483,29 +6613,31 @@ func TestAddHook_AllOptionalFields(t *testing.T) {
 	bTrue := true
 	bFalse := false
 	out, err := AddHook(context.Background(), client, AddHookInput{
-		ProjectID:                 "42",
-		URL:                       "https://hook.example.com",
-		Name:                      "my-hook",
-		Description:               "desc",
-		Token:                     "secret",
-		PushEvents:                &bTrue,
-		PushEventsBranchFilter:    "main",
-		IssuesEvents:              &bTrue,
-		ConfidentialIssuesEvents:  &bFalse,
-		MergeRequestsEvents:       &bTrue,
-		TagPushEvents:             &bTrue,
-		NoteEvents:                &bTrue,
-		ConfidentialNoteEvents:    &bFalse,
-		JobEvents:                 &bTrue,
-		PipelineEvents:            &bTrue,
-		WikiPageEvents:            &bFalse,
-		DeploymentEvents:          &bTrue,
-		ReleasesEvents:            &bTrue,
-		EmojiEvents:               &bFalse,
-		ResourceAccessTokenEvents: &bTrue,
-		EnableSSLVerification:     &bTrue,
-		CustomWebhookTemplate:     `{"text":"hello"}`,
-		BranchFilterStrategy:      "wildcard",
+		ProjectID: "42",
+		URL:       "https://hook.example.com",
+		HookOptionsInput: HookOptionsInput{
+			Name:                      "my-hook",
+			Description:               "desc",
+			Token:                     "secret",
+			PushEvents:                &bTrue,
+			PushEventsBranchFilter:    "main",
+			IssuesEvents:              &bTrue,
+			ConfidentialIssuesEvents:  &bFalse,
+			MergeRequestsEvents:       &bTrue,
+			TagPushEvents:             &bTrue,
+			NoteEvents:                &bTrue,
+			ConfidentialNoteEvents:    &bFalse,
+			JobEvents:                 &bTrue,
+			PipelineEvents:            &bTrue,
+			WikiPageEvents:            &bFalse,
+			DeploymentEvents:          &bTrue,
+			ReleasesEvents:            &bTrue,
+			EmojiEvents:               &bFalse,
+			ResourceAccessTokenEvents: &bTrue,
+			EnableSSLVerification:     &bTrue,
+			CustomWebhookTemplate:     `{"text":"hello"}`,
+			BranchFilterStrategy:      "wildcard",
+		},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -6527,30 +6659,32 @@ func TestEditHook_AllOptionalFields(t *testing.T) {
 	bTrue := true
 	bFalse := false
 	out, err := EditHook(context.Background(), client, EditHookInput{
-		ProjectID:                 "42",
-		HookID:                    1,
-		URL:                       "https://updated.example.com",
-		Name:                      "updated",
-		Description:               "new desc",
-		Token:                     "newsecret",
-		PushEvents:                &bTrue,
-		PushEventsBranchFilter:    "develop",
-		IssuesEvents:              &bFalse,
-		ConfidentialIssuesEvents:  &bTrue,
-		MergeRequestsEvents:       &bTrue,
-		TagPushEvents:             &bFalse,
-		NoteEvents:                &bTrue,
-		ConfidentialNoteEvents:    &bTrue,
-		JobEvents:                 &bFalse,
-		PipelineEvents:            &bTrue,
-		WikiPageEvents:            &bTrue,
-		DeploymentEvents:          &bFalse,
-		ReleasesEvents:            &bTrue,
-		EmojiEvents:               &bTrue,
-		ResourceAccessTokenEvents: &bFalse,
-		EnableSSLVerification:     &bFalse,
-		CustomWebhookTemplate:     `{"text":"updated"}`,
-		BranchFilterStrategy:      "regex",
+		ProjectID: "42",
+		HookID:    1,
+		URL:       "https://updated.example.com",
+		HookOptionsInput: HookOptionsInput{
+			Name:                      "updated",
+			Description:               "new desc",
+			Token:                     "newsecret",
+			PushEvents:                &bTrue,
+			PushEventsBranchFilter:    "develop",
+			IssuesEvents:              &bFalse,
+			ConfidentialIssuesEvents:  &bTrue,
+			MergeRequestsEvents:       &bTrue,
+			TagPushEvents:             &bFalse,
+			NoteEvents:                &bTrue,
+			ConfidentialNoteEvents:    &bTrue,
+			JobEvents:                 &bFalse,
+			PipelineEvents:            &bTrue,
+			WikiPageEvents:            &bTrue,
+			DeploymentEvents:          &bFalse,
+			ReleasesEvents:            &bTrue,
+			EmojiEvents:               &bTrue,
+			ResourceAccessTokenEvents: &bFalse,
+			EnableSSLVerification:     &bFalse,
+			CustomWebhookTemplate:     `{"text":"updated"}`,
+			BranchFilterStrategy:      "regex",
+		},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

@@ -19,6 +19,7 @@ type HookInput struct {
 	Name                     string `json:"name,omitempty"                       jsonschema:"Hook name"`
 	Description              string `json:"description,omitempty"                jsonschema:"Hook description"`
 	Token                    string `json:"token,omitempty"                      jsonschema:"Secret token for payload validation"`
+	SigningToken             string `json:"signing_token,omitempty"              jsonschema:"Write-only signing token for webhook signature validation"`
 	PushEvents               *bool  `json:"push_events,omitempty"                jsonschema:"Trigger on push events"`
 	TagPushEvents            *bool  `json:"tag_push_events,omitempty"            jsonschema:"Trigger on tag push events"`
 	MergeRequestsEvents      *bool  `json:"merge_requests_events,omitempty"      jsonschema:"Trigger on merge request events"`
@@ -29,8 +30,11 @@ type HookInput struct {
 	WikiPageEvents           *bool  `json:"wiki_page_events,omitempty"           jsonschema:"Trigger on wiki page events"`
 	DeploymentEvents         *bool  `json:"deployment_events,omitempty"          jsonschema:"Trigger on deployment events"`
 	ReleasesEvents           *bool  `json:"releases_events,omitempty"            jsonschema:"Trigger on release events"`
+	MilestoneEvents          *bool  `json:"milestone_events,omitempty"           jsonschema:"Trigger on milestone events"`
+	FeatureFlagEvents        *bool  `json:"feature_flag_events,omitempty"        jsonschema:"Trigger on feature flag events"`
 	SubGroupEvents           *bool  `json:"subgroup_events,omitempty"            jsonschema:"Trigger on subgroup events"`
 	MemberEvents             *bool  `json:"member_events,omitempty"              jsonschema:"Trigger on member events"`
+	VulnerabilityEvents      *bool  `json:"vulnerability_events,omitempty"       jsonschema:"Trigger on vulnerability events"`
 	ConfidentialIssuesEvents *bool  `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
 	ConfidentialNoteEvents   *bool  `json:"confidential_note_events,omitempty"   jsonschema:"Trigger on confidential note events"`
 	EnableSSLVerification    *bool  `json:"enable_ssl_verification,omitempty"    jsonschema:"Enable SSL verification for the hook endpoint"`
@@ -72,8 +76,7 @@ type DeleteHookInput struct {
 // placeholders like {var_name} in a webhook URL with secret values resolved
 // server-side. Only the key is returned by the API; the value is masked.
 type HookURLVariable struct {
-	Key   string `json:"key"`
-	Value string `json:"value,omitempty"`
+	Key string `json:"key"`
 }
 
 // HookOutput represents a GitLab group webhook.
@@ -100,7 +103,13 @@ type HookOutput struct {
 	ConfidentialNoteEvents   bool              `json:"confidential_note_events"`
 	EnableSSLVerification    bool              `json:"enable_ssl_verification"`
 	AlertStatus              string            `json:"alert_status,omitempty"`
+	DisabledUntil            string            `json:"disabled_until,omitempty"`
 	URLVariables             []HookURLVariable `json:"url_variables,omitempty"`
+	FeatureFlagEvents        bool              `json:"feature_flag_events"`
+	MilestoneEvents          bool              `json:"milestone_events"`
+	VulnerabilityEvents      bool              `json:"vulnerability_events"`
+	TokenPresent             bool              `json:"token_present"`
+	SigningTokenPresent      bool              `json:"signing_token_present"`
 	CreatedAt                string            `json:"created_at,omitempty"`
 }
 
@@ -135,15 +144,23 @@ func hookToOutput(h *gl.GroupHook) HookOutput {
 		ConfidentialNoteEvents:   h.ConfidentialNoteEvents,
 		EnableSSLVerification:    h.EnableSSLVerification,
 		AlertStatus:              h.AlertStatus,
+		FeatureFlagEvents:        h.FeatureFlagEvents,
+		MilestoneEvents:          h.MilestoneEvents,
+		VulnerabilityEvents:      h.VulnerabilityEvents,
+		TokenPresent:             h.TokenPresent,
+		SigningTokenPresent:      h.SigningTokenPresent,
 	}
 	if len(h.URLVariables) > 0 {
 		out.URLVariables = make([]HookURLVariable, len(h.URLVariables))
 		for i, v := range h.URLVariables {
-			out.URLVariables[i] = HookURLVariable{Key: v.Key, Value: v.Value}
+			out.URLVariables[i] = HookURLVariable{Key: v.Key}
 		}
 	}
 	if h.CreatedAt != nil {
 		out.CreatedAt = h.CreatedAt.Format(time.RFC3339)
+	}
+	if h.DisabledUntil != nil {
+		out.DisabledUntil = h.DisabledUntil.Format(time.RFC3339)
 	}
 	return out
 }
@@ -201,16 +218,7 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 	return hookToOutput(h), nil
 }
 
-// applyAddHookOpts builds the AddGroupHookOptions from HookInput.
-func applyAddHookOpts(input HookInput) *gl.AddGroupHookOptions {
-	opts := &gl.AddGroupHookOptions{}
-	applyAddHookIdentity(input, opts)
-	applyAddHookEvents(input, opts)
-	return opts
-}
-
-// applyAddHookIdentity applies add hook identity transformations.
-func applyAddHookIdentity(input HookInput, opts *gl.AddGroupHookOptions) {
+func applyGroupHookOptions(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.URL != "" {
 		opts.URL = new(input.URL)
 	}
@@ -223,16 +231,15 @@ func applyAddHookIdentity(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.Token != "" {
 		opts.Token = new(input.Token)
 	}
+	if input.SigningToken != "" {
+		opts.SigningToken = new(input.SigningToken)
+	}
 	if input.EnableSSLVerification != nil {
 		opts.EnableSSLVerification = input.EnableSSLVerification
 	}
 	if input.PushEventsBranchFilter != "" {
 		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
 	}
-}
-
-// applyAddHookEvents applies add hook events transformations.
-func applyAddHookEvents(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.PushEvents != nil {
 		opts.PushEvents = input.PushEvents
 	}
@@ -263,94 +270,68 @@ func applyAddHookEvents(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.ReleasesEvents != nil {
 		opts.ReleasesEvents = input.ReleasesEvents
 	}
+	if input.MilestoneEvents != nil {
+		opts.MilestoneEvents = input.MilestoneEvents
+	}
+	if input.FeatureFlagEvents != nil {
+		opts.FeatureFlagEvents = input.FeatureFlagEvents
+	}
 	if input.SubGroupEvents != nil {
 		opts.SubGroupEvents = input.SubGroupEvents
 	}
 	if input.MemberEvents != nil {
 		opts.MemberEvents = input.MemberEvents
 	}
+	if input.VulnerabilityEvents != nil {
+		opts.VulnerabilityEvents = input.VulnerabilityEvents
+	}
 	if input.ConfidentialIssuesEvents != nil {
 		opts.ConfidentialIssuesEvents = input.ConfidentialIssuesEvents
 	}
 	if input.ConfidentialNoteEvents != nil {
 		opts.ConfidentialNoteEvents = input.ConfidentialNoteEvents
+	}
+}
+
+// applyAddHookOpts builds the AddGroupHookOptions from HookInput.
+func applyAddHookOpts(input HookInput) *gl.AddGroupHookOptions {
+	opts := &gl.AddGroupHookOptions{}
+	applyGroupHookOptions(input, opts)
+	return opts
+}
+
+func groupEditHookOptionsFromAdd(opts *gl.AddGroupHookOptions) *gl.EditGroupHookOptions {
+	return &gl.EditGroupHookOptions{
+		URL:                      opts.URL,
+		Name:                     opts.Name,
+		Description:              opts.Description,
+		PushEvents:               opts.PushEvents,
+		PushEventsBranchFilter:   opts.PushEventsBranchFilter,
+		IssuesEvents:             opts.IssuesEvents,
+		ConfidentialIssuesEvents: opts.ConfidentialIssuesEvents,
+		MergeRequestsEvents:      opts.MergeRequestsEvents,
+		TagPushEvents:            opts.TagPushEvents,
+		NoteEvents:               opts.NoteEvents,
+		ConfidentialNoteEvents:   opts.ConfidentialNoteEvents,
+		JobEvents:                opts.JobEvents,
+		PipelineEvents:           opts.PipelineEvents,
+		WikiPageEvents:           opts.WikiPageEvents,
+		DeploymentEvents:         opts.DeploymentEvents,
+		FeatureFlagEvents:        opts.FeatureFlagEvents,
+		ReleasesEvents:           opts.ReleasesEvents,
+		MilestoneEvents:          opts.MilestoneEvents,
+		SubGroupEvents:           opts.SubGroupEvents,
+		MemberEvents:             opts.MemberEvents,
+		VulnerabilityEvents:      opts.VulnerabilityEvents,
+		EnableSSLVerification:    opts.EnableSSLVerification,
+		Token:                    opts.Token,
+		SigningToken:             opts.SigningToken,
 	}
 }
 
 // applyEditHookOpts builds the EditGroupHookOptions from HookInput.
 func applyEditHookOpts(input HookInput) *gl.EditGroupHookOptions {
-	opts := &gl.EditGroupHookOptions{}
-	applyEditHookIdentity(input, opts)
-	applyEditHookEvents(input, opts)
-	return opts
-}
-
-// applyEditHookIdentity applies edit hook identity transformations.
-func applyEditHookIdentity(input HookInput, opts *gl.EditGroupHookOptions) {
-	if input.URL != "" {
-		opts.URL = new(input.URL)
-	}
-	if input.Name != "" {
-		opts.Name = new(input.Name)
-	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
-	if input.Token != "" {
-		opts.Token = new(input.Token)
-	}
-	if input.EnableSSLVerification != nil {
-		opts.EnableSSLVerification = input.EnableSSLVerification
-	}
-	if input.PushEventsBranchFilter != "" {
-		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
-	}
-}
-
-// applyEditHookEvents applies edit hook events transformations.
-func applyEditHookEvents(input HookInput, opts *gl.EditGroupHookOptions) {
-	if input.PushEvents != nil {
-		opts.PushEvents = input.PushEvents
-	}
-	if input.TagPushEvents != nil {
-		opts.TagPushEvents = input.TagPushEvents
-	}
-	if input.MergeRequestsEvents != nil {
-		opts.MergeRequestsEvents = input.MergeRequestsEvents
-	}
-	if input.IssuesEvents != nil {
-		opts.IssuesEvents = input.IssuesEvents
-	}
-	if input.NoteEvents != nil {
-		opts.NoteEvents = input.NoteEvents
-	}
-	if input.JobEvents != nil {
-		opts.JobEvents = input.JobEvents
-	}
-	if input.PipelineEvents != nil {
-		opts.PipelineEvents = input.PipelineEvents
-	}
-	if input.WikiPageEvents != nil {
-		opts.WikiPageEvents = input.WikiPageEvents
-	}
-	if input.DeploymentEvents != nil {
-		opts.DeploymentEvents = input.DeploymentEvents
-	}
-	if input.ReleasesEvents != nil {
-		opts.ReleasesEvents = input.ReleasesEvents
-	}
-	if input.SubGroupEvents != nil {
-		opts.SubGroupEvents = input.SubGroupEvents
-	}
-	if input.MemberEvents != nil {
-		opts.MemberEvents = input.MemberEvents
-	}
-	if input.ConfidentialIssuesEvents != nil {
-		opts.ConfidentialIssuesEvents = input.ConfidentialIssuesEvents
-	}
-	if input.ConfidentialNoteEvents != nil {
-		opts.ConfidentialNoteEvents = input.ConfidentialNoteEvents
-	}
+	return groupEditHookOptionsFromAdd(applyAddHookOpts(input))
 }
 
 // AddHook adds a new webhook to a group. Requires the webhook URL.
@@ -454,11 +435,20 @@ func enabledEvents(h HookOutput) string {
 	if h.ReleasesEvents {
 		events = append(events, "releases")
 	}
+	if h.MilestoneEvents {
+		events = append(events, "milestone")
+	}
+	if h.FeatureFlagEvents {
+		events = append(events, "feature_flag")
+	}
 	if h.SubGroupEvents {
 		events = append(events, "subgroup")
 	}
 	if h.MemberEvents {
 		events = append(events, "member")
+	}
+	if h.VulnerabilityEvents {
+		events = append(events, "vulnerability")
 	}
 	if len(events) == 0 {
 		return "none"

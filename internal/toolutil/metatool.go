@@ -396,10 +396,12 @@ func inputSchemaForType(rt reflect.Type) map[string]any {
 		m, _ := cached.(map[string]any)
 		return m
 	}
-	schema := maps.Clone(schemaForType(rt))
-	if schema == nil {
+	baseSchema := schemaForType(rt)
+	if baseSchema == nil {
 		return nil
 	}
+	schema := cloneSchemaMap(baseSchema)
+	markWriteOnlySecretFields(schema, rt)
 	if required := requiredJSONFieldNames(rt); len(required) > 0 {
 		schema["required"] = required
 	} else {
@@ -407,6 +409,45 @@ func inputSchemaForType(rt reflect.Type) map[string]any {
 	}
 	inputSchemaCache.Store(rt, schema)
 	return schema
+}
+
+func markWriteOnlySecretFields(schema map[string]any, rt reflect.Type) {
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	for _, name := range secretJSONFieldNames(rt) {
+		if prop, isPropertySchema := props[name].(map[string]any); isPropertySchema {
+			prop["writeOnly"] = true
+		}
+	}
+}
+
+func secretJSONFieldNames(rt reflect.Type) []string {
+	if rt.Kind() == reflect.Pointer {
+		rt = rt.Elem()
+	}
+	if rt.Kind() != reflect.Struct {
+		return nil
+	}
+	var names []string
+	for field := range rt.Fields() {
+		if field.PkgPath != "" && !field.Anonymous {
+			continue
+		}
+		jsonName := jsonFieldName(field)
+		if jsonName == "-" {
+			continue
+		}
+		if field.Anonymous && jsonName == "" {
+			names = append(names, secretJSONFieldNames(field.Type)...)
+			continue
+		}
+		if jsonName == "token" || jsonName == "signing_token" {
+			names = append(names, jsonName)
+		}
+	}
+	return names
 }
 
 func requiredJSONFieldNames(rt reflect.Type) []string {

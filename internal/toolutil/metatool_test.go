@@ -2893,6 +2893,104 @@ func TestInputSchemaForType_RequiredSuffixRemoved(t *testing.T) {
 	}
 }
 
+// TestInputSchemaForType_SecretFieldsWriteOnly verifies token inputs are marked
+// write-only without relying on jsonschema-go tag support.
+func TestInputSchemaForType_SecretFieldsWriteOnly(t *testing.T) {
+	type embeddedSecret struct {
+		SigningToken string `json:"signing_token,omitempty" jsonschema:"Signing token"`
+	}
+	type secretInput struct {
+		embeddedSecret
+		Token string `json:"token,omitempty" jsonschema:"Secret token"`
+		Name  string `json:"name,omitempty" jsonschema:"Name"`
+	}
+
+	schema := inputSchemaForType(reflect.TypeFor[secretInput]())
+	properties := schema["properties"].(map[string]any)
+	for _, key := range []string{"token", "signing_token"} {
+		property := properties[key].(map[string]any)
+		if property["writeOnly"] != true {
+			t.Fatalf("%s writeOnly = %v, want true", key, property["writeOnly"])
+		}
+	}
+	name := properties["name"].(map[string]any)
+	if _, ok := name["writeOnly"]; ok {
+		t.Fatalf("name should not be writeOnly: %v", name)
+	}
+}
+
+func TestInputSchemaForType_UnsupportedTypeReturnsNil(t *testing.T) {
+	type unsupportedInput struct {
+		Ch chan int `json:"ch"`
+	}
+
+	if schema := inputSchemaForType(reflect.TypeFor[unsupportedInput]()); schema != nil {
+		t.Fatalf("inputSchemaForType() = %v, want nil", schema)
+	}
+}
+
+func TestInputSchemaForType_PointerInputCacheHit(t *testing.T) {
+	type pointerSecretInput struct {
+		Token string `json:"token,omitempty"`
+	}
+
+	first := inputSchemaForType(reflect.TypeFor[*pointerSecretInput]())
+	second := inputSchemaForType(reflect.TypeFor[*pointerSecretInput]())
+	if first == nil || second == nil {
+		t.Fatal("expected non-nil schemas")
+	}
+	if reflect.ValueOf(first).Pointer() != reflect.ValueOf(second).Pointer() {
+		t.Fatal("expected cached input schema map to be reused")
+	}
+	properties := first["properties"].(map[string]any)
+	token := properties["token"].(map[string]any)
+	if token["writeOnly"] != true {
+		t.Fatalf("token writeOnly = %v, want true", token["writeOnly"])
+	}
+}
+
+func TestMarkWriteOnlySecretFields_IgnoresMissingProperties(t *testing.T) {
+	schema := map[string]any{"type": "string"}
+	markWriteOnlySecretFields(schema, reflect.TypeFor[string]())
+
+	if _, ok := schema["writeOnly"]; ok {
+		t.Fatalf("schema should not be marked writeOnly: %v", schema)
+	}
+}
+
+func TestMarkWriteOnlySecretFields_IgnoresNonSchemaProperties(t *testing.T) {
+	type secretInput struct {
+		Token string `json:"token,omitempty"`
+	}
+	schema := map[string]any{"properties": map[string]any{"token": "not-a-schema"}}
+	markWriteOnlySecretFields(schema, reflect.TypeFor[secretInput]())
+
+	properties := schema["properties"].(map[string]any)
+	if properties["token"] != "not-a-schema" {
+		t.Fatalf("token property mutated unexpectedly: %v", properties["token"])
+	}
+}
+
+func TestSecretJSONFieldNames_EdgeCases(t *testing.T) {
+	type embeddedSecret struct {
+		SigningToken string `json:"signing_token,omitempty"`
+	}
+	type secretInput struct {
+		*embeddedSecret
+		ignored string
+		Ignored string `json:"-"`
+		Token   string `json:"token,omitempty"`
+	}
+
+	_ = secretInput{ignored: "private"}
+	if got := secretJSONFieldNames(reflect.TypeFor[*string]()); len(got) != 0 {
+		t.Fatalf("non-struct secret fields = %v, want empty", got)
+	}
+	if got := secretJSONFieldNames(reflect.TypeFor[secretInput]()); !reflect.DeepEqual(got, []string{"signing_token", "token"}) {
+		t.Fatalf("secret fields = %v, want [signing_token token]", got)
+	}
+}
+
 // TestStripReservedKeys_MultipleKeys verifies that real keys are preserved
 // when reserved keys are also present (covers the "copy" branch).
 func TestStripReservedKeys_MultipleKeys(t *testing.T) {

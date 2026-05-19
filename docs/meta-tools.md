@@ -1,6 +1,6 @@
 # Meta-Tools Reference
 
-Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1014 self-managed Enterprise/Premium individual tools or 1019 GitLab.com Enterprise/Premium tools, **33 base meta-tools** (49 self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium) provide the same functionality while reducing token overhead for LLMs.
+Meta-tools group related GitLab operations under a single MCP tool with an `action` parameter. Instead of 1017 self-managed Enterprise/Premium individual tools or 1022 GitLab.com Enterprise/Premium tools, **33 base meta-tools** (49 self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium) provide the same functionality while reducing token overhead for LLMs.
 
 > **Diátaxis type**: Reference
 > **Audience**: 👤🔧 All users
@@ -62,7 +62,7 @@ Meta-tools remain available because they are the most broadly compatible consoli
 | Mode | Tool Count | Best For |
 | --- | ---: | --- |
 | Meta-tools | 33 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
-| Individual tools | 863 CE / 1014 self-managed Enterprise/Premium / 1019 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation |
+| Individual tools | 866 CE / 1017 self-managed Enterprise/Premium / 1022 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation |
 
 ---
 

@@ -55,7 +55,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("system_hook_list", toolutil.RouteAction(client, systemhooks.List), "gitlab_list_system_hooks"),
 		adminReadSpec("system_hook_get", toolutil.RouteAction(client, systemhooks.Get), "gitlab_get_system_hook"),
 		adminCreateSpec("system_hook_add", toolutil.RouteAction(client, systemhooks.Add), "gitlab_add_system_hook"),
+		adminSystemHookEditSpec(client),
 		adminSystemHookTestSpec(client),
+		adminUpdateSpec("system_hook_set_url_variable", toolutil.RouteVoidAction(client, systemhooks.SetURLVariable), "gitlab_set_system_hook_url_variable"),
+		adminDeleteSpec("system_hook_delete_url_variable", toolutil.DestructiveVoidAction(client, systemhooks.DeleteURLVariable), "gitlab_delete_system_hook_url_variable"),
 		adminDeleteSpec("system_hook_delete", toolutil.DestructiveVoidAction(client, systemhooks.Delete), "gitlab_delete_system_hook"),
 		adminReadSpec("sidekiq_queue_metrics", toolutil.RouteAction(client, sidekiq.GetQueueMetrics), "gitlab_get_sidekiq_queue_metrics"),
 		adminReadSpec("sidekiq_process_metrics", toolutil.RouteAction(client, sidekiq.GetProcessMetrics), "gitlab_get_sidekiq_process_metrics"),
@@ -170,6 +173,13 @@ func adminSystemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.IndividualTool.AnnotationOverrides.ReadOnly = &individualReadOnly
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
 	return toolutil.NewActionSpec("system_hook_test", toolutil.RouteAction(client, systemhooks.Test), options)
+}
+
+func adminSystemHookEditSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := adminOptions("gitlab_edit_system_hook")
+	options.Idempotent = true
+	options.IndividualTool.Description = "Edit an instance system hook."
+	return toolutil.NewActionSpec("system_hook_edit", toolutil.RouteAction(client, systemhooks.Edit), options)
 }
 
 func adminSettingsGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {

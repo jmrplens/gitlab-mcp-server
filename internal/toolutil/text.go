@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+// RedactedSecretValue is the standard placeholder for sensitive values that
+// must not be exposed through structured output or Markdown renderers.
+const RedactedSecretValue = "REDACTED"
+
 // NormalizeText replaces literal escape sequences with real characters.
 // MCP clients may send text with literal backslash-n instead of real newlines
 // when the JSON transport double-escapes the input.

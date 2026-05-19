@@ -51,8 +51,17 @@ func FormatHookMarkdown(item HookItem) *mcp.CallToolResult {
 	fmt.Fprintf(&sb, "| MR Events | %v |\n", item.MergeRequestsEvents)
 	fmt.Fprintf(&sb, "| Repo Update Events | %v |\n", item.RepositoryUpdateEvents)
 	fmt.Fprintf(&sb, "| SSL Verification | %v |\n", item.EnableSSLVerification)
+	fmt.Fprintf(&sb, "| Token Present | %v |\n", item.TokenPresent)
+	fmt.Fprintf(&sb, "| Signing Token Present | %v |\n", item.SigningTokenPresent)
 	if item.CreatedAt != "" {
 		fmt.Fprintf(&sb, "| Created At | %s |\n", toolutil.FormatTime(item.CreatedAt))
+	}
+	if len(item.URLVariables) > 0 {
+		sb.WriteString("\n### URL Variables\n\n")
+		sb.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
+		for _, variable := range item.URLVariables {
+			sb.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), toolutil.RedactedSecretValue))
+		}
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_test_system_hook` to verify this hook is working")
 	return toolutil.ToolResultWithMarkdown(sb.String())

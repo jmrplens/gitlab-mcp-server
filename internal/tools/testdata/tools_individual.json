@@ -2137,6 +2137,11 @@
             "boolean"
           ]
         },
+        "signing_token": {
+          "description": "Write-only signing token for webhook signature validation",
+          "type": "string",
+          "writeOnly": true
+        },
         "tag_push_events": {
           "description": "Trigger on tag push events",
           "type": [
@@ -2146,7 +2151,8 @@
         },
         "token": {
           "description": "Secret token for payload validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Hook URL to receive events",
@@ -2188,11 +2194,35 @@
             "repository_update_events": {
               "type": "boolean"
             },
+            "signing_token_present": {
+              "type": "boolean"
+            },
             "tag_push_events": {
+              "type": "boolean"
+            },
+            "token_present": {
               "type": "boolean"
             },
             "url": {
               "type": "string"
+            },
+            "url_variables": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             }
           },
           "required": [
@@ -2202,7 +2232,9 @@
             "tag_push_events",
             "merge_requests_events",
             "repository_update_events",
-            "enable_ssl_verification"
+            "enable_ssl_verification",
+            "token_present",
+            "signing_token_present"
           ],
           "type": "object"
         },
@@ -13651,6 +13683,63 @@
     }
   },
   {
+    "name": "gitlab_delete_system_hook_url_variable",
+    "description": "Delete System Hook URL Variable.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "id": {
+          "description": "System hook ID",
+          "type": "integer"
+        },
+        "key": {
+          "description": "URL variable key name to delete",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "key"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_delete_terraform_state",
     "description": "Delete a Terraform state\n\nReturns: JSON confirming state deletion.\n\nSee also: gitlab_list_terraform_states, gitlab_get_terraform_state",
     "inputSchema": {
@@ -17619,6 +17708,182 @@
         "id",
         "key",
         "process_mode"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_edit_system_hook",
+    "description": "Edit an instance system hook.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "branch_filter_strategy": {
+          "description": "Branch filter strategy: wildcard, regex, or all_branches",
+          "type": "string"
+        },
+        "description": {
+          "description": "Updated hook description",
+          "type": "string"
+        },
+        "enable_ssl_verification": {
+          "description": "Enable SSL verification for the hook URL",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "id": {
+          "description": "System hook ID to edit",
+          "type": "integer"
+        },
+        "merge_requests_events": {
+          "description": "Trigger on merge request events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "name": {
+          "description": "Updated hook name",
+          "type": "string"
+        },
+        "push_events": {
+          "description": "Trigger on push events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "push_events_branch_filter": {
+          "description": "Branch filter for push events (wildcard, regex, or branch name)",
+          "type": "string"
+        },
+        "repository_update_events": {
+          "description": "Trigger on repository update events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "signing_token": {
+          "description": "Updated write-only signing token for webhook signature validation",
+          "type": "string",
+          "writeOnly": true
+        },
+        "tag_push_events": {
+          "description": "Trigger on tag push events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "token": {
+          "description": "Updated secret token for payload validation",
+          "type": "string",
+          "writeOnly": true
+        },
+        "url": {
+          "description": "Updated hook URL",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "hook": {
+          "additionalProperties": false,
+          "properties": {
+            "created_at": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "enable_ssl_verification": {
+              "type": "boolean"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "merge_requests_events": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "push_events": {
+              "type": "boolean"
+            },
+            "repository_update_events": {
+              "type": "boolean"
+            },
+            "signing_token_present": {
+              "type": "boolean"
+            },
+            "tag_push_events": {
+              "type": "boolean"
+            },
+            "token_present": {
+              "type": "boolean"
+            },
+            "url": {
+              "type": "string"
+            },
+            "url_variables": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "url",
+            "push_events",
+            "tag_push_events",
+            "merge_requests_events",
+            "repository_update_events",
+            "enable_ssl_verification",
+            "token_present",
+            "signing_token_present"
+          ],
+          "type": "object"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "hook"
       ],
       "type": "object"
     },
@@ -28524,11 +28789,35 @@
             "repository_update_events": {
               "type": "boolean"
             },
+            "signing_token_present": {
+              "type": "boolean"
+            },
             "tag_push_events": {
+              "type": "boolean"
+            },
+            "token_present": {
               "type": "boolean"
             },
             "url": {
               "type": "string"
+            },
+            "url_variables": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             }
           },
           "required": [
@@ -28538,7 +28827,9 @@
             "tag_push_events",
             "merge_requests_events",
             "repository_update_events",
-            "enable_ssl_verification"
+            "enable_ssl_verification",
+            "token_present",
+            "signing_token_present"
           ],
           "type": "object"
         },
@@ -32005,6 +32296,13 @@
             "boolean"
           ]
         },
+        "feature_flag_events": {
+          "description": "Trigger on feature flag events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -32032,6 +32330,13 @@
         },
         "merge_requests_events": {
           "description": "Trigger on merge request events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "milestone_events": {
+          "description": "Trigger on milestone events",
           "type": [
             "null",
             "boolean"
@@ -32073,6 +32378,11 @@
             "boolean"
           ]
         },
+        "signing_token": {
+          "description": "Write-only signing token for webhook signature validation",
+          "type": "string",
+          "writeOnly": true
+        },
         "subgroup_events": {
           "description": "Trigger on subgroup events",
           "type": [
@@ -32089,11 +32399,19 @@
         },
         "token": {
           "description": "Secret token for payload validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Webhook URL (required for add)",
           "type": "string"
+        },
+        "vulnerability_events": {
+          "description": "Trigger on vulnerability events",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "wiki_page_events": {
           "description": "Trigger on wiki page events",
@@ -32129,7 +32447,13 @@
         "description": {
           "type": "string"
         },
+        "disabled_until": {
+          "type": "string"
+        },
         "enable_ssl_verification": {
+          "type": "boolean"
+        },
+        "feature_flag_events": {
           "type": "boolean"
         },
         "group_id": {
@@ -32148,6 +32472,9 @@
           "type": "boolean"
         },
         "merge_requests_events": {
+          "type": "boolean"
+        },
+        "milestone_events": {
           "type": "boolean"
         },
         "name": {
@@ -32174,10 +32501,16 @@
         "releases_events": {
           "type": "boolean"
         },
+        "signing_token_present": {
+          "type": "boolean"
+        },
         "subgroup_events": {
           "type": "boolean"
         },
         "tag_push_events": {
+          "type": "boolean"
+        },
+        "token_present": {
           "type": "boolean"
         },
         "url": {
@@ -32188,9 +32521,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -32203,6 +32533,9 @@
             "null",
             "array"
           ]
+        },
+        "vulnerability_events": {
+          "type": "boolean"
         },
         "wiki_page_events": {
           "type": "boolean"
@@ -32226,7 +32559,12 @@
         "member_events",
         "confidential_issues_events",
         "confidential_note_events",
-        "enable_ssl_verification"
+        "enable_ssl_verification",
+        "feature_flag_events",
+        "milestone_events",
+        "vulnerability_events",
+        "token_present",
+        "signing_token_present"
       ],
       "type": "object"
     },
@@ -32330,6 +32668,13 @@
             "boolean"
           ]
         },
+        "feature_flag_events": {
+          "description": "Trigger on feature flag events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "group_id": {
           "description": "Group ID or URL-encoded path",
           "type": "string"
@@ -32361,6 +32706,13 @@
         },
         "merge_requests_events": {
           "description": "Trigger on merge request events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "milestone_events": {
+          "description": "Trigger on milestone events",
           "type": [
             "null",
             "boolean"
@@ -32402,6 +32754,11 @@
             "boolean"
           ]
         },
+        "signing_token": {
+          "description": "Write-only signing token for webhook signature validation",
+          "type": "string",
+          "writeOnly": true
+        },
         "subgroup_events": {
           "description": "Trigger on subgroup events",
           "type": [
@@ -32418,11 +32775,19 @@
         },
         "token": {
           "description": "Secret token for payload validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Webhook URL (required for add)",
           "type": "string"
+        },
+        "vulnerability_events": {
+          "description": "Trigger on vulnerability events",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "wiki_page_events": {
           "description": "Trigger on wiki page events",
@@ -32459,7 +32824,13 @@
         "description": {
           "type": "string"
         },
+        "disabled_until": {
+          "type": "string"
+        },
         "enable_ssl_verification": {
+          "type": "boolean"
+        },
+        "feature_flag_events": {
           "type": "boolean"
         },
         "group_id": {
@@ -32478,6 +32849,9 @@
           "type": "boolean"
         },
         "merge_requests_events": {
+          "type": "boolean"
+        },
+        "milestone_events": {
           "type": "boolean"
         },
         "name": {
@@ -32504,10 +32878,16 @@
         "releases_events": {
           "type": "boolean"
         },
+        "signing_token_present": {
+          "type": "boolean"
+        },
         "subgroup_events": {
           "type": "boolean"
         },
         "tag_push_events": {
+          "type": "boolean"
+        },
+        "token_present": {
           "type": "boolean"
         },
         "url": {
@@ -32518,9 +32898,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -32533,6 +32910,9 @@
             "null",
             "array"
           ]
+        },
+        "vulnerability_events": {
+          "type": "boolean"
         },
         "wiki_page_events": {
           "type": "boolean"
@@ -32556,7 +32936,12 @@
         "member_events",
         "confidential_issues_events",
         "confidential_note_events",
-        "enable_ssl_verification"
+        "enable_ssl_verification",
+        "feature_flag_events",
+        "milestone_events",
+        "vulnerability_events",
+        "token_present",
+        "signing_token_present"
       ],
       "type": "object"
     },
@@ -32608,7 +32993,13 @@
         "description": {
           "type": "string"
         },
+        "disabled_until": {
+          "type": "string"
+        },
         "enable_ssl_verification": {
+          "type": "boolean"
+        },
+        "feature_flag_events": {
           "type": "boolean"
         },
         "group_id": {
@@ -32627,6 +33018,9 @@
           "type": "boolean"
         },
         "merge_requests_events": {
+          "type": "boolean"
+        },
+        "milestone_events": {
           "type": "boolean"
         },
         "name": {
@@ -32653,10 +33047,16 @@
         "releases_events": {
           "type": "boolean"
         },
+        "signing_token_present": {
+          "type": "boolean"
+        },
         "subgroup_events": {
           "type": "boolean"
         },
         "tag_push_events": {
+          "type": "boolean"
+        },
+        "token_present": {
           "type": "boolean"
         },
         "url": {
@@ -32667,9 +33067,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -32682,6 +33079,9 @@
             "null",
             "array"
           ]
+        },
+        "vulnerability_events": {
+          "type": "boolean"
         },
         "wiki_page_events": {
           "type": "boolean"
@@ -32705,7 +33105,12 @@
         "member_events",
         "confidential_issues_events",
         "confidential_note_events",
-        "enable_ssl_verification"
+        "enable_ssl_verification",
+        "feature_flag_events",
+        "milestone_events",
+        "vulnerability_events",
+        "token_present",
+        "signing_token_present"
       ],
       "type": "object"
     },
@@ -32765,7 +33170,13 @@
               "description": {
                 "type": "string"
               },
+              "disabled_until": {
+                "type": "string"
+              },
               "enable_ssl_verification": {
+                "type": "boolean"
+              },
+              "feature_flag_events": {
                 "type": "boolean"
               },
               "group_id": {
@@ -32784,6 +33195,9 @@
                 "type": "boolean"
               },
               "merge_requests_events": {
+                "type": "boolean"
+              },
+              "milestone_events": {
                 "type": "boolean"
               },
               "name": {
@@ -32810,10 +33224,16 @@
               "releases_events": {
                 "type": "boolean"
               },
+              "signing_token_present": {
+                "type": "boolean"
+              },
               "subgroup_events": {
                 "type": "boolean"
               },
               "tag_push_events": {
+                "type": "boolean"
+              },
+              "token_present": {
                 "type": "boolean"
               },
               "url": {
@@ -32824,9 +33244,6 @@
                   "additionalProperties": false,
                   "properties": {
                     "key": {
-                      "type": "string"
-                    },
-                    "value": {
                       "type": "string"
                     }
                   },
@@ -32839,6 +33256,9 @@
                   "null",
                   "array"
                 ]
+              },
+              "vulnerability_events": {
+                "type": "boolean"
               },
               "wiki_page_events": {
                 "type": "boolean"
@@ -32862,7 +33282,12 @@
               "member_events",
               "confidential_issues_events",
               "confidential_note_events",
-              "enable_ssl_verification"
+              "enable_ssl_verification",
+              "feature_flag_events",
+              "milestone_events",
+              "vulnerability_events",
+              "token_present",
+              "signing_token_present"
             ],
             "type": "object"
           },
@@ -60581,11 +61006,35 @@
               "repository_update_events": {
                 "type": "boolean"
               },
+              "signing_token_present": {
+                "type": "boolean"
+              },
               "tag_push_events": {
+                "type": "boolean"
+              },
+              "token_present": {
                 "type": "boolean"
               },
               "url": {
                 "type": "string"
+              },
+              "url_variables": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               }
             },
             "required": [
@@ -60595,7 +61044,9 @@
               "tag_push_events",
               "merge_requests_events",
               "repository_update_events",
-              "enable_ssl_verification"
+              "enable_ssl_verification",
+              "token_present",
+              "signing_token_present"
             ],
             "type": "object"
           },
@@ -80459,7 +80910,8 @@
         },
         "token": {
           "description": "Pipeline trigger token",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "variables": {
           "description": "JSON object of key-value variable pairs",
@@ -85174,6 +85626,13 @@
             "boolean"
           ]
         },
+        "feature_flag_events": {
+          "description": "Trigger on feature flag events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "issues_events": {
           "description": "Trigger on issue events",
           "type": [
@@ -85190,6 +85649,13 @@
         },
         "merge_requests_events": {
           "description": "Trigger on merge request events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "milestone_events": {
+          "description": "Trigger on milestone events",
           "type": [
             "null",
             "boolean"
@@ -85242,6 +85708,18 @@
             "boolean"
           ]
         },
+        "resource_deploy_token_events": {
+          "description": "Trigger on resource deploy token events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "signing_token": {
+          "description": "Write-only signing token for webhook signature validation",
+          "type": "string",
+          "writeOnly": true
+        },
         "tag_push_events": {
           "description": "Trigger on tag push events",
           "type": [
@@ -85251,11 +85729,19 @@
         },
         "token": {
           "description": "Secret token for validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Webhook URL",
           "type": "string"
+        },
+        "vulnerability_events": {
+          "description": "Trigger on vulnerability events",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "wiki_page_events": {
           "description": "Trigger on wiki page events",
@@ -85289,6 +85775,24 @@
         "created_at": {
           "type": "string"
         },
+        "custom_headers": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "custom_webhook_template": {
           "type": "string"
         },
@@ -85296,6 +85800,9 @@
           "type": "boolean"
         },
         "description": {
+          "type": "string"
+        },
+        "disabled_until": {
           "type": "string"
         },
         "emoji_events": {
@@ -85358,11 +85865,41 @@
         "resource_access_token_events": {
           "type": "boolean"
         },
+        "resource_deploy_token_events": {
+          "type": "boolean"
+        },
+        "signing_token_present": {
+          "type": "boolean"
+        },
         "tag_push_events": {
+          "type": "boolean"
+        },
+        "token_present": {
           "type": "boolean"
         },
         "url": {
           "type": "string"
+        },
+        "url_variables": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "vulnerability_events": {
+          "type": "boolean"
         },
         "wiki_page_events": {
           "type": "boolean"
@@ -85390,6 +85927,10 @@
         "enable_ssl_verification",
         "repository_update_events",
         "resource_access_token_events",
+        "resource_deploy_token_events",
+        "vulnerability_events",
+        "token_present",
+        "signing_token_present",
         "created_at"
       ],
       "type": "object"
@@ -85616,7 +86157,7 @@
           ]
         },
         "description": {
-          "description": "Updated webhook description",
+          "description": "Webhook description",
           "type": "string"
         },
         "emoji_events": {
@@ -85627,7 +86168,14 @@
           ]
         },
         "enable_ssl_verification": {
-          "description": "Enable SSL verification",
+          "description": "Enable SSL verification for webhook",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "feature_flag_events": {
+          "description": "Trigger on feature flag events",
           "type": [
             "null",
             "boolean"
@@ -85658,8 +86206,15 @@
             "boolean"
           ]
         },
+        "milestone_events": {
+          "description": "Trigger on milestone events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "name": {
-          "description": "Updated webhook name",
+          "description": "Webhook name",
           "type": "string"
         },
         "note_events": {
@@ -85705,6 +86260,18 @@
             "boolean"
           ]
         },
+        "resource_deploy_token_events": {
+          "description": "Trigger on resource deploy token events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "signing_token": {
+          "description": "Write-only signing token for webhook signature validation",
+          "type": "string",
+          "writeOnly": true
+        },
         "tag_push_events": {
           "description": "Trigger on tag push events",
           "type": [
@@ -85713,12 +86280,20 @@
           ]
         },
         "token": {
-          "description": "Updated secret token",
-          "type": "string"
+          "description": "Secret token for validation",
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Updated webhook URL",
           "type": "string"
+        },
+        "vulnerability_events": {
+          "description": "Trigger on vulnerability events",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "wiki_page_events": {
           "description": "Trigger on wiki page events",
@@ -85752,6 +86327,24 @@
         "created_at": {
           "type": "string"
         },
+        "custom_headers": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "custom_webhook_template": {
           "type": "string"
         },
@@ -85759,6 +86352,9 @@
           "type": "boolean"
         },
         "description": {
+          "type": "string"
+        },
+        "disabled_until": {
           "type": "string"
         },
         "emoji_events": {
@@ -85821,11 +86417,41 @@
         "resource_access_token_events": {
           "type": "boolean"
         },
+        "resource_deploy_token_events": {
+          "type": "boolean"
+        },
+        "signing_token_present": {
+          "type": "boolean"
+        },
         "tag_push_events": {
+          "type": "boolean"
+        },
+        "token_present": {
           "type": "boolean"
         },
         "url": {
           "type": "string"
+        },
+        "url_variables": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "vulnerability_events": {
+          "type": "boolean"
         },
         "wiki_page_events": {
           "type": "boolean"
@@ -85853,6 +86479,10 @@
         "enable_ssl_verification",
         "repository_update_events",
         "resource_access_token_events",
+        "resource_deploy_token_events",
+        "vulnerability_events",
+        "token_present",
+        "signing_token_present",
         "created_at"
       ],
       "type": "object"
@@ -85902,6 +86532,24 @@
         "created_at": {
           "type": "string"
         },
+        "custom_headers": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "custom_webhook_template": {
           "type": "string"
         },
@@ -85909,6 +86557,9 @@
           "type": "boolean"
         },
         "description": {
+          "type": "string"
+        },
+        "disabled_until": {
           "type": "string"
         },
         "emoji_events": {
@@ -85971,11 +86622,41 @@
         "resource_access_token_events": {
           "type": "boolean"
         },
+        "resource_deploy_token_events": {
+          "type": "boolean"
+        },
+        "signing_token_present": {
+          "type": "boolean"
+        },
         "tag_push_events": {
+          "type": "boolean"
+        },
+        "token_present": {
           "type": "boolean"
         },
         "url": {
           "type": "string"
+        },
+        "url_variables": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "vulnerability_events": {
+          "type": "boolean"
         },
         "wiki_page_events": {
           "type": "boolean"
@@ -86003,6 +86684,10 @@
         "enable_ssl_verification",
         "repository_update_events",
         "resource_access_token_events",
+        "resource_deploy_token_events",
+        "vulnerability_events",
+        "token_present",
+        "signing_token_present",
         "created_at"
       ],
       "type": "object"
@@ -86060,6 +86745,24 @@
               "created_at": {
                 "type": "string"
               },
+              "custom_headers": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
               "custom_webhook_template": {
                 "type": "string"
               },
@@ -86067,6 +86770,9 @@
                 "type": "boolean"
               },
               "description": {
+                "type": "string"
+              },
+              "disabled_until": {
                 "type": "string"
               },
               "emoji_events": {
@@ -86129,11 +86835,41 @@
               "resource_access_token_events": {
                 "type": "boolean"
               },
+              "resource_deploy_token_events": {
+                "type": "boolean"
+              },
+              "signing_token_present": {
+                "type": "boolean"
+              },
               "tag_push_events": {
+                "type": "boolean"
+              },
+              "token_present": {
                 "type": "boolean"
               },
               "url": {
                 "type": "string"
+              },
+              "url_variables": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "vulnerability_events": {
+                "type": "boolean"
               },
               "wiki_page_events": {
                 "type": "boolean"
@@ -86161,6 +86897,10 @@
               "enable_ssl_verification",
               "repository_update_events",
               "resource_access_token_events",
+              "resource_deploy_token_events",
+              "vulnerability_events",
+              "token_present",
+              "signing_token_present",
               "created_at"
             ],
             "type": "object"
@@ -101373,7 +102113,8 @@
         },
         "token": {
           "description": "Runner authentication token",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         }
       },
       "required": [
@@ -102673,7 +103414,8 @@
         },
         "token": {
           "description": "Registration token",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         }
       },
       "required": [
@@ -103128,7 +103870,8 @@
       "properties": {
         "token": {
           "description": "Runner authentication token to verify",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         }
       },
       "required": [
@@ -106280,6 +107023,63 @@
         "sha",
         "external_status_check_id",
         "status"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_set_system_hook_url_variable",
+    "description": "Set System Hook URL Variable.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "System hook ID",
+          "type": "integer"
+        },
+        "key": {
+          "description": "URL variable key name",
+          "type": "string"
+        },
+        "value": {
+          "description": "URL variable value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "key",
+        "value"
       ],
       "type": "object"
     },

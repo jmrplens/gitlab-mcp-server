@@ -2,6 +2,7 @@ package systemhooks
 
 import (
 	"context"
+	"fmt"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -13,7 +14,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		systemHookReadSpec("system_hook_list", toolutil.RouteAction(client, List), "gitlab_list_system_hooks"),
 		systemHookReadSpec("system_hook_get", toolutil.RouteAction(client, Get), "gitlab_get_system_hook"),
 		systemHookCreateSpec("system_hook_add", toolutil.RouteAction(client, Add), "gitlab_add_system_hook"),
+		systemHookUpdateSpec("system_hook_edit", toolutil.RouteAction(client, Edit), "gitlab_edit_system_hook"),
 		systemHookTestSpec(client),
+		systemHookUpdateSpec("system_hook_set_url_variable", toolutil.RouteAction(client, setURLVariableOutput), "gitlab_set_system_hook_url_variable"),
+		systemHookDeleteSpec("system_hook_delete_url_variable", toolutil.DestructiveAction(client, deleteURLVariableOutput), "gitlab_delete_system_hook_url_variable"),
 		systemHookDeleteSpec("system_hook_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_system_hook"),
 	}
 }
@@ -26,6 +30,20 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 	return out, nil
 }
 
+func setURLVariableOutput(ctx context.Context, client *gitlabclient.Client, input SetURLVariableInput) (toolutil.VoidOutput, error) {
+	if err := SetURLVariable(ctx, client, input); err != nil {
+		return toolutil.VoidOutput{}, err
+	}
+	return toolutil.VoidOutput{Status: "success", Message: fmt.Sprintf("URL variable %q set on system hook %d", input.Key, input.ID)}, nil
+}
+
+func deleteURLVariableOutput(ctx context.Context, client *gitlabclient.Client, input DeleteURLVariableInput) (toolutil.VoidOutput, error) {
+	if err := DeleteURLVariable(ctx, client, input); err != nil {
+		return toolutil.VoidOutput{}, err
+	}
+	return toolutil.VoidOutput{Status: "success", Message: fmt.Sprintf("URL variable %q deleted from system hook %d", input.Key, input.ID)}, nil
+}
+
 func systemHookReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := systemHookOptions(individualTool)
 	options.ReadOnly = true
@@ -35,6 +53,12 @@ func systemHookReadSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func systemHookCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewActionSpec(name, route, systemHookOptions(individualTool))
+}
+
+func systemHookUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := systemHookOptions(individualTool)
+	options.Idempotent = true
+	return toolutil.NewActionSpec(name, route, options)
 }
 
 func systemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {

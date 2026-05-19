@@ -201,10 +201,11 @@ func FormatHookMarkdown(out HookOutput) string {
 		fmt.Fprintf(&b, "**Name:** %s\n", out.Name)
 	}
 	fmt.Fprintf(&b, "**URL:** %s\n", out.URL)
-	fmt.Fprintf(&b, "**SSL Verification:** %s\n\n", boolIcon(out.EnableSSLVerification))
+	fmt.Fprintf(&b, "**SSL Verification:** %s\n", boolIcon(out.EnableSSLVerification))
+	fmt.Fprintf(&b, "**Token Present:** %s\n", boolIcon(out.TokenPresent))
+	fmt.Fprintf(&b, "**Signing Token Present:** %s\n\n", boolIcon(out.SigningTokenPresent))
 	b.WriteString("### Event Triggers\n\n")
-	b.WriteString("| Event | Enabled |\n")
-	b.WriteString(toolutil.TblSep2Col)
+	b.WriteString(toolutil.MarkdownTableHeader("Event", "Enabled"))
 	events := []struct {
 		name string
 		on   bool
@@ -226,9 +227,25 @@ func FormatHookMarkdown(out HookOutput) string {
 		{"Emoji", out.EmojiEvents},
 		{"Repository Update", out.RepositoryUpdateEvents},
 		{"Resource Access Token", out.ResourceAccessTokenEvents},
+		{"Resource Deploy Token", out.ResourceDeployTokenEvents},
+		{"Vulnerability", out.VulnerabilityEvents},
 	}
 	for _, ev := range events {
-		fmt.Fprintf(&b, "| %s | %s |\n", ev.name, boolIcon(ev.on))
+		b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(ev.name), boolIcon(ev.on)))
+	}
+	if len(out.URLVariables) > 0 {
+		b.WriteString("\n### URL Variables\n\n")
+		b.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
+		for _, variable := range out.URLVariables {
+			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), toolutil.RedactedSecretValue))
+		}
+	}
+	if len(out.CustomHeaders) > 0 {
+		b.WriteString("\n### Custom Headers\n\n")
+		b.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
+		for _, header := range out.CustomHeaders {
+			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(header.Key), toolutil.RedactedSecretValue))
+		}
 	}
 	toolutil.WriteHints(&b,
 		"Use `gitlab_project_hook_edit` to modify event triggers",

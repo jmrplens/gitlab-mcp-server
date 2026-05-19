@@ -13,6 +13,7 @@ import (
 const (
 	pathGroupProtBranches = "/api/v4/groups/mygroup/protected_branches"
 	pathGroupProtBranch   = "/api/v4/groups/mygroup/protected_branches/main"
+	pathGroupProtRelease  = "/api/v4/groups/mygroup/protected_branches/release%2F1.0"
 )
 
 const branchJSON = `{
@@ -180,6 +181,23 @@ func TestGet(t *testing.T) {
 				}
 				if len(out.UnprotectAccessLevels) != 0 {
 					t.Errorf("len(UnprotectAccessLevels) = %d, want 0", len(out.UnprotectAccessLevels))
+				}
+			},
+		},
+		{
+			name:  "escapes branch name with slash once",
+			input: GetInput{GroupID: "mygroup", Branch: "release/1.0"},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodGet)
+				if got := r.URL.EscapedPath(); got != pathGroupProtRelease {
+					t.Errorf("EscapedPath = %q, want %q", got, pathGroupProtRelease)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"id":2,"name":"release/1.0","push_access_levels":[],"merge_access_levels":[],"unprotect_access_levels":[],"allow_force_push":false}`)
+			}),
+			check: func(t *testing.T, out Output) {
+				t.Helper()
+				if out.Name != "release/1.0" {
+					t.Errorf("Name = %q, want %q", out.Name, "release/1.0")
 				}
 			},
 		},
@@ -400,6 +418,23 @@ func TestUpdate(t *testing.T) {
 			},
 		},
 		{
+			name:  "escapes branch name with slash once",
+			input: UpdateInput{GroupID: "mygroup", Branch: "release/1.0", AllowForcePush: &allowForce},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodPatch)
+				if got := r.URL.EscapedPath(); got != pathGroupProtRelease {
+					t.Errorf("EscapedPath = %q, want %q", got, pathGroupProtRelease)
+				}
+				testutil.RespondJSON(w, http.StatusOK, `{"id":2,"name":"release/1.0","push_access_levels":[],"merge_access_levels":[],"unprotect_access_levels":[],"allow_force_push":true}`)
+			}),
+			check: func(t *testing.T, out Output) {
+				t.Helper()
+				if !out.AllowForcePush {
+					t.Error("AllowForcePush = false, want true")
+				}
+			},
+		},
+		{
 			name:  "updates with new branch name",
 			input: UpdateInput{GroupID: "mygroup", Branch: "main", Name: "main-v2"},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -503,6 +538,17 @@ func TestUnprotect(t *testing.T) {
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodDelete)
 				testutil.AssertRequestPath(t, r, pathGroupProtBranch)
+				w.WriteHeader(http.StatusNoContent)
+			}),
+		},
+		{
+			name:  "escapes branch name with slash once",
+			input: UnprotectInput{GroupID: "mygroup", Branch: "release/1.0"},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				testutil.AssertRequestMethod(t, r, http.MethodDelete)
+				if got := r.URL.EscapedPath(); got != pathGroupProtRelease {
+					t.Errorf("EscapedPath = %q, want %q", got, pathGroupProtRelease)
+				}
 				w.WriteHeader(http.StatusNoContent)
 			}),
 		},

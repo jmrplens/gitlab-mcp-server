@@ -143,14 +143,14 @@ Get details of a specific group webhook by hook ID. Returns URL, enabled events,
 
 ### `gitlab_group_hook_add`
 
-Add a new webhook to a GitLab group. Requires URL; optionally configure event triggers, SSL verification, secret token, and branch filter.
+Add a new webhook to a GitLab group. Requires URL; optionally configure event triggers, SSL verification, secret token, write-only signing token, and branch filter.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_group_hook_edit`
 
-Edit an existing group webhook. Supports changing URL, events, SSL verification, secret token, and branch filter.
+Edit an existing group webhook. Supports changing URL, events, SSL verification, secret token, write-only signing token, and branch filter.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

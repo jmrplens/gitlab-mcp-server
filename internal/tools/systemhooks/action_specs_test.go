@@ -4,6 +4,7 @@ package systemhooks
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -23,7 +24,10 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		{"gitlab_list_system_hooks", map[string]any{}},
 		{"gitlab_get_system_hook", map[string]any{"id": 1}},
 		{"gitlab_add_system_hook", map[string]any{"url": testHookURL}},
+		{"gitlab_edit_system_hook", map[string]any{"id": 1, "url": testHookURL}},
 		{"gitlab_test_system_hook", map[string]any{"id": 1}},
+		{"gitlab_set_system_hook_url_variable", map[string]any{"id": 1, "key": "env", "value": "prod"}},
+		{"gitlab_delete_system_hook_url_variable", map[string]any{"id": 1, "key": "env"}},
 		{"gitlab_delete_system_hook", map[string]any{"id": 1}},
 	}
 
@@ -53,6 +57,9 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		{"gitlab_list_system_hooks", map[string]any{}},
 		{"gitlab_get_system_hook", map[string]any{"id": 1}},
 		{"gitlab_add_system_hook", map[string]any{"url": "https://example.com"}},
+		{"gitlab_edit_system_hook", map[string]any{"id": 1, "url": "https://example.com"}},
+		{"gitlab_set_system_hook_url_variable", map[string]any{"id": 1, "key": "env", "value": "prod"}},
+		{"gitlab_delete_system_hook_url_variable", map[string]any{"id": 1, "key": "env"}},
 		{"gitlab_delete_system_hook", map[string]any{"id": 1}},
 	}
 	for _, tt := range tests {
@@ -79,6 +86,35 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 	if out.Message != "Successfully deleted system hook." {
 		t.Fatalf("delete message = %q", out.Message)
+	}
+}
+
+// TestActionSpecs_URLVariableOutputs verifies URL variable routes return clear success messages.
+func TestActionSpecs_URLVariableOutputs(t *testing.T) {
+	byTool := systemHookSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, systemHookActionHandler())))
+
+	setResult, err := byTool["gitlab_set_system_hook_url_variable"].Route.Handler(t.Context(), map[string]any{"id": 1, "key": "env", "value": "prod"})
+	if err != nil {
+		t.Fatalf("Route.Handler(gitlab_set_system_hook_url_variable) error: %v", err)
+	}
+	setOut, ok := setResult.(toolutil.VoidOutput)
+	if !ok {
+		t.Fatalf("set route returned %T, want toolutil.VoidOutput", setResult)
+	}
+	if !strings.Contains(setOut.Message, "env") {
+		t.Fatalf("set message = %q, want variable key", setOut.Message)
+	}
+
+	deleteResult, err := byTool["gitlab_delete_system_hook_url_variable"].Route.Handler(t.Context(), map[string]any{"id": 1, "key": "env"})
+	if err != nil {
+		t.Fatalf("Route.Handler(gitlab_delete_system_hook_url_variable) error: %v", err)
+	}
+	deleteOut, ok := deleteResult.(toolutil.VoidOutput)
+	if !ok {
+		t.Fatalf("delete route returned %T, want toolutil.VoidOutput", deleteResult)
+	}
+	if !strings.Contains(deleteOut.Message, "env") {
+		t.Fatalf("delete message = %q, want variable key", deleteOut.Message)
 	}
 }
 
@@ -136,6 +172,14 @@ func systemHookActionHandler() http.Handler {
 			testutil.RespondJSON(w, http.StatusOK, hookJSON)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v4/hooks":
 			testutil.RespondJSON(w, http.StatusCreated, hookJSON)
+		case r.Method == http.MethodPut && r.URL.Path == "/api/v4/hooks/1":
+			testutil.RespondJSON(w, http.StatusOK, hookJSON)
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v4/hooks/1":
+			testutil.RespondJSON(w, http.StatusOK, `{"event_name":"project_create","project_id":42}`)
+		case r.Method == http.MethodPut && r.URL.Path == "/api/v4/hooks/1/url_variables/env":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/v4/hooks/1/url_variables/env":
+			w.WriteHeader(http.StatusNoContent)
 		case r.Method == http.MethodDelete && r.URL.Path == "/api/v4/hooks/1":
 			w.WriteHeader(http.StatusNoContent)
 		default:

@@ -70,7 +70,7 @@ graph TD
         SPECS[domain ActionSpecs<br/>165 domain sub-packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1014 self-managed / 1019 GitLab.com Enterprise tools]
+        IND[individual projection<br/>1017 self-managed / 1022 GitLab.com Enterprise tools]
         META[meta projection<br/>33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise tools]
         DYN[dynamic projection<br/>2 visible find / execute tools]
         SAMP[sampling support<br/>11 LLM-assisted actions]
@@ -178,7 +178,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package — contains 1014 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1019 total in that catalog, organized across 165 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed.
+The largest package — contains 1017 self-managed Enterprise/Premium MCP tool implementations, plus 5 GitLab.com-only Orbit handlers for 1022 total in that catalog, organized across 165 domain sub-packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 
