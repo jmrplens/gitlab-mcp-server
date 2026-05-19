@@ -1176,34 +1176,52 @@ func GetLanguages(ctx context.Context, client *gitlabclient.Client, input GetLan
 // HookOutput represents a project webhook.
 type HookOutput struct {
 	toolutil.HintableOutput
-	ID                        int64     `json:"id"`
-	URL                       string    `json:"url"`
-	Name                      string    `json:"name,omitempty"`
-	Description               string    `json:"description,omitempty"`
-	ProjectID                 int64     `json:"project_id"`
-	PushEvents                bool      `json:"push_events"`
-	PushEventsBranchFilter    string    `json:"push_events_branch_filter,omitempty"`
-	IssuesEvents              bool      `json:"issues_events"`
-	ConfidentialIssuesEvents  bool      `json:"confidential_issues_events"`
-	MergeRequestsEvents       bool      `json:"merge_requests_events"`
-	TagPushEvents             bool      `json:"tag_push_events"`
-	NoteEvents                bool      `json:"note_events"`
-	ConfidentialNoteEvents    bool      `json:"confidential_note_events"`
-	JobEvents                 bool      `json:"job_events"`
-	PipelineEvents            bool      `json:"pipeline_events"`
-	WikiPageEvents            bool      `json:"wiki_page_events"`
-	DeploymentEvents          bool      `json:"deployment_events"`
-	ReleasesEvents            bool      `json:"releases_events"`
-	MilestoneEvents           bool      `json:"milestone_events"`
-	FeatureFlagEvents         bool      `json:"feature_flag_events"`
-	EmojiEvents               bool      `json:"emoji_events"`
-	EnableSSLVerification     bool      `json:"enable_ssl_verification"`
-	RepositoryUpdateEvents    bool      `json:"repository_update_events"`
-	ResourceAccessTokenEvents bool      `json:"resource_access_token_events"`
-	AlertStatus               string    `json:"alert_status,omitempty"`
-	BranchFilterStrategy      string    `json:"branch_filter_strategy,omitempty"`
-	CustomWebhookTemplate     string    `json:"custom_webhook_template,omitempty"`
-	CreatedAt                 time.Time `json:"created_at"`
+	ID                        int64              `json:"id"`
+	URL                       string             `json:"url"`
+	Name                      string             `json:"name,omitempty"`
+	Description               string             `json:"description,omitempty"`
+	ProjectID                 int64              `json:"project_id"`
+	PushEvents                bool               `json:"push_events"`
+	PushEventsBranchFilter    string             `json:"push_events_branch_filter,omitempty"`
+	IssuesEvents              bool               `json:"issues_events"`
+	ConfidentialIssuesEvents  bool               `json:"confidential_issues_events"`
+	MergeRequestsEvents       bool               `json:"merge_requests_events"`
+	TagPushEvents             bool               `json:"tag_push_events"`
+	NoteEvents                bool               `json:"note_events"`
+	ConfidentialNoteEvents    bool               `json:"confidential_note_events"`
+	JobEvents                 bool               `json:"job_events"`
+	PipelineEvents            bool               `json:"pipeline_events"`
+	WikiPageEvents            bool               `json:"wiki_page_events"`
+	DeploymentEvents          bool               `json:"deployment_events"`
+	ReleasesEvents            bool               `json:"releases_events"`
+	MilestoneEvents           bool               `json:"milestone_events"`
+	FeatureFlagEvents         bool               `json:"feature_flag_events"`
+	EmojiEvents               bool               `json:"emoji_events"`
+	EnableSSLVerification     bool               `json:"enable_ssl_verification"`
+	RepositoryUpdateEvents    bool               `json:"repository_update_events"`
+	ResourceAccessTokenEvents bool               `json:"resource_access_token_events"`
+	AlertStatus               string             `json:"alert_status,omitempty"`
+	DisabledUntil             string             `json:"disabled_until,omitempty"`
+	URLVariables              []HookURLVariable  `json:"url_variables,omitempty"`
+	BranchFilterStrategy      string             `json:"branch_filter_strategy,omitempty"`
+	CustomWebhookTemplate     string             `json:"custom_webhook_template,omitempty"`
+	CustomHeaders             []HookCustomHeader `json:"custom_headers,omitempty"`
+	VulnerabilityEvents       bool               `json:"vulnerability_events"`
+	TokenPresent              bool               `json:"token_present"`
+	SigningTokenPresent       bool               `json:"signing_token_present"`
+	CreatedAt                 time.Time          `json:"created_at"`
+}
+
+// HookURLVariable represents a masked webhook URL variable.
+type HookURLVariable struct {
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
+}
+
+// HookCustomHeader represents a webhook custom header.
+type HookCustomHeader struct {
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
 }
 
 // hookOutputFromGL maps hook output from gl between API and evaluator models.
@@ -1234,11 +1252,41 @@ func hookOutputFromGL(h *gl.ProjectHook) HookOutput {
 		RepositoryUpdateEvents:    h.RepositoryUpdateEvents,
 		ResourceAccessTokenEvents: h.ResourceAccessTokenEvents,
 		AlertStatus:               h.AlertStatus,
+		URLVariables:              projectHookURLVariablesToOutput(h.URLVariables),
 		BranchFilterStrategy:      h.BranchFilterStrategy,
 		CustomWebhookTemplate:     h.CustomWebhookTemplate,
+		CustomHeaders:             projectHookCustomHeadersToOutput(h.CustomHeaders),
+		VulnerabilityEvents:       h.VulnerabilityEvents,
+		TokenPresent:              h.TokenPresent,
+		SigningTokenPresent:       h.SigningTokenPresent,
 	}
 	if h.CreatedAt != nil {
 		out.CreatedAt = *h.CreatedAt
+	}
+	if h.DisabledUntil != nil {
+		out.DisabledUntil = h.DisabledUntil.Format(time.RFC3339)
+	}
+	return out
+}
+
+func projectHookURLVariablesToOutput(variables []gl.HookURLVariable) []HookURLVariable {
+	if len(variables) == 0 {
+		return nil
+	}
+	out := make([]HookURLVariable, len(variables))
+	for i, variable := range variables {
+		out[i] = HookURLVariable{Key: variable.Key, Value: variable.Value}
+	}
+	return out
+}
+
+func projectHookCustomHeadersToOutput(headers []*gl.HookCustomHeader) []HookCustomHeader {
+	if len(headers) == 0 {
+		return nil
+	}
+	out := make([]HookCustomHeader, len(headers))
+	for i, header := range headers {
+		out[i] = HookCustomHeader{Key: header.Key, Value: header.Value}
 	}
 	return out
 }
@@ -1315,6 +1363,7 @@ type AddHookInput struct {
 	Name                      string               `json:"name,omitempty" jsonschema:"Webhook name"`
 	Description               string               `json:"description,omitempty" jsonschema:"Webhook description"`
 	Token                     string               `json:"token,omitempty" jsonschema:"Secret token for validation"`
+	SigningToken              string               `json:"signing_token,omitempty" jsonschema:"Write-only signing token for webhook signature validation"`
 	PushEvents                *bool                `json:"push_events,omitempty" jsonschema:"Trigger on push events"`
 	PushEventsBranchFilter    string               `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events"`
 	IssuesEvents              *bool                `json:"issues_events,omitempty" jsonschema:"Trigger on issue events"`
@@ -1328,8 +1377,12 @@ type AddHookInput struct {
 	WikiPageEvents            *bool                `json:"wiki_page_events,omitempty" jsonschema:"Trigger on wiki page events"`
 	DeploymentEvents          *bool                `json:"deployment_events,omitempty" jsonschema:"Trigger on deployment events"`
 	ReleasesEvents            *bool                `json:"releases_events,omitempty" jsonschema:"Trigger on release events"`
+	MilestoneEvents           *bool                `json:"milestone_events,omitempty" jsonschema:"Trigger on milestone events"`
+	FeatureFlagEvents         *bool                `json:"feature_flag_events,omitempty" jsonschema:"Trigger on feature flag events"`
 	EmojiEvents               *bool                `json:"emoji_events,omitempty" jsonschema:"Trigger on emoji events"`
 	ResourceAccessTokenEvents *bool                `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
+	ResourceDeployTokenEvents *bool                `json:"resource_deploy_token_events,omitempty" jsonschema:"Trigger on resource deploy token events"`
+	VulnerabilityEvents       *bool                `json:"vulnerability_events,omitempty" jsonschema:"Trigger on vulnerability events"`
 	EnableSSLVerification     *bool                `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for webhook"`
 	CustomWebhookTemplate     string               `json:"custom_webhook_template,omitempty" jsonschema:"Custom webhook payload template"`
 	BranchFilterStrategy      string               `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
@@ -1373,6 +1426,9 @@ func applyAddHookIdentity(input AddHookInput, opts *gl.AddProjectHookOptions) {
 	}
 	if input.Token != "" {
 		opts.Token = new(input.Token)
+	}
+	if input.SigningToken != "" {
+		opts.SigningToken = new(input.SigningToken)
 	}
 	if input.EnableSSLVerification != nil {
 		opts.EnableSSLVerification = input.EnableSSLVerification
@@ -1432,6 +1488,18 @@ func applyAddHookEvents(input AddHookInput, opts *gl.AddProjectHookOptions) {
 	if input.ResourceAccessTokenEvents != nil {
 		opts.ResourceAccessTokenEvents = input.ResourceAccessTokenEvents
 	}
+	if input.ResourceDeployTokenEvents != nil {
+		opts.ResourceDeployTokenEvents = input.ResourceDeployTokenEvents
+	}
+	if input.MilestoneEvents != nil {
+		opts.MilestoneEvents = input.MilestoneEvents
+	}
+	if input.FeatureFlagEvents != nil {
+		opts.FeatureFlagEvents = input.FeatureFlagEvents
+	}
+	if input.VulnerabilityEvents != nil {
+		opts.VulnerabilityEvents = input.VulnerabilityEvents
+	}
 }
 
 // EditHookInput defines parameters for editing a project webhook.
@@ -1442,6 +1510,7 @@ type EditHookInput struct {
 	Name                      string               `json:"name,omitempty" jsonschema:"Updated webhook name"`
 	Description               string               `json:"description,omitempty" jsonschema:"Updated webhook description"`
 	Token                     string               `json:"token,omitempty" jsonschema:"Updated secret token"`
+	SigningToken              string               `json:"signing_token,omitempty" jsonschema:"Updated write-only signing token for webhook signature validation"`
 	PushEvents                *bool                `json:"push_events,omitempty" jsonschema:"Trigger on push events"`
 	PushEventsBranchFilter    string               `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events"`
 	IssuesEvents              *bool                `json:"issues_events,omitempty" jsonschema:"Trigger on issue events"`
@@ -1455,8 +1524,12 @@ type EditHookInput struct {
 	WikiPageEvents            *bool                `json:"wiki_page_events,omitempty" jsonschema:"Trigger on wiki page events"`
 	DeploymentEvents          *bool                `json:"deployment_events,omitempty" jsonschema:"Trigger on deployment events"`
 	ReleasesEvents            *bool                `json:"releases_events,omitempty" jsonschema:"Trigger on release events"`
+	MilestoneEvents           *bool                `json:"milestone_events,omitempty" jsonschema:"Trigger on milestone events"`
+	FeatureFlagEvents         *bool                `json:"feature_flag_events,omitempty" jsonschema:"Trigger on feature flag events"`
 	EmojiEvents               *bool                `json:"emoji_events,omitempty" jsonschema:"Trigger on emoji events"`
 	ResourceAccessTokenEvents *bool                `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
+	ResourceDeployTokenEvents *bool                `json:"resource_deploy_token_events,omitempty" jsonschema:"Trigger on resource deploy token events"`
+	VulnerabilityEvents       *bool                `json:"vulnerability_events,omitempty" jsonschema:"Trigger on vulnerability events"`
 	EnableSSLVerification     *bool                `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification"`
 	CustomWebhookTemplate     string               `json:"custom_webhook_template,omitempty" jsonschema:"Custom webhook payload template"`
 	BranchFilterStrategy      string               `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
@@ -1501,6 +1574,9 @@ func applyEditHookIdentity(input EditHookInput, opts *gl.EditProjectHookOptions)
 	}
 	if input.Token != "" {
 		opts.Token = new(input.Token)
+	}
+	if input.SigningToken != "" {
+		opts.SigningToken = new(input.SigningToken)
 	}
 	if input.EnableSSLVerification != nil {
 		opts.EnableSSLVerification = input.EnableSSLVerification
@@ -1559,6 +1635,18 @@ func applyEditHookEvents(input EditHookInput, opts *gl.EditProjectHookOptions) {
 	}
 	if input.ResourceAccessTokenEvents != nil {
 		opts.ResourceAccessTokenEvents = input.ResourceAccessTokenEvents
+	}
+	if input.ResourceDeployTokenEvents != nil {
+		opts.ResourceDeployTokenEvents = input.ResourceDeployTokenEvents
+	}
+	if input.MilestoneEvents != nil {
+		opts.MilestoneEvents = input.MilestoneEvents
+	}
+	if input.FeatureFlagEvents != nil {
+		opts.FeatureFlagEvents = input.FeatureFlagEvents
+	}
+	if input.VulnerabilityEvents != nil {
+		opts.VulnerabilityEvents = input.VulnerabilityEvents
 	}
 }
 

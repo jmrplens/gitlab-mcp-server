@@ -168,7 +168,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1014
+		const expectedTools = 1017
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -184,7 +184,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		const expectedTools = 863
+		const expectedTools = 866
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -492,6 +492,7 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_delete_ssh_key":                         true,
 		"gitlab_delete_ssh_key_for_user":                true,
 		"gitlab_delete_system_hook":                     true,
+		"gitlab_delete_system_hook_url_variable":        true,
 		"gitlab_delete_terraform_state":                 true,
 		"gitlab_delete_terraform_state_version":         true,
 		"gitlab_delete_topic":                           true,
@@ -535,6 +536,7 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_edit_project_badge":                     true,
 		"gitlab_edit_project_mirror":                    true,
 		"gitlab_edit_resource_group":                    true,
+		"gitlab_edit_system_hook":                       true,
 		"gitlab_enable_disable_error_tracking":          true,
 		"gitlab_environment_create":                     true,
 		"gitlab_environment_delete":                     true,
@@ -1274,6 +1276,7 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		"gitlab_set_feature_flag":                                  true,
 		"gitlab_set_jira_integration":                              true,
 		"gitlab_set_project_mr_external_status_check_status":       true,
+		"gitlab_set_system_hook_url_variable":                      true,
 		"gitlab_set_user_status":                                   true,
 		"gitlab_show_secure_file":                                  true,
 		"gitlab_snippet_content":                                   true,

@@ -5,6 +5,7 @@ package groups
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -26,7 +27,7 @@ const (
 )
 
 // groupHookJSON stores the package-level group hook JSON state.
-var groupHookJSON = `{"id":10,"url":"https://example.com/hook","name":"CI Hook","description":"Triggers CI","group_id":99,"push_events":true,"merge_requests_events":true,"issues_events":false,"tag_push_events":false,"note_events":false,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":false,"subgroup_events":false,"member_events":false,"confidential_issues_events":false,"confidential_note_events":false,"enable_ssl_verification":true,"alert_status":"executable","created_at":"2026-01-15T10:00:00Z"}`
+var groupHookJSON = `{"id":10,"url":"https://example.com/hook","name":"CI Hook","description":"Triggers CI","group_id":99,"push_events":true,"merge_requests_events":true,"issues_events":false,"tag_push_events":false,"note_events":false,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":false,"milestone_events":true,"feature_flag_events":true,"subgroup_events":false,"member_events":false,"vulnerability_events":true,"confidential_issues_events":false,"confidential_note_events":false,"enable_ssl_verification":true,"alert_status":"executable","disabled_until":"2026-01-16T10:00:00Z","url_variables":[{"key":"env","value":"prod"}],"token_present":true,"signing_token_present":true,"created_at":"2026-01-15T10:00:00Z"}`
 
 // groupHookListJSON stores the package-level group hook list JSON state.
 var groupHookListJSON = `[` + groupHookJSON + `]`
@@ -59,6 +60,18 @@ func TestListHooks_Success(t *testing.T) {
 	}
 	if !out.Hooks[0].PushEvents {
 		t.Error("out.Hooks[0].PushEvents = false, want true")
+	}
+	if !out.Hooks[0].TokenPresent || !out.Hooks[0].SigningTokenPresent {
+		t.Error("expected token presence flags to be true")
+	}
+	if !out.Hooks[0].MilestoneEvents || !out.Hooks[0].FeatureFlagEvents || !out.Hooks[0].VulnerabilityEvents {
+		t.Error("expected new event flags to be true")
+	}
+	if out.Hooks[0].DisabledUntil == "" {
+		t.Error("out.Hooks[0].DisabledUntil is empty, want timestamp")
+	}
+	if len(out.Hooks[0].URLVariables) != 1 || out.Hooks[0].URLVariables[0].Key != "env" {
+		t.Fatalf("unexpected URL variables: %+v", out.Hooks[0].URLVariables)
 	}
 }
 
@@ -98,6 +111,9 @@ func TestGetHook_Success(t *testing.T) {
 	if !out.EnableSSLVerification {
 		t.Error("out.EnableSSLVerification = false, want true")
 	}
+	if !out.TokenPresent || !out.SigningTokenPresent {
+		t.Error("expected token presence flags to be true")
+	}
 }
 
 // TestGetHook_APIError verifies GetHook when API error.
@@ -118,8 +134,14 @@ func TestGetHook_APIError(t *testing.T) {
 
 // TestAddHook_Success verifies AddHook when success.
 func TestAddHook_Success(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupHooks {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, groupHookJSON)
 			return
 		}
@@ -130,8 +152,12 @@ func TestAddHook_Success(t *testing.T) {
 	out, err := AddHook(context.Background(), client, AddHookInput{
 		GroupID: "99",
 		HookInput: HookInput{
-			URL:        testHookURL,
-			PushEvents: &push,
+			URL:                 testHookURL,
+			SigningToken:        "signing-secret",
+			PushEvents:          &push,
+			MilestoneEvents:     &push,
+			FeatureFlagEvents:   &push,
+			VulnerabilityEvents: &push,
 		},
 	})
 	if err != nil {
@@ -139,6 +165,11 @@ func TestAddHook_Success(t *testing.T) {
 	}
 	if out.ID != 10 {
 		t.Errorf("out.ID = %d, want 10", out.ID)
+	}
+	for _, want := range []string{"signing_token", "milestone_events", "feature_flag_events", "vulnerability_events"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing %q: %s", want, capturedBody)
+		}
 	}
 }
 
@@ -163,19 +194,30 @@ func TestAddHook_APIError(t *testing.T) {
 
 // TestEditHook_Success verifies EditHook when success.
 func TestEditHook_Success(t *testing.T) {
+	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathGroupHook10 {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, groupHookJSON)
 			return
 		}
 		http.NotFound(w, r)
 	}))
 
+	enabled := true
 	out, err := EditHook(context.Background(), client, EditHookInput{
 		GroupID: "99",
 		HookID:  10,
 		HookInput: HookInput{
-			URL: testHookURL,
+			URL:                 testHookURL,
+			SigningToken:        "new-signing-secret",
+			MilestoneEvents:     &enabled,
+			FeatureFlagEvents:   &enabled,
+			VulnerabilityEvents: &enabled,
 		},
 	})
 	if err != nil {
@@ -183,6 +225,11 @@ func TestEditHook_Success(t *testing.T) {
 	}
 	if out.ID != 10 {
 		t.Errorf("out.ID = %d, want 10", out.ID)
+	}
+	for _, want := range []string{"signing_token", "milestone_events", "feature_flag_events", "vulnerability_events"} {
+		if !strings.Contains(capturedBody, want) {
+			t.Errorf("request body missing %q: %s", want, capturedBody)
+		}
 	}
 }
 

@@ -15,16 +15,25 @@ import (
 
 // HookItem represents a system hook.
 type HookItem struct {
-	ID                     int64  `json:"id"`
-	URL                    string `json:"url"`
-	Name                   string `json:"name,omitempty"`
-	Description            string `json:"description,omitempty"`
-	CreatedAt              string `json:"created_at,omitempty"`
-	PushEvents             bool   `json:"push_events"`
-	TagPushEvents          bool   `json:"tag_push_events"`
-	MergeRequestsEvents    bool   `json:"merge_requests_events"`
-	RepositoryUpdateEvents bool   `json:"repository_update_events"`
-	EnableSSLVerification  bool   `json:"enable_ssl_verification"`
+	ID                     int64             `json:"id"`
+	URL                    string            `json:"url"`
+	Name                   string            `json:"name,omitempty"`
+	Description            string            `json:"description,omitempty"`
+	CreatedAt              string            `json:"created_at,omitempty"`
+	PushEvents             bool              `json:"push_events"`
+	TagPushEvents          bool              `json:"tag_push_events"`
+	MergeRequestsEvents    bool              `json:"merge_requests_events"`
+	RepositoryUpdateEvents bool              `json:"repository_update_events"`
+	EnableSSLVerification  bool              `json:"enable_ssl_verification"`
+	URLVariables           []HookURLVariable `json:"url_variables,omitempty"`
+	TokenPresent           bool              `json:"token_present"`
+	SigningTokenPresent    bool              `json:"signing_token_present"`
+}
+
+// HookURLVariable represents a masked URL variable configured on a system hook.
+type HookURLVariable struct {
+	Key   string `json:"key"`
+	Value string `json:"value,omitempty"`
 }
 
 // HookEventItem represents a hook test event.
@@ -63,6 +72,7 @@ type AddInput struct {
 	Name                   string `json:"name,omitempty"            jsonschema:"Descriptive name for the hook"`
 	Description            string `json:"description,omitempty"     jsonschema:"Description for the hook"`
 	Token                  string `json:"token,omitempty"           jsonschema:"Secret token for payload validation"`
+	SigningToken           string `json:"signing_token,omitempty"   jsonschema:"Write-only signing token for webhook signature validation"`
 	PushEvents             *bool  `json:"push_events,omitempty"             jsonschema:"Trigger on push events"`
 	PushEventsBranchFilter string `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events (wildcard, regex, or branch name)"`
 	BranchFilterStrategy   string `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy: wildcard, regex, or all_branches"`
@@ -74,6 +84,29 @@ type AddInput struct {
 
 // AddOutput wraps the added hook.
 type AddOutput struct {
+	toolutil.HintableOutput
+	Hook HookItem `json:"hook"`
+}
+
+// EditInput is the input for editing a system hook.
+type EditInput struct {
+	ID                     int64  `json:"id"                        jsonschema:"System hook ID to edit,required"`
+	URL                    string `json:"url,omitempty"             jsonschema:"Updated hook URL"`
+	Name                   string `json:"name,omitempty"            jsonschema:"Updated hook name"`
+	Description            string `json:"description,omitempty"     jsonschema:"Updated hook description"`
+	Token                  string `json:"token,omitempty"           jsonschema:"Updated secret token for payload validation"`
+	SigningToken           string `json:"signing_token,omitempty"   jsonschema:"Updated write-only signing token for webhook signature validation"`
+	PushEvents             *bool  `json:"push_events,omitempty"             jsonschema:"Trigger on push events"`
+	PushEventsBranchFilter string `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events (wildcard, regex, or branch name)"`
+	BranchFilterStrategy   string `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy: wildcard, regex, or all_branches"`
+	TagPushEvents          *bool  `json:"tag_push_events,omitempty"         jsonschema:"Trigger on tag push events"`
+	MergeRequestsEvents    *bool  `json:"merge_requests_events,omitempty"   jsonschema:"Trigger on merge request events"`
+	RepositoryUpdateEvents *bool  `json:"repository_update_events,omitempty" jsonschema:"Trigger on repository update events"`
+	EnableSSLVerification  *bool  `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for the hook URL"`
+}
+
+// EditOutput wraps the edited hook.
+type EditOutput struct {
 	toolutil.HintableOutput
 	Hook HookItem `json:"hook"`
 }
@@ -92,6 +125,19 @@ type TestOutput struct {
 // DeleteInput is the input for deleting a system hook.
 type DeleteInput struct {
 	ID int64 `json:"id" jsonschema:"System hook ID to delete,required"`
+}
+
+// SetURLVariableInput is the input for creating or updating a system hook URL variable.
+type SetURLVariableInput struct {
+	ID    int64  `json:"id"    jsonschema:"System hook ID,required"`
+	Key   string `json:"key"   jsonschema:"URL variable key name,required"`
+	Value string `json:"value" jsonschema:"URL variable value,required"`
+}
+
+// DeleteURLVariableInput is the input for deleting a system hook URL variable.
+type DeleteURLVariableInput struct {
+	ID  int64  `json:"id"  jsonschema:"System hook ID,required"`
+	Key string `json:"key" jsonschema:"URL variable key name to delete,required"`
 }
 
 // Helpers.
@@ -113,6 +159,95 @@ func toItem(h *gl.Hook) HookItem {
 		MergeRequestsEvents:    h.MergeRequestsEvents,
 		RepositoryUpdateEvents: h.RepositoryUpdateEvents,
 		EnableSSLVerification:  h.EnableSSLVerification,
+		URLVariables:           hookURLVariablesToOutput(h.URLVariables),
+		TokenPresent:           h.TokenPresent,
+		SigningTokenPresent:    h.SigningTokenPresent,
+	}
+}
+
+func hookURLVariablesToOutput(variables []gl.HookURLVariable) []HookURLVariable {
+	if len(variables) == 0 {
+		return nil
+	}
+	out := make([]HookURLVariable, len(variables))
+	for i, variable := range variables {
+		out[i] = HookURLVariable{Key: variable.Key, Value: variable.Value}
+	}
+	return out
+}
+
+func applyHookAddOptions(input AddInput, opts *gl.AddHookOptions) {
+	if input.Name != "" {
+		opts.Name = new(input.Name)
+	}
+	if input.Description != "" {
+		opts.Description = new(input.Description)
+	}
+	if input.Token != "" {
+		opts.Token = new(input.Token)
+	}
+	if input.SigningToken != "" {
+		opts.SigningToken = new(input.SigningToken)
+	}
+	if input.PushEvents != nil {
+		opts.PushEvents = input.PushEvents
+	}
+	if input.PushEventsBranchFilter != "" {
+		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
+	}
+	if input.BranchFilterStrategy != "" {
+		opts.BranchFilterStrategy = new(gl.BranchFilterStrategy(input.BranchFilterStrategy))
+	}
+	if input.TagPushEvents != nil {
+		opts.TagPushEvents = input.TagPushEvents
+	}
+	if input.MergeRequestsEvents != nil {
+		opts.MergeRequestsEvents = input.MergeRequestsEvents
+	}
+	if input.RepositoryUpdateEvents != nil {
+		opts.RepositoryUpdateEvents = input.RepositoryUpdateEvents
+	}
+	if input.EnableSSLVerification != nil {
+		opts.EnableSSLVerification = input.EnableSSLVerification
+	}
+}
+
+func applyHookEditOptions(input EditInput, opts *gl.EditHookOptions) {
+	if input.URL != "" {
+		opts.URL = new(input.URL)
+	}
+	if input.Name != "" {
+		opts.Name = new(input.Name)
+	}
+	if input.Description != "" {
+		opts.Description = new(input.Description)
+	}
+	if input.Token != "" {
+		opts.Token = new(input.Token)
+	}
+	if input.SigningToken != "" {
+		opts.SigningToken = new(input.SigningToken)
+	}
+	if input.PushEvents != nil {
+		opts.PushEvents = input.PushEvents
+	}
+	if input.PushEventsBranchFilter != "" {
+		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
+	}
+	if input.BranchFilterStrategy != "" {
+		opts.BranchFilterStrategy = new(gl.BranchFilterStrategy(input.BranchFilterStrategy))
+	}
+	if input.TagPushEvents != nil {
+		opts.TagPushEvents = input.TagPushEvents
+	}
+	if input.MergeRequestsEvents != nil {
+		opts.MergeRequestsEvents = input.MergeRequestsEvents
+	}
+	if input.RepositoryUpdateEvents != nil {
+		opts.RepositoryUpdateEvents = input.RepositoryUpdateEvents
+	}
+	if input.EnableSSLVerification != nil {
+		opts.EnableSSLVerification = input.EnableSSLVerification
 	}
 }
 
@@ -150,36 +285,7 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 	opts := &gl.AddHookOptions{
 		URL: new(input.URL),
 	}
-	if input.Name != "" {
-		opts.Name = new(input.Name)
-	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
-	if input.Token != "" {
-		opts.Token = new(input.Token)
-	}
-	if input.PushEvents != nil {
-		opts.PushEvents = input.PushEvents
-	}
-	if input.PushEventsBranchFilter != "" {
-		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
-	}
-	if input.BranchFilterStrategy != "" {
-		opts.BranchFilterStrategy = new(gl.BranchFilterStrategy(input.BranchFilterStrategy))
-	}
-	if input.TagPushEvents != nil {
-		opts.TagPushEvents = input.TagPushEvents
-	}
-	if input.MergeRequestsEvents != nil {
-		opts.MergeRequestsEvents = input.MergeRequestsEvents
-	}
-	if input.RepositoryUpdateEvents != nil {
-		opts.RepositoryUpdateEvents = input.RepositoryUpdateEvents
-	}
-	if input.EnableSSLVerification != nil {
-		opts.EnableSSLVerification = input.EnableSSLVerification
-	}
+	applyHookAddOptions(input, opts)
 
 	hook, _, err := client.GL().SystemHooks.AddHook(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -187,6 +293,22 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 			"requires administrator; url must be HTTP(S) and reachable from the instance; token is shared secret for X-Gitlab-Token header; enable specific event flags (push_events, tag_push_events, merge_requests_events, etc.)")
 	}
 	return AddOutput{Hook: toItem(hook)}, nil
+}
+
+// Edit updates an existing system hook.
+func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (EditOutput, error) {
+	if input.ID <= 0 {
+		return EditOutput{}, toolutil.ErrRequiredInt64("system_hook_edit", "id")
+	}
+	opts := &gl.EditHookOptions{}
+	applyHookEditOptions(input, opts)
+
+	hook, _, err := client.GL().SystemHooks.EditHook(input.ID, opts, gl.WithContext(ctx))
+	if err != nil {
+		return EditOutput{}, toolutil.WrapErrWithStatusHint("system_hook_edit", err, http.StatusNotFound,
+			"verify hook_id with gitlab_list_system_hooks; admin-only on self-managed instances; unset fields keep current values")
+	}
+	return EditOutput{Hook: toItem(hook)}, nil
 }
 
 // Test triggers a test event for a system hook.
@@ -218,6 +340,39 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("system_hook_delete", err, http.StatusForbidden,
 			"requires administrator access; deletion is irreversible \u2014 verify hook_id with gitlab_list_system_hooks before deleting")
+	}
+	return nil
+}
+
+// SetURLVariable creates or updates a URL variable for a system hook.
+func SetURLVariable(ctx context.Context, client *gitlabclient.Client, input SetURLVariableInput) error {
+	if input.ID <= 0 {
+		return toolutil.ErrRequiredInt64("system_hook_set_url_variable", "id")
+	}
+	if input.Key == "" {
+		return toolutil.ErrFieldRequired("key")
+	}
+	opts := &gl.SetHookURLVariableOptions{Value: &input.Value}
+	_, err := client.GL().SystemHooks.SetHookURLVariable(input.ID, input.Key, opts, gl.WithContext(ctx))
+	if err != nil {
+		return toolutil.WrapErrWithStatusHint("system_hook_set_url_variable", err, http.StatusNotFound,
+			"verify hook_id with gitlab_list_system_hooks; URL variable keys are case-sensitive and referenced by placeholders in the hook URL")
+	}
+	return nil
+}
+
+// DeleteURLVariable deletes a URL variable from a system hook.
+func DeleteURLVariable(ctx context.Context, client *gitlabclient.Client, input DeleteURLVariableInput) error {
+	if input.ID <= 0 {
+		return toolutil.ErrRequiredInt64("system_hook_delete_url_variable", "id")
+	}
+	if input.Key == "" {
+		return toolutil.ErrFieldRequired("key")
+	}
+	_, err := client.GL().SystemHooks.DeleteHookURLVariable(input.ID, input.Key, gl.WithContext(ctx))
+	if err != nil {
+		return toolutil.WrapErrWithStatusHint("system_hook_delete_url_variable", err, http.StatusNotFound,
+			"variable key not currently set on this hook, or hook not found; use gitlab_get_system_hook to inspect configured URL variables")
 	}
 	return nil
 }

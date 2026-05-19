@@ -1587,7 +1587,7 @@ func TestProjectGetLanguages_EmptyProjectID(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // hookJSON stores the package-level hook JSON state.
-var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"enable_ssl_verification":true,"created_at":"2026-01-01T00:00:00Z"}`
+var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"vulnerability_events":true,"enable_ssl_verification":true,"disabled_until":"2026-01-02T00:00:00Z","url_variables":[{"key":"env","value":"prod"}],"custom_headers":[{"key":"X-Env","value":"prod"}],"token_present":true,"signing_token_present":true,"created_at":"2026-01-01T00:00:00Z"}`
 
 // TestProjectListHooks_Success verifies ProjectListHooks when success.
 func TestProjectListHooks_Success(t *testing.T) {
@@ -1618,6 +1618,21 @@ func TestProjectListHooks_Success(t *testing.T) {
 	}
 	if !out.Hooks[0].EnableSSLVerification {
 		t.Error("EnableSSLVerification = false, want true")
+	}
+	if !out.Hooks[0].TokenPresent || !out.Hooks[0].SigningTokenPresent {
+		t.Error("expected token presence flags to be true")
+	}
+	if !out.Hooks[0].MilestoneEvents || !out.Hooks[0].FeatureFlagEvents || !out.Hooks[0].VulnerabilityEvents {
+		t.Error("expected milestone, feature flag, and vulnerability events to be true")
+	}
+	if out.Hooks[0].DisabledUntil == "" {
+		t.Error("DisabledUntil is empty, want timestamp")
+	}
+	if len(out.Hooks[0].URLVariables) != 1 || out.Hooks[0].URLVariables[0].Key != "env" {
+		t.Fatalf("unexpected URL variables: %+v", out.Hooks[0].URLVariables)
+	}
+	if len(out.Hooks[0].CustomHeaders) != 1 || out.Hooks[0].CustomHeaders[0].Key != "X-Env" {
+		t.Fatalf("unexpected custom headers: %+v", out.Hooks[0].CustomHeaders)
 	}
 }
 
@@ -1655,6 +1670,9 @@ func TestProjectGetHook_Success(t *testing.T) {
 	}
 	if out.Name != testMyHook {
 		t.Errorf(fmtNameWantQ, out.Name, testMyHook)
+	}
+	if !out.TokenPresent || !out.SigningTokenPresent {
+		t.Error("expected token presence flags to be true")
 	}
 }
 
@@ -2904,7 +2922,7 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 				t.Fatalf("read request body: %v", err)
 			}
 			capturedBody = string(body)
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"issues_events":true,"merge_requests_events":true,"tag_push_events":true,"note_events":true,"confidential_note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"emoji_events":true,"resource_access_token_events":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"issues_events":true,"merge_requests_events":true,"tag_push_events":true,"note_events":true,"confidential_note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"emoji_events":true,"resource_access_token_events":true,"vulnerability_events":true,"token_present":true,"signing_token_present":true}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -2916,6 +2934,7 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 		Name:                      "full-hook",
 		Description:               "all events",
 		Token:                     "secret",
+		SigningToken:              "signing-secret",
 		PushEvents:                new(true),
 		PushEventsBranchFilter:    "main",
 		IssuesEvents:              new(true),
@@ -2929,8 +2948,12 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 		WikiPageEvents:            new(true),
 		DeploymentEvents:          new(true),
 		ReleasesEvents:            new(true),
+		MilestoneEvents:           new(true),
+		FeatureFlagEvents:         new(true),
 		EmojiEvents:               new(true),
 		ResourceAccessTokenEvents: new(true),
+		ResourceDeployTokenEvents: new(true),
+		VulnerabilityEvents:       new(true),
 		EnableSSLVerification:     new(true),
 		CustomWebhookTemplate:     "tpl",
 		BranchFilterStrategy:      "all",
@@ -2941,7 +2964,7 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf(fmtIDWant1, out.ID)
 	}
-	for _, want := range []string{"url", "token", "push_events_branch_filter", "custom_webhook_template", "branch_filter_strategy", "emoji_events", "resource_access_token_events"} {
+	for _, want := range []string{"url", "token", "signing_token", "push_events_branch_filter", "custom_webhook_template", "branch_filter_strategy", "emoji_events", "resource_access_token_events", "resource_deploy_token_events", "milestone_events", "feature_flag_events", "vulnerability_events"} {
 		if !strings.Contains(capturedBody, want) {
 			t.Errorf("request body missing field %q", want)
 		}
@@ -2971,6 +2994,7 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 		Name:                      "updated-hook",
 		Description:               "updated",
 		Token:                     "new-secret",
+		SigningToken:              "new-signing-secret",
 		PushEvents:                new(true),
 		PushEventsBranchFilter:    testBranchDevelop,
 		IssuesEvents:              new(false),
@@ -2984,8 +3008,12 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 		WikiPageEvents:            new(false),
 		DeploymentEvents:          new(true),
 		ReleasesEvents:            new(false),
+		MilestoneEvents:           new(true),
+		FeatureFlagEvents:         new(false),
 		EmojiEvents:               new(true),
 		ResourceAccessTokenEvents: new(false),
+		ResourceDeployTokenEvents: new(true),
+		VulnerabilityEvents:       new(true),
 		EnableSSLVerification:     new(false),
 		CustomWebhookTemplate:     "new-tpl",
 		BranchFilterStrategy:      "regex",
@@ -2996,7 +3024,7 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 	if out.URL != "https://example.com/hook-updated" {
 		t.Errorf("URL = %q, want updated URL", out.URL)
 	}
-	for _, want := range []string{"url", "token", "push_events_branch_filter", "custom_webhook_template", "branch_filter_strategy", "emoji_events"} {
+	for _, want := range []string{"url", "token", "signing_token", "push_events_branch_filter", "custom_webhook_template", "branch_filter_strategy", "emoji_events", "resource_deploy_token_events", "milestone_events", "feature_flag_events", "vulnerability_events"} {
 		if !strings.Contains(capturedBody, want) {
 			t.Errorf("request body missing field %q", want)
 		}

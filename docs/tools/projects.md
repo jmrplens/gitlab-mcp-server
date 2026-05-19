@@ -178,14 +178,14 @@ Get details of a specific project webhook including all event trigger settings.
 
 ### `gitlab_project_hook_add`
 
-Add a webhook to a GitLab project. Configure the URL, secret token, SSL verification, and which events trigger the webhook (push, issues, MRs, tags, notes, jobs, pipelines, wiki, deployments, releases, emoji, etc.).
+Add a webhook to a GitLab project. Configure the URL, secret token, write-only signing token, SSL verification, and which events trigger the webhook (push, issues, MRs, tags, notes, jobs, pipelines, wiki, deployments, releases, milestones, feature flags, vulnerabilities, resource tokens, emoji, etc.).
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_project_hook_edit`
 
-Edit an existing project webhook. Update the URL, events, SSL verification, secret token, or other settings.
+Edit an existing project webhook. Update the URL, events, SSL verification, secret token, write-only signing token, or other settings.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

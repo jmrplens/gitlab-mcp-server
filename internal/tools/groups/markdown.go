@@ -144,12 +144,25 @@ func FormatHookMarkdown(h HookOutput) string {
 	}
 	fmt.Fprintf(&b, "- **Group ID**: %d\n", h.GroupID)
 	fmt.Fprintf(&b, "- **SSL Verification**: %v\n", h.EnableSSLVerification)
+	fmt.Fprintf(&b, "- **Token Present**: %v\n", h.TokenPresent)
+	fmt.Fprintf(&b, "- **Signing Token Present**: %v\n", h.SigningTokenPresent)
 	fmt.Fprintf(&b, "- **Events**: %s\n", enabledEvents(h))
 	if h.AlertStatus != "" {
 		fmt.Fprintf(&b, "- **Alert Status**: %s\n", h.AlertStatus)
 	}
+	if h.DisabledUntil != "" {
+		fmt.Fprintf(&b, "- **Disabled Until**: %s\n", toolutil.FormatTime(h.DisabledUntil))
+	}
 	if h.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(h.CreatedAt))
+	}
+	if len(h.URLVariables) > 0 {
+		b.WriteString("\n### URL Variables\n\n")
+		b.WriteString("| Key | Value |\n")
+		b.WriteString(toolutil.TblSep2Col)
+		for _, variable := range h.URLVariables {
+			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(variable.Key), toolutil.EscapeMdTableCell(variable.Value))
+		}
 	}
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,

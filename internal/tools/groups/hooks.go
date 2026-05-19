@@ -19,6 +19,7 @@ type HookInput struct {
 	Name                     string `json:"name,omitempty"                       jsonschema:"Hook name"`
 	Description              string `json:"description,omitempty"                jsonschema:"Hook description"`
 	Token                    string `json:"token,omitempty"                      jsonschema:"Secret token for payload validation"`
+	SigningToken             string `json:"signing_token,omitempty"              jsonschema:"Write-only signing token for webhook signature validation"`
 	PushEvents               *bool  `json:"push_events,omitempty"                jsonschema:"Trigger on push events"`
 	TagPushEvents            *bool  `json:"tag_push_events,omitempty"            jsonschema:"Trigger on tag push events"`
 	MergeRequestsEvents      *bool  `json:"merge_requests_events,omitempty"      jsonschema:"Trigger on merge request events"`
@@ -29,8 +30,11 @@ type HookInput struct {
 	WikiPageEvents           *bool  `json:"wiki_page_events,omitempty"           jsonschema:"Trigger on wiki page events"`
 	DeploymentEvents         *bool  `json:"deployment_events,omitempty"          jsonschema:"Trigger on deployment events"`
 	ReleasesEvents           *bool  `json:"releases_events,omitempty"            jsonschema:"Trigger on release events"`
+	MilestoneEvents          *bool  `json:"milestone_events,omitempty"           jsonschema:"Trigger on milestone events"`
+	FeatureFlagEvents        *bool  `json:"feature_flag_events,omitempty"        jsonschema:"Trigger on feature flag events"`
 	SubGroupEvents           *bool  `json:"subgroup_events,omitempty"            jsonschema:"Trigger on subgroup events"`
 	MemberEvents             *bool  `json:"member_events,omitempty"              jsonschema:"Trigger on member events"`
+	VulnerabilityEvents      *bool  `json:"vulnerability_events,omitempty"       jsonschema:"Trigger on vulnerability events"`
 	ConfidentialIssuesEvents *bool  `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
 	ConfidentialNoteEvents   *bool  `json:"confidential_note_events,omitempty"   jsonschema:"Trigger on confidential note events"`
 	EnableSSLVerification    *bool  `json:"enable_ssl_verification,omitempty"    jsonschema:"Enable SSL verification for the hook endpoint"`
@@ -100,7 +104,13 @@ type HookOutput struct {
 	ConfidentialNoteEvents   bool              `json:"confidential_note_events"`
 	EnableSSLVerification    bool              `json:"enable_ssl_verification"`
 	AlertStatus              string            `json:"alert_status,omitempty"`
+	DisabledUntil            string            `json:"disabled_until,omitempty"`
 	URLVariables             []HookURLVariable `json:"url_variables,omitempty"`
+	FeatureFlagEvents        bool              `json:"feature_flag_events"`
+	MilestoneEvents          bool              `json:"milestone_events"`
+	VulnerabilityEvents      bool              `json:"vulnerability_events"`
+	TokenPresent             bool              `json:"token_present"`
+	SigningTokenPresent      bool              `json:"signing_token_present"`
 	CreatedAt                string            `json:"created_at,omitempty"`
 }
 
@@ -135,6 +145,11 @@ func hookToOutput(h *gl.GroupHook) HookOutput {
 		ConfidentialNoteEvents:   h.ConfidentialNoteEvents,
 		EnableSSLVerification:    h.EnableSSLVerification,
 		AlertStatus:              h.AlertStatus,
+		FeatureFlagEvents:        h.FeatureFlagEvents,
+		MilestoneEvents:          h.MilestoneEvents,
+		VulnerabilityEvents:      h.VulnerabilityEvents,
+		TokenPresent:             h.TokenPresent,
+		SigningTokenPresent:      h.SigningTokenPresent,
 	}
 	if len(h.URLVariables) > 0 {
 		out.URLVariables = make([]HookURLVariable, len(h.URLVariables))
@@ -144,6 +159,9 @@ func hookToOutput(h *gl.GroupHook) HookOutput {
 	}
 	if h.CreatedAt != nil {
 		out.CreatedAt = h.CreatedAt.Format(time.RFC3339)
+	}
+	if h.DisabledUntil != nil {
+		out.DisabledUntil = h.DisabledUntil.Format(time.RFC3339)
 	}
 	return out
 }
@@ -223,6 +241,9 @@ func applyAddHookIdentity(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.Token != "" {
 		opts.Token = new(input.Token)
 	}
+	if input.SigningToken != "" {
+		opts.SigningToken = new(input.SigningToken)
+	}
 	if input.EnableSSLVerification != nil {
 		opts.EnableSSLVerification = input.EnableSSLVerification
 	}
@@ -263,11 +284,20 @@ func applyAddHookEvents(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.ReleasesEvents != nil {
 		opts.ReleasesEvents = input.ReleasesEvents
 	}
+	if input.MilestoneEvents != nil {
+		opts.MilestoneEvents = input.MilestoneEvents
+	}
+	if input.FeatureFlagEvents != nil {
+		opts.FeatureFlagEvents = input.FeatureFlagEvents
+	}
 	if input.SubGroupEvents != nil {
 		opts.SubGroupEvents = input.SubGroupEvents
 	}
 	if input.MemberEvents != nil {
 		opts.MemberEvents = input.MemberEvents
+	}
+	if input.VulnerabilityEvents != nil {
+		opts.VulnerabilityEvents = input.VulnerabilityEvents
 	}
 	if input.ConfidentialIssuesEvents != nil {
 		opts.ConfidentialIssuesEvents = input.ConfidentialIssuesEvents
@@ -298,6 +328,9 @@ func applyEditHookIdentity(input HookInput, opts *gl.EditGroupHookOptions) {
 	}
 	if input.Token != "" {
 		opts.Token = new(input.Token)
+	}
+	if input.SigningToken != "" {
+		opts.SigningToken = new(input.SigningToken)
 	}
 	if input.EnableSSLVerification != nil {
 		opts.EnableSSLVerification = input.EnableSSLVerification
@@ -339,11 +372,20 @@ func applyEditHookEvents(input HookInput, opts *gl.EditGroupHookOptions) {
 	if input.ReleasesEvents != nil {
 		opts.ReleasesEvents = input.ReleasesEvents
 	}
+	if input.MilestoneEvents != nil {
+		opts.MilestoneEvents = input.MilestoneEvents
+	}
+	if input.FeatureFlagEvents != nil {
+		opts.FeatureFlagEvents = input.FeatureFlagEvents
+	}
 	if input.SubGroupEvents != nil {
 		opts.SubGroupEvents = input.SubGroupEvents
 	}
 	if input.MemberEvents != nil {
 		opts.MemberEvents = input.MemberEvents
+	}
+	if input.VulnerabilityEvents != nil {
+		opts.VulnerabilityEvents = input.VulnerabilityEvents
 	}
 	if input.ConfidentialIssuesEvents != nil {
 		opts.ConfidentialIssuesEvents = input.ConfidentialIssuesEvents
@@ -454,11 +496,20 @@ func enabledEvents(h HookOutput) string {
 	if h.ReleasesEvents {
 		events = append(events, "releases")
 	}
+	if h.MilestoneEvents {
+		events = append(events, "milestone")
+	}
+	if h.FeatureFlagEvents {
+		events = append(events, "feature_flag")
+	}
 	if h.SubGroupEvents {
 		events = append(events, "subgroup")
 	}
 	if h.MemberEvents {
 		events = append(events, "member")
+	}
+	if h.VulnerabilityEvents {
+		events = append(events, "vulnerability")
 	}
 	if len(events) == 0 {
 		return "none"

@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.0.2 | up to 1019 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
+> Version 2.0.2 | up to 1022 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -1220,7 +1220,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>system_hook_add</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"hook":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"id":{"type":"integer"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"push_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"}},"required":["id","url","push_events","tag_push_events","merge_requests_events","repository_update_events","enable_ssl_verification"],"type":"object"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["hook"],"type":"object"}
+{"additionalProperties":false,"properties":{"hook":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"id":{"type":"integer"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"push_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]}},"required":["id","url","push_events","tag_push_events","merge_requests_events","repository_update_events","enable_ssl_verification","token_present","signing_token_present"],"type":"object"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["hook"],"type":"object"}
 ```
 
 </details>
@@ -1233,10 +1233,26 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 </details>
 
+<details><summary>system_hook_delete_url_variable</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"}},"required":["status","message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>system_hook_edit</summary>
+
+```json
+{"additionalProperties":false,"properties":{"hook":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"id":{"type":"integer"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"push_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]}},"required":["id","url","push_events","tag_push_events","merge_requests_events","repository_update_events","enable_ssl_verification","token_present","signing_token_present"],"type":"object"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["hook"],"type":"object"}
+```
+
+</details>
+
 <details><summary>system_hook_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"hook":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"id":{"type":"integer"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"push_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"}},"required":["id","url","push_events","tag_push_events","merge_requests_events","repository_update_events","enable_ssl_verification"],"type":"object"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["hook"],"type":"object"}
+{"additionalProperties":false,"properties":{"hook":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"id":{"type":"integer"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"push_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]}},"required":["id","url","push_events","tag_push_events","merge_requests_events","repository_update_events","enable_ssl_verification","token_present","signing_token_present"],"type":"object"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["hook"],"type":"object"}
 ```
 
 </details>
@@ -1244,7 +1260,15 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>system_hook_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"hooks":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"id":{"type":"integer"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"push_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"}},"required":["id","url","push_events","tag_push_events","merge_requests_events","repository_update_events","enable_ssl_verification"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["hooks"],"type":"object"}
+{"additionalProperties":false,"properties":{"hooks":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"id":{"type":"integer"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"push_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]}},"required":["id","url","push_events","tag_push_events","merge_requests_events","repository_update_events","enable_ssl_verification","token_present","signing_token_present"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["hooks"],"type":"object"}
+```
+
+</details>
+
+<details><summary>system_hook_set_url_variable</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"}},"required":["status","message"],"type":"object"}
 ```
 
 </details>
@@ -3140,7 +3164,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_add</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","token_present","signing_token_present"],"type":"object"}
 ```
 
 </details>
@@ -3156,7 +3180,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_edit</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","token_present","signing_token_present"],"type":"object"}
 ```
 
 </details>
@@ -3164,7 +3188,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","token_present","signing_token_present"],"type":"object"}
 ```
 
 </details>
@@ -3172,7 +3196,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"hooks":{"items":{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["hooks","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"hooks":{"items":{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","token_present","signing_token_present"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["hooks","pagination"],"type":"object"}
 ```
 
 </details>
@@ -6400,7 +6424,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_add</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"custom_webhook_template":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_id":{"type":"integer"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","project_id","push_events","issues_events","confidential_issues_events","merge_requests_events","tag_push_events","note_events","confidential_note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","milestone_events","feature_flag_events","emoji_events","enable_ssl_verification","repository_update_events","resource_access_token_events","created_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"custom_headers":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"custom_webhook_template":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_id":{"type":"integer"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","project_id","push_events","issues_events","confidential_issues_events","merge_requests_events","tag_push_events","note_events","confidential_note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","milestone_events","feature_flag_events","emoji_events","enable_ssl_verification","repository_update_events","resource_access_token_events","vulnerability_events","token_present","signing_token_present","created_at"],"type":"object"}
 ```
 
 </details>
@@ -6432,7 +6456,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_edit</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"custom_webhook_template":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_id":{"type":"integer"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","project_id","push_events","issues_events","confidential_issues_events","merge_requests_events","tag_push_events","note_events","confidential_note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","milestone_events","feature_flag_events","emoji_events","enable_ssl_verification","repository_update_events","resource_access_token_events","created_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"custom_headers":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"custom_webhook_template":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_id":{"type":"integer"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","project_id","push_events","issues_events","confidential_issues_events","merge_requests_events","tag_push_events","note_events","confidential_note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","milestone_events","feature_flag_events","emoji_events","enable_ssl_verification","repository_update_events","resource_access_token_events","vulnerability_events","token_present","signing_token_present","created_at"],"type":"object"}
 ```
 
 </details>
@@ -6440,7 +6464,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"custom_webhook_template":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_id":{"type":"integer"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","project_id","push_events","issues_events","confidential_issues_events","merge_requests_events","tag_push_events","note_events","confidential_note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","milestone_events","feature_flag_events","emoji_events","enable_ssl_verification","repository_update_events","resource_access_token_events","created_at"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"custom_headers":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"custom_webhook_template":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_id":{"type":"integer"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","project_id","push_events","issues_events","confidential_issues_events","merge_requests_events","tag_push_events","note_events","confidential_note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","milestone_events","feature_flag_events","emoji_events","enable_ssl_verification","repository_update_events","resource_access_token_events","vulnerability_events","token_present","signing_token_present","created_at"],"type":"object"}
 ```
 
 </details>
@@ -6448,7 +6472,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"hooks":{"items":{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"custom_webhook_template":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_id":{"type":"integer"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"url":{"type":"string"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","project_id","push_events","issues_events","confidential_issues_events","merge_requests_events","tag_push_events","note_events","confidential_note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","milestone_events","feature_flag_events","emoji_events","enable_ssl_verification","repository_update_events","resource_access_token_events","created_at"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["hooks","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"hooks":{"items":{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"custom_headers":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"custom_webhook_template":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_id":{"type":"integer"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"repository_update_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","project_id","push_events","issues_events","confidential_issues_events","merge_requests_events","tag_push_events","note_events","confidential_note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","milestone_events","feature_flag_events","emoji_events","enable_ssl_verification","repository_update_events","resource_access_token_events","vulnerability_events","token_present","signing_token_present","created_at"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["hooks","pagination"],"type":"object"}
 ```
 
 </details>
@@ -10646,7 +10670,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When `TOOL_SURFACE=individual`, up to 1019 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1014.
+When `TOOL_SURFACE=individual`, up to 1022 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1017.
 Grouped by domain:
 
 ### access (8 tools)
@@ -10983,6 +11007,7 @@ Add a new system hook (admin). Requires URL. Optionally configure event subscrip
 - `push_events` (boolean): Trigger on push events
 - `push_events_branch_filter` (string): Branch filter for push events (wildcard, regex, or branch name)
 - `repository_update_events` (boolean): Trigger on repository update events
+- `signing_token` (string): Write-only signing token for webhook signature validation
 - `tag_push_events` (boolean): Trigger on tag push events
 - `token` (string): Secret token for payload validation
 - `url` (string) (required): Hook URL to receive events
@@ -12152,7 +12177,7 @@ Deactivate an active GitLab user (admin only). Deactivated users cannot login bu
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### delete (46 tools)
+### delete (47 tools)
 
 #### gitlab_delete_alert_metric_image
 
@@ -12632,6 +12657,18 @@ Delete a system hook by ID (admin).
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
+#### gitlab_delete_system_hook_url_variable
+
+Delete System Hook URL Variable.
+
+**Parameters:**
+
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+- `id` (integer) (required): System hook ID
+- `key` (string) (required): URL variable key name to delete
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
 #### gitlab_delete_terraform_state
 
 Delete a Terraform state
@@ -13106,7 +13143,7 @@ Download the finished export archive of a project. Returns the archive as base64
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### edit (5 tools)
+### edit (6 tools)
 
 #### gitlab_edit_geo_site
 
@@ -13184,6 +13221,28 @@ Edit a resource group process mode.
 - `key` (string) (required): Resource group key
 - `process_mode` (string) (required): Process mode (newest_first, oldest_first, unordered)
 - `project_id` (string) (required): Project ID or URL-encoded path
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_edit_system_hook
+
+Edit an instance system hook.
+
+**Parameters:**
+
+- `branch_filter_strategy` (string): Branch filter strategy: wildcard, regex, or all_branches
+- `description` (string): Updated hook description
+- `enable_ssl_verification` (boolean): Enable SSL verification for the hook URL
+- `id` (integer) (required): System hook ID to edit
+- `merge_requests_events` (boolean): Trigger on merge request events
+- `name` (string): Updated hook name
+- `push_events` (boolean): Trigger on push events
+- `push_events_branch_filter` (string): Branch filter for push events (wildcard, regex, or branch name)
+- `repository_update_events` (boolean): Trigger on repository update events
+- `signing_token` (string): Updated write-only signing token for webhook signature validation
+- `tag_push_events` (boolean): Trigger on tag push events
+- `token` (string): Updated secret token for payload validation
+- `url` (string): Updated hook URL
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -14995,21 +15054,25 @@ Add a new webhook to a GitLab group. Requires URL; optionally configure event tr
 - `deployment_events` (boolean): Trigger on deployment events
 - `description` (string): Hook description
 - `enable_ssl_verification` (boolean): Enable SSL verification for the hook endpoint
+- `feature_flag_events` (boolean): Trigger on feature flag events
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `issues_events` (boolean): Trigger on issue events
 - `job_events` (boolean): Trigger on job events
 - `member_events` (boolean): Trigger on member events
 - `merge_requests_events` (boolean): Trigger on merge request events
+- `milestone_events` (boolean): Trigger on milestone events
 - `name` (string): Hook name
 - `note_events` (boolean): Trigger on comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
 - `push_events` (boolean): Trigger on push events
 - `push_events_branch_filter` (string): Branch filter for push events (e.g. 'main')
 - `releases_events` (boolean): Trigger on release events
+- `signing_token` (string): Write-only signing token for webhook signature validation
 - `subgroup_events` (boolean): Trigger on subgroup events
 - `tag_push_events` (boolean): Trigger on tag push events
 - `token` (string): Secret token for payload validation
 - `url` (string): Webhook URL (required for add)
+- `vulnerability_events` (boolean): Trigger on vulnerability events
 - `wiki_page_events` (boolean): Trigger on wiki page events
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -15037,22 +15100,26 @@ Edit an existing group webhook. Supports changing URL, events, SSL verification,
 - `deployment_events` (boolean): Trigger on deployment events
 - `description` (string): Hook description
 - `enable_ssl_verification` (boolean): Enable SSL verification for the hook endpoint
+- `feature_flag_events` (boolean): Trigger on feature flag events
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `hook_id` (integer) (required): Hook ID to edit
 - `issues_events` (boolean): Trigger on issue events
 - `job_events` (boolean): Trigger on job events
 - `member_events` (boolean): Trigger on member events
 - `merge_requests_events` (boolean): Trigger on merge request events
+- `milestone_events` (boolean): Trigger on milestone events
 - `name` (string): Hook name
 - `note_events` (boolean): Trigger on comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
 - `push_events` (boolean): Trigger on push events
 - `push_events_branch_filter` (string): Branch filter for push events (e.g. 'main')
 - `releases_events` (boolean): Trigger on release events
+- `signing_token` (string): Write-only signing token for webhook signature validation
 - `subgroup_events` (boolean): Trigger on subgroup events
 - `tag_push_events` (boolean): Trigger on tag push events
 - `token` (string): Secret token for payload validation
 - `url` (string): Webhook URL (required for add)
+- `vulnerability_events` (boolean): Trigger on vulnerability events
 - `wiki_page_events` (boolean): Trigger on wiki page events
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -20624,9 +20691,11 @@ Add a webhook to a GitLab project. Configure the URL, secret token, SSL verifica
 - `description` (string): Webhook description
 - `emoji_events` (boolean): Trigger on emoji events
 - `enable_ssl_verification` (boolean): Enable SSL verification for webhook
+- `feature_flag_events` (boolean): Trigger on feature flag events
 - `issues_events` (boolean): Trigger on issue events
 - `job_events` (boolean): Trigger on CI job events
 - `merge_requests_events` (boolean): Trigger on merge request events
+- `milestone_events` (boolean): Trigger on milestone events
 - `name` (string): Webhook name
 - `note_events` (boolean): Trigger on note/comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
@@ -20635,9 +20704,12 @@ Add a webhook to a GitLab project. Configure the URL, secret token, SSL verifica
 - `push_events_branch_filter` (string): Branch filter for push events
 - `releases_events` (boolean): Trigger on release events
 - `resource_access_token_events` (boolean): Trigger on resource access token events
+- `resource_deploy_token_events` (boolean): Trigger on resource deploy token events
+- `signing_token` (string): Write-only signing token for webhook signature validation
 - `tag_push_events` (boolean): Trigger on tag push events
 - `token` (string): Secret token for validation
 - `url` (string) (required): Webhook URL
+- `vulnerability_events` (boolean): Trigger on vulnerability events
 - `wiki_page_events` (boolean): Trigger on wiki page events
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -20694,10 +20766,12 @@ Edit an existing project webhook. Update the URL, events, SSL verification, secr
 - `description` (string): Updated webhook description
 - `emoji_events` (boolean): Trigger on emoji events
 - `enable_ssl_verification` (boolean): Enable SSL verification
+- `feature_flag_events` (boolean): Trigger on feature flag events
 - `hook_id` (integer) (required): Webhook ID to edit
 - `issues_events` (boolean): Trigger on issue events
 - `job_events` (boolean): Trigger on CI job events
 - `merge_requests_events` (boolean): Trigger on merge request events
+- `milestone_events` (boolean): Trigger on milestone events
 - `name` (string): Updated webhook name
 - `note_events` (boolean): Trigger on note/comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
@@ -20706,9 +20780,12 @@ Edit an existing project webhook. Update the URL, events, SSL verification, secr
 - `push_events_branch_filter` (string): Branch filter for push events
 - `releases_events` (boolean): Trigger on release events
 - `resource_access_token_events` (boolean): Trigger on resource access token events
+- `resource_deploy_token_events` (boolean): Trigger on resource deploy token events
+- `signing_token` (string): Updated write-only signing token for webhook signature validation
 - `tag_push_events` (boolean): Trigger on tag push events
 - `token` (string): Updated secret token
 - `url` (string): Updated webhook URL
+- `vulnerability_events` (boolean): Trigger on vulnerability events
 - `wiki_page_events` (boolean): Trigger on wiki page events
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -22824,7 +22901,7 @@ Check MCP server health and GitLab connectivity. Returns server version, author,
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### set (5 tools)
+### set (6 tools)
 
 #### gitlab_set_custom_attribute
 
@@ -22895,6 +22972,18 @@ Set the status of an external status check for a project merge request. Requires
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `sha` (string) (required): Head SHA of the merge request source branch
 - `status` (string) (required): Status value (e.g. passed, failed)
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_set_system_hook_url_variable
+
+Set System Hook URL Variable.
+
+**Parameters:**
+
+- `id` (integer) (required): System hook ID
+- `key` (string) (required): URL variable key name
+- `value` (string) (required): URL variable value
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
