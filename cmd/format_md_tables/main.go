@@ -20,7 +20,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/docgen"
 )
 
-const defaultRoot = "."
+const (
+	defaultRoot          = "."
+	statPathErrorFormat  = "stat %s: %w"
+	writeStdoutErrorText = "write stdout: %w"
+)
 
 type options struct {
 	root  string
@@ -80,11 +84,11 @@ func run(args []string, stdout io.Writer) error {
 		return writeStdout(stdout, "Markdown tables already formatted")
 	}
 	if _, writeErr := fmt.Fprintf(stdout, "Formatted Markdown tables in %d file(s):\n", len(changed)); writeErr != nil {
-		return fmt.Errorf("write stdout: %w", writeErr)
+		return fmt.Errorf(writeStdoutErrorText, writeErr)
 	}
 	for _, file := range changed {
 		if _, writeErr := fmt.Fprintf(stdout, "- %s\n", file); writeErr != nil {
-			return fmt.Errorf("write stdout: %w", writeErr)
+			return fmt.Errorf(writeStdoutErrorText, writeErr)
 		}
 	}
 	return nil
@@ -92,7 +96,7 @@ func run(args []string, stdout io.Writer) error {
 
 func writeStdout(stdout io.Writer, message string) error {
 	if _, err := fmt.Fprintln(stdout, message); err != nil {
-		return fmt.Errorf("write stdout: %w", err)
+		return fmt.Errorf(writeStdoutErrorText, err)
 	}
 	return nil
 }
@@ -122,7 +126,7 @@ func discoverMarkdownFiles(rootFS *os.Root, root string, paths []string) ([]stri
 		}
 		info, err := rootFS.Stat(rel)
 		if err != nil {
-			return nil, fmt.Errorf("stat %s: %w", item, err)
+			return nil, fmt.Errorf(statPathErrorFormat, item, err)
 		}
 		if info.IsDir() {
 			walkErr := iofs.WalkDir(rootFS.FS(), filepath.ToSlash(rel), func(path string, entry iofs.DirEntry, err error) error {
@@ -136,7 +140,7 @@ func discoverMarkdownFiles(rootFS *os.Root, root string, paths []string) ([]stri
 					relPath := filepath.FromSlash(path)
 					fileInfo, statErr := rootFS.Stat(relPath)
 					if statErr != nil {
-						return fmt.Errorf("stat %s: %w", relPath, statErr)
+						return fmt.Errorf(statPathErrorFormat, relPath, statErr)
 					}
 					if !fileInfo.IsDir() {
 						files = append(files, relPath)
@@ -186,7 +190,7 @@ func formatMarkdownTableFile(rootFS *os.Root, path string, check bool) (bool, er
 	}
 	info, err := rootFS.Stat(path)
 	if err != nil {
-		return false, fmt.Errorf("stat %s: %w", path, err)
+		return false, fmt.Errorf(statPathErrorFormat, path, err)
 	}
 	writeErr := rootFS.WriteFile(path, []byte(formatted), info.Mode().Perm())
 	if writeErr != nil {

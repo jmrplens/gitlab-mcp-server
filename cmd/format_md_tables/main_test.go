@@ -47,9 +47,9 @@ func TestRun_TableDriven(t *testing.T) {
 			name: "formats explicit path",
 			args: []string{"custom.md"},
 			files: map[string]string{
-				"custom.md": "| A | B |\n| --- | --- |\n| one | two |\n",
+				"custom.md": "| A | B |\n| --- | ---: |\n| one | 2 |\n",
 			},
-			wantContains: map[string]string{"custom.md": "| one | two |"},
+			wantContains: map[string]string{"custom.md": "| one |    2 |"},
 		},
 		{
 			name:       "check succeeds when formatted",
