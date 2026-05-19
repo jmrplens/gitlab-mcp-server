@@ -51,11 +51,11 @@ LLMs using MCP tools need actionable error messages to self-correct without huma
 
 Introduce three new functions in `internal/toolutil/errors.go` that layer on top of the existing `WrapErr`:
 
-| Function | Purpose | When to use |
-| --- | --- | --- |
-| `ExtractGitLabMessage(err)` | Extracts specific detail from `gl.ErrorResponse.Message` | Building block for other functions |
-| `WrapErrWithMessage(op, err)` | Like `WrapErr` but includes the GitLab error message | Mutating operations (default) |
-| `WrapErrWithHint(op, err, hint)` | Like `WrapErrWithMessage` plus an actionable suggestion | When a specific corrective action is known |
+| Function                         | Purpose                                                  | When to use                                |
+| -------------------------------- | -------------------------------------------------------- | ------------------------------------------ |
+| `ExtractGitLabMessage(err)`      | Extracts specific detail from `gl.ErrorResponse.Message` | Building block for other functions         |
+| `WrapErrWithMessage(op, err)`    | Like `WrapErr` but includes the GitLab error message     | Mutating operations (default)              |
+| `WrapErrWithHint(op, err, hint)` | Like `WrapErrWithMessage` plus an actionable suggestion  | When a specific corrective action is known |
 
 ### Error format progression
 

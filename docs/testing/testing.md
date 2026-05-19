@@ -616,11 +616,11 @@ Docker mode enables pipeline and job tests that require a CI runner. It also sta
 
 Both `make test-e2e` and `make test-e2e-docker` use [gotestsum](https://github.com/gotestyourself/gotestsum) to produce structured test reports in `dist/e2e-reports/`:
 
-| File                        | Format    | Purpose                                      |
-| --------------------------- | --------- | -------------------------------------------- |
-| `e2e-junit.xml`             | JUnit XML | CI/CD integration (GitHub Actions, SonarQube) |
-| `e2e-log.json`              | JSON      | Programmatic analysis, filtering              |
-| `e2e-output.txt`            | Plain     | Human-readable console output (`testdox`)     |
+| File             | Format    | Purpose                                       |
+| ---------------- | --------- | --------------------------------------------- |
+| `e2e-junit.xml`  | JUnit XML | CI/CD integration (GitHub Actions, SonarQube) |
+| `e2e-log.json`   | JSON      | Programmatic analysis, filtering              |
+| `e2e-output.txt` | Plain     | Human-readable console output (`testdox`)     |
 
 Docker mode files use the `e2e-docker-` prefix. Reports are written to `dist/e2e-reports/` (gitignored via `dist/`).
 
@@ -632,22 +632,22 @@ Install gotestsum via `make install-tools` or `go install gotest.tools/gotestsum
 
 The suite uses five MCP server/client pairs via `mcp.NewInMemoryTransports()`:
 
-| Session       | Purpose                                    |
-| ------------- | ------------------------------------------ |
-| `individual`  | Individual GitLab tools                    |
-| `meta`        | Domain meta-tools and action dispatch      |
-| `sampling`    | Sampling tools with mock LLM handler       |
-| `elicitation` | Elicitation tools with mock user handler   |
+| Session       | Purpose                                      |
+| ------------- | -------------------------------------------- |
+| `individual`  | Individual GitLab tools                      |
+| `meta`        | Domain meta-tools and action dispatch        |
+| `sampling`    | Sampling tools with mock LLM handler         |
+| `elicitation` | Elicitation tools with mock user handler     |
 | `safeMode`    | Mutating tools wrapped as safe-mode previews |
 
 **Workflows:**
 
-| Area                 | Description                                               |
-| -------------------- | --------------------------------------------------------- |
-| Individual tools     | Exercises domain tools directly against real GitLab       |
-| Meta-tools           | Exercises domain action dispatch through meta-tools       |
-| MCP capabilities     | Verifies logging, progress, roots, completions, sampling, elicitation, and safe mode |
-| Docker-only runner   | Exercises CI pipeline and job behavior with a registered runner |
+| Area               | Description                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| Individual tools   | Exercises domain tools directly against real GitLab                                  |
+| Meta-tools         | Exercises domain action dispatch through meta-tools                                  |
+| MCP capabilities   | Verifies logging, progress, roots, completions, sampling, elicitation, and safe mode |
+| Docker-only runner | Exercises CI pipeline and job behavior with a registered runner                      |
 
 Docker validation snapshots are written under `dist/e2e-reports/` after `make test-e2e-docker`. The generated metrics above count E2E `Test*` entry points statically; they do not replace the runtime report produced by gotestsum.
 
@@ -712,12 +712,12 @@ go test -v -tags e2e -timeout 300s -run '^TestMeta_' ./test/e2e/suite/
 
 Validation tests in `internal/tools/register_validation_test.go` ensure structural integrity across all sub-packages:
 
-| Test                                   | Purpose                                                                                     |
-| -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `TestRegisterAllDoesNotUseDomainRegisterTools` | Verifies root individual registration stays catalog-backed and cannot regress to per-domain `RegisterTools` loops |
-| `TestActionSpecCoverage_AllCatalogRoutesClassified` | Builds the GitLab.com Enterprise dynamic catalog and verifies every catalog action is spec-backed |
-| `TestAllMarkdownFormattersRegistered`  | Verifies all ~266 output types across 76 sub-packages have registered markdown formatters via `toolutil.RegisterMarkdown[T]` |
-| `TestAllHintReferencesValid`           | Validates all `action 'xxx'` and backtick-quoted `` `gitlab_xxx` `` references in WriteHints across all markdown.go files match registered tools/actions |
+| Test                                                | Purpose                                                                                                                                                  |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TestRegisterAllDoesNotUseDomainRegisterTools`      | Verifies root individual registration stays catalog-backed and cannot regress to per-domain `RegisterTools` loops                                        |
+| `TestActionSpecCoverage_AllCatalogRoutesClassified` | Builds the GitLab.com Enterprise dynamic catalog and verifies every catalog action is spec-backed                                                        |
+| `TestAllMarkdownFormattersRegistered`               | Verifies all ~266 output types across 76 sub-packages have registered markdown formatters via `toolutil.RegisterMarkdown[T]`                             |
+| `TestAllHintReferencesValid`                        | Validates all `action 'xxx'` and backtick-quoted `` `gitlab_xxx` `` references in WriteHints across all markdown.go files match registered tools/actions |
 
 ```bash
 # Run validation tests
@@ -800,11 +800,11 @@ make inspector-stop # Stop Inspector and clean up temp binary
 
 ### Shared Helpers (`internal/testutil/`)
 
-| Helper                          | Purpose                                    |
-| ------------------------------- | ------------------------------------------ |
-| `NewTestClient()`               | Creates mock GitLab client + httptest server |
-| `RespondJSON()`                 | Writes JSON response body                  |
-| `RespondJSONWithPagination()`   | Writes JSON + pagination headers           |
+| Helper                        | Purpose                                      |
+| ----------------------------- | -------------------------------------------- |
+| `NewTestClient()`             | Creates mock GitLab client + httptest server |
+| `RespondJSON()`               | Writes JSON response body                    |
+| `RespondJSONWithPagination()` | Writes JSON + pagination headers             |
 
 ### Test File Organization
 
@@ -862,19 +862,19 @@ variables** overridden in tests with `t.Cleanup` to restore originals.
 
 **Function variables** (defined in source files, overridden in tests):
 
-| Variable          | Source file     | Real function    | Purpose                    |
-| ----------------- | --------------- | ---------------- | -------------------------- |
-| `allClientsFn`    | `clients.go`    | `AllClients()`   | Returns MCP client configs |
-| `openBrowserFn`   | `browser.go`    | `openBrowser()`  | Launches default browser   |
-| `pickDirectoryFn` | `dirpicker.go`  | `pickDirectory()`| Opens OS directory picker  |
+| Variable          | Source file    | Real function     | Purpose                    |
+| ----------------- | -------------- | ----------------- | -------------------------- |
+| `allClientsFn`    | `clients.go`   | `AllClients()`    | Returns MCP client configs |
+| `openBrowserFn`   | `browser.go`   | `openBrowser()`   | Launches default browser   |
+| `pickDirectoryFn` | `dirpicker.go` | `pickDirectory()` | Opens OS directory picker  |
 
 **Test helpers** (`testhelpers_test.go`):
 
-| Helper                          | Purpose                                                  |
-| ------------------------------- | -------------------------------------------------------- |
-| `useFakeClients(t)`             | Overrides `allClientsFn` with clients using temp dir paths — prevents writing to real `mcp.json` files |
-| `stubPickDirectory(t, path, err)` | Overrides `pickDirectoryFn` — prevents OS directory dialog |
-| `stubOpenBrowser(t)`            | Overrides `openBrowserFn` — prevents browser launch       |
+| Helper                            | Purpose                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `useFakeClients(t)`               | Overrides `allClientsFn` with clients using temp dir paths — prevents writing to real `mcp.json` files |
+| `stubPickDirectory(t, path, err)` | Overrides `pickDirectoryFn` — prevents OS directory dialog                                             |
+| `stubOpenBrowser(t)`              | Overrides `openBrowserFn` — prevents browser launch                                                    |
 
 **File organization** (12 test files, 159 test functions):
 

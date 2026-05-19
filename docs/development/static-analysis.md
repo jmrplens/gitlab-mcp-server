@@ -12,17 +12,17 @@ This document describes all static analysis tools used in **gitlab-mcp-server**,
 
 The project uses nine complementary static analysis tools:
 
-| Tool | Purpose | Auto-fix | Config | Docs |
-| --- | --- | --- | --- | --- |
-| `goimports` | Import ordering/grouping + gofmt formatting | Yes (`-w`) | N/A | [pkg.go.dev](https://pkg.go.dev/golang.org/x/tools/cmd/goimports) |
-| `gofmt` | Official Go code formatter (canonical style) | Yes (`-w`) | N/A | [pkg.go.dev](https://pkg.go.dev/cmd/gofmt) |
-| `go vet` | Built-in Go bug detection | No | N/A | [pkg.go.dev](https://pkg.go.dev/cmd/vet) |
-| `modernize` | Modern Go idiom suggestions (Go 1.18–1.26) | Yes (`-fix`) | N/A | [pkg.go.dev](https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize) |
-| `golangci-lint` | Meta-linter with 100+ checks | Partial | `.golangci.yml` | [golangci-lint.run](https://golangci-lint.run/) |
-| `gosec` | OWASP-oriented security scanner | No | `.golangci.yml` | [github.com](https://github.com/securego/gosec) |
-| `staticcheck` | Advanced bug/deprecation/simplification analysis | No | `.golangci.yml` | [staticcheck.dev](https://staticcheck.dev/) |
-| `govulncheck` | Dependency CVE scanner | No | N/A | [pkg.go.dev](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck) |
-| `markdownlint-cli2` | Markdown lint and auto-fix | Yes (`--fix`) | `.markdownlint-cli2.jsonc` | [github.com](https://github.com/DavidAnson/markdownlint-cli2) |
+| Tool                | Purpose                                          | Auto-fix      | Config                     | Docs                                                                             |
+| ------------------- | ------------------------------------------------ | ------------- | -------------------------- | -------------------------------------------------------------------------------- |
+| `goimports`         | Import ordering/grouping + gofmt formatting      | Yes (`-w`)    | N/A                        | [pkg.go.dev](https://pkg.go.dev/golang.org/x/tools/cmd/goimports)                |
+| `gofmt`             | Official Go code formatter (canonical style)     | Yes (`-w`)    | N/A                        | [pkg.go.dev](https://pkg.go.dev/cmd/gofmt)                                       |
+| `go vet`            | Built-in Go bug detection                        | No            | N/A                        | [pkg.go.dev](https://pkg.go.dev/cmd/vet)                                         |
+| `modernize`         | Modern Go idiom suggestions (Go 1.18–1.26)       | Yes (`-fix`)  | N/A                        | [pkg.go.dev](https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize) |
+| `golangci-lint`     | Meta-linter with 100+ checks                     | Partial       | `.golangci.yml`            | [golangci-lint.run](https://golangci-lint.run/)                                  |
+| `gosec`             | OWASP-oriented security scanner                  | No            | `.golangci.yml`            | [github.com](https://github.com/securego/gosec)                                  |
+| `staticcheck`       | Advanced bug/deprecation/simplification analysis | No            | `.golangci.yml`            | [staticcheck.dev](https://staticcheck.dev/)                                      |
+| `govulncheck`       | Dependency CVE scanner                           | No            | N/A                        | [pkg.go.dev](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck)               |
+| `markdownlint-cli2` | Markdown lint and auto-fix                       | Yes (`--fix`) | `.markdownlint-cli2.jsonc` | [github.com](https://github.com/DavidAnson/markdownlint-cli2)                    |
 
 Go analyzers and formatters are scoped to the project Go source roots: `cmd/`, `internal/`, and `test/`. Analysis targets pass the `e2e` build tag so files under `test/e2e/` are included without running E2E tests. Markdown linting remains repository-wide for Markdown files, excluding `plan/` drafts.
 
@@ -46,6 +46,17 @@ make analyze-report
 make analyze-fix
 ```
 
+## Markdown Table Formatting
+
+Source documentation tables can be normalized with the dedicated formatter:
+
+```bash
+go run ./cmd/format_md_tables/
+go run ./cmd/format_md_tables/ --check
+```
+
+The command scans `README.md` and `docs/` by default, skips fenced code blocks, preserves left/right/center alignment markers, and pads table columns for readable source Markdown. Use `--check` in review or CI contexts when you want a non-writing verification pass.
+
 ## Tool Installation
 
 All tools install into `$GOBIN` (usually `$GOPATH/bin`):
@@ -56,14 +67,14 @@ make install-tools
 
 This installs:
 
-| Tool | Install Command | Version |
-| --- | --- | --- |
-| modernize | `go install golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest` | latest |
-| golangci-lint | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` | v2.11+ |
-| gosec | `go install github.com/securego/gosec/v2/cmd/gosec@latest` | v2.24+ |
-| staticcheck | `go install honnef.co/go/tools/cmd/staticcheck@latest` | 2026.1+ |
-| govulncheck | `go install golang.org/x/vuln/cmd/govulncheck@latest` | v1.1+ |
-| goimports | `go install golang.org/x/tools/cmd/goimports@latest` | latest |
+| Tool          | Install Command                                                                   | Version |
+| ------------- | --------------------------------------------------------------------------------- | ------- |
+| modernize     | `go install golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest` | latest  |
+| golangci-lint | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`        | v2.11+  |
+| gosec         | `go install github.com/securego/gosec/v2/cmd/gosec@latest`                        | v2.24+  |
+| staticcheck   | `go install honnef.co/go/tools/cmd/staticcheck@latest`                            | 2026.1+ |
+| govulncheck   | `go install golang.org/x/vuln/cmd/govulncheck@latest`                             | v1.1+   |
+| goimports     | `go install golang.org/x/tools/cmd/goimports@latest`                              | latest  |
 
 Verify installation:
 
@@ -79,44 +90,44 @@ govulncheck -version
 
 ### Individual Targets
 
-| Target | Description |
-| --- | --- |
-| `make goimports` | Apply goimports formatting to Go files under `cmd/`, `internal/`, and `test/` |
-| `make goimports-check` | Check if goimports formatting is needed (no changes) |
-| `make gofmt-check` | Check if gofmt formatting is needed (no changes) |
-| `make fmt` | Apply gofmt formatting to Go files under `cmd/`, `internal/`, and `test/` |
-| `make vet` | Run `go vet` on `cmd/`, `internal/`, and `test/` packages with the `e2e` build tag |
-| `make modernize` | Report modernization suggestions |
-| `make modernize-fix` | Apply modernization fixes automatically |
-| `make golangci-lint` | Run golangci-lint on `cmd/`, `internal/`, and `test/` packages |
-| `make gosec` | Run security scanner (medium+ severity/confidence) |
-| `make staticcheck` | Run static analysis checks |
-| `make govulncheck` | Scan dependencies for known CVEs |
-| `make mdlint` | Lint all Markdown files (excludes `plan/`) |
-| `make mdlint-fix` | Auto-fix Markdown lint issues |
+| Target                 | Description                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `make goimports`       | Apply goimports formatting to Go files under `cmd/`, `internal/`, and `test/`      |
+| `make goimports-check` | Check if goimports formatting is needed (no changes)                               |
+| `make gofmt-check`     | Check if gofmt formatting is needed (no changes)                                   |
+| `make fmt`             | Apply gofmt formatting to Go files under `cmd/`, `internal/`, and `test/`          |
+| `make vet`             | Run `go vet` on `cmd/`, `internal/`, and `test/` packages with the `e2e` build tag |
+| `make modernize`       | Report modernization suggestions                                                   |
+| `make modernize-fix`   | Apply modernization fixes automatically                                            |
+| `make golangci-lint`   | Run golangci-lint on `cmd/`, `internal/`, and `test/` packages                     |
+| `make gosec`           | Run security scanner (medium+ severity/confidence)                                 |
+| `make staticcheck`     | Run static analysis checks                                                         |
+| `make govulncheck`     | Scan dependencies for known CVEs                                                   |
+| `make mdlint`          | Lint all Markdown files (excludes `plan/`)                                         |
+| `make mdlint-fix`      | Auto-fix Markdown lint issues                                                      |
 
 ### Combined Targets
 
-| Target | Description |
-| --- | --- |
-| `make analyze` | Run ALL 9 tools sequentially and fail if any tool reports findings or exits non-zero |
-| `make analyze-fix` | Apply auto-fixes: goimports + gofmt + modernize + markdownlint |
-| `make analyze-report` | Generate combined report to `dist/analysis/report.txt` |
-| `make lint` | Quick lint (go vet only, backward compatible) |
+| Target                | Description                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------ |
+| `make analyze`        | Run ALL 9 tools sequentially and fail if any tool reports findings or exits non-zero |
+| `make analyze-fix`    | Apply auto-fixes: goimports + gofmt + modernize + markdownlint                       |
+| `make analyze-report` | Generate combined report to `dist/analysis/report.txt`                               |
+| `make lint`           | Quick lint (go vet only, backward compatible)                                        |
 
 ### Project Audit Targets
 
-| Target | Description |
-| --- | --- |
-| `make audit-output` | Run the MCP output quality audit on all tools |
-| `make audit-tokens` | Measure exposed tool token overhead |
-| `make audit-tools` | Audit MCP tool metadata violations |
-| `make audit-metrics` | Report MCP tool/resource/prompt counts |
-| `make audit-action-spec-coverage` | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json` |
-| `make audit-dynamic-aliases` | Audit Dynamic search aliases and canonical action reachability |
-| `make audit-test-names` | Audit test function naming convention compliance |
-| `make audit-godocs` | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings |
-| `make audit-godocs-check` | Run the same Godoc audit and fail if findings remain |
+| Target                            | Description                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `make audit-output`               | Run the MCP output quality audit on all tools                                                    |
+| `make audit-tokens`               | Measure exposed tool token overhead                                                              |
+| `make audit-tools`                | Audit MCP tool metadata violations                                                               |
+| `make audit-metrics`              | Report MCP tool/resource/prompt counts                                                           |
+| `make audit-action-spec-coverage` | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json`               |
+| `make audit-dynamic-aliases`      | Audit Dynamic search aliases and canonical action reachability                                   |
+| `make audit-test-names`           | Audit test function naming convention compliance                                                 |
+| `make audit-godocs`               | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings |
+| `make audit-godocs-check`         | Run the same Godoc audit and fail if findings remain                                             |
 
 See [Godoc Compliance](godoc.md) for the detailed policy, categories, and local pkgsite workflow.
 
@@ -300,13 +311,13 @@ Configuration file: [`.golangci.yml`](../../.golangci.yml) (v2 format)
 
 #### Exclusion Rules
 
-| Scope | Relaxed Linters |
-| --- | --- |
-| `_test.go` | errcheck, gosec, bodyclose, gocritic, revive, unparam, perfsprint |
-| `vendor/` | All linters |
-| `cmd/server/main.go` | gosec G114 (os.Exit) |
-| `internal/testutil/` | errcheck, gosec |
-| `test/e2e/` | tparallel, thelper, contextcheck, errchkjson (sequential design with shared GitLab fixtures; cleanups use fresh contexts) |
+| Scope                | Relaxed Linters                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `_test.go`           | errcheck, gosec, bodyclose, gocritic, revive, unparam, perfsprint                                                         |
+| `vendor/`            | All linters                                                                                                               |
+| `cmd/server/main.go` | gosec G114 (os.Exit)                                                                                                      |
+| `internal/testutil/` | errcheck, gosec                                                                                                           |
+| `test/e2e/`          | tparallel, thelper, contextcheck, errchkjson (sequential design with shared GitLab fixtures; cleanups use fresh contexts) |
 
 ### 6. gosec
 
@@ -548,18 +559,18 @@ Runs via `npx` (Node.js required, no global install needed).
 
 #### Key Rules
 
-| Rule | Description |
-| --- | --- |
-| MD001 | Heading levels should only increment by one |
-| MD003 | Heading style should be consistent |
-| MD009 | Trailing spaces |
-| MD010 | Hard tabs |
-| MD012 | Multiple consecutive blank lines |
-| MD022 | Headings should be surrounded by blank lines |
+| Rule  | Description                                            |
+| ----- | ------------------------------------------------------ |
+| MD001 | Heading levels should only increment by one            |
+| MD003 | Heading style should be consistent                     |
+| MD009 | Trailing spaces                                        |
+| MD010 | Hard tabs                                              |
+| MD012 | Multiple consecutive blank lines                       |
+| MD022 | Headings should be surrounded by blank lines           |
 | MD031 | Fenced code blocks should be surrounded by blank lines |
-| MD032 | Lists should be surrounded by blank lines |
-| MD034 | Bare URLs without angle brackets or links |
-| MD047 | Files should end with a single newline character |
+| MD032 | Lists should be surrounded by blank lines              |
+| MD034 | Bare URLs without angle brackets or links              |
+| MD047 | Files should end with a single newline character       |
 
 Full rule list: [markdownlint rules](https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md)
 
@@ -567,14 +578,14 @@ Full rule list: [markdownlint rules](https://github.com/DavidAnson/markdownlint/
 
 #### Disabled Rules
 
-| Rule | Reason |
-| --- | --- |
-| MD013 | Line length — many tables and code blocks exceed 80 chars |
-| MD024 | Multiple headings with same content — common in changelogs |
+| Rule  | Reason                                                          |
+| ----- | --------------------------------------------------------------- |
+| MD013 | Line length — many tables and code blocks exceed 80 chars       |
+| MD024 | Multiple headings with same content — common in changelogs      |
 | MD025 | Single top-level heading — some docs have multiple H1 by design |
-| MD033 | Inline HTML — Mermaid diagrams, badges, details/summary |
-| MD041 | First line heading — files with front matter |
-| MD060 | Native syntax over HTML — disabled |
+| MD033 | Inline HTML — Mermaid diagrams, badges, details/summary         |
+| MD041 | First line heading — files with front matter                    |
+| MD060 | Native syntax over HTML — disabled                              |
 
 #### Ignored Paths
 

@@ -23,9 +23,9 @@ With `TOOL_SURFACE=meta`, all 10 individual tools below are consolidated into a 
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description              |
+| ---------- | :------: | :---------: | :--------: | ------------------------ |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation |
 
 All search tools are read-only.
 

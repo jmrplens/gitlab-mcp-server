@@ -22,10 +22,10 @@ Sampling tools require the MCP client to support the sampling capability. Elicit
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
-| **Create** | — | No | — | Creates a new resource |
+| Annotation | ReadOnly | Destructive | Idempotent | Description              |
+| ---------- | :------: | :---------: | :--------: | ------------------------ |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation |
+| **Create** |    —     |     No      |     —      | Creates a new resource   |
 
 ---
 
@@ -176,24 +176,24 @@ Check MCP server health and GitLab connectivity. Returns server version, author,
 
 ### Capability Requirements
 
-| Tool | Required MCP Capability | Fallback Behavior |
-| ---- | ----------------------- | ----------------- |
-| `gitlab_analyze_mr_changes` | Sampling | Returns informational message if unsupported |
-| `gitlab_summarize_issue` | Sampling | Returns informational message if unsupported |
-| `gitlab_generate_release_notes` | Sampling | Returns informational message if unsupported |
-| `gitlab_analyze_pipeline_failure` | Sampling | Returns informational message if unsupported |
-| `gitlab_summarize_mr_review` | Sampling | Returns informational message if unsupported |
-| `gitlab_generate_milestone_report` | Sampling | Returns informational message if unsupported |
-| `gitlab_analyze_ci_configuration` | Sampling | Returns informational message if unsupported |
-| `gitlab_analyze_issue_scope` | Sampling | Returns informational message if unsupported |
-| `gitlab_review_mr_security` | Sampling | Returns informational message if unsupported |
-| `gitlab_find_technical_debt` | Sampling | Returns informational message if unsupported |
-| `gitlab_analyze_deployment_history` | Sampling | Returns informational message if unsupported |
-| `gitlab_interactive_issue_create` | Elicitation | Returns informational message if unsupported |
-| `gitlab_interactive_mr_create` | Elicitation | Returns informational message if unsupported |
-| `gitlab_interactive_release_create` | Elicitation | Returns informational message if unsupported |
-| `gitlab_interactive_project_create` | Elicitation | Returns informational message if unsupported |
-| `gitlab_server_status` | None | Always available |
+| Tool                                | Required MCP Capability | Fallback Behavior                            |
+| ----------------------------------- | ----------------------- | -------------------------------------------- |
+| `gitlab_analyze_mr_changes`         | Sampling                | Returns informational message if unsupported |
+| `gitlab_summarize_issue`            | Sampling                | Returns informational message if unsupported |
+| `gitlab_generate_release_notes`     | Sampling                | Returns informational message if unsupported |
+| `gitlab_analyze_pipeline_failure`   | Sampling                | Returns informational message if unsupported |
+| `gitlab_summarize_mr_review`        | Sampling                | Returns informational message if unsupported |
+| `gitlab_generate_milestone_report`  | Sampling                | Returns informational message if unsupported |
+| `gitlab_analyze_ci_configuration`   | Sampling                | Returns informational message if unsupported |
+| `gitlab_analyze_issue_scope`        | Sampling                | Returns informational message if unsupported |
+| `gitlab_review_mr_security`         | Sampling                | Returns informational message if unsupported |
+| `gitlab_find_technical_debt`        | Sampling                | Returns informational message if unsupported |
+| `gitlab_analyze_deployment_history` | Sampling                | Returns informational message if unsupported |
+| `gitlab_interactive_issue_create`   | Elicitation             | Returns informational message if unsupported |
+| `gitlab_interactive_mr_create`      | Elicitation             | Returns informational message if unsupported |
+| `gitlab_interactive_release_create` | Elicitation             | Returns informational message if unsupported |
+| `gitlab_interactive_project_create` | Elicitation             | Returns informational message if unsupported |
+| `gitlab_server_status`              | None                    | Always available                             |
 
 ---
 

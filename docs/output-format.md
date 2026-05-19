@@ -71,13 +71,13 @@ These hints are available in both the Markdown and JSON output, so your IDE can 
 
 Different MCP clients read different parts of the response:
 
-| Client | Reads Markdown `content` | Reads `structuredContent` JSON | How hints arrive |
-|--------|--------------------------|-------------------------------|-----------------|
-| **VS Code / Copilot** | ❌ Ignores | ✅ Primary | `next_steps` array in JSON |
-| **Cursor** | ✅ Primary | ✅ Also available | Both `💡 Next steps` in Markdown and `next_steps` in JSON |
-| **Claude Desktop** | ✅ Primary | ✅ Also available | Both formats |
-| **CLI tools** | ✅ Primary | ❌ Often ignored | `💡 Next steps` in Markdown |
-| **Custom HTTP clients** | Depends | Depends | Both available in JSON-RPC response |
+| Client                  | Reads Markdown `content` | Reads `structuredContent` JSON | How hints arrive                                         |
+| ----------------------- | ------------------------ | ------------------------------ | -------------------------------------------------------- |
+| **VS Code / Copilot**   | ❌ Ignores                | ✅ Primary                      | `next_steps` array in JSON                               |
+| **Cursor**              | ✅ Primary                | ✅ Also available               | Both `💡 Next steps` in Markdown and `next_steps` in JSON |
+| **Claude Desktop**      | ✅ Primary                | ✅ Also available               | Both formats                                             |
+| **CLI tools**           | ✅ Primary                | ❌ Often ignored                | `💡 Next steps` in Markdown                               |
+| **Custom HTTP clients** | Depends                  | Depends                        | Both available in JSON-RPC response                      |
 
 The server ensures hints appear in **both** formats so no client misses them.
 
@@ -85,14 +85,14 @@ The server ensures hints appear in **both** formats so no client misses them.
 
 Every Markdown response includes [MCP annotations](https://modelcontextprotocol.io/specification/2025-11-25/server/utilities/annotations) that tell the client who the content is for and how important it is:
 
-| Annotation | Audience | Priority | Used For |
-|-----------|----------|----------|----------|
-| `ContentList` | `assistant` | 0.4 | List and search results |
-| `ContentDetail` | `assistant` | 0.6 | Single-entity details (get, show) |
-| `ContentMutate` | `assistant` | 0.8 | Create, update, delete confirmations |
-| `ContentAssistant` | `assistant` | 0.7 | General assistant-targeted content |
-| `ContentUser` | `user` | 0.8 | Content for direct user display |
-| `ContentBoth` | `user`, `assistant` | 0.5 | Content for both audiences |
+| Annotation         | Audience            | Priority | Used For                             |
+| ------------------ | ------------------- | -------- | ------------------------------------ |
+| `ContentList`      | `assistant`         | 0.4      | List and search results              |
+| `ContentDetail`    | `assistant`         | 0.6      | Single-entity details (get, show)    |
+| `ContentMutate`    | `assistant`         | 0.8      | Create, update, delete confirmations |
+| `ContentAssistant` | `assistant`         | 0.7      | General assistant-targeted content   |
+| `ContentUser`      | `user`              | 0.8      | Content for direct user display      |
+| `ContentBoth`      | `user`, `assistant` | 0.5      | Content for both audiences           |
 
 ### What Does `audience: ["assistant"]` Mean?
 
@@ -106,12 +106,12 @@ The `priority` value (0.0 to 1.0) hints to the client how important the content 
 
 Separate from content annotations, every **tool** has behavioral annotations that describe what it does:
 
-| Annotation | Type | Meaning |
-|-----------|------|---------|
-| `readOnlyHint` | `bool` | The tool only reads data, never modifies anything |
-| `destructiveHint` | `*bool` | The tool may perform irreversible operations (delete, drop) |
-| `idempotentHint` | `bool` | Calling the tool multiple times with the same input produces the same result |
-| `openWorldHint` | `*bool` | The tool interacts with external systems (GitLab API) |
+| Annotation        | Type    | Meaning                                                                      |
+| ----------------- | ------- | ---------------------------------------------------------------------------- |
+| `readOnlyHint`    | `bool`  | The tool only reads data, never modifies anything                            |
+| `destructiveHint` | `*bool` | The tool may perform irreversible operations (delete, drop)                  |
+| `idempotentHint`  | `bool`  | Calling the tool multiple times with the same input produces the same result |
+| `openWorldHint`   | `*bool` | The tool interacts with external systems (GitLab API)                        |
 
 These annotations help your AI assistant and IDE make safety decisions:
 
@@ -230,30 +230,30 @@ Selected `gitlab_*_get` tools attach an additional content block of type `resour
 
 Currently embedded by 22 `gitlab_*_get` handlers:
 
-| Tool                          | Canonical URI                                            |
-| ----------------------------- | -------------------------------------------------------- |
-| `gitlab_board_get`            | `gitlab://project/{project_id}/board/{board_id}`         |
-| `gitlab_branch_get`           | `gitlab://project/{project_id}/branch/{branch_name}`     |
-| `gitlab_commit_get`           | `gitlab://project/{project_id}/commit/{sha}`             |
-| `gitlab_deploy_key_get`       | `gitlab://project/{project_id}/deploy_key/{key_id}`      |
-| `gitlab_deployment_get`       | `gitlab://project/{project_id}/deployment/{deployment_id}` |
-| `gitlab_environment_get`      | `gitlab://project/{project_id}/environment/{environment_id}` |
-| `gitlab_feature_flag_get`     | `gitlab://project/{project_id}/feature_flag/{name}`      |
-| `gitlab_group_get`            | `gitlab://group/{group_id}`                              |
-| `gitlab_group_label_get`      | `gitlab://group/{group_id}/label/{label_id}`             |
-| `gitlab_group_milestone_get`  | `gitlab://group/{group_id}/milestone/{milestone_iid}`    |
-| `gitlab_issue_get`            | `gitlab://project/{project_id}/issue/{issue_iid}`        |
-| `gitlab_job_get`              | `gitlab://project/{project_id}/job/{job_id}`             |
-| `gitlab_label_get`            | `gitlab://project/{project_id}/label/{label_id}`         |
-| `gitlab_milestone_get`        | `gitlab://project/{project_id}/milestone/{milestone_iid}`|
-| `gitlab_mr_get`               | `gitlab://project/{project_id}/mr/{merge_request_iid}`              |
-| `gitlab_pipeline_get`         | `gitlab://project/{project_id}/pipeline/{pipeline_id}`   |
-| `gitlab_project_get`          | `gitlab://project/{project_id}`                          |
-| `gitlab_project_snippet_get`  | `gitlab://project/{project_id}/snippet/{snippet_id}`     |
-| `gitlab_release_get`          | `gitlab://project/{project_id}/release/{tag_name}`       |
-| `gitlab_snippet_get`          | `gitlab://snippet/{snippet_id}`                          |
-| `gitlab_tag_get`              | `gitlab://project/{project_id}/tag/{tag_name}`           |
-| `gitlab_wiki_get`             | `gitlab://project/{project_id}/wiki/{slug}`              |
+| Tool                         | Canonical URI                                                |
+| ---------------------------- | ------------------------------------------------------------ |
+| `gitlab_board_get`           | `gitlab://project/{project_id}/board/{board_id}`             |
+| `gitlab_branch_get`          | `gitlab://project/{project_id}/branch/{branch_name}`         |
+| `gitlab_commit_get`          | `gitlab://project/{project_id}/commit/{sha}`                 |
+| `gitlab_deploy_key_get`      | `gitlab://project/{project_id}/deploy_key/{key_id}`          |
+| `gitlab_deployment_get`      | `gitlab://project/{project_id}/deployment/{deployment_id}`   |
+| `gitlab_environment_get`     | `gitlab://project/{project_id}/environment/{environment_id}` |
+| `gitlab_feature_flag_get`    | `gitlab://project/{project_id}/feature_flag/{name}`          |
+| `gitlab_group_get`           | `gitlab://group/{group_id}`                                  |
+| `gitlab_group_label_get`     | `gitlab://group/{group_id}/label/{label_id}`                 |
+| `gitlab_group_milestone_get` | `gitlab://group/{group_id}/milestone/{milestone_iid}`        |
+| `gitlab_issue_get`           | `gitlab://project/{project_id}/issue/{issue_iid}`            |
+| `gitlab_job_get`             | `gitlab://project/{project_id}/job/{job_id}`                 |
+| `gitlab_label_get`           | `gitlab://project/{project_id}/label/{label_id}`             |
+| `gitlab_milestone_get`       | `gitlab://project/{project_id}/milestone/{milestone_iid}`    |
+| `gitlab_mr_get`              | `gitlab://project/{project_id}/mr/{merge_request_iid}`       |
+| `gitlab_pipeline_get`        | `gitlab://project/{project_id}/pipeline/{pipeline_id}`       |
+| `gitlab_project_get`         | `gitlab://project/{project_id}`                              |
+| `gitlab_project_snippet_get` | `gitlab://project/{project_id}/snippet/{snippet_id}`         |
+| `gitlab_release_get`         | `gitlab://project/{project_id}/release/{tag_name}`           |
+| `gitlab_snippet_get`         | `gitlab://snippet/{snippet_id}`                              |
+| `gitlab_tag_get`             | `gitlab://project/{project_id}/tag/{tag_name}`               |
+| `gitlab_wiki_get`            | `gitlab://project/{project_id}/wiki/{slug}`                  |
 
 The embedded resource carries `MIMEType: "application/json"` and a `Text` payload equal to the JSON-marshaled output struct — duplicating `StructuredContent` so simpler clients lose nothing. Not-found responses do **not** embed (the entity does not exist).
 

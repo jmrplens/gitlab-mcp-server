@@ -76,12 +76,12 @@ Returns a `Tracker` bound to the request's session and progress token. If the re
 
 ### Methods
 
-| Method | Signature | Purpose |
-| ------ | --------- | ------- |
-| `IsActive()` | `() bool` | Check if tracker can send notifications |
+| Method                                  | Signature                                     | Purpose                                                                                  |
+| --------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `IsActive()`                            | `() bool`                                     | Check if tracker can send notifications                                                  |
 | `Update(ctx, progress, total, message)` | `(context.Context, float64, float64, string)` | Send progress with explicit float values. Drops non-monotonic updates (logged at debug). |
-| `Step(ctx, step, total, message)` | `(context.Context, int, int, string)` | Convenience: report 1-based step of N |
-| `Done(ctx, total, message)` | `(context.Context, float64, string)` | Send a final notification with `progress == total` to signal completion |
+| `Step(ctx, step, total, message)`       | `(context.Context, int, int, string)`         | Convenience: report 1-based step of N                                                    |
+| `Done(ctx, total, message)`             | `(context.Context, float64, string)`          | Send a final notification with `progress == total` to signal completion                  |
 
 #### Strictly-monotonic progress
 
@@ -106,11 +106,11 @@ tracker.Step(ctx, 4, 4, "Analysis complete")
 
 ## Configuration
 
-| Setting | Value | Notes |
-| ------- | ----- | ----- |
-| Token source | `CallToolRequest.Params.GetProgressToken()` | Provided by the MCP client |
-| Error handling | Silent | Failed notifications logged at debug level |
-| Context awareness | Yes | Returns early if context is canceled |
+| Setting           | Value                                       | Notes                                      |
+| ----------------- | ------------------------------------------- | ------------------------------------------ |
+| Token source      | `CallToolRequest.Params.GetProgressToken()` | Provided by the MCP client                 |
+| Error handling    | Silent                                      | Failed notifications logged at debug level |
+| Context awareness | Yes                                         | Returns early if context is canceled       |
 
 ## Security
 
@@ -120,16 +120,16 @@ tracker.Step(ctx, 4, 4, "Analysis complete")
 
 ## Tools Using Progress
 
-| Tool | Steps | What Each Step Reports |
-| ---- | ----: | ---------------------- |
-| `gitlab_analyze_mr_changes` | 4 | Check capability → Fetch MR → Fetch diffs → LLM analysis |
-| `gitlab_summarize_issue` | 4 | Check capability → Fetch issue → Fetch notes → LLM summary |
-| `gitlab_generate_release_notes` | 5 | Check capability → Compare refs → Fetch MRs → LLM notes → Done |
-| `gitlab_analyze_pipeline_failure` | 5 | Check capability → Fetch pipeline → Fetch jobs/traces → LLM analysis → Done |
-| `gitlab_interactive_issue_create` | 4 | Collect details → Optional fields → Confirm → Create |
-| `gitlab_interactive_mr_create` | 4 | Collect details → Options → Confirm → Create |
-| `gitlab_interactive_release_create` | 3 | Collect details → Confirm → Create |
-| `gitlab_interactive_project_create` | 4 | Collect details → Options → Confirm → Create |
+| Tool                                | Steps | What Each Step Reports                                                      |
+| ----------------------------------- | ----: | --------------------------------------------------------------------------- |
+| `gitlab_analyze_mr_changes`         |     4 | Check capability → Fetch MR → Fetch diffs → LLM analysis                    |
+| `gitlab_summarize_issue`            |     4 | Check capability → Fetch issue → Fetch notes → LLM summary                  |
+| `gitlab_generate_release_notes`     |     5 | Check capability → Compare refs → Fetch MRs → LLM notes → Done              |
+| `gitlab_analyze_pipeline_failure`   |     5 | Check capability → Fetch pipeline → Fetch jobs/traces → LLM analysis → Done |
+| `gitlab_interactive_issue_create`   |     4 | Collect details → Optional fields → Confirm → Create                        |
+| `gitlab_interactive_mr_create`      |     4 | Collect details → Options → Confirm → Create                                |
+| `gitlab_interactive_release_create` |     3 | Collect details → Confirm → Create                                          |
+| `gitlab_interactive_project_create` |     4 | Collect details → Options → Confirm → Create                                |
 
 Progress is most valuable for **sampling tools** (which make multiple GitLab API calls and then wait for LLM analysis) and **elicitation tools** (which require multiple rounds of user interaction).
 

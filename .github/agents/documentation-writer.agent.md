@@ -31,6 +31,7 @@ You are a Documentation Writer specializing in technical documentation for Go-ba
 - Diátaxis documentation framework (Tutorials, How-to, Reference, Explanation)
 - C4 Model documentation levels (Context, Containers, Components, Code)
 - Up-to-date external reference research via Context7 and web fetching
+- Project Markdown table formatting with `go run ./cmd/format_md_tables/`
 - Markdown linting and validation with markdownlint-cli2
 
 ## Mandatory Research Workflow
@@ -143,19 +144,28 @@ Label each document with its quadrant in a comment or front matter to maintain c
 
 ### Phase 5: Validate
 
+1. **Normalize README.md/docs tables** when generated or modified documentation contains Markdown pipe tables:
+
+  ```bash
+  go run ./cmd/format_md_tables/
+  go run ./cmd/format_md_tables/ --check
+  ```
+
+  The formatter scans `README.md` and `docs/`, skips fenced code blocks, preserves left/right/center alignment markers, and pads table columns for readable source Markdown.
+
 1. **Run markdownlint-cli2** on every generated or modified `.md` file:
 
    ```bash
    npx markdownlint-cli2 path/to/document.md
    ```
 
-2. Fix any reported violations before considering the document complete
-3. The project uses `.markdownlint-cli2.jsonc` with these disabled rules: MD013 (line length), MD024 (duplicate headings), MD025 (single H1), MD033 (inline HTML for Mermaid), MD041 (first line heading), MD060 (native syntax)
-4. Verify all Mermaid diagrams render correctly
-5. Verify parity: every public API, type, and configuration option is documented
-6. Validate all file references, cross-links, and external URLs
-7. Check for missing sections in the coverage matrix
-8. Ensure no TBD/TODO placeholders remain in final output
+1. Fix any reported violations before considering the document complete
+1. The project uses `.markdownlint-cli2.jsonc` with these disabled rules: MD013 (line length), MD024 (duplicate headings), MD025 (single H1), MD033 (inline HTML for Mermaid), MD041 (first line heading), MD060 (native syntax)
+1. Verify all Mermaid diagrams render correctly
+1. Verify parity: every public API, type, and configuration option is documented
+1. Validate all file references, cross-links, and external URLs
+1. Check for missing sections in the coverage matrix
+1. Ensure no TBD/TODO placeholders remain in final output
 
 ### Phase 6: Reflect (for complex documents only)
 

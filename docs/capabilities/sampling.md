@@ -94,19 +94,19 @@ The server acts as a **data curator**: it collects, filters, and formats the rig
 
 This capability powers eleven tools that provide LLM-assisted insights directly from GitLab data:
 
-| Tool | Purpose |
-| ---- | ------- |
-| `gitlab_analyze_mr_changes` | Code review: analyzes MR diffs for quality, bugs, improvements |
-| `gitlab_summarize_issue` | Issue summary: key decisions, action items, participants |
-| `gitlab_generate_release_notes` | Release notes: categorized changes from commits and MRs |
-| `gitlab_analyze_pipeline_failure` | Pipeline failure: root cause analysis of failed jobs and traces |
-| `gitlab_summarize_mr_review` | MR review summary: reviewer feedback, unresolved threads, action items |
-| `gitlab_generate_milestone_report` | Milestone report: progress metrics, risks, and recommendations |
-| `gitlab_analyze_ci_configuration` | CI config analysis: best practices, security, performance review |
-| `gitlab_analyze_issue_scope` | Issue scope: complexity assessment, effort estimation, decomposition |
-| `gitlab_review_mr_security` | Security review: OWASP Top 10, injection, auth, secrets in MR diffs |
-| `gitlab_find_technical_debt` | Technical debt: TODO/FIXME/HACK markers categorized and prioritized |
-| `gitlab_analyze_deployment_history` | Deployment analysis: frequency, success rate, rollback patterns |
+| Tool                                | Purpose                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| `gitlab_analyze_mr_changes`         | Code review: analyzes MR diffs for quality, bugs, improvements         |
+| `gitlab_summarize_issue`            | Issue summary: key decisions, action items, participants               |
+| `gitlab_generate_release_notes`     | Release notes: categorized changes from commits and MRs                |
+| `gitlab_analyze_pipeline_failure`   | Pipeline failure: root cause analysis of failed jobs and traces        |
+| `gitlab_summarize_mr_review`        | MR review summary: reviewer feedback, unresolved threads, action items |
+| `gitlab_generate_milestone_report`  | Milestone report: progress metrics, risks, and recommendations         |
+| `gitlab_analyze_ci_configuration`   | CI config analysis: best practices, security, performance review       |
+| `gitlab_analyze_issue_scope`        | Issue scope: complexity assessment, effort estimation, decomposition   |
+| `gitlab_review_mr_security`         | Security review: OWASP Top 10, injection, auth, secrets in MR diffs    |
+| `gitlab_find_technical_debt`        | Technical debt: TODO/FIXME/HACK markers categorized and prioritized    |
+| `gitlab_analyze_deployment_history` | Deployment analysis: frequency, success rate, rollback patterns        |
 
 ## How It Works: Step by Step
 
@@ -198,47 +198,47 @@ result, err := samplingClient.Analyze(ctx, prompt, data,
 
 ### Methods
 
-| Method | Signature | Purpose |
-| ------ | --------- | ------- |
-| `FromRequest(req)` | `(*mcp.CallToolRequest) Client` | Create client from tool request |
-| `IsSupported()` | `() bool` | Check if client has sampling capability |
-| `Analyze(ctx, prompt, data, ...opts)` | `(...) (AnalysisResult, error)` | Send data to LLM for analysis |
+| Method                                                   | Signature                       | Purpose                                    |
+| -------------------------------------------------------- | ------------------------------- | ------------------------------------------ |
+| `FromRequest(req)`                                       | `(*mcp.CallToolRequest) Client` | Create client from tool request            |
+| `IsSupported()`                                          | `() bool`                       | Check if client has sampling capability    |
+| `Analyze(ctx, prompt, data, ...opts)`                    | `(...) (AnalysisResult, error)` | Send data to LLM for analysis              |
 | `AnalyzeWithTools(ctx, prompt, data, executor, ...opts)` | `(...) (AnalysisResult, error)` | Send data to LLM with tool-calling support |
 
 ### Interfaces
 
-| Interface | Method | Purpose |
-| --------- | ------ | ------- |
-| `ToolExecutor` | `ExecuteTool(ctx, name, args) (*CallToolResult, error)` | Dispatches tool calls requested by the LLM |
-| `ServerToolExecutor` | (implements `ToolExecutor`) | Dispatches to registered MCP tool handlers with allow-list |
+| Interface            | Method                                                  | Purpose                                                    |
+| -------------------- | ------------------------------------------------------- | ---------------------------------------------------------- |
+| `ToolExecutor`       | `ExecuteTool(ctx, name, args) (*CallToolResult, error)` | Dispatches tool calls requested by the LLM                 |
+| `ServerToolExecutor` | (implements `ToolExecutor`)                             | Dispatches to registered MCP tool handlers with allow-list |
 
 ### Options
 
-| Option | Default | Purpose |
-| ------ | ------- | ------- |
-| `WithMaxTokens(n)` | 4096 | Maximum tokens for LLM response |
-| `WithModelHints(hints...)` | none | Model preference hints to the client |
-| `WithModelPriorities(cost, speed, intelligence)` | balanced | Cost/speed/intelligence priorities (0..1, clamped). Hints take precedence per the MCP spec; priorities disambiguate between matches and influence model choice when no hint matches. |
-| `WithTemperature(t)` | client default | LLM sampling temperature (0..2, clamped). Lower values produce more deterministic output — recommended for security review, code analysis, release notes. |
-| `WithStopSequences(seqs...)` | none | Stop sequences that cause the LLM to halt generation when matched. Empty strings are filtered. |
-| `WithTools(tools)` | none | Tools available to the LLM during `AnalyzeWithTools` |
-| `WithToolChoice(choice)` | auto | How the LLM should use tools (auto/required/none) |
-| `WithMaxIterations(n)` | 5 | Maximum tool-calling rounds before giving up |
-| `WithIterationTimeout(d)` | 2 min | Per-iteration timeout for `AnalyzeWithTools` loop iterations, preventing indefinite hangs |
+| Option                                           | Default        | Purpose                                                                                                                                                                              |
+| ------------------------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `WithMaxTokens(n)`                               | 4096           | Maximum tokens for LLM response                                                                                                                                                      |
+| `WithModelHints(hints...)`                       | none           | Model preference hints to the client                                                                                                                                                 |
+| `WithModelPriorities(cost, speed, intelligence)` | balanced       | Cost/speed/intelligence priorities (0..1, clamped). Hints take precedence per the MCP spec; priorities disambiguate between matches and influence model choice when no hint matches. |
+| `WithTemperature(t)`                             | client default | LLM sampling temperature (0..2, clamped). Lower values produce more deterministic output — recommended for security review, code analysis, release notes.                            |
+| `WithStopSequences(seqs...)`                     | none           | Stop sequences that cause the LLM to halt generation when matched. Empty strings are filtered.                                                                                       |
+| `WithTools(tools)`                               | none           | Tools available to the LLM during `AnalyzeWithTools`                                                                                                                                 |
+| `WithToolChoice(choice)`                         | auto           | How the LLM should use tools (auto/required/none)                                                                                                                                    |
+| `WithMaxIterations(n)`                           | 5              | Maximum tool-calling rounds before giving up                                                                                                                                         |
+| `WithIterationTimeout(d)`                        | 2 min          | Per-iteration timeout for `AnalyzeWithTools` loop iterations, preventing indefinite hangs                                                                                            |
 
 **Model-priority presets** (actual values used by built-in sampling tools):
 
-| Preset (cost / speed / intelligence) | Used by |
-| ------------------------------------ | ------- |
-| `0.0 / 0.0 / 1.0` | `gitlab_review_mr_security` |
-| `0.2 / 0.2 / 0.8` | `gitlab_analyze_mr_changes` |
-| `0.2 / 0.3 / 0.8` | `gitlab_analyze_pipeline_failure` |
-| `0.3 / 0.3 / 0.7` | `gitlab_analyze_ci_configuration` |
-| `0.3 / 0.4 / 0.6` | `gitlab_analyze_issue_scope` |
-| `0.4 / 0.5 / 0.5` | `gitlab_analyze_deployment_history`, `gitlab_summarize_mr_review`, `gitlab_generate_milestone_report` |
-| `0.4 / 0.6 / 0.4` | `gitlab_summarize_issue` |
-| `0.5 / 0.5 / 0.5` | `gitlab_find_technical_debt` |
-| `0.5 / 0.6 / 0.4` | `gitlab_generate_release_notes` |
+| Preset (cost / speed / intelligence) | Used by                                                                                               |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `0.0 / 0.0 / 1.0`                    | `gitlab_review_mr_security`                                                                           |
+| `0.2 / 0.2 / 0.8`                    | `gitlab_analyze_mr_changes`                                                                           |
+| `0.2 / 0.3 / 0.8`                    | `gitlab_analyze_pipeline_failure`                                                                     |
+| `0.3 / 0.3 / 0.7`                    | `gitlab_analyze_ci_configuration`                                                                     |
+| `0.3 / 0.4 / 0.6`                    | `gitlab_analyze_issue_scope`                                                                          |
+| `0.4 / 0.5 / 0.5`                    | `gitlab_analyze_deployment_history`, `gitlab_summarize_mr_review`, `gitlab_generate_milestone_report` |
+| `0.4 / 0.6 / 0.4`                    | `gitlab_summarize_issue`                                                                              |
+| `0.5 / 0.5 / 0.5`                    | `gitlab_find_technical_debt`                                                                          |
+| `0.5 / 0.6 / 0.4`                    | `gitlab_generate_release_notes`                                                                       |
 
 ### AnalysisResult
 
@@ -284,16 +284,16 @@ Sampling is the most security-sensitive capability because it sends GitLab data 
 
 Before sending data to the LLM, a regex engine scans all content and replaces matches with `[REDACTED]`:
 
-| What Is Detected | Pattern Examples |
-| ---------------- | ---------------- |
-| GitLab tokens | `glpat-xxxx...` |
-| GitHub tokens | `ghp_xxxx`, `gho_xxxx`, `github_pat_xxxx` |
-| Slack tokens | `xoxb-xxxx`, `xoxp-xxxx` |
-| AWS access keys | `AKIA...` (16 alphanumeric chars) |
-| JWT tokens | `eyJ...` (three dot-separated segments) |
+| What Is Detected  | Pattern Examples                              |
+| ----------------- | --------------------------------------------- |
+| GitLab tokens     | `glpat-xxxx...`                               |
+| GitHub tokens     | `ghp_xxxx`, `gho_xxxx`, `github_pat_xxxx`     |
+| Slack tokens      | `xoxb-xxxx`, `xoxp-xxxx`                      |
+| AWS access keys   | `AKIA...` (16 alphanumeric chars)             |
+| JWT tokens        | `eyJ...` (three dot-separated segments)       |
 | Key-value secrets | `password=xxx`, `api_key: xxx`, `secret: xxx` |
-| PEM private keys | `-----BEGIN PRIVATE KEY-----...` blocks |
-| Generic API keys | `sk-xxx`, `pk-xxx`, `rk-xxx` prefixes |
+| PEM private keys  | `-----BEGIN PRIVATE KEY-----...` blocks       |
+| Generic API keys  | `sk-xxx`, `pk-xxx`, `rk-xxx` prefixes         |
 
 ### Layer 2: Prompt Injection Prevention
 
@@ -317,10 +317,10 @@ Data exceeding **100 KB** is truncated. This prevents:
 
 When truncation occurs, a warning is appended: `[WARNING: Data was truncated due to size limits. Analysis may be incomplete.]`
 
-| Limit | Value | Behavior |
-| ----- | ----- | -------- |
-| Max input data | 100 KB | Truncated with warning marker |
-| Default max tokens | 4,096 | Can be overridden with `WithMaxTokens()` |
+| Limit              | Value  | Behavior                                 |
+| ------------------ | ------ | ---------------------------------------- |
+| Max input data     | 100 KB | Truncated with warning marker            |
+| Default max tokens | 4,096  | Can be overridden with `WithMaxTokens()` |
 
 ### Layer 4: Hardened System Prompt
 
@@ -349,9 +349,9 @@ The eleven tools fall into four categories based on what kind of analysis they p
 
 These tools help review code changes for quality, security, and best practices.
 
-| Tool | Input | What It Analyzes |
-| ---- | ----- | ---------------- |
-| `gitlab_analyze_mr_changes` | project + MR IID | Fetches MR diffs and provides a code review: summary of changes, potential bugs, improvement suggestions |
+| Tool                        | Input            | What It Analyzes                                                                                            |
+| --------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| `gitlab_analyze_mr_changes` | project + MR IID | Fetches MR diffs and provides a code review: summary of changes, potential bugs, improvement suggestions    |
 | `gitlab_review_mr_security` | project + MR IID | Same diffs, but with a security-focused prompt: OWASP Top 10, injection risks, exposed secrets, auth issues |
 
 **When to use**: Before merging, during code review, or when you want a second opinion on code quality.
@@ -362,11 +362,11 @@ These tools help review code changes for quality, security, and best practices.
 
 These tools summarize discussions and review feedback.
 
-| Tool | Input | What It Analyzes |
-| ---- | ----- | ---------------- |
-| `gitlab_summarize_issue` | project + issue IID | Fetches issue description and all comments, produces a summary with key decisions and action items |
-| `gitlab_summarize_mr_review` | project + MR IID | Fetches MR discussions and approval state, summarizes reviewer feedback and unresolved threads |
-| `gitlab_analyze_issue_scope` | project + issue IID | Fetches issue with time stats, participants, related MRs, suggests decomposition if too large |
+| Tool                         | Input               | What It Analyzes                                                                                   |
+| ---------------------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
+| `gitlab_summarize_issue`     | project + issue IID | Fetches issue description and all comments, produces a summary with key decisions and action items |
+| `gitlab_summarize_mr_review` | project + MR IID    | Fetches MR discussions and approval state, summarizes reviewer feedback and unresolved threads     |
+| `gitlab_analyze_issue_scope` | project + issue IID | Fetches issue with time stats, participants, related MRs, suggests decomposition if too large      |
 
 **When to use**: When joining a long discussion, triaging issues, or preparing a sprint review.
 
@@ -376,10 +376,10 @@ These tools summarize discussions and review feedback.
 
 These tools help diagnose pipeline problems and improve CI configuration.
 
-| Tool | Input | What It Analyzes |
-| ---- | ----- | ---------------- |
-| `gitlab_analyze_pipeline_failure` | project + pipeline ID | Fetches failed jobs and their log traces, identifies root cause and suggests fixes |
-| `gitlab_analyze_ci_configuration` | project | Lints the CI config, fetches the merged YAML, analyzes for best practices and optimization |
+| Tool                              | Input                 | What It Analyzes                                                                           |
+| --------------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| `gitlab_analyze_pipeline_failure` | project + pipeline ID | Fetches failed jobs and their log traces, identifies root cause and suggests fixes         |
+| `gitlab_analyze_ci_configuration` | project               | Lints the CI config, fetches the merged YAML, analyzes for best practices and optimization |
 
 **When to use**: When a pipeline fails and you need a quick diagnosis, or when optimizing CI/CD performance.
 
@@ -389,12 +389,12 @@ These tools help diagnose pipeline problems and improve CI configuration.
 
 These tools provide broader insights about project health and progress.
 
-| Tool | Input | What It Analyzes |
-| ---- | ----- | ---------------- |
-| `gitlab_generate_release_notes` | project + from/to refs | Compares two Git refs, fetches commits and merged MRs with labels, produces categorized release notes |
-| `gitlab_generate_milestone_report` | project + milestone | Fetches milestone details with linked issues and MRs, produces a progress report with metrics and risks |
-| `gitlab_find_technical_debt` | project (+ optional ref) | Searches for TODO/FIXME/HACK/XXX/DEPRECATED markers, categorizes and prioritizes them |
-| `gitlab_analyze_deployment_history` | project (+ optional env) | Fetches recent deployments, analyzes frequency, success rates, and rollback patterns |
+| Tool                                | Input                    | What It Analyzes                                                                                        |
+| ----------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `gitlab_generate_release_notes`     | project + from/to refs   | Compares two Git refs, fetches commits and merged MRs with labels, produces categorized release notes   |
+| `gitlab_generate_milestone_report`  | project + milestone      | Fetches milestone details with linked issues and MRs, produces a progress report with metrics and risks |
+| `gitlab_find_technical_debt`        | project (+ optional ref) | Searches for TODO/FIXME/HACK/XXX/DEPRECATED markers, categorizes and prioritizes them                   |
+| `gitlab_analyze_deployment_history` | project (+ optional env) | Fetches recent deployments, analyzes frequency, success rates, and rollback patterns                    |
 
 **When to use**: Release preparation, sprint reviews, technical debt management, or deployment health checks.
 
@@ -404,10 +404,10 @@ These tools provide broader insights about project health and progress.
 
 #### `gitlab_analyze_mr_changes`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
-| `merge_request_iid` | int | Yes | Merge request IID |
+| Parameter           | Type   | Required | Description        |
+| ------------------- | ------ | :------: | ------------------ |
+| `project_id`        | string |   Yes    | Project ID or path |
+| `merge_request_iid` | int    |   Yes    | Merge request IID  |
 
 **Flow**: Fetch MR details → Fetch diffs → Format as Markdown → LLM analysis
 
@@ -415,10 +415,10 @@ These tools provide broader insights about project health and progress.
 
 ### `gitlab_summarize_issue`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
-| `issue_iid` | int | Yes | Issue IID |
+| Parameter    | Type   | Required | Description        |
+| ------------ | ------ | :------: | ------------------ |
+| `project_id` | string |   Yes    | Project ID or path |
+| `issue_iid`  | int    |   Yes    | Issue IID          |
 
 **Flow**: Fetch issue → Fetch all notes (paginated) → Format as Markdown → LLM summary
 
@@ -426,11 +426,11 @@ These tools provide broader insights about project health and progress.
 
 ### `gitlab_generate_release_notes`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
-| `from` | string | Yes | Starting ref (tag, branch, SHA) |
-| `to` | string | No | Ending ref (defaults to `HEAD`) |
+| Parameter    | Type   | Required | Description                     |
+| ------------ | ------ | :------: | ------------------------------- |
+| `project_id` | string |   Yes    | Project ID or path              |
+| `from`       | string |   Yes    | Starting ref (tag, branch, SHA) |
+| `to`         | string |    No    | Ending ref (defaults to `HEAD`) |
 
 **Flow**: Compare refs → Fetch merged MRs with labels → Format commits + MRs + diffs → LLM categorization
 
@@ -438,10 +438,10 @@ These tools provide broader insights about project health and progress.
 
 ### `gitlab_analyze_pipeline_failure`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
-| `pipeline_id` | int | Yes | Pipeline ID |
+| Parameter     | Type   | Required | Description        |
+| ------------- | ------ | :------: | ------------------ |
+| `project_id`  | string |   Yes    | Project ID or path |
+| `pipeline_id` | int    |   Yes    | Pipeline ID        |
 
 **Flow**: Fetch pipeline → Fetch failed jobs with traces → Format as Markdown → LLM root cause analysis
 
@@ -449,10 +449,10 @@ These tools provide broader insights about project health and progress.
 
 ### `gitlab_summarize_mr_review`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
-| `merge_request_iid` | int | Yes | Merge request IID |
+| Parameter           | Type   | Required | Description        |
+| ------------------- | ------ | :------: | ------------------ |
+| `project_id`        | string |   Yes    | Project ID or path |
+| `merge_request_iid` | int    |   Yes    | Merge request IID  |
 
 **Flow**: Fetch MR details → Fetch discussions → Fetch approval state → Format as Markdown → LLM summary
 
@@ -460,10 +460,10 @@ These tools provide broader insights about project health and progress.
 
 ### `gitlab_generate_milestone_report`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
-| `milestone_id` | string | Yes | Milestone title or IID (auto-resolved) |
+| Parameter      | Type   | Required | Description                            |
+| -------------- | ------ | :------: | -------------------------------------- |
+| `project_id`   | string |   Yes    | Project ID or path                     |
+| `milestone_id` | string |   Yes    | Milestone title or IID (auto-resolved) |
 
 **Flow**: Fetch milestone → Fetch linked issues and MRs → Format as Markdown → LLM progress report
 
@@ -471,9 +471,9 @@ These tools provide broader insights about project health and progress.
 
 ### `gitlab_analyze_ci_configuration`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
+| Parameter    | Type   | Required | Description        |
+| ------------ | ------ | :------: | ------------------ |
+| `project_id` | string |   Yes    | Project ID or path |
 
 **Flow**: Lint CI config → Fetch merged YAML and includes → Format as Markdown → LLM analysis
 
@@ -481,10 +481,10 @@ These tools provide broader insights about project health and progress.
 
 ### `gitlab_analyze_issue_scope`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
-| `issue_iid` | int | Yes | Issue IID |
+| Parameter    | Type   | Required | Description        |
+| ------------ | ------ | :------: | ------------------ |
+| `project_id` | string |   Yes    | Project ID or path |
+| `issue_iid`  | int    |   Yes    | Issue IID          |
 
 **Flow**: Fetch issue → Fetch time stats, participants, related MRs, notes → Format as Markdown → LLM scope analysis
 
@@ -492,10 +492,10 @@ These tools provide broader insights about project health and progress.
 
 ### `gitlab_review_mr_security`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
-| `merge_request_iid` | int | Yes | Merge request IID |
+| Parameter           | Type   | Required | Description        |
+| ------------------- | ------ | :------: | ------------------ |
+| `project_id`        | string |   Yes    | Project ID or path |
+| `merge_request_iid` | int    |   Yes    | Merge request IID  |
 
 **Flow**: Fetch MR details → Fetch code diffs → Format as Markdown → LLM security review
 
@@ -503,9 +503,9 @@ These tools provide broader insights about project health and progress.
 
 ### `gitlab_find_technical_debt`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
+| Parameter    | Type   | Required | Description        |
+| ------------ | ------ | :------: | ------------------ |
+| `project_id` | string |   Yes    | Project ID or path |
 
 **Flow**: Search for TODO/FIXME/HACK/XXX/DEPRECATED markers → Format results → LLM categorization
 
@@ -515,10 +515,10 @@ These tools provide broader insights about project health and progress.
 
 ### `gitlab_analyze_deployment_history`
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string | Yes | Project ID or path |
-| `environment` | string | No | Filter by environment name (e.g., "production") |
+| Parameter     | Type   | Required | Description                                     |
+| ------------- | ------ | :------: | ----------------------------------------------- |
+| `project_id`  | string |   Yes    | Project ID or path                              |
+| `environment` | string |    No    | Filter by environment name (e.g., "production") |
 
 **Flow**: Fetch recent deployments → Format as Markdown with success/failure stats → LLM analysis
 
@@ -591,15 +591,15 @@ You:  "Generate release notes for gitlab-mcp-server between v1.1.6 and v1.1.7."
 
 You might wonder: "Why not just ask the AI to read the diff directly, without sampling?"
 
-| Aspect | Direct AI Analysis | Sampling Tools |
-| ------ | ------------------ | -------------- |
-| **Data access** | AI can only see what's in its context window | Server fetches complete datasets from GitLab API |
-| **Data quality** | Raw API output (JSON), AI must parse | Pre-formatted Markdown with relevant fields only |
-| **Credential safety** | No automatic redaction | Credentials stripped before LLM sees data |
-| **Injection protection** | None — data mixed with instructions | XML delimiters + hardened system prompt |
-| **Consistency** | Varies with prompt phrasing | Same prompt template produces consistent results |
-| **Context efficiency** | Full API response consumes tokens | Server curates only relevant information |
-| **Pagination** | AI must manage page cursors | Server handles multi-page collection automatically |
+| Aspect                   | Direct AI Analysis                           | Sampling Tools                                     |
+| ------------------------ | -------------------------------------------- | -------------------------------------------------- |
+| **Data access**          | AI can only see what's in its context window | Server fetches complete datasets from GitLab API   |
+| **Data quality**         | Raw API output (JSON), AI must parse         | Pre-formatted Markdown with relevant fields only   |
+| **Credential safety**    | No automatic redaction                       | Credentials stripped before LLM sees data          |
+| **Injection protection** | None — data mixed with instructions          | XML delimiters + hardened system prompt            |
+| **Consistency**          | Varies with prompt phrasing                  | Same prompt template produces consistent results   |
+| **Context efficiency**   | Full API response consumes tokens            | Server curates only relevant information           |
+| **Pagination**           | AI must manage page cursors                  | Server handles multi-page collection automatically |
 
 In short, sampling tools provide **safer, more consistent, and more complete analysis** by leveraging the server as a data preparation layer.
 
@@ -618,13 +618,13 @@ Not all MCP clients support sampling. When a client lacks this capability, every
 
 As of the current MCP specification, sampling support varies by client:
 
-| Client | Sampling Support |
-| ------ | ---------------- |
+| Client                      | Sampling Support                       |
+| --------------------------- | -------------------------------------- |
 | VS Code with GitHub Copilot | Partial (depends on extension version) |
-| Copilot CLI | Depends on version |
-| OpenCode | Depends on implementation |
-| Continue.dev | Yes |
-| Custom clients | Depends on implementation |
+| Copilot CLI                 | Depends on version                     |
+| OpenCode                    | Depends on implementation              |
+| Continue.dev                | Yes                                    |
+| Custom clients              | Depends on implementation              |
 
 Check your MCP client's documentation for sampling capability status.
 

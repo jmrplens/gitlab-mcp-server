@@ -24,11 +24,11 @@ Use security categories before creating security attributes. Use security attrib
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Create** | — | No | No | Creates a new category |
-| **Update** | — | No | Yes | Modifies an existing category |
-| **Delete** | — | Yes | Yes | Destroys a category and its attributes; protected by confirmation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description                                                       |
+| ---------- | :------: | :---------: | :--------: | ----------------------------------------------------------------- |
+| **Create** |    —     |     No      |     No     | Creates a new category                                            |
+| **Update** |    —     |     No      |    Yes     | Modifies an existing category                                     |
+| **Delete** |    —     |     Yes     |    Yes     | Destroys a category and its attributes; protected by confirmation |
 
 Tools marked **Delete** require confirmation before execution.
 
@@ -43,12 +43,12 @@ Create a security category in a namespace.
 | Annotation | **Create** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `namespace_id` | int | Yes | Numeric namespace ID |
-| `name` | string | Yes | Category name |
-| `description` | string | No | Category description |
-| `multiple_selection` | bool | No | Whether multiple attributes can be selected for the category |
+| Parameter            | Type   | Required | Description                                                  |
+| -------------------- | ------ | :------: | ------------------------------------------------------------ |
+| `namespace_id`       | int    |   Yes    | Numeric namespace ID                                         |
+| `name`               | string |   Yes    | Category name                                                |
+| `description`        | string |    No    | Category description                                         |
+| `multiple_selection` | bool   |    No    | Whether multiple attributes can be selected for the category |
 
 ### `gitlab_update_security_category`
 
@@ -57,12 +57,12 @@ Update a security category name or description.
 | Annotation | **Update** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `category_id` | int | Yes | Numeric security category ID |
-| `namespace_id` | int | Yes | Numeric namespace ID |
-| `name` | string | No | New category name |
-| `description` | string | No | New category description |
+| Parameter      | Type   | Required | Description                  |
+| -------------- | ------ | :------: | ---------------------------- |
+| `category_id`  | int    |   Yes    | Numeric security category ID |
+| `namespace_id` | int    |   Yes    | Numeric namespace ID         |
+| `name`         | string |    No    | New category name            |
+| `description`  | string |    No    | New category description     |
 
 At least one of `name` or `description` must be provided.
 
@@ -73,9 +73,9 @@ Delete a custom security category and its associated security attributes.
 | Annotation | **Delete** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `category_id` | int | Yes | Numeric security category ID |
+| Parameter     | Type | Required | Description                  |
+| ------------- | ---- | :------: | ---------------------------- |
+| `category_id` | int  |   Yes    | Numeric security category ID |
 
 > **Destructive**: Protected by confirmation prompt because associated security attributes are also deleted.
 

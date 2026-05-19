@@ -19,13 +19,13 @@ The project uses the official GitLab Go client (`gitlab.com/gitlab-org/api/clien
 
 However, several GitLab API domains are **only available via GraphQL** and have no corresponding service wrapper in `client-go`:
 
-| Domain             | GitLab API Coverage                          | client-go Status     |
-| ------------------ | -------------------------------------------- | -------------------- |
-| Vulnerabilities    | REST (partial) + GraphQL (full: mutations, severity counts, pipeline summary) | REST only, no mutations |
-| Security Findings  | GraphQL only (pipeline security tab)         | Not covered          |
-| CI/CD Catalog      | GraphQL only (catalog resources, components) | Not covered          |
-| Branch Rules       | GraphQL only (consolidated branch protections) | Not covered          |
-| Custom Emoji       | GraphQL only (group-level custom emoji CRUD) | Not covered          |
+| Domain            | GitLab API Coverage                                                           | client-go Status        |
+| ----------------- | ----------------------------------------------------------------------------- | ----------------------- |
+| Vulnerabilities   | REST (partial) + GraphQL (full: mutations, severity counts, pipeline summary) | REST only, no mutations |
+| Security Findings | GraphQL only (pipeline security tab)                                          | Not covered             |
+| CI/CD Catalog     | GraphQL only (catalog resources, components)                                  | Not covered             |
+| Branch Rules      | GraphQL only (consolidated branch protections)                                | Not covered             |
+| Custom Emoji      | GraphQL only (group-level custom emoji CRUD)                                  | Not covered             |
 
 ### Options considered
 
@@ -88,18 +88,18 @@ Used by `samplingtools` to fetch rich context (vulnerability summaries, pipeline
 
 Shared GraphQL utilities live in `internal/toolutil/graphql.go`:
 
-| Utility                     | Purpose                                                  |
-| --------------------------- | -------------------------------------------------------- |
-| `GraphQLPaginationInput`    | Cursor-based pagination input (first/after/last/before)  |
-| `GraphQLPaginationOutput`   | Pagination metadata for tool responses                   |
-| `GraphQLRawPageInfo`        | Raw camelCase PageInfo from GitLab API                   |
-| `PageInfoToOutput()`        | Converts camelCase PageInfo to snake_case output          |
-| `FormatGraphQLPagination()` | Formats pagination metadata as Markdown summary          |
-| `FormatGID()`               | Builds GitLab Global ID (`gid://gitlab/Type/123`)        |
-| `ParseGID()`                | Extracts type and numeric ID from a GitLab Global ID     |
-| `MergeVariables()`          | Merges multiple variable maps for complex queries        |
-| `GraphQLDefaultFirst`       | Default page size (20)                                   |
-| `GraphQLMaxFirst`           | Maximum page size (100)                                  |
+| Utility                     | Purpose                                                 |
+| --------------------------- | ------------------------------------------------------- |
+| `GraphQLPaginationInput`    | Cursor-based pagination input (first/after/last/before) |
+| `GraphQLPaginationOutput`   | Pagination metadata for tool responses                  |
+| `GraphQLRawPageInfo`        | Raw camelCase PageInfo from GitLab API                  |
+| `PageInfoToOutput()`        | Converts camelCase PageInfo to snake_case output        |
+| `FormatGraphQLPagination()` | Formats pagination metadata as Markdown summary         |
+| `FormatGID()`               | Builds GitLab Global ID (`gid://gitlab/Type/123`)       |
+| `ParseGID()`                | Extracts type and numeric ID from a GitLab Global ID    |
+| `MergeVariables()`          | Merges multiple variable maps for complex queries       |
+| `GraphQLDefaultFirst`       | Default page size (20)                                  |
+| `GraphQLMaxFirst`           | Maximum page size (100)                                 |
 
 ### Testing approach
 

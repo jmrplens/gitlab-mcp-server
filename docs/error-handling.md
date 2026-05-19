@@ -52,32 +52,32 @@ Created via `NewDetailedError(domain, action, err)` which automatically:
 
 Inspects the error chain and returns a diagnostic message:
 
-| Error Type | Example Message |
-| --- | --- |
-| GitLab HTTP response | Delegates to `ClassifyHTTPStatus` |
-| Connection refused | "GitLab server is unreachable (connection refused)" |
-| DNS failure | "GitLab server hostname could not be resolved" |
-| Timeout | "Request to GitLab timed out" |
-| TLS/SSL | "TLS/SSL handshake failed" |
-| URL error | "network error reaching GitLab" |
-| Other | "unexpected error" |
+| Error Type           | Example Message                                     |
+| -------------------- | --------------------------------------------------- |
+| GitLab HTTP response | Delegates to `ClassifyHTTPStatus`                   |
+| Connection refused   | "GitLab server is unreachable (connection refused)" |
+| DNS failure          | "GitLab server hostname could not be resolved"      |
+| Timeout              | "Request to GitLab timed out"                       |
+| TLS/SSL              | "TLS/SSL handshake failed"                          |
+| URL error            | "network error reaching GitLab"                     |
+| Other                | "unexpected error"                                  |
 
 ### ClassifyHTTPStatus
 
 Maps HTTP status codes to actionable guidance:
 
-| Code | Message |
-| --- | --- |
-| 400 | "bad request — check your input parameters" |
-| 401 | "authentication failed — GITLAB_TOKEN may be invalid or expired" |
-| 403 | "access denied — your token lacks the required permissions" |
-| 404 | "not found — the requested resource does not exist or you lack access" |
-| 409 | "conflict — the resource already exists or there is a state conflict" |
-| 422 | "validation failed — GitLab rejected the request due to invalid data" |
-| 429 | "rate limited — too many requests, please wait before retrying" |
-| 500 | "GitLab internal server error" |
-| 502 | "GitLab is temporarily unavailable (bad gateway)" |
-| 503 | "GitLab is under maintenance or overloaded" |
+| Code | Message                                                                |
+| ---- | ---------------------------------------------------------------------- |
+| 400  | "bad request — check your input parameters"                            |
+| 401  | "authentication failed — GITLAB_TOKEN may be invalid or expired"       |
+| 403  | "access denied — your token lacks the required permissions"            |
+| 404  | "not found — the requested resource does not exist or you lack access" |
+| 409  | "conflict — the resource already exists or there is a state conflict"  |
+| 422  | "validation failed — GitLab rejected the request due to invalid data"  |
+| 429  | "rate limited — too many requests, please wait before retrying"        |
+| 500  | "GitLab internal server error"                                         |
+| 502  | "GitLab is temporarily unavailable (bad gateway)"                      |
+| 503  | "GitLab is under maintenance or overloaded"                            |
 
 ## Error Flow in Tool Handlers
 
@@ -153,13 +153,13 @@ For handlers that need different hints per status code, use a `switch` over `IsH
 
 ### Error Function Decision Tree
 
-| Scenario | Function | Example |
-| --- | --- | --- |
-| Read-only operation (list, get, search) | `WrapErr` | `WrapErr("listBranches", err)` |
-| Get operation returning 404 | `NotFoundResult` | `NotFoundResult("Branch", "main in project 42", "Use gitlab_branch_list...")` |
-| Mutating operation (create, update, delete) | `WrapErrWithMessage` | `WrapErrWithMessage("fileCreate", err)` |
-| Specific error with known corrective action | `WrapErrWithHint` | `WrapErrWithHint("branchDelete", err, "use gitlab_branch_unprotect first")` |
-| Single-status hint (the common case) | `WrapErrWithStatusHint` | `WrapErrWithStatusHint("issueGet", err, 404, "verify issue_iid")` |
+| Scenario                                    | Function                | Example                                                                       |
+| ------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
+| Read-only operation (list, get, search)     | `WrapErr`               | `WrapErr("listBranches", err)`                                                |
+| Get operation returning 404                 | `NotFoundResult`        | `NotFoundResult("Branch", "main in project 42", "Use gitlab_branch_list...")` |
+| Mutating operation (create, update, delete) | `WrapErrWithMessage`    | `WrapErrWithMessage("fileCreate", err)`                                       |
+| Specific error with known corrective action | `WrapErrWithHint`       | `WrapErrWithHint("branchDelete", err, "use gitlab_branch_unprotect first")`   |
+| Single-status hint (the common case)        | `WrapErrWithStatusHint` | `WrapErrWithStatusHint("issueGet", err, 404, "verify issue_iid")`             |
 
 ### NotFoundResult — Informational 404 Responses
 
@@ -210,13 +210,13 @@ result := FormatIssueReport("issues", "create", err, inputParams)
 
 The generated Markdown includes:
 
-| Section | Content |
-| --- | --- |
-| Environment | Server version, Go version, OS/Arch, timestamp |
-| Error Details | Tool, action, error message, HTTP status, request ID |
-| Input (sanitized) | All input parameters with secrets redacted |
-| Steps to Reproduce | Pre-filled reproduction steps |
-| Suggested Labels | `bug`, `mcp-tool`, `automated-report` |
+| Section            | Content                                              |
+| ------------------ | ---------------------------------------------------- |
+| Environment        | Server version, Go version, OS/Arch, timestamp       |
+| Error Details      | Tool, action, error message, HTTP status, request ID |
+| Input (sanitized)  | All input parameters with secrets redacted           |
+| Steps to Reproduce | Pre-filled reproduction steps                        |
+| Suggested Labels   | `bug`, `mcp-tool`, `automated-report`                |
 
 ### Secret Redaction
 
@@ -232,13 +232,13 @@ The report includes the server version, read from the `VERSION` file at package 
 
 Lower-level helpers detect specific network conditions:
 
-| Helper | Detects |
-| --- | --- |
-| `isConnectionRefused` | ECONNREFUSED, "connectex:" |
-| `isDNSError` | `*net.DNSError` in error chain |
-| `isTimeout` | Any error implementing `Timeout() bool` |
-| `isTLSError` | "tls:", "certificate", "x509:" in message |
-| `ContainsAny` | Generic substring match on `err.Error()` |
+| Helper                | Detects                                   |
+| --------------------- | ----------------------------------------- |
+| `isConnectionRefused` | ECONNREFUSED, "connectex:"                |
+| `isDNSError`          | `*net.DNSError` in error chain            |
+| `isTimeout`           | Any error implementing `Timeout() bool`   |
+| `isTLSError`          | "tls:", "certificate", "x509:" in message |
+| `ContainsAny`         | Generic substring match on `err.Error()`  |
 
 ## Parameter-Name Guidance Helpers
 
@@ -257,9 +257,9 @@ actionable errors when LLMs mistype argument names:
    missing required values and emit messages that name the exact documented
    parameter:
 
-| Helper | Use Case | Example Output |
-| --- | --- | --- |
-| `ErrRequiredInt64(op, field)` | Required int64 field is 0 | `"milestoneGet: milestone_iid is required (must be > 0). Ensure you use the exact parameter name 'milestone_iid'..."` |
+| Helper                         | Use Case                       | Example Output                                                                                                          |
+| ------------------------------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `ErrRequiredInt64(op, field)`  | Required int64 field is 0      | `"milestoneGet: milestone_iid is required (must be > 0). Ensure you use the exact parameter name 'milestone_iid'..."`   |
 | `ErrRequiredString(op, field)` | Required string field is empty | `"branchCreate: branch_name is required (must be non-empty). Ensure you use the exact parameter name 'branch_name'..."` |
 
 Used in `milestones`, `branches`, `mergerequests`, and other domains where LLMs frequently confuse parameter names (e.g., `milestone_id` vs `milestone_iid`, `branch` vs `branch_name`, `iid` vs `merge_request_iid`).
@@ -286,13 +286,13 @@ testutil.RespondJSON(w, http.StatusBadRequest, map[string]string{
 
 ## File Reference
 
-| File | Purpose |
-| --- | --- |
-| `internal/toolutil/errors.go` | ToolError, DetailedError, WrapErr, WrapErrWithMessage, WrapErrWithHint, WrapErrWithStatusHint, ExtractGitLabMessage, ClassifyError, ClassifyHTTPStatus, IsHTTPStatus, ContainsAny |
-| `internal/toolutil/not_found.go` | NotFoundResult — informational 404 pattern for get handlers |
-| `internal/toolutil/issue_report.go` | IssueReport, FormatIssueReport, secret redaction |
-| `internal/toolutil/confirm.go` | Destructive action confirmation flow |
-| `internal/toolutil/output.go` | SuccessResult, ErrorResult helpers |
+| File                                | Purpose                                                                                                                                                                           |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `internal/toolutil/errors.go`       | ToolError, DetailedError, WrapErr, WrapErrWithMessage, WrapErrWithHint, WrapErrWithStatusHint, ExtractGitLabMessage, ClassifyError, ClassifyHTTPStatus, IsHTTPStatus, ContainsAny |
+| `internal/toolutil/not_found.go`    | NotFoundResult — informational 404 pattern for get handlers                                                                                                                       |
+| `internal/toolutil/issue_report.go` | IssueReport, FormatIssueReport, secret redaction                                                                                                                                  |
+| `internal/toolutil/confirm.go`      | Destructive action confirmation flow                                                                                                                                              |
+| `internal/toolutil/output.go`       | SuccessResult, ErrorResult helpers                                                                                                                                                |
 
 ## LLM Ergonomics Hint Rollout
 
@@ -300,15 +300,15 @@ Actionable hints were added across the entire codebase to help LLMs self-correct
 
 ### Coverage
 
-| Metric | Count |
-| --- | --- |
-| `WrapErrWithHint` call sites (GraphQL) | 257 |
-| `WrapErrWithStatusHint` call sites (REST) | 858 |
-| **Total hinted error sites** | **1,115** |
-| `WrapErrWithMessage` (skip-category, retained) | 344 |
-| `NotFoundResult` (informational 404s) | 32 |
-| Domain sub-packages with hints | 153 of 162 |
-| Source files with hints | 171 |
+| Metric                                         | Count      |
+| ---------------------------------------------- | ---------- |
+| `WrapErrWithHint` call sites (GraphQL)         | 257        |
+| `WrapErrWithStatusHint` call sites (REST)      | 858        |
+| **Total hinted error sites**                   | **1,115**  |
+| `WrapErrWithMessage` (skip-category, retained) | 344        |
+| `NotFoundResult` (informational 404s)          | 32         |
+| Domain sub-packages with hints                 | 153 of 162 |
+| Source files with hints                        | 171        |
 
 ### Skip Categories
 

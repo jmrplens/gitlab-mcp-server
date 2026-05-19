@@ -60,6 +60,7 @@ For each affected document:
 - **UPD-006**: Add deprecation notices for removed APIs rather than deleting immediately
 - **UPD-007**: Never introduce TBD/TODO placeholders in updates
 - **UPD-008**: Maintain consistent terminology with the rest of the documentation
+- **UPD-009**: When creating or editing Markdown pipe tables in `README.md` or `docs/`, run `go run ./cmd/format_md_tables/` and verify with `go run ./cmd/format_md_tables/ --check` so source tables keep consistent padding and alignment markers
 
 ### For New APIs
 
@@ -114,6 +115,7 @@ After all updates are applied, perform a parity check:
 - [ ] No TBD/TODO placeholders in updated sections
 - [ ] Consistent terminology and style with surrounding content
 - [ ] Deprecation notices added for removed APIs
+- [ ] Markdown pipe tables in `README.md` and `docs/` were normalized with `go run ./cmd/format_md_tables/ --check`
 
 ## Output Format
 

@@ -24,12 +24,12 @@ With `TOOL_SURFACE=meta`, the 57 individual tools below are consolidated into si
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
-| **Create** | — | No | — | Creates a new resource |
-| **Update** | — | No | Yes | Modifies an existing resource |
-| **Delete** | — | Yes | Yes | Destroys a resource; protected by confirmation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description                                    |
+| ---------- | :------: | :---------: | :--------: | ---------------------------------------------- |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation                       |
+| **Create** |    —     |     No      |     —      | Creates a new resource                         |
+| **Update** |    —     |     No      |    Yes     | Modifies an existing resource                  |
+| **Delete** |    —     |     Yes     |    Yes     | Destroys a resource; protected by confirmation |
 
 Tools marked **Delete** require user confirmation before execution.
 
@@ -138,13 +138,13 @@ Get the latest pipeline for a project, optionally filtered by branch/tag ref. Re
 
 Wait for a pipeline to reach a terminal state (success, failed, canceled, skipped, manual). Polls the pipeline status at a configurable interval and sends progress notifications. Returns the final pipeline details when done or when the timeout is reached.
 
-| Parameter           | Required | Default | Description                                    |
-| ------------------- | -------- | ------- | ---------------------------------------------- |
-| `project_id`        | Yes      | —       | Project ID or URL-encoded path                 |
-| `pipeline_id`       | Yes      | —       | Pipeline ID to wait for                        |
-| `interval_seconds`  | No       | 10      | Polling interval in seconds (5–60)             |
-| `timeout_seconds`   | No       | 300     | Maximum wait time in seconds (1–3600)          |
-| `fail_on_error`     | No       | true    | Return error if pipeline reaches a failed state |
+| Parameter          | Required | Default | Description                                     |
+| ------------------ | -------- | ------- | ----------------------------------------------- |
+| `project_id`       | Yes      | —       | Project ID or URL-encoded path                  |
+| `pipeline_id`      | Yes      | —       | Pipeline ID to wait for                         |
+| `interval_seconds` | No       | 10      | Polling interval in seconds (5–60)              |
+| `timeout_seconds`  | No       | 300     | Maximum wait time in seconds (1–3600)           |
+| `fail_on_error`    | No       | true    | Return error if pipeline reaches a failed state |
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -275,13 +275,13 @@ Delete all artifacts across an entire project. This is a destructive operation.
 
 Wait for a CI/CD job to reach a terminal state (success, failed, canceled, skipped, manual). Polls the job status at a configurable interval and sends progress notifications. Returns the final job details when done or when the timeout is reached.
 
-| Parameter           | Required | Default | Description                                 |
-| ------------------- | -------- | ------- | ------------------------------------------- |
-| `project_id`        | Yes      | —       | Project ID or URL-encoded path              |
-| `job_id`            | Yes      | —       | Job ID to wait for                          |
-| `interval_seconds`  | No       | 10      | Polling interval in seconds (5–60)          |
-| `timeout_seconds`   | No       | 300     | Maximum wait time in seconds (1–3600)       |
-| `fail_on_error`     | No       | true    | Return error if job reaches a failed state  |
+| Parameter          | Required | Default | Description                                |
+| ------------------ | -------- | ------- | ------------------------------------------ |
+| `project_id`       | Yes      | —       | Project ID or URL-encoded path             |
+| `job_id`           | Yes      | —       | Job ID to wait for                         |
+| `interval_seconds` | No       | 10      | Polling interval in seconds (5–60)         |
+| `timeout_seconds`  | No       | 300     | Maximum wait time in seconds (1–3600)      |
+| `fail_on_error`    | No       | true    | Return error if job reaches a failed state |
 
 | Annotation | **Read** |
 | ---------- | -------- |

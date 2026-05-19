@@ -9,25 +9,25 @@ around `cmd/eval_mcp_surfaces`.
 
 ## Source Map
 
-| Path | Purpose |
-| --- | --- |
-| `cmd/eval_mcp_surfaces/main.go` | Evaluation runner, task filtering, MCP execution, report writing, trace writing. |
-| `cmd/eval_mcp_surfaces/providers.go` | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs. |
-| `cmd/eval_mcp_surfaces/fixtures.go` | Docker GitLab fixture preparation and placeholder replacement. |
-| `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md` | Canonical task corpus. |
-| `dist/evaluation/mcp-surfaces/` | Generated reports, traces, and fixture state; ignored by Git. |
-| `docs/testing/model-results.md` | Current published benchmark result copied from generated reports. |
+| Path                                                            | Purpose                                                                          |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `cmd/eval_mcp_surfaces/main.go`                                 | Evaluation runner, task filtering, MCP execution, report writing, trace writing. |
+| `cmd/eval_mcp_surfaces/providers.go`                            | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs.       |
+| `cmd/eval_mcp_surfaces/fixtures.go`                             | Docker GitLab fixture preparation and placeholder replacement.                   |
+| `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md` | Canonical task corpus.                                                           |
+| `dist/evaluation/mcp-surfaces/`                                 | Generated reports, traces, and fixture state; ignored by Git.                    |
+| `docs/testing/model-results.md`                                 | Current published benchmark result copied from generated reports.                |
 
 ## Environment
 
 The evaluator reads model provider keys from environment variables:
 
-| Provider | Environment variable |
-| --- | --- |
-| Anthropic | `ANTHROPIC_API_KEY` |
-| Google | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
-| OpenAI | `OPENAI_API_KEY` |
-| Qwen | `QWEN_API_KEY` |
+| Provider  | Environment variable                 |
+| --------- | ------------------------------------ |
+| Anthropic | `ANTHROPIC_API_KEY`                  |
+| Google    | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
+| OpenAI    | `OPENAI_API_KEY`                     |
+| Qwen      | `QWEN_API_KEY`                       |
 
 Docker mode also needs `test/e2e/.env.docker`, created by the E2E provisioning
 scripts. Never print or commit `.env`, `.env.docker`, provider keys, raw traces,
@@ -164,41 +164,41 @@ timeout 1800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
 
 ## Important Flags
 
-| Flag | Meaning |
-| --- | --- |
-| `--preset schema-enterprise` | Schema-only Enterprise/Premium route coverage; dry-run by default. |
-| `--preset docker-read` | Docker read-only partition. |
-| `--preset docker-mutating-safe` | Docker safe mutation partition. |
-| `--preset docker-destructive-safe` | Docker safe destructive partition. |
-| `--model` | One provider/model pair. Overrides `--models`. |
-| `--models` | Comma-separated provider/model list. |
-| `--backend=gitlab` | Build the catalog against the real GitLab backend. |
-| `--gitlab-env-file` | Load Docker GitLab credentials from `test/e2e/.env.docker`. |
-| `--prepare-fixtures` | Create or refresh Docker GitLab resources used by evaluation tasks. |
-| `--use-fixtures` | Replace placeholder IDs in prompts with fixture state. |
-| `--execute-tools` | Execute validated model tool calls through MCP. |
-| `--skip-unavailable` | Skip routes not available in the current catalog or GitLab edition. |
-| `--task` | Comma-separated task IDs for targeted runs. |
-| `--out` | Markdown report path. Trace directory defaults to `<report>.traces/`. |
-| `--terminal-log` | File receiving progress and terminal output. Defaults beside `--out`, or under `dist/evaluation/mcp-surfaces/terminal/` when no report path is known yet. |
-| `--print-output` | Also echo progress/output to the terminal. Without this flag, the command writes terminal output only to `--terminal-log`. |
-| `--publish-docs` | Publish reviewed evaluation reports into the managed docs blocks. |
-| `--publish-from` | Reviewed Markdown report path to publish; repeat once per report. |
-| `--publish-label` | Human-readable label for the published snapshot. |
-| `--check-docs` | Verify committed docs match the selected `--publish-from` reports without writing files. |
+| Flag                               | Meaning                                                                                                                                                   |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--preset schema-enterprise`       | Schema-only Enterprise/Premium route coverage; dry-run by default.                                                                                        |
+| `--preset docker-read`             | Docker read-only partition.                                                                                                                               |
+| `--preset docker-mutating-safe`    | Docker safe mutation partition.                                                                                                                           |
+| `--preset docker-destructive-safe` | Docker safe destructive partition.                                                                                                                        |
+| `--model`                          | One provider/model pair. Overrides `--models`.                                                                                                            |
+| `--models`                         | Comma-separated provider/model list.                                                                                                                      |
+| `--backend=gitlab`                 | Build the catalog against the real GitLab backend.                                                                                                        |
+| `--gitlab-env-file`                | Load Docker GitLab credentials from `test/e2e/.env.docker`.                                                                                               |
+| `--prepare-fixtures`               | Create or refresh Docker GitLab resources used by evaluation tasks.                                                                                       |
+| `--use-fixtures`                   | Replace placeholder IDs in prompts with fixture state.                                                                                                    |
+| `--execute-tools`                  | Execute validated model tool calls through MCP.                                                                                                           |
+| `--skip-unavailable`               | Skip routes not available in the current catalog or GitLab edition.                                                                                       |
+| `--task`                           | Comma-separated task IDs for targeted runs.                                                                                                               |
+| `--out`                            | Markdown report path. Trace directory defaults to `<report>.traces/`.                                                                                     |
+| `--terminal-log`                   | File receiving progress and terminal output. Defaults beside `--out`, or under `dist/evaluation/mcp-surfaces/terminal/` when no report path is known yet. |
+| `--print-output`                   | Also echo progress/output to the terminal. Without this flag, the command writes terminal output only to `--terminal-log`.                                |
+| `--publish-docs`                   | Publish reviewed evaluation reports into the managed docs blocks.                                                                                         |
+| `--publish-from`                   | Reviewed Markdown report path to publish; repeat once per report.                                                                                         |
+| `--publish-label`                  | Human-readable label for the published snapshot.                                                                                                          |
+| `--check-docs`                     | Verify committed docs match the selected `--publish-from` reports without writing files.                                                                  |
 
 ## Outputs
 
 Each model-backed run writes:
 
-| Output | Purpose |
-| --- | --- |
-| `*.md` report | Startup placeholder, then final summary metrics, task results, API usage, and failure triage. If the run stops before final metrics, the file is replaced with a failure report. |
-| `*.log` terminal log | Progress lines, report-write notifications, provider warnings, and command errors. The evaluator writes this by default and stays silent on the terminal unless `--print-output` is set. |
-| `*.traces/index.md` | Trace index. |
-| `*.traces/*.json` | Per-task trace with prompts, tool calls, validation, MCP results, and repairs. |
-| `*.traces/traces.jsonl` | JSONL stream for programmatic analysis. |
-| `e2e-fixtures.json` | Docker model-evaluation fixture IDs; generated and ignored. |
+| Output                  | Purpose                                                                                                                                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `*.md` report           | Startup placeholder, then final summary metrics, task results, API usage, and failure triage. If the run stops before final metrics, the file is replaced with a failure report.         |
+| `*.log` terminal log    | Progress lines, report-write notifications, provider warnings, and command errors. The evaluator writes this by default and stays silent on the terminal unless `--print-output` is set. |
+| `*.traces/index.md`     | Trace index.                                                                                                                                                                             |
+| `*.traces/*.json`       | Per-task trace with prompts, tool calls, validation, MCP results, and repairs.                                                                                                           |
+| `*.traces/traces.jsonl` | JSONL stream for programmatic analysis.                                                                                                                                                  |
+| `e2e-fixtures.json`     | Docker model-evaluation fixture IDs; generated and ignored.                                                                                                                              |
 
 For long runs, always pass an explicit `--out` path so the terminal log defaults
 to a sibling `.log` file. The Markdown report is the review artifact; terminal

@@ -83,15 +83,15 @@ Roots are fetched eagerly on `notifications/initialized` (immediately after the 
 
 ### Methods
 
-| Method | Signature | Purpose |
-| ------ | --------- | ------- |
-| `NewManager()` | `() *Manager` | Create an empty root manager |
-| `Refresh(ctx, session)` | `(context.Context, *mcp.ServerSession) error` | Query client and cache current roots. No-op if the client did not advertise roots. |
-| `GetRoots()` | `() []*mcp.Root` | Return a copy of cached roots |
-| `FindGitRoot()` | `() (string, bool)` | Scan cached roots for a Git repository |
-| `HasRoot(uri)` | `(string) bool` | Check if a specific URI is in the cache |
-| `ListClientRoots(ctx, session)` | `(context.Context, *mcp.ServerSession) ([]*mcp.Root, error)` | Query roots without caching |
-| `ClientSupportsRoots(session)` | `(*mcp.ServerSession) bool` | Reports whether the client advertised the roots capability during initialization |
+| Method                          | Signature                                                    | Purpose                                                                            |
+| ------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `NewManager()`                  | `() *Manager`                                                | Create an empty root manager                                                       |
+| `Refresh(ctx, session)`         | `(context.Context, *mcp.ServerSession) error`                | Query client and cache current roots. No-op if the client did not advertise roots. |
+| `GetRoots()`                    | `() []*mcp.Root`                                             | Return a copy of cached roots                                                      |
+| `FindGitRoot()`                 | `() (string, bool)`                                          | Scan cached roots for a Git repository                                             |
+| `HasRoot(uri)`                  | `(string) bool`                                              | Check if a specific URI is in the cache                                            |
+| `ListClientRoots(ctx, session)` | `(context.Context, *mcp.ServerSession) ([]*mcp.Root, error)` | Query roots without caching                                                        |
+| `ClientSupportsRoots(session)`  | `(*mcp.ServerSession) bool`                                  | Reports whether the client advertised the roots capability during initialization   |
 
 ### Git Detection Heuristics
 
@@ -105,11 +105,11 @@ This enables auto-detection of the GitLab project from the user's opened workspa
 
 ## Configuration
 
-| Setting | Value | Notes |
-| ------- | ----- | ----- |
-| Thread safety | `sync.RWMutex` | All operations are goroutine-safe |
+| Setting            | Value                                | Notes                             |
+| ------------------ | ------------------------------------ | --------------------------------- |
+| Thread safety      | `sync.RWMutex`                       | All operations are goroutine-safe |
 | Cache invalidation | On `roots/list_changed` notification | Client notifies server of changes |
-| URI scheme | `file://` | Standard scheme for local paths |
+| URI scheme         | `file://`                            | Standard scheme for local paths   |
 
 ## Security
 
@@ -124,20 +124,20 @@ The roots infrastructure is **fully implemented** and operational. The `Manager`
 
 ### Active Consumers
 
-| Consumer | How It Uses Roots |
-| -------- | ----------------- |
-| **`gitlab://workspace/roots` resource** | Exposes cached roots as an MCP resource so LLMs can read workspace directories |
-| **`gitlab_discover_project` tool** | LLMs read `.git/config` from root directories to discover `project_id` automatically |
+| Consumer                                | How It Uses Roots                                                                    |
+| --------------------------------------- | ------------------------------------------------------------------------------------ |
+| **`gitlab://workspace/roots` resource** | Exposes cached roots as an MCP resource so LLMs can read workspace directories       |
+| **`gitlab_discover_project` tool**      | LLMs read `.git/config` from root directories to discover `project_id` automatically |
 
 The **project discovery workflow** chains these components: LLM fetches `gitlab://workspace/roots` → reads `.git/config` from each root → calls `gitlab_discover_project` with the remote URL → obtains `project_id` for all subsequent operations.
 
 ### Future Features
 
-| Feature | How Roots Enables It |
-| ------- | -------------------- |
-| **Workspace-relative file paths** | Resolve file references in tool arguments relative to workspace roots |
-| **Multi-project awareness** | Support workspaces with multiple Git repositories (monorepos, polyrepos) |
-| **Contextual completions** | Prioritize completions from the detected project over global search |
+| Feature                           | How Roots Enables It                                                     |
+| --------------------------------- | ------------------------------------------------------------------------ |
+| **Workspace-relative file paths** | Resolve file references in tool arguments relative to workspace roots    |
+| **Multi-project awareness**       | Support workspaces with multiple Git repositories (monorepos, polyrepos) |
+| **Contextual completions**        | Prioritize completions from the detected project over global search      |
 
 ## How Roots Fit in the MCP Architecture
 

@@ -17,29 +17,29 @@ This document explains when and how the GraphQL integration is used, the pattern
 
 ## When REST vs GraphQL
 
-| Use REST when | Use GraphQL when |
-| ------------- | ---------------- |
-| client-go has a typed service wrapper | No REST endpoint exists (e.g. CI/CD Catalog, Branch Rules) |
-| The domain is well-served by REST | The REST endpoint is deprecated (e.g. vulnerability findings) |
-| Single-resource CRUD operations | Multiple related resources need to be fetched in one request |
-| The feature is available on all GitLab tiers | The feature is GraphQL-only (e.g. CI/CD Catalog) |
+| Use REST when                                | Use GraphQL when                                              |
+| -------------------------------------------- | ------------------------------------------------------------- |
+| client-go has a typed service wrapper        | No REST endpoint exists (e.g. CI/CD Catalog, Branch Rules)    |
+| The domain is well-served by REST            | The REST endpoint is deprecated (e.g. vulnerability findings) |
+| Single-resource CRUD operations              | Multiple related resources need to be fetched in one request  |
+| The feature is available on all GitLab tiers | The feature is GraphQL-only (e.g. CI/CD Catalog)              |
 
 ### Domains using GraphQL
 
-| Domain | Package | Reason |
-| ------ | ------- | ------ |
-| Epics (6 tools) | `internal/tools/epics/` | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items GraphQL API via client-go `WorkItems` service |
-| Epic Notes (5 tools) | `internal/tools/epicnotes/` | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items notes widgets via client-go `WorkItems` service |
-| Epic Discussions (7 tools) | `internal/tools/epicdiscussions/` | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items discussions widgets via client-go `WorkItems` service |
-| Epic Issues (4 tools) | `internal/tools/epicissues/` | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items children/parent widgets via client-go `WorkItems` service |
-| Vulnerabilities | `internal/tools/vulnerabilities/` | GraphQL provides richer query/mutation capabilities than REST |
-| Security Attributes | `internal/tools/securityattributes/` | GraphQL-only namespace classification feature via client-go `SecurityAttributes` service |
-| Security Categories | `internal/tools/securitycategories/` | GraphQL-only namespace classification feature via client-go `SecurityCategories` service |
-| Security Findings | `internal/tools/securityfindings/` | REST endpoint deprecated; GraphQL `Pipeline.securityReportFindings` is the replacement |
-| CI/CD Catalog | `internal/tools/cicatalog/` | GraphQL-only feature — no REST API exists |
-| Branch Rules | `internal/tools/branchrules/` | GraphQL-only aggregated view of branch protections, approval rules, and status checks |
-| Custom Emoji | `internal/tools/customemoji/` | GraphQL-only — no REST API for custom emoji management |
-| Sampling Tools | `internal/tools/samplingtools/` | GraphQL aggregation replaces 3-6 sequential REST calls with a single request |
+| Domain                     | Package                              | Reason                                                                                                                                 |
+| -------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Epics (6 tools)            | `internal/tools/epics/`              | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items GraphQL API via client-go `WorkItems` service             |
+| Epic Notes (5 tools)       | `internal/tools/epicnotes/`          | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items notes widgets via client-go `WorkItems` service           |
+| Epic Discussions (7 tools) | `internal/tools/epicdiscussions/`    | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items discussions widgets via client-go `WorkItems` service     |
+| Epic Issues (4 tools)      | `internal/tools/epicissues/`         | REST API deprecated since GitLab 17.0 (removal 19.0); migrated to Work Items children/parent widgets via client-go `WorkItems` service |
+| Vulnerabilities            | `internal/tools/vulnerabilities/`    | GraphQL provides richer query/mutation capabilities than REST                                                                          |
+| Security Attributes        | `internal/tools/securityattributes/` | GraphQL-only namespace classification feature via client-go `SecurityAttributes` service                                               |
+| Security Categories        | `internal/tools/securitycategories/` | GraphQL-only namespace classification feature via client-go `SecurityCategories` service                                               |
+| Security Findings          | `internal/tools/securityfindings/`   | REST endpoint deprecated; GraphQL `Pipeline.securityReportFindings` is the replacement                                                 |
+| CI/CD Catalog              | `internal/tools/cicatalog/`          | GraphQL-only feature — no REST API exists                                                                                              |
+| Branch Rules               | `internal/tools/branchrules/`        | GraphQL-only aggregated view of branch protections, approval rules, and status checks                                                  |
+| Custom Emoji               | `internal/tools/customemoji/`        | GraphQL-only — no REST API for custom emoji management                                                                                 |
+| Sampling Tools             | `internal/tools/samplingtools/`      | GraphQL aggregation replaces 3-6 sequential REST calls with a single request                                                           |
 
 ## Architecture
 
@@ -210,12 +210,12 @@ typeName, id, err := toolutil.ParseGID("gid://gitlab/Vulnerability/42")
 
 GraphQL uses cursor-based pagination instead of REST's page/per_page model. The `toolutil.GraphQLPaginationInput` struct provides a consistent interface:
 
-| Parameter | Description |
-| --------- | ----------- |
-| `first` | Number of items to return (default 20, max 100) |
-| `after` | Forward pagination cursor |
-| `last` | Number of items from the end (backward pagination) |
-| `before` | Backward pagination cursor |
+| Parameter | Description                                        |
+| --------- | -------------------------------------------------- |
+| `first`   | Number of items to return (default 20, max 100)    |
+| `after`   | Forward pagination cursor                          |
+| `last`    | Number of items from the end (backward pagination) |
+| `before`  | Backward pagination cursor                         |
 
 The `Variables()` method converts these to a GraphQL variables map, and `PageInfoToOutput()` normalizes the camelCase API response to snake\_case output.
 
@@ -247,16 +247,16 @@ if len(resp.Data.VulnerabilityDismiss.Errors) > 0 {
 
 The `internal/toolutil/graphql.go` module provides shared GraphQL infrastructure:
 
-| Type/Function | Purpose |
-| ------------- | ------- |
-| `GraphQLPaginationInput` | Cursor-based pagination input struct with `Variables()` method |
-| `GraphQLPaginationOutput` | Normalized pagination output for tool responses |
-| `GraphQLRawPageInfo` | Raw camelCase page info from API responses |
-| `PageInfoToOutput()` | Converts raw page info to output format |
-| `FormatGraphQLPagination()` | Renders pagination as Markdown summary |
-| `FormatGID()` | Builds a GitLab GID string |
-| `ParseGID()` | Extracts type and ID from a GID string |
-| `MergeVariables()` | Merges multiple variable maps |
+| Type/Function               | Purpose                                                        |
+| --------------------------- | -------------------------------------------------------------- |
+| `GraphQLPaginationInput`    | Cursor-based pagination input struct with `Variables()` method |
+| `GraphQLPaginationOutput`   | Normalized pagination output for tool responses                |
+| `GraphQLRawPageInfo`        | Raw camelCase page info from API responses                     |
+| `PageInfoToOutput()`        | Converts raw page info to output format                        |
+| `FormatGraphQLPagination()` | Renders pagination as Markdown summary                         |
+| `FormatGID()`               | Builds a GitLab GID string                                     |
+| `ParseGID()`                | Extracts type and ID from a GID string                         |
+| `MergeVariables()`          | Merges multiple variable maps                                  |
 
 ## Testing GraphQL Tools
 

@@ -24,12 +24,12 @@ This domain is distinct from security findings and vulnerabilities: security att
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Create** | — | No | No | Creates one or more new attributes |
-| **Update** | — | No | Yes | Modifies metadata or project assignments |
-| **Delete** | — | Yes | Yes | Destroys an attribute; protected by confirmation |
-| **Bulk** | — | Yes | Yes | Applies, removes, or replaces assignments at scale; protected by confirmation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description                                                                   |
+| ---------- | :------: | :---------: | :--------: | ----------------------------------------------------------------------------- |
+| **Create** |    —     |     No      |     No     | Creates one or more new attributes                                            |
+| **Update** |    —     |     No      |    Yes     | Modifies metadata or project assignments                                      |
+| **Delete** |    —     |     Yes     |    Yes     | Destroys an attribute; protected by confirmation                              |
+| **Bulk**   |    —     |     Yes     |    Yes     | Applies, removes, or replaces assignments at scale; protected by confirmation |
 
 Tools marked **Delete** or **Bulk** require confirmation before execution.
 
@@ -44,11 +44,11 @@ Create one or more security attributes under an existing security category.
 | Annotation | **Create** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `namespace_id` | int | Yes | Numeric namespace ID |
-| `category_id` | int | Yes | Numeric security category ID |
-| `attributes` | array | Yes | Attributes to create; each item has `name`, `description`, and `color` |
+| Parameter      | Type  | Required | Description                                                            |
+| -------------- | ----- | :------: | ---------------------------------------------------------------------- |
+| `namespace_id` | int   |   Yes    | Numeric namespace ID                                                   |
+| `category_id`  | int   |   Yes    | Numeric security category ID                                           |
+| `attributes`   | array |   Yes    | Attributes to create; each item has `name`, `description`, and `color` |
 
 ### `gitlab_update_security_attribute`
 
@@ -57,12 +57,12 @@ Update a security attribute name, description, or color.
 | Annotation | **Update** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `attribute_id` | int | Yes | Numeric security attribute ID |
-| `name` | string | No | New attribute name |
-| `description` | string | No | New attribute description |
-| `color` | string | No | New color as a hex code, such as `#FF0000` |
+| Parameter      | Type   | Required | Description                                |
+| -------------- | ------ | :------: | ------------------------------------------ |
+| `attribute_id` | int    |   Yes    | Numeric security attribute ID              |
+| `name`         | string |    No    | New attribute name                         |
+| `description`  | string |    No    | New attribute description                  |
+| `color`        | string |    No    | New color as a hex code, such as `#FF0000` |
 
 At least one of `name`, `description`, or `color` must be provided.
 
@@ -73,9 +73,9 @@ Delete a custom security attribute.
 | Annotation | **Delete** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `attribute_id` | int | Yes | Numeric security attribute ID |
+| Parameter      | Type | Required | Description                   |
+| -------------- | ---- | :------: | ----------------------------- |
+| `attribute_id` | int  |   Yes    | Numeric security attribute ID |
 
 > **Destructive**: Protected by confirmation prompt.
 
@@ -86,11 +86,11 @@ Add or remove security attributes on a project.
 | Annotation | **Update** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | int | Yes | Numeric project ID |
-| `add_attribute_ids` | int[] | No | Security attribute IDs to add |
-| `remove_attribute_ids` | int[] | No | Security attribute IDs to remove |
+| Parameter              | Type  | Required | Description                      |
+| ---------------------- | ----- | :------: | -------------------------------- |
+| `project_id`           | int   |   Yes    | Numeric project ID               |
+| `add_attribute_ids`    | int[] |    No    | Security attribute IDs to add    |
+| `remove_attribute_ids` | int[] |    No    | Security attribute IDs to remove |
 
 At least one of `add_attribute_ids` or `remove_attribute_ids` must be provided.
 
@@ -101,12 +101,12 @@ Add, remove, or replace security attributes across multiple groups and projects.
 | Annotation | **Bulk** |
 | ---------- | -------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_ids` | int[] | No | Numeric group IDs to update |
-| `project_ids` | int[] | No | Numeric project IDs to update |
-| `attribute_ids` | int[] | Yes | Security attribute IDs to apply |
-| `mode` | string | Yes | Bulk mode: `ADD`, `REMOVE`, or `REPLACE` |
+| Parameter       | Type   | Required | Description                              |
+| --------------- | ------ | :------: | ---------------------------------------- |
+| `group_ids`     | int[]  |    No    | Numeric group IDs to update              |
+| `project_ids`   | int[]  |    No    | Numeric project IDs to update            |
+| `attribute_ids` | int[]  |   Yes    | Security attribute IDs to apply          |
+| `mode`          | string |   Yes    | Bulk mode: `ADD`, `REMOVE`, or `REPLACE` |
 
 At least one of `group_ids` or `project_ids` must be provided.
 

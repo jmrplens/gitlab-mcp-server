@@ -26,10 +26,10 @@ With `TOOL_SURFACE=meta`, all 8 individual tools below are consolidated into a s
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
-| **Update** | — | No | Yes | Modifies an existing resource |
+| Annotation | ReadOnly | Destructive | Idempotent | Description                   |
+| ---------- | :------: | :---------: | :--------: | ----------------------------- |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation      |
+| **Update** |    —     |     No      |    Yes     | Modifies an existing resource |
 
 ---
 
@@ -42,18 +42,18 @@ List project vulnerabilities with extensive filtering support. Returns a paginat
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_path` | string | Yes | Full path of the project (e.g. `my-group/my-project`) |
-| `severity` | string[] | No | Filter by severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `UNKNOWN` |
-| `state` | string[] | No | Filter by state: `DETECTED`, `CONFIRMED`, `DISMISSED`, `RESOLVED` |
-| `scanner` | string[] | No | Filter by scanner external IDs |
-| `report_type` | string[] | No | Filter by report type: `SAST`, `DAST`, `DEPENDENCY_SCANNING`, `CONTAINER_SCANNING`, `SECRET_DETECTION`, `COVERAGE_FUZZING`, `API_FUZZING`, `CLUSTER_IMAGE_SCANNING` |
-| `has_issues` | bool | No | Filter by whether a linked issue exists |
-| `has_resolution` | bool | No | Filter by whether a resolution exists |
-| `sort` | string | No | Sort order: `severity_desc`, `severity_asc`, `detected_desc`, `detected_asc` |
-| `first` | int | No | Number of items per page (default: 20) |
-| `after` | string | No | Cursor for forward pagination |
+| Parameter        | Type     | Required | Description                                                                                                                                                         |
+| ---------------- | -------- | :------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_path`   | string   |   Yes    | Full path of the project (e.g. `my-group/my-project`)                                                                                                               |
+| `severity`       | string[] |    No    | Filter by severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, `INFO`, `UNKNOWN`                                                                                          |
+| `state`          | string[] |    No    | Filter by state: `DETECTED`, `CONFIRMED`, `DISMISSED`, `RESOLVED`                                                                                                   |
+| `scanner`        | string[] |    No    | Filter by scanner external IDs                                                                                                                                      |
+| `report_type`    | string[] |    No    | Filter by report type: `SAST`, `DAST`, `DEPENDENCY_SCANNING`, `CONTAINER_SCANNING`, `SECRET_DETECTION`, `COVERAGE_FUZZING`, `API_FUZZING`, `CLUSTER_IMAGE_SCANNING` |
+| `has_issues`     | bool     |    No    | Filter by whether a linked issue exists                                                                                                                             |
+| `has_resolution` | bool     |    No    | Filter by whether a resolution exists                                                                                                                               |
+| `sort`           | string   |    No    | Sort order: `severity_desc`, `severity_asc`, `detected_desc`, `detected_asc`                                                                                        |
+| `first`          | int      |    No    | Number of items per page (default: 20)                                                                                                                              |
+| `after`          | string   |    No    | Cursor for forward pagination                                                                                                                                       |
 
 ### `gitlab_get_vulnerability`
 
@@ -62,9 +62,9 @@ Get full details of a single vulnerability by its GID. Returns complete vulnerab
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `id` | string | Yes | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`) |
+| Parameter | Type   | Required | Description                                              |
+| --------- | ------ | :------: | -------------------------------------------------------- |
+| `id`      | string |   Yes    | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`) |
 
 ---
 
@@ -91,11 +91,11 @@ Dismiss a vulnerability with an optional comment and reason. Valid dismissal rea
 | Annotation | **Update** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `id` | string | Yes | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`) |
-| `comment` | string | No | Reason for dismissal |
-| `dismissal_reason` | string | No | Structured reason: `ACCEPTABLE_RISK`, `FALSE_POSITIVE`, `MITIGATING_CONTROL`, `USED_IN_TESTS`, `NOT_APPLICABLE` |
+| Parameter          | Type   | Required | Description                                                                                                     |
+| ------------------ | ------ | :------: | --------------------------------------------------------------------------------------------------------------- |
+| `id`               | string |   Yes    | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`)                                                        |
+| `comment`          | string |    No    | Reason for dismissal                                                                                            |
+| `dismissal_reason` | string |    No    | Structured reason: `ACCEPTABLE_RISK`, `FALSE_POSITIVE`, `MITIGATING_CONTROL`, `USED_IN_TESTS`, `NOT_APPLICABLE` |
 
 ### `gitlab_confirm_vulnerability`
 
@@ -104,9 +104,9 @@ Confirm a detected vulnerability. Changes state from `DETECTED` to `CONFIRMED`.
 | Annotation | **Update** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `id` | string | Yes | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`) |
+| Parameter | Type   | Required | Description                                              |
+| --------- | ------ | :------: | -------------------------------------------------------- |
+| `id`      | string |   Yes    | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`) |
 
 ### `gitlab_resolve_vulnerability`
 
@@ -115,9 +115,9 @@ Resolve a vulnerability. Changes state to `RESOLVED`.
 | Annotation | **Update** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `id` | string | Yes | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`) |
+| Parameter | Type   | Required | Description                                              |
+| --------- | ------ | :------: | -------------------------------------------------------- |
+| `id`      | string |   Yes    | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`) |
 
 ### `gitlab_revert_vulnerability`
 
@@ -126,9 +126,9 @@ Revert a vulnerability back to `DETECTED` state from any other state.
 | Annotation | **Update** |
 | ---------- | ---------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `id` | string | Yes | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`) |
+| Parameter | Type   | Required | Description                                              |
+| --------- | ------ | :------: | -------------------------------------------------------- |
+| `id`      | string |   Yes    | Vulnerability GID (e.g. `gid://gitlab/Vulnerability/42`) |
 
 ---
 
@@ -141,9 +141,9 @@ Get vulnerability severity counts for a project. Returns counts per severity lev
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_path` | string | Yes | Full path of the project (e.g. `my-group/my-project`) |
+| Parameter      | Type   | Required | Description                                           |
+| -------------- | ------ | :------: | ----------------------------------------------------- |
+| `project_path` | string |   Yes    | Full path of the project (e.g. `my-group/my-project`) |
 
 ### `gitlab_pipeline_security_summary`
 
@@ -152,10 +152,10 @@ Get the security report summary for a specific pipeline. Returns scanner-level b
 | Annotation | **Read** |
 | ---------- | -------- |
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_path` | string | Yes | Full path of the project (e.g. `my-group/my-project`) |
-| `pipeline_iid` | string | Yes | Pipeline IID (internal ID within the project) |
+| Parameter      | Type   | Required | Description                                           |
+| -------------- | ------ | :------: | ----------------------------------------------------- |
+| `project_path` | string |   Yes    | Full path of the project (e.g. `my-group/my-project`) |
+| `pipeline_iid` | string |   Yes    | Pipeline IID (internal ID within the project)         |
 
 ---
 

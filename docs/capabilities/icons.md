@@ -26,22 +26,22 @@ interface Icon {
 
 ### Client MIME Type Support
 
-| MIME Type | Support Level | Notes |
-| --------- | ------------- | ----- |
-| `image/png` | **MUST** support | Universal compatibility |
-| `image/jpeg` | **MUST** support | Universal compatibility |
+| MIME Type       | Support Level      | Notes                          |
+| --------------- | ------------------ | ------------------------------ |
+| `image/png`     | **MUST** support   | Universal compatibility        |
+| `image/jpeg`    | **MUST** support   | Universal compatibility        |
 | `image/svg+xml` | **SHOULD** support | Scalable, used by this project |
-| `image/webp` | **SHOULD** support | Modern efficient format |
+| `image/webp`    | **SHOULD** support | Modern efficient format        |
 
 gitlab-mcp-server uses `image/svg+xml` exclusively. Clients that only implement the MUST-level MIME types (PNG/JPEG) will not render these icons.
 
 ### Client Compatibility
 
-| MCP Client | SVG Icons | Notes |
-| ---------- | --------- | ----- |
-| VS Code (GitHub Copilot) | Yes | Full SVG rendering support |
-| Claude Desktop | No | Does not render tool icons |
-| Continue.dev | Partial | Depends on version |
+| MCP Client               | SVG Icons | Notes                      |
+| ------------------------ | --------- | -------------------------- |
+| VS Code (GitHub Copilot) | Yes       | Full SVG rendering support |
+| Claude Desktop           | No        | Does not render tool icons |
+| Continue.dev             | Partial   | Depends on version         |
 
 ## Implementation Details
 
@@ -102,118 +102,118 @@ All 50 icons with their SVG preview, exported variable name, and the tool packag
 
 ### Source Control
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/branch.svg" width="32" height="32" alt="Branch"> | `IconBranch` | branches, repository, repositorysubmodules |
-| <img src="icons/commit.svg" width="32" height="32" alt="Commit"> | `IconCommit` | commits, mrcontextcommits |
-| <img src="icons/tag.svg" width="32" height="32" alt="Tag"> | `IconTag` | tags |
-| <img src="icons/release.svg" width="32" height="32" alt="Release"> | `IconRelease` | releases |
-| <img src="icons/file.svg" width="32" height="32" alt="File"> | `IconFile` | files, markdown, pages |
+| Preview                                                            | Name          | Packages                                   |
+| ------------------------------------------------------------------ | ------------- | ------------------------------------------ |
+| <img src="icons/branch.svg" width="32" height="32" alt="Branch">   | `IconBranch`  | branches, repository, repositorysubmodules |
+| <img src="icons/commit.svg" width="32" height="32" alt="Commit">   | `IconCommit`  | commits, mrcontextcommits                  |
+| <img src="icons/tag.svg" width="32" height="32" alt="Tag">         | `IconTag`     | tags                                       |
+| <img src="icons/release.svg" width="32" height="32" alt="Release"> | `IconRelease` | releases                                   |
+| <img src="icons/file.svg" width="32" height="32" alt="File">       | `IconFile`    | files, markdown, pages                     |
 
 ### Issues and Planning
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/issue.svg" width="32" height="32" alt="Issue"> | `IconIssue` | issues, workitems |
-| <img src="icons/label.svg" width="32" height="32" alt="Label"> | `IconLabel` | awardemoji, badges, grouplabels, labels, topics |
-| <img src="icons/milestone.svg" width="32" height="32" alt="Milestone"> | `IconMilestone` | groupmilestones, milestones |
-| <img src="icons/board.svg" width="32" height="32" alt="Board"> | `IconBoard` | boards, groupboards |
-| <img src="icons/link.svg" width="32" height="32" alt="Link"> | `IconLink` | issuelinks, releaselinks |
-| <img src="icons/epic.svg" width="32" height="32" alt="Epic"> | `IconEpic` | epicissues, epicnotes, epics |
-| <img src="icons/todo.svg" width="32" height="32" alt="Todo"> | `IconTodo` | todos |
+| Preview                                                                | Name            | Packages                                        |
+| ---------------------------------------------------------------------- | --------------- | ----------------------------------------------- |
+| <img src="icons/issue.svg" width="32" height="32" alt="Issue">         | `IconIssue`     | issues, workitems                               |
+| <img src="icons/label.svg" width="32" height="32" alt="Label">         | `IconLabel`     | awardemoji, badges, grouplabels, labels, topics |
+| <img src="icons/milestone.svg" width="32" height="32" alt="Milestone"> | `IconMilestone` | groupmilestones, milestones                     |
+| <img src="icons/board.svg" width="32" height="32" alt="Board">         | `IconBoard`     | boards, groupboards                             |
+| <img src="icons/link.svg" width="32" height="32" alt="Link">           | `IconLink`      | issuelinks, releaselinks                        |
+| <img src="icons/epic.svg" width="32" height="32" alt="Epic">           | `IconEpic`      | epicissues, epicnotes, epics                    |
+| <img src="icons/todo.svg" width="32" height="32" alt="Todo">           | `IconTodo`      | todos                                           |
 
 ### Merge Requests
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/mr.svg" width="32" height="32" alt="MR"> | `IconMR` | deploymentmergerequests, mergerequests, mrapprovals, mrchanges |
+| Preview                                                                  | Name             | Packages                                                                                                                   |
+| ------------------------------------------------------------------------ | ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| <img src="icons/mr.svg" width="32" height="32" alt="MR">                 | `IconMR`         | deploymentmergerequests, mergerequests, mrapprovals, mrchanges                                                             |
 | <img src="icons/discussion.svg" width="32" height="32" alt="Discussion"> | `IconDiscussion` | commitdiscussions, epicdiscussions, issuediscussions, issuenotes, mrdiscussions, mrdraftnotes, mrnotes, snippetdiscussions |
 
 ### CI/CD
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/pipeline.svg" width="32" height="32" alt="Pipeline"> | `IconPipeline` | cilint, pipelines, pipelinetriggers |
-| <img src="icons/job.svg" width="32" height="32" alt="Job"> | `IconJob` | jobs, jobtokenscope |
-| <img src="icons/runner.svg" width="32" height="32" alt="Runner"> | `IconRunner` | clusteragents, runners, runnercontrollers, runnercontrollerscopes |
-| <img src="icons/schedule.svg" width="32" height="32" alt="Schedule"> | `IconSchedule` | freezeperiods, pipelineschedules |
-| <img src="icons/variable.svg" width="32" height="32" alt="Variable"> | `IconVariable` | civariables, groupvariables, instancevariables |
+| Preview                                                              | Name           | Packages                                                          |
+| -------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------- |
+| <img src="icons/pipeline.svg" width="32" height="32" alt="Pipeline"> | `IconPipeline` | cilint, pipelines, pipelinetriggers                               |
+| <img src="icons/job.svg" width="32" height="32" alt="Job">           | `IconJob`      | jobs, jobtokenscope                                               |
+| <img src="icons/runner.svg" width="32" height="32" alt="Runner">     | `IconRunner`   | clusteragents, runners, runnercontrollers, runnercontrollerscopes |
+| <img src="icons/schedule.svg" width="32" height="32" alt="Schedule"> | `IconSchedule` | freezeperiods, pipelineschedules                                  |
+| <img src="icons/variable.svg" width="32" height="32" alt="Variable"> | `IconVariable` | civariables, groupvariables, instancevariables                    |
 
 ### Environments and Deployments
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/environment.svg" width="32" height="32" alt="Environment"> | `IconEnvironment` | environments |
-| <img src="icons/deploy.svg" width="32" height="32" alt="Deploy"> | `IconDeploy` | deployments |
-| <img src="icons/infra.svg" width="32" height="32" alt="Infra"> | `IconInfra` | terraformstates |
+| Preview                                                                    | Name              | Packages        |
+| -------------------------------------------------------------------------- | ----------------- | --------------- |
+| <img src="icons/environment.svg" width="32" height="32" alt="Environment"> | `IconEnvironment` | environments    |
+| <img src="icons/deploy.svg" width="32" height="32" alt="Deploy">           | `IconDeploy`      | deployments     |
+| <img src="icons/infra.svg" width="32" height="32" alt="Infra">             | `IconInfra`       | terraformstates |
 
 ### Projects and Groups
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/project.svg" width="32" height="32" alt="Project"> | `IconProject` | projectdiscovery, projects |
-| <img src="icons/group.svg" width="32" height="32" alt="Group"> | `IconGroup` | groups, namespaces |
-| <img src="icons/queue.svg" width="32" height="32" alt="Queue"> | `IconQueue` | resourcegroups |
-| <img src="icons/user.svg" width="32" height="32" alt="User"> | `IconUser` | accessrequests, avatar, ffuserlists, groupmembers, invites, members, users |
-| <img src="icons/bot.svg" width="32" height="32" alt="Bot"> | `IconBot` | groupserviceaccounts |
+| Preview                                                            | Name          | Packages                                                                   |
+| ------------------------------------------------------------------ | ------------- | -------------------------------------------------------------------------- |
+| <img src="icons/project.svg" width="32" height="32" alt="Project"> | `IconProject` | projectdiscovery, projects                                                 |
+| <img src="icons/group.svg" width="32" height="32" alt="Group">     | `IconGroup`   | groups, namespaces                                                         |
+| <img src="icons/queue.svg" width="32" height="32" alt="Queue">     | `IconQueue`   | resourcegroups                                                             |
+| <img src="icons/user.svg" width="32" height="32" alt="User">       | `IconUser`    | accessrequests, avatar, ffuserlists, groupmembers, invites, members, users |
+| <img src="icons/bot.svg" width="32" height="32" alt="Bot">         | `IconBot`     | groupserviceaccounts                                                       |
 
 ### Packages and Registry
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/package.svg" width="32" height="32" alt="Package"> | `IconPackage` | dependencyproxy, packages |
-| <img src="icons/container.svg" width="32" height="32" alt="Container"> | `IconContainer` | containerregistry |
+| Preview                                                                | Name            | Packages                  |
+| ---------------------------------------------------------------------- | --------------- | ------------------------- |
+| <img src="icons/package.svg" width="32" height="32" alt="Package">     | `IconPackage`   | dependencyproxy, packages |
+| <img src="icons/container.svg" width="32" height="32" alt="Container"> | `IconContainer` | containerregistry         |
 
 ### Search and Analytics
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/search.svg" width="32" height="32" alt="Search"> | `IconSearch` | search |
+| Preview                                                                | Name            | Packages                                                                    |
+| ---------------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------- |
+| <img src="icons/search.svg" width="32" height="32" alt="Search">       | `IconSearch`    | search                                                                      |
 | <img src="icons/analytics.svg" width="32" height="32" alt="Analytics"> | `IconAnalytics` | appstatistics, issuestatistics, projectstatistics, samplingtools, usagedata |
 
 ### Security and Access
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/security.svg" width="32" height="32" alt="Security"> | `IconSecurity` | externalstatuschecks, groupscim, license, memberroles, securefiles, securityattributes, securitycategories, securitysettings |
-| <img src="icons/shield.svg" width="32" height="32" alt="Shield"> | `IconShield` | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages |
-| <img src="icons/vulnerability.svg" width="32" height="32" alt="Vulnerability"> | `IconVulnerability` | securityfindings, vulnerabilities |
-| <img src="icons/compliance.svg" width="32" height="32" alt="Compliance"> | `IconCompliance` | attestations, compliancepolicy |
-| <img src="icons/token.svg" width="32" height="32" alt="Token"> | `IconToken` | accesstokens, deploytokens, jobtokenscope, runnercontrollertokens |
-| <img src="icons/key.svg" width="32" height="32" alt="Key"> | `IconKey` | deploykeys, keys |
+| Preview                                                                        | Name                | Packages                                                                                                                     |
+| ------------------------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| <img src="icons/security.svg" width="32" height="32" alt="Security">           | `IconSecurity`      | externalstatuschecks, groupscim, license, memberroles, securefiles, securityattributes, securitycategories, securitysettings |
+| <img src="icons/shield.svg" width="32" height="32" alt="Shield">               | `IconShield`        | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages                                                 |
+| <img src="icons/vulnerability.svg" width="32" height="32" alt="Vulnerability"> | `IconVulnerability` | securityfindings, vulnerabilities                                                                                            |
+| <img src="icons/compliance.svg" width="32" height="32" alt="Compliance">       | `IconCompliance`    | attestations, compliancepolicy                                                                                               |
+| <img src="icons/token.svg" width="32" height="32" alt="Token">                 | `IconToken`         | accesstokens, deploytokens, jobtokenscope, runnercontrollertokens                                                            |
+| <img src="icons/key.svg" width="32" height="32" alt="Key">                     | `IconKey`           | deploykeys, keys                                                                                                             |
 
 ### Documentation and Content
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/wiki.svg" width="32" height="32" alt="Wiki"> | `IconWiki` | wikis |
+| Preview                                                            | Name          | Packages |
+| ------------------------------------------------------------------ | ------------- | -------- |
+| <img src="icons/wiki.svg" width="32" height="32" alt="Wiki">       | `IconWiki`    | wikis    |
 | <img src="icons/snippet.svg" width="32" height="32" alt="Snippet"> | `IconSnippet` | snippets |
 
 ### Configuration and Administration
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/config.svg" width="32" height="32" alt="Config"> | `IconConfig` | appearance, applications, customattributes, dbmigrations, elicitationtools, featureflags, features, planlimits, settings, sidekiq |
-| <img src="icons/server.svg" width="32" height="32" alt="Server"> | `IconServer` | metadata, serverupdate |
-| <img src="icons/template.svg" width="32" height="32" alt="Template"> | `IconTemplate` | ciyamltemplates, dockerfiletemplates, gitignoretemplates, licensetemplates, projecttemplates |
+| Preview                                                              | Name           | Packages                                                                                                                          |
+| -------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="icons/config.svg" width="32" height="32" alt="Config">     | `IconConfig`   | appearance, applications, customattributes, dbmigrations, elicitationtools, featureflags, features, planlimits, settings, sidekiq |
+| <img src="icons/server.svg" width="32" height="32" alt="Server">     | `IconServer`   | metadata, serverupdate                                                                                                            |
+| <img src="icons/template.svg" width="32" height="32" alt="Template"> | `IconTemplate` | ciyamltemplates, dockerfiletemplates, gitignoretemplates, licensetemplates, projecttemplates                                      |
 
 ### Notifications and Events
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
+| Preview                                                          | Name         | Packages                         |
+| ---------------------------------------------------------------- | ------------ | -------------------------------- |
 | <img src="icons/notify.svg" width="32" height="32" alt="Notify"> | `IconNotify` | broadcastmessages, notifications |
-| <img src="icons/event.svg" width="32" height="32" alt="Event"> | `IconEvent` | events, resourceevents |
-| <img src="icons/audit.svg" width="32" height="32" alt="Audit"> | `IconAudit` | auditevents |
-| <img src="icons/alert.svg" width="32" height="32" alt="Alert"> | `IconAlert` | alertmanagement, errortracking |
+| <img src="icons/event.svg" width="32" height="32" alt="Event">   | `IconEvent`  | events, resourceevents           |
+| <img src="icons/audit.svg" width="32" height="32" alt="Audit">   | `IconAudit`  | auditevents                      |
+| <img src="icons/alert.svg" width="32" height="32" alt="Alert">   | `IconAlert`  | alertmanagement, errortracking   |
 
 ### Integrations and Operations
 
-| Preview | Name | Packages |
-| ------- | ---- | -------- |
-| <img src="icons/integration.svg" width="32" height="32" alt="Integration"> | `IconIntegration` | integrations, systemhooks |
-| <img src="icons/health.svg" width="32" height="32" alt="Health"> | `IconHealth` | health |
-| <img src="icons/upload.svg" width="32" height="32" alt="Upload"> | `IconUpload` | groupmarkdownuploads, uploads |
-| <img src="icons/import.svg" width="32" height="32" alt="Import"> | `IconImport` | bulkimports, groupimportexport, grouprelationsexport, importservice, projectimportexport |
+| Preview                                                                    | Name              | Packages                                                                                 |
+| -------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------- |
+| <img src="icons/integration.svg" width="32" height="32" alt="Integration"> | `IconIntegration` | integrations, systemhooks                                                                |
+| <img src="icons/health.svg" width="32" height="32" alt="Health">           | `IconHealth`      | health                                                                                   |
+| <img src="icons/upload.svg" width="32" height="32" alt="Upload">           | `IconUpload`      | groupmarkdownuploads, uploads                                                            |
+| <img src="icons/import.svg" width="32" height="32" alt="Import">           | `IconImport`      | bulkimports, groupimportexport, grouprelationsexport, importservice, projectimportexport |
 
 <!-- markdownlint-enable MD033 -->
 
@@ -221,70 +221,70 @@ All 50 icons with their SVG preview, exported variable name, and the tool packag
 
 Alphabetical listing of all 50 icons and every sub-package that uses each one.
 
-| Icon | Variable | Packages |
-| ---- | -------- | -------- |
-| Alert | `IconAlert` | alertmanagement, errortracking |
-| Analytics | `IconAnalytics` | appstatistics, issuestatistics, projectstatistics, samplingtools, usagedata |
-| Audit | `IconAudit` | auditevents |
-| Board | `IconBoard` | boards, groupboards |
-| Bot | `IconBot` | groupserviceaccounts |
-| Branch | `IconBranch` | branches, repository, repositorysubmodules |
-| Commit | `IconCommit` | commits, mrcontextcommits |
-| Compliance | `IconCompliance` | attestations, compliancepolicy |
-| Config | `IconConfig` | appearance, applications, customattributes, dbmigrations, elicitationtools, featureflags, features, planlimits, settings, sidekiq |
-| Container | `IconContainer` | containerregistry |
-| Deploy | `IconDeploy` | deployments |
-| Discussion | `IconDiscussion` | commitdiscussions, epicdiscussions, issuediscussions, issuenotes, mrdiscussions, mrdraftnotes, mrnotes, snippetdiscussions |
-| Epic | `IconEpic` | epicissues, epicnotes, epics |
-| Environment | `IconEnvironment` | environments |
-| Event | `IconEvent` | events, resourceevents |
-| File | `IconFile` | files, markdown, pages |
-| Group | `IconGroup` | groups, namespaces |
-| Health | `IconHealth` | health |
-| Import | `IconImport` | bulkimports, groupimportexport, grouprelationsexport, importservice, projectimportexport |
-| Infra | `IconInfra` | terraformstates |
-| Integration | `IconIntegration` | integrations, systemhooks |
-| Issue | `IconIssue` | issues, workitems |
-| Job | `IconJob` | jobs, jobtokenscope |
-| Key | `IconKey` | deploykeys, keys |
-| Label | `IconLabel` | awardemoji, badges, grouplabels, labels, topics |
-| Link | `IconLink` | issuelinks, releaselinks |
-| MR | `IconMR` | deploymentmergerequests, mergerequests, mrapprovals, mrchanges |
-| Milestone | `IconMilestone` | groupmilestones, milestones |
-| Notify | `IconNotify` | broadcastmessages, notifications |
-| Package | `IconPackage` | dependencyproxy, packages |
-| Pipeline | `IconPipeline` | cilint, pipelines, pipelinetriggers |
-| Project | `IconProject` | projectdiscovery, projects |
-| Queue | `IconQueue` | resourcegroups |
-| Release | `IconRelease` | releases |
-| Runner | `IconRunner` | clusteragents, runners, runnercontrollers, runnercontrollerscopes |
-| Schedule | `IconSchedule` | freezeperiods, pipelineschedules |
-| Search | `IconSearch` | search |
-| Security | `IconSecurity` | externalstatuschecks, groupscim, license, memberroles, securefiles, securityattributes, securitycategories, securitysettings |
-| Server | `IconServer` | metadata, serverupdate |
-| Shield | `IconShield` | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages |
-| Snippet | `IconSnippet` | snippets |
-| Tag | `IconTag` | tags |
-| Template | `IconTemplate` | ciyamltemplates, dockerfiletemplates, gitignoretemplates, licensetemplates, projecttemplates |
-| Todo | `IconTodo` | todos |
-| Token | `IconToken` | accesstokens, deploytokens, jobtokenscope, runnercontrollertokens |
-| Upload | `IconUpload` | groupmarkdownuploads, uploads |
-| User | `IconUser` | accessrequests, avatar, ffuserlists, groupmembers, invites, members, users |
-| Variable | `IconVariable` | civariables, groupvariables, instancevariables |
-| Vulnerability | `IconVulnerability` | securityfindings, vulnerabilities |
-| Wiki | `IconWiki` | wikis |
+| Icon          | Variable            | Packages                                                                                                                          |
+| ------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Alert         | `IconAlert`         | alertmanagement, errortracking                                                                                                    |
+| Analytics     | `IconAnalytics`     | appstatistics, issuestatistics, projectstatistics, samplingtools, usagedata                                                       |
+| Audit         | `IconAudit`         | auditevents                                                                                                                       |
+| Board         | `IconBoard`         | boards, groupboards                                                                                                               |
+| Bot           | `IconBot`           | groupserviceaccounts                                                                                                              |
+| Branch        | `IconBranch`        | branches, repository, repositorysubmodules                                                                                        |
+| Commit        | `IconCommit`        | commits, mrcontextcommits                                                                                                         |
+| Compliance    | `IconCompliance`    | attestations, compliancepolicy                                                                                                    |
+| Config        | `IconConfig`        | appearance, applications, customattributes, dbmigrations, elicitationtools, featureflags, features, planlimits, settings, sidekiq |
+| Container     | `IconContainer`     | containerregistry                                                                                                                 |
+| Deploy        | `IconDeploy`        | deployments                                                                                                                       |
+| Discussion    | `IconDiscussion`    | commitdiscussions, epicdiscussions, issuediscussions, issuenotes, mrdiscussions, mrdraftnotes, mrnotes, snippetdiscussions        |
+| Epic          | `IconEpic`          | epicissues, epicnotes, epics                                                                                                      |
+| Environment   | `IconEnvironment`   | environments                                                                                                                      |
+| Event         | `IconEvent`         | events, resourceevents                                                                                                            |
+| File          | `IconFile`          | files, markdown, pages                                                                                                            |
+| Group         | `IconGroup`         | groups, namespaces                                                                                                                |
+| Health        | `IconHealth`        | health                                                                                                                            |
+| Import        | `IconImport`        | bulkimports, groupimportexport, grouprelationsexport, importservice, projectimportexport                                          |
+| Infra         | `IconInfra`         | terraformstates                                                                                                                   |
+| Integration   | `IconIntegration`   | integrations, systemhooks                                                                                                         |
+| Issue         | `IconIssue`         | issues, workitems                                                                                                                 |
+| Job           | `IconJob`           | jobs, jobtokenscope                                                                                                               |
+| Key           | `IconKey`           | deploykeys, keys                                                                                                                  |
+| Label         | `IconLabel`         | awardemoji, badges, grouplabels, labels, topics                                                                                   |
+| Link          | `IconLink`          | issuelinks, releaselinks                                                                                                          |
+| MR            | `IconMR`            | deploymentmergerequests, mergerequests, mrapprovals, mrchanges                                                                    |
+| Milestone     | `IconMilestone`     | groupmilestones, milestones                                                                                                       |
+| Notify        | `IconNotify`        | broadcastmessages, notifications                                                                                                  |
+| Package       | `IconPackage`       | dependencyproxy, packages                                                                                                         |
+| Pipeline      | `IconPipeline`      | cilint, pipelines, pipelinetriggers                                                                                               |
+| Project       | `IconProject`       | projectdiscovery, projects                                                                                                        |
+| Queue         | `IconQueue`         | resourcegroups                                                                                                                    |
+| Release       | `IconRelease`       | releases                                                                                                                          |
+| Runner        | `IconRunner`        | clusteragents, runners, runnercontrollers, runnercontrollerscopes                                                                 |
+| Schedule      | `IconSchedule`      | freezeperiods, pipelineschedules                                                                                                  |
+| Search        | `IconSearch`        | search                                                                                                                            |
+| Security      | `IconSecurity`      | externalstatuschecks, groupscim, license, memberroles, securefiles, securityattributes, securitycategories, securitysettings      |
+| Server        | `IconServer`        | metadata, serverupdate                                                                                                            |
+| Shield        | `IconShield`        | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages                                                      |
+| Snippet       | `IconSnippet`       | snippets                                                                                                                          |
+| Tag           | `IconTag`           | tags                                                                                                                              |
+| Template      | `IconTemplate`      | ciyamltemplates, dockerfiletemplates, gitignoretemplates, licensetemplates, projecttemplates                                      |
+| Todo          | `IconTodo`          | todos                                                                                                                             |
+| Token         | `IconToken`         | accesstokens, deploytokens, jobtokenscope, runnercontrollertokens                                                                 |
+| Upload        | `IconUpload`        | groupmarkdownuploads, uploads                                                                                                     |
+| User          | `IconUser`          | accessrequests, avatar, ffuserlists, groupmembers, invites, members, users                                                        |
+| Variable      | `IconVariable`      | civariables, groupvariables, instancevariables                                                                                    |
+| Vulnerability | `IconVulnerability` | securityfindings, vulnerabilities                                                                                                 |
+| Wiki          | `IconWiki`          | wikis                                                                                                                             |
 
 ## Testing
 
 Icon integrity is validated by 5 unit tests in [`internal/toolutil/icons_test.go`](../../internal/toolutil/icons_test.go):
 
-| Test | Validates |
-| ---- | --------- |
-| `TestAllIcons_ValidDataURI` | Every icon Source starts with `data:image/svg+xml;base64,` |
-| `TestAllIcons_CorrectMIMEType` | MIME type is `image/svg+xml` |
-| `TestAllIcons_NonEmpty` | Source is not empty |
-| `TestAllIcons_DecodesToSVG` | Base64 payload decodes to a `<svg>...</svg>` document |
-| `TestAllIcons_SizesAny` | `Sizes` field equals `["any"]` (scalable) |
+| Test                           | Validates                                                  |
+| ------------------------------ | ---------------------------------------------------------- |
+| `TestAllIcons_ValidDataURI`    | Every icon Source starts with `data:image/svg+xml;base64,` |
+| `TestAllIcons_CorrectMIMEType` | MIME type is `image/svg+xml`                               |
+| `TestAllIcons_NonEmpty`        | Source is not empty                                        |
+| `TestAllIcons_DecodesToSVG`    | Base64 payload decodes to a `<svg>...</svg>` document      |
+| `TestAllIcons_SizesAny`        | `Sizes` field equals `["any"]` (scalable)                  |
 
 ## Security Considerations
 

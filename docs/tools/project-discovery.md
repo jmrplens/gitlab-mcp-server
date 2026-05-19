@@ -20,9 +20,9 @@ The project discovery domain provides a utility tool that resolves git remote UR
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description              |
+| ---------- | :------: | :---------: | :--------: | ------------------------ |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation |
 
 ---
 
@@ -43,9 +43,9 @@ Supports both HTTPS and SSH remote URL formats:
 
 **Parameters:**
 
-| Name | Type | Required | Description |
-| --- | --- | :---: | --- |
-| `remote_url` | string | Yes | Git remote URL from `.git/config` (e.g., `https://gitlab.example.com/group/project.git` or `git@gitlab.example.com:group/project.git`) |
+| Name         | Type   | Required | Description                                                                                                                            |
+| ------------ | ------ | :------: | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `remote_url` | string |   Yes    | Git remote URL from `.git/config` (e.g., `https://gitlab.example.com/group/project.git` or `git@gitlab.example.com:group/project.git`) |
 
 **Returns**: Project ID, name, path, `path_with_namespace`, web URL, default branch, description, visibility, clone URLs, and the extracted path.
 
@@ -62,10 +62,10 @@ Supports both HTTPS and SSH remote URL formats:
 
 ## Related Resources
 
-| Resource | URI | Description |
-| --- | --- | --- |
+| Resource          | URI                        | Description                                                                         |
+| ----------------- | -------------------------- | ----------------------------------------------------------------------------------- |
 | `workspace_roots` | `gitlab://workspace/roots` | List workspace root directories from the MCP client to find `.git/config` locations |
-| `current_user` | `gitlab://user/current` | Confirm authentication before project discovery |
+| `current_user`    | `gitlab://user/current`    | Confirm authentication before project discovery                                     |
 
 ## Project Discovery Workflow
 

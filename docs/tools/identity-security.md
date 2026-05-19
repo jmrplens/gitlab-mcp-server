@@ -25,12 +25,12 @@ With `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled, the 20 indi
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
-| **Create** | — | No | — | Creates a new resource |
-| **Update** | — | No | Yes | Modifies an existing resource |
-| **Delete** | — | Yes | Yes | Destroys a resource; protected by confirmation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description                                    |
+| ---------- | :------: | :---------: | :--------: | ---------------------------------------------- |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation                       |
+| **Create** |    —     |     No      |     —      | Creates a new resource                         |
+| **Update** |    —     |     No      |    Yes     | Modifies an existing resource                  |
+| **Delete** |    —     |     Yes     |    Yes     | Destroys a resource; protected by confirmation |
 
 Tools marked **Delete** require user confirmation before execution.
 
@@ -42,9 +42,9 @@ Tools marked **Delete** require user confirmation before execution.
 
 List all SCIM identities for a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
 
 **Annotation**: Read
 
@@ -52,10 +52,10 @@ List all SCIM identities for a group.
 
 Get a single SCIM identity by external UID.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `uid` | string | Yes | SCIM external UID |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
+| `uid`      | string     |   Yes    | SCIM external UID            |
 
 **Annotation**: Read
 
@@ -63,11 +63,11 @@ Get a single SCIM identity by external UID.
 
 Update a SCIM identity's external UID.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `uid` | string | Yes | Current SCIM external UID |
-| `extern_uid` | string | Yes | New external UID value |
+| Parameter    | Type       | Required | Description                  |
+| ------------ | ---------- | :------: | ---------------------------- |
+| `group_id`   | string/int |   Yes    | Group ID or URL-encoded path |
+| `uid`        | string     |   Yes    | Current SCIM external UID    |
+| `extern_uid` | string     |   Yes    | New external UID value       |
 
 **Annotation**: Update
 
@@ -75,10 +75,10 @@ Update a SCIM identity's external UID.
 
 Delete a SCIM identity from a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `uid` | string | Yes | SCIM external UID |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
+| `uid`      | string     |   Yes    | SCIM external UID            |
 
 **Annotation**: Delete
 
@@ -90,9 +90,9 @@ Delete a SCIM identity from a group.
 
 List SSH certificates for a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
 
 **Annotation**: Read
 
@@ -100,11 +100,11 @@ List SSH certificates for a group.
 
 Create an SSH certificate for a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `key` | string | Yes | SSH public key |
-| `title` | string | Yes | Certificate title |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
+| `key`      | string     |   Yes    | SSH public key               |
+| `title`    | string     |   Yes    | Certificate title            |
 
 **Annotation**: Create
 
@@ -112,10 +112,10 @@ Create an SSH certificate for a group.
 
 Delete an SSH certificate from a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `certificate_id` | int | Yes | SSH certificate ID |
+| Parameter        | Type       | Required | Description                  |
+| ---------------- | ---------- | :------: | ---------------------------- |
+| `group_id`       | string/int |   Yes    | Group ID or URL-encoded path |
+| `certificate_id` | int        |   Yes    | SSH certificate ID           |
 
 **Annotation**: Delete
 
@@ -127,9 +127,9 @@ Delete an SSH certificate from a group.
 
 Get all security settings for a project (secret push protection, pre-receive, etc.).
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string/int | Yes | Project ID or URL-encoded path |
+| Parameter    | Type       | Required | Description                    |
+| ------------ | ---------- | :------: | ------------------------------ |
+| `project_id` | string/int |   Yes    | Project ID or URL-encoded path |
 
 **Annotation**: Read
 
@@ -137,10 +137,10 @@ Get all security settings for a project (secret push protection, pre-receive, et
 
 Enable or disable secret push protection for a project.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `project_id` | string/int | Yes | Project ID or URL-encoded path |
-| `secret_push_protection_enabled` | bool | Yes | Whether to enable secret push protection |
+| Parameter                        | Type       | Required | Description                              |
+| -------------------------------- | ---------- | :------: | ---------------------------------------- |
+| `project_id`                     | string/int |   Yes    | Project ID or URL-encoded path           |
+| `secret_push_protection_enabled` | bool       |   Yes    | Whether to enable secret push protection |
 
 **Annotation**: Update
 
@@ -148,11 +148,11 @@ Enable or disable secret push protection for a project.
 
 Enable or disable secret push protection for a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `secret_push_protection_enabled` | bool | Yes | Whether to enable secret push protection |
-| `projects_to_exclude` | []int | No | Project IDs to exclude from the setting |
+| Parameter                        | Type       | Required | Description                              |
+| -------------------------------- | ---------- | :------: | ---------------------------------------- |
+| `group_id`                       | string/int |   Yes    | Group ID or URL-encoded path             |
+| `secret_push_protection_enabled` | bool       |   Yes    | Whether to enable secret push protection |
+| `projects_to_exclude`            | []int      |    No    | Project IDs to exclude from the setting  |
 
 **Annotation**: Update
 
@@ -172,12 +172,12 @@ No parameters required.
 
 Create a custom member role at instance level.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `name` | string | Yes | Role name |
-| `base_access_level` | int | Yes | Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner) |
-| `description` | string | No | Role description |
-| `permissions` | object | No | Permission overrides (20 boolean fields) |
+| Parameter           | Type   | Required | Description                                                                      |
+| ------------------- | ------ | :------: | -------------------------------------------------------------------------------- |
+| `name`              | string |   Yes    | Role name                                                                        |
+| `base_access_level` | int    |   Yes    | Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner) |
+| `description`       | string |    No    | Role description                                                                 |
+| `permissions`       | object |    No    | Permission overrides (20 boolean fields)                                         |
 
 **Annotation**: Create
 
@@ -185,9 +185,9 @@ Create a custom member role at instance level.
 
 Delete a custom member role at instance level.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `member_role_id` | int | Yes | Member role ID |
+| Parameter        | Type | Required | Description    |
+| ---------------- | ---- | :------: | -------------- |
+| `member_role_id` | int  |   Yes    | Member role ID |
 
 **Annotation**: Delete
 
@@ -195,9 +195,9 @@ Delete a custom member role at instance level.
 
 List custom member roles for a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
 
 **Annotation**: Read
 
@@ -205,13 +205,13 @@ List custom member roles for a group.
 
 Create a custom member role for a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `name` | string | Yes | Role name |
-| `base_access_level` | int | Yes | Base access level |
-| `description` | string | No | Role description |
-| `permissions` | object | No | Permission overrides |
+| Parameter           | Type       | Required | Description                  |
+| ------------------- | ---------- | :------: | ---------------------------- |
+| `group_id`          | string/int |   Yes    | Group ID or URL-encoded path |
+| `name`              | string     |   Yes    | Role name                    |
+| `base_access_level` | int        |   Yes    | Base access level            |
+| `description`       | string     |    No    | Role description             |
+| `permissions`       | object     |    No    | Permission overrides         |
 
 **Annotation**: Create
 
@@ -219,10 +219,10 @@ Create a custom member role for a group.
 
 Delete a custom member role from a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `member_role_id` | int | Yes | Member role ID |
+| Parameter        | Type       | Required | Description                  |
+| ---------------- | ---------- | :------: | ---------------------------- |
+| `group_id`       | string/int |   Yes    | Group ID or URL-encoded path |
+| `member_role_id` | int        |   Yes    | Member role ID               |
 
 **Annotation**: Delete
 
@@ -234,14 +234,14 @@ Delete a custom member role from a group.
 
 List personal access tokens managed by a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `search` | string | No | Filter tokens by name |
-| `state` | string | No | Filter by state (`active`/`inactive`) |
-| `revoked` | bool | No | Filter by revoked status |
-| `page` | int | No | Page number |
-| `per_page` | int | No | Items per page |
+| Parameter  | Type       | Required | Description                           |
+| ---------- | ---------- | :------: | ------------------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path          |
+| `search`   | string     |    No    | Filter tokens by name                 |
+| `state`    | string     |    No    | Filter by state (`active`/`inactive`) |
+| `revoked`  | bool       |    No    | Filter by revoked status              |
+| `page`     | int        |    No    | Page number                           |
+| `per_page` | int        |    No    | Items per page                        |
 
 **Annotation**: Read
 
@@ -249,11 +249,11 @@ List personal access tokens managed by a group.
 
 List SSH keys managed by a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `page` | int | No | Page number |
-| `per_page` | int | No | Items per page |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
+| `page`     | int        |    No    | Page number                  |
+| `per_page` | int        |    No    | Items per page               |
 
 **Annotation**: Read
 
@@ -261,10 +261,10 @@ List SSH keys managed by a group.
 
 Revoke a personal access token managed by a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `token_id` | int | Yes | Token ID to revoke |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
+| `token_id` | int        |   Yes    | Token ID to revoke           |
 
 **Annotation**: Delete
 
@@ -272,10 +272,10 @@ Revoke a personal access token managed by a group.
 
 Delete an SSH key managed by a group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `key_id` | int | Yes | SSH key ID to delete |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
+| `key_id`   | int        |   Yes    | SSH key ID to delete         |
 
 **Annotation**: Delete
 
@@ -287,9 +287,9 @@ Delete an SSH key managed by a group.
 
 List all LDAP group links for a GitLab group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
 
 **Annotation**: Read
 
@@ -297,14 +297,14 @@ List all LDAP group links for a GitLab group.
 
 Add an LDAP group link to a GitLab group (by CN or filter).
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `cn` | string | No | LDAP Common Name (CN) |
-| `filter` | string | No | LDAP filter |
-| `group_access` | int | Yes | Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner) |
-| `provider` | string | Yes | LDAP provider name |
-| `member_role_id` | int | No | Custom member role ID |
+| Parameter        | Type       | Required | Description                                                                 |
+| ---------------- | ---------- | :------: | --------------------------------------------------------------------------- |
+| `group_id`       | string/int |   Yes    | Group ID or URL-encoded path                                                |
+| `cn`             | string     |    No    | LDAP Common Name (CN)                                                       |
+| `filter`         | string     |    No    | LDAP filter                                                                 |
+| `group_access`   | int        |   Yes    | Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner) |
+| `provider`       | string     |   Yes    | LDAP provider name                                                          |
+| `member_role_id` | int        |    No    | Custom member role ID                                                       |
 
 **Annotation**: Create
 
@@ -312,12 +312,12 @@ Add an LDAP group link to a GitLab group (by CN or filter).
 
 Delete a group LDAP link by CN or filter.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `cn` | string | No | LDAP Common Name to delete |
-| `filter` | string | No | LDAP filter to delete |
-| `provider` | string | No | LDAP provider name |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
+| `cn`       | string     |    No    | LDAP Common Name to delete   |
+| `filter`   | string     |    No    | LDAP filter to delete        |
+| `provider` | string     |    No    | LDAP provider name           |
 
 **Annotation**: Delete
 
@@ -325,11 +325,11 @@ Delete a group LDAP link by CN or filter.
 
 Delete a group LDAP link for a specific provider.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `provider` | string | Yes | LDAP provider name |
-| `cn` | string | Yes | LDAP Common Name |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
+| `provider` | string     |   Yes    | LDAP provider name           |
+| `cn`       | string     |   Yes    | LDAP Common Name             |
 
 **Annotation**: Delete
 
@@ -341,9 +341,9 @@ Delete a group LDAP link for a specific provider.
 
 List all SAML group links for a GitLab group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
+| Parameter  | Type       | Required | Description                  |
+| ---------- | ---------- | :------: | ---------------------------- |
+| `group_id` | string/int |   Yes    | Group ID or URL-encoded path |
 
 **Annotation**: Read
 
@@ -351,10 +351,10 @@ List all SAML group links for a GitLab group.
 
 Get a single SAML group link by name.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `saml_group_name` | string | Yes | Name of the SAML group |
+| Parameter         | Type       | Required | Description                  |
+| ----------------- | ---------- | :------: | ---------------------------- |
+| `group_id`        | string/int |   Yes    | Group ID or URL-encoded path |
+| `saml_group_name` | string     |   Yes    | Name of the SAML group       |
 
 **Annotation**: Read
 
@@ -362,13 +362,13 @@ Get a single SAML group link by name.
 
 Add a SAML group link to a GitLab group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `saml_group_name` | string | Yes | Name of the SAML group |
-| `access_level` | int | Yes | Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner) |
-| `member_role_id` | int | No | Custom member role ID |
-| `provider` | string | No | SAML provider name |
+| Parameter         | Type       | Required | Description                                                                 |
+| ----------------- | ---------- | :------: | --------------------------------------------------------------------------- |
+| `group_id`        | string/int |   Yes    | Group ID or URL-encoded path                                                |
+| `saml_group_name` | string     |   Yes    | Name of the SAML group                                                      |
+| `access_level`    | int        |   Yes    | Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner) |
+| `member_role_id`  | int        |    No    | Custom member role ID                                                       |
+| `provider`        | string     |    No    | SAML provider name                                                          |
 
 **Annotation**: Create
 
@@ -376,10 +376,10 @@ Add a SAML group link to a GitLab group.
 
 Delete a SAML group link from a GitLab group.
 
-| Parameter | Type | Required | Description |
-| --------- | ---- | :------: | ----------- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `saml_group_name` | string | Yes | Name of the SAML group to delete |
+| Parameter         | Type       | Required | Description                      |
+| ----------------- | ---------- | :------: | -------------------------------- |
+| `group_id`        | string/int |   Yes    | Group ID or URL-encoded path     |
+| `saml_group_name` | string     |   Yes    | Name of the SAML group to delete |
 
 **Annotation**: Delete
 

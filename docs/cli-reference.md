@@ -22,47 +22,47 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 
 ### General
 
-| Flag | Type | Default | Description |
-| --- | --- | --- | --- |
-| `-h` | bool | `false` | Show full help with flags, environment variables, and JSON examples |
-| `-version` | bool | `false` | Print version and commit hash, then exit |
-| `-shutdown` | bool | `false` | Terminate all running instances and exit (used by external updaters) |
-| `-setup` | bool | `false` | Run the interactive Setup Wizard |
-| `-setup-mode` | string | `auto` | Setup UI mode: `auto`, `web`, `tui`, `cli` |
+| Flag          | Type   | Default | Description                                                          |
+| ------------- | ------ | ------- | -------------------------------------------------------------------- |
+| `-h`          | bool   | `false` | Show full help with flags, environment variables, and JSON examples  |
+| `-version`    | bool   | `false` | Print version and commit hash, then exit                             |
+| `-shutdown`   | bool   | `false` | Terminate all running instances and exit (used by external updaters) |
+| `-setup`      | bool   | `false` | Run the interactive Setup Wizard                                     |
+| `-setup-mode` | string | `auto`  | Setup UI mode: `auto`, `web`, `tui`, `cli`                           |
 
 ### HTTP Transport Mode
 
-| Flag | Type | Default | Description |
-| --- | --- | --- | --- |
-| `-http` | bool | `false` | Enable HTTP transport mode (default is stdio) |
-| `-http-addr` | string | `:8080` | HTTP listen address (e.g. `localhost:8080`, `:9090`) |
-| `-gitlab-url` | string | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request |
-| `-skip-tls-verify` | bool | `false` | Skip TLS certificate verification for self-signed certs |
-| `-tool-surface` | string | `dynamic` | Canonical tool catalog selector: `meta`, `individual`, or `dynamic` |
-| `-meta-tools` | bool | `true` | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false` |
-| `-capability-surface` | string | `full` | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps `gitlab://workspace/roots`, disables optional resources, workflow guides, and prompts, and keeps meta-schema resources only for `--tool-surface=meta` |
-| `-meta-param-schema` | string | `opaque` | Meta-tool input-schema strategy: `opaque` (default), `compact`, or `full`. Applies to meta-tool schemas only. See [env-reference.md](env-reference.md) |
-| `-enterprise` | bool | `false` | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
-| `-read-only` | bool | `false` | Read-only mode: disables all mutating tools. Only tools with `ReadOnlyHint=true` remain available |
-| `-safe-mode` | bool | `false` | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. If `--read-only` is also set, it takes precedence |
-| `-embedded-resources` | bool | `true` | Embed canonical `gitlab://` MCP resource URIs as `EmbeddedResource` content blocks in `gitlab_*_get` tool results. Set `false` to disable for clients that don't tolerate duplicate content blocks |
-| `-max-http-clients` | int | `100` | Maximum concurrent client sessions (upper bound: 10,000) |
-| `-session-timeout` | duration | `30m` | Idle MCP session timeout (upper bound: 24h) |
-| `-revalidate-interval` | duration | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
-| `-auth-mode` | string | `legacy` | Authentication mode: `legacy` (PRIVATE-TOKEN header passthrough) or `oauth` (RFC 9728 Bearer token verification via GitLab API). See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) |
-| `-oauth-cache-ttl` | duration | `15m` | TTL for verified OAuth token identity cache. Range: 1m–2h. Only applies when `--auth-mode=oauth` |
-| `-trusted-proxy-header` | string | _(empty)_ | HTTP header containing the real client IP when behind a reverse proxy (e.g. `Fly-Client-IP`, `X-Forwarded-For`, `X-Real-IP`). Required for accurate rate limiting behind proxies |
-| `-rate-limit-rps` | float | `0` | Per-server `tools/call` rate limit in requests/second. `0` disables. See [Security — Rate Limiting Model](security.md#rate-limiting-model) |
-| `-rate-limit-burst` | int | `40` | Token-bucket burst size when `--rate-limit-rps > 0`. Must be ≥ 1 |
+| Flag                    | Type     | Default      | Description                                                                                                                                                                                                                    |
+| ----------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-http`                 | bool     | `false`      | Enable HTTP transport mode (default is stdio)                                                                                                                                                                                  |
+| `-http-addr`            | string   | `:8080`      | HTTP listen address (e.g. `localhost:8080`, `:9090`)                                                                                                                                                                           |
+| `-gitlab-url`           | string   | _(optional)_ | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request                                                                                                                                     |
+| `-skip-tls-verify`      | bool     | `false`      | Skip TLS certificate verification for self-signed certs                                                                                                                                                                        |
+| `-tool-surface`         | string   | `dynamic`    | Canonical tool catalog selector: `meta`, `individual`, or `dynamic`                                                                                                                                                            |
+| `-meta-tools`           | bool     | `true`       | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                                                                 |
+| `-capability-surface`   | string   | `full`       | Resource and prompt catalog selector: `full` or `minimal`. Minimal keeps `gitlab://workspace/roots`, disables optional resources, workflow guides, and prompts, and keeps meta-schema resources only for `--tool-surface=meta` |
+| `-meta-param-schema`    | string   | `opaque`     | Meta-tool input-schema strategy: `opaque` (default), `compact`, or `full`. Applies to meta-tool schemas only. See [env-reference.md](env-reference.md)                                                                         |
+| `-enterprise`           | bool     | `false`      | Force the Enterprise/Premium tool catalog when explicitly set. When omitted, HTTP mode auto-detects CE/EE per token+URL pool entry when GitLab reports edition in `/api/v4/version`                                            |
+| `-read-only`            | bool     | `false`      | Read-only mode: disables all mutating tools. Only tools with `ReadOnlyHint=true` remain available                                                                                                                              |
+| `-safe-mode`            | bool     | `false`      | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. If `--read-only` is also set, it takes precedence                                                                                        |
+| `-embedded-resources`   | bool     | `true`       | Embed canonical `gitlab://` MCP resource URIs as `EmbeddedResource` content blocks in `gitlab_*_get` tool results. Set `false` to disable for clients that don't tolerate duplicate content blocks                             |
+| `-max-http-clients`     | int      | `100`        | Maximum concurrent client sessions (upper bound: 10,000)                                                                                                                                                                       |
+| `-session-timeout`      | duration | `30m`        | Idle MCP session timeout (upper bound: 24h)                                                                                                                                                                                    |
+| `-revalidate-interval`  | duration | `15m`        | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                                |
+| `-auth-mode`            | string   | `legacy`     | Authentication mode: `legacy` (PRIVATE-TOKEN header passthrough) or `oauth` (RFC 9728 Bearer token verification via GitLab API). See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode)                           |
+| `-oauth-cache-ttl`      | duration | `15m`        | TTL for verified OAuth token identity cache. Range: 1m–2h. Only applies when `--auth-mode=oauth`                                                                                                                               |
+| `-trusted-proxy-header` | string   | _(empty)_    | HTTP header containing the real client IP when behind a reverse proxy (e.g. `Fly-Client-IP`, `X-Forwarded-For`, `X-Real-IP`). Required for accurate rate limiting behind proxies                                               |
+| `-rate-limit-rps`       | float    | `0`          | Per-server `tools/call` rate limit in requests/second. `0` disables. See [Security — Rate Limiting Model](security.md#rate-limiting-model)                                                                                     |
+| `-rate-limit-burst`     | int      | `40`         | Token-bucket burst size when `--rate-limit-rps > 0`. Must be ≥ 1                                                                                                                                                               |
 
 ### Auto-Update
 
-| Flag | Type | Default | Description |
-| --- | --- | --- | --- |
-| `-auto-update` | string | `true` | Auto-update mode: `true` (auto-apply), `check` (log-only), `false` (disabled) |
-| `-auto-update-repo` | string | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for update release assets |
-| `-auto-update-interval` | duration | `1h` | How often to check for new releases (HTTP mode periodic checks) |
-| `-auto-update-timeout` | duration | `60s` | Timeout for pre-start update download (range: 5s–10m) |
+| Flag                    | Type     | Default                      | Description                                                                   |
+| ----------------------- | -------- | ---------------------------- | ----------------------------------------------------------------------------- |
+| `-auto-update`          | string   | `true`                       | Auto-update mode: `true` (auto-apply), `check` (log-only), `false` (disabled) |
+| `-auto-update-repo`     | string   | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for update release assets                 |
+| `-auto-update-interval` | duration | `1h`                         | How often to check for new releases (HTTP mode periodic checks)               |
+| `-auto-update-timeout`  | duration | `60s`                        | Timeout for pre-start update download (range: 5s–10m)                         |
 
 ---
 
@@ -181,10 +181,10 @@ See [Dynamic Tools](dynamic-tools.md) for how `dynamic` relates.
 
 ## Exit Codes
 
-| Code | Meaning |
-| --- | --- |
-| `0` | Normal exit (signal-based shutdown, `-version`, `-h`, or `--shutdown`) |
-| `1` | Configuration error, connection failure, runtime error, or `--shutdown` failure |
+| Code | Meaning                                                                         |
+| ---- | ------------------------------------------------------------------------------- |
+| `0`  | Normal exit (signal-based shutdown, `-version`, `-h`, or `--shutdown`)          |
+| `1`  | Configuration error, connection failure, runtime error, or `--shutdown` failure |
 
 ---
 

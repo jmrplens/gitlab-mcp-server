@@ -83,16 +83,16 @@ logger := logging.NewSessionLogger(session)
 
 ### Log Levels
 
-| Method | MCP Level | Use Case |
-| ------ | --------- | -------- |
-| `Debug(ctx, message, data)` | `debug` | Detailed diagnostic information |
-| `Info(ctx, message, data)` | `info` | Normal operational events |
-| `Notice(ctx, message, data)` | `notice` | Significant but expected events |
-| `Warning(ctx, message, data)` | `warning` | Potential issues that don't block operation |
-| `Error(ctx, message, data)` | `error` | Failed operations |
-| `Critical(ctx, message, data)` | `critical` | Critical conditions requiring attention |
-| `Alert(ctx, message, data)` | `alert` | Action must be taken immediately |
-| `Emergency(ctx, message, data)` | `emergency` | System is unusable |
+| Method                          | MCP Level   | Use Case                                    |
+| ------------------------------- | ----------- | ------------------------------------------- |
+| `Debug(ctx, message, data)`     | `debug`     | Detailed diagnostic information             |
+| `Info(ctx, message, data)`      | `info`      | Normal operational events                   |
+| `Notice(ctx, message, data)`    | `notice`    | Significant but expected events             |
+| `Warning(ctx, message, data)`   | `warning`   | Potential issues that don't block operation |
+| `Error(ctx, message, data)`     | `error`     | Failed operations                           |
+| `Critical(ctx, message, data)`  | `critical`  | Critical conditions requiring attention     |
+| `Alert(ctx, message, data)`     | `alert`     | Action must be taken immediately            |
+| `Emergency(ctx, message, data)` | `emergency` | System is unusable                          |
 
 The server exposes the full set of [RFC 5424 syslog severity levels](https://datatracker.ietf.org/doc/html/rfc5424) required by the MCP 2025-11-25 spec. Catalog-backed tool handlers currently emit at `info` (success) and `error` (failure); the higher-severity helpers are available for callers that need them and for clients to filter via `logging/setLevel`.
 
@@ -119,19 +119,19 @@ On error, the payload includes `"status": "error"` and the error message.
 
 The `data` parameter in log methods controls the structure of the payload sent to the client:
 
-| Input | Result |
-| ----- | ------ |
-| `nil` | The message string becomes the payload |
+| Input            | Result                                           |
+| ---------------- | ------------------------------------------------ |
+| `nil`            | The message string becomes the payload           |
 | `map[string]any` | Message is added as a `"message"` key in the map |
-| Anything else | Wrapped in `{"message": "...", "data": ...}` |
+| Anything else    | Wrapped in `{"message": "...", "data": ...}`     |
 
 ## Configuration
 
-| Setting | Value | Notes |
-| ------- | ----- | ----- |
-| Logger name | `gitlab-mcp-server` | Constant, identifies the server in client logs |
-| Transport | MCP protocol notification | `notifications/message` |
-| Error handling | Silent | Failed sends logged to stderr at debug level |
+| Setting        | Value                     | Notes                                          |
+| -------------- | ------------------------- | ---------------------------------------------- |
+| Logger name    | `gitlab-mcp-server`       | Constant, identifies the server in client logs |
+| Transport      | MCP protocol notification | `notifications/message`                        |
+| Error handling | Silent                    | Failed sends logged to stderr at debug level   |
 
 ## Security
 
@@ -159,14 +159,14 @@ This means **every single tool call** (up to 1022 individual tools on GitLab.com
 
 The server produces two log streams. Understanding when to use each helps diagnose issues effectively.
 
-| Aspect | MCP Protocol Logging | stderr (slog) |
-| ------ | -------------------- | ------------- |
-| **Transport** | MCP `notifications/message` | stderr stream |
-| **Audience** | AI client and user | Server operator |
-| **Availability** | Only when MCP session is active | Always available |
-| **Structured data** | JSON payload with tool/duration/status | Text log lines |
-| **Typical use** | Tool call results, warnings for the user | Startup, shutdown, config issues |
-| **Security concern** | Data sent to client — never include secrets | Local only — less sensitive |
+| Aspect               | MCP Protocol Logging                        | stderr (slog)                    |
+| -------------------- | ------------------------------------------- | -------------------------------- |
+| **Transport**        | MCP `notifications/message`                 | stderr stream                    |
+| **Audience**         | AI client and user                          | Server operator                  |
+| **Availability**     | Only when MCP session is active             | Always available                 |
+| **Structured data**  | JSON payload with tool/duration/status      | Text log lines                   |
+| **Typical use**      | Tool call results, warnings for the user    | Startup, shutdown, config issues |
+| **Security concern** | Data sent to client — never include secrets | Local only — less sensitive      |
 
 In practice, both are always active. MCP logging provides the AI with operational context, while stderr provides the operator with detailed diagnostics (including debug-level messages from failed MCP log sends).
 

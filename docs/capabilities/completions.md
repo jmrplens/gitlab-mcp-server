@@ -93,40 +93,40 @@ The server supports **17 argument types** across prompts and resources.
 
 These completers search across the entire GitLab instance. They do not require a project context.
 
-| Argument | Query Method | Example Input → Suggestions |
-| -------- | ------------ | --------------------------- |
+| Argument     | Query Method                    | Example Input → Suggestions                                   |
+| ------------ | ------------------------------- | ------------------------------------------------------------- |
 | `project_id` | Search projects by path or name | `mcp` → `group/gitlab-mcp-server`, `group/redmine-mcp-server` |
-| `group_id` | Search groups by name | `eng` → `engineering` |
-| `username` | Search GitLab users | `jreq` → `jmrplens` |
+| `group_id`   | Search groups by name           | `eng` → `engineering`                                         |
+| `username`   | Search GitLab users             | `jreq` → `jmrplens`                                           |
 
 ### Per-Project Completers
 
 These completers require a `project_id` context, which is extracted from previously resolved arguments in the same request.
 
-| Argument | Query Method | Example Input → Suggestions |
-| -------- | ------------ | --------------------------- |
-| `branch`, `source_branch`, `target_branch` | List branches matching prefix | `feat` → `feature/login`, `feature/signup` |
-| `from`, `to`, `ref` | Branches + tags matching prefix | `v1` → `v1.0.0`, `v1.1.7`, `v1-branch` |
-| `tag` | List tags matching prefix | `v1.1` → `v1.1.5`, `v1.1.6`, `v1.1.7` |
-| `merge_request_iid` | List open MRs, filter by IID prefix | `1` → `15`, `14` (titles fetched separately by client) |
-| `issue_iid` | List open issues, filter by IID | `3` → `33`, `34` |
-| `pipeline_id` | Recent pipelines, filter by ID prefix | `415` → `41557`, `41556` |
-| `sha` | Recent commits, filter by SHA prefix | `ddc` → `ddcc2f13` |
-| `label` | Project labels matching prefix | `type` → `type::bug`, `type::enhancement` |
-| `milestone_id` | Milestones matching title | `v1` → `1`, `2` (IDs; titles fetched separately) |
-| `job_id` | Jobs in a pipeline, filter by ID | `10` → `100`, `101` |
+| Argument                                   | Query Method                          | Example Input → Suggestions                            |
+| ------------------------------------------ | ------------------------------------- | ------------------------------------------------------ |
+| `branch`, `source_branch`, `target_branch` | List branches matching prefix         | `feat` → `feature/login`, `feature/signup`             |
+| `from`, `to`, `ref`                        | Branches + tags matching prefix       | `v1` → `v1.0.0`, `v1.1.7`, `v1-branch`                 |
+| `tag`                                      | List tags matching prefix             | `v1.1` → `v1.1.5`, `v1.1.6`, `v1.1.7`                  |
+| `merge_request_iid`                        | List open MRs, filter by IID prefix   | `1` → `15`, `14` (titles fetched separately by client) |
+| `issue_iid`                                | List open issues, filter by IID       | `3` → `33`, `34`                                       |
+| `pipeline_id`                              | Recent pipelines, filter by ID prefix | `415` → `41557`, `41556`                               |
+| `sha`                                      | Recent commits, filter by SHA prefix  | `ddc` → `ddcc2f13`                                     |
+| `label`                                    | Project labels matching prefix        | `type` → `type::bug`, `type::enhancement`              |
+| `milestone_id`                             | Milestones matching title             | `v1` → `1`, `2` (IDs; titles fetched separately)       |
+| `job_id`                                   | Jobs in a pipeline, filter by ID      | `10` → `100`, `101`                                    |
 
 The `job_id` completer is special — it requires both `project_id` and `pipeline_id` to be resolved first.
 
 ## Configuration
 
-| Setting | Value | Notes |
-| ------- | ----- | ----- |
-| Max results | 10 per request | `maxCompletionResults` constant; aligned with MCP spec recommendation |
-| Error handling | Graceful | Returns empty results on API errors |
-| Caching | None | Queries GitLab API in real-time for freshness |
-| `total` field | Populated from GitLab `X-Total` header | When the underlying GitLab call returns `X-Total`, the value is forwarded to `CompletionResultDetails.Total` so clients can display “N of M matches” |
-| `hasMore` field | Computed from total vs. returned | Set to `true` when more results exist beyond the returned slice |
+| Setting         | Value                                  | Notes                                                                                                                                                |
+| --------------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Max results     | 10 per request                         | `maxCompletionResults` constant; aligned with MCP spec recommendation                                                                                |
+| Error handling  | Graceful                               | Returns empty results on API errors                                                                                                                  |
+| Caching         | None                                   | Queries GitLab API in real-time for freshness                                                                                                        |
+| `total` field   | Populated from GitLab `X-Total` header | When the underlying GitLab call returns `X-Total`, the value is forwarded to `CompletionResultDetails.Total` so clients can display “N of M matches” |
+| `hasMore` field | Computed from total vs. returned       | Set to `true` when more results exist beyond the returned slice                                                                                      |
 
 ### Spec compliance
 
@@ -208,11 +208,11 @@ Values are the bare IIDs; the client fetches MR titles via `gitlab_mr_get` (or a
 
 Completions are not just a user-facing convenience — they also help the **AI itself** select correct parameters. When the AI is composing a tool call and needs to fill in a `branch` argument, completions provide the actual branch names from GitLab rather than forcing the AI to guess or hallucinate.
 
-| Without Completions | With Completions |
-| ------------------- | ---------------- |
+| Without Completions               | With Completions                              |
+| --------------------------------- | --------------------------------------------- |
 | AI guesses `main` (may not exist) | AI receives `develop` (actual default branch) |
-| AI uses wrong MR IID from memory | AI gets list of actual open MRs |
-| AI invents a tag name | AI selects from real tags |
+| AI uses wrong MR IID from memory  | AI gets list of actual open MRs               |
+| AI invents a tag name             | AI selects from real tags                     |
 
 This is especially valuable for **per-project context** — branch names, labels, and milestones vary across projects and cannot be guessed reliably.
 

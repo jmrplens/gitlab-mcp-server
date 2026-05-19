@@ -32,33 +32,33 @@ Fuzzy matching is conservative. It runs when lexical search returns no matches o
 
 ## Ranking Weights
 
-| Signal | Weight |
-| --- | ---: |
-| Exact canonical action ID | 120 |
-| Exact alias | 100 |
-| Exact tag | 90 |
-| Exact domain or action | 80 |
-| Split domain or action word | 65 |
-| Partial canonical ID | 55 |
-| Partial domain or action | 45 |
-| Required param match | 35 |
-| Schema enum match | 28 |
-| Typed field or raw flat-text match | 25 |
-| Optional param match | 22 |
-| Synonym or verb alternative flat-text match | 18 |
-| Schema description match | 12 |
+| Signal                                      | Weight |
+| ------------------------------------------- | -----: |
+| Exact canonical action ID                   |    120 |
+| Exact alias                                 |    100 |
+| Exact tag                                   |     90 |
+| Exact domain or action                      |     80 |
+| Split domain or action word                 |     65 |
+| Partial canonical ID                        |     55 |
+| Partial domain or action                    |     45 |
+| Required param match                        |     35 |
+| Schema enum match                           |     28 |
+| Typed field or raw flat-text match          |     25 |
+| Optional param match                        |     22 |
+| Synonym or verb alternative flat-text match |     18 |
+| Schema description match                    |     12 |
 
 ## Alias Metadata
 
 Dynamic aliases have explicit source metadata:
 
-| Source | Meaning |
-| --- | --- |
-| `catalog` | Native alias supplied by the canonical action catalog. |
-| `compatibility` | Backward-compatible alias maintained by the dynamic registry. |
+| Source              | Meaning                                                       |
+| ------------------- | ------------------------------------------------------------- |
+| `catalog`           | Native alias supplied by the canonical action catalog.        |
+| `compatibility`     | Backward-compatible alias maintained by the dynamic registry. |
 | `provider_observed` | Alias observed in model output and kept for repair tolerance. |
-| `standalone` | Alias associated with standalone dynamic-only actions. |
-| `deprecated` | Alias retained only for temporary migration compatibility. |
+| `standalone`        | Alias associated with standalone dynamic-only actions.        |
+| `deprecated`        | Alias retained only for temporary migration compatibility.    |
 
 Aliases also carry a `Searchable` flag. Searchable aliases influence ranking and appear in the field-aware search document. Non-searchable aliases still canonicalize in `describe` and `execute`, but they do not influence search ranking. This is useful for compatibility aliases such as `repository_tree` that are safe to accept as input but too broad for discovery ranking.
 

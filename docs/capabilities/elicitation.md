@@ -107,19 +107,19 @@ if !elicitClient.IsSupported() {
 
 ### Methods
 
-| Method | Signature | Purpose |
-| ------ | --------- | ------- |
-| `FromRequest(req)` | `(*mcp.CallToolRequest) Client` | Create client from tool request |
-| `IsSupported()` | `() bool` | Check if client has elicitation capability |
-| `IsURLSupported()` | `() bool` | Check if client supports URL mode elicitation |
-| `Confirm(ctx, message)` | `(...) (bool, error)` | Ask a yes/no question |
-| `PromptText(ctx, message, field)` | `(...) (string, error)` | Request free-form text input |
-| `PromptNumber(ctx, message, field, min, max)` | `(...) (float64, error)` | Request numeric input with bounds |
-| `SelectOne(ctx, message, options)` | `(...) (string, error)` | Single-choice selection from a list |
-| `SelectOneInt(ctx, message, options)` | `(...) (int, error)` | Single-choice selection from an integer list |
-| `SelectMulti(ctx, message, options, min, max)` | `(...) ([]string, error)` | Multi-choice selection with cardinality bounds |
-| `GatherData(ctx, message, schema)` | `(...) (map[string]any, error)` | Request structured data via JSON Schema |
-| `ElicitURL(ctx, gitlabBaseURL, targetURL, msg)` | `(...) error` | Open a GitLab URL in the client (URL mode) |
+| Method                                          | Signature                       | Purpose                                        |
+| ----------------------------------------------- | ------------------------------- | ---------------------------------------------- |
+| `FromRequest(req)`                              | `(*mcp.CallToolRequest) Client` | Create client from tool request                |
+| `IsSupported()`                                 | `() bool`                       | Check if client has elicitation capability     |
+| `IsURLSupported()`                              | `() bool`                       | Check if client supports URL mode elicitation  |
+| `Confirm(ctx, message)`                         | `(...) (bool, error)`           | Ask a yes/no question                          |
+| `PromptText(ctx, message, field)`               | `(...) (string, error)`         | Request free-form text input                   |
+| `PromptNumber(ctx, message, field, min, max)`   | `(...) (float64, error)`        | Request numeric input with bounds              |
+| `SelectOne(ctx, message, options)`              | `(...) (string, error)`         | Single-choice selection from a list            |
+| `SelectOneInt(ctx, message, options)`           | `(...) (int, error)`            | Single-choice selection from an integer list   |
+| `SelectMulti(ctx, message, options, min, max)`  | `(...) ([]string, error)`       | Multi-choice selection with cardinality bounds |
+| `GatherData(ctx, message, schema)`              | `(...) (map[string]any, error)` | Request structured data via JSON Schema        |
+| `ElicitURL(ctx, gitlabBaseURL, targetURL, msg)` | `(...) error`                   | Open a GitLab URL in the client (URL mode)     |
 
 **Method selection guide:**
 
@@ -134,12 +134,12 @@ if !elicitClient.IsSupported() {
 
 ### Error Types
 
-| Error | Meaning | Tool Handler Action |
-| ----- | ------- | ------------------- |
-| `ErrElicitationNotSupported` | Client does not support elicitation | Return informational message explaining the requirement |
-| `ErrURLElicitationNotSupported` | Client does not support URL mode elicitation | Fall back to text-based workflow |
-| `ErrDeclined` | User declined the elicitation request | Return cancellation message via `CancelledResult` |
-| `ErrCancelled` | User cancelled the elicitation flow | Return cancellation message via `CancelledResult` |
+| Error                           | Meaning                                      | Tool Handler Action                                     |
+| ------------------------------- | -------------------------------------------- | ------------------------------------------------------- |
+| `ErrElicitationNotSupported`    | Client does not support elicitation          | Return informational message explaining the requirement |
+| `ErrURLElicitationNotSupported` | Client does not support URL mode elicitation | Fall back to text-based workflow                        |
+| `ErrDeclined`                   | User declined the elicitation request        | Return cancellation message via `CancelledResult`       |
+| `ErrCancelled`                  | User cancelled the elicitation flow          | Return cancellation message via `CancelledResult`       |
 
 ### Cancellation Helper
 
@@ -177,46 +177,46 @@ Every elicitation tool includes a final `Confirm` step before executing any writ
 
 ### `gitlab_interactive_issue_create`
 
-| Step | Method | Field | Required |
-| ---: | ------ | ----- | :------: |
-| 1 | `PromptText` | Title | Yes |
-| 2 | `PromptText` | Description | No |
-| 3 | `PromptText` | Labels (comma-separated) | No |
-| 4 | `Confirm` | Confidential? | — |
-| 5 | `Confirm` | Create issue? | — |
+| Step | Method       | Field                    | Required |
+| ---: | ------------ | ------------------------ | :------: |
+|    1 | `PromptText` | Title                    |   Yes    |
+|    2 | `PromptText` | Description              |    No    |
+|    3 | `PromptText` | Labels (comma-separated) |    No    |
+|    4 | `Confirm`    | Confidential?            |    —     |
+|    5 | `Confirm`    | Create issue?            |    —     |
 
 ### `gitlab_interactive_mr_create`
 
-| Step | Method | Field | Required |
-| ---: | ------ | ----- | :------: |
-| 1 | `PromptText` | Source branch | Yes |
-| 2 | `PromptText` | Target branch | Yes |
-| 3 | `PromptText` | Title | Yes |
-| 4 | `PromptText` | Description | No |
-| 5 | `PromptText` | Labels (comma-separated) | No |
-| 6 | `Confirm` | Squash commits? | — |
-| 7 | `Confirm` | Remove source branch? | — |
-| 8 | `Confirm` | Create MR? | — |
+| Step | Method       | Field                    | Required |
+| ---: | ------------ | ------------------------ | :------: |
+|    1 | `PromptText` | Source branch            |   Yes    |
+|    2 | `PromptText` | Target branch            |   Yes    |
+|    3 | `PromptText` | Title                    |   Yes    |
+|    4 | `PromptText` | Description              |    No    |
+|    5 | `PromptText` | Labels (comma-separated) |    No    |
+|    6 | `Confirm`    | Squash commits?          |    —     |
+|    7 | `Confirm`    | Remove source branch?    |    —     |
+|    8 | `Confirm`    | Create MR?               |    —     |
 
 ### `gitlab_interactive_release_create`
 
-| Step | Method | Field | Required |
-| ---: | ------ | ----- | :------: |
-| 1 | `PromptText` | Tag name | Yes |
-| 2 | `PromptText` | Release name | Yes |
-| 3 | `PromptText` | Description | No |
-| 4 | `Confirm` | Create release? | — |
+| Step | Method       | Field           | Required |
+| ---: | ------------ | --------------- | :------: |
+|    1 | `PromptText` | Tag name        |   Yes    |
+|    2 | `PromptText` | Release name    |   Yes    |
+|    3 | `PromptText` | Description     |    No    |
+|    4 | `Confirm`    | Create release? |    —     |
 
 ### `gitlab_interactive_project_create`
 
-| Step | Method | Field | Required |
-| ---: | ------ | ----- | :------: |
-| 1 | `PromptText` | Project name | Yes |
-| 2 | `PromptText` | Description | No |
-| 3 | `SelectOne` | Visibility (public/private/internal) | Yes |
-| 4 | `Confirm` | Initialize with README? | — |
-| 5 | `PromptText` | Default branch name | No |
-| 6 | `Confirm` | Create project? | — |
+| Step | Method       | Field                                | Required |
+| ---: | ------------ | ------------------------------------ | :------: |
+|    1 | `PromptText` | Project name                         |   Yes    |
+|    2 | `PromptText` | Description                          |    No    |
+|    3 | `SelectOne`  | Visibility (public/private/internal) |   Yes    |
+|    4 | `Confirm`    | Initialize with README?              |    —     |
+|    5 | `PromptText` | Default branch name                  |    No    |
+|    6 | `Confirm`    | Create project?                      |    —     |
 
 ## Real-World Scenarios
 
@@ -246,14 +246,14 @@ The entire flow happens in structured form fields rather than back-and-forth cha
 
 ## Elicitation vs Parameterized Tools
 
-| Aspect | Parameterized Tool | Elicitation Tool |
-| ------ | ------------------ | ---------------- |
-| **Input method** | AI provides all parameters at once | Server prompts user step by step |
-| **User interaction** | Indirect (through AI chat) | Direct (structured forms) |
-| **Validation** | At tool execution time | At each step, before proceeding |
-| **Cancellation** | Not possible mid-execution | User can cancel at any step |
-| **Best for** | Automation, scripting, batch operations | Interactive creation, first-time users |
-| **AI context needed** | AI must know all parameters upfront | AI only needs to decide which tool to call |
+| Aspect                | Parameterized Tool                      | Elicitation Tool                           |
+| --------------------- | --------------------------------------- | ------------------------------------------ |
+| **Input method**      | AI provides all parameters at once      | Server prompts user step by step           |
+| **User interaction**  | Indirect (through AI chat)              | Direct (structured forms)                  |
+| **Validation**        | At tool execution time                  | At each step, before proceeding            |
+| **Cancellation**      | Not possible mid-execution              | User can cancel at any step                |
+| **Best for**          | Automation, scripting, batch operations | Interactive creation, first-time users     |
+| **AI context needed** | AI must know all parameters upfront     | AI only needs to decide which tool to call |
 
 Both types coexist in this server. The regular `gitlab_create_issue` tool accepts all parameters at once (better for automation), while `gitlab_interactive_issue_create` guides the user through each field (better for interactive use).
 

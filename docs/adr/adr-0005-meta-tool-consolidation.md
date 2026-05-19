@@ -25,11 +25,11 @@ superseded_by: "ADR-0014 for meta registration mechanics"
 
 ADR-0004 established modular domain sub-packages and each package could originally expose its own `RegisterMeta()` function. Over time the meta-tool count grew organically:
 
-| Metric                          | Count |
-| ------------------------------- | ----- |
-| Inline meta-tools (register_meta.go) | 19    |
-| Standalone RegisterMeta calls   | 49    |
-| **Total meta-tools exposed**    | **68** |
+| Metric                               | Count  |
+| ------------------------------------ | ------ |
+| Inline meta-tools (register_meta.go) | 19     |
+| Standalone RegisterMeta calls        | 49     |
+| **Total meta-tools exposed**         | **68** |
 
 ### Problems with 68 meta-tools
 
@@ -116,57 +116,57 @@ Enterprise/Premium deployments add 16 gated meta-tools. GitLab.com Enterprise/Pr
 
 ### Consolidation mapping (49 standalone → absorbed)
 
-| Standalone package        | Target meta-tool      | Action prefix |
-| ------------------------- | --------------------- | ------------- |
-| accessrequests            | gitlab_access         | access_request_* |
-| accesstokens              | gitlab_access         | token_* |
-| alertmanagement           | gitlab_admin → gitlab_security | alert_* |
-| avatar                    | gitlab_admin          | avatar_* |
-| awardemoji                | gitlab_notification   | emoji_* |
-| boards                    | gitlab_board          | board_* |
-| clusteragents             | gitlab_admin          | cluster_agent_* |
-| commitdiscussions         | gitlab_repository     | commit_discussion_* |
-| containerregistry         | gitlab_package        | registry_* |
-| dependencyproxy           | gitlab_admin          | dependency_proxy_* |
-| deploykeys                | gitlab_access         | deploy_key_* |
-| deploytokens              | gitlab_access         | deploy_token_* |
-| epicdiscussions           | gitlab_snippet        | epic_discussion_* |
-| errortracking             | gitlab_security       | error_tracking_* |
-| events                    | gitlab_notification   | event_* |
-| featureflags              | gitlab_security       | feature_flag_* |
-| ffuserlists               | gitlab_security       | user_list_* |
-| freezeperiods             | gitlab_environment    | freeze_period_* |
-| groupboards               | gitlab_board          | group_board_* |
-| groupimportexport         | gitlab_group          | import_*, export_* |
-| grouplabels               | gitlab_group          | label_* |
-| groupmarkdownuploads      | gitlab_group          | upload_* |
-| groupmembers              | gitlab_group          | member_* |
-| groupmilestones           | gitlab_group          | milestone_* |
-| grouprelationsexport      | gitlab_group          | relations_export_* |
-| groupvariables            | gitlab_ci             | group_variable_* |
-| importservice             | gitlab_admin          | import_* |
-| instancevariables         | gitlab_ci             | instance_variable_* |
-| invites                   | gitlab_access         | invite_* |
-| issuediscussions          | gitlab_issue          | discussion_* |
-| issuestatistics           | gitlab_issue          | statistics_* |
-| jobtokenscope             | gitlab_job            | token_scope_* |
-| keys                      | gitlab_user           | key_* |
-| namespaces                | gitlab_user           | namespace_* |
-| notifications             | gitlab_notification   | notification_* |
-| packages                  | gitlab_package        | package_* |
-| pages                     | gitlab_admin          | pages_* |
-| pipelinetriggers          | gitlab_pipeline       | trigger_* |
-| projectimportexport       | gitlab_project        | import_*, export_* |
-| projectstatistics         | gitlab_project        | statistics_* |
-| protectedenvs             | gitlab_environment    | protected_env_* |
-| resourceevents            | gitlab_notification   | resource_event_* |
-| resourcegroups            | gitlab_job            | resource_group_* |
-| runners                   | gitlab_runner         | runner_* |
-| search                    | gitlab_search         | (already standalone) |
-| securefiles               | gitlab_security       | secure_file_* |
-| snippetdiscussions        | gitlab_snippet        | snippet_discussion_* |
-| snippets                  | gitlab_snippet        | snippet_* |
-| terraformstates           | gitlab_admin          | terraform_* |
+| Standalone package   | Target meta-tool               | Action prefix        |
+| -------------------- | ------------------------------ | -------------------- |
+| accessrequests       | gitlab_access                  | access_request_*     |
+| accesstokens         | gitlab_access                  | token_*              |
+| alertmanagement      | gitlab_admin → gitlab_security | alert_*              |
+| avatar               | gitlab_admin                   | avatar_*             |
+| awardemoji           | gitlab_notification            | emoji_*              |
+| boards               | gitlab_board                   | board_*              |
+| clusteragents        | gitlab_admin                   | cluster_agent_*      |
+| commitdiscussions    | gitlab_repository              | commit_discussion_*  |
+| containerregistry    | gitlab_package                 | registry_*           |
+| dependencyproxy      | gitlab_admin                   | dependency_proxy_*   |
+| deploykeys           | gitlab_access                  | deploy_key_*         |
+| deploytokens         | gitlab_access                  | deploy_token_*       |
+| epicdiscussions      | gitlab_snippet                 | epic_discussion_*    |
+| errortracking        | gitlab_security                | error_tracking_*     |
+| events               | gitlab_notification            | event_*              |
+| featureflags         | gitlab_security                | feature_flag_*       |
+| ffuserlists          | gitlab_security                | user_list_*          |
+| freezeperiods        | gitlab_environment             | freeze_period_*      |
+| groupboards          | gitlab_board                   | group_board_*        |
+| groupimportexport    | gitlab_group                   | import_*, export_*   |
+| grouplabels          | gitlab_group                   | label_*              |
+| groupmarkdownuploads | gitlab_group                   | upload_*             |
+| groupmembers         | gitlab_group                   | member_*             |
+| groupmilestones      | gitlab_group                   | milestone_*          |
+| grouprelationsexport | gitlab_group                   | relations_export_*   |
+| groupvariables       | gitlab_ci                      | group_variable_*     |
+| importservice        | gitlab_admin                   | import_*             |
+| instancevariables    | gitlab_ci                      | instance_variable_*  |
+| invites              | gitlab_access                  | invite_*             |
+| issuediscussions     | gitlab_issue                   | discussion_*         |
+| issuestatistics      | gitlab_issue                   | statistics_*         |
+| jobtokenscope        | gitlab_job                     | token_scope_*        |
+| keys                 | gitlab_user                    | key_*                |
+| namespaces           | gitlab_user                    | namespace_*          |
+| notifications        | gitlab_notification            | notification_*       |
+| packages             | gitlab_package                 | package_*            |
+| pages                | gitlab_admin                   | pages_*              |
+| pipelinetriggers     | gitlab_pipeline                | trigger_*            |
+| projectimportexport  | gitlab_project                 | import_*, export_*   |
+| projectstatistics    | gitlab_project                 | statistics_*         |
+| protectedenvs        | gitlab_environment             | protected_env_*      |
+| resourceevents       | gitlab_notification            | resource_event_*     |
+| resourcegroups       | gitlab_job                     | resource_group_*     |
+| runners              | gitlab_runner                  | runner_*             |
+| search               | gitlab_search                  | (already standalone) |
+| securefiles          | gitlab_security                | secure_file_*        |
+| snippetdiscussions   | gitlab_snippet                 | snippet_discussion_* |
+| snippets             | gitlab_snippet                 | snippet_*            |
+| terraformstates      | gitlab_admin                   | terraform_*          |
 
 ### Implementation approach
 

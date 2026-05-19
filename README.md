@@ -244,11 +244,11 @@ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/get
 
 Three registration modes, controlled by `TOOL_SURFACE`:
 
-| Mode | Tools | Description |
-|------|-------|-------------|
-| **Dynamic Toolset** (default) | 2 visible tools | Low-token find/execute surface over the canonical action catalog. |
-| **Meta-Tools** | 33 base domain meta-tools plus the `gitlab_server` helper | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
-| **Individual** | 866 CE / 1017 self-managed enterprise / 1022 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool. |
+| Mode                          | Tools                                                              | Description                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dynamic Toolset** (default) | 2 visible tools                                                    | Low-token find/execute surface over the canonical action catalog.                                                                                                 |
+| **Meta-Tools**                | 33 base domain meta-tools plus the `gitlab_server` helper          | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
+| **Individual**                | 866 CE / 1017 self-managed enterprise / 1022 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool.                                                                                                                    |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Dynamic minimal keeps only `gitlab://workspace/roots`; meta minimal keeps workspace roots plus meta-schema resources so opaque meta-tools can still read exact action schemas. The default remains `full`.
 
@@ -258,17 +258,17 @@ The detailed meta-tool catalog now lives in [Meta-Tools Reference](docs/meta-too
 
 ## Compatibility
 
-| MCP Capability | Support |
-|----------------|---------|
-| **Tools** | Up to 1022 individual / 33–50 meta |
-| **Resources** | 46 (static + templates) |
-| **Prompts** | 37 templates |
-| **Completions** | Project, user, group, branch, tag |
-| **Logging** | Structured (text/JSON) + MCP notifications |
-| **Progress** | Tool execution progress reporting |
-| **Sampling** | 11 LLM-powered analysis actions via `gitlab_analyze` |
-| **Elicitation** | 4 interactive creation wizards |
-| **Roots** | Workspace root tracking |
+| MCP Capability  | Support                                              |
+| --------------- | ---------------------------------------------------- |
+| **Tools**       | Up to 1022 individual / 33–50 meta                   |
+| **Resources**   | 46 (static + templates)                              |
+| **Prompts**     | 37 templates                                         |
+| **Completions** | Project, user, group, branch, tag                    |
+| **Logging**     | Structured (text/JSON) + MCP notifications           |
+| **Progress**    | Tool execution progress reporting                    |
+| **Sampling**    | 11 LLM-powered analysis actions via `gitlab_analyze` |
+| **Elicitation** | 4 interactive creation wizards                       |
+| **Roots**       | Workspace root tracking                              |
 
 Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline, Roo Code.
 
@@ -313,31 +313,31 @@ The published model-evaluation set covers 536 task attempts and 1024 expected MC
 
 Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](https://jmrplens.github.io/gitlab-mcp-server/)**.
 
-| Document | Description |
-|----------|-------------|
-| [Getting Started](docs/getting-started.md) | Download, setup wizard, per-client configuration |
-| [IDE Configuration](docs/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples |
-| [Configuration](docs/configuration.md) | Environment variables, transport modes, TLS |
-| [HTTP Server Mode](docs/http-server-mode.md) | Shared HTTP deployments, authentication, server pool isolation |
-| [Tools Reference](docs/tools/README.md) | All individual tools with input/output schemas, including GitLab.com-only Orbit |
-| [Meta-Tools](docs/meta-tools.md) | 33/49/50 domain meta-tools with action dispatching |
-| [Dynamic Toolset](docs/dynamic-tools.md) | 2-tool low-token mode with canonical action catalog, safety model, and examples |
-| [Resources](docs/resources-reference.md) | All 46 resources with URI templates |
-| [Prompts](docs/prompts-reference.md) | All 37 prompts with arguments and output format |
-| [Auto-Update](docs/auto-update.md) | Self-update mechanism, modes, and release format |
-| [Testing](docs/testing/README.md) | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results |
-| [Security](docs/security.md) | Security model, token scopes, input validation |
-| [Architecture](docs/architecture.md) | System architecture, component design, data flow |
-| [Development Guide](docs/development/development.md) | Building, testing, CI/CD, contributing |
+| Document                                             | Description                                                                            |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| [Getting Started](docs/getting-started.md)           | Download, setup wizard, per-client configuration                                       |
+| [IDE Configuration](docs/ide-configuration.md)       | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                 |
+| [Configuration](docs/configuration.md)               | Environment variables, transport modes, TLS                                            |
+| [HTTP Server Mode](docs/http-server-mode.md)         | Shared HTTP deployments, authentication, server pool isolation                         |
+| [Tools Reference](docs/tools/README.md)              | All individual tools with input/output schemas, including GitLab.com-only Orbit        |
+| [Meta-Tools](docs/meta-tools.md)                     | 33/49/50 domain meta-tools with action dispatching                                     |
+| [Dynamic Toolset](docs/dynamic-tools.md)             | 2-tool low-token mode with canonical action catalog, safety model, and examples        |
+| [Resources](docs/resources-reference.md)             | All 46 resources with URI templates                                                    |
+| [Prompts](docs/prompts-reference.md)                 | All 37 prompts with arguments and output format                                        |
+| [Auto-Update](docs/auto-update.md)                   | Self-update mechanism, modes, and release format                                       |
+| [Testing](docs/testing/README.md)                    | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results |
+| [Security](docs/security.md)                         | Security model, token scopes, input validation                                         |
+| [Architecture](docs/architecture.md)                 | System architecture, component design, data flow                                       |
+| [Development Guide](docs/development/development.md) | Building, testing, CI/CD, contributing                                                 |
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Language | Go 1.26+ |
-| MCP SDK | `github.com/modelcontextprotocol/go-sdk` v1.6.0 |
+| Component     | Technology                                       |
+| ------------- | ------------------------------------------------ |
+| Language      | Go 1.26+                                         |
+| MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.0  |
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.27.0 |
-| Transport | stdio (default), HTTP (Streamable HTTP) |
+| Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Building from Source
 

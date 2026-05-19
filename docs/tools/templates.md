@@ -23,9 +23,9 @@ With `TOOL_SURFACE=meta`, all 10 template tools are consolidated into a single `
 
 ### Annotation Legend
 
-| Annotation | ReadOnly | Destructive | Idempotent | Description |
-| ---------- | :------: | :---------: | :--------: | ----------- |
-| **Read**   | Yes | No | Yes | Safe read-only operation |
+| Annotation | ReadOnly | Destructive | Idempotent | Description              |
+| ---------- | :------: | :---------: | :--------: | ------------------------ |
+| **Read**   |   Yes    |     No      |    Yes     | Safe read-only operation |
 
 ---
 

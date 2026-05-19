@@ -9,12 +9,12 @@ or direct group management.
 
 ### Tools
 
-| Tool | Description | Annotations |
-| --- | --- | --- |
-| `gitlab_list_enterprise_users` | List all enterprise users for a group | Read-only |
-| `gitlab_get_enterprise_user` | Get details of a specific enterprise user | Read-only |
-| `gitlab_disable_2fa_enterprise_user` | Disable two-factor authentication for a user | Update |
-| `gitlab_delete_enterprise_user` | Delete an enterprise user (soft or hard delete) | Destructive |
+| Tool                                 | Description                                     | Annotations |
+| ------------------------------------ | ----------------------------------------------- | ----------- |
+| `gitlab_list_enterprise_users`       | List all enterprise users for a group           | Read-only   |
+| `gitlab_get_enterprise_user`         | Get details of a specific enterprise user       | Read-only   |
+| `gitlab_disable_2fa_enterprise_user` | Disable two-factor authentication for a user    | Update      |
+| `gitlab_delete_enterprise_user`      | Delete an enterprise user (soft or hard delete) | Destructive |
 
 ### Meta-tool
 
@@ -70,26 +70,26 @@ Hard delete a user:
 
 #### List
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `username` | string | No | Filter by exact username |
-| `search` | string | No | Search by name, username, or email |
-| `active` | bool | No | Filter for active users |
-| `blocked` | bool | No | Filter for blocked users |
-| `created_after` | string | No | ISO 8601 date filter |
-| `created_before` | string | No | ISO 8601 date filter |
-| `two_factor` | string | No | Filter by 2FA: `enabled` or `disabled` |
-| `page` | int | No | Page number |
-| `per_page` | int | No | Items per page (max 100) |
+| Parameter        | Type       | Required | Description                            |
+| ---------------- | ---------- | -------- | -------------------------------------- |
+| `group_id`       | string/int | Yes      | Group ID or URL-encoded path           |
+| `username`       | string     | No       | Filter by exact username               |
+| `search`         | string     | No       | Search by name, username, or email     |
+| `active`         | bool       | No       | Filter for active users                |
+| `blocked`        | bool       | No       | Filter for blocked users               |
+| `created_after`  | string     | No       | ISO 8601 date filter                   |
+| `created_before` | string     | No       | ISO 8601 date filter                   |
+| `two_factor`     | string     | No       | Filter by 2FA: `enabled` or `disabled` |
+| `page`           | int        | No       | Page number                            |
+| `per_page`       | int        | No       | Items per page (max 100)               |
 
 #### Get / Disable 2FA / Delete
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `group_id` | string/int | Yes | Group ID or URL-encoded path |
-| `user_id` | int | Yes | User ID |
-| `hard_delete` | bool | No | Permanently delete (delete only) |
+| Parameter     | Type       | Required | Description                      |
+| ------------- | ---------- | -------- | -------------------------------- |
+| `group_id`    | string/int | Yes      | Group ID or URL-encoded path     |
+| `user_id`     | int        | Yes      | User ID                          |
+| `hard_delete` | bool       | No       | Permanently delete (delete only) |
 
 ---
 
@@ -100,10 +100,10 @@ information for CI/CD builds. They are scoped to a project and identified by sub
 
 ### Tools
 
-| Tool | Description | Annotations |
-| --- | --- | --- |
-| `gitlab_list_attestations` | List attestations matching a subject digest | Read-only |
-| `gitlab_download_attestation` | Download attestation content (base64-encoded) | Read-only |
+| Tool                          | Description                                   | Annotations |
+| ----------------------------- | --------------------------------------------- | ----------- |
+| `gitlab_list_attestations`    | List attestations matching a subject digest   | Read-only   |
+| `gitlab_download_attestation` | Download attestation content (base64-encoded) | Read-only   |
 
 ### Meta-tool
 
@@ -137,24 +137,24 @@ Download an attestation:
 
 #### List
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `project_id` | string/int | Yes | Project ID or URL-encoded path |
-| `subject_digest` | string | Yes | Subject digest hash to filter attestations |
+| Parameter        | Type       | Required | Description                                |
+| ---------------- | ---------- | -------- | ------------------------------------------ |
+| `project_id`     | string/int | Yes      | Project ID or URL-encoded path             |
+| `subject_digest` | string     | Yes      | Subject digest hash to filter attestations |
 
 #### Download
 
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `project_id` | string/int | Yes | Project ID or URL-encoded path |
-| `attestation_iid` | int | Yes | Attestation IID (project-scoped) |
+| Parameter         | Type       | Required | Description                      |
+| ----------------- | ---------- | -------- | -------------------------------- |
+| `project_id`      | string/int | Yes      | Project ID or URL-encoded path   |
+| `attestation_iid` | int        | Yes      | Attestation IID (project-scoped) |
 
 ### Response
 
 The download tool returns:
 
-| Field | Description |
-| --- | --- |
+| Field             | Description                           |
+| ----------------- | ------------------------------------- |
 | `attestation_iid` | The IID of the downloaded attestation |
-| `size` | Size in bytes |
-| `content_base64` | Base64-encoded binary content |
+| `size`            | Size in bytes                         |
+| `content_base64`  | Base64-encoded binary content         |

@@ -79,12 +79,12 @@ When running with `--auth-mode=oauth`, the server validates every request's Bear
 
 See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) for the full architecture and flow diagram, and [OAuth App Setup](oauth-app-setup.md) for creating GitLab OAuth applications.
 
-| Threat | Mitigation |
-| --- | --- |
-| Token replay | TTL-based expiration; tokens re-verified after cache expires |
-| Cache key leakage | SHA-256 hashing of raw tokens; original tokens never stored |
-| Brute force | GitLab API rate limiting applies to verification requests |
-| Memory dump | Only SHA-256 hashes and user metadata stored; no raw tokens in cache |
+| Threat            | Mitigation                                                           |
+| ----------------- | -------------------------------------------------------------------- |
+| Token replay      | TTL-based expiration; tokens re-verified after cache expires         |
+| Cache key leakage | SHA-256 hashing of raw tokens; original tokens never stored          |
+| Brute force       | GitLab API rate limiting applies to verification requests            |
+| Memory dump       | Only SHA-256 hashes and user metadata stored; no raw tokens in cache |
 
 ## PAT Scope-Based Tool Filtering
 
@@ -105,12 +105,12 @@ MCP tool output contains user-generated content (UGC) from GitLab — issue desc
 
 All Markdown formatters apply context-appropriate escaping to UGC fields:
 
-| Context | Escape Function | Purpose |
-| --- | --- | --- |
-| Table cells | `EscapeMdTableCell()` | Prevents pipe characters from breaking table structure |
-| Headings | `EscapeMdHeading()` | Prevents `#` injection that would break heading hierarchy |
-| Multi-line body content | `WrapGFMBody()` | Wraps in blockquote (`>`) to contain structural Markdown |
-| List items (single-line) | `EscapeMdTableCell()` | Strips newlines and pipes from inline values |
+| Context                  | Escape Function       | Purpose                                                   |
+| ------------------------ | --------------------- | --------------------------------------------------------- |
+| Table cells              | `EscapeMdTableCell()` | Prevents pipe characters from breaking table structure    |
+| Headings                 | `EscapeMdHeading()`   | Prevents `#` injection that would break heading hierarchy |
+| Multi-line body content  | `WrapGFMBody()`       | Wraps in blockquote (`>`) to contain structural Markdown  |
+| List items (single-line) | `EscapeMdTableCell()` | Strips newlines and pipes from inline values              |
 
 ### UGC Boundary Markers
 
@@ -140,11 +140,11 @@ The error handling system is designed to be informative for LLMs while avoiding 
 
 ## Dependencies
 
-| Dependency | Security Notes |
-| --- | --- |
+| Dependency                               | Security Notes                                                        |
+| ---------------------------------------- | --------------------------------------------------------------------- |
 | `gitlab.com/gitlab-org/api/client-go/v2` | Official GitLab client; uses `retryablehttp` with exponential backoff |
-| `github.com/modelcontextprotocol/go-sdk` | Official MCP SDK; handles JSON-RPC transport |
-| `github.com/joho/godotenv` | Loads `.env` files (CWD and `~/.gitlab-mcp-server.env` fallback) |
+| `github.com/modelcontextprotocol/go-sdk` | Official MCP SDK; handles JSON-RPC transport                          |
+| `github.com/joho/godotenv`               | Loads `.env` files (CWD and `~/.gitlab-mcp-server.env` fallback)      |
 
 Run `go list -m all` to see all transitive dependencies. Use `govulncheck` for vulnerability scanning:
 
@@ -160,17 +160,17 @@ govulncheck ./...
 The auto-update subsystem embeds a GitHub API token in the
 compiled binary to check for and download new releases. Attack vectors:
 
-| Vector | Description | Mitigation |
-|--------|-------------|------------|
-| Traffic capture (HTTP) | Intercept token on the wire | HTTPS enforcement in `NewUpdater()` |
-| Proxy interception (`HTTPS_PROXY`) | Token sent through attacker proxy | `Proxy: nil` in HTTP transport |
-| HTTP redirect to external host | GitHub redirects to S3/CDN leaking token | `CheckRedirect` strips `Authorization` on cross-host |
-| Protocol downgrade (HTTPS→HTTP) | Redirect from HTTPS to HTTP exposes token | `CheckRedirect` refuses HTTPS→HTTP redirects |
-| Redirect chain abuse | Infinite redirects / open redirect exploitation | Max 10 redirects enforced |
-| Token to external hosts | Asset URL points to non-GitHub host | `sameHost()` check before attaching header |
-| Memory dump (`gcore`, `/proc/PID/mem`) | Read token from process memory | Intermediate `[]byte` zeroed; globals zeroed after first use |
-| Accidental logging (`%v`, panic) | Token printed in logs or stack traces | `Config.String()` / `GoString()` redact to `***` |
-| `GetConfig()` API | Token exposed via MCP tool | Returns copy with `Token: "***"` |
+| Vector                                 | Description                                     | Mitigation                                                   |
+| -------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------ |
+| Traffic capture (HTTP)                 | Intercept token on the wire                     | HTTPS enforcement in `NewUpdater()`                          |
+| Proxy interception (`HTTPS_PROXY`)     | Token sent through attacker proxy               | `Proxy: nil` in HTTP transport                               |
+| HTTP redirect to external host         | GitHub redirects to S3/CDN leaking token        | `CheckRedirect` strips `Authorization` on cross-host         |
+| Protocol downgrade (HTTPS→HTTP)        | Redirect from HTTPS to HTTP exposes token       | `CheckRedirect` refuses HTTPS→HTTP redirects                 |
+| Redirect chain abuse                   | Infinite redirects / open redirect exploitation | Max 10 redirects enforced                                    |
+| Token to external hosts                | Asset URL points to non-GitHub host             | `sameHost()` check before attaching header                   |
+| Memory dump (`gcore`, `/proc/PID/mem`) | Read token from process memory                  | Intermediate `[]byte` zeroed; globals zeroed after first use |
+| Accidental logging (`%v`, panic)       | Token printed in logs or stack traces           | `Config.String()` / `GoString()` redact to `***`             |
+| `GetConfig()` API                      | Token exposed via MCP tool                      | Returns copy with `Token: "***"`                             |
 
 ### Network Hardening
 
@@ -186,11 +186,11 @@ The `newGitHubSource` HTTP client (`internal/autoupdate/github_source.go`):
 
 ### File Reference
 
-| File | Purpose |
-|------|---------|
-| `internal/autoupdate/github_source.go` | `newGitHubSource` with hardened HTTP client |
-| `internal/autoupdate/autoupdate.go` | HTTPS enforcement, `Config.String()`/`GoString()` |
-| `cmd/server/main.go` | Update initialization |
+| File                                   | Purpose                                           |
+| -------------------------------------- | ------------------------------------------------- |
+| `internal/autoupdate/github_source.go` | `newGitHubSource` with hardened HTTP client       |
+| `internal/autoupdate/autoupdate.go`    | HTTPS enforcement, `Config.String()`/`GoString()` |
+| `cmd/server/main.go`                   | Update initialization                             |
 
 ---
 
@@ -203,10 +203,10 @@ agents and noisy clients, not to replace upstream throttling.
 
 ### Configuration
 
-| Setting | Env var | Flag (HTTP mode) | Default |
-| --- | --- | --- | --- |
-| Requests/second | `RATE_LIMIT_RPS` | `--rate-limit-rps` | `0` (disabled) |
-| Burst capacity | `RATE_LIMIT_BURST` | `--rate-limit-burst` | `40` |
+| Setting         | Env var            | Flag (HTTP mode)     | Default        |
+| --------------- | ------------------ | -------------------- | -------------- |
+| Requests/second | `RATE_LIMIT_RPS`   | `--rate-limit-rps`   | `0` (disabled) |
+| Burst capacity  | `RATE_LIMIT_BURST` | `--rate-limit-burst` | `40`           |
 
 When `RATE_LIMIT_RPS = 0` the middleware is not attached and there is zero
 overhead on the hot path. Setting any value `> 0` activates a `golang.org/x/time/rate`
@@ -219,12 +219,12 @@ limiter scoped to **one MCP server instance**:
 
 ### Recommended values
 
-| Deployment | `--rate-limit-rps` | Rationale |
-| --- | --- | --- |
-| GitLab.com (authenticated user) | `20` | Stays well under the published ~33 rps authenticated quota with headroom for pagination loops. |
-| Self-hosted (default config) | `8` | Matches the typical 600 req/min default in `application_settings`. |
-| CI / batch automation | `2`–`4` | Conservative; pipelines that invoke many tools per job. |
-| Disabled (default) | `0` | Trust GitLab's own throttle; useful when you have not measured traffic patterns yet. |
+| Deployment                      | `--rate-limit-rps` | Rationale                                                                                      |
+| ------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------- |
+| GitLab.com (authenticated user) | `20`               | Stays well under the published ~33 rps authenticated quota with headroom for pagination loops. |
+| Self-hosted (default config)    | `8`                | Matches the typical 600 req/min default in `application_settings`.                             |
+| CI / batch automation           | `2`–`4`            | Conservative; pipelines that invoke many tools per job.                                        |
+| Disabled (default)              | `0`                | Trust GitLab's own throttle; useful when you have not measured traffic patterns yet.           |
 
 ### Behavior on excess
 
