@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -1285,9 +1286,15 @@ func projectHookCustomHeadersToOutput(headers []*gl.HookCustomHeader) []HookCust
 	if len(headers) == 0 {
 		return nil
 	}
-	out := make([]HookCustomHeader, len(headers))
-	for i, header := range headers {
-		out[i] = HookCustomHeader{Key: header.Key, Value: header.Value}
+	out := make([]HookCustomHeader, 0, len(headers))
+	for _, header := range headers {
+		if header == nil {
+			continue
+		}
+		out = append(out, HookCustomHeader{Key: header.Key, Value: header.Value})
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }
@@ -1472,68 +1479,52 @@ type projectHookOptions struct {
 	EnableSSLVerification     *bool
 }
 
+var projectHookOptionFieldNames = []string{
+	"URL",
+	"Name",
+	"Description",
+	"Token",
+	"SigningToken",
+	"PushEventsBranchFilter",
+	"CustomWebhookTemplate",
+	"BranchFilterStrategy",
+	"PushEvents",
+	"IssuesEvents",
+	"ConfidentialIssuesEvents",
+	"MergeRequestsEvents",
+	"TagPushEvents",
+	"NoteEvents",
+	"ConfidentialNoteEvents",
+	"JobEvents",
+	"PipelineEvents",
+	"WikiPageEvents",
+	"DeploymentEvents",
+	"ReleasesEvents",
+	"MilestoneEvents",
+	"FeatureFlagEvents",
+	"EmojiEvents",
+	"ResourceAccessTokenEvents",
+	"ResourceDeployTokenEvents",
+	"VulnerabilityEvents",
+	"EnableSSLVerification",
+}
+
 func projectHookOptionsFromAdd(input AddHookInput) projectHookOptions {
-	return projectHookOptions{
-		URL:                       input.URL,
-		Name:                      input.Name,
-		Description:               input.Description,
-		Token:                     input.Token,
-		SigningToken:              input.SigningToken,
-		PushEventsBranchFilter:    input.PushEventsBranchFilter,
-		CustomWebhookTemplate:     input.CustomWebhookTemplate,
-		BranchFilterStrategy:      input.BranchFilterStrategy,
-		PushEvents:                input.PushEvents,
-		IssuesEvents:              input.IssuesEvents,
-		ConfidentialIssuesEvents:  input.ConfidentialIssuesEvents,
-		MergeRequestsEvents:       input.MergeRequestsEvents,
-		TagPushEvents:             input.TagPushEvents,
-		NoteEvents:                input.NoteEvents,
-		ConfidentialNoteEvents:    input.ConfidentialNoteEvents,
-		JobEvents:                 input.JobEvents,
-		PipelineEvents:            input.PipelineEvents,
-		WikiPageEvents:            input.WikiPageEvents,
-		DeploymentEvents:          input.DeploymentEvents,
-		ReleasesEvents:            input.ReleasesEvents,
-		MilestoneEvents:           input.MilestoneEvents,
-		FeatureFlagEvents:         input.FeatureFlagEvents,
-		EmojiEvents:               input.EmojiEvents,
-		ResourceAccessTokenEvents: input.ResourceAccessTokenEvents,
-		ResourceDeployTokenEvents: input.ResourceDeployTokenEvents,
-		VulnerabilityEvents:       input.VulnerabilityEvents,
-		EnableSSLVerification:     input.EnableSSLVerification,
-	}
+	return projectHookOptionsFromInput(input)
 }
 
 func projectHookOptionsFromEdit(input EditHookInput) projectHookOptions {
-	return projectHookOptions{
-		URL:                       input.URL,
-		Name:                      input.Name,
-		Description:               input.Description,
-		Token:                     input.Token,
-		SigningToken:              input.SigningToken,
-		PushEventsBranchFilter:    input.PushEventsBranchFilter,
-		CustomWebhookTemplate:     input.CustomWebhookTemplate,
-		BranchFilterStrategy:      input.BranchFilterStrategy,
-		PushEvents:                input.PushEvents,
-		IssuesEvents:              input.IssuesEvents,
-		ConfidentialIssuesEvents:  input.ConfidentialIssuesEvents,
-		MergeRequestsEvents:       input.MergeRequestsEvents,
-		TagPushEvents:             input.TagPushEvents,
-		NoteEvents:                input.NoteEvents,
-		ConfidentialNoteEvents:    input.ConfidentialNoteEvents,
-		JobEvents:                 input.JobEvents,
-		PipelineEvents:            input.PipelineEvents,
-		WikiPageEvents:            input.WikiPageEvents,
-		DeploymentEvents:          input.DeploymentEvents,
-		ReleasesEvents:            input.ReleasesEvents,
-		MilestoneEvents:           input.MilestoneEvents,
-		FeatureFlagEvents:         input.FeatureFlagEvents,
-		EmojiEvents:               input.EmojiEvents,
-		ResourceAccessTokenEvents: input.ResourceAccessTokenEvents,
-		ResourceDeployTokenEvents: input.ResourceDeployTokenEvents,
-		VulnerabilityEvents:       input.VulnerabilityEvents,
-		EnableSSLVerification:     input.EnableSSLVerification,
+	return projectHookOptionsFromInput(input)
+}
+
+func projectHookOptionsFromInput(input any) projectHookOptions {
+	var options projectHookOptions
+	sourceValue := reflect.ValueOf(input)
+	targetValue := reflect.ValueOf(&options).Elem()
+	for _, fieldName := range projectHookOptionFieldNames {
+		targetValue.FieldByName(fieldName).Set(sourceValue.FieldByName(fieldName))
 	}
+	return options
 }
 
 func applyProjectHookOptions(input projectHookOptions, opts *gl.AddProjectHookOptions) {

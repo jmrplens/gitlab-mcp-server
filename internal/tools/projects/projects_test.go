@@ -1587,7 +1587,7 @@ func TestProjectGetLanguages_EmptyProjectID(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // hookJSON stores the package-level hook JSON state.
-var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"resource_deploy_token_events":true,"vulnerability_events":true,"enable_ssl_verification":true,"disabled_until":"2026-01-02T00:00:00Z","url_variables":[{"key":"env","value":"prod"}],"custom_headers":[{"key":"X-Env","value":"prod"}],"token_present":true,"signing_token_present":true,"created_at":"2026-01-01T00:00:00Z"}`
+var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"resource_deploy_token_events":true,"vulnerability_events":true,"enable_ssl_verification":true,"disabled_until":"2026-01-02T00:00:00Z","url_variables":[{"key":"env","value":"prod"}],"custom_headers":[null,{"key":"X-Env","value":"prod"}],"token_present":true,"signing_token_present":true,"created_at":"2026-01-01T00:00:00Z"}`
 
 // TestProjectListHooks_Success verifies ProjectListHooks when success.
 func TestProjectListHooks_Success(t *testing.T) {
@@ -1636,6 +1636,20 @@ func TestProjectListHooks_Success(t *testing.T) {
 	}
 	if len(out.Hooks[0].CustomHeaders) != 1 || out.Hooks[0].CustomHeaders[0].Key != "X-Env" {
 		t.Fatalf("unexpected custom headers: %+v", out.Hooks[0].CustomHeaders)
+	}
+}
+
+func TestProjectHookCustomHeadersToOutput_SkipsNilEntries(t *testing.T) {
+	headers := projectHookCustomHeadersToOutput([]*gl.HookCustomHeader{
+		nil,
+		{Key: "X-Env", Value: "prod"},
+	})
+	if len(headers) != 1 || headers[0].Key != "X-Env" || headers[0].Value != "prod" {
+		t.Fatalf("unexpected custom headers: %+v", headers)
+	}
+
+	if out := projectHookCustomHeadersToOutput([]*gl.HookCustomHeader{nil}); out != nil {
+		t.Fatalf("expected nil when all custom headers are nil, got %+v", out)
 	}
 }
 
