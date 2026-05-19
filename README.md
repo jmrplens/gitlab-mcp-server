@@ -244,11 +244,11 @@ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/get
 
 Three registration modes, controlled by `TOOL_SURFACE`:
 
-| Mode                          | Tools                                                              | Description                                                                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Dynamic Toolset** (default) | 2 visible tools                                                    | Low-token find/execute surface over the canonical action catalog.                                                                                                 |
-| **Meta-Tools**                | 33 base domain meta-tools plus the `gitlab_server` helper          | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
-| **Individual**                | 866 CE / 1017 self-managed enterprise / 1022 GitLab.com Enterprise | Every GitLab operation as a separate MCP tool.                                                                                                                    |
+| Mode                          | Tools                                                                              | Description                                                                                                                                                       |
+| ----------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dynamic Toolset** (default) | 2 visible tools                                                                    | Low-token find/execute surface over the canonical action catalog.                                                                                                 |
+| **Meta-Tools**                | 33 base GitLab/interactive tools; `gitlab_server` is a separate maintenance helper | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
+| **Individual**                | 866 CE / 1017 self-managed enterprise / 1022 GitLab.com Enterprise                 | Every GitLab operation as a separate MCP tool.                                                                                                                    |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Dynamic minimal keeps only `gitlab://workspace/roots`; meta minimal keeps workspace roots plus meta-schema resources so opaque meta-tools can still read exact action schemas. The default remains `full`.
 

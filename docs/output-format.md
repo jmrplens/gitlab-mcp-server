@@ -46,7 +46,7 @@ List results include clickable links that open directly in GitLab:
 | [!241](https://gitlab.example.com/project/-/merge_requests/241) | Add tests | bob | open |
 ```
 
-Click on `!243` to open the merge request in your browser. This works for merge requests, issues, pipelines, projects, branches, commits, releases, todos, milestones, and members — **14 domains** with clickable links.
+Click on `!243` to open the merge request in your browser. This works for merge requests, issues, pipelines, projects, branches, commits, releases, todos, milestones, members, and other list surfaces that include GitLab web URLs.
 
 ### Next Steps
 
