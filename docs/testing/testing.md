@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,193 |
-| Unit test functions                                   |  9,942 |
+| Total test functions                                  | 10,194 |
+| Unit test functions                                   |  9,943 |
 | E2E test functions                                    |    251 |
 | cmd test functions                                    |    531 |
 | Test files (internal/)                                |    422 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,135 | 89.6% |
+| `TestFunc_Scenario` (2-part)           | 9,136 | 89.6% |
 | `TestFunc` (no underscore)             |   768 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   290 |  2.8% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,728 |         80 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (170) |          7,399 |        330 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (170) |          7,400 |        330 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            531 |         22 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,193** |    **553** |                                                                                                 |
+| **Total**               |     **10,194** |    **553** |                                                                                                 |
 
 ### Core Packages
 
@@ -79,14 +79,14 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   338 |    99.2% |    54 |
+| projects          |   338 |    99.8% |    54 |
 | mergerequests     |   224 |   100.0% |    30 |
 | issues            |   207 |   100.0% |    21 |
 | users             |   186 |   100.0% |    36 |
 | samplingtools     |   166 |   100.0% |    11 |
 | jobs              |   129 |    99.8% |    17 |
 | dynamic           |   126 |    99.3% |     2 |
-| groups            |   125 |    98.5% |    18 |
+| groups            |   125 |    98.3% |    18 |
 | search            |   116 |   100.0% |    10 |
 | packages          |   111 |    99.1% |     8 |
 | awardemoji        |   109 |    99.2% |    24 |
@@ -184,7 +184,7 @@
 | groupprotectedenvs      |        12 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        25 |          2 |   100.0% |         2 |
 | groupreleases           |        14 |          3 |   100.0% |         1 |
-| groups                  |       125 |          3 |    98.5% |        18 |
+| groups                  |       125 |          3 |    98.3% |        18 |
 | groupsaml               |        23 |          3 |   100.0% |         4 |
 | groupscim               |        27 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        19 |          2 |   100.0% |         7 |
@@ -238,7 +238,7 @@
 | projectimportexport     |        33 |          1 |   100.0% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        62 |          2 |   100.0% |         7 |
-| projects                |       338 |          4 |    99.2% |        54 |
+| projects                |       338 |          4 |    99.8% |        54 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        17 |          2 |   100.0% |         6 |
 | projecttemplates        |        18 |          1 |   100.0% |         2 |
@@ -269,7 +269,7 @@
 | snippets                |        78 |          2 |    99.5% |        15 |
 | snippetstoragemoves     |        38 |          2 |   100.0% |         6 |
 | surfaces                |        10 |          1 |   100.0% |         0 |
-| systemhooks             |        32 |          2 |    97.4% |         8 |
+| systemhooks             |        33 |          2 |    97.3% |         8 |
 | tags                    |        77 |          2 |   100.0% |         9 |
 | terraformstates         |        17 |          1 |   100.0% |         6 |
 | todos                   |        29 |          1 |   100.0% |         3 |
@@ -282,7 +282,7 @@
 | vulnerabilities         |        57 |          3 |   100.0% |         8 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,399** |    **330** |          | **1,118** |
+| **Total**               | **7,400** |    **330** |          | **1,118** |
 
 </details>
 
@@ -410,7 +410,7 @@
 | groupprotectedenvs      |   100.0% |
 | grouprelationsexport    |   100.0% |
 | groupreleases           |   100.0% |
-| groups                  |    98.5% |
+| groups                  |    98.3% |
 | groupsaml               |   100.0% |
 | groupscim               |   100.0% |
 | groupserviceaccounts    |   100.0% |
@@ -464,7 +464,7 @@
 | projectimportexport     |   100.0% |
 | projectiterations       |   100.0% |
 | projectmirrors          |   100.0% |
-| projects                |    99.2% |
+| projects                |    99.8% |
 | projectstatistics       |   100.0% |
 | projectstoragemoves     |   100.0% |
 | projecttemplates        |   100.0% |
@@ -495,7 +495,7 @@
 | snippets                |    99.5% |
 | snippetstoragemoves     |   100.0% |
 | surfaces                |   100.0% |
-| systemhooks             |    97.4% |
+| systemhooks             |    97.3% |
 | tags                    |   100.0% |
 | terraformstates         |   100.0% |
 | todos                   |   100.0% |

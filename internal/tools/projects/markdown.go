@@ -10,6 +10,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const hookSecretMarkdownValue = "REDACTED"
+
 type projectNotFoundOutput struct {
 	Identifier string
 }
@@ -228,6 +230,7 @@ func FormatHookMarkdown(out HookOutput) string {
 		{"Emoji", out.EmojiEvents},
 		{"Repository Update", out.RepositoryUpdateEvents},
 		{"Resource Access Token", out.ResourceAccessTokenEvents},
+		{"Resource Deploy Token", out.ResourceDeployTokenEvents},
 		{"Vulnerability", out.VulnerabilityEvents},
 	}
 	for _, ev := range events {
@@ -238,7 +241,7 @@ func FormatHookMarkdown(out HookOutput) string {
 		b.WriteString("| Key | Value |\n")
 		b.WriteString(toolutil.TblSep2Col)
 		for _, variable := range out.URLVariables {
-			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(variable.Key), toolutil.EscapeMdTableCell(variable.Value))
+			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(variable.Key), hookSecretMarkdownValue)
 		}
 	}
 	if len(out.CustomHeaders) > 0 {
@@ -246,7 +249,7 @@ func FormatHookMarkdown(out HookOutput) string {
 		b.WriteString("| Key | Value |\n")
 		b.WriteString(toolutil.TblSep2Col)
 		for _, header := range out.CustomHeaders {
-			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(header.Key), toolutil.EscapeMdTableCell(header.Value))
+			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(header.Key), hookSecretMarkdownValue)
 		}
 	}
 	toolutil.WriteHints(&b,

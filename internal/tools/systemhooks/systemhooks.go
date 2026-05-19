@@ -176,43 +176,43 @@ func hookURLVariablesToOutput(variables []gl.HookURLVariable) []HookURLVariable 
 	return out
 }
 
-func applyHookAddOptions(input AddInput, opts *gl.AddHookOptions) {
-	if input.Name != "" {
-		opts.Name = new(input.Name)
-	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
-	if input.Token != "" {
-		opts.Token = new(input.Token)
-	}
-	if input.SigningToken != "" {
-		opts.SigningToken = new(input.SigningToken)
-	}
-	if input.PushEvents != nil {
-		opts.PushEvents = input.PushEvents
-	}
-	if input.PushEventsBranchFilter != "" {
-		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
-	}
-	if input.BranchFilterStrategy != "" {
-		opts.BranchFilterStrategy = new(gl.BranchFilterStrategy(input.BranchFilterStrategy))
-	}
-	if input.TagPushEvents != nil {
-		opts.TagPushEvents = input.TagPushEvents
-	}
-	if input.MergeRequestsEvents != nil {
-		opts.MergeRequestsEvents = input.MergeRequestsEvents
-	}
-	if input.RepositoryUpdateEvents != nil {
-		opts.RepositoryUpdateEvents = input.RepositoryUpdateEvents
-	}
-	if input.EnableSSLVerification != nil {
-		opts.EnableSSLVerification = input.EnableSSLVerification
+type hookOptions struct {
+	URL                    string
+	Name                   string
+	Description            string
+	Token                  string
+	SigningToken           string
+	PushEvents             *bool
+	PushEventsBranchFilter string
+	BranchFilterStrategy   string
+	TagPushEvents          *bool
+	MergeRequestsEvents    *bool
+	RepositoryUpdateEvents *bool
+	EnableSSLVerification  *bool
+}
+
+func hookOptionsFromAdd(input AddInput) hookOptions {
+	return hookOptions(input)
+}
+
+func hookOptionsFromEdit(input EditInput) hookOptions {
+	return hookOptions{
+		URL:                    input.URL,
+		Name:                   input.Name,
+		Description:            input.Description,
+		Token:                  input.Token,
+		SigningToken:           input.SigningToken,
+		PushEvents:             input.PushEvents,
+		PushEventsBranchFilter: input.PushEventsBranchFilter,
+		BranchFilterStrategy:   input.BranchFilterStrategy,
+		TagPushEvents:          input.TagPushEvents,
+		MergeRequestsEvents:    input.MergeRequestsEvents,
+		RepositoryUpdateEvents: input.RepositoryUpdateEvents,
+		EnableSSLVerification:  input.EnableSSLVerification,
 	}
 }
 
-func applyHookEditOptions(input EditInput, opts *gl.EditHookOptions) {
+func applyHookOptions(input hookOptions, opts *gl.AddHookOptions) {
 	if input.URL != "" {
 		opts.URL = new(input.URL)
 	}
@@ -251,6 +251,19 @@ func applyHookEditOptions(input EditInput, opts *gl.EditHookOptions) {
 	}
 }
 
+func hookAddOptions(input AddInput) *gl.AddHookOptions {
+	opts := &gl.AddHookOptions{}
+	applyHookOptions(hookOptionsFromAdd(input), opts)
+	return opts
+}
+
+func hookEditOptions(input EditInput) *gl.EditHookOptions {
+	addOptions := &gl.AddHookOptions{}
+	applyHookOptions(hookOptionsFromEdit(input), addOptions)
+	editOptions := gl.EditHookOptions(*addOptions)
+	return &editOptions
+}
+
 // Handlers.
 
 // List retrieves all system hooks.
@@ -282,10 +295,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 
 // Add creates a new system hook.
 func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddOutput, error) {
-	opts := &gl.AddHookOptions{
-		URL: new(input.URL),
+	if input.URL == "" {
+		return AddOutput{}, toolutil.ErrRequiredString("system_hook_add", "url")
 	}
-	applyHookAddOptions(input, opts)
+	opts := hookAddOptions(input)
 
 	hook, _, err := client.GL().SystemHooks.AddHook(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -300,8 +313,7 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ed
 	if input.ID <= 0 {
 		return EditOutput{}, toolutil.ErrRequiredInt64("system_hook_edit", "id")
 	}
-	opts := &gl.EditHookOptions{}
-	applyHookEditOptions(input, opts)
+	opts := hookEditOptions(input)
 
 	hook, _, err := client.GL().SystemHooks.EditHook(input.ID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -350,7 +362,10 @@ func SetURLVariable(ctx context.Context, client *gitlabclient.Client, input SetU
 		return toolutil.ErrRequiredInt64("system_hook_set_url_variable", "id")
 	}
 	if input.Key == "" {
-		return toolutil.ErrFieldRequired("key")
+		return toolutil.ErrRequiredString("system_hook_set_url_variable", "key")
+	}
+	if input.Value == "" {
+		return toolutil.ErrRequiredString("system_hook_set_url_variable", "value")
 	}
 	opts := &gl.SetHookURLVariableOptions{Value: &input.Value}
 	_, err := client.GL().SystemHooks.SetHookURLVariable(input.ID, input.Key, opts, gl.WithContext(ctx))
@@ -367,7 +382,7 @@ func DeleteURLVariable(ctx context.Context, client *gitlabclient.Client, input D
 		return toolutil.ErrRequiredInt64("system_hook_delete_url_variable", "id")
 	}
 	if input.Key == "" {
-		return toolutil.ErrFieldRequired("key")
+		return toolutil.ErrRequiredString("system_hook_delete_url_variable", "key")
 	}
 	_, err := client.GL().SystemHooks.DeleteHookURLVariable(input.ID, input.Key, gl.WithContext(ctx))
 	if err != nil {

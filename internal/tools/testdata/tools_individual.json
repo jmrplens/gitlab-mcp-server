@@ -85881,6 +85881,9 @@
         "resource_access_token_events": {
           "type": "boolean"
         },
+        "resource_deploy_token_events": {
+          "type": "boolean"
+        },
         "signing_token_present": {
           "type": "boolean"
         },
@@ -85943,6 +85946,7 @@
         "enable_ssl_verification",
         "repository_update_events",
         "resource_access_token_events",
+        "resource_deploy_token_events",
         "vulnerability_events",
         "token_present",
         "signing_token_present",
@@ -86433,6 +86437,9 @@
         "resource_access_token_events": {
           "type": "boolean"
         },
+        "resource_deploy_token_events": {
+          "type": "boolean"
+        },
         "signing_token_present": {
           "type": "boolean"
         },
@@ -86495,6 +86502,7 @@
         "enable_ssl_verification",
         "repository_update_events",
         "resource_access_token_events",
+        "resource_deploy_token_events",
         "vulnerability_events",
         "token_present",
         "signing_token_present",
@@ -86640,6 +86648,9 @@
         "resource_access_token_events": {
           "type": "boolean"
         },
+        "resource_deploy_token_events": {
+          "type": "boolean"
+        },
         "signing_token_present": {
           "type": "boolean"
         },
@@ -86702,6 +86713,7 @@
         "enable_ssl_verification",
         "repository_update_events",
         "resource_access_token_events",
+        "resource_deploy_token_events",
         "vulnerability_events",
         "token_present",
         "signing_token_present",
@@ -86855,6 +86867,9 @@
               "resource_access_token_events": {
                 "type": "boolean"
               },
+              "resource_deploy_token_events": {
+                "type": "boolean"
+              },
               "signing_token_present": {
                 "type": "boolean"
               },
@@ -86917,6 +86932,7 @@
               "enable_ssl_verification",
               "repository_update_events",
               "resource_access_token_events",
+              "resource_deploy_token_events",
               "vulnerability_events",
               "token_present",
               "signing_token_present",

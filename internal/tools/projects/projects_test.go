@@ -1587,7 +1587,7 @@ func TestProjectGetLanguages_EmptyProjectID(t *testing.T) {
 // ---------------------------------------------------------------------------.
 
 // hookJSON stores the package-level hook JSON state.
-var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"vulnerability_events":true,"enable_ssl_verification":true,"disabled_until":"2026-01-02T00:00:00Z","url_variables":[{"key":"env","value":"prod"}],"custom_headers":[{"key":"X-Env","value":"prod"}],"token_present":true,"signing_token_present":true,"created_at":"2026-01-01T00:00:00Z"}`
+var hookJSON = `{"id":1,"url":"https://example.com/hook","name":"my-hook","project_id":42,"push_events":true,"issues_events":false,"merge_requests_events":true,"tag_push_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"resource_deploy_token_events":true,"vulnerability_events":true,"enable_ssl_verification":true,"disabled_until":"2026-01-02T00:00:00Z","url_variables":[{"key":"env","value":"prod"}],"custom_headers":[{"key":"X-Env","value":"prod"}],"token_present":true,"signing_token_present":true,"created_at":"2026-01-01T00:00:00Z"}`
 
 // TestProjectListHooks_Success verifies ProjectListHooks when success.
 func TestProjectListHooks_Success(t *testing.T) {
@@ -1624,6 +1624,9 @@ func TestProjectListHooks_Success(t *testing.T) {
 	}
 	if !out.Hooks[0].MilestoneEvents || !out.Hooks[0].FeatureFlagEvents || !out.Hooks[0].VulnerabilityEvents {
 		t.Error("expected milestone, feature flag, and vulnerability events to be true")
+	}
+	if !out.Hooks[0].ResourceDeployTokenEvents {
+		t.Error("ResourceDeployTokenEvents = false, want true")
 	}
 	if out.Hooks[0].DisabledUntil == "" {
 		t.Error("DisabledUntil is empty, want timestamp")
@@ -1667,6 +1670,9 @@ func TestProjectGetHook_Success(t *testing.T) {
 	}
 	if out.ID != 1 {
 		t.Errorf(fmtIDWant1, out.ID)
+	}
+	if !out.ResourceDeployTokenEvents {
+		t.Error("ResourceDeployTokenEvents = false, want true")
 	}
 	if out.Name != testMyHook {
 		t.Errorf(fmtNameWantQ, out.Name, testMyHook)
@@ -2922,7 +2928,7 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 				t.Fatalf("read request body: %v", err)
 			}
 			capturedBody = string(body)
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"issues_events":true,"merge_requests_events":true,"tag_push_events":true,"note_events":true,"confidential_note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"emoji_events":true,"resource_access_token_events":true,"vulnerability_events":true,"token_present":true,"signing_token_present":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"issues_events":true,"merge_requests_events":true,"tag_push_events":true,"note_events":true,"confidential_note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"emoji_events":true,"resource_access_token_events":true,"resource_deploy_token_events":true,"vulnerability_events":true,"token_present":true,"signing_token_present":true}`)
 			return
 		}
 		http.NotFound(w, r)
@@ -3301,18 +3307,26 @@ func TestFormatListHooksMarkdown_HookWithoutName(t *testing.T) {
 // TestFormatHookMarkdown_WithName verifies FormatHookMarkdown when with name.
 func TestFormatHookMarkdown_WithName(t *testing.T) {
 	out := HookOutput{
-		ID:                    1,
-		URL:                   testHookURL,
-		Name:                  "deploy-hook",
-		PushEvents:            true,
-		IssuesEvents:          true,
-		MergeRequestsEvents:   false,
-		EnableSSLVerification: true,
+		ID:                        1,
+		URL:                       testHookURL,
+		Name:                      "deploy-hook",
+		PushEvents:                true,
+		IssuesEvents:              true,
+		MergeRequestsEvents:       false,
+		EnableSSLVerification:     true,
+		ResourceDeployTokenEvents: true,
+		URLVariables:              []HookURLVariable{{Key: "secret_env", Value: "prod-secret"}},
+		CustomHeaders:             []HookCustomHeader{{Key: "X-Secret", Value: "header-secret"}},
 	}
 	md := FormatHookMarkdown(out)
-	for _, want := range []string{"Webhook #1", "deploy-hook", testHookURL, "SSL Verification", "Event Triggers", "Push", "Issues", "Merge Requests"} {
+	for _, want := range []string{"Webhook #1", "deploy-hook", testHookURL, "SSL Verification", "Event Triggers", "Push", "Issues", "Merge Requests", "Resource Deploy Token", "REDACTED"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("FormatHookMarkdown missing %q", want)
+		}
+	}
+	for _, secret := range []string{"prod-secret", "header-secret"} {
+		if strings.Contains(md, secret) {
+			t.Errorf("FormatHookMarkdown exposed secret value %q", secret)
 		}
 	}
 }

@@ -133,6 +133,19 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
+// TestAdd_Validation verifies Add validates required fields before calling the API.
+func TestAdd_Validation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal(errAPINotCalledZeroID)
+	}))
+
+	if _, err := Add(t.Context(), client, AddInput{}); err == nil {
+		t.Fatal("expected error for empty URL, got nil")
+	} else if !strings.Contains(err.Error(), "system_hook_add: url is required") {
+		t.Fatalf("unexpected URL validation error: %v", err)
+	}
+}
+
 // TestEdit_Success verifies Edit when success.
 func TestEdit_Success(t *testing.T) {
 	var capturedBody string
@@ -359,6 +372,13 @@ func TestSetURLVariable_Validation(t *testing.T) {
 	}
 	if err := SetURLVariable(t.Context(), client, SetURLVariableInput{ID: 1}); err == nil {
 		t.Fatal("expected error for empty key, got nil")
+	} else if !strings.Contains(err.Error(), "system_hook_set_url_variable: key is required") {
+		t.Fatalf("unexpected key validation error: %v", err)
+	}
+	if err := SetURLVariable(t.Context(), client, SetURLVariableInput{ID: 1, Key: "env"}); err == nil {
+		t.Fatal("expected error for empty value, got nil")
+	} else if !strings.Contains(err.Error(), "system_hook_set_url_variable: value is required") {
+		t.Fatalf("unexpected value validation error: %v", err)
 	}
 }
 
@@ -372,6 +392,8 @@ func TestDeleteURLVariable_Validation(t *testing.T) {
 	}
 	if err := DeleteURLVariable(t.Context(), client, DeleteURLVariableInput{ID: 1}); err == nil {
 		t.Fatal("expected error for empty key, got nil")
+	} else if !strings.Contains(err.Error(), "system_hook_delete_url_variable: key is required") {
+		t.Fatalf("unexpected key validation error: %v", err)
 	}
 }
 

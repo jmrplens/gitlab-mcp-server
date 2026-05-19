@@ -219,16 +219,7 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 	return hookToOutput(h), nil
 }
 
-// applyAddHookOpts builds the AddGroupHookOptions from HookInput.
-func applyAddHookOpts(input HookInput) *gl.AddGroupHookOptions {
-	opts := &gl.AddGroupHookOptions{}
-	applyAddHookIdentity(input, opts)
-	applyAddHookEvents(input, opts)
-	return opts
-}
-
-// applyAddHookIdentity applies add hook identity transformations.
-func applyAddHookIdentity(input HookInput, opts *gl.AddGroupHookOptions) {
+func applyGroupHookOptions(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.URL != "" {
 		opts.URL = new(input.URL)
 	}
@@ -250,10 +241,6 @@ func applyAddHookIdentity(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.PushEventsBranchFilter != "" {
 		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
 	}
-}
-
-// applyAddHookEvents applies add hook events transformations.
-func applyAddHookEvents(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.PushEvents != nil {
 		opts.PushEvents = input.PushEvents
 	}
@@ -304,95 +291,48 @@ func applyAddHookEvents(input HookInput, opts *gl.AddGroupHookOptions) {
 	}
 	if input.ConfidentialNoteEvents != nil {
 		opts.ConfidentialNoteEvents = input.ConfidentialNoteEvents
+	}
+}
+
+// applyAddHookOpts builds the AddGroupHookOptions from HookInput.
+func applyAddHookOpts(input HookInput) *gl.AddGroupHookOptions {
+	opts := &gl.AddGroupHookOptions{}
+	applyGroupHookOptions(input, opts)
+	return opts
+}
+
+func groupEditHookOptionsFromAdd(opts *gl.AddGroupHookOptions) *gl.EditGroupHookOptions {
+	return &gl.EditGroupHookOptions{
+		URL:                      opts.URL,
+		Name:                     opts.Name,
+		Description:              opts.Description,
+		PushEvents:               opts.PushEvents,
+		PushEventsBranchFilter:   opts.PushEventsBranchFilter,
+		IssuesEvents:             opts.IssuesEvents,
+		ConfidentialIssuesEvents: opts.ConfidentialIssuesEvents,
+		MergeRequestsEvents:      opts.MergeRequestsEvents,
+		TagPushEvents:            opts.TagPushEvents,
+		NoteEvents:               opts.NoteEvents,
+		ConfidentialNoteEvents:   opts.ConfidentialNoteEvents,
+		JobEvents:                opts.JobEvents,
+		PipelineEvents:           opts.PipelineEvents,
+		WikiPageEvents:           opts.WikiPageEvents,
+		DeploymentEvents:         opts.DeploymentEvents,
+		FeatureFlagEvents:        opts.FeatureFlagEvents,
+		ReleasesEvents:           opts.ReleasesEvents,
+		MilestoneEvents:          opts.MilestoneEvents,
+		SubGroupEvents:           opts.SubGroupEvents,
+		MemberEvents:             opts.MemberEvents,
+		VulnerabilityEvents:      opts.VulnerabilityEvents,
+		EnableSSLVerification:    opts.EnableSSLVerification,
+		Token:                    opts.Token,
+		SigningToken:             opts.SigningToken,
 	}
 }
 
 // applyEditHookOpts builds the EditGroupHookOptions from HookInput.
 func applyEditHookOpts(input HookInput) *gl.EditGroupHookOptions {
-	opts := &gl.EditGroupHookOptions{}
-	applyEditHookIdentity(input, opts)
-	applyEditHookEvents(input, opts)
-	return opts
-}
-
-// applyEditHookIdentity applies edit hook identity transformations.
-func applyEditHookIdentity(input HookInput, opts *gl.EditGroupHookOptions) {
-	if input.URL != "" {
-		opts.URL = new(input.URL)
-	}
-	if input.Name != "" {
-		opts.Name = new(input.Name)
-	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
-	if input.Token != "" {
-		opts.Token = new(input.Token)
-	}
-	if input.SigningToken != "" {
-		opts.SigningToken = new(input.SigningToken)
-	}
-	if input.EnableSSLVerification != nil {
-		opts.EnableSSLVerification = input.EnableSSLVerification
-	}
-	if input.PushEventsBranchFilter != "" {
-		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
-	}
-}
-
-// applyEditHookEvents applies edit hook events transformations.
-func applyEditHookEvents(input HookInput, opts *gl.EditGroupHookOptions) {
-	if input.PushEvents != nil {
-		opts.PushEvents = input.PushEvents
-	}
-	if input.TagPushEvents != nil {
-		opts.TagPushEvents = input.TagPushEvents
-	}
-	if input.MergeRequestsEvents != nil {
-		opts.MergeRequestsEvents = input.MergeRequestsEvents
-	}
-	if input.IssuesEvents != nil {
-		opts.IssuesEvents = input.IssuesEvents
-	}
-	if input.NoteEvents != nil {
-		opts.NoteEvents = input.NoteEvents
-	}
-	if input.JobEvents != nil {
-		opts.JobEvents = input.JobEvents
-	}
-	if input.PipelineEvents != nil {
-		opts.PipelineEvents = input.PipelineEvents
-	}
-	if input.WikiPageEvents != nil {
-		opts.WikiPageEvents = input.WikiPageEvents
-	}
-	if input.DeploymentEvents != nil {
-		opts.DeploymentEvents = input.DeploymentEvents
-	}
-	if input.ReleasesEvents != nil {
-		opts.ReleasesEvents = input.ReleasesEvents
-	}
-	if input.MilestoneEvents != nil {
-		opts.MilestoneEvents = input.MilestoneEvents
-	}
-	if input.FeatureFlagEvents != nil {
-		opts.FeatureFlagEvents = input.FeatureFlagEvents
-	}
-	if input.SubGroupEvents != nil {
-		opts.SubGroupEvents = input.SubGroupEvents
-	}
-	if input.MemberEvents != nil {
-		opts.MemberEvents = input.MemberEvents
-	}
-	if input.VulnerabilityEvents != nil {
-		opts.VulnerabilityEvents = input.VulnerabilityEvents
-	}
-	if input.ConfidentialIssuesEvents != nil {
-		opts.ConfidentialIssuesEvents = input.ConfidentialIssuesEvents
-	}
-	if input.ConfidentialNoteEvents != nil {
-		opts.ConfidentialNoteEvents = input.ConfidentialNoteEvents
-	}
+	return groupEditHookOptionsFromAdd(applyAddHookOpts(input))
 }
 
 // AddHook adds a new webhook to a group. Requires the webhook URL.

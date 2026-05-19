@@ -1200,6 +1200,7 @@ type HookOutput struct {
 	EnableSSLVerification     bool               `json:"enable_ssl_verification"`
 	RepositoryUpdateEvents    bool               `json:"repository_update_events"`
 	ResourceAccessTokenEvents bool               `json:"resource_access_token_events"`
+	ResourceDeployTokenEvents bool               `json:"resource_deploy_token_events"`
 	AlertStatus               string             `json:"alert_status,omitempty"`
 	DisabledUntil             string             `json:"disabled_until,omitempty"`
 	URLVariables              []HookURLVariable  `json:"url_variables,omitempty"`
@@ -1291,6 +1292,35 @@ func projectHookCustomHeadersToOutput(headers []*gl.HookCustomHeader) []HookCust
 	return out
 }
 
+type projectHookAPI struct {
+	gl.ProjectHook
+	ResourceDeployTokenEvents bool `json:"resource_deploy_token_events"`
+}
+
+func projectHooksPath(projectID string) string {
+	return fmt.Sprintf("projects/%s/hooks", gl.PathEscape(projectID))
+}
+
+func projectHookPath(projectID string, hookID int64) string {
+	return fmt.Sprintf("%s/%d", projectHooksPath(projectID), hookID)
+}
+
+func doProjectHookRequest[T any](ctx context.Context, client *gitlabclient.Client, method, path string, opts any) (T, *gl.Response, error) {
+	var out T
+	req, err := client.GL().NewRequest(method, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	if err != nil {
+		return out, nil, err
+	}
+	resp, err := client.GL().Do(req, &out)
+	return out, resp, err
+}
+
+func hookOutputFromAPI(h *projectHookAPI) HookOutput {
+	out := hookOutputFromGL(&h.ProjectHook)
+	out.ResourceDeployTokenEvents = h.ResourceDeployTokenEvents
+	return out
+}
+
 // ListHooksInput defines parameters for listing project webhooks.
 type ListHooksInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
@@ -1315,7 +1345,7 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 	opts := &gl.ListProjectHooksOptions{
 		ListOptions: gl.ListOptions{Page: int64(input.Page), PerPage: int64(input.PerPage)},
 	}
-	hooks, resp, err := client.GL().Projects.ListProjectHooks(string(input.ProjectID), opts, gl.WithContext(ctx))
+	hooks, resp, err := doProjectHookRequest[[]projectHookAPI](ctx, client, http.MethodGet, projectHooksPath(string(input.ProjectID)), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ListHooksOutput{}, toolutil.WrapErrWithHint("projectListHooks", err,
@@ -1325,8 +1355,8 @@ func ListHooks(ctx context.Context, client *gitlabclient.Client, input ListHooks
 			hintVerifyProjectExists)
 	}
 	out := make([]HookOutput, 0, len(hooks))
-	for _, h := range hooks {
-		out = append(out, hookOutputFromGL(h))
+	for i := range hooks {
+		out = append(out, hookOutputFromAPI(&hooks[i]))
 	}
 	return ListHooksOutput{Hooks: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
@@ -1348,12 +1378,12 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 	if input.HookID == 0 {
 		return HookOutput{}, errors.New("projectGetHook: hook_id is required. Use gitlab_project_hook_list to find webhook IDs for the project")
 	}
-	h, _, err := client.GL().Projects.GetProjectHook(string(input.ProjectID), input.HookID, gl.WithContext(ctx))
+	h, _, err := doProjectHookRequest[projectHookAPI](ctx, client, http.MethodGet, projectHookPath(string(input.ProjectID), input.HookID), nil)
 	if err != nil {
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("projectGetHook", err, http.StatusNotFound,
 			"webhook may have been deleted \u2014 use gitlab_project_hook_list to find current hook_id values")
 	}
-	return hookOutputFromGL(h), nil
+	return hookOutputFromAPI(&h), nil
 }
 
 // AddHookInput defines parameters for adding a webhook to a project.
@@ -1399,12 +1429,8 @@ func AddHook(ctx context.Context, client *gitlabclient.Client, input AddHookInpu
 	if input.URL == "" {
 		return HookOutput{}, errors.New("projectAddHook: url is required. Provide the URL that will receive webhook HTTP POST requests")
 	}
-	opts := &gl.AddProjectHookOptions{
-		URL: new(input.URL),
-	}
-	applyAddHookIdentity(input, opts)
-	applyAddHookEvents(input, opts)
-	h, _, err := client.GL().Projects.AddProjectHook(string(input.ProjectID), opts, gl.WithContext(ctx))
+	opts := addProjectHookOptions(input)
+	h, _, err := doProjectHookRequest[projectHookAPI](ctx, client, http.MethodPost, projectHooksPath(string(input.ProjectID)), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return HookOutput{}, toolutil.WrapErrWithHint("projectAddHook", err,
@@ -1413,11 +1439,107 @@ func AddHook(ctx context.Context, client *gitlabclient.Client, input AddHookInpu
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("projectAddHook", err, http.StatusForbidden,
 			"adding webhooks requires at least Maintainer role on the project")
 	}
-	return hookOutputFromGL(h), nil
+	return hookOutputFromAPI(&h), nil
 }
 
-// applyAddHookIdentity applies add hook identity transformations.
-func applyAddHookIdentity(input AddHookInput, opts *gl.AddProjectHookOptions) {
+type projectHookOptions struct {
+	URL                       string
+	Name                      string
+	Description               string
+	Token                     string
+	SigningToken              string
+	PushEventsBranchFilter    string
+	CustomWebhookTemplate     string
+	BranchFilterStrategy      string
+	PushEvents                *bool
+	IssuesEvents              *bool
+	ConfidentialIssuesEvents  *bool
+	MergeRequestsEvents       *bool
+	TagPushEvents             *bool
+	NoteEvents                *bool
+	ConfidentialNoteEvents    *bool
+	JobEvents                 *bool
+	PipelineEvents            *bool
+	WikiPageEvents            *bool
+	DeploymentEvents          *bool
+	ReleasesEvents            *bool
+	MilestoneEvents           *bool
+	FeatureFlagEvents         *bool
+	EmojiEvents               *bool
+	ResourceAccessTokenEvents *bool
+	ResourceDeployTokenEvents *bool
+	VulnerabilityEvents       *bool
+	EnableSSLVerification     *bool
+}
+
+func projectHookOptionsFromAdd(input AddHookInput) projectHookOptions {
+	return projectHookOptions{
+		URL:                       input.URL,
+		Name:                      input.Name,
+		Description:               input.Description,
+		Token:                     input.Token,
+		SigningToken:              input.SigningToken,
+		PushEventsBranchFilter:    input.PushEventsBranchFilter,
+		CustomWebhookTemplate:     input.CustomWebhookTemplate,
+		BranchFilterStrategy:      input.BranchFilterStrategy,
+		PushEvents:                input.PushEvents,
+		IssuesEvents:              input.IssuesEvents,
+		ConfidentialIssuesEvents:  input.ConfidentialIssuesEvents,
+		MergeRequestsEvents:       input.MergeRequestsEvents,
+		TagPushEvents:             input.TagPushEvents,
+		NoteEvents:                input.NoteEvents,
+		ConfidentialNoteEvents:    input.ConfidentialNoteEvents,
+		JobEvents:                 input.JobEvents,
+		PipelineEvents:            input.PipelineEvents,
+		WikiPageEvents:            input.WikiPageEvents,
+		DeploymentEvents:          input.DeploymentEvents,
+		ReleasesEvents:            input.ReleasesEvents,
+		MilestoneEvents:           input.MilestoneEvents,
+		FeatureFlagEvents:         input.FeatureFlagEvents,
+		EmojiEvents:               input.EmojiEvents,
+		ResourceAccessTokenEvents: input.ResourceAccessTokenEvents,
+		ResourceDeployTokenEvents: input.ResourceDeployTokenEvents,
+		VulnerabilityEvents:       input.VulnerabilityEvents,
+		EnableSSLVerification:     input.EnableSSLVerification,
+	}
+}
+
+func projectHookOptionsFromEdit(input EditHookInput) projectHookOptions {
+	return projectHookOptions{
+		URL:                       input.URL,
+		Name:                      input.Name,
+		Description:               input.Description,
+		Token:                     input.Token,
+		SigningToken:              input.SigningToken,
+		PushEventsBranchFilter:    input.PushEventsBranchFilter,
+		CustomWebhookTemplate:     input.CustomWebhookTemplate,
+		BranchFilterStrategy:      input.BranchFilterStrategy,
+		PushEvents:                input.PushEvents,
+		IssuesEvents:              input.IssuesEvents,
+		ConfidentialIssuesEvents:  input.ConfidentialIssuesEvents,
+		MergeRequestsEvents:       input.MergeRequestsEvents,
+		TagPushEvents:             input.TagPushEvents,
+		NoteEvents:                input.NoteEvents,
+		ConfidentialNoteEvents:    input.ConfidentialNoteEvents,
+		JobEvents:                 input.JobEvents,
+		PipelineEvents:            input.PipelineEvents,
+		WikiPageEvents:            input.WikiPageEvents,
+		DeploymentEvents:          input.DeploymentEvents,
+		ReleasesEvents:            input.ReleasesEvents,
+		MilestoneEvents:           input.MilestoneEvents,
+		FeatureFlagEvents:         input.FeatureFlagEvents,
+		EmojiEvents:               input.EmojiEvents,
+		ResourceAccessTokenEvents: input.ResourceAccessTokenEvents,
+		ResourceDeployTokenEvents: input.ResourceDeployTokenEvents,
+		VulnerabilityEvents:       input.VulnerabilityEvents,
+		EnableSSLVerification:     input.EnableSSLVerification,
+	}
+}
+
+func applyProjectHookOptions(input projectHookOptions, opts *gl.AddProjectHookOptions) {
+	if input.URL != "" {
+		opts.URL = new(input.URL)
+	}
 	if input.Name != "" {
 		opts.Name = new(input.Name)
 	}
@@ -1430,9 +1552,6 @@ func applyAddHookIdentity(input AddHookInput, opts *gl.AddProjectHookOptions) {
 	if input.SigningToken != "" {
 		opts.SigningToken = new(input.SigningToken)
 	}
-	if input.EnableSSLVerification != nil {
-		opts.EnableSSLVerification = input.EnableSSLVerification
-	}
 	if input.PushEventsBranchFilter != "" {
 		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
 	}
@@ -1442,10 +1561,10 @@ func applyAddHookIdentity(input AddHookInput, opts *gl.AddProjectHookOptions) {
 	if input.BranchFilterStrategy != "" {
 		opts.BranchFilterStrategy = new(input.BranchFilterStrategy)
 	}
+	applyProjectHookEventOptions(input, opts)
 }
 
-// applyAddHookEvents applies add hook events transformations.
-func applyAddHookEvents(input AddHookInput, opts *gl.AddProjectHookOptions) {
+func applyProjectHookEventOptions(input projectHookOptions, opts *gl.AddProjectHookOptions) {
 	if input.PushEvents != nil {
 		opts.PushEvents = input.PushEvents
 	}
@@ -1500,6 +1619,22 @@ func applyAddHookEvents(input AddHookInput, opts *gl.AddProjectHookOptions) {
 	if input.VulnerabilityEvents != nil {
 		opts.VulnerabilityEvents = input.VulnerabilityEvents
 	}
+	if input.EnableSSLVerification != nil {
+		opts.EnableSSLVerification = input.EnableSSLVerification
+	}
+}
+
+func addProjectHookOptions(input AddHookInput) *gl.AddProjectHookOptions {
+	opts := &gl.AddProjectHookOptions{}
+	applyProjectHookOptions(projectHookOptionsFromAdd(input), opts)
+	return opts
+}
+
+func editProjectHookOptions(input EditHookInput) *gl.EditProjectHookOptions {
+	addOptions := &gl.AddProjectHookOptions{}
+	applyProjectHookOptions(projectHookOptionsFromEdit(input), addOptions)
+	editOptions := gl.EditProjectHookOptions(*addOptions)
+	return &editOptions
 }
 
 // EditHookInput defines parameters for editing a project webhook.
@@ -1546,10 +1681,8 @@ func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookIn
 	if input.HookID == 0 {
 		return HookOutput{}, errors.New("projectEditHook: hook_id is required. Use gitlab_project_hook_list to find webhook IDs for the project")
 	}
-	opts := &gl.EditProjectHookOptions{}
-	applyEditHookIdentity(input, opts)
-	applyEditHookEvents(input, opts)
-	h, _, err := client.GL().Projects.EditProjectHook(string(input.ProjectID), input.HookID, opts, gl.WithContext(ctx))
+	opts := editProjectHookOptions(input)
+	h, _, err := doProjectHookRequest[projectHookAPI](ctx, client, http.MethodPut, projectHookPath(string(input.ProjectID), input.HookID), opts)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return HookOutput{}, toolutil.WrapErrWithHint("projectEditHook", err,
@@ -1558,96 +1691,7 @@ func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookIn
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("projectEditHook", err, http.StatusNotFound,
 			"hook may have been deleted \u2014 use gitlab_project_hook_list to find current hook_id")
 	}
-	return hookOutputFromGL(h), nil
-}
-
-// applyEditHookIdentity applies edit hook identity transformations.
-func applyEditHookIdentity(input EditHookInput, opts *gl.EditProjectHookOptions) {
-	if input.URL != "" {
-		opts.URL = new(input.URL)
-	}
-	if input.Name != "" {
-		opts.Name = new(input.Name)
-	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
-	if input.Token != "" {
-		opts.Token = new(input.Token)
-	}
-	if input.SigningToken != "" {
-		opts.SigningToken = new(input.SigningToken)
-	}
-	if input.EnableSSLVerification != nil {
-		opts.EnableSSLVerification = input.EnableSSLVerification
-	}
-	if input.PushEventsBranchFilter != "" {
-		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
-	}
-	if input.CustomWebhookTemplate != "" {
-		opts.CustomWebhookTemplate = new(input.CustomWebhookTemplate)
-	}
-	if input.BranchFilterStrategy != "" {
-		opts.BranchFilterStrategy = new(input.BranchFilterStrategy)
-	}
-}
-
-// applyEditHookEvents applies edit hook events transformations.
-func applyEditHookEvents(input EditHookInput, opts *gl.EditProjectHookOptions) {
-	if input.PushEvents != nil {
-		opts.PushEvents = input.PushEvents
-	}
-	if input.IssuesEvents != nil {
-		opts.IssuesEvents = input.IssuesEvents
-	}
-	if input.ConfidentialIssuesEvents != nil {
-		opts.ConfidentialIssuesEvents = input.ConfidentialIssuesEvents
-	}
-	if input.MergeRequestsEvents != nil {
-		opts.MergeRequestsEvents = input.MergeRequestsEvents
-	}
-	if input.TagPushEvents != nil {
-		opts.TagPushEvents = input.TagPushEvents
-	}
-	if input.NoteEvents != nil {
-		opts.NoteEvents = input.NoteEvents
-	}
-	if input.ConfidentialNoteEvents != nil {
-		opts.ConfidentialNoteEvents = input.ConfidentialNoteEvents
-	}
-	if input.JobEvents != nil {
-		opts.JobEvents = input.JobEvents
-	}
-	if input.PipelineEvents != nil {
-		opts.PipelineEvents = input.PipelineEvents
-	}
-	if input.WikiPageEvents != nil {
-		opts.WikiPageEvents = input.WikiPageEvents
-	}
-	if input.DeploymentEvents != nil {
-		opts.DeploymentEvents = input.DeploymentEvents
-	}
-	if input.ReleasesEvents != nil {
-		opts.ReleasesEvents = input.ReleasesEvents
-	}
-	if input.EmojiEvents != nil {
-		opts.EmojiEvents = input.EmojiEvents
-	}
-	if input.ResourceAccessTokenEvents != nil {
-		opts.ResourceAccessTokenEvents = input.ResourceAccessTokenEvents
-	}
-	if input.ResourceDeployTokenEvents != nil {
-		opts.ResourceDeployTokenEvents = input.ResourceDeployTokenEvents
-	}
-	if input.MilestoneEvents != nil {
-		opts.MilestoneEvents = input.MilestoneEvents
-	}
-	if input.FeatureFlagEvents != nil {
-		opts.FeatureFlagEvents = input.FeatureFlagEvents
-	}
-	if input.VulnerabilityEvents != nil {
-		opts.VulnerabilityEvents = input.VulnerabilityEvents
-	}
+	return hookOutputFromAPI(&h), nil
 }
 
 // DeleteHookInput defines parameters for deleting a project webhook.
