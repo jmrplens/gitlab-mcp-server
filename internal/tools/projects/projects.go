@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"reflect"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -1393,36 +1392,41 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 	return hookOutputFromAPI(&h), nil
 }
 
+// HookOptionsInput defines common project webhook settings shared by add and edit operations.
+type HookOptionsInput struct {
+	Name                      string `json:"name,omitempty" jsonschema:"Webhook name"`
+	Description               string `json:"description,omitempty" jsonschema:"Webhook description"`
+	Token                     string `json:"token,omitempty" jsonschema:"Secret token for validation"`
+	SigningToken              string `json:"signing_token,omitempty" jsonschema:"Write-only signing token for webhook signature validation"`
+	PushEventsBranchFilter    string `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events"`
+	CustomWebhookTemplate     string `json:"custom_webhook_template,omitempty" jsonschema:"Custom webhook payload template"`
+	BranchFilterStrategy      string `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
+	PushEvents                *bool  `json:"push_events,omitempty" jsonschema:"Trigger on push events"`
+	IssuesEvents              *bool  `json:"issues_events,omitempty" jsonschema:"Trigger on issue events"`
+	ConfidentialIssuesEvents  *bool  `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
+	MergeRequestsEvents       *bool  `json:"merge_requests_events,omitempty" jsonschema:"Trigger on merge request events"`
+	TagPushEvents             *bool  `json:"tag_push_events,omitempty" jsonschema:"Trigger on tag push events"`
+	NoteEvents                *bool  `json:"note_events,omitempty" jsonschema:"Trigger on note/comment events"`
+	ConfidentialNoteEvents    *bool  `json:"confidential_note_events,omitempty" jsonschema:"Trigger on confidential note events"`
+	JobEvents                 *bool  `json:"job_events,omitempty" jsonschema:"Trigger on CI job events"`
+	PipelineEvents            *bool  `json:"pipeline_events,omitempty" jsonschema:"Trigger on pipeline events"`
+	WikiPageEvents            *bool  `json:"wiki_page_events,omitempty" jsonschema:"Trigger on wiki page events"`
+	DeploymentEvents          *bool  `json:"deployment_events,omitempty" jsonschema:"Trigger on deployment events"`
+	ReleasesEvents            *bool  `json:"releases_events,omitempty" jsonschema:"Trigger on release events"`
+	MilestoneEvents           *bool  `json:"milestone_events,omitempty" jsonschema:"Trigger on milestone events"`
+	FeatureFlagEvents         *bool  `json:"feature_flag_events,omitempty" jsonschema:"Trigger on feature flag events"`
+	EmojiEvents               *bool  `json:"emoji_events,omitempty" jsonschema:"Trigger on emoji events"`
+	ResourceAccessTokenEvents *bool  `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
+	ResourceDeployTokenEvents *bool  `json:"resource_deploy_token_events,omitempty" jsonschema:"Trigger on resource deploy token events"`
+	VulnerabilityEvents       *bool  `json:"vulnerability_events,omitempty" jsonschema:"Trigger on vulnerability events"`
+	EnableSSLVerification     *bool  `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for webhook"`
+}
+
 // AddHookInput defines parameters for adding a webhook to a project.
 type AddHookInput struct {
-	ProjectID                 toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	URL                       string               `json:"url" jsonschema:"Webhook URL,required"`
-	Name                      string               `json:"name,omitempty" jsonschema:"Webhook name"`
-	Description               string               `json:"description,omitempty" jsonschema:"Webhook description"`
-	Token                     string               `json:"token,omitempty" jsonschema:"Secret token for validation"`
-	SigningToken              string               `json:"signing_token,omitempty" jsonschema:"Write-only signing token for webhook signature validation"`
-	PushEvents                *bool                `json:"push_events,omitempty" jsonschema:"Trigger on push events"`
-	PushEventsBranchFilter    string               `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events"`
-	IssuesEvents              *bool                `json:"issues_events,omitempty" jsonschema:"Trigger on issue events"`
-	ConfidentialIssuesEvents  *bool                `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
-	MergeRequestsEvents       *bool                `json:"merge_requests_events,omitempty" jsonschema:"Trigger on merge request events"`
-	TagPushEvents             *bool                `json:"tag_push_events,omitempty" jsonschema:"Trigger on tag push events"`
-	NoteEvents                *bool                `json:"note_events,omitempty" jsonschema:"Trigger on note/comment events"`
-	ConfidentialNoteEvents    *bool                `json:"confidential_note_events,omitempty" jsonschema:"Trigger on confidential note events"`
-	JobEvents                 *bool                `json:"job_events,omitempty" jsonschema:"Trigger on CI job events"`
-	PipelineEvents            *bool                `json:"pipeline_events,omitempty" jsonschema:"Trigger on pipeline events"`
-	WikiPageEvents            *bool                `json:"wiki_page_events,omitempty" jsonschema:"Trigger on wiki page events"`
-	DeploymentEvents          *bool                `json:"deployment_events,omitempty" jsonschema:"Trigger on deployment events"`
-	ReleasesEvents            *bool                `json:"releases_events,omitempty" jsonschema:"Trigger on release events"`
-	MilestoneEvents           *bool                `json:"milestone_events,omitempty" jsonschema:"Trigger on milestone events"`
-	FeatureFlagEvents         *bool                `json:"feature_flag_events,omitempty" jsonschema:"Trigger on feature flag events"`
-	EmojiEvents               *bool                `json:"emoji_events,omitempty" jsonschema:"Trigger on emoji events"`
-	ResourceAccessTokenEvents *bool                `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
-	ResourceDeployTokenEvents *bool                `json:"resource_deploy_token_events,omitempty" jsonschema:"Trigger on resource deploy token events"`
-	VulnerabilityEvents       *bool                `json:"vulnerability_events,omitempty" jsonschema:"Trigger on vulnerability events"`
-	EnableSSLVerification     *bool                `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification for webhook"`
-	CustomWebhookTemplate     string               `json:"custom_webhook_template,omitempty" jsonschema:"Custom webhook payload template"`
-	BranchFilterStrategy      string               `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	URL       string               `json:"url" jsonschema:"Webhook URL,required"`
+	HookOptionsInput
 }
 
 // AddHook adds a webhook to a project.
@@ -1449,87 +1453,9 @@ func AddHook(ctx context.Context, client *gitlabclient.Client, input AddHookInpu
 	return hookOutputFromAPI(&h), nil
 }
 
-type projectHookOptions struct {
-	URL                       string
-	Name                      string
-	Description               string
-	Token                     string
-	SigningToken              string
-	PushEventsBranchFilter    string
-	CustomWebhookTemplate     string
-	BranchFilterStrategy      string
-	PushEvents                *bool
-	IssuesEvents              *bool
-	ConfidentialIssuesEvents  *bool
-	MergeRequestsEvents       *bool
-	TagPushEvents             *bool
-	NoteEvents                *bool
-	ConfidentialNoteEvents    *bool
-	JobEvents                 *bool
-	PipelineEvents            *bool
-	WikiPageEvents            *bool
-	DeploymentEvents          *bool
-	ReleasesEvents            *bool
-	MilestoneEvents           *bool
-	FeatureFlagEvents         *bool
-	EmojiEvents               *bool
-	ResourceAccessTokenEvents *bool
-	ResourceDeployTokenEvents *bool
-	VulnerabilityEvents       *bool
-	EnableSSLVerification     *bool
-}
-
-var projectHookOptionFieldNames = []string{
-	"URL",
-	"Name",
-	"Description",
-	"Token",
-	"SigningToken",
-	"PushEventsBranchFilter",
-	"CustomWebhookTemplate",
-	"BranchFilterStrategy",
-	"PushEvents",
-	"IssuesEvents",
-	"ConfidentialIssuesEvents",
-	"MergeRequestsEvents",
-	"TagPushEvents",
-	"NoteEvents",
-	"ConfidentialNoteEvents",
-	"JobEvents",
-	"PipelineEvents",
-	"WikiPageEvents",
-	"DeploymentEvents",
-	"ReleasesEvents",
-	"MilestoneEvents",
-	"FeatureFlagEvents",
-	"EmojiEvents",
-	"ResourceAccessTokenEvents",
-	"ResourceDeployTokenEvents",
-	"VulnerabilityEvents",
-	"EnableSSLVerification",
-}
-
-func projectHookOptionsFromAdd(input AddHookInput) projectHookOptions {
-	return projectHookOptionsFromInput(input)
-}
-
-func projectHookOptionsFromEdit(input EditHookInput) projectHookOptions {
-	return projectHookOptionsFromInput(input)
-}
-
-func projectHookOptionsFromInput(input any) projectHookOptions {
-	var options projectHookOptions
-	sourceValue := reflect.ValueOf(input)
-	targetValue := reflect.ValueOf(&options).Elem()
-	for _, fieldName := range projectHookOptionFieldNames {
-		targetValue.FieldByName(fieldName).Set(sourceValue.FieldByName(fieldName))
-	}
-	return options
-}
-
-func applyProjectHookOptions(input projectHookOptions, opts *gl.AddProjectHookOptions) {
-	if input.URL != "" {
-		opts.URL = new(input.URL)
+func applyProjectHookOptions(url string, input HookOptionsInput, opts *gl.AddProjectHookOptions) {
+	if url != "" {
+		opts.URL = new(url)
 	}
 	if input.Name != "" {
 		opts.Name = new(input.Name)
@@ -1555,7 +1481,7 @@ func applyProjectHookOptions(input projectHookOptions, opts *gl.AddProjectHookOp
 	applyProjectHookEventOptions(input, opts)
 }
 
-func applyProjectHookEventOptions(input projectHookOptions, opts *gl.AddProjectHookOptions) {
+func applyProjectHookEventOptions(input HookOptionsInput, opts *gl.AddProjectHookOptions) {
 	if input.PushEvents != nil {
 		opts.PushEvents = input.PushEvents
 	}
@@ -1617,48 +1543,23 @@ func applyProjectHookEventOptions(input projectHookOptions, opts *gl.AddProjectH
 
 func addProjectHookOptions(input AddHookInput) *gl.AddProjectHookOptions {
 	opts := &gl.AddProjectHookOptions{}
-	applyProjectHookOptions(projectHookOptionsFromAdd(input), opts)
+	applyProjectHookOptions(input.URL, input.HookOptionsInput, opts)
 	return opts
 }
 
 func editProjectHookOptions(input EditHookInput) *gl.EditProjectHookOptions {
 	addOptions := &gl.AddProjectHookOptions{}
-	applyProjectHookOptions(projectHookOptionsFromEdit(input), addOptions)
+	applyProjectHookOptions(input.URL, input.HookOptionsInput, addOptions)
 	editOptions := gl.EditProjectHookOptions(*addOptions)
 	return &editOptions
 }
 
 // EditHookInput defines parameters for editing a project webhook.
 type EditHookInput struct {
-	ProjectID                 toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	HookID                    int64                `json:"hook_id" jsonschema:"Webhook ID to edit,required"`
-	URL                       string               `json:"url,omitempty" jsonschema:"Updated webhook URL"`
-	Name                      string               `json:"name,omitempty" jsonschema:"Updated webhook name"`
-	Description               string               `json:"description,omitempty" jsonschema:"Updated webhook description"`
-	Token                     string               `json:"token,omitempty" jsonschema:"Updated secret token"`
-	SigningToken              string               `json:"signing_token,omitempty" jsonschema:"Updated write-only signing token for webhook signature validation"`
-	PushEvents                *bool                `json:"push_events,omitempty" jsonschema:"Trigger on push events"`
-	PushEventsBranchFilter    string               `json:"push_events_branch_filter,omitempty" jsonschema:"Branch filter for push events"`
-	IssuesEvents              *bool                `json:"issues_events,omitempty" jsonschema:"Trigger on issue events"`
-	ConfidentialIssuesEvents  *bool                `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
-	MergeRequestsEvents       *bool                `json:"merge_requests_events,omitempty" jsonschema:"Trigger on merge request events"`
-	TagPushEvents             *bool                `json:"tag_push_events,omitempty" jsonschema:"Trigger on tag push events"`
-	NoteEvents                *bool                `json:"note_events,omitempty" jsonschema:"Trigger on note/comment events"`
-	ConfidentialNoteEvents    *bool                `json:"confidential_note_events,omitempty" jsonschema:"Trigger on confidential note events"`
-	JobEvents                 *bool                `json:"job_events,omitempty" jsonschema:"Trigger on CI job events"`
-	PipelineEvents            *bool                `json:"pipeline_events,omitempty" jsonschema:"Trigger on pipeline events"`
-	WikiPageEvents            *bool                `json:"wiki_page_events,omitempty" jsonschema:"Trigger on wiki page events"`
-	DeploymentEvents          *bool                `json:"deployment_events,omitempty" jsonschema:"Trigger on deployment events"`
-	ReleasesEvents            *bool                `json:"releases_events,omitempty" jsonschema:"Trigger on release events"`
-	MilestoneEvents           *bool                `json:"milestone_events,omitempty" jsonschema:"Trigger on milestone events"`
-	FeatureFlagEvents         *bool                `json:"feature_flag_events,omitempty" jsonschema:"Trigger on feature flag events"`
-	EmojiEvents               *bool                `json:"emoji_events,omitempty" jsonschema:"Trigger on emoji events"`
-	ResourceAccessTokenEvents *bool                `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
-	ResourceDeployTokenEvents *bool                `json:"resource_deploy_token_events,omitempty" jsonschema:"Trigger on resource deploy token events"`
-	VulnerabilityEvents       *bool                `json:"vulnerability_events,omitempty" jsonschema:"Trigger on vulnerability events"`
-	EnableSSLVerification     *bool                `json:"enable_ssl_verification,omitempty" jsonschema:"Enable SSL verification"`
-	CustomWebhookTemplate     string               `json:"custom_webhook_template,omitempty" jsonschema:"Custom webhook payload template"`
-	BranchFilterStrategy      string               `json:"branch_filter_strategy,omitempty" jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	HookID    int64                `json:"hook_id" jsonschema:"Webhook ID to edit,required"`
+	URL       string               `json:"url,omitempty" jsonschema:"Updated webhook URL"`
+	HookOptionsInput
 }
 
 // EditHook edits an existing project webhook.
@@ -2747,21 +2648,16 @@ func UploadAvatar(ctx context.Context, client *gitlabclient.Client, input Upload
 		return Output{}, errors.New("projectUploadAvatar: either file_path or content_base64 is required")
 	}
 
-	var reader *bytes.Reader
+	var reader io.Reader
 
 	if hasFilePath {
 		cfg := toolutil.GetUploadConfig()
-		f, info, err := toolutil.OpenAndValidateFile(input.FilePath, cfg.MaxFileSize)
+		f, _, err := toolutil.OpenAndValidateFile(input.FilePath, cfg.MaxFileSize)
 		if err != nil {
 			return Output{}, fmt.Errorf("projectUploadAvatar: %w", err)
 		}
 		defer f.Close()
-
-		data := make([]byte, info.Size())
-		if _, err = io.ReadFull(f, data); err != nil {
-			return Output{}, fmt.Errorf("projectUploadAvatar: reading file: %w", err)
-		}
-		reader = bytes.NewReader(data)
+		reader = f
 	} else {
 		decoded, err := base64.StdEncoding.DecodeString(input.ContentBase64)
 		if err != nil {
@@ -2807,6 +2703,10 @@ func DownloadAvatar(ctx context.Context, client *gitlabclient.Client, input Down
 		return DownloadAvatarOutput{}, toolutil.WrapErrWithStatusHint("projectDownloadAvatar", err, http.StatusNotFound,
 			"project has no custom avatar configured \u2014 GitLab serves a generated identicon when no avatar is set")
 	}
+	return downloadAvatarOutputFromReader(reader)
+}
+
+func downloadAvatarOutputFromReader(reader io.Reader) (DownloadAvatarOutput, error) {
 	data, err := io.ReadAll(reader)
 	if err != nil {
 		return DownloadAvatarOutput{}, fmt.Errorf("projectDownloadAvatar: reading response: %w", err)

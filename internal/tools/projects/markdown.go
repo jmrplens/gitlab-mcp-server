@@ -207,8 +207,7 @@ func FormatHookMarkdown(out HookOutput) string {
 	fmt.Fprintf(&b, "**Token Present:** %s\n", boolIcon(out.TokenPresent))
 	fmt.Fprintf(&b, "**Signing Token Present:** %s\n\n", boolIcon(out.SigningTokenPresent))
 	b.WriteString("### Event Triggers\n\n")
-	b.WriteString("| Event | Enabled |\n")
-	b.WriteString(toolutil.TblSep2Col)
+	b.WriteString(toolutil.MarkdownTableHeader("Event", "Enabled"))
 	events := []struct {
 		name string
 		on   bool
@@ -234,22 +233,20 @@ func FormatHookMarkdown(out HookOutput) string {
 		{"Vulnerability", out.VulnerabilityEvents},
 	}
 	for _, ev := range events {
-		fmt.Fprintf(&b, "| %s | %s |\n", ev.name, boolIcon(ev.on))
+		b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(ev.name), boolIcon(ev.on)))
 	}
 	if len(out.URLVariables) > 0 {
 		b.WriteString("\n### URL Variables\n\n")
-		b.WriteString("| Key | Value |\n")
-		b.WriteString(toolutil.TblSep2Col)
+		b.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
 		for _, variable := range out.URLVariables {
-			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(variable.Key), hookSecretMarkdownValue)
+			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), hookSecretMarkdownValue))
 		}
 	}
 	if len(out.CustomHeaders) > 0 {
 		b.WriteString("\n### Custom Headers\n\n")
-		b.WriteString("| Key | Value |\n")
-		b.WriteString(toolutil.TblSep2Col)
+		b.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
 		for _, header := range out.CustomHeaders {
-			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(header.Key), hookSecretMarkdownValue)
+			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(header.Key), hookSecretMarkdownValue))
 		}
 	}
 	toolutil.WriteHints(&b,

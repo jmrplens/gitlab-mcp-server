@@ -20766,16 +20766,16 @@ Edit an existing project webhook. Update the URL, events, SSL verification, secr
 - `confidential_note_events` (boolean): Trigger on confidential note events
 - `custom_webhook_template` (string): Custom webhook payload template
 - `deployment_events` (boolean): Trigger on deployment events
-- `description` (string): Updated webhook description
+- `description` (string): Webhook description
 - `emoji_events` (boolean): Trigger on emoji events
-- `enable_ssl_verification` (boolean): Enable SSL verification
+- `enable_ssl_verification` (boolean): Enable SSL verification for webhook
 - `feature_flag_events` (boolean): Trigger on feature flag events
 - `hook_id` (integer) (required): Webhook ID to edit
 - `issues_events` (boolean): Trigger on issue events
 - `job_events` (boolean): Trigger on CI job events
 - `merge_requests_events` (boolean): Trigger on merge request events
 - `milestone_events` (boolean): Trigger on milestone events
-- `name` (string): Updated webhook name
+- `name` (string): Webhook name
 - `note_events` (boolean): Trigger on note/comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -20784,9 +20784,9 @@ Edit an existing project webhook. Update the URL, events, SSL verification, secr
 - `releases_events` (boolean): Trigger on release events
 - `resource_access_token_events` (boolean): Trigger on resource access token events
 - `resource_deploy_token_events` (boolean): Trigger on resource deploy token events
-- `signing_token` (string): Updated write-only signing token for webhook signature validation
+- `signing_token` (string): Write-only signing token for webhook signature validation
 - `tag_push_events` (boolean): Trigger on tag push events
-- `token` (string): Updated secret token
+- `token` (string): Secret token for validation
 - `url` (string): Updated webhook URL
 - `vulnerability_events` (boolean): Trigger on vulnerability events
 - `wiki_page_events` (boolean): Trigger on wiki page events

@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,195 |
-| Unit test functions                                   |  9,944 |
+| Total test functions                                  | 10,197 |
+| Unit test functions                                   |  9,946 |
 | E2E test functions                                    |    251 |
 | cmd test functions                                    |    531 |
 | Test files (internal/)                                |    422 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,137 | 89.6% |
+| `TestFunc_Scenario` (2-part)           | 9,139 | 89.6% |
 | `TestFunc` (no underscore)             |   768 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   290 |  2.8% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,728 |         80 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (170) |          7,401 |        330 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (170) |          7,403 |        330 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            531 |         22 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,195** |    **553** |                                                                                                 |
+| **Total**               |     **10,197** |    **553** |                                                                                                 |
 
 ### Core Packages
 
@@ -79,7 +79,7 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   339 |    99.8% |    54 |
+| projects          |   341 |   100.0% |    54 |
 | mergerequests     |   224 |   100.0% |    30 |
 | issues            |   207 |   100.0% |    21 |
 | users             |   186 |   100.0% |    36 |
@@ -238,7 +238,7 @@
 | projectimportexport     |        33 |          1 |   100.0% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        62 |          2 |   100.0% |         7 |
-| projects                |       339 |          4 |    99.8% |        54 |
+| projects                |       341 |          4 |   100.0% |        54 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        17 |          2 |   100.0% |         6 |
 | projecttemplates        |        18 |          1 |   100.0% |         2 |
@@ -282,7 +282,7 @@
 | vulnerabilities         |        57 |          3 |   100.0% |         8 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,401** |    **330** |          | **1,118** |
+| **Total**               | **7,403** |    **330** |          | **1,118** |
 
 </details>
 
@@ -464,7 +464,7 @@
 | projectimportexport     |   100.0% |
 | projectiterations       |   100.0% |
 | projectmirrors          |   100.0% |
-| projects                |    99.8% |
+| projects                |   100.0% |
 | projectstatistics       |   100.0% |
 | projectstoragemoves     |   100.0% |
 | projecttemplates        |   100.0% |

@@ -86176,7 +86176,7 @@
           ]
         },
         "description": {
-          "description": "Updated webhook description",
+          "description": "Webhook description",
           "type": "string"
         },
         "emoji_events": {
@@ -86187,7 +86187,7 @@
           ]
         },
         "enable_ssl_verification": {
-          "description": "Enable SSL verification",
+          "description": "Enable SSL verification for webhook",
           "type": [
             "null",
             "boolean"
@@ -86233,7 +86233,7 @@
           ]
         },
         "name": {
-          "description": "Updated webhook name",
+          "description": "Webhook name",
           "type": "string"
         },
         "note_events": {
@@ -86287,7 +86287,7 @@
           ]
         },
         "signing_token": {
-          "description": "Updated write-only signing token for webhook signature validation",
+          "description": "Write-only signing token for webhook signature validation",
           "type": "string"
         },
         "tag_push_events": {
@@ -86298,7 +86298,7 @@
           ]
         },
         "token": {
-          "description": "Updated secret token",
+          "description": "Secret token for validation",
           "type": "string"
         },
         "url": {
