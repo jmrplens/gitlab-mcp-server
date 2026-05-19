@@ -5,106 +5,220 @@ import (
 	"testing"
 )
 
-func TestFormatMarkdownTables_FormatsPipeTables(t *testing.T) {
-	input := strings.Join([]string{
-		"Before",
-		"",
-		"| Name | Count | Status |",
-		"| --- | ---: | :---: |",
-		"| short | 1 | ok |",
-		"| much longer | 20 | review |",
-		"",
-		"After",
-		"",
-	}, "\n")
-	want := strings.Join([]string{
-		"Before",
-		"",
-		"| Name        | Count | Status |",
-		"| ----------- | ----: | :----: |",
-		"| short       |     1 |   ok   |",
-		"| much longer |    20 | review |",
-		"",
-		"After",
-		"",
-	}, "\n")
-
-	got, changed := FormatMarkdownTables(input)
-	if !changed {
-		t.Fatal("FormatMarkdownTables changed = false, want true")
-	}
-	if got != want {
-		t.Fatalf("FormatMarkdownTables() =\n%s\nwant\n%s", got, want)
-	}
-}
-
-func TestFormatMarkdownTables_SkipsFencedCodeBlocks(t *testing.T) {
-	input := strings.Join([]string{
-		"```md",
-		"| A | B |",
-		"| --- | --- |",
-		"| unformatted | value |",
-		"```",
-		"",
-	}, "\n")
-
-	got, changed := FormatMarkdownTables(input)
-	if changed {
-		t.Fatal("FormatMarkdownTables changed fenced code block")
-	}
-	if got != input {
-		t.Fatalf("FormatMarkdownTables() =\n%s\nwant\n%s", got, input)
-	}
-}
-
-func TestFormatMarkdownTables_PreservesEscapedAndCodePipes(t *testing.T) {
-	input := strings.Join([]string{
-		"| Pattern | Meaning |",
-		"| --- | --- |",
-		"| `a|b` | escaped \\| pipe |",
-		"",
-	}, "\n")
-	want := strings.Join([]string{
-		"| Pattern | Meaning         |",
-		"| ------- | --------------- |",
-		"| `a|b`   | escaped \\| pipe |",
-		"",
-	}, "\n")
-
-	got, changed := FormatMarkdownTables(input)
-	if !changed {
-		t.Fatal("FormatMarkdownTables changed = false, want true")
-	}
-	if got != want {
-		t.Fatalf("FormatMarkdownTables() =\n%s\nwant\n%s", got, want)
-	}
-}
-
-func TestFormatMarkdownTables_PreservesEOFWithoutNewline(t *testing.T) {
-	input := "| A | B |\n| --- | --- |\n| one | two |"
-	want := "| A   | B   |\n| --- | --- |\n| one | two |"
-
-	got, changed := FormatMarkdownTables(input)
-	if !changed {
-		t.Fatal("FormatMarkdownTables changed = false, want true")
-	}
-	if got != want {
-		t.Fatalf("FormatMarkdownTables() = %q, want %q", got, want)
-	}
-}
-
-func TestFormatMarkdownTables_IdempotentForFormattedTable(t *testing.T) {
-	input := RenderMarkdownTable(
+func TestFormatMarkdownTables_TableDriven(t *testing.T) {
+	formattedTable := RenderMarkdownTable(
 		[]string{"Name", "Count"},
 		[]Alignment{AlignLeft, AlignRight},
 		[][]string{{"alpha", "10"}},
 	)
 
-	got, changed := FormatMarkdownTables(input)
-	if changed {
-		t.Fatal("FormatMarkdownTables changed already formatted table")
+	tests := []struct {
+		name        string
+		input       string
+		want        string
+		wantChanged bool
+	}{
+		{
+			name: "formats pipe tables",
+			input: strings.Join([]string{
+				"Before",
+				"",
+				"| Name | Count | Status |",
+				"| --- | ---: | :---: |",
+				"| short | 1 | ok |",
+				"| much longer | 20 | review |",
+				"",
+				"After",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"Before",
+				"",
+				"| Name        | Count | Status |",
+				"| ----------- | ----: | :----: |",
+				"| short       |     1 |   ok   |",
+				"| much longer |    20 | review |",
+				"",
+				"After",
+				"",
+			}, "\n"),
+			wantChanged: true,
+		},
+		{
+			name: "skips fenced code blocks",
+			input: strings.Join([]string{
+				"```md",
+				"| A | B |",
+				"| --- | --- |",
+				"| unformatted | value |",
+				"```",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"```md",
+				"| A | B |",
+				"| --- | --- |",
+				"| unformatted | value |",
+				"```",
+				"",
+			}, "\n"),
+		},
+		{
+			name: "preserves escaped and code pipes",
+			input: strings.Join([]string{
+				"| Pattern | Meaning |",
+				"| --- | --- |",
+				"| `a|b` | escaped \\| pipe |",
+				"| ``a|b`` | code span |",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"| Pattern | Meaning         |",
+				"| ------- | --------------- |",
+				"| `a|b`   | escaped \\| pipe |",
+				"| ``a|b`` | code span       |",
+				"",
+			}, "\n"),
+			wantChanged: true,
+		},
+		{
+			name:        "preserves eof without newline",
+			input:       "| A | B |\n| --- | --- |\n| one | two |",
+			want:        "| A   | B   |\n| --- | --- |\n| one | two |",
+			wantChanged: true,
+		},
+		{
+			name: "preserves crlf line endings",
+			input: strings.Join([]string{
+				"| A | B |\r",
+				"| --- | ---: |\r",
+				"| one | 2 |\r",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"| A   |    B |\r",
+				"| --- | ---: |\r",
+				"| one |    2 |\r",
+				"",
+			}, "\n"),
+			wantChanged: true,
+		},
+		{
+			name: "normalizes ragged rows",
+			input: strings.Join([]string{
+				"| A | B | C |",
+				"| --- | --- | --- |",
+				"| one | two |",
+				"| extra | values | ignored | more |",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"| A     | B      | C       |",
+				"| ----- | ------ | ------- |",
+				"| one   | two    |         |",
+				"| extra | values | ignored |",
+				"",
+			}, "\n"),
+			wantChanged: true,
+		},
+		{
+			name: "stops table at non table content",
+			input: strings.Join([]string{
+				"| A | B |",
+				"| --- | --- |",
+				"| one | two |",
+				"not a table",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"| A   | B   |",
+				"| --- | --- |",
+				"| one | two |",
+				"not a table",
+				"",
+			}, "\n"),
+			wantChanged: true,
+		},
+		{
+			name:        "idempotent for formatted table",
+			input:       formattedTable,
+			want:        formattedTable,
+			wantChanged: false,
+		},
+		{
+			name:        "empty content",
+			input:       "",
+			want:        "",
+			wantChanged: false,
+		},
+		{
+			name: "leaves invalid short separator unchanged",
+			input: strings.Join([]string{
+				"| A | B |",
+				"| -- | --- |",
+				"| one | two |",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"| A | B |",
+				"| -- | --- |",
+				"| one | two |",
+				"",
+			}, "\n"),
+		},
+		{
+			name: "leaves empty separator cell unchanged",
+			input: strings.Join([]string{
+				"| A | B |",
+				"|  | --- |",
+				"| one | two |",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"| A | B |",
+				"|  | --- |",
+				"| one | two |",
+				"",
+			}, "\n"),
+		},
+		{
+			name: "leaves separator column mismatch unchanged",
+			input: strings.Join([]string{
+				"| A | B |",
+				"| --- |",
+				"| one | two |",
+				"",
+			}, "\n"),
+			want: strings.Join([]string{
+				"| A | B |",
+				"| --- |",
+				"| one | two |",
+				"",
+			}, "\n"),
+		},
 	}
-	if got != input {
-		t.Fatalf("FormatMarkdownTables() =\n%s\nwant\n%s", got, input)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, changed := FormatMarkdownTables(tt.input)
+			if changed != tt.wantChanged {
+				t.Fatalf("FormatMarkdownTables changed = %v, want %v", changed, tt.wantChanged)
+			}
+			if got != tt.want {
+				t.Fatalf("FormatMarkdownTables() =\n%s\nwant\n%s", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMarkdownTableHelpers_EdgeCases(t *testing.T) {
+	if _, ok := parseMarkdownTableSeparator("| --- |", 0); ok {
+		t.Fatal("parseMarkdownTableSeparator accepted zero columns")
+	}
+	if got := applyMarkdownTableLineEnding("rendered\n", nil); got != "rendered\n" {
+		t.Fatalf("applyMarkdownTableLineEnding() = %q, want rendered newline", got)
+	}
+	if got := applyMarkdownTableLineEnding("rendered\n", []markdownLine{{Raw: "raw", Text: "raw"}}); got != "rendered" {
+		t.Fatalf("applyMarkdownTableLineEnding() = %q, want trimmed newline", got)
 	}
 }

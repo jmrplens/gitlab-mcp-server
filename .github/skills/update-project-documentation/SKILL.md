@@ -115,7 +115,7 @@ After all updates are applied, perform a parity check:
 - [ ] No TBD/TODO placeholders in updated sections
 - [ ] Consistent terminology and style with surrounding content
 - [ ] Deprecation notices added for removed APIs
-- [ ] Markdown pipe tables in `README.md` and `docs/` were normalized with `go run ./cmd/format_md_tables/ --check`
+- [ ] Markdown pipe tables in `README.md` and `docs/` were verified with `go run ./cmd/format_md_tables/ --check`
 
 ## Output Format
 

@@ -46,7 +46,13 @@ func run(args []string, stdout io.Writer) error {
 	}
 	opts.root = root
 
-	files, err := discoverMarkdownFiles(opts.root, opts.paths)
+	rootFS, err := os.OpenRoot(opts.root)
+	if err != nil {
+		return fmt.Errorf("open root %s: %w", opts.root, err)
+	}
+	defer rootFS.Close()
+
+	files, err := discoverMarkdownFiles(rootFS, opts.root, opts.paths)
 	if err != nil {
 		return err
 	}
@@ -54,12 +60,12 @@ func run(args []string, stdout io.Writer) error {
 	changed := make([]string, 0)
 	for _, file := range files {
 		var fileChanged bool
-		fileChanged, err = formatMarkdownTableFile(file, opts.check)
+		fileChanged, err = formatMarkdownTableFile(rootFS, file, opts.check)
 		if err != nil {
 			return err
 		}
 		if fileChanged {
-			changed = append(changed, displayPath(opts.root, file))
+			changed = append(changed, displayPath(file))
 		}
 	}
 
@@ -67,17 +73,26 @@ func run(args []string, stdout io.Writer) error {
 		if len(changed) > 0 {
 			return fmt.Errorf("markdown tables are out of date in %d file(s): %s", len(changed), strings.Join(changed, ", "))
 		}
-		_, _ = fmt.Fprintln(stdout, "Markdown tables are up to date")
-		return nil
+		return writeStdout(stdout, "Markdown tables are up to date")
 	}
 
 	if len(changed) == 0 {
-		_, _ = fmt.Fprintln(stdout, "Markdown tables already formatted")
-		return nil
+		return writeStdout(stdout, "Markdown tables already formatted")
 	}
-	_, _ = fmt.Fprintf(stdout, "Formatted Markdown tables in %d file(s):\n", len(changed))
+	if _, writeErr := fmt.Fprintf(stdout, "Formatted Markdown tables in %d file(s):\n", len(changed)); writeErr != nil {
+		return fmt.Errorf("write stdout: %w", writeErr)
+	}
 	for _, file := range changed {
-		_, _ = fmt.Fprintf(stdout, "- %s\n", file)
+		if _, writeErr := fmt.Fprintf(stdout, "- %s\n", file); writeErr != nil {
+			return fmt.Errorf("write stdout: %w", writeErr)
+		}
+	}
+	return nil
+}
+
+func writeStdout(stdout io.Writer, message string) error {
+	if _, err := fmt.Fprintln(stdout, message); err != nil {
+		return fmt.Errorf("write stdout: %w", err)
 	}
 	return nil
 }
@@ -98,19 +113,19 @@ func parseOptions(args []string) (options, error) {
 	return opts, nil
 }
 
-func discoverMarkdownFiles(root string, paths []string) ([]string, error) {
+func discoverMarkdownFiles(rootFS *os.Root, root string, paths []string) ([]string, error) {
 	files := make([]string, 0)
 	for _, item := range paths {
-		path, err := resolveInputPath(root, item)
+		rel, err := resolveInputPath(root, item)
 		if err != nil {
 			return nil, err
 		}
-		info, err := os.Stat(path)
+		info, err := rootFS.Stat(rel)
 		if err != nil {
-			return nil, fmt.Errorf("stat %s: %w", path, err)
+			return nil, fmt.Errorf("stat %s: %w", item, err)
 		}
 		if info.IsDir() {
-			walkErr := filepath.WalkDir(path, func(path string, entry iofs.DirEntry, err error) error {
+			walkErr := iofs.WalkDir(rootFS.FS(), filepath.ToSlash(rel), func(path string, entry iofs.DirEntry, err error) error {
 				if err != nil {
 					return err
 				}
@@ -118,25 +133,38 @@ func discoverMarkdownFiles(root string, paths []string) ([]string, error) {
 					return nil
 				}
 				if strings.EqualFold(filepath.Ext(entry.Name()), ".md") {
-					files = append(files, path)
+					relPath := filepath.FromSlash(path)
+					fileInfo, statErr := rootFS.Stat(relPath)
+					if statErr != nil {
+						return fmt.Errorf("stat %s: %w", relPath, statErr)
+					}
+					if !fileInfo.IsDir() {
+						files = append(files, relPath)
+					}
 				}
 				return nil
 			})
 			if walkErr != nil {
-				return nil, fmt.Errorf("walk %s: %w", path, walkErr)
+				return nil, fmt.Errorf("walk %s: %w", item, walkErr)
 			}
 			continue
 		}
-		if strings.EqualFold(filepath.Ext(info.Name()), ".md") {
-			files = append(files, path)
+		if strings.EqualFold(filepath.Ext(rel), ".md") {
+			files = append(files, rel)
 		}
 	}
-	sort.Strings(files)
+	sort.Slice(files, func(i, j int) bool {
+		return filepath.ToSlash(files[i]) < filepath.ToSlash(files[j])
+	})
 	return files, nil
 }
 
 func resolveInputPath(root, item string) (string, error) {
-	path := filepath.Clean(filepath.Join(root, item))
+	path := item
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(root, item)
+	}
+	path = filepath.Clean(path)
 	rel, err := filepath.Rel(root, path)
 	if err != nil {
 		return "", fmt.Errorf("resolve %s: %w", item, err)
@@ -144,11 +172,11 @@ func resolveInputPath(root, item string) (string, error) {
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path %s escapes root %s", item, root)
 	}
-	return path, nil
+	return rel, nil
 }
 
-func formatMarkdownTableFile(path string, check bool) (bool, error) {
-	content, err := os.ReadFile(path)
+func formatMarkdownTableFile(rootFS *os.Root, path string, check bool) (bool, error) {
+	content, err := rootFS.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -156,22 +184,17 @@ func formatMarkdownTableFile(path string, check bool) (bool, error) {
 	if !changed || check {
 		return changed, nil
 	}
-	info, err := os.Stat(path)
+	info, err := rootFS.Stat(path)
 	if err != nil {
 		return false, fmt.Errorf("stat %s: %w", path, err)
 	}
-	// #nosec G703 -- paths are resolved under --root before formatting repository files.
-	writeErr := os.WriteFile(path, []byte(formatted), info.Mode().Perm())
+	writeErr := rootFS.WriteFile(path, []byte(formatted), info.Mode().Perm())
 	if writeErr != nil {
 		return false, fmt.Errorf("write %s: %w", path, writeErr)
 	}
 	return true, nil
 }
 
-func displayPath(root, path string) string {
-	rel, err := filepath.Rel(root, path)
-	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
-		return filepath.ToSlash(path)
-	}
-	return filepath.ToSlash(rel)
+func displayPath(path string) string {
+	return filepath.ToSlash(path)
 }

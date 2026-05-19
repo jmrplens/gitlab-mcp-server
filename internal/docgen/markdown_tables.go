@@ -116,9 +116,6 @@ func parseMarkdownTableRow(line string) ([]string, bool) {
 	}
 
 	cells := splitMarkdownTableCells(trimmed)
-	if len(cells) == 0 {
-		return nil, false
-	}
 	return cells, true
 }
 
@@ -126,10 +123,24 @@ func splitMarkdownTableCells(line string) []string {
 	cells := make([]string, 0, strings.Count(line, "|")+1)
 	var cell strings.Builder
 	inCode := false
-	for i := range len(line) {
+	codeDelimiterLen := 0
+	for i := 0; i < len(line); i++ {
 		ch := line[i]
 		if ch == '`' && !isEscapedAt(line, i) {
-			inCode = !inCode
+			run := 1
+			for j := i + 1; j < len(line) && line[j] == '`'; j++ {
+				run++
+			}
+			if !inCode {
+				inCode = true
+				codeDelimiterLen = run
+			} else if run == codeDelimiterLen {
+				inCode = false
+				codeDelimiterLen = 0
+			}
+			cell.WriteString(line[i : i+run])
+			i += run - 1
+			continue
 		}
 		if ch == '|' && !inCode && !isEscapedAt(line, i) {
 			cells = append(cells, strings.TrimSpace(cell.String()))
