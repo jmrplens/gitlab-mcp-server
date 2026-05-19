@@ -158,10 +158,9 @@ func FormatHookMarkdown(h HookOutput) string {
 	}
 	if len(h.URLVariables) > 0 {
 		b.WriteString("\n### URL Variables\n\n")
-		b.WriteString("| Key | Value |\n")
-		b.WriteString(toolutil.TblSep2Col)
+		b.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
 		for _, variable := range h.URLVariables {
-			fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(variable.Key), toolutil.EscapeMdTableCell(variable.Value))
+			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), toolutil.RedactedSecretValue))
 		}
 	}
 	toolutil.WriteHints(&b,

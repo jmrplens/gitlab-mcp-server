@@ -76,8 +76,7 @@ type DeleteHookInput struct {
 // placeholders like {var_name} in a webhook URL with secret values resolved
 // server-side. Only the key is returned by the API; the value is masked.
 type HookURLVariable struct {
-	Key   string `json:"key"`
-	Value string `json:"value,omitempty"`
+	Key string `json:"key"`
 }
 
 // HookOutput represents a GitLab group webhook.
@@ -154,7 +153,7 @@ func hookToOutput(h *gl.GroupHook) HookOutput {
 	if len(h.URLVariables) > 0 {
 		out.URLVariables = make([]HookURLVariable, len(h.URLVariables))
 		for i, v := range h.URLVariables {
-			out.URLVariables[i] = HookURLVariable{Key: v.Key, Value: v.Value}
+			out.URLVariables[i] = HookURLVariable{Key: v.Key}
 		}
 	}
 	if h.CreatedAt != nil {

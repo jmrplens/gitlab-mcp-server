@@ -5,6 +5,7 @@ package groups
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -72,6 +73,13 @@ func TestListHooks_Success(t *testing.T) {
 	}
 	if len(out.Hooks[0].URLVariables) != 1 || out.Hooks[0].URLVariables[0].Key != "env" {
 		t.Fatalf("unexpected URL variables: %+v", out.Hooks[0].URLVariables)
+	}
+	encodedHook, err := json.Marshal(out.Hooks[0])
+	if err != nil {
+		t.Fatalf("marshal hook output: %v", err)
+	}
+	if strings.Contains(string(encodedHook), `"value"`) || strings.Contains(string(encodedHook), "prod") {
+		t.Fatalf("hook output exposed secret-bearing values: %s", encodedHook)
 	}
 }
 
@@ -351,5 +359,60 @@ func TestGetHook_URLVariables(t *testing.T) {
 	}
 	if out.URLVariables[0].Key != "token" || out.URLVariables[1].Key != "api_key" {
 		t.Errorf("URLVariables = %+v", out.URLVariables)
+	}
+	encodedHook, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal hook output: %v", err)
+	}
+	if strings.Contains(string(encodedHook), `"value"`) {
+		t.Fatalf("hook output exposed URL variable values: %s", encodedHook)
+	}
+}
+
+func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
+	text := FormatHookMarkdown(HookOutput{
+		ID:                  10,
+		URL:                 testHookURL,
+		Name:                "Deploy hook",
+		Description:         "Deploy events",
+		GroupID:             99,
+		AlertStatus:         "executable",
+		DisabledUntil:       "2026-01-16T10:00:00Z",
+		CreatedAt:           "2026-01-15T10:00:00Z",
+		TokenPresent:        true,
+		SigningTokenPresent: true,
+		URLVariables:        []HookURLVariable{{Key: "token"}},
+	})
+
+	for _, want := range []string{"Deploy hook", "Deploy events", "Alert Status", "Disabled Until", "Created", "URL Variables", "token", "REDACTED"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("FormatHookMarkdown missing %q: %s", want, text)
+		}
+	}
+}
+
+func TestEnabledEvents_AllEvents(t *testing.T) {
+	text := enabledEvents(HookOutput{
+		PushEvents:          true,
+		TagPushEvents:       true,
+		MergeRequestsEvents: true,
+		IssuesEvents:        true,
+		NoteEvents:          true,
+		JobEvents:           true,
+		PipelineEvents:      true,
+		WikiPageEvents:      true,
+		DeploymentEvents:    true,
+		ReleasesEvents:      true,
+		MilestoneEvents:     true,
+		FeatureFlagEvents:   true,
+		SubGroupEvents:      true,
+		MemberEvents:        true,
+		VulnerabilityEvents: true,
+	})
+
+	for _, want := range []string{"push", "tag_push", "merge_request", "issues", "note", "job", "pipeline", "wiki", "deployment", "releases", "milestone", "feature_flag", "subgroup", "member", "vulnerability"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("enabledEvents missing %q: %s", want, text)
+		}
 	}
 }

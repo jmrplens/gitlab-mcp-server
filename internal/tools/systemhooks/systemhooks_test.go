@@ -5,6 +5,7 @@ package systemhooks
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -63,6 +64,13 @@ func TestList_Success(t *testing.T) {
 	}
 	if len(out.Hooks[0].URLVariables) != 1 || out.Hooks[0].URLVariables[0].Key != "env" {
 		t.Fatalf("unexpected URL variables: %+v", out.Hooks[0].URLVariables)
+	}
+	encodedHook, err := json.Marshal(out.Hooks[0])
+	if err != nil {
+		t.Fatalf("marshal hook output: %v", err)
+	}
+	if strings.Contains(string(encodedHook), `"value"`) || strings.Contains(string(encodedHook), "prod") {
+		t.Fatalf("hook output exposed secret-bearing values: %s", encodedHook)
 	}
 }
 
@@ -438,6 +446,21 @@ func TestFormatHookMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(text, "A test hook") {
 		t.Errorf("expected description in output, got: %s", text)
+	}
+}
+
+func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
+	result := FormatHookMarkdown(HookItem{
+		ID:           1,
+		URL:          testHookURL,
+		URLVariables: []HookURLVariable{{Key: "token"}},
+	})
+	text := result.Content[0].(*mcp.TextContent).Text
+
+	for _, want := range []string{"URL Variables", "token", "REDACTED"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("FormatHookMarkdown missing %q: %s", want, text)
+		}
 	}
 }
 

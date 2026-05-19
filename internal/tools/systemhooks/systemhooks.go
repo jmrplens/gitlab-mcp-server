@@ -32,8 +32,7 @@ type HookItem struct {
 
 // HookURLVariable represents a masked URL variable configured on a system hook.
 type HookURLVariable struct {
-	Key   string `json:"key"`
-	Value string `json:"value,omitempty"`
+	Key string `json:"key"`
 }
 
 // HookEventItem represents a hook test event.
@@ -171,7 +170,7 @@ func hookURLVariablesToOutput(variables []gl.HookURLVariable) []HookURLVariable 
 	}
 	out := make([]HookURLVariable, len(variables))
 	for i, variable := range variables {
-		out[i] = HookURLVariable{Key: variable.Key, Value: variable.Value}
+		out[i] = HookURLVariable{Key: variable.Key}
 	}
 	return out
 }

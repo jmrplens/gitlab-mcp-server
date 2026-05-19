@@ -96,6 +96,20 @@ const (
 	headerXPerPage    = "X-Per-Page"
 )
 
+func assertJSONKeys(t *testing.T, body string, keys ...string) {
+	t.Helper()
+
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("request body is not valid JSON: %v", err)
+	}
+	for _, key := range keys {
+		if _, ok := payload[key]; !ok {
+			t.Errorf("request body missing field %q", key)
+		}
+	}
+}
+
 // TestProjectCreate_Success verifies that Create creates a project and
 // returns the correct ID, name, path, and visibility. The mock returns
 // HTTP 201 with a valid project JSON response.
@@ -1637,6 +1651,13 @@ func TestProjectListHooks_Success(t *testing.T) {
 	if len(out.Hooks[0].CustomHeaders) != 1 || out.Hooks[0].CustomHeaders[0].Key != "X-Env" {
 		t.Fatalf("unexpected custom headers: %+v", out.Hooks[0].CustomHeaders)
 	}
+	encodedHook, err := json.Marshal(out.Hooks[0])
+	if err != nil {
+		t.Fatalf("marshal hook output: %v", err)
+	}
+	if strings.Contains(string(encodedHook), `"value"`) || strings.Contains(string(encodedHook), "prod") {
+		t.Fatalf("hook output exposed secret-bearing values: %s", encodedHook)
+	}
 }
 
 func TestProjectHookCustomHeadersToOutput_SkipsNilEntries(t *testing.T) {
@@ -1644,7 +1665,7 @@ func TestProjectHookCustomHeadersToOutput_SkipsNilEntries(t *testing.T) {
 		nil,
 		{Key: "X-Env", Value: "prod"},
 	})
-	if len(headers) != 1 || headers[0].Key != "X-Env" || headers[0].Value != "prod" {
+	if len(headers) != 1 || headers[0].Key != "X-Env" {
 		t.Fatalf("unexpected custom headers: %+v", headers)
 	}
 
@@ -3004,11 +3025,20 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf(fmtIDWant1, out.ID)
 	}
-	for _, want := range []string{"url", "token", "signing_token", "push_events_branch_filter", "custom_webhook_template", "branch_filter_strategy", "emoji_events", "resource_access_token_events", "resource_deploy_token_events", "milestone_events", "feature_flag_events", "vulnerability_events"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
-	}
+	assertJSONKeys(t, capturedBody,
+		"url",
+		"token",
+		"signing_token",
+		"push_events_branch_filter",
+		"custom_webhook_template",
+		"branch_filter_strategy",
+		"emoji_events",
+		"resource_access_token_events",
+		"resource_deploy_token_events",
+		"milestone_events",
+		"feature_flag_events",
+		"vulnerability_events",
+	)
 }
 
 // TestEditHook_WithAllEvents verifies EditHook when with all events.
@@ -3066,11 +3096,19 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 	if out.URL != "https://example.com/hook-updated" {
 		t.Errorf("URL = %q, want updated URL", out.URL)
 	}
-	for _, want := range []string{"url", "token", "signing_token", "push_events_branch_filter", "custom_webhook_template", "branch_filter_strategy", "emoji_events", "resource_deploy_token_events", "milestone_events", "feature_flag_events", "vulnerability_events"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
-	}
+	assertJSONKeys(t, capturedBody,
+		"url",
+		"token",
+		"signing_token",
+		"push_events_branch_filter",
+		"custom_webhook_template",
+		"branch_filter_strategy",
+		"emoji_events",
+		"resource_deploy_token_events",
+		"milestone_events",
+		"feature_flag_events",
+		"vulnerability_events",
+	)
 }
 
 // ---------------------------------------------------------------------------
@@ -3351,18 +3389,13 @@ func TestFormatHookMarkdown_WithName(t *testing.T) {
 		MergeRequestsEvents:       false,
 		EnableSSLVerification:     true,
 		ResourceDeployTokenEvents: true,
-		URLVariables:              []HookURLVariable{{Key: "secret_env", Value: "prod-secret"}},
-		CustomHeaders:             []HookCustomHeader{{Key: "X-Secret", Value: "header-secret"}},
+		URLVariables:              []HookURLVariable{{Key: "secret_env"}},
+		CustomHeaders:             []HookCustomHeader{{Key: "X-Secret"}},
 	}
 	md := FormatHookMarkdown(out)
 	for _, want := range []string{"Webhook #1", "deploy-hook", testHookURL, "SSL Verification", "Event Triggers", "Push", "Issues", "Merge Requests", "Resource Deploy Token", "REDACTED"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("FormatHookMarkdown missing %q", want)
-		}
-	}
-	for _, secret := range []string{"prod-secret", "header-secret"} {
-		if strings.Contains(md, secret) {
-			t.Errorf("FormatHookMarkdown exposed secret value %q", secret)
 		}
 	}
 }

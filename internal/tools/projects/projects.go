@@ -1215,14 +1215,12 @@ type HookOutput struct {
 
 // HookURLVariable represents a masked webhook URL variable.
 type HookURLVariable struct {
-	Key   string `json:"key"`
-	Value string `json:"value,omitempty"`
+	Key string `json:"key"`
 }
 
 // HookCustomHeader represents a webhook custom header.
 type HookCustomHeader struct {
-	Key   string `json:"key"`
-	Value string `json:"value,omitempty"`
+	Key string `json:"key"`
 }
 
 // hookOutputFromGL maps hook output from gl between API and evaluator models.
@@ -1276,7 +1274,7 @@ func projectHookURLVariablesToOutput(variables []gl.HookURLVariable) []HookURLVa
 	}
 	out := make([]HookURLVariable, len(variables))
 	for i, variable := range variables {
-		out[i] = HookURLVariable{Key: variable.Key, Value: variable.Value}
+		out[i] = HookURLVariable{Key: variable.Key}
 	}
 	return out
 }
@@ -1290,7 +1288,7 @@ func projectHookCustomHeadersToOutput(headers []*gl.HookCustomHeader) []HookCust
 		if header == nil {
 			continue
 		}
-		out = append(out, HookCustomHeader{Key: header.Key, Value: header.Value})
+		out = append(out, HookCustomHeader{Key: header.Key})
 	}
 	if len(out) == 0 {
 		return nil

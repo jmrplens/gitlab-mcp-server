@@ -10,8 +10,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const hookSecretMarkdownValue = "REDACTED"
-
 type projectNotFoundOutput struct {
 	Identifier string
 }
@@ -239,14 +237,14 @@ func FormatHookMarkdown(out HookOutput) string {
 		b.WriteString("\n### URL Variables\n\n")
 		b.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
 		for _, variable := range out.URLVariables {
-			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), hookSecretMarkdownValue))
+			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), toolutil.RedactedSecretValue))
 		}
 	}
 	if len(out.CustomHeaders) > 0 {
 		b.WriteString("\n### Custom Headers\n\n")
 		b.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
 		for _, header := range out.CustomHeaders {
-			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(header.Key), hookSecretMarkdownValue))
+			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(header.Key), toolutil.RedactedSecretValue))
 		}
 	}
 	toolutil.WriteHints(&b,

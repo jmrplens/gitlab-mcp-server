@@ -2139,7 +2139,8 @@
         },
         "signing_token": {
           "description": "Write-only signing token for webhook signature validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "tag_push_events": {
           "description": "Trigger on tag push events",
@@ -2150,7 +2151,8 @@
         },
         "token": {
           "description": "Secret token for payload validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Hook URL to receive events",
@@ -2209,9 +2211,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "key": {
-                    "type": "string"
-                  },
-                  "value": {
                     "type": "string"
                   }
                 },
@@ -17774,7 +17773,8 @@
         },
         "signing_token": {
           "description": "Updated write-only signing token for webhook signature validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "tag_push_events": {
           "description": "Trigger on tag push events",
@@ -17785,7 +17785,8 @@
         },
         "token": {
           "description": "Updated secret token for payload validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Updated hook URL",
@@ -17844,9 +17845,6 @@
                 "additionalProperties": false,
                 "properties": {
                   "key": {
-                    "type": "string"
-                  },
-                  "value": {
                     "type": "string"
                   }
                 },
@@ -28809,9 +28807,6 @@
                 "properties": {
                   "key": {
                     "type": "string"
-                  },
-                  "value": {
-                    "type": "string"
                   }
                 },
                 "required": [
@@ -32385,7 +32380,8 @@
         },
         "signing_token": {
           "description": "Write-only signing token for webhook signature validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "subgroup_events": {
           "description": "Trigger on subgroup events",
@@ -32403,7 +32399,8 @@
         },
         "token": {
           "description": "Secret token for payload validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Webhook URL (required for add)",
@@ -32524,9 +32521,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -32762,7 +32756,8 @@
         },
         "signing_token": {
           "description": "Write-only signing token for webhook signature validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "subgroup_events": {
           "description": "Trigger on subgroup events",
@@ -32780,7 +32775,8 @@
         },
         "token": {
           "description": "Secret token for payload validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Webhook URL (required for add)",
@@ -32902,9 +32898,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -33074,9 +33067,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -33254,9 +33244,6 @@
                   "additionalProperties": false,
                   "properties": {
                     "key": {
-                      "type": "string"
-                    },
-                    "value": {
                       "type": "string"
                     }
                   },
@@ -61037,9 +61024,6 @@
                   "properties": {
                     "key": {
                       "type": "string"
-                    },
-                    "value": {
-                      "type": "string"
                     }
                   },
                   "required": [
@@ -80926,7 +80910,8 @@
         },
         "token": {
           "description": "Pipeline trigger token",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "variables": {
           "description": "JSON object of key-value variable pairs",
@@ -85732,7 +85717,8 @@
         },
         "signing_token": {
           "description": "Write-only signing token for webhook signature validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "tag_push_events": {
           "description": "Trigger on tag push events",
@@ -85743,7 +85729,8 @@
         },
         "token": {
           "description": "Secret token for validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Webhook URL",
@@ -85793,9 +85780,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -85901,9 +85885,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -86288,7 +86269,8 @@
         },
         "signing_token": {
           "description": "Write-only signing token for webhook signature validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "tag_push_events": {
           "description": "Trigger on tag push events",
@@ -86299,7 +86281,8 @@
         },
         "token": {
           "description": "Secret token for validation",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         },
         "url": {
           "description": "Updated webhook URL",
@@ -86349,9 +86332,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -86457,9 +86437,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -86561,9 +86538,6 @@
             "properties": {
               "key": {
                 "type": "string"
-              },
-              "value": {
-                "type": "string"
               }
             },
             "required": [
@@ -86668,9 +86642,6 @@
             "additionalProperties": false,
             "properties": {
               "key": {
-                "type": "string"
-              },
-              "value": {
                 "type": "string"
               }
             },
@@ -86780,9 +86751,6 @@
                   "properties": {
                     "key": {
                       "type": "string"
-                    },
-                    "value": {
-                      "type": "string"
                     }
                   },
                   "required": [
@@ -86887,9 +86855,6 @@
                   "additionalProperties": false,
                   "properties": {
                     "key": {
-                      "type": "string"
-                    },
-                    "value": {
                       "type": "string"
                     }
                   },
@@ -102148,7 +102113,8 @@
         },
         "token": {
           "description": "Runner authentication token",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         }
       },
       "required": [
@@ -103448,7 +103414,8 @@
         },
         "token": {
           "description": "Registration token",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         }
       },
       "required": [
@@ -103903,7 +103870,8 @@
       "properties": {
         "token": {
           "description": "Runner authentication token to verify",
-          "type": "string"
+          "type": "string",
+          "writeOnly": true
         }
       },
       "required": [

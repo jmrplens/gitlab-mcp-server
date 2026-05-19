@@ -2893,6 +2893,32 @@ func TestInputSchemaForType_RequiredSuffixRemoved(t *testing.T) {
 	}
 }
 
+// TestInputSchemaForType_SecretFieldsWriteOnly verifies token inputs are marked
+// write-only without relying on jsonschema-go tag support.
+func TestInputSchemaForType_SecretFieldsWriteOnly(t *testing.T) {
+	type embeddedSecret struct {
+		SigningToken string `json:"signing_token,omitempty" jsonschema:"Signing token"`
+	}
+	type secretInput struct {
+		embeddedSecret
+		Token string `json:"token,omitempty" jsonschema:"Secret token"`
+		Name  string `json:"name,omitempty" jsonschema:"Name"`
+	}
+
+	schema := inputSchemaForType(reflect.TypeFor[secretInput]())
+	properties := schema["properties"].(map[string]any)
+	for _, key := range []string{"token", "signing_token"} {
+		property := properties[key].(map[string]any)
+		if property["writeOnly"] != true {
+			t.Fatalf("%s writeOnly = %v, want true", key, property["writeOnly"])
+		}
+	}
+	name := properties["name"].(map[string]any)
+	if _, ok := name["writeOnly"]; ok {
+		t.Fatalf("name should not be writeOnly: %v", name)
+	}
+}
+
 // TestStripReservedKeys_MultipleKeys verifies that real keys are preserved
 // when reserved keys are also present (covers the "copy" branch).
 func TestStripReservedKeys_MultipleKeys(t *testing.T) {

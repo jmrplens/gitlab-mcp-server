@@ -58,10 +58,9 @@ func FormatHookMarkdown(item HookItem) *mcp.CallToolResult {
 	}
 	if len(item.URLVariables) > 0 {
 		sb.WriteString("\n### URL Variables\n\n")
-		sb.WriteString("| Key | Value |\n")
-		sb.WriteString(toolutil.TblSep2Col)
+		sb.WriteString(toolutil.MarkdownTableHeader("Key", "Value"))
 		for _, variable := range item.URLVariables {
-			fmt.Fprintf(&sb, "| %s | %s |\n", toolutil.EscapeMdTableCell(variable.Key), toolutil.EscapeMdTableCell(variable.Value))
+			sb.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), toolutil.RedactedSecretValue))
 		}
 	}
 	toolutil.WriteHints(&sb, "Use `gitlab_test_system_hook` to verify this hook is working")

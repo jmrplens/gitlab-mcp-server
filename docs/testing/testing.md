@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,197 |
-| Unit test functions                                   |  9,946 |
+| Total test functions                                  | 10,201 |
+| Unit test functions                                   |  9,950 |
 | E2E test functions                                    |    251 |
 | cmd test functions                                    |    531 |
 | Test files (internal/)                                |    422 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,139 | 89.6% |
+| `TestFunc_Scenario` (2-part)           | 9,143 | 89.6% |
 | `TestFunc` (no underscore)             |   768 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   290 |  2.8% |
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          1,728 |         80 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          1,729 |         80 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (170) |          7,403 |        330 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (170) |          7,406 |        330 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            531 |         22 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,197** |    **553** |                                                                                                 |
+| **Total**               |     **10,201** |    **553** |                                                                                                 |
 
 ### Core Packages
 
@@ -71,9 +71,9 @@
 | sampling     |        83 |    99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis.                                                          |
 | serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | testutil     |        25 |    91.9% | Package testutil provides shared test utilities for MCP tool tests.                                                                                                                                               |
-| toolutil     |       455 |    96.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
+| toolutil     |       456 |    96.4% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard       |       252 |    93.1% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,728** |          |                                                                                                                                                                                                                   |
+| **Subtotal** | **1,729** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -85,8 +85,8 @@
 | users             |   186 |   100.0% |    36 |
 | samplingtools     |   166 |   100.0% |    11 |
 | jobs              |   129 |    99.8% |    17 |
+| groups            |   127 |   100.0% |    18 |
 | dynamic           |   126 |    99.3% |     2 |
-| groups            |   125 |    98.3% |    18 |
 | search            |   116 |   100.0% |    10 |
 | packages          |   111 |    99.1% |     8 |
 | awardemoji        |   109 |    99.2% |    24 |
@@ -184,7 +184,7 @@
 | groupprotectedenvs      |        12 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        25 |          2 |   100.0% |         2 |
 | groupreleases           |        14 |          3 |   100.0% |         1 |
-| groups                  |       125 |          3 |    98.3% |        18 |
+| groups                  |       127 |          3 |   100.0% |        18 |
 | groupsaml               |        23 |          3 |   100.0% |         4 |
 | groupscim               |        27 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        19 |          2 |   100.0% |         7 |
@@ -269,7 +269,7 @@
 | snippets                |        78 |          2 |    99.5% |        15 |
 | snippetstoragemoves     |        38 |          2 |   100.0% |         6 |
 | surfaces                |        10 |          1 |   100.0% |         0 |
-| systemhooks             |        33 |          2 |    97.3% |         8 |
+| systemhooks             |        34 |          2 |   100.0% |         8 |
 | tags                    |        77 |          2 |   100.0% |         9 |
 | terraformstates         |        17 |          1 |   100.0% |         6 |
 | todos                   |        29 |          1 |   100.0% |         3 |
@@ -282,7 +282,7 @@
 | vulnerabilities         |        57 |          3 |   100.0% |         8 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,403** |    **330** |          | **1,118** |
+| **Total**               | **7,406** |    **330** |          | **1,118** |
 
 </details>
 
@@ -330,7 +330,7 @@
 | sampling    |    99.5% |
 | serverpool  |    99.6% |
 | testutil    |    91.9% |
-| toolutil    |    96.6% |
+| toolutil    |    96.4% |
 | wizard      |    93.1% |
 
 ### Tool Sub-Packages
@@ -410,7 +410,7 @@
 | groupprotectedenvs      |   100.0% |
 | grouprelationsexport    |   100.0% |
 | groupreleases           |   100.0% |
-| groups                  |    98.3% |
+| groups                  |   100.0% |
 | groupsaml               |   100.0% |
 | groupscim               |   100.0% |
 | groupserviceaccounts    |   100.0% |
@@ -495,7 +495,7 @@
 | snippets                |    99.5% |
 | snippetstoragemoves     |   100.0% |
 | surfaces                |   100.0% |
-| systemhooks             |    97.3% |
+| systemhooks             |   100.0% |
 | tags                    |   100.0% |
 | terraformstates         |   100.0% |
 | todos                   |   100.0% |
