@@ -135,8 +135,8 @@ func TestWait_Timeout(t *testing.T) {
 	out, err := Wait(context.Background(), nil, client, WaitInput{
 		ProjectID:       "42",
 		PipelineID:      10,
-		IntervalSeconds: 5,
-		TimeoutSeconds:  1,
+		IntervalSeconds: 1,
+		TimeoutSeconds:  20,
 	})
 	if err != nil {
 		t.Fatalf("Wait() unexpected error: %v", err)

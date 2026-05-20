@@ -154,6 +154,35 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 	}
 }
 
+// TestQuery_LLMResponseFormat_UsesRawResponse verifies that Query uses the
+// raw Orbit API path for GOON/TOON text responses instead of JSON decoding.
+func TestQuery_LLMResponseFormat_UsesRawResponse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+		var got map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if string(got["response_format"]) != `"llm"` {
+			t.Fatalf("response_format = %s, want llm", got["response_format"])
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("@header\nProject(name: gitlab)\n"))
+	}))
+
+	out, err := Query(context.Background(), client, QueryInput{
+		Query:               map[string]any{"query_type": "traversal"},
+		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
+	})
+	if err != nil {
+		t.Fatalf("Query() error: %v", err)
+	}
+	if !strings.Contains(out.FormattedText, "@header") || out.Result != nil {
+		t.Fatalf("Query() = %+v, want raw formatted text only", out)
+	}
+}
+
 // TestGraphStatus_RequiresExactlyOneScope verifies that GraphStatus rejects
 // missing, conflicting, or invalid scope inputs before making an HTTP request.
 func TestGraphStatus_RequiresExactlyOneScope(t *testing.T) {
@@ -664,6 +693,11 @@ func TestOrbitMarkdownFormatters_IncludeExpectedSections(t *testing.T) {
 			name: "tools",
 			md:   FormatToolsMarkdown(ToolsOutput{Tools: []ToolDefinition{{Name: "query_graph", Description: "Execute graph queries"}}}),
 			want: []string{"Orbit Tools", "query_graph"},
+		},
+		{
+			name: "query formatted",
+			md:   FormatQueryMarkdown(QueryOutput{FormattedText: "@header\nProject(name: gitlab)"}),
+			want: []string{"Orbit Query Result", "```text", "@header"},
 		},
 		{
 			name: "graph status structured",

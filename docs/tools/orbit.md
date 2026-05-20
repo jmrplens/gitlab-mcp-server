@@ -79,7 +79,7 @@ Get the Orbit MCP tool manifest served by GitLab.com. Use this before `gitlab_or
 
 ### `gitlab_orbit_query`
 
-Execute a read-only Orbit Knowledge Graph query. The `query` parameter must be a JSON object matching the schema returned by `gitlab_orbit_tools`. Optional `response_format` accepts `raw` or `llm`.
+Execute a read-only Orbit Knowledge Graph query. The `query` parameter must be a JSON object matching the schema returned by `gitlab_orbit_tools`. Optional `response_format` accepts `raw` or `llm`; `llm` responses are returned as verbatim GOON/TOON text.
 
 | Annotation | **Read** |
 | ---------- | -------- |

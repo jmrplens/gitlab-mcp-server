@@ -3552,6 +3552,7 @@ func TestBuildCreateOpts_AllOptionalFields(t *testing.T) {
 	lfsEnabled := true
 	requestAccess := true
 	allowSkipped := false
+	protectMRPipelines := true
 	removeBranch := true
 	autoclose := true
 
@@ -3576,6 +3577,7 @@ func TestBuildCreateOpts_AllOptionalFields(t *testing.T) {
 		RequestAccessEnabled:         &requestAccess,
 		CIConfigPath:                 ".gitlab-ci.yml",
 		AllowMergeOnSkippedPipeline:  &allowSkipped,
+		ProtectMergeRequestPipelines: &protectMRPipelines,
 		RemoveSourceBranchAfterMerge: &removeBranch,
 		AutocloseReferencedIssues:    &autoclose,
 	}
@@ -3668,6 +3670,9 @@ func assertCreateProjectToggleOpts(t *testing.T, opts *gl.CreateProjectOptions) 
 	if opts.AllowMergeOnSkippedPipeline == nil || *opts.AllowMergeOnSkippedPipeline {
 		t.Error("AllowMergeOnSkippedPipeline not set correctly")
 	}
+	if opts.ProtectMergeRequestPipelines == nil || !*opts.ProtectMergeRequestPipelines {
+		t.Error("ProtectMergeRequestPipelines not set")
+	}
 	if opts.RemoveSourceBranchAfterMerge == nil || !*opts.RemoveSourceBranchAfterMerge {
 		t.Error("RemoveSourceBranchAfterMerge not set")
 	}
@@ -3693,6 +3698,7 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 	autoclose := true
 	mergePipelines := true
 	mergeTrains := false
+	protectMRPipelines := true
 	resolveOutdated := true
 
 	input := UpdateInput{
@@ -3718,6 +3724,7 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		SquashCommitTemplate:           "Squash: %{title}",
 		MergePipelinesEnabled:          &mergePipelines,
 		MergeTrainsEnabled:             &mergeTrains,
+		ProtectMergeRequestPipelines:   &protectMRPipelines,
 		ResolveOutdatedDiffDiscussions: &resolveOutdated,
 		ApprovalsBeforeMerge:           2,
 		LFSEnabled:                     &issuesOn,
@@ -3812,6 +3819,9 @@ func assertEditProjectAdvancedOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	}
 	if opts.MergeTrainsEnabled == nil {
 		t.Error("MergeTrainsEnabled not set")
+	}
+	if opts.ProtectMergeRequestPipelines == nil || !*opts.ProtectMergeRequestPipelines {
+		t.Error("ProtectMergeRequestPipelines not set")
 	}
 	if opts.ResolveOutdatedDiffDiscussions == nil {
 		t.Error("ResolveOutdatedDiffDiscussions not set")
@@ -6919,15 +6929,16 @@ func TestToOutput_WithAllOptionals(t *testing.T) {
 	now := time.Now()
 	delDate := gl.ISOTime(now)
 	p := &gl.Project{
-		ID:                  42,
-		Name:                "test",
-		PathWithNamespace:   "ns/test",
-		Namespace:           &gl.ProjectNamespace{FullPath: "ns"},
-		ForkedFromProject:   &gl.ForkParent{PathWithNamespace: "upstream/test"},
-		MarkedForDeletionOn: &delDate,
-		CreatedAt:           &now,
-		UpdatedAt:           &now,
-		LastActivityAt:      &now,
+		ID:                           42,
+		Name:                         "test",
+		PathWithNamespace:            "ns/test",
+		Namespace:                    &gl.ProjectNamespace{FullPath: "ns"},
+		ForkedFromProject:            &gl.ForkParent{PathWithNamespace: "upstream/test"},
+		MarkedForDeletionOn:          &delDate,
+		ProtectMergeRequestPipelines: true,
+		CreatedAt:                    &now,
+		UpdatedAt:                    &now,
+		LastActivityAt:               &now,
 	}
 	out := ToOutput(p)
 	if out.Namespace != "ns" {
@@ -6938,6 +6949,9 @@ func TestToOutput_WithAllOptionals(t *testing.T) {
 	}
 	if out.MarkedForDeletionOn == "" {
 		t.Error("expected non-empty MarkedForDeletionOn")
+	}
+	if !out.ProtectMergeRequestPipelines {
+		t.Error("expected ProtectMergeRequestPipelines to be true")
 	}
 	if out.CreatedAt == "" {
 		t.Error("expected non-empty CreatedAt")

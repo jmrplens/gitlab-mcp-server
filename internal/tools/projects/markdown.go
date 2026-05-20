@@ -67,6 +67,9 @@ func FormatMarkdown(p Output) string {
 			fmt.Fprintf(&b, "- **MR Title Regex Description**: %s\n", p.MergeRequestTitleRegexDescription)
 		}
 	}
+	if p.ProtectMergeRequestPipelines {
+		fmt.Fprintf(&b, "- **Protected MR Pipelines**: enabled\n")
+	}
 	toolutil.WriteHints(&b,
 		"Use gitlab_branch action 'list' to see branches",
 		"Use gitlab_merge_request action 'list' to see open merge requests",

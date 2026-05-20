@@ -42581,6 +42581,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -42663,6 +42666,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -83403,6 +83407,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -83485,6 +83492,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -83617,6 +83625,13 @@
         "path": {
           "description": "Project path slug (defaults from name)",
           "type": "string"
+        },
+        "protect_merge_request_pipelines": {
+          "description": "Prevent merge request pipeline settings from being modified by users with lower permissions",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "public_builds": {
           "description": "Enable public access to pipelines",
@@ -83826,6 +83841,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -83908,6 +83926,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -84142,6 +84161,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -84224,6 +84246,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -85111,6 +85134,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -85193,6 +85219,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -85381,6 +85408,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -85463,6 +85493,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -87724,6 +87755,9 @@
               "path_with_namespace": {
                 "type": "string"
               },
+              "protect_merge_request_pipelines": {
+                "type": "boolean"
+              },
               "public_builds": {
                 "type": "boolean"
               },
@@ -87806,6 +87840,7 @@
               "allow_merge_on_skipped_pipeline",
               "merge_pipelines_enabled",
               "merge_trains_enabled",
+              "protect_merge_request_pipelines",
               "autoclose_referenced_issues",
               "resolve_outdated_diff_discussions"
             ],
@@ -88019,6 +88054,9 @@
               "path_with_namespace": {
                 "type": "string"
               },
+              "protect_merge_request_pipelines": {
+                "type": "boolean"
+              },
               "public_builds": {
                 "type": "boolean"
               },
@@ -88101,6 +88139,7 @@
               "allow_merge_on_skipped_pipeline",
               "merge_pipelines_enabled",
               "merge_trains_enabled",
+              "protect_merge_request_pipelines",
               "autoclose_referenced_issues",
               "resolve_outdated_diff_discussions"
             ],
@@ -88834,6 +88873,9 @@
               "path_with_namespace": {
                 "type": "string"
               },
+              "protect_merge_request_pipelines": {
+                "type": "boolean"
+              },
               "public_builds": {
                 "type": "boolean"
               },
@@ -88916,6 +88958,7 @@
               "allow_merge_on_skipped_pipeline",
               "merge_pipelines_enabled",
               "merge_trains_enabled",
+              "protect_merge_request_pipelines",
               "autoclose_referenced_issues",
               "resolve_outdated_diff_discussions"
             ],
@@ -89181,6 +89224,9 @@
               "path_with_namespace": {
                 "type": "string"
               },
+              "protect_merge_request_pipelines": {
+                "type": "boolean"
+              },
               "public_builds": {
                 "type": "boolean"
               },
@@ -89263,6 +89309,7 @@
               "allow_merge_on_skipped_pipeline",
               "merge_pipelines_enabled",
               "merge_trains_enabled",
+              "protect_merge_request_pipelines",
               "autoclose_referenced_issues",
               "resolve_outdated_diff_discussions"
             ],
@@ -89528,6 +89575,9 @@
               "path_with_namespace": {
                 "type": "string"
               },
+              "protect_merge_request_pipelines": {
+                "type": "boolean"
+              },
               "public_builds": {
                 "type": "boolean"
               },
@@ -89610,6 +89660,7 @@
               "allow_merge_on_skipped_pipeline",
               "merge_pipelines_enabled",
               "merge_trains_enabled",
+              "protect_merge_request_pipelines",
               "autoclose_referenced_issues",
               "resolve_outdated_diff_discussions"
             ],
@@ -90783,6 +90834,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -90865,6 +90919,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -91933,6 +91988,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -92015,6 +92073,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -92286,6 +92345,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -92368,6 +92430,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -92536,6 +92599,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -92618,6 +92684,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -92786,6 +92853,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -92868,6 +92938,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -93013,6 +93084,13 @@
         "project_id": {
           "description": "Project ID or URL-encoded path",
           "type": "string"
+        },
+        "protect_merge_request_pipelines": {
+          "description": "Prevent merge request pipeline settings from being modified by users with lower permissions",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "public_builds": {
           "description": "Enable public access to pipelines",
@@ -93229,6 +93307,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -93311,6 +93392,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -93562,6 +93644,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -93644,6 +93729,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],
@@ -105998,6 +106084,9 @@
               "path_with_namespace": {
                 "type": "string"
               },
+              "protect_merge_request_pipelines": {
+                "type": "boolean"
+              },
               "public_builds": {
                 "type": "boolean"
               },
@@ -106080,6 +106169,7 @@
               "allow_merge_on_skipped_pipeline",
               "merge_pipelines_enabled",
               "merge_trains_enabled",
+              "protect_merge_request_pipelines",
               "autoclose_referenced_issues",
               "resolve_outdated_diff_discussions"
             ],

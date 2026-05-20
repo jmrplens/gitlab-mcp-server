@@ -2567,6 +2567,9 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": "boolean"
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -2649,6 +2652,7 @@
         "allow_merge_on_skipped_pipeline",
         "merge_pipelines_enabled",
         "merge_trains_enabled",
+        "protect_merge_request_pipelines",
         "autoclose_referenced_issues",
         "resolve_outdated_diff_discussions"
       ],

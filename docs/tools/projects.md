@@ -39,7 +39,7 @@ Tools marked **Delete** require user confirmation before execution.
 
 ### `gitlab_project_create`
 
-Create a new GitLab project (repository). Supports setting namespace, visibility (private/internal/public), description, default branch, optional README initialization, merge method, squash option, topics, and feature flags.
+Create a new GitLab project (repository). Supports setting namespace, visibility (private/internal/public), description, default branch, optional README initialization, merge method, squash option, protected merge request pipeline settings, topics, and feature flags.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
@@ -60,7 +60,7 @@ List GitLab projects accessible to the authenticated user. Supports filtering by
 
 ### `gitlab_project_update`
 
-Update GitLab project settings such as name, description, visibility, default branch, merge method, squash option, topics, feature flags, CI/CD config, merge templates, and approval settings. Only specified fields are modified; unset fields remain unchanged.
+Update GitLab project settings such as name, description, visibility, default branch, merge method, squash option, protected merge request pipeline settings, topics, feature flags, CI/CD config, merge templates, and approval settings. Only specified fields are modified; unset fields remain unchanged.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
