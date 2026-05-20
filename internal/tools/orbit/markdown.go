@@ -6,24 +6,33 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// orbitNotFoundOutput is returned by MCP Orbit tools when the requested resource or feature is not found (HTTP 404).
+// Used to provide actionable hints for missing Orbit endpoints or disabled features.
 type orbitNotFoundOutput struct {
 	Resource   string
 	Identifier string
 }
 
+// init registers all Markdown formatters for Orbit MCP tool outputs.
+//
+// Each formatter converts the tool output struct to a Markdown summary for LLM and user-facing documentation.
 func init() {
 	toolutil.RegisterMarkdownResult(formatOrbitNotFound)
 	toolutil.RegisterMarkdown[StatusOutput](FormatStatusMarkdown)
 	toolutil.RegisterMarkdown[SchemaOutput](FormatSchemaMarkdown)
 	toolutil.RegisterMarkdown[ToolsOutput](FormatToolsMarkdown)
+	toolutil.RegisterMarkdown[DSLOutput](FormatDSLMarkdown)
 	toolutil.RegisterMarkdown[QueryOutput](FormatQueryMarkdown)
 	toolutil.RegisterMarkdown[GraphStatusOutput](FormatGraphStatusMarkdown)
 }
 
+// formatOrbitNotFound returns a [*mcp.CallToolResult] with actionable hints when an Orbit resource is not found.
+// Used by all Orbit MCP tool handlers to provide LLM-friendly error output for HTTP 404.
 func formatOrbitNotFound(out orbitNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(out.Resource, out.Identifier,
 		"Verify GitLab Orbit is enabled on GitLab.com for the requested token",
@@ -31,7 +40,10 @@ func formatOrbitNotFound(out orbitNotFoundOutput) *mcp.CallToolResult {
 	)
 }
 
-// FormatStatusMarkdown formats Orbit status output for LLM consumption.
+// FormatStatusMarkdown returns a Markdown-formatted summary of Orbit cluster health for LLM consumption.
+//
+// Includes status, version, timestamp, and a table of subsystem components with replica counts.
+// If FormattedText is present, it is rendered as a fenced code block.
 func FormatStatusMarkdown(out StatusOutput) string {
 	var b strings.Builder
 	b.WriteString("## Orbit Status\n\n")
@@ -62,7 +74,9 @@ func FormatStatusMarkdown(out StatusOutput) string {
 	return b.String()
 }
 
-// FormatSchemaMarkdown formats Orbit schema output for LLM consumption.
+// FormatSchemaMarkdown returns a Markdown-formatted summary of the Orbit Knowledge Graph schema.
+//
+// Includes schema version, domain table, and counts of nodes and edges. Used for LLM and user-facing docs.
 func FormatSchemaMarkdown(out SchemaOutput) string {
 	var b strings.Builder
 	b.WriteString("## Orbit Schema\n\n")
@@ -87,7 +101,9 @@ func FormatSchemaMarkdown(out SchemaOutput) string {
 	return b.String()
 }
 
-// FormatToolsMarkdown formats Orbit tool manifest output for LLM consumption.
+// FormatToolsMarkdown returns a Markdown-formatted table of Orbit MCP tool definitions.
+//
+// Each row shows the tool name and description. Used for LLM tool discovery and user docs.
 func FormatToolsMarkdown(out ToolsOutput) string {
 	var b strings.Builder
 	b.WriteString("## Orbit Tools\n\n")
@@ -110,7 +126,30 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 	return b.String()
 }
 
-// FormatQueryMarkdown formats Orbit query output for LLM consumption.
+// FormatDSLMarkdown returns a Markdown-formatted fenced code block with the Orbit query DSL.
+//
+// Used to display the DSL grammar or schema for LLMs and users.
+func FormatDSLMarkdown(out DSLOutput) string {
+	var b strings.Builder
+	b.WriteString("## Orbit DSL\n\n")
+	if out.Content == "" {
+		b.WriteString("No Orbit DSL data returned.\n")
+		return b.String()
+	}
+	language := "json"
+	if strings.EqualFold(out.ResponseFormat, string(gl.OrbitResponseFormatLLM)) {
+		language = "text"
+	}
+	b.WriteString(fencedBlock(language, out.Content))
+	toolutil.WriteHints(&b,
+		"Use gitlab_orbit query after choosing a supported query shape from the DSL",
+		"Use gitlab_orbit schema to understand node and edge names")
+	return b.String()
+}
+
+// FormatQueryMarkdown returns a Markdown-formatted summary of an Orbit query result.
+//
+// If FormattedText is present, it is rendered as a fenced code block. Otherwise, the result is shown as JSON.
 func FormatQueryMarkdown(out QueryOutput) string {
 	var b strings.Builder
 	b.WriteString("## Orbit Query Result\n\n")
@@ -137,7 +176,9 @@ func FormatQueryMarkdown(out QueryOutput) string {
 	return b.String()
 }
 
-// FormatGraphStatusMarkdown formats Orbit graph indexing output for LLM consumption.
+// FormatGraphStatusMarkdown returns a Markdown-formatted summary of Orbit graph indexing status.
+//
+// Includes indexed project counts, domain node counts, and indexing pipeline state. Used for LLM and user docs.
 func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	var b strings.Builder
 	b.WriteString("## Orbit Graph Status\n\n")
@@ -177,6 +218,8 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	return b.String()
 }
 
+// writeKV writes a Markdown bullet list item for a key-value pair, skipping empty values.
+// Used by all Orbit Markdown formatters for summary fields.
 func writeKV(b *strings.Builder, key, value string) {
 	if value == "" {
 		return
@@ -184,6 +227,8 @@ func writeKV(b *strings.Builder, key, value string) {
 	fmt.Fprintf(b, "- %s: %s\n", key, value)
 }
 
+// prettyAny returns a pretty-printed JSON string for any value, or falls back to fmt.Sprint on error.
+// Used to render Orbit query results in Markdown.
 func prettyAny(value any) string {
 	buf, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
@@ -192,6 +237,8 @@ func prettyAny(value any) string {
 	return string(buf)
 }
 
+// fencedBlock returns a Markdown fenced code block for the given language and content.
+// The fence length is auto-detected to avoid conflicts with backticks in the content.
 func fencedBlock(language, content string) string {
 	fence := markdownFence(content)
 	if language != "" {
@@ -200,6 +247,8 @@ func fencedBlock(language, content string) string {
 	return fmt.Sprintf("%s\n%s\n%s\n", fence, content, fence)
 }
 
+// markdownFence returns the appropriate Markdown code fence for a content block.
+// If the content contains 3 or more consecutive backticks, the fence is lengthened to avoid collision.
 func markdownFence(content string) string {
 	longest := 0
 	current := 0

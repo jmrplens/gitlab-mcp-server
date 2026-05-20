@@ -187,9 +187,11 @@ func TestBuildActionCatalog_EnterpriseAndGitLabDotComGates(t *testing.T) {
 		})
 	}
 
-	assertCatalogMissingAction(t, base, "orbit.status")
-	assertCatalogMissingAction(t, enterprise, "orbit.status")
-	assertCatalogHasAction(t, gitLabDotComEnterprise, "orbit.status")
+	for _, actionID := range []actioncatalog.ActionID{"orbit.status", "orbit.dsl"} {
+		assertCatalogMissingAction(t, base, actionID)
+		assertCatalogMissingAction(t, enterprise, actionID)
+		assertCatalogHasAction(t, gitLabDotComEnterprise, actionID)
+	}
 }
 
 // TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions verifies BuildMCPActionGroup when nil updater omits update actions.
@@ -517,7 +519,7 @@ const (
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
 	expectedEnterpriseDynamicCatalogActions = 1021
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	expectedGitLabComEnterpriseCatalogActions = 1026
+	expectedGitLabComEnterpriseCatalogActions = 1027
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

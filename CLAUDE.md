@@ -20,7 +20,7 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | 1017 self-managed Enterprise/Premium; 1022 on GitLab.com Enterprise/Premium with Orbit                     |
+| MCP Tools (individual)    | 1017 self-managed Enterprise/Premium; 1023 on GitLab.com Enterprise/Premium with Orbit                     |
 | Meta-mode tools           | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise (Orbit)                                    |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_tool`) — see Dynamic toolset mode below |
 | MCP Resources             | 46 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
@@ -459,7 +459,7 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (172 `internal/tools` packages, 1017 self-managed tools / 1022 GitLab.com Enterprise tools) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (172 `internal/tools` packages, 1017 self-managed tools / 1023 GitLab.com Enterprise tools) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |

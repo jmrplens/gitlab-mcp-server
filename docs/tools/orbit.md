@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Orbit Knowledge Graph
-> **Individual tools**: 5
+> **Individual tools**: 6
 > **Meta-tool**: `gitlab_orbit` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Orbit API](https://docs.gitlab.com/api/orbit/)
 > **Availability**: GitLab.com only; Enterprise/Premium catalog; experimental `knowledge_graph` feature
@@ -16,13 +16,14 @@ The Orbit domain exposes GitLab's experimental Knowledge Graph API for GitLab.co
 
 The upstream Orbit API is moving quickly. This MCP surface follows the latest GitLab client and CLI coverage, including `graph_status`; GitLab's public API reference may lag behind that endpoint. For schema formatting, the live API currently uses the `format` query parameter, while this server also accepts `response_format` as an input alias for compatibility with public documentation wording.
 
-With `TOOL_SURFACE=meta`, all five individual tools below are consolidated into the `gitlab_orbit` meta-tool with an `action` parameter.
+With `TOOL_SURFACE=meta`, all six individual tools below are consolidated into the `gitlab_orbit` meta-tool with an `action` parameter.
 
 | Meta-tool Action | Individual Tool             | Purpose                                                           |
 | ---------------- | --------------------------- | ----------------------------------------------------------------- |
 | `status`         | `gitlab_orbit_status`       | Check Orbit service health and backend components                 |
 | `schema`         | `gitlab_orbit_schema`       | Inspect the graph ontology and optionally expand node definitions |
 | `tools`          | `gitlab_orbit_tools`        | Discover the live Orbit query manifest                            |
+| `dsl`            | `gitlab_orbit_dsl`          | Retrieve the Orbit query DSL schema or LLM grammar                |
 | `query`          | `gitlab_orbit_query`        | Run a read-only Knowledge Graph query object                      |
 | `graph_status`   | `gitlab_orbit_graph_status` | Inspect indexing status for one namespace, project, or full path  |
 
@@ -75,6 +76,17 @@ Get the Orbit MCP tool manifest served by GitLab.com. Use this before `gitlab_or
 
 ---
 
+## Query DSL
+
+### `gitlab_orbit_dsl`
+
+Get the Orbit query DSL from `GET /api/v4/orbit/schema/dsl`. Optional `response_format` accepts `raw` for a JSON Schema document or `llm` for the Orbit LLM grammar returned verbatim.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+---
+
 ## Query
 
 ### `gitlab_orbit_query`
@@ -104,8 +116,9 @@ Get graph indexing status for exactly one scope: `namespace_id`, `project_id`, o
 | 1 | `gitlab_orbit_status` | Status | Read |
 | 2 | `gitlab_orbit_schema` | Schema | Read |
 | 3 | `gitlab_orbit_tools` | Tool Manifest | Read |
-| 4 | `gitlab_orbit_query` | Query | Read |
-| 5 | `gitlab_orbit_graph_status` | Graph Status | Read |
+| 4 | `gitlab_orbit_dsl` | Query DSL | Read |
+| 5 | `gitlab_orbit_query` | Query | Read |
+| 6 | `gitlab_orbit_graph_status` | Graph Status | Read |
 
 ### Destructive Tools (Require Confirmation)
 

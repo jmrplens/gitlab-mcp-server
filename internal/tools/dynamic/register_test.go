@@ -929,7 +929,7 @@ func TestDynamicCatalog_DelegatedSpecBackedDomainsPreserveIDsAndSchemas(t *testi
 		"search.code",
 		"runner.enable_project",
 		"analyze.mr_changes",
-		"orbit.status",
+		"orbit.dsl",
 	}
 
 	for _, actionID := range actionIDs {
