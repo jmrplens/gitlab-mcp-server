@@ -27,14 +27,16 @@ server := mcp.NewServer(
 
 Use snake_case with a service prefix to avoid conflicts when multiple MCP servers run together:
 
-- **Format**: `{service}_{action}_{resource}` (e.g., `gitlab_create_issue`, `gitlab_list_projects`)
+- **Format for this project**: individual tools use `gitlab_{action}_{resource}` (e.g., `gitlab_create_issue`, `gitlab_list_projects`), while catalog action IDs use `{domain}.{action}`
 - **Be action-oriented**: Start with verbs (`get`, `list`, `search`, `create`, `update`, `delete`)
 - **Be specific**: Avoid generic names that could conflict with other servers
 - **Descriptions**: Must narrowly and unambiguously describe functionality, matching actual behavior
 
 ## Adding Tools
 
-Use `mcp.AddTool` with struct-based input and output for type safety:
+For ordinary GitLab API actions in this repository, add or update domain-local `ActionSpecs` and handlers. Do not add package-local `RegisterTools` functions or ad hoc `mcp.AddTool` calls; shared projection layers consume the canonical action catalog for meta-tools, dynamic find/execute, `gitlab://tools`, audits, docs, and individual tool registration.
+
+For shared projection code or standalone surfaces that intentionally register SDK tools directly, use `mcp.AddTool` with struct-based input and output for type safety:
 
 ```go
 type ToolInput struct {

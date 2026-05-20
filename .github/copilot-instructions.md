@@ -6,9 +6,9 @@ This project implements a **Model Context Protocol (MCP) server** that exposes G
 
 ## Architecture
 
-- **Language**: Go 1.26+
-- **MCP SDK**: `github.com/modelcontextprotocol/go-sdk/mcp`
-- **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v2` (official client, migrated from deprecated `xanzy/go-gitlab`)
+- **Language**: Go 1.26.3
+- **MCP SDK**: `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.0
+- **GitLab Client**: `gitlab.com/gitlab-org/api/client-go/v2` v2.29.0 (official client, migrated from deprecated `xanzy/go-gitlab`)
 - **Transport**: stdio (primary), HTTP (optional)
 - **Cross-platform**: Windows, Linux & macOS, amd64 & arm64
 
@@ -82,13 +82,13 @@ gitlab-mcp-server/
 
 ### MCP Patterns
 
-- Each GitLab operation is defined once as a typed `ActionSpec` and projected into meta, dynamic, schema, and individual surfaces
+- Each GitLab operation is defined once as a typed `ActionSpec` and projected into meta, dynamic, `gitlab://tools`, and individual surfaces
 - Use `jsonschema` struct tags for tool input documentation
 - Register runtime surfaces from the canonical action catalog only; ordinary GitLab actions must not add package-local `RegisterTools` functions or package-level meta registration paths
 - Resources for read-only data (project info, user info, etc.)
 - Graceful shutdown via signal handling
 - Dynamic mode (`TOOL_SURFACE=dynamic`) exposes `gitlab_find_action` and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. It is the default tool surface; set `TOOL_SURFACE=meta` for consolidated domain meta-tools.
-- When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic find/execute, schema resources, LLM files, and individual tool projection consume that catalog. Do not add package-local `RegisterTools` functions for ordinary GitLab API actions.
+- When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic find/execute, `gitlab://tools` resources, LLM files, and individual tool projection consume that catalog. Do not add package-local `RegisterTools` functions for ordinary GitLab API actions.
 - For the detailed developer architecture of individual tools, meta-tools, dynamic mode, and the canonical action core, see `docs/development/tool-surfaces-and-action-core.md`.
 
 ### GitLab Integration
@@ -105,7 +105,7 @@ gitlab-mcp-server/
 - Use `httptest` for mocking GitLab API responses in unit tests
 - Test naming: `TestToolName_Scenario_ExpectedResult`
 - Aim for >80% coverage on tool handlers
-- **When adding or modifying tests, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs`** to refresh `docs/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
+- **After completing a test-focused phase or milestone, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs`** to refresh `docs/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
 
 ### Verification After Changes
 

@@ -40,7 +40,8 @@ Every package needs exactly one `Package` comment, typically in the main file or
 // API, and a typed output struct for the response.
 //
 // Actions are exposed through [ActionSpecs], which feed catalog-backed meta,
-// dynamic, schema, and individual tool surfaces with appropriate annotations.
+// dynamic, gitlab://tools resources, and individual tool surfaces with
+// appropriate annotations.
 //
 // # Supported Operations
 //
@@ -221,7 +222,7 @@ behavioral expectations:
 ```go
 // ActionSpecProvider returns canonical action specs for one GitLab API domain.
 // Implementations provide route metadata consumed by meta-tools, dynamic
-// discovery, schema resources, audits, and individual tool projection.
+// discovery, gitlab://tools resources, audits, and individual tool projection.
 type ActionSpecProvider interface {
     ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec
 }
