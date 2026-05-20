@@ -127,7 +127,7 @@ type Output struct {
 	AllowMergeOnSkippedPipeline               bool     `json:"allow_merge_on_skipped_pipeline"`
 	MergePipelinesEnabled                     bool     `json:"merge_pipelines_enabled"`
 	MergeTrainsEnabled                        bool     `json:"merge_trains_enabled"`
-	ProtectMergeRequestPipelines              bool     `json:"protect_merge_request_pipelines"`
+	ProtectMergeRequestPipelines              bool     `json:"protect_merge_request_pipelines,omitempty"`
 	MergeCommitTemplate                       string   `json:"merge_commit_template,omitempty"`
 	SquashCommitTemplate                      string   `json:"squash_commit_template,omitempty"`
 	AutocloseReferencedIssues                 bool     `json:"autoclose_referenced_issues"`
