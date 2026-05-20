@@ -3,7 +3,7 @@ title: Orbit
 description: GitLab.com Enterprise/Premium Knowledge Graph tools
 ---
 
-Orbit exposes GitLab.com's experimental Knowledge Graph API through five read-only MCP tools. It is available only when the server connects to `https://gitlab.com` and the Enterprise/Premium catalog is enabled with `GITLAB_ENTERPRISE=true` or `--enterprise`.
+Orbit exposes GitLab.com's experimental Knowledge Graph API through six read-only MCP tools. It is available only when the server connects to `https://gitlab.com` and the Enterprise/Premium catalog is enabled with `GITLAB_ENTERPRISE=true` or `--enterprise`.
 
 :::note[Technical reference]
 For the complete generated tool reference, see [`docs/tools/orbit.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/tools/orbit.md) in the repository.
@@ -11,13 +11,13 @@ For the complete generated tool reference, see [`docs/tools/orbit.md`](https://g
 
 ## Availability
 
-| Requirement     | Value                            |
-| --------------- | -------------------------------- |
-| GitLab host     | `https://gitlab.com`             |
-| Catalog         | Enterprise/Premium               |
-| Meta-tool mode  | `gitlab_orbit` with five actions |
-| Individual mode | Five `gitlab_orbit_*` tools      |
-| Write behavior  | Read-only                        |
+| Requirement     | Value                           |
+| --------------- | ------------------------------- |
+| GitLab host     | `https://gitlab.com`            |
+| Catalog         | Enterprise/Premium              |
+| Meta-tool mode  | `gitlab_orbit` with six actions |
+| Individual mode | Six `gitlab_orbit_*` tools      |
+| Write behavior  | Read-only                       |
 
 Self-managed GitLab instances do not register Orbit tools, even when the Enterprise/Premium catalog is enabled.
 
@@ -26,8 +26,9 @@ Self-managed GitLab instances do not register Orbit tools, even when the Enterpr
 | Action         | Individual tool             | Purpose                                                           |
 | -------------- | --------------------------- | ----------------------------------------------------------------- |
 | `status`       | `gitlab_orbit_status`       | Check Orbit service health and component status                   |
-| `schema`       | `gitlab_orbit_schema`       | Inspect the graph ontology and optional expanded node definitions |
+| `schema`       | `gitlab_orbit_schema`       | Inspect the graph ontology and optionally expand node definitions |
 | `tools`        | `gitlab_orbit_tools`        | Discover the live Orbit query manifest                            |
+| `dsl`          | `gitlab_orbit_dsl`          | Retrieve the Orbit query DSL schema or LLM grammar                |
 | `query`        | `gitlab_orbit_query`        | Execute a read-only Knowledge Graph query object                  |
 | `graph_status` | `gitlab_orbit_graph_status` | Inspect indexing status for a namespace, project, or full path    |
 
@@ -36,7 +37,79 @@ Self-managed GitLab instances do not register Orbit tools, even when the Enterpr
 1. Call `gitlab_orbit` with `action: "status"` to confirm the service is available.
 2. Call `action: "schema"` to inspect graph domains, nodes, and relationships.
 3. Call `action: "tools"` before `action: "query"` to obtain the live query schema served by GitLab.com.
-4. Pass a JSON query object to `action: "query"` with `response_format` set to `raw` or `llm`.
+4. (Optional) Call `action: "dsl"` to retrieve the Orbit query DSL schema or LLM grammar.
+5. Pass a JSON query object to `action: "query"` with `response_format` set to `raw` or `llm`.
+
+### Example: Check Orbit status
+
+```json
+{
+	"tool": "gitlab_orbit",
+	"arguments": {
+		"action": "status"
+	}
+}
+```
+
+### Example: Get graph schema
+
+```json
+{
+	"tool": "gitlab_orbit",
+	"arguments": {
+		"action": "schema",
+		"params": {
+			"expand": ["Project", "User"],
+			"response_format": "llm"
+		}
+	}
+}
+```
+
+### Example: Get Orbit tool manifest
+
+```json
+{
+	"tool": "gitlab_orbit",
+	"arguments": {
+		"action": "tools"
+	}
+}
+```
+
+### Example: Get Orbit query DSL
+
+```json
+{
+	"tool": "gitlab_orbit",
+	"arguments": {
+		"action": "dsl",
+		"params": {
+			"response_format": "llm"
+		}
+	}
+}
+```
+
+### Example: Run a Knowledge Graph query
+
+```json
+{
+	"tool": "gitlab_orbit",
+	"arguments": {
+		"action": "query",
+		"params": {
+			"query": {
+				"type": "Project",
+				"filters": { "namespace": "gitlab-org" }
+			},
+			"response_format": "llm"
+		}
+	}
+}
+```
+
+### Example: Check indexing status
 
 ```json
 {
@@ -51,6 +124,44 @@ Self-managed GitLab instances do not register Orbit tools, even when the Enterpr
 }
 ```
 
+## Action details
+
+### `status` — Check Orbit service health
+
+Returns cluster health and backend component status. Use to verify Orbit is available for your token and project.
+
+**Example:** See above.
+
+### `schema` — Inspect the graph ontology
+
+Returns the Orbit graph ontology, including schema version, domains, node summaries, and edges. Use `expand` to get detailed node definitions. Supports `response_format` (`raw` or `llm`).
+
+**Example:** See above.
+
+### `tools` — Discover the Orbit tool manifest
+
+Returns the live Orbit MCP tool manifest. Use before `query` to discover supported query shapes and parameter schemas.
+
+**Example:** See above.
+
+### `dsl` — Retrieve the Orbit query DSL schema or LLM grammar
+
+Returns the Orbit query DSL as a JSON Schema (`raw`) or LLM grammar (`llm`). Useful for advanced query construction and LLM integration.
+
+**Example:** See above.
+
+### `query` — Execute a Knowledge Graph query
+
+Runs a read-only Knowledge Graph query. The `query` parameter must match the schema from `tools`. Supports `response_format` (`raw` or `llm`).
+
+**Example:** See above.
+
+### `graph_status` — Inspect indexing status
+
+Returns graph indexing status for a namespace, project, or full path. Use to check if a project is indexed and ready for queries.
+
+**Example:** See above.
+
 ## Schema discovery
 
 In meta-tool mode, action parameter schemas are available through MCP resources:
@@ -60,6 +171,7 @@ In meta-tool mode, action parameter schemas are available through MCP resources:
 | `gitlab://tools/gitlab_orbit.status`       | Parameters for service health checks    |
 | `gitlab://tools/gitlab_orbit.schema`       | Parameters for ontology inspection      |
 | `gitlab://tools/gitlab_orbit.tools`        | Parameters for query manifest discovery |
+| `gitlab://tools/gitlab_orbit.dsl`          | Parameters for DSL schema/grammar       |
 | `gitlab://tools/gitlab_orbit.query`        | Parameters for Knowledge Graph queries  |
 | `gitlab://tools/gitlab_orbit.graph_status` | Parameters for indexing status checks   |
 

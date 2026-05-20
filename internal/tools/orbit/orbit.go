@@ -16,7 +16,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// ResponseFormatInput holds the common Orbit response_format parameter.
 type ResponseFormatInput struct {
 	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format to request: raw or llm. Defaults to raw."`
 }
@@ -35,6 +34,18 @@ type SchemaInput struct {
 
 // ToolsInput is the input for listing Orbit MCP tool manifests.
 type ToolsInput struct{}
+
+// DSLInput holds parameters for retrieving the Orbit query DSL.
+type DSLInput struct {
+	ResponseFormatInput
+}
+
+// DSLOutput is the raw Orbit query DSL response.
+type DSLOutput struct {
+	toolutil.HintableOutput
+	ResponseFormat string `json:"response_format,omitempty"`
+	Content        string `json:"content,omitempty"`
+}
 
 // QueryInput holds parameters for executing an Orbit Knowledge Graph query.
 type QueryInput struct {
@@ -214,6 +225,23 @@ func Tools(ctx context.Context, client *gitlabclient.Client, _ ToolsInput) (Tool
 	return convertTools(tools), nil
 }
 
+// DSL retrieves the Orbit query DSL body verbatim.
+func DSL(ctx context.Context, client *gitlabclient.Client, input DSLInput) (DSLOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return DSLOutput{}, err
+	}
+	format, err := responseFormat(input.ResponseFormat, "response_format")
+	if err != nil {
+		return DSLOutput{}, err
+	}
+
+	content, _, err := client.GL().Orbit.GetDsl(&gl.GetOrbitDslOptions{ResponseFormat: format}, gl.WithContext(ctx))
+	if err != nil {
+		return DSLOutput{}, wrapOrbitErr("orbit_dsl", err)
+	}
+	return DSLOutput{ResponseFormat: responseFormatName(format), Content: content}, nil
+}
+
 // Query executes an Orbit Knowledge Graph query.
 func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (QueryOutput, error) {
 	if err := ctx.Err(); err != nil {
@@ -288,6 +316,13 @@ func responseFormat(format, field string) (*gl.OrbitResponseFormatValue, error) 
 	default:
 		return nil, errors.New("invalid " + field + ": use raw or llm")
 	}
+}
+
+func responseFormatName(format *gl.OrbitResponseFormatValue) string {
+	if format == nil {
+		return string(gl.OrbitResponseFormatRaw)
+	}
+	return string(*format)
 }
 
 func validateQuery(query map[string]any) (json.RawMessage, error) {
