@@ -135,6 +135,8 @@ Find returns a ranked shortlist of catalog actions with exact schemas inline. Th
 
 Pass `explain: true` to include deterministic scoring reasons in each result. The default omits explanations to keep responses compact. Enabling `explain` does not alter ranking; it only adds reasoning metadata.
 
+Find accepts `limit`; the default is 20 results and the server caps it at 50. The limit only controls how many ranked actions are returned. It does not shrink the catalog searched by the server.
+
 ### `gitlab_execute_tool`
 
 Execute accepts a canonical `domain.action` ID and a required `params` object. Use `params: {}` for actions with no parameters.
@@ -299,9 +301,25 @@ The canonical action catalog is filtered after policy decisions such as enterpri
 - **Segmented matching**: long multi-intent prompts are also searched in overlapping three- to six-term windows. This helps prompts such as `discover project from remote url merge request list current user open authored` surface both project discovery and merge-request listing candidates.
 - **Ambiguity handling**: ambiguous aliases are reported with explicit canonical alternatives; execute rejects ambiguous aliases until the caller chooses one canonical `domain.action` ID.
 
+Internally, the ranker first gathers candidates from an inverted index keyed by aliases, domains, actions, and schema-derived tokens. If no index bucket matches, it intentionally scores the full visible catalog so the result is deterministic and can still recover through broader metadata or fuzzy matching.
+
+Current internal limits and safety rules:
+
+| Rule                         | Behavior                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Result count                 | `limit` defaults to 20 and is capped at 50                                                                                     |
+| High-confidence threshold    | Top result needs score at least 80 and a margin of at least 15 over the next result                                            |
+| Required query-term matches  | 1-2 meaningful terms must all match; longer queries may miss one term                                                          |
+| Fuzzy typo recovery          | Runs only after zero-result or low-confidence lexical search; max two edits; ignores tokens under 3 chars                      |
+| Destructive fuzzy protection | Destructive fuzzy matches require an exact destructive verb plus a resource/action/tag signal                                  |
+| Segmented long-prompt search | Uses three- to six-term windows; runs for long prompts or compact `limit <= 10` searches with 5+ terms                         |
+| No-match suggestions         | Returns up to six nearby indexed tokens, then common domains such as project, issue, merge request, pipeline, branch, and user |
+
+These values are internal tuning constants, not runtime configuration flags. Change them in code only with dynamic search tests and model-evaluation evidence.
+
 The goal is not to make the model guess blindly. The model should use find to shortlist actions and fetch exact schemas, then execute.
 
-Find and search return only actions visible to the current server instance. Enterprise gating, GitLab.com-only routing, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, excluded tools, and token-scope filtering are applied before the dynamic registry is exposed.
+Find returns only actions visible to the current server instance. Enterprise gating, GitLab.com-only routing, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, excluded tools, and token-scope filtering are applied before the dynamic registry is exposed.
 
 ### Metadata Guidance
 

@@ -71,7 +71,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` mantiene `gitlab://workspace/roots` y `gitlab://tools`, y omite recursos opcionales, prompts y guías de flujo. Dynamic conserva el descubrimiento de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. `META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
+`CAPABILITY_SURFACE=minimal` mantiene `gitlab://workspace/roots` y los recursos de manifiesto de herramientas (`gitlab://tools` y `gitlab://tools/{id}`), y omite recursos opcionales, prompts y guías de flujo. Dynamic conserva el descubrimiento de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. `META_PARAM_SCHEMA` solo afecta los schemas de las meta-herramientas, así que deja el valor predeterminado `opaque` en despliegues dinámicos.
 
 ## Flujo del modelo
 
@@ -122,6 +122,18 @@ El pipeline de ranking:
 La recuperación fuzzy está limitada a propósito: permite hasta dos errores de edición en tokens de al menos tres caracteres y suprime coincidencias tipográficas débiles para acciones destructivas. Eso ayuda con prompts como `merje requesy list`, mientras que términos cortos como `mr` siguen apoyándose en alias y sinónimos en lugar de coincidencias tipográficas demasiado permisivas.
 
 Find acepta `explain: true` cuando el asistente necesita razones deterministas de puntuación. La respuesta por defecto sigue siendo compacta. Activar `explain` no cambia el ranking; solo añade metadatos de razonamiento. Las búsquedas sin coincidencias devuelven una lista pequeña de sugerencias, y los flujos curados pueden devolver `related_actions`, como `repository.compare` antes de `analyze.release_notes`.
+
+Algunos límites útiles están fijados dentro del servidor en vez de configurarse por entorno:
+
+| Comportamiento                | Valor actual                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Resultados devueltos por find | Por defecto 20 y máximo 50                                                                                               |
+| Resultado de alta confianza   | Puntuación mínima 80 y al menos 15 puntos de margen sobre el siguiente resultado                                         |
+| Manejo de prompts largos      | Busca ventanas solapadas de tres a seis términos para que un prompt pueda sacar varias acciones                          |
+| Recuperación fuzzy de typos   | Máximo dos ediciones y solo para términos de al menos tres caracteres                                                    |
+| Sugerencias sin coincidencias | Hasta seis tokens cercanos del catálogo, luego áreas comunes como project, issue, merge request, pipeline, branch y user |
+
+Estos números son constantes internas de ajuste. No son variables de entorno. Existen para mantener el descubrimiento predecible sin perder recuperación ante redacciones y errores tipográficos comunes de los modelos.
 
 :::tip[Usa IDs canónicos]
 Los alias ayudan en la búsqueda y pueden resolverse si no son ambiguos, pero los IDs canónicos `domain.action` son el contrato estable de ejecución. Ejecuta el ID de acción devuelto por find.

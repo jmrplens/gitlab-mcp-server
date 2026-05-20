@@ -71,7 +71,7 @@ gitlab-mcp-server --http \
   --capability-surface=minimal
 ```
 
-`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` plus `gitlab://tools`, and omits optional resources, prompts, and workflow guides. Dynamic still has schema discovery because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
+`CAPABILITY_SURFACE=minimal` keeps `gitlab://workspace/roots` plus the tool manifest resources (`gitlab://tools` and `gitlab://tools/{id}`), and omits optional resources, prompts, and workflow guides. Dynamic still has schema discovery because `gitlab_find_action` returns exact action schemas inline. `META_PARAM_SCHEMA` only affects meta-tool dispatcher schemas, so leave it at the default `opaque` for dynamic deployments.
 
 ## The model workflow
 
@@ -122,6 +122,18 @@ The ranking pipeline:
 Fuzzy recovery is bounded on purpose: it allows up to two edit mistakes for tokens of at least three characters and suppresses weak typo matches for destructive actions. That helps with prompts like `merje requesy list`, while short terms such as `mr` still rely on aliases and synonyms instead of loose typo matching.
 
 Find accepts `explain: true` when the assistant needs deterministic scoring reasons. The default response stays compact. Enabling `explain` does not change ranking; it only adds reasoning metadata. No-match searches return a small suggestions list, and curated workflows may return `related_actions`, such as `repository.compare` before `analyze.release_notes`.
+
+Some useful limits are fixed inside the server rather than configured by operators:
+
+| Behavior                 | Current value                                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Results returned by find | Defaults to 20 and is capped at 50                                                                                |
+| High-confidence result   | Score at least 80 and at least 15 points ahead of the next result                                                 |
+| Long prompt handling     | Searches overlapping three- to six-term windows so one prompt can surface several actions                         |
+| Fuzzy typo recovery      | Maximum two edits, only for terms with at least three characters                                                  |
+| No-match suggestions     | Up to six nearby catalog tokens, then common areas like project, issue, merge request, pipeline, branch, and user |
+
+Those numbers are internal tuning constants. They are not environment variables. They exist to keep discovery predictable while still recovering from common model wording and typos.
 
 :::tip[Use canonical IDs]
 Aliases help find and may resolve when unambiguous, but canonical `domain.action` IDs are the stable execution contract. Execute the action ID returned by find.
