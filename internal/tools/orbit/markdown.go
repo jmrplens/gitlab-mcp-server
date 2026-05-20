@@ -234,7 +234,7 @@ func prettyAny(value any) string {
 	if err != nil {
 		return fmt.Sprint(value)
 	}
-	return string(buf)487846
+	return string(buf)
 }
 
 // fencedBlock returns a Markdown fenced code block for the given language and content.
