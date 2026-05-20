@@ -1,6 +1,7 @@
 package orbit
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -118,6 +119,7 @@ type ToolsOutput struct {
 // QueryOutput is the result envelope returned by Orbit query execution.
 type QueryOutput struct {
 	toolutil.HintableOutput
+	FormattedText   string   `json:"formatted_text,omitempty"`
 	Result          any      `json:"result,omitempty"`
 	QueryType       string   `json:"query_type,omitempty"`
 	RawQueryStrings []string `json:"raw_query_strings,omitempty"`
@@ -225,11 +227,20 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 	if err != nil {
 		return QueryOutput{}, err
 	}
-
-	result, _, err := client.GL().Orbit.Query(&gl.OrbitQueryRequest{
+	request := &gl.OrbitQueryRequest{
 		Query:          query,
 		ResponseFormat: format,
-	}, gl.WithContext(ctx))
+	}
+	if format != nil && *format == gl.OrbitResponseFormatLLM {
+		var raw bytes.Buffer
+		_, err = client.GL().Orbit.QueryRaw(request, &raw, gl.WithContext(ctx))
+		if err != nil {
+			return QueryOutput{}, wrapOrbitErr("orbit_query", err)
+		}
+		return QueryOutput{FormattedText: raw.String(), QueryType: queryType(input.Query)}, nil
+	}
+
+	result, _, err := client.GL().Orbit.Query(request, gl.WithContext(ctx))
 	if err != nil {
 		return QueryOutput{}, wrapOrbitErr("orbit_query", err)
 	}
@@ -288,6 +299,14 @@ func validateQuery(query map[string]any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("query must be a JSON object: %w", err)
 	}
 	return json.RawMessage(buf), nil
+}
+
+func queryType(query map[string]any) string {
+	queryTypeValue, ok := query["query_type"].(string)
+	if !ok {
+		return ""
+	}
+	return queryTypeValue
 }
 
 func graphStatusOptions(input GraphStatusInput) (*gl.GetGraphStatusOptions, error) {

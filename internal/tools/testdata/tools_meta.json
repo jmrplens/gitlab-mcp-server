@@ -2567,6 +2567,12 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_builds": {
           "type": "boolean"
         },

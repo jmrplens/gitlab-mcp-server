@@ -42581,6 +42581,12 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -83403,6 +83409,12 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -83618,6 +83630,13 @@
           "description": "Project path slug (defaults from name)",
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "description": "Prevent merge request pipeline settings from being modified by users with lower permissions",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_builds": {
           "description": "Enable public access to pipelines",
           "type": [
@@ -83825,6 +83844,12 @@
         },
         "path_with_namespace": {
           "type": "string"
+        },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "public_builds": {
           "type": "boolean"
@@ -84141,6 +84166,12 @@
         },
         "path_with_namespace": {
           "type": "string"
+        },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "public_builds": {
           "type": "boolean"
@@ -85111,6 +85142,12 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -85380,6 +85417,12 @@
         },
         "path_with_namespace": {
           "type": "string"
+        },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "public_builds": {
           "type": "boolean"
@@ -87724,6 +87767,12 @@
               "path_with_namespace": {
                 "type": "string"
               },
+              "protect_merge_request_pipelines": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "public_builds": {
                 "type": "boolean"
               },
@@ -88018,6 +88067,12 @@
               },
               "path_with_namespace": {
                 "type": "string"
+              },
+              "protect_merge_request_pipelines": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "public_builds": {
                 "type": "boolean"
@@ -88834,6 +88889,12 @@
               "path_with_namespace": {
                 "type": "string"
               },
+              "protect_merge_request_pipelines": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "public_builds": {
                 "type": "boolean"
               },
@@ -89181,6 +89242,12 @@
               "path_with_namespace": {
                 "type": "string"
               },
+              "protect_merge_request_pipelines": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "public_builds": {
                 "type": "boolean"
               },
@@ -89527,6 +89594,12 @@
               },
               "path_with_namespace": {
                 "type": "string"
+              },
+              "protect_merge_request_pipelines": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "public_builds": {
                 "type": "boolean"
@@ -90783,6 +90856,12 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -91933,6 +92012,12 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -92286,6 +92371,12 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -92535,6 +92626,12 @@
         },
         "path_with_namespace": {
           "type": "string"
+        },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "public_builds": {
           "type": "boolean"
@@ -92786,6 +92883,12 @@
         "path_with_namespace": {
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_builds": {
           "type": "boolean"
         },
@@ -93014,6 +93117,13 @@
           "description": "Project ID or URL-encoded path",
           "type": "string"
         },
+        "protect_merge_request_pipelines": {
+          "description": "Prevent merge request pipeline settings from being modified by users with lower permissions",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "public_builds": {
           "description": "Enable public access to pipelines",
           "type": [
@@ -93228,6 +93338,12 @@
         },
         "path_with_namespace": {
           "type": "string"
+        },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "public_builds": {
           "type": "boolean"
@@ -93561,6 +93677,12 @@
         },
         "path_with_namespace": {
           "type": "string"
+        },
+        "protect_merge_request_pipelines": {
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "public_builds": {
           "type": "boolean"
@@ -105997,6 +106119,12 @@
               },
               "path_with_namespace": {
                 "type": "string"
+              },
+              "protect_merge_request_pipelines": {
+                "type": [
+                  "null",
+                  "boolean"
+                ]
               },
               "public_builds": {
                 "type": "boolean"

@@ -114,6 +114,11 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 func FormatQueryMarkdown(out QueryOutput) string {
 	var b strings.Builder
 	b.WriteString("## Orbit Query Result\n\n")
+	if out.FormattedText != "" {
+		b.WriteString(fencedBlock("text", out.FormattedText))
+		toolutil.WriteHints(&b, "Use gitlab_orbit graph_status if query results look stale or incomplete")
+		return b.String()
+	}
 	writeKV(&b, "Query type", out.QueryType)
 	if out.RowCount > 0 {
 		fmt.Fprintf(&b, "- Row count: %d\n", out.RowCount)

@@ -38,7 +38,7 @@ chmod +x gitlab-mcp-server
 For pinned versions, replace `latest` with a specific tag:
 
 ```bash
-curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.0.2/gitlab-mcp-server-linux-amd64" \
+curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.0.3/gitlab-mcp-server-linux-amd64" \
   -o gitlab-mcp-server
 chmod +x gitlab-mcp-server
 ```

@@ -55,6 +55,7 @@ type CreateInput struct {
 	OnlyAllowMergeIfPipelineSucceeds          bool   `json:"only_allow_merge_if_pipeline_succeeds,omitempty" jsonschema:"Only allow merge when pipeline succeeds"`
 	OnlyAllowMergeIfAllDiscussionsAreResolved bool   `json:"only_allow_merge_if_all_discussions_are_resolved,omitempty" jsonschema:"Only allow merge when all discussions are resolved"`
 	AllowMergeOnSkippedPipeline               *bool  `json:"allow_merge_on_skipped_pipeline,omitempty" jsonschema:"Allow merge when pipeline is skipped"`
+	ProtectMergeRequestPipelines              *bool  `json:"protect_merge_request_pipelines,omitempty" jsonschema:"Prevent merge request pipeline settings from being modified by users with lower permissions"`
 	RemoveSourceBranchAfterMerge              *bool  `json:"remove_source_branch_after_merge,omitempty" jsonschema:"Remove source branch after merge by default"`
 	AutocloseReferencedIssues                 *bool  `json:"autoclose_referenced_issues,omitempty" jsonschema:"Auto-close referenced issues on merge"`
 	SuggestionCommitMessage                   string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions"`
@@ -126,6 +127,7 @@ type Output struct {
 	AllowMergeOnSkippedPipeline               bool     `json:"allow_merge_on_skipped_pipeline"`
 	MergePipelinesEnabled                     bool     `json:"merge_pipelines_enabled"`
 	MergeTrainsEnabled                        bool     `json:"merge_trains_enabled"`
+	ProtectMergeRequestPipelines              *bool    `json:"protect_merge_request_pipelines,omitempty"`
 	MergeCommitTemplate                       string   `json:"merge_commit_template,omitempty"`
 	SquashCommitTemplate                      string   `json:"squash_commit_template,omitempty"`
 	AutocloseReferencedIssues                 bool     `json:"autoclose_referenced_issues"`
@@ -241,6 +243,7 @@ type UpdateInput struct {
 	SquashCommitTemplate                      string               `json:"squash_commit_template,omitempty"   jsonschema:"Template for squash commit messages"`
 	MergePipelinesEnabled                     *bool                `json:"merge_pipelines_enabled,omitempty"  jsonschema:"Enable merged results pipelines"`
 	MergeTrainsEnabled                        *bool                `json:"merge_trains_enabled,omitempty"     jsonschema:"Enable merge trains"`
+	ProtectMergeRequestPipelines              *bool                `json:"protect_merge_request_pipelines,omitempty" jsonschema:"Prevent merge request pipeline settings from being modified by users with lower permissions"`
 	ResolveOutdatedDiffDiscussions            *bool                `json:"resolve_outdated_diff_discussions,omitempty" jsonschema:"Auto-resolve outdated diff discussions"`
 	ApprovalsBeforeMerge                      int64                `json:"approvals_before_merge,omitempty"   jsonschema:"Number of approvals required before merge"`
 	MergeRequestTitleRegex                    string               `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
@@ -286,6 +289,7 @@ func ToOutput(p *gl.Project) Output {
 		AllowMergeOnSkippedPipeline:               p.AllowMergeOnSkippedPipeline,
 		MergePipelinesEnabled:                     p.MergePipelinesEnabled,
 		MergeTrainsEnabled:                        p.MergeTrainsEnabled,
+		ProtectMergeRequestPipelines:              &p.ProtectMergeRequestPipelines,
 		MergeCommitTemplate:                       p.MergeCommitTemplate,
 		SquashCommitTemplate:                      p.SquashCommitTemplate,
 		AutocloseReferencedIssues:                 p.AutocloseReferencedIssues,
@@ -402,6 +406,9 @@ func applyCreateFeatureToggles(opts *gl.CreateProjectOptions, input CreateInput)
 	}
 	if input.AllowMergeOnSkippedPipeline != nil {
 		opts.AllowMergeOnSkippedPipeline = input.AllowMergeOnSkippedPipeline
+	}
+	if input.ProtectMergeRequestPipelines != nil {
+		opts.ProtectMergeRequestPipelines = input.ProtectMergeRequestPipelines
 	}
 	if input.RemoveSourceBranchAfterMerge != nil {
 		opts.RemoveSourceBranchAfterMerge = input.RemoveSourceBranchAfterMerge
@@ -791,6 +798,9 @@ func applyUpdateFeatureOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	}
 	if input.MergeTrainsEnabled != nil {
 		opts.MergeTrainsEnabled = input.MergeTrainsEnabled
+	}
+	if input.ProtectMergeRequestPipelines != nil {
+		opts.ProtectMergeRequestPipelines = input.ProtectMergeRequestPipelines
 	}
 	if input.ResolveOutdatedDiffDiscussions != nil {
 		opts.ResolveOutdatedDiffDiscussions = input.ResolveOutdatedDiffDiscussions

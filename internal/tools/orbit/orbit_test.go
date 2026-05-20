@@ -154,6 +154,59 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 	}
 }
 
+// TestQuery_LLMResponseFormat_UsesRawResponse verifies that Query uses the
+// raw Orbit API path for GOON/TOON text responses instead of JSON decoding.
+func TestQuery_LLMResponseFormat_UsesRawResponse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+		var got map[string]json.RawMessage
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if string(got["response_format"]) != `"llm"` {
+			t.Fatalf("response_format = %s, want llm", got["response_format"])
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("@header\nProject(name: gitlab)\n"))
+	}))
+
+	out, err := Query(context.Background(), client, QueryInput{
+		Query:               map[string]any{"query_type": "traversal"},
+		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
+	})
+	if err != nil {
+		t.Fatalf("Query() error: %v", err)
+	}
+	if !strings.Contains(out.FormattedText, "@header") || out.Result != nil || out.QueryType != "traversal" {
+		t.Fatalf("Query() = %+v, want raw formatted text with query type", out)
+	}
+}
+
+// TestQuery_LLMResponseFormat_RawError verifies raw Orbit API failures are
+// wrapped instead of falling back to JSON decoding.
+func TestQuery_LLMResponseFormat_RawError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	_, err := Query(context.Background(), client, QueryInput{
+		Query:               map[string]any{"query_type": "traversal"},
+		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestQueryType_NonString_ReturnsEmpty(t *testing.T) {
+	if got := queryType(map[string]any{"query_type": 42}); got != "" {
+		t.Fatalf("queryType() = %q, want empty", got)
+	}
+}
+
 // TestGraphStatus_RequiresExactlyOneScope verifies that GraphStatus rejects
 // missing, conflicting, or invalid scope inputs before making an HTTP request.
 func TestGraphStatus_RequiresExactlyOneScope(t *testing.T) {
@@ -666,6 +719,11 @@ func TestOrbitMarkdownFormatters_IncludeExpectedSections(t *testing.T) {
 			want: []string{"Orbit Tools", "query_graph"},
 		},
 		{
+			name: "query formatted",
+			md:   FormatQueryMarkdown(QueryOutput{FormattedText: "@header\nProject(name: gitlab)"}),
+			want: []string{"Orbit Query Result", "```text", "@header", "Use gitlab_orbit graph_status"},
+		},
+		{
 			name: "graph status structured",
 			md: FormatGraphStatusMarkdown(GraphStatusOutput{
 				Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3},
@@ -687,6 +745,9 @@ func TestOrbitMarkdownFormatters_IncludeExpectedSections(t *testing.T) {
 				if !strings.Contains(tt.md, want) {
 					t.Fatalf("markdown = %q, want substring %q", tt.md, want)
 				}
+			}
+			if tt.name == "query formatted" && strings.Contains(tt.md, "Query type") {
+				t.Fatalf("markdown = %q, want formatted text without structured query fields", tt.md)
 			}
 		})
 	}
