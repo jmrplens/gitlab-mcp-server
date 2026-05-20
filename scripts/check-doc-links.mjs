@@ -7,13 +7,21 @@ import path from "node:path";
 const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 	encoding: "utf8",
 }).trim();
-const trackedDocs = execFileSync("git", ["ls-files", "*.md", "*.mdx"], {
-	cwd: repoRoot,
-	encoding: "utf8",
-})
-	.trim()
-	.split("\n")
-	.filter(Boolean)
+const trackedDocs = [
+	...new Set(
+		execFileSync(
+			"git",
+			["ls-files", "*.md", "*.mdx", ":(glob)**/*.md", ":(glob)**/*.mdx"],
+			{
+				cwd: repoRoot,
+				encoding: "utf8",
+			},
+		)
+			.trim()
+			.split("\n")
+			.filter(Boolean),
+	),
+]
 	.filter((file) => !file.startsWith("plan/"))
 	.filter((file) => !file.startsWith(".github/skills/"));
 
@@ -38,7 +46,7 @@ for (const file of trackedDocs) {
 			checkTarget(file, index + 1, target);
 		}
 
-		const reference = line.match(/^\s*\[[^\]]+\]:\s*(\S+)/);
+		const reference = line.match(/^\s*\[(?!\^)[^\]]+\]:\s*(<[^>]+>|\S+)/);
 		if (reference) {
 			checkTarget(file, index + 1, reference[1]);
 		}
@@ -59,7 +67,7 @@ console.log(
 
 function inlineLinks(line) {
 	const targets = [];
-	const pattern = /!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+	const pattern = /!?\[[^\]]*\]\(\s*(<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\s*\)/g;
 	let match;
 	while ((match = pattern.exec(line)) !== null) {
 		targets.push(match[1]);

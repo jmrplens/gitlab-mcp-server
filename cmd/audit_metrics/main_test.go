@@ -93,8 +93,13 @@ func TestCountActionRoutes_CountsCatalogActions(t *testing.T) {
 // TestCountToolPackages_ReportsCatalogFirstPackages verifies package metrics do
 // not depend on the removed package-local register.go convention.
 func TestCountToolPackages_ReportsCatalogFirstPackages(t *testing.T) {
-	if got := countToolPackages(); got < 100 {
-		t.Fatalf("countToolPackages() = %d, want catalog-first package count", got)
+	toolsDir := filepath.Join(repositoryRoot(), "internal", "tools")
+	want := countToolPackageDirsAt(toolsDir)
+	if want == 0 {
+		t.Fatalf("countToolPackageDirsAt(%s) = 0, want registered tool packages", toolsDir)
+	}
+	if got := countToolPackages(); got != want {
+		t.Fatalf("countToolPackages() = %d, want %d", got, want)
 	}
 }
 
@@ -105,12 +110,13 @@ func TestCountToolPackageDirsAt_IncludesPackagesWithoutRegisterGo(t *testing.T) 
 	writeTestFile(t, toolsDir, "root.go")
 	writeTestFile(t, filepath.Join(toolsDir, "alpha"), "alpha.go")
 	writeTestFile(t, filepath.Join(toolsDir, "beta"), "beta_test.go")
+	writeTestFile(t, filepath.Join(toolsDir, "nested", "gamma"), "gamma.go")
 	if err := os.Mkdir(filepath.Join(toolsDir, "empty"), 0o755); err != nil {
 		t.Fatalf("Mkdir(empty): %v", err)
 	}
 
-	if got := countToolPackageDirsAt(toolsDir); got != 3 {
-		t.Fatalf("countToolPackageDirsAt() = %d, want 3", got)
+	if got := countToolPackageDirsAt(toolsDir); got != 4 {
+		t.Fatalf("countToolPackageDirsAt() = %d, want 4", got)
 	}
 }
 

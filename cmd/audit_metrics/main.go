@@ -14,13 +14,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -187,19 +185,10 @@ func main() {
 	}
 }
 
-// countToolPackages counts Go packages under internal/tools using the Go tool,
-// matching the catalog-first architecture where ordinary tool packages no longer
-// carry package-local register.go files.
+// countToolPackages counts Go package directories under internal/tools,
+// matching the catalog-first architecture where ordinary tool packages no
+// longer carry package-local register.go files.
 func countToolPackages() int {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "list", "./internal/tools/...")
-	cmd.Dir = repositoryRoot()
-	output, err := cmd.Output()
-	if err == nil {
-		return countNonEmptyLines(output)
-	}
-	fmt.Fprintf(os.Stderr, "go list ./internal/tools/...: %v\n", err)
 	return countToolPackageDirsAt(filepath.Join(repositoryRoot(), "internal", "tools"))
 }
 
@@ -211,33 +200,23 @@ func repositoryRoot() string {
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }
 
-func countNonEmptyLines(output []byte) int {
-	count := 0
-	for line := range strings.SplitSeq(string(output), "\n") {
-		if strings.TrimSpace(line) != "" {
-			count++
-		}
-	}
-	return count
-}
-
 func countToolPackageDirsAt(toolsDir string) int {
 	count := 0
-	if directoryHasGoFile(toolsDir) {
-		count++
-	}
-	entries, err := os.ReadDir(toolsDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ReadDir %s: %v\n", toolsDir, err)
-		return count
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+	err := filepath.WalkDir(toolsDir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			fmt.Fprintf(os.Stderr, "WalkDir %s: %v\n", path, walkErr)
+			return nil
 		}
-		if directoryHasGoFile(filepath.Join(toolsDir, entry.Name())) {
+		if !entry.IsDir() {
+			return nil
+		}
+		if directoryHasGoFile(path) {
 			count++
 		}
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "WalkDir %s: %v\n", toolsDir, err)
 	}
 	return count
 }
