@@ -26,7 +26,9 @@ func TestEvalCreateMessageHandler_ReturnsDeterministicSamplingResult(t *testing.
 // TestEvalElicitationHandler_DerivesNestedDefaults verifies elicitation schemas
 // are auto-accepted with type-aware deterministic fixture values.
 func TestEvalElicitationHandler_DerivesNestedDefaults(t *testing.T) {
+	previousTag, _ := evalElicitationReleaseTag.Load().(string)
 	setEvalElicitationReleaseTag("v-test")
+	t.Cleanup(func() { setEvalElicitationReleaseTag(previousTag) })
 	result, err := evalElicitationHandler(t.Context(), &mcp.ElicitRequest{Params: &mcp.ElicitParams{RequestedSchema: map[string]any{
 		"type": "object",
 		"properties": map[string]any{

@@ -17,17 +17,14 @@ func shouldWriteStartupReport(opts options) bool {
 	return opts.Output != "" && !opts.FixturesOnly
 }
 
-// writeStartupReport writes startup report to disk.
 func writeStartupReport(path string, opts options) error {
 	return writeStatusReport(path, opts, "running", "The evaluator created this placeholder at startup. It will be replaced by the final metrics report when the run completes.", nil)
 }
 
-// writeErrorReport writes error report to disk.
 func writeErrorReport(path string, opts options, runErr error) error {
 	return writeStatusReport(path, opts, "failed", "The evaluator stopped before it could write the final metrics report.", runErr)
 }
 
-// writeStatusReport writes status report to disk.
 func writeStatusReport(path string, opts options, status, message string, runErr error) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create report directory: %w", err)
@@ -51,7 +48,6 @@ func writeStatusReport(path string, opts options, status, message string, runErr
 	return nil
 }
 
-// writeReportHeader writes report header to disk.
 func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	fmt.Fprintf(b, "# %s\n\n", reportTitle(opts.ToolSurface))
 	fmt.Fprintf(b, "Date: %s\n", time.Now().UTC().Format(time.RFC3339))
@@ -127,7 +123,6 @@ func reportMode(dryRun bool) string {
 	return "model tool-calling"
 }
 
-// writeReport writes report to disk.
 func writeReport(path string, opts options, results []taskResult, catalog []modelTool, routes map[string]toolutil.ActionMap, dryRun bool) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create report directory: %w", err)
@@ -198,7 +193,6 @@ func writeReport(path string, opts options, results []taskResult, catalog []mode
 	return nil
 }
 
-// writeFailureDiagnostics writes failure diagnostics to disk.
 func writeFailureDiagnostics(b *strings.Builder, opts options, results []taskResult) {
 	counts := make(map[string]int)
 	examples := make(map[string]string)
@@ -280,13 +274,8 @@ func failureDiagnosticCategoryForResult(opts options, result taskResult) string 
 	return failureDiagnosticCategory(result.Notes)
 }
 
-// dynamicFailureDiagnosticCategory separates dynamic-mode failures into buckets
-// that map directly to follow-up implementation work.
-func dynamicFailureDiagnosticCategory(result taskResult) string {
-	text := strings.ToLower(strings.Join(result.Notes, "\n"))
+func commonFailureCategory(text string) string {
 	switch {
-	case text == "":
-		return "other"
 	case strings.Contains(text, "invalid_api_key") || strings.Contains(text, "incorrect api key") || strings.Contains(text, "api key") && strings.Contains(text, "invalid"):
 		return "model_provider_auth"
 	case strings.Contains(text, "not_found_error") && strings.Contains(text, "model") || strings.Contains(text, "model is not found") || strings.Contains(text, "models/") && strings.Contains(text, diagnosticNotFound):
@@ -295,6 +284,25 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 		return "mcp_implementation_bug"
 	case strings.Contains(text, "500") || strings.Contains(text, "502") || strings.Contains(text, "503") || strings.Contains(text, "504") || strings.Contains(text, "internal server error") || strings.Contains(text, "bad gateway") || strings.Contains(text, "service unavailable") || strings.Contains(text, "gateway timeout"):
 		return "transient_gitlab_5xx"
+	case strings.Contains(text, "timeout") || strings.Contains(text, "deadline exceeded") || strings.Contains(text, "resource exhausted") || strings.Contains(text, "too many requests") || strings.Contains(text, "429"):
+		return "timeout_resource_exhaustion"
+	case strings.Contains(text, "404") || strings.Contains(text, diagnosticNotFound):
+		return "not_found"
+	default:
+		return ""
+	}
+}
+
+// dynamicFailureDiagnosticCategory separates dynamic-mode failures into buckets
+// that map directly to follow-up implementation work.
+func dynamicFailureDiagnosticCategory(result taskResult) string {
+	text := strings.ToLower(strings.Join(result.Notes, "\n"))
+	if category := commonFailureCategory(text); category != "" {
+		return category
+	}
+	switch {
+	case text == "":
+		return "other"
 	case strings.Contains(text, "sampling_unsupported") || strings.Contains(text, "sampling capability unsupported") || strings.Contains(text, "ce") && (strings.Contains(text, "unavailable") || strings.Contains(text, "unsupported")) || strings.Contains(text, "requires premium") || strings.Contains(text, "requires ultimate") || strings.Contains(text, "license") || strings.Contains(text, "not available"):
 		return "ce_or_sampling_limitation"
 	case strings.Contains(text, "expected tool gitlab_discover_project") || strings.Contains(text, "expected tool gitlab_interactive_") || strings.Contains(text, "standalone tool"):
@@ -311,16 +319,12 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 		return "true_discovery_miss"
 	case strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive"):
 		return "destructive_safety"
-	case strings.Contains(text, "timeout") || strings.Contains(text, "deadline exceeded") || strings.Contains(text, "resource exhausted") || strings.Contains(text, "too many requests") || strings.Contains(text, "429"):
-		return "timeout_resource_exhaustion"
-	case strings.Contains(text, "404") || strings.Contains(text, diagnosticNotFound):
-		return "not_found"
 	default:
 		return "other"
 	}
 }
 
-// dynamicRankerMiss formats dynamic ranker miss for report output.
+// dynamicRankerMiss reports whether a failure points to dynamic search ranking.
 func dynamicRankerMiss(text string) bool {
 	if strings.Contains(text, "dynamic ranker miss") || strings.Contains(text, "ranker miss") {
 		return true
@@ -355,7 +359,7 @@ func dynamicAliasMiss(text string) bool {
 	return false
 }
 
-// dynamicMultiStepOrderMiss classifies dynamic multi step order miss for evaluation diagnostics.
+// dynamicMultiStepOrderMiss identifies runs that exhausted the dynamic task budget after partial progress.
 func dynamicMultiStepOrderMiss(text string) bool {
 	if !strings.Contains(text, "tool-call step limit reached after") {
 		return false
@@ -363,18 +367,12 @@ func dynamicMultiStepOrderMiss(text string) bool {
 	return !strings.Contains(text, "after 0/")
 }
 
-// failureDiagnosticCategory classifies failure diagnostic category for evaluation diagnostics.
 func failureDiagnosticCategory(notes []string) string {
 	text := strings.ToLower(strings.Join(notes, "\n"))
+	if category := commonFailureCategory(text); category != "" {
+		return category
+	}
 	switch {
-	case strings.Contains(text, "invalid_api_key") || strings.Contains(text, "incorrect api key") || strings.Contains(text, "api key") && strings.Contains(text, "invalid"):
-		return "model_provider_auth"
-	case strings.Contains(text, "not_found_error") && strings.Contains(text, "model") || strings.Contains(text, "model is not found") || strings.Contains(text, "models/") && strings.Contains(text, diagnosticNotFound):
-		return "model_provider_model_unavailable"
-	case strings.Contains(text, "int64") || strings.Contains(text, "cannot unmarshal") || (strings.Contains(text, "integer") && strings.Contains(text, "invalid")):
-		return "mcp_implementation_bug"
-	case strings.Contains(text, "500") || strings.Contains(text, "502") || strings.Contains(text, "503") || strings.Contains(text, "504") || strings.Contains(text, "internal server error") || strings.Contains(text, "bad gateway") || strings.Contains(text, "service unavailable") || strings.Contains(text, "gateway timeout"):
-		return "transient_gitlab_5xx"
 	case strings.Contains(text, "ce") && (strings.Contains(text, "unavailable") || strings.Contains(text, "unsupported")) || strings.Contains(text, "requires premium") || strings.Contains(text, "requires ultimate") || strings.Contains(text, "license") || strings.Contains(text, "not available"):
 		return "gitlab_ce_limitation"
 	case strings.Contains(text, "fixture unavailable") || strings.Contains(text, "fixture state") || strings.Contains(text, "prepare fixtures"):
@@ -385,16 +383,11 @@ func failureDiagnosticCategory(notes []string) string {
 		return "model_parameter_shape_miss"
 	case strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive"):
 		return "destructive_safety"
-	case strings.Contains(text, "timeout") || strings.Contains(text, "deadline exceeded") || strings.Contains(text, "resource exhausted") || strings.Contains(text, "too many requests") || strings.Contains(text, "429"):
-		return "timeout_resource_exhaustion"
-	case strings.Contains(text, "404") || strings.Contains(text, diagnosticNotFound):
-		return "not_found"
 	default:
 		return "other"
 	}
 }
 
-// writeTraceArtifacts writes trace artifacts to disk.
 func writeTraceArtifacts(dir string, results []taskResult, traceProviderBodies bool) error {
 	if dir == "" {
 		return nil
@@ -454,7 +447,6 @@ func writeTraceArtifacts(dir string, results []taskResult, traceProviderBodies b
 	return nil
 }
 
-// traceFileName retrieves the trace of file name for the main package.
 func traceFileName(trace taskTrace) string {
 	taskID := strings.NewReplacer("/", "-", "\\", "-", " ", "-").Replace(trace.TaskID)
 	model := strings.NewReplacer("/", "-", "\\", "-", " ", "-", ":", "-").Replace(trace.Model)
@@ -464,7 +456,6 @@ func traceFileName(trace taskTrace) string {
 	return fmt.Sprintf("%s-run-%03d-%s.json", model, trace.Run, taskID)
 }
 
-// writeFixtureCoverage writes fixture coverage to disk.
 func writeFixtureCoverage(b *strings.Builder, catalog []modelTool, results []taskResult, routes map[string]toolutil.ActionMap) {
 	summary := fixtureToolCoverage(catalog, results)
 	actionSummary := fixtureActionCoverage(routes, results)
@@ -491,7 +482,6 @@ type fixtureCoverage struct {
 	Missing []string
 }
 
-// fixtureToolCoverage returns tool coverage fixture content.
 func fixtureToolCoverage(catalog []modelTool, results []taskResult) fixtureCoverage {
 	catalogNames := make([]string, 0, len(catalog))
 	for _, tool := range catalog {
@@ -513,7 +503,6 @@ func fixtureToolCoverage(catalog []modelTool, results []taskResult) fixtureCover
 	return fixtureCoverage{Total: len(catalogNames), Covered: len(catalogNames) - len(missing), Missing: missing}
 }
 
-// fixtureActionCoverage returns action coverage fixture content.
 func fixtureActionCoverage(routes map[string]toolutil.ActionMap, results []taskResult) fixtureCoverage {
 	if len(routes) == 0 {
 		return fixtureCoverage{}
@@ -542,7 +531,6 @@ func fixtureActionCoverage(routes map[string]toolutil.ActionMap, results []taskR
 	return fixtureCoverage{Total: len(all), Covered: len(all) - len(missing), Missing: missing}
 }
 
-// writeCoverageReportIfRequested writes coverage report if requested to disk.
 func writeCoverageReportIfRequested(opts options, results []taskResult, routes map[string]toolutil.ActionMap) error {
 	if opts.CoverageReport == "" {
 		return nil
@@ -558,7 +546,6 @@ func writeCoverageReportIfRequested(opts options, results []taskResult, routes m
 	return nil
 }
 
-// buildRouteCoverageReport constructs the request parameters from the input.
 func buildRouteCoverageReport(opts options, results []taskResult, routes map[string]toolutil.ActionMap) string {
 	covered := coveredRouteSet(results)
 	uncovered := uncoveredHighRiskRoutes(routes, covered)
@@ -750,7 +737,6 @@ func stepDisplay(tool, action string) string {
 	return fmt.Sprintf("`%s` / `%s`", tool, action)
 }
 
-// writePerRunMetrics writes per run metrics to disk.
 func writePerRunMetrics(b *strings.Builder, results []taskResult) {
 	byRun := make(map[int][]taskResult)
 	runs := make([]int, 0)
@@ -781,7 +767,6 @@ func writePerRunMetrics(b *strings.Builder, results []taskResult) {
 	}
 }
 
-// writePerModelMetrics writes per model metrics to disk.
 func writePerModelMetrics(b *strings.Builder, results []taskResult) {
 	byModel := resultsByModel(results)
 	if len(byModel) <= 1 {
@@ -798,7 +783,6 @@ func writePerModelMetrics(b *strings.Builder, results []taskResult) {
 	}
 }
 
-// writeUsageSummary writes usage summary to disk.
 func writeUsageSummary(b *strings.Builder, opts options, results []taskResult, dryRun bool) {
 	if dryRun {
 		return
@@ -939,7 +923,6 @@ func valueOrUnknown(value string) string {
 	return value
 }
 
-// writePerModelUsage writes per model usage to disk.
 func writePerModelUsage(b *strings.Builder, opts options, results []taskResult) {
 	byModel := resultsByModel(results)
 	if len(byModel) <= 1 {

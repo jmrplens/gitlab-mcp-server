@@ -1077,6 +1077,10 @@ func dynamicDiscoveryResult(ctx context.Context, routes map[string]toolutil.Acti
 // registry as the dynamic toolset.
 func dynamicFindResult(ctx context.Context, routes map[string]toolutil.ActionMap, query string, limit int) any {
 	registry := dynamictools.NewRegistry(dynamicCatalogRoutesFromValidationRoutes(routes))
+	return dynamicFindResultWithRegistry(ctx, registry, query, limit)
+}
+
+func dynamicFindResultWithRegistry(ctx context.Context, registry *dynamictools.Registry, query string, limit int) any {
 	_, output, err := registry.Find(ctx, nil, dynamictools.FindInput{Query: query, Limit: limit})
 	if err != nil {
 		return map[string]any{"query": query, "count": 0, "results": []any{}, "error": err.Error()}

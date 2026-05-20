@@ -23,9 +23,6 @@ import (
 )
 
 func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client, session *mcp.ClientSession, task evalTask, toolSurface string) (evalTask, error) {
-	if session == nil {
-		return task, nil
-	}
 	switch task.ID {
 	case "MT-008":
 		return ensureLiveSubgroupDeleteTarget(ctx, client, task)
@@ -38,6 +35,9 @@ func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client
 	case "MT-028":
 		return task, ensureLiveProjectVariableDeleteTarget(ctx, client, task.Prompt)
 	case "MT-015":
+		if session == nil {
+			return task, errors.New("prepare MT-015 fixture requires an MCP session")
+		}
 		return task, ensureLiveMergeRequestSource(ctx, session, task.Prompt, toolSurface)
 	case "MT-081":
 		return task, ensureLiveInteractiveMergeRequestTarget(ctx, client, task.Prompt)
@@ -1434,7 +1434,10 @@ func ensureLiveFeatureFlagDeleteTarget(ctx context.Context, client *gitlabclient
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	_, _ = client.GL().ProjectFeatureFlags.DeleteProjectFeatureFlag(projectID, flagName, gl.WithContext(setupCtx))
+	_, deleteErr := client.GL().ProjectFeatureFlags.DeleteProjectFeatureFlag(projectID, flagName, gl.WithContext(setupCtx))
+	if deleteErr != nil && !toolutil.IsHTTPStatus(deleteErr, http.StatusNotFound) {
+		return fmt.Errorf("prepare MT-106 fixture feature flag cleanup project %s flag %s: %w", projectID, flagName, deleteErr)
+	}
 	active := false
 	_, _, err := client.GL().ProjectFeatureFlags.CreateProjectFeatureFlag(projectID, &gl.CreateProjectFeatureFlagOptions{
 		Name:   &flagName,
@@ -1461,7 +1464,10 @@ func ensureLiveWikiDeleteTarget(ctx context.Context, client *gitlabclient.Client
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	_, _ = client.GL().Wikis.DeleteWikiPage(projectID, slug, gl.WithContext(setupCtx))
+	_, deleteErr := client.GL().Wikis.DeleteWikiPage(projectID, slug, gl.WithContext(setupCtx))
+	if deleteErr != nil && !toolutil.IsHTTPStatus(deleteErr, http.StatusNotFound) {
+		return fmt.Errorf("prepare MT-108 fixture wiki page cleanup project %s slug %s: %w", projectID, slug, deleteErr)
+	}
 	content := "# Delete fixture\n\nTemporary wiki page for destructive evaluator coverage."
 	_, _, err := client.GL().Wikis.CreateWikiPage(projectID, &gl.CreateWikiPageOptions{
 		Title:   &slug,
@@ -1542,13 +1548,6 @@ func promptInt64After(prompt, marker string) (int64, error) {
 
 // createLiveMRAwardEmoji creates live MR award emoji and returns [int64].
 func createLiveMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, projectID string, mergeRequestIID int64) (int64, error) {
-	emojis, _, err := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(projectID, mergeRequestIID, &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
-	if err != nil {
-		return 0, err
-	}
-	if len(emojis) > 0 {
-		return emojis[0].ID, nil
-	}
 	for _, name := range liveAwardEmojiNames() {
 		emoji, _, createErr := client.GL().AwardEmoji.CreateMergeRequestAwardEmoji(projectID, mergeRequestIID, &gl.CreateAwardEmojiOptions{Name: name}, gl.WithContext(ctx))
 		if createErr == nil {
@@ -1563,13 +1562,6 @@ func createLiveMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, pr
 
 // createLiveIssueAwardEmoji creates live issue award emoji and returns [int64].
 func createLiveIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, projectID string, issueIID int64) (int64, error) {
-	emojis, _, err := client.GL().AwardEmoji.ListIssueAwardEmoji(projectID, issueIID, &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
-	if err != nil {
-		return 0, err
-	}
-	if len(emojis) > 0 {
-		return emojis[0].ID, nil
-	}
 	for _, name := range liveAwardEmojiNames() {
 		emoji, _, createErr := client.GL().AwardEmoji.CreateIssueAwardEmoji(projectID, issueIID, &gl.CreateAwardEmojiOptions{Name: name}, gl.WithContext(ctx))
 		if createErr == nil {

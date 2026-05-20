@@ -35,6 +35,11 @@ func TestValidateStepCallWithRoutes_ValidatesDynamicParamsAgainstSchema(t *testi
 	if invalid.Valid || !strings.Contains(invalid.Message, "unknown params") || !strings.Contains(invalid.Message, "options.ref") {
 		t.Fatalf("invalid call = %+v, want unknown extra and missing options.ref", invalid)
 	}
+
+	missingRootRequired := validateStepCallWithRoutes(step, dynamicExecuteTool, map[string]any{"action": actionProjectGet, "params": map[string]any{"options": map[string]any{"ref": "main"}}}, routes)
+	if missingRootRequired.Valid || !strings.Contains(missingRootRequired.Message, "project_id") {
+		t.Fatalf("missing root required call = %+v, want missing project_id", missingRootRequired)
+	}
 }
 
 // TestValidateStandaloneToolCall_RejectsActionEnvelope verifies standalone tools

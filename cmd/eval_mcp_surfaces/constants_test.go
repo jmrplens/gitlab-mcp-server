@@ -11,7 +11,10 @@ func TestCapabilityDiscoveryConstants_AreWired(t *testing.T) {
 	if partitionCapabilityFallback != "capability-fallback" {
 		t.Fatalf("partitionCapabilityFallback = %q", partitionCapabilityFallback)
 	}
-	if capabilityListTool != "gitlab_list_capabilities" || completionTool != "gitlab_complete" {
-		t.Fatalf("bridge tool constants = %q/%q", capabilityListTool, completionTool)
+	if capabilityListTool != "gitlab_list_capabilities" {
+		t.Fatalf("capabilityListTool = %q", capabilityListTool)
+	}
+	if completionTool != "gitlab_complete" {
+		t.Fatalf("completionTool = %q", completionTool)
 	}
 }

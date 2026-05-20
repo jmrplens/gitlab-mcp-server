@@ -123,7 +123,7 @@ func TestToolManifest_IndividualSurfaceUsesDirectToolIDs(t *testing.T) {
 				"required":   []any{"project_id"},
 				"properties": map[string]any{"project_id": map[string]any{"type": "string"}},
 			},
-			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: boolPtr(false)},
+			Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: new(false)},
 		}},
 	})
 
@@ -201,8 +201,4 @@ func readToolDetail(t *testing.T, session *mcp.ClientSession, uri string) ToolSu
 		t.Fatalf("unmarshal detail: %v", uErr)
 	}
 	return detail
-}
-
-func boolPtr(value bool) *bool {
-	return &value
 }

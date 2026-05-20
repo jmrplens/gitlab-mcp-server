@@ -154,11 +154,9 @@ func schemaValidationIssues(schema map[string]any, value any, path string) (unkn
 		return unknown, missing
 	}
 
-	if path != "" {
-		for _, required := range schemaStringSlice(schema["required"]) {
-			if _, present := object[required]; !present {
-				missing = append(missing, schemaPath(path, required))
-			}
+	for _, required := range schemaStringSlice(schema["required"]) {
+		if _, present := object[required]; !present {
+			missing = append(missing, schemaPath(path, required))
 		}
 	}
 	for name, childValue := range object {
