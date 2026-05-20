@@ -46,13 +46,14 @@ The `tools` and `resources` `ListChanged: true` flags are always advertised.
 The `prompts` capability is advertised only when `CAPABILITY_SURFACE=full`.
 `CAPABILITY_SURFACE=minimal` keeps tool execution, logging, completions, roots
 handling, progress handling, and the `gitlab://workspace/roots` resource, but
-omits optional prompts, static GitLab resources, and workflow guides. In
-`TOOL_SURFACE=meta`, minimal also keeps the meta-schema resources so callers can
-retrieve exact action parameter schemas without expanding `tools/list`.
+omits optional prompts, static GitLab resources, and workflow guides. It also
+keeps `gitlab://tools` and `gitlab://tools/{id}` so callers can retrieve exact
+action call shapes without expanding `tools/list`.
 
 The configuration intentionally has only two modes today. `full` is the broad
 compatibility surface; `minimal` is the low-token surface for Dynamic clients
-that can use `gitlab_find_action` for schemas inline.
+that can use `gitlab_find_action` for schemas inline or `gitlab://tools` for
+explicit action enumeration.
 The latest token audit measured shared resources plus prompts at about 18.2k
 tokens in full mode and about 184 tokens in minimal mode. Intermediate modes
 such as schemas-only or resources-only are not exposed because they add another

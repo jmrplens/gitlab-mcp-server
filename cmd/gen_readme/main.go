@@ -135,9 +135,21 @@ type tokenFootprintRow struct {
 // for README token-footprint measurements.
 type resourceRegistrationOptions struct {
 	Core           bool
-	MetaSchema     bool
+	ToolManifest   bool
+	ToolSurface    string
+	ToolList       []*mcp.Tool
+	ToolCatalog    *actioncatalog.Catalog
 	WorkflowGuides bool
 	WorkspaceRoots bool
+}
+
+type sharedTokenMeasureOptions struct {
+	Routes            map[string]toolutil.ActionMap
+	ToolCatalog       *actioncatalog.Catalog
+	ToolList          []*mcp.Tool
+	ToolSurface       string
+	CapabilitySurface string
+	PromptTokens      int
 }
 
 func (r tokenFootprintRow) totalTokens() int {
@@ -202,23 +214,56 @@ func measureTokenFootprintRows(client *gitlabclient.Client, schemaMode string) (
 		return nil, err
 	}
 
-	dynamicFullShared, err := measureSharedTokens(client, dynamicRoutes, config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, promptTokens)
+	dynamicFullShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
+		Routes:            dynamicRoutes,
+		ToolCatalog:       dynamicCatalog,
+		ToolList:          dynamicTools,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		PromptTokens:      promptTokens,
+	})
 	if err != nil {
 		return nil, err
 	}
-	dynamicMinimalShared, err := measureSharedTokens(client, dynamicRoutes, config.ToolSurfaceDynamic, config.CapabilitySurfaceMinimal, promptTokens)
+	dynamicMinimalShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
+		Routes:            dynamicRoutes,
+		ToolCatalog:       dynamicCatalog,
+		ToolList:          dynamicTools,
+		ToolSurface:       config.ToolSurfaceDynamic,
+		CapabilitySurface: config.CapabilitySurfaceMinimal,
+		PromptTokens:      promptTokens,
+	})
 	if err != nil {
 		return nil, err
 	}
-	metaFullShared, err := measureSharedTokens(client, metaRoutes, config.ToolSurfaceMeta, config.CapabilitySurfaceFull, promptTokens)
+	metaFullShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
+		Routes:            metaRoutes,
+		ToolCatalog:       metaCatalog,
+		ToolList:          metaTools,
+		ToolSurface:       config.ToolSurfaceMeta,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		PromptTokens:      promptTokens,
+	})
 	if err != nil {
 		return nil, err
 	}
-	metaMinimalShared, err := measureSharedTokens(client, metaRoutes, config.ToolSurfaceMeta, config.CapabilitySurfaceMinimal, promptTokens)
+	metaMinimalShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
+		Routes:            metaRoutes,
+		ToolCatalog:       metaCatalog,
+		ToolList:          metaTools,
+		ToolSurface:       config.ToolSurfaceMeta,
+		CapabilitySurface: config.CapabilitySurfaceMinimal,
+		PromptTokens:      promptTokens,
+	})
 	if err != nil {
 		return nil, err
 	}
-	individualFullShared, err := measureSharedTokens(client, nil, config.ToolSurfaceIndividual, config.CapabilitySurfaceFull, promptTokens)
+	individualFullShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{
+		ToolList:          individualTools,
+		ToolSurface:       config.ToolSurfaceIndividual,
+		CapabilitySurface: config.CapabilitySurfaceFull,
+		PromptTokens:      promptTokens,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +336,7 @@ func renderTokenFootprint(schemaMode string, rows []tokenFootprintRow) string {
 		tableRows,
 	))
 
-	fmt.Fprintf(&b, "\nRows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=%s` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and individual mode already exposes one schema per tool. In `meta` + `minimal`, shared tokens still include meta-schema resources so opaque meta-tools can look up exact action parameter schemas.\n", schemaMode)
+	fmt.Fprintf(&b, "\nRows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=%s` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.\n", schemaMode)
 	return b.String()
 }
 
@@ -340,30 +385,23 @@ func measureToolSchemaTokens(toolList []*mcp.Tool) (int, error) {
 	return totalBytes / readmeBytesPerToken, nil
 }
 
-func measureSharedTokens(client *gitlabclient.Client, routes map[string]toolutil.ActionMap, toolSurface, capabilitySurface string, promptTokens int) (int, error) {
-	resourceTokens, err := measureResourcesWithOptions(client, routes, resourceRegistrationOptions{
-		Core:           capabilitySurface == config.CapabilitySurfaceFull,
-		MetaSchema:     shouldRegisterReadmeMetaSchemaResources(capabilitySurface, toolSurface) && len(routes) > 0,
-		WorkflowGuides: capabilitySurface == config.CapabilitySurfaceFull,
+func measureSharedTokens(client *gitlabclient.Client, opts sharedTokenMeasureOptions) (int, error) {
+	resourceTokens, err := measureResourcesWithOptions(client, opts.Routes, resourceRegistrationOptions{
+		Core:           opts.CapabilitySurface == config.CapabilitySurfaceFull,
+		ToolManifest:   true,
+		ToolSurface:    opts.ToolSurface,
+		ToolList:       opts.ToolList,
+		ToolCatalog:    opts.ToolCatalog,
+		WorkflowGuides: opts.CapabilitySurface == config.CapabilitySurfaceFull,
 		WorkspaceRoots: true,
 	})
 	if err != nil {
 		return 0, err
 	}
-	if capabilitySurface == config.CapabilitySurfaceFull {
-		return resourceTokens + promptTokens, nil
+	if opts.CapabilitySurface == config.CapabilitySurfaceFull {
+		return resourceTokens + opts.PromptTokens, nil
 	}
 	return resourceTokens, nil
-}
-
-func shouldRegisterReadmeMetaSchemaResources(capabilitySurface, toolSurface string) bool {
-	if toolSurface == config.ToolSurfaceIndividual {
-		return false
-	}
-	if capabilitySurface == config.CapabilitySurfaceFull {
-		return true
-	}
-	return capabilitySurface == config.CapabilitySurfaceMinimal && toolSurface == config.ToolSurfaceMeta
 }
 
 func measureResourcesWithOptions(client *gitlabclient.Client, routes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) (int, error) {
@@ -371,8 +409,13 @@ func measureResourcesWithOptions(client *gitlabclient.Client, routes map[string]
 	if opts.Core {
 		resources.Register(server, client)
 	}
-	if opts.MetaSchema && len(routes) > 0 {
-		resources.RegisterMetaSchemaResources(server, routes)
+	if opts.ToolManifest {
+		resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
+			Surface:    opts.ToolSurface,
+			Tools:      opts.ToolList,
+			Catalog:    opts.ToolCatalog,
+			MetaRoutes: routes,
+		})
 	}
 	if opts.WorkspaceRoots {
 		resources.RegisterWorkspaceRoots(server, roots.NewManager())

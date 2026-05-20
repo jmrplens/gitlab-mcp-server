@@ -633,6 +633,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 
 	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
 	var metaSchemaRoutes map[string]toolutil.ActionMap
+	var surfaceCatalog *actioncatalog.Catalog
 	if toolSurface != config.ToolSurfaceIndividual {
 		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
 	}
@@ -643,6 +644,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
 		}
 		metaSchemaRoutes = actionCatalog.ActionMaps()
+		surfaceCatalog = actionCatalog
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
 	case config.ToolSurfaceMeta:
 		actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
@@ -660,6 +662,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		}
 		actionCatalog = filteredCatalog
 		metaSchemaRoutes = actionCatalog.ActionMaps()
+		surfaceCatalog = actionCatalog
 		gitlabtools.RegisterMetaCatalog(server, actionCatalog)
 		gitlabtools.RegisterMetaStandaloneTools(server, client)
 	default:
@@ -711,9 +714,6 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	if capabilitySurface == config.CapabilitySurfaceFull {
 		resources.Register(server, client)
 	}
-	if shouldRegisterMetaSchemaResources(capabilitySurface, toolSurface) {
-		resources.RegisterMetaSchemaResources(server, metaSchemaRoutes)
-	}
 	resources.RegisterWorkspaceRoots(server, rootsManager)
 	if capabilitySurface == config.CapabilitySurfaceFull {
 		resources.RegisterWorkflowGuides(server)
@@ -733,6 +733,17 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	// the same finalized schema set.
 	toolutil.EnrichPaginationConstraints(server)
 
+	if manifestTools, listErr := listRegisteredToolsForInspection(server, "tool-manifest"); listErr != nil {
+		slog.Warn("failed to build tool manifest resource", "error", listErr)
+	} else {
+		resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
+			Surface:    toolSurface,
+			Tools:      manifestTools,
+			Catalog:    surfaceCatalog,
+			MetaRoutes: metaSchemaRoutes,
+		})
+	}
+
 	// Optional per-server tools/call rate limit. In HTTP mode each pooled
 	// per-token server gets its own bucket (effectively per-token). In
 	// stdio mode the bucket is global to the process. Disabled when
@@ -746,16 +757,6 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 
 	return server, nil
-}
-
-func shouldRegisterMetaSchemaResources(capabilitySurface, toolSurface string) bool {
-	if toolSurface == config.ToolSurfaceIndividual {
-		return false
-	}
-	if capabilitySurface == config.CapabilitySurfaceFull {
-		return true
-	}
-	return capabilitySurface == config.CapabilitySurfaceMinimal && toolSurface == config.ToolSurfaceMeta
 }
 
 // httpShutdownTimeout bounds graceful HTTP shutdown after the process context

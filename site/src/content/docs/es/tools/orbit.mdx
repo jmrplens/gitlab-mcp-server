@@ -55,12 +55,12 @@ Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuan
 
 En modo meta-herramientas, los schemas de parámetros por acción están disponibles como recursos MCP:
 
-| Recurso                                          | Propósito                                            |
-| ------------------------------------------------ | ---------------------------------------------------- |
-| `gitlab://schema/meta/gitlab_orbit/status`       | Parámetros para comprobar salud del servicio         |
-| `gitlab://schema/meta/gitlab_orbit/schema`       | Parámetros para inspeccionar la ontología            |
-| `gitlab://schema/meta/gitlab_orbit/tools`        | Parámetros para descubrir el manifiesto de consultas |
-| `gitlab://schema/meta/gitlab_orbit/query`        | Parámetros para consultas Knowledge Graph            |
-| `gitlab://schema/meta/gitlab_orbit/graph_status` | Parámetros para comprobar estado de indexación       |
+| Recurso                                    | Propósito                                            |
+| ------------------------------------------ | ---------------------------------------------------- |
+| `gitlab://tools/gitlab_orbit.status`       | Parámetros para comprobar salud del servicio         |
+| `gitlab://tools/gitlab_orbit.schema`       | Parámetros para inspeccionar la ontología            |
+| `gitlab://tools/gitlab_orbit.tools`        | Parámetros para descubrir el manifiesto de consultas |
+| `gitlab://tools/gitlab_orbit.query`        | Parámetros para consultas Knowledge Graph            |
+| `gitlab://tools/gitlab_orbit.graph_status` | Parámetros para comprobar estado de indexación       |
 
-Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` en cualquier modo de `META_PARAM_SCHEMA`. Se omiten con `CAPABILITY_SURFACE=minimal`.
+Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` en cualquier modo de `META_PARAM_SCHEMA`.

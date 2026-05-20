@@ -269,7 +269,7 @@ These schemas are:
 
 - **Exposed in `llms-full.txt`** under "Action Output Schemas" for each meta-tool, using collapsible `<details>` blocks per action
 - **Audited by `cmd/audit_output`** which reports routes with missing schemas (category `route-output-schema`)
-- **Accessible programmatically** via `tools.BuildActionCatalog(...)`; meta-tools, dynamic tools, schema resources, and audits project route maps from that canonical catalog
+- **Accessible programmatically** via `tools.BuildActionCatalog(...)`; meta-tools, dynamic tools, the `gitlab://tools` manifest, and audits project route maps from that canonical catalog
 - **Cached** by `reflect.Type` to avoid redundant schema generation
 
 This enables LLMs to predict the exact response shape of each meta-tool action without trial-and-error.

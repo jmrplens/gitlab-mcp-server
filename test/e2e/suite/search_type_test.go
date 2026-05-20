@@ -98,14 +98,14 @@ func TestSearchType_InvalidValueFails(t *testing.T) {
 }
 
 // TestSearchType_SchemasExposeEnum verifies search_type is constrained in the
-// live individual tools/list schema and the meta-tool per-action schema resource.
+// live individual tools/list schema and the meta-tool detail resource.
 func TestSearchType_SchemasExposeEnum(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
-	if sess.glClient == nil || sess.meta == nil {
-		t.Skip("meta schema session not configured")
+	if sess.glClient == nil {
+		t.Skip("tool manifest session not configured")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -117,9 +117,9 @@ func TestSearchType_SchemasExposeEnum(t *testing.T) {
 	individualTool := findE2ETool(t, toolsResult.Tools, "gitlab_search_code")
 	requireE2ESearchTypeEnum(t, schemaMapFromAny(t, individualTool.InputSchema))
 
-	metaSession := metaSchemaResourceSession(t, sess.glClient, sess.enterprise)
+	metaSession := toolManifestResourceSession(t, sess.glClient, sess.enterprise)
 	resource, err := metaSession.ReadResource(ctx, &mcp.ReadResourceParams{
-		URI: "gitlab://schema/meta/gitlab_search/code",
+		URI: "gitlab://tools/gitlab_search.code",
 	})
 	if err != nil {
 		t.Fatalf("ReadResource: %v", err)
@@ -128,11 +128,11 @@ func TestSearchType_SchemasExposeEnum(t *testing.T) {
 		t.Fatalf("contents = %d, want 1", len(resource.Contents))
 	}
 
-	var metaSchema map[string]any
-	if unmarshalErr := json.Unmarshal([]byte(resource.Contents[0].Text), &metaSchema); unmarshalErr != nil {
-		t.Fatalf("meta schema is not valid JSON: %v", unmarshalErr)
+	var detail map[string]any
+	if unmarshalErr := json.Unmarshal([]byte(resource.Contents[0].Text), &detail); unmarshalErr != nil {
+		t.Fatalf("tool detail is not valid JSON: %v", unmarshalErr)
 	}
-	requireE2ESearchTypeEnum(t, metaSchema)
+	requireE2ESearchTypeEnum(t, schemaMapFromAny(t, detail["input_schema"]))
 }
 
 func requireSearchTypeError(t *testing.T, err error) {

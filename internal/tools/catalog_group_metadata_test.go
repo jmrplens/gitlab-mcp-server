@@ -67,7 +67,7 @@ func TestCatalogGroupDescription_StripsStoredMetaPrefix(t *testing.T) {
 	t.Cleanup(func() { catalogMetaToolDescriptions = original })
 
 	catalogMetaToolDescriptions = map[string]string{
-		"gitlab_widget": "Use {\"action\":\"archive\",\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://schema/meta/gitlab_widget/<action>.\n\nDetailed widget actions.",
+		"gitlab_widget": "Use {\"action\":\"archive\",\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://tools/gitlab_widget.<action>.\n\nDetailed widget actions.",
 	}
 	routes := toolutil.ActionMap{"create": toolutil.Route(nil), "archive": toolutil.Route(nil)}
 

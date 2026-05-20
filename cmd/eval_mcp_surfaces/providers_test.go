@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -187,6 +188,55 @@ func TestAnthropicProviderCallOnce_RequestFailureIsRetryable(t *testing.T) {
 	}
 	if !retry {
 		t.Fatal("retry = false, want true")
+	}
+}
+
+// TestAnthropicProviderCallOnce_SerializesEmptyToolUseInput verifies Anthropic history keeps input on no-parameter tool calls.
+func TestAnthropicProviderCallOnce_SerializesEmptyToolUseInput(t *testing.T) {
+	var requestBody []byte
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
+		}
+		requestBody = body
+		response := `{"content":[{"type":"text","text":"ok"}],"usage":{"input_tokens":1,"output_tokens":1}}`
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(response)), Header: make(http.Header)}, nil
+	})}
+
+	_, _, err := anthropicProvider{}.callOnce(context.Background(), client, "secret-key", modelProviderRequest{
+		Model:     "claude",
+		MaxTokens: 16,
+		Messages:  []modelMessage{{Role: "assistant", Content: []modelContentBlock{{Type: "tool_use", ID: "toolu_1", Name: capabilityListTool}}}},
+	})
+	if err != nil {
+		t.Fatalf("callOnce() error = %v", err)
+	}
+	if !bytes.Contains(requestBody, []byte(`"input":{}`)) {
+		t.Fatalf("request body = %s, want empty tool_use input object", requestBody)
+	}
+}
+
+// TestDeepCloneMap_DoesNotShareNestedContainers verifies OpenAI schema cloning
+// can mutate retry hints without altering the catalog schema.
+func TestDeepCloneMap_DoesNotShareNestedContainers(t *testing.T) {
+	original := map[string]any{
+		"properties": map[string]any{"params": map[string]any{"type": "object"}},
+		"required":   []any{"action"},
+		"unchanged":  "value",
+	}
+	cloned := deepCloneMap(original)
+	cloned["properties"].(map[string]any)["params"].(map[string]any)["description"] = "hint"
+	cloned["required"].([]any)[0] = "params"
+
+	if _, ok := original["properties"].(map[string]any)["params"].(map[string]any)["description"]; ok {
+		t.Fatalf("original properties mutated: %#v", original)
+	}
+	if original["required"].([]any)[0] != "action" {
+		t.Fatalf("original required mutated: %#v", original["required"])
+	}
+	if deepCloneMap(nil) != nil || deepCloneAny("plain") != "plain" {
+		t.Fatal("deep clone nil/scalar behavior changed")
 	}
 }
 

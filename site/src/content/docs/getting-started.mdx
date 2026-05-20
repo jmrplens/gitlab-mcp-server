@@ -492,7 +492,7 @@ Meta-tools reduce token overhead by **96%** while preserving full functionality.
 
 For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_find_action` and `gitlab_execute_tool`, backed by the same canonical GitLab action catalog.
 
-Pair dynamic mode with `CAPABILITY_SURFACE=minimal` to keep only workspace roots and omit optional resources, meta-schema resources, workflow guides, and prompts when you need the smallest initial MCP context. Dynamic keeps inline schemas through `gitlab_find_action`.
+Pair dynamic mode with `CAPABILITY_SURFACE=minimal` to keep only workspace roots plus `gitlab://tools`, and omit optional resources, workflow guides, and prompts when you need the smallest initial MCP context. Dynamic keeps inline schemas through `gitlab_find_action`.
 :::
 
 ## Next steps

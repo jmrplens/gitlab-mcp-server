@@ -751,8 +751,80 @@ func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 	if _, ok := action.InputSchema["x_destructive"]; !ok {
 		t.Fatalf("InputSchema missing x_destructive: %+v", action.InputSchema)
 	}
+	if confirmation, ok := action.InputSchema["x_confirmation"].(map[string]any); !ok || confirmation["location"] != "gitlab_execute_tool.confirm" {
+		t.Fatalf("InputSchema x_confirmation = %+v, want dynamic top-level confirm guidance", action.InputSchema["x_confirmation"])
+	}
+	if _, hasConfirmParam := schemaProperties(action.InputSchema)["confirm"]; hasConfirmParam {
+		t.Fatalf("InputSchema includes params.confirm for dynamic action: %+v", action.InputSchema)
+	}
+	if required, _ := action.InputSchema["required"].([]any); slices.Contains(required, any("confirm")) {
+		t.Fatalf("InputSchema requires params.confirm for dynamic action: %+v", action.InputSchema)
+	}
 	if action.Example.Arguments["confirm"] != true {
 		t.Fatalf("example missing confirm param: %+v", action.Example)
+	}
+	if action.SchemaURI != "gitlab://tools/project.delete" {
+		t.Fatalf("SchemaURI = %q, want tool detail URI", action.SchemaURI)
+	}
+}
+
+// TestDynamicInputSchema_RemovesConfirmFromRequired verifies dynamic action
+// schemas keep destructive confirmation at gitlab_execute_tool.confirm only.
+func TestDynamicInputSchema_RemovesConfirmFromRequired(t *testing.T) {
+	schema := dynamicInputSchema(actionEntry{
+		ID:          "project.delete",
+		Tool:        "gitlab_project",
+		Action:      "delete",
+		Destructive: true,
+		Route: toolutil.ActionRoute{InputSchema: map[string]any{
+			"type":     "object",
+			"required": []any{"project_id", "confirm"},
+			"properties": map[string]any{
+				"project_id": map[string]any{"type": "integer"},
+				"confirm":    map[string]any{"type": "boolean"},
+			},
+		}},
+	})
+	if _, hasConfirm := schemaProperties(schema)["confirm"]; hasConfirm {
+		t.Fatalf("schema properties include confirm: %+v", schema)
+	}
+	if required, _ := schema["required"].([]any); slices.Contains(required, any("confirm")) {
+		t.Fatalf("schema required includes confirm: %+v", schema)
+	}
+}
+
+func TestDynamicInputSchema_DefaultsWhenRouteSchemaMissing(t *testing.T) {
+	schema := dynamicInputSchema(actionEntry{
+		ID:     "widget.ping",
+		Tool:   "gitlab_widget",
+		Action: "ping",
+		Route:  toolutil.ActionRoute{},
+	})
+	if schema["type"] != "object" || schema["additionalProperties"] != true {
+		t.Fatalf("schema = %+v, want permissive object fallback", schema)
+	}
+	if description, _ := schema["description"].(string); !strings.Contains(description, "no captured parameter schema") {
+		t.Fatalf("schema description = %q, want fallback guidance", description)
+	}
+}
+
+func TestRemoveDynamicRequiredConfirmParam_HandlesStringRequiredLists(t *testing.T) {
+	anySchema := map[string]any{"required": []any{"confirm"}}
+	removeDynamicRequiredConfirmParam(anySchema)
+	if _, ok := anySchema["required"]; ok {
+		t.Fatalf("required should be deleted for []any when empty: %+v", anySchema)
+	}
+
+	schema := map[string]any{"required": []string{"project_id", "confirm"}}
+	removeDynamicRequiredConfirmParam(schema)
+	if required, _ := schema["required"].([]string); len(required) != 1 || required[0] != "project_id" {
+		t.Fatalf("required = %+v, want project_id", schema["required"])
+	}
+
+	schema = map[string]any{"required": []string{"confirm"}}
+	removeDynamicRequiredConfirmParam(schema)
+	if _, ok := schema["required"]; ok {
+		t.Fatalf("required should be deleted when empty: %+v", schema)
 	}
 }
 
@@ -2306,6 +2378,68 @@ func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 		t.Fatalf("gitlab_execute_tool output schema = %v, want open object schema", executeOutputSchema)
 	}
 	assertSchemaHasProperties(t, executeOutputSchema, "next_steps", "pagination")
+}
+
+// TestRegisterCatalogFindExecuteTools_FindAcceptsNaturalLanguageAndReturnsSchema
+// verifies that the registered MCP tool accepts plain search phrases and returns
+// the schema payload needed for the next execute call.
+func TestRegisterCatalogFindExecuteTools_FindAcceptsNaturalLanguageAndReturnsSchema(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
+	RegisterCatalogFindExecuteTools(server, actioncatalog.FromActionMaps(testRoutes(t)))
+
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { serverSession.Close() })
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "dynamic-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: findToolName,
+		Arguments: map[string]any{
+			"query": "please remove a project",
+			"limit": 3,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(gitlab_find_action) error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("CallTool(gitlab_find_action) result = %+v, want non-error", result)
+	}
+	if result.StructuredContent == nil {
+		t.Fatal("CallTool(gitlab_find_action) StructuredContent is nil")
+	}
+
+	data := unmarshalStructuredContentMap(t, result.StructuredContent)
+	results, ok := data["results"].([]any)
+	if !ok || len(results) == 0 {
+		t.Fatalf("StructuredContent results = %+v, want at least one match", data["results"])
+	}
+	first, ok := results[0].(map[string]any)
+	if !ok {
+		t.Fatalf("first result = %+v, want object", results[0])
+	}
+	if first["id"] != "project.delete" {
+		t.Fatalf("first id = %v, want project.delete", first["id"])
+	}
+	if first["schema_uri"] != "gitlab://tools/project.delete" {
+		t.Fatalf("first schema_uri = %v, want gitlab://tools/project.delete", first["schema_uri"])
+	}
+	if _, hasInputSchema := first["input_schema"].(map[string]any); !hasInputSchema {
+		t.Fatalf("first input_schema = %+v, want schema object", first["input_schema"])
+	}
+	example, ok := first["example"].(map[string]any)
+	if !ok || example["tool"] != executeToolName {
+		t.Fatalf("first example = %+v, want gitlab_execute_tool", first["example"])
+	}
 }
 
 // TestRegisterCatalogFindExecuteTools_ExecuteOutputSchemaAcceptsActionOutput verifies that

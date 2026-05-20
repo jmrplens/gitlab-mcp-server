@@ -1432,7 +1432,7 @@ func TestMetaToolSchema_OpaqueDefault(t *testing.T) {
 	if desc != metaToolParamsDescription {
 		t.Errorf("params.description = %q, want %q", desc, metaToolParamsDescription)
 	}
-	if !strings.Contains(desc, "gitlab://schema/meta/{tool}/{action}") {
+	if !strings.Contains(desc, "gitlab://tools/{tool}.{action}") {
 		t.Error("params.description should mention the schema resource URI")
 	}
 	if strings.Contains(desc, "unknown keys") {
@@ -1530,7 +1530,7 @@ func TestMetaToolDescriptionPrefix_FormatsLiteralExample(t *testing.T) {
 	if !strings.Contains(got, wantEnvelope) {
 		t.Errorf("prefix missing envelope guidance, got: %q", got)
 	}
-	wantPointer := "Action params schema: gitlab://schema/meta/gitlab_widget/<action>"
+	wantPointer := "Action params schema: gitlab://tools/gitlab_widget.<action>"
 	if !strings.Contains(got, wantPointer) {
 		t.Errorf("prefix missing resource pointer, got: %q", got)
 	}
@@ -1639,7 +1639,7 @@ func TestStripMetaToolDescriptionPrefix_PreservesPrefixOnlyDescription(t *testin
 // generation compatible with descriptions emitted before the concise prefix.
 func TestStripMetaToolDescriptionPrefix_StripsLegacyPrefix(t *testing.T) {
 	description := "Example: {\"action\":\"create\",\"params\":{...}}\n" +
-		"For the params schema of any action, read gitlab://schema/meta/gitlab_issue/<action>.\n\n" +
+		"For the params schema of any action, read gitlab://tools/gitlab_issue.<action>.\n\n" +
 		"Manage GitLab issues."
 
 	got := StripMetaToolDescriptionPrefix(description)
@@ -2154,7 +2154,7 @@ func TestAddMetaTool_RegistersSharedMetadata(t *testing.T) {
 	AddMetaTool(server, "gitlab_test_meta", "Manage test metadata.", routes, nil, nil)
 
 	tool := findTool(t, listToolsViaClient(t, server), "gitlab_test_meta")
-	if !strings.Contains(tool.Description, "gitlab://schema/meta/gitlab_test_meta/<action>") {
+	if !strings.Contains(tool.Description, "gitlab://tools/gitlab_test_meta.<action>") {
 		t.Errorf("description missing schema resource hint: %q", tool.Description)
 	}
 	if !strings.Contains(tool.Description, "Manage test metadata.") {
@@ -2188,7 +2188,7 @@ func TestAddReadOnlyMetaTool_RegistersReadOnlyMetadata(t *testing.T) {
 	AddReadOnlyMetaTool(server, "gitlab_test_read", "List test metadata.", routes, nil, nil)
 
 	tool := findTool(t, listToolsViaClient(t, server), "gitlab_test_read")
-	if !strings.Contains(tool.Description, "gitlab://schema/meta/gitlab_test_read/<action>") {
+	if !strings.Contains(tool.Description, "gitlab://tools/gitlab_test_read.<action>") {
 		t.Errorf("description missing schema resource hint: %q", tool.Description)
 	}
 	if tool.Annotations == nil {

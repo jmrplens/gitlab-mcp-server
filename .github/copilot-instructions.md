@@ -201,7 +201,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `META_TOOLS`             | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs | _(unset)_          |
 | `TOOL_SURFACE`           | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; overrides legacy `META_TOOLS` | `dynamic` (default when unset) |
 | `CAPABILITY_SURFACE`     | Resource and prompt catalog selector: `full` or `minimal`; pair `minimal` with dynamic experiments when startup context must be tiny | `full` (default)   |
-| `META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. With `CAPABILITY_SURFACE=full`, per-action schemas are discoverable via `gitlab://schema/meta/{tool}/{action}` resources for meta and dynamic surfaces | `opaque` (default) |
+| `META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface | `opaque` (default) |
 | `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |
 | `GITLAB_SAFE_MODE`       | Safe mode: intercepts mutating tools and returns a JSON preview | `false` (default)  |
 | `AUTO_UPDATE`            | Enable auto-update: `true` (default), `check`, `false` | `true` (default)   |

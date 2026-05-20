@@ -53,7 +53,10 @@ type toolTokenInfo struct {
 // for token-audit measurements.
 type resourceRegistrationOptions struct {
 	Core           bool
-	MetaSchema     bool
+	ToolManifest   bool
+	ToolSurface    string
+	ToolList       []*mcp.Tool
+	ToolCatalog    *actioncatalog.Catalog
 	WorkflowGuides bool
 	WorkspaceRoots bool
 }
@@ -95,10 +98,16 @@ func main() {
 	dynamicBaseInfo := measureTools(dynamicBaseTools)
 	dynamicEnterpriseInfo := measureTools(dynamicEnterpriseTools)
 
-	individualResourceTokens := measureResources(client, nil)
-	metaBaseResourceTokens := measureResources(client, metaBaseRoutes)
-	dynamicBaseResourceTokens := measureResources(client, dynamicBaseRoutes)
-	dynamicMinimalResourceTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{WorkspaceRoots: true})
+	individualResourceTokens := measureResources(client, nil, nil, individualTools, config.ToolSurfaceIndividual)
+	metaBaseResourceTokens := measureResources(client, metaBaseRoutes, actioncatalog.FromActionMaps(metaBaseRoutes), metaBaseTools, config.ToolSurfaceMeta)
+	dynamicBaseResourceTokens := measureResources(client, dynamicBaseRoutes, dynamicBaseCatalog, dynamicBaseTools, config.ToolSurfaceDynamic)
+	dynamicMinimalResourceTokens := measureResourcesWithOptions(client, nil, resourceRegistrationOptions{
+		ToolManifest:   true,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		ToolList:       dynamicBaseTools,
+		ToolCatalog:    dynamicBaseCatalog,
+		WorkspaceRoots: true,
+	})
 	promptTokens := measurePrompts(client)
 
 	fmt.Println("=" + strings.Repeat("=", 69))
@@ -164,8 +173,8 @@ func main() {
 	fmt.Println("## Minimal Capability Candidate")
 	fmt.Println()
 	fmt.Println("  Required for dynamic action use: `gitlab_find_action` returns exact schemas inline, and `gitlab_execute_tool` performs execution.")
-	fmt.Println("  Retained minimal resource: `gitlab://workspace/roots` for local project discovery from .git/config remotes.")
-	fmt.Println("  Optional in minimal mode: static GitLab data resources, meta-schema resources, workflow guide resources, and prompt templates.")
+	fmt.Println("  Retained minimal resources: `gitlab://workspace/roots` for local project discovery and `gitlab://tools` for action call shapes.")
+	fmt.Println("  Optional in minimal mode: static GitLab data resources, workflow guide resources, and prompt templates.")
 	if dynamicBaseResourceTokens+promptTokens > 0 {
 		savings := float64(dynamicBaseResourceTokens+promptTokens-dynamicMinimalResourceTokens) / float64(dynamicBaseResourceTokens+promptTokens) * 100
 		fmt.Printf("  Shared-overhead reduction: %.1f%% vs full dynamic resources+prompts\n", savings)
@@ -237,7 +246,7 @@ func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
 }
 
 // buildMetaActionMaps builds the action route catalog that backs both
-// meta-schema resources and the dynamic toolset.
+// meta-tools and the dynamic toolset.
 func buildMetaActionMaps(client *gitlabclient.Client, enterprise bool) map[string]toolutil.ActionMap {
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
 	if err != nil {
@@ -304,13 +313,15 @@ func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 	return infos
 }
 
-// measureResources registers static, template, workflow, and optionally
-// meta-schema MCP resources, then estimates the token cost of their advertised
-// definitions.
-func measureResources(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap) int {
+// measureResources registers static, template, workflow, and tool manifest MCP
+// resources, then estimates the token cost of their advertised definitions.
+func measureResources(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap, catalog *actioncatalog.Catalog, toolList []*mcp.Tool, toolSurface string) int {
 	return measureResourcesWithOptions(client, metaRoutes, resourceRegistrationOptions{
 		Core:           true,
-		MetaSchema:     len(metaRoutes) > 0,
+		ToolManifest:   true,
+		ToolSurface:    toolSurface,
+		ToolList:       toolList,
+		ToolCatalog:    catalog,
 		WorkflowGuides: true,
 		WorkspaceRoots: true,
 	})
@@ -321,8 +332,13 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 	if opts.Core {
 		resources.Register(server, client)
 	}
-	if opts.MetaSchema && len(metaRoutes) > 0 {
-		resources.RegisterMetaSchemaResources(server, metaRoutes)
+	if opts.ToolManifest {
+		resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
+			Surface:    opts.ToolSurface,
+			Tools:      opts.ToolList,
+			Catalog:    opts.ToolCatalog,
+			MetaRoutes: metaRoutes,
+		})
 	}
 	if opts.WorkspaceRoots {
 		resources.RegisterWorkspaceRoots(server, roots.NewManager())

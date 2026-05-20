@@ -18,7 +18,7 @@ The current registry stores each visible action as an `actionEntry` with:
 - Flat lower-case `SearchText` kept as a compatibility fallback during the ranker migration.
 - Tokenized `SearchTokens` for fuzzy fallback.
 
-Search currently scans the visible action entries and scores each normalized query term against typed action metadata, falling back to flat text for compatibility. Exact canonical IDs score highest, followed by aliases, tags, exact domain or action names, partial ID matches, partial domain or action matches, typed field matches, and broader flat text matches. Synonyms and verb alternatives are expanded before scoring.
+Search first uses a lightweight inverted index to gather candidates from aliases, domains, actions, and indexed metadata tokens. If no bucket matches, it deliberately falls back to the full visible catalog so ranking remains deterministic instead of returning an accidental empty set. It then scores each normalized query term against typed action metadata, falling back to flat text for compatibility. Exact canonical IDs score highest, followed by aliases, tags, exact domain or action names, partial ID matches, partial domain or action matches, typed field matches, and broader flat text matches. Synonyms and verb alternatives are expanded before scoring.
 
 Callers may pass `explain:true` to `gitlab_find_action` to include deterministic scoring explanations. The default remains compact and omits explanations. Explanation mode reuses the same scoring path as non-explanation mode, so enabling explanations does not change ranking.
 
@@ -27,6 +27,8 @@ Search and describe results also include curated `related_actions` for workflows
 No-match searches return a small `suggestions` list built from nearby indexed tokens plus common domains. This gives recovery guidance without exposing or dumping the full catalog.
 
 Fuzzy matching is conservative. It runs when lexical search returns no matches or only low-confidence matches, ignores query tokens shorter than three characters, and uses bounded Levenshtein distance with a maximum of two edits. Fuzzy recovery is filtered so weak typo matches do not elevate destructive actions.
+
+Long prompts are searched twice: once as the whole normalized query, and again through overlapping three- to six-term windows when the query is long enough. Segmented search runs for queries longer than six meaningful terms, or for five- and six-term queries when the requested result limit is 10 or lower. Each segment match receives a large window-size boost so multi-intent prompts can surface each relevant action without forcing the model to split the prompt perfectly.
 
 `describe` and `execute` accept canonical action IDs and unambiguous aliases. Ambiguous aliases are rejected with repair guidance listing the valid canonical action IDs. Dynamic `execute` normalizes schema-safe parameter aliases before dispatch, logs name-only normalization metadata at debug level, and reports unknown or missing parameters with valid schema fields before calling the route handler. It does not silently drop unsupported security-sensitive fields such as `masked` or `protected`; callers receive validation feedback and must retry with fields accepted by the selected action schema. Destructive actions still require explicit `confirm:true` before execution.
 
@@ -47,6 +49,41 @@ Fuzzy matching is conservative. It runs when lexical search returns no matches o
 | Optional param match                        |     22 |
 | Synonym or verb alternative flat-text match |     18 |
 | Schema description match                    |     12 |
+
+The base score is scaled by the matched-term ratio. One- or two-term queries must match all meaningful terms; longer queries may miss one term so incidental words do not suppress a good action. The top result is marked `low_confidence` if its score is below 80 or its margin over the second result is below 15.
+
+Additional scoring adjustments:
+
+| Adjustment                                         | Value |
+| -------------------------------------------------- | ----: |
+| Verb-intent boost for matching read/write/workflow |    16 |
+| Verb-intent penalty for mismatched intent          |   -24 |
+| Destructive verb boost for delete/remove/revoke    |    48 |
+| Required parameter signal boost                    |    10 |
+| Optional parameter signal boost                    |     5 |
+| Compound tag match boost                           |    50 |
+| Unmatched action-specific word penalty, per word   |   -60 |
+| Segmented-search boost, per matched window term    |    90 |
+
+## Operational Limits
+
+These constants are intentionally internal tuning values, not user-facing configuration knobs. They are documented here so maintainers can explain observed ranking behavior and update tests deliberately when changing them.
+
+| Area                       | Current value                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `gitlab_find_action.limit` | Defaults to 20 results and is capped at 50                                                                               |
+| Meaningful terms           | Query text is lower-cased, split on spaces, dots, underscores, and hyphens, then filtered through stopwords              |
+| Stopwords                  | `a`, `an`, `and`, `as`, `at`, `by`, `for`, `from`, `in`, `of`, `on`, `or`, `please`, `the`, `to`, `using`, `via`, `with` |
+| Required matched terms     | All terms for one- or two-term queries; all but one term for longer queries                                              |
+| Fuzzy edit distance        | Maximum two Levenshtein edits                                                                                            |
+| Fuzzy token length         | Query parts shorter than three characters are not fuzzy-matched                                                          |
+| Fuzzy distance scores      | Distance 0 = 40, distance 1 = 34, distance 2 = 28, plus 2 when first letters match                                       |
+| Fuzzy destructive safety   | Destructive fuzzy results require an exact destructive verb plus a resource/action/tag signal                            |
+| Segmented search windows   | Three to six meaningful terms                                                                                            |
+| No-match suggestions       | Up to six nearby indexed tokens, then common fallback domains                                                            |
+| Unknown action suggestions | Up to five nearby canonical action IDs                                                                                   |
+| Unknown param suggestions  | Levenshtein recovery against valid params with maximum distance three                                                    |
+| Markdown param guidance    | At most two parameter-guidance snippets in compact `gitlab_find_action` Markdown                                         |
 
 ## Alias Metadata
 
@@ -142,7 +179,7 @@ Static registry metrics are available through `Registry.Metrics()` and are repor
 go run ./cmd/audit_metrics/
 ```
 
-The metrics include dynamic action count, search index token/posting counts, total aliases, searchable aliases, unsearchable aliases, and ambiguous aliases. The visible dynamic MCP tool count remains unchanged at three tools.
+The metrics include dynamic action count, search index token/posting counts, total aliases, searchable aliases, unsearchable aliases, and ambiguous aliases. The visible dynamic MCP tool count remains unchanged at two public tools: `gitlab_find_action` and `gitlab_execute_tool`.
 
 ## Regression Corpus
 

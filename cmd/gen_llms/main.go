@@ -319,16 +319,27 @@ func validateDynamicToolContract(dynamicTools []*mcp.Tool) error {
 }
 
 // listResources returns the static resources and resource templates advertised
-// by the MCP server, including the per-action meta-schema template.
+// by the MCP server, including the surface-aware tool manifest template.
 func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error) {
-	metaCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{})
+	dynamicCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{IncludeMCP: true})
 	if err != nil {
-		return nil, nil, fmt.Errorf("build meta action catalog: %w", err)
+		return nil, nil, fmt.Errorf("build dynamic action catalog: %w", err)
 	}
-	metaRoutes := metaCatalog.ActionMaps()
+	dynamicCatalog, err = dynamictools.AddStandaloneCatalog(dynamicCatalog, client, dynamictools.StandaloneOptions{})
+	if err != nil {
+		return nil, nil, fmt.Errorf("add dynamic standalone catalog: %w", err)
+	}
+	dynamicTools, err := listDynamicTools(client)
+	if err != nil {
+		return nil, nil, err
+	}
 	session, cleanup, err := newSession(func(server *mcp.Server) error {
 		resources.Register(server, client)
-		resources.RegisterMetaSchemaResources(server, metaRoutes)
+		resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
+			Surface: config.ToolSurfaceDynamic,
+			Tools:   dynamicTools,
+			Catalog: dynamicCatalog,
+		})
 		resources.RegisterWorkflowGuides(server)
 		return nil
 	})

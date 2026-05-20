@@ -84,7 +84,7 @@ Resources:
 - gitlab://guides/git-workflow: git_workflow
 - gitlab://guides/merge-request-hygiene: merge_request_hygiene
 - gitlab://guides/pipeline-troubleshooting: pipeline_troubleshooting
-- gitlab://schema/meta/: meta_schema_index
+- gitlab://tools: tool_manifest
 - gitlab://user/current: current_user
 - gitlab://group/{group_id}: group
 - gitlab://group/{group_id}/label/{label_id}: group_label
@@ -121,8 +121,8 @@ Resources:
 - gitlab://project/{project_id}/tag/{tag_name}: tag
 - gitlab://project/{project_id}/tags: project_tags
 - gitlab://project/{project_id}/wiki/{slug}: wiki_page
-- gitlab://schema/meta/{tool}/{action}: meta_action_schema
 - gitlab://snippet/{snippet_id}: snippet
+- gitlab://tools/{id}: tool_detail
 - gitlab://workspace/roots: Workspace Roots
 
 Prompts:

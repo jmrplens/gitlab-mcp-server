@@ -450,6 +450,23 @@ func TestApplyPresetDefaults_UsesDockerReadDefaults(t *testing.T) {
 	}
 }
 
+// TestApplyPresetDefaults_UsesDockerCapabilityDiscoveryDefaults verifies ApplyPresetDefaults uses safe Docker defaults for MCP capability discovery.
+func TestApplyPresetDefaults_UsesDockerCapabilityDiscoveryDefaults(t *testing.T) {
+	opts, err := applyPresetDefaults(options{Preset: presetDockerCapabilityDiscovery, explicitFlags: map[string]bool{}})
+	if err != nil {
+		t.Fatalf("applyPresetDefaults() error = %v", err)
+	}
+	if opts.Backend != backendGitLab {
+		t.Fatalf("Backend = %q, want %q", opts.Backend, backendGitLab)
+	}
+	if opts.Partition != partitionCapabilityFallback {
+		t.Fatalf("Partition = %q, want %q", opts.Partition, partitionCapabilityFallback)
+	}
+	if !opts.Execute || !opts.UseFixtures || !opts.SkipUnavailable || !opts.SkipMutating || !opts.SkipDestructive {
+		t.Fatalf("docker-capability-discovery defaults not fully applied: %+v", opts)
+	}
+}
+
 // TestApplyPresetDefaults_PreservesExplicitFlags verifies ApplyPresetDefaults preserves explicit flags.
 func TestApplyPresetDefaults_PreservesExplicitFlags(t *testing.T) {
 	opts, err := applyPresetDefaults(options{
@@ -491,6 +508,7 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 		{ID: "delete", ExpectedTool: "gitlab", ExpectedAction: "issue.delete", Destructive: true},
 		{ID: "enterprise", ExpectedTool: "gitlab", ExpectedAction: "merge_train.list_project"},
 		{ID: "fallback", ExpectedTool: "gitlab_server", ExpectedAction: "schema_get"},
+		{ID: "capability", Steps: []evalStep{{ExpectedTool: resourceListTool}, {ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}},
 	}
 
 	read, err := filterTasksByPreset(tasks, presetDockerRead)
@@ -520,6 +538,24 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	}
 	if got := taskIDs(enterprise); got != "enterprise" {
 		t.Fatalf("schema-enterprise IDs = %q, want enterprise", got)
+	}
+	capability, err := filterTasksByPreset(tasks, presetDockerCapabilityDiscovery)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-capability-discovery) error = %v", err)
+	}
+	if got := taskIDs(capability); got != "fallback,capability" {
+		t.Fatalf("docker-capability-discovery IDs = %q, want fallback,capability", got)
+	}
+}
+
+// TestStandaloneToolAvailableInLiveEvaluator_IncludesCapabilityBridgeTools verifies live filtering keeps evaluator bridge tasks.
+func TestStandaloneToolAvailableInLiveEvaluator_IncludesCapabilityBridgeTools(t *testing.T) {
+	for _, tool := range []string{capabilityListTool, resourceListTool, resourceReadTool, promptListTool, promptGetTool, completionTool} {
+		t.Run(tool, func(t *testing.T) {
+			if !standaloneToolAvailableInLiveEvaluator(tool) {
+				t.Fatalf("standaloneToolAvailableInLiveEvaluator(%q) = false, want true", tool)
+			}
+		})
 	}
 }
 
@@ -872,14 +908,16 @@ func TestDynamicPrompt_RequiresFindBeforeUncertainExecute(t *testing.T) {
 
 	system := systemPromptForTask(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "systemPromptForTask()", system, []string{
-		"Use only the provided tools: gitlab_find_action and gitlab_execute_tool.",
+		"GitLab operations are executed through gitlab_find_action and gitlab_execute_tool",
+		"MCP capability bridge tools",
 		"Use gitlab_find_action before gitlab_execute_tool whenever the exact canonical action ID or exact params schema is not already known",
 		"Destructive actions require top-level confirm:true on gitlab_execute_tool",
 	})
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible.",
+		"Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_tool",
+		"Use bridge tools directly for capability, resource, prompt, and completion inspection steps",
 		"use gitlab_find_action before executing when an action ID or params schema is not exact",
 		"params limited to the selected action input_schema",
 		"put confirm:true at the top level of gitlab_execute_tool arguments",
@@ -1124,8 +1162,8 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForOptionalOnlyList(t *testing.T) 
 		`"order_by":"updated_at"`,
 		`"sort":"desc"`,
 		`"per_page":10`,
-		"Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible.",
-		"gitlab_find_action and gitlab_execute_tool",
+		"Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_tool",
+		"gitlab_find_action, gitlab_execute_tool",
 	})
 }
 
@@ -1140,7 +1178,7 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForSearchProjects(t *testing.T) {
 		"Dynamic first-step exact call",
 		`"action":"search.projects"`,
 		`"query":"gitlab-mcp-server"`,
-		"Dynamic mode override: only gitlab_find_action and gitlab_execute_tool are visible.",
+		"Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_tool",
 	})
 }
 
@@ -4588,6 +4626,119 @@ func TestEvaluateTask_UsesSchemaLookupThenFinalCall(t *testing.T) {
 	}
 }
 
+// TestEvaluateTask_UsesResourceLookupThenFinalCall verifies resource bridge calls do not count as final task calls.
+func TestEvaluateTask_UsesResourceLookupThenFinalCall(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("resources", resourceListTool, map[string]any{}),
+		toolUseResponse("tools-detail", resourceReadTool, map[string]any{"uri": "gitlab://tools"}),
+		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
+	)
+	runner.mcpSession = newResourceLookupSessionForTest(t)
+	task := evalTask{ID: "MT-002", ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+	catalog := appendCapabilityBridgeTools([]modelTool{modelToolFromParts("gitlab_project", "project meta-tool", map[string]any{"type": "object"})}, mcpBridgeSupport{Resources: true})
+
+	result := runner.evaluateTask(t.Context(), task, catalog, routes)
+
+	if !result.ResourceLookupUsed || result.ResourceCalls != 2 {
+		t.Fatalf("resource metrics = used:%t calls:%d, want used with two calls", result.ResourceLookupUsed, result.ResourceCalls)
+	}
+	if result.SchemaLookupUsed {
+		t.Fatalf("SchemaLookupUsed = true, want resource lookups tracked separately")
+	}
+	if !result.FinalSuccess || result.ModelCalls != 3 || result.FirstTool != "gitlab_project" {
+		t.Fatalf("result = %+v, want final project call after resource lookup", result)
+	}
+}
+
+// TestEvaluateTask_ExpectedResourceBridgeStepAdvancesScenario verifies expected bridge calls count as workflow steps.
+func TestEvaluateTask_ExpectedResourceBridgeStepAdvancesScenario(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("resources", resourceListTool, map[string]any{}),
+		toolUseResponse("tools-detail", resourceReadTool, map[string]any{"uri": "gitlab://tools/project.get"}),
+		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
+	)
+	runner.mcpSession = newResourceLookupSessionForTest(t)
+	task := evalTask{ID: "MS-040", Steps: []evalStep{
+		{ExpectedTool: resourceListTool},
+		{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}},
+		{ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}},
+	}}
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+
+	result := runner.evaluateTask(t.Context(), task, nil, routes)
+
+	if !result.FinalSuccess || result.CompletedSteps != 3 {
+		t.Fatalf("result = %+v, want bridge steps and final project step completed", result)
+	}
+	if !result.FirstPass || result.FirstTool != resourceListTool || result.FirstAction != "" {
+		t.Fatalf("first call = %s/%s pass=%t, want expected resource bridge", result.FirstTool, result.FirstAction, result.FirstPass)
+	}
+	if !result.ResourceLookupUsed || result.ResourceCalls != 2 || result.CapabilityCalls != 2 {
+		t.Fatalf("bridge metrics = resource:%t resource_calls:%d capability_calls:%d, want two resource bridge calls", result.ResourceLookupUsed, result.ResourceCalls, result.CapabilityCalls)
+	}
+}
+
+// TestBuildCatalogSession_ExposesFullCapabilitySurface verifies eval sessions expose normal MCP capabilities.
+func TestBuildCatalogSession_ExposesFullCapabilitySurface(t *testing.T) {
+	client, cleanup, clientErr := newMockGitLabClient()
+	if clientErr != nil {
+		t.Fatalf("newMockGitLabClient() error = %v", clientErr)
+	}
+	defer cleanup()
+	session, closeSession, _, _, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic)
+	if sessionErr != nil {
+		t.Fatalf("buildCatalogSession() error = %v", sessionErr)
+	}
+	defer closeSession()
+
+	support := probeCapabilityBridgeSupport(session)
+	if !support.Capabilities || !support.Resources || !support.Prompts || !support.Completion {
+		t.Fatalf("capability support = %+v, want capabilities, resources, prompts, and completion", support)
+	}
+
+	resourcesResult, resourcesErr := session.ListResources(t.Context(), nil)
+	if resourcesErr != nil {
+		t.Fatalf("ListResources() error = %v", resourcesErr)
+	}
+	if !hasEvalResource(resourcesResult.Resources, "gitlab://tools") || !hasEvalResource(resourcesResult.Resources, "gitlab://workspace/roots") || !hasEvalResource(resourcesResult.Resources, "gitlab://user/current") {
+		t.Fatalf("resources = %+v, want tools, workspace roots, and normal GitLab resources", resourcesResult.Resources)
+	}
+	templatesResult, templatesErr := session.ListResourceTemplates(t.Context(), nil)
+	if templatesErr != nil {
+		t.Fatalf("ListResourceTemplates() error = %v", templatesErr)
+	}
+	if !hasEvalResourceTemplate(templatesResult.ResourceTemplates, "gitlab://tools/{id}") || !hasEvalResourceTemplate(templatesResult.ResourceTemplates, "gitlab://project/{project_id}") {
+		t.Fatalf("resource templates = %+v, want tools detail and normal GitLab templates", templatesResult.ResourceTemplates)
+	}
+	requireReadResource(t, session, "gitlab://tools/project.get")
+
+	promptsResult, promptsErr := session.ListPrompts(t.Context(), nil)
+	if promptsErr != nil {
+		t.Fatalf("ListPrompts() error = %v", promptsErr)
+	}
+	if len(promptsResult.Prompts) == 0 {
+		t.Fatal("ListPrompts() returned no prompts, want normal prompt surface")
+	}
+	promptName, argumentName, ok := promptCompletionTarget(promptsResult.Prompts)
+	if !ok {
+		t.Fatalf("ListPrompts() = %+v, want at least one prompt argument supported by completion", promptsResult.Prompts)
+	}
+	completeResult, completeErr := session.Complete(t.Context(), &mcp.CompleteParams{
+		Ref: &mcp.CompleteReference{Type: "ref/prompt", Name: promptName},
+		Argument: mcp.CompleteParamsArgument{
+			Name:  argumentName,
+			Value: "",
+		},
+	})
+	if completeErr != nil {
+		t.Fatalf("Complete() error = %v", completeErr)
+	}
+	if completeResult == nil || completeResult.Completion.Values == nil {
+		t.Fatalf("Complete() = %+v, want completion result", completeResult)
+	}
+}
+
 // TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation verifies EvaluateTask when records trace for prompt tool use and validation.
 func TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation(t *testing.T) {
 	runner := newScriptedRunner(t,
@@ -4885,16 +5036,51 @@ func TestCalculateMetrics_AggregatesRepeatedAttempts(t *testing.T) {
 // TestAggregateUsage_SumsRequestsToolCallsAndTokens verifies AggregateUsage when sums requests tool calls and tokens.
 func TestAggregateUsage_SumsRequestsToolCallsAndTokens(t *testing.T) {
 	results := []taskResult{
-		{ModelCalls: 2, ToolCalls: 3, Usage: modelUsage{InputTokens: 100, OutputTokens: 20, CacheCreationInputTokens: 50}},
-		{ModelCalls: 1, ToolCalls: 1, Usage: modelUsage{InputTokens: 25, OutputTokens: 5, CacheReadInputTokens: 200}},
+		{ModelCalls: 2, ToolCalls: 3, ResourceCalls: 1, CapabilityCalls: 2, Usage: modelUsage{InputTokens: 100, OutputTokens: 20, CacheCreationInputTokens: 50}},
+		{ModelCalls: 1, ToolCalls: 1, ResourceCalls: 2, CapabilityCalls: 3, Usage: modelUsage{InputTokens: 25, OutputTokens: 5, CacheReadInputTokens: 200}},
 	}
 	summary := aggregateUsage(results)
-	if summary.ModelCalls != 3 || summary.ToolCalls != 4 {
+	if summary.ModelCalls != 3 || summary.ToolCalls != 4 || summary.ResourceCalls != 3 || summary.CapabilityCalls != 5 {
 		t.Fatalf("summary calls = %+v, want 3 requests and 4 tool calls", summary)
 	}
 	if summary.Usage.InputTokens != 125 || summary.Usage.OutputTokens != 25 || summary.Usage.CacheCreationInputTokens != 50 || summary.Usage.CacheReadInputTokens != 200 {
 		t.Fatalf("usage = %+v, want summed tokens", summary.Usage)
 	}
+}
+
+func TestCollectCapabilityBridgeUsage_GroupsToolTargetsAndModels(t *testing.T) {
+	results := []taskResult{
+		{
+			Task:  evalTask{ID: "MT-001"},
+			Model: "model-a",
+			Trace: taskTrace{Events: []traceEvent{
+				{Kind: "tool_use", Tool: resourceReadTool, Input: map[string]any{"uri": "gitlab://tools/project.get"}},
+				{Kind: "tool_use", Tool: promptGetTool, Input: map[string]any{"name": "project_overview"}},
+			}},
+		},
+		{
+			Task:  evalTask{ID: "MT-002"},
+			Model: "model-b",
+			Trace: taskTrace{Events: []traceEvent{
+				{Kind: "tool_use", Tool: resourceReadTool, Input: map[string]any{"uri": "gitlab://tools/project.get"}},
+				{Kind: "tool_use", Tool: completionTool, Input: map[string]any{"ref_type": "ref/prompt", "name": "project_overview", "argument_name": "project_id"}},
+			}},
+		},
+	}
+
+	usage := collectCapabilityBridgeUsage(results)
+	if len(usage) != 3 {
+		t.Fatalf("usage = %+v, want three grouped entries", usage)
+	}
+	var b strings.Builder
+	writeCapabilityBridgeUsage(&b, results, false)
+	report := b.String()
+	requireContainsAll(t, "capability bridge usage", report, []string{
+		"## MCP Capability Bridge Usage",
+		"`gitlab_read_resource` | resources | gitlab://tools/project.get | 2 | model-a, model-b | MT-001, MT-002",
+		"`gitlab_get_prompt` | prompts | project_overview | 1 | model-a | MT-001",
+		"`gitlab_complete` | completion:ref/prompt | project_overview#project_id | 1 | model-b | MT-002",
+	})
 }
 
 // TestEstimateCostUSD_UsesPerMillionPricing verifies EstimateCostUSD uses per million pricing.
@@ -5107,6 +5293,35 @@ func TestWriteReportHeader_MetaTitle(t *testing.T) {
 		"# Meta-Tool Model Evaluation",
 		"Terminal output: `eval.log`",
 	})
+}
+
+func TestWriteReportHeader_ResourceAccessState(t *testing.T) {
+	tests := []struct {
+		name string
+		opts options
+		want string
+	}{
+		{name: "disabled", opts: options{}, want: "Resource access: `disabled`"},
+		{name: "requested", opts: options{ExposeResources: true}, want: "Resource access: `requested but not active`"},
+		{name: "enabled", opts: options{ExposeResources: true, ResourceAccessActive: true}, want: "Resource access: `enabled`"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var b strings.Builder
+			writeReportHeader(&b, tt.opts, false)
+			requireContainsAll(t, "resource access header", b.String(), []string{tt.want})
+		})
+	}
+}
+
+func TestProbeCapabilityBridgeSupport_RequiresAdvertisedResources(t *testing.T) {
+	if support := probeCapabilityBridgeSupport(newProjectGetSession(t)); support.Resources {
+		t.Fatalf("probeCapabilityBridgeSupport().Resources = true for session without resources capability, want false; support = %+v", support)
+	}
+	if support := probeCapabilityBridgeSupport(newResourceLookupSessionForTest(t)); !support.Resources {
+		t.Fatalf("probeCapabilityBridgeSupport().Resources = false for session with resources, want true; support = %+v", support)
+	}
 }
 
 // TestWriteFailureDiagnostics_IncludesUnsafeDestructiveSuccess verifies safety
@@ -5635,6 +5850,97 @@ func newProjectGetSession(t *testing.T) *mcp.ClientSession {
 	}
 	t.Cleanup(func() { _ = session.Close() })
 	return session
+}
+
+// newResourceLookupSessionForTest constructs a minimal MCP session with listable resources.
+func newResourceLookupSessionForTest(t *testing.T) *mcp.ClientSession {
+	t.Helper()
+	server := mcp.NewServer(&mcp.Implementation{Name: "eval-resource-test", Version: "0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "gitlab_project", Description: "project meta-tool"}, func(_ context.Context, _ *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
+		params, _ := input["params"].(map[string]any)
+		if params["project_id"] == nil {
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "MCP missing params.project_id"}}}, nil, nil
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "project ok"}}}, nil, nil
+	})
+	server.AddResource(&mcp.Resource{
+		URI:      "gitlab://tools",
+		Name:     "tool_manifest",
+		MIMEType: "application/json",
+	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: "gitlab://tools", MIMEType: "application/json", Text: `{"surface":"meta"}`}}}, nil
+	})
+	server.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "gitlab://tools/{id}",
+		Name:        "tool_detail",
+		MIMEType:    "application/json",
+	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: req.Params.URI, MIMEType: "application/json", Text: `{"id":"gitlab_project.get"}`}}}, nil
+	})
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(t.Context(), serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "eval-resource-test-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
+func hasEvalResource(resources []*mcp.Resource, uri string) bool {
+	for _, resource := range resources {
+		if resource != nil && resource.URI == uri {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEvalResourceTemplate(templates []*mcp.ResourceTemplate, uriTemplate string) bool {
+	for _, template := range templates {
+		if template != nil && template.URITemplate == uriTemplate {
+			return true
+		}
+	}
+	return false
+}
+
+func promptCompletionTarget(prompts []*mcp.Prompt) (string, string, bool) {
+	for _, prompt := range prompts {
+		if prompt == nil {
+			continue
+		}
+		for _, argument := range prompt.Arguments {
+			if argument != nil && promptArgumentSupportsCompletion(argument.Name) {
+				return prompt.Name, argument.Name, true
+			}
+		}
+	}
+	return "", "", false
+}
+
+func promptArgumentSupportsCompletion(name string) bool {
+	switch name {
+	case "project_id", "group_id", "merge_request_iid", "issue_iid", "username", "from", "to", "ref", "tag", "pipeline_id", "sha", "branch", "source_branch", "target_branch", "label", "milestone_id", "milestone", "job_id":
+		return true
+	default:
+		return false
+	}
+}
+
+func requireReadResource(t *testing.T, session *mcp.ClientSession, uri string) {
+	t.Helper()
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: uri})
+	if err != nil {
+		t.Fatalf("ReadResource(%s) error = %v", uri, err)
+	}
+	if result == nil {
+		t.Fatalf("ReadResource(%s) returned nil result", uri)
+	}
 }
 
 // toolUseResponse converts the GitLab API response to the tool output format.

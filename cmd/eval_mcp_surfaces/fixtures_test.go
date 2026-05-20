@@ -176,6 +176,115 @@ func TestFixtureRemoteURL(t *testing.T) {
 	}
 }
 
+// TestFixturePlaceholderHelpers_CoverIDPathAndContentBranches verifies pure
+// fixture helpers rewrite prompts and derive deterministic path/content values.
+func TestFixturePlaceholderHelpers_CoverIDPathAndContentBranches(t *testing.T) {
+	state := &liveFixtureState{
+		ProjectID:              101,
+		PipelineID:             202,
+		GroupID:                303,
+		MilestoneDeleteIID:     404,
+		PipelineScheduleID:     505,
+		PipelineSchedulePlayID: 506,
+		PipelineTriggerRunID:   507,
+		CommitDiscussionNoteID: 608,
+		CommitDiscussionID:     "discussion-1",
+		CommitSHA:              "deadbeef",
+		FeatureFlagName:        "eval_flag_202",
+		ReleaseSummaryTag:      "v1.2.3-summary",
+		CleanupReleaseTag:      "v1.2.3-cleanup",
+		ProjectTokenID:         707,
+		DeployKeyID:            808,
+		DeployTokenID:          909,
+		PackageID:              1001,
+		RunnerID:               1002,
+		EnvironmentID:          1003,
+		SnippetID:              1004,
+		HookDeleteID:           1005,
+		BadgeDeleteID:          1006,
+		PipelineTriggerID:      1007,
+		UserID:                 1008,
+	}
+	cases := map[string]string{
+		"MT-007":               "group ID `303`",
+		"MT-035":               "milestone IID `404`",
+		"MT-042":               "project access token ID `707`",
+		"MT-044":               "package ID `1001`",
+		"MT-049":               "environment ID `1003`",
+		"MT-057":               "webhook ID `1005`",
+		"MT-059":               "badge ID `1006`",
+		taskPipelineScheduleID: "pipeline schedule ID `505`",
+		"MT-104":               "user ID `1008`",
+		"MT-111":               "deploy key ID `808`",
+		"MT-112":               "project deploy token ID `909`",
+		"MT-113":               "commit discussion note `608`",
+		"MT-095":               "`v1.2.3-summary`",
+		"MS-013":               "`eval_flag_202`",
+		"MS-006":               "deployment ID `77`",
+		taskFileCreateID:       "`tmp/eval-202.txt`",
+	}
+	prompt := "group ID `123` milestone IID `7` project access token ID `77` package ID `55` runner ID `99` environment ID `7` personal snippet ID `33` numeric snippet ID `44` webhook ID `5` badge ID `8` pipeline trigger token ID `77` pipeline schedule ID `12` user ID `55` deploy key ID `88` project deploy token ID `66` commit discussion note `999` discussion `abc123` commit `abc1234` `v0.0.0-eval-ms` `eval_flag` deployment ID `77` `tmp/eval.txt`"
+	for taskID, want := range cases {
+		got := replaceResourcePlaceholders(taskID, prompt, state)
+		if !strings.Contains(got, want) {
+			t.Fatalf("replaceResourcePlaceholders(%s) = %q, want %q", taskID, got, want)
+		}
+	}
+	if got := replaceResourcePlaceholders(taskPipelineScheduleID, "run trigger pipeline trigger token ID `77`", state); !strings.Contains(got, "`507`") {
+		t.Fatalf("trigger run prompt = %q, want run trigger ID", got)
+	}
+	if fixtureUniqueSuffix(&liveFixtureState{ProjectID: 11}) != "11" || fixtureUniqueSuffix(&liveFixtureState{}) != "" {
+		t.Fatal("fixtureUniqueSuffix project/empty branches failed")
+	}
+	if got := replaceID("issue `1`", "issue", 1, 0); got != "issue `1`" {
+		t.Fatalf("replaceID(newID zero) = %q, want unchanged", got)
+	}
+	if pathBase("dir/file.txt") != "file.txt" || pathBase("file.txt") != "file.txt" {
+		t.Fatal("pathBase failed for nested or flat path")
+	}
+	if !strings.Contains(fixtureReadme(), "RegisterMCPMeta") {
+		t.Fatal("fixtureReadme() missing expected code marker")
+	}
+	if key, err := newAuthorizedSSHKey(); err != nil || !strings.HasPrefix(key, "ssh-ed25519 ") {
+		t.Fatalf("newAuthorizedSSHKey() = %q, %v; want ed25519 public key", key, err)
+	}
+}
+
+// TestLiveFixtureStateReadWriteAndValidation_CoverFileHelpers verifies fixture
+// state persistence fills legacy defaults and validates safe live-prep options.
+func TestLiveFixtureStateReadWriteAndValidation_CoverFileHelpers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "fixtures", "state.json")
+	state := &liveFixtureState{ProjectPath: liveFixtureProjectPath, ProjectID: 101, CleanupReleaseTag: liveFixtureCleanupTag, ReleaseSummaryTag: liveFixtureCleanupTag}
+	if err := writeLiveFixtures(path, state); err != nil {
+		t.Fatalf("writeLiveFixtures() error = %v", err)
+	}
+	loaded, err := readLiveFixtures(path)
+	if err != nil {
+		t.Fatalf("readLiveFixtures() error = %v", err)
+	}
+	if loaded.ProjectID != 101 || loaded.ReleaseSummaryTag != liveFixtureReleaseSummaryTag || loaded.ElicitationReleaseTag != liveFixtureElicitationTag || len(loaded.PackageReleaseFiles) == 0 {
+		t.Fatalf("loaded fixture = %+v, want defaults and package files", loaded)
+	}
+	badPath := filepath.Join(t.TempDir(), "bad.json")
+	writeBadErr := os.WriteFile(badPath, []byte(`{"project_id":0}`), 0o600)
+	if writeBadErr != nil {
+		t.Fatalf("write bad fixture: %v", writeBadErr)
+	}
+	_, badFixtureErr := readLiveFixtures(badPath)
+	if badFixtureErr == nil {
+		t.Fatal("readLiveFixtures(missing project identity) error = nil, want error")
+	}
+	mockBackendErr := validateFixtureOptions(options{Backend: backendMock})
+	if mockBackendErr == nil {
+		t.Fatal("validateFixtureOptions(mock) error = nil, want backend error")
+	}
+	t.Setenv("E2E_MODE", "docker")
+	dockerBackendErr := validateFixtureOptions(options{Backend: backendGitLab})
+	if dockerBackendErr != nil {
+		t.Fatalf("validateFixtureOptions(docker gitlab) error = %v", dockerBackendErr)
+	}
+}
+
 // TestEnsureLiveProjectActive_UnarchivesArchivedFixtureProject verifies EnsureLiveProjectActive when unarchives archived fixture project.
 func TestEnsureLiveProjectActive_UnarchivesArchivedFixtureProject(t *testing.T) {
 	calls := make([]string, 0, 2)

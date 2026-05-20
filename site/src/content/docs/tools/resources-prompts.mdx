@@ -12,7 +12,7 @@ MCP resources provide **read-only context data** that clients can request at any
 The server exposes **46 resources** across several categories:
 
 :::note
-MCP lists fixed resources and URI templates separately. In full mode, clients that only inspect `resources/list` see 9 fixed URIs: current user, groups, workspace roots, the meta-schema index, and 5 workflow guides. The remaining 37 entries are URI templates returned by `resources/templates/list` and are read by substituting project, group, issue, MR, or other IDs at runtime.
+MCP lists fixed resources and URI templates separately. In full mode, clients that only inspect `resources/list` see 9 fixed URIs: current user, groups, workspace roots, the tool manifest, and 5 workflow guides. The remaining 37 entries are URI templates returned by `resources/templates/list` and are read by substituting project, group, issue, MR, or other IDs at runtime.
 :::
 
 ### Static resources (4)
@@ -22,21 +22,21 @@ MCP lists fixed resources and URI templates separately. In full mode, clients th
 | `gitlab://user/current`    | Current authenticated user profile (username, email, state, admin status)                                      |
 | `gitlab://groups`          | All GitLab groups accessible to the authenticated user                                                         |
 | `gitlab://workspace/roots` | Workspace root directories from the MCP client, for project discovery via `gitlab_resolve_project_from_remote` |
-| `gitlab://schema/meta/`    | Catalog of registered meta-tools and their actions                                                             |
+| `gitlab://tools`           | Surface-aware manifest of visible tools and executable entries                                                 |
 
-### Meta-schema resource template (1)
+### Tool manifest resource template (1)
 
-| Resource                               | Description                                                 |
-| -------------------------------------- | ----------------------------------------------------------- |
-| `gitlab://schema/meta/{tool}/{action}` | JSON Schema for the `params` of a specific meta-tool action |
+| Resource              | Description                                                              |
+| --------------------- | ------------------------------------------------------------------------ |
+| `gitlab://tools/{id}` | Accepted call shape and input schema for one entry from `gitlab://tools` |
 
-Use the meta-schema resources when a client needs the exact parameter shape for a meta-tool action without expanding every schema in `tools/list`.
+Use the tool manifest resources when a client needs the exact parameter shape for a meta-tool action without expanding every schema in `tools/list`, or when it wants to enumerate dynamic and individual entries in a consistent format.
 
-1. Read `gitlab://schema/meta/` to get a JSON catalog with `uri_template` and a sorted list of registered meta-tools and actions.
-2. Replace `{tool}` and `{action}` in `gitlab://schema/meta/{tool}/{action}` to read the JSON Schema for that action's `params` object.
+1. Read `gitlab://tools` to get the active surface, visible tools, and executable entries.
+2. Replace `{id}` in `gitlab://tools/{id}` to read the JSON Schema and call shape for that entry.
 3. Call the meta-tool with the normal `{ "action": "...", "params": { ... } }` envelope.
 
-For example, `gitlab://schema/meta/gitlab_merge_request/create` returns the parameter schema for the `create` action of `gitlab_merge_request`. These schema resources are available for meta-tools with `CAPABILITY_SURFACE=full` or `minimal`, regardless of `META_PARAM_SCHEMA` mode. Dynamic clients using `CAPABILITY_SURFACE=minimal` should use `gitlab_find_action` for inline schemas instead.
+For example, `gitlab://tools/gitlab_merge_request.create` returns the parameter schema and call shape for the `create` action of `gitlab_merge_request`. These manifest resources are available with `CAPABILITY_SURFACE=full` or `minimal`, regardless of `META_PARAM_SCHEMA` mode. Dynamic clients can also use `gitlab_find_action` for ranked discovery and inline schemas.
 
 ### Project resource templates (23)
 
@@ -136,7 +136,7 @@ To inspect meta-tool parameters, read the schema index first and then the action
 {
 	"method": "resources/read",
 	"params": {
-		"uri": "gitlab://schema/meta/"
+		"uri": "gitlab://tools"
 	}
 }
 ```
@@ -145,7 +145,7 @@ To inspect meta-tool parameters, read the schema index first and then the action
 {
 	"method": "resources/read",
 	"params": {
-		"uri": "gitlab://schema/meta/gitlab_merge_request/create"
+		"uri": "gitlab://tools/gitlab_merge_request.create"
 	}
 }
 ```
@@ -270,9 +270,9 @@ The server returns a structured prompt with context-aware content that the LLM u
 
 ## Configuration
 
-| Variable             | Default | Description                                                                                                                                                 |
-| -------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CAPABILITY_SURFACE` | `full`  | `full` registers resources, meta-schema resources, workflow guides, and prompts; `minimal` keeps workspace roots and, for meta-tools, meta-schema resources |
+| Variable             | Default | Description                                                                                                                       |
+| -------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `CAPABILITY_SURFACE` | `full`  | `full` registers resources, workflow guides, prompts, and `gitlab://tools`; `minimal` keeps workspace roots plus `gitlab://tools` |
 
 :::tip
 Resources are particularly useful for providing project context at the start of a conversation. By reading the project resource, the LLM gains immediate understanding of the repository's purpose, team, and current state.
