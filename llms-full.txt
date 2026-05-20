@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.0.3 | up to 1022 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
+> Version 2.0.3 | up to 1023 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -10330,9 +10330,10 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 **Orbit**
 
-Use {"action":"graph_status","params":{...}}; only top-level keys are action and params.
+Use {"action":"dsl","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_orbit.<action>.
 Action guidance:
+- dsl: Retrieve the experimental GitLab Orbit query DSL schema or LLM grammar.
 - graph_status: Inspect experimental GitLab Orbit graph indexing status for one scope.
 - query: Execute a read-only experimental GitLab Orbit Knowledge Graph query.
 - schema: Inspect the experimental GitLab Orbit Knowledge Graph ontology.
@@ -10344,6 +10345,14 @@ GitLab orbit actions.
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **Action Output Schemas:**
+
+<details><summary>dsl</summary>
+
+```json
+{"additionalProperties":false,"properties":{"content":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"response_format":{"type":"string"}},"type":"object"}
+```
+
+</details>
 
 <details><summary>graph_status</summary>
 
@@ -10673,7 +10682,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When `TOOL_SURFACE=individual`, up to 1022 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1017.
+When `TOOL_SURFACE=individual`, up to 1023 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1017.
 Grouped by domain:
 
 ### access (8 tools)
@@ -19490,7 +19499,17 @@ Update notification settings for a specific project.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### orbit (5 tools)
+### orbit (6 tools)
+
+#### gitlab_orbit_dsl
+
+Retrieve the experimental GitLab Orbit query DSL schema or LLM grammar.
+
+**Parameters:**
+
+- `response_format` (string): Response format to request: raw or llm. Defaults to raw.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_graph_status
 

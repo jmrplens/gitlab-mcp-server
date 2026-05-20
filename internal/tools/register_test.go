@@ -223,7 +223,7 @@ func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
 			if !tt.wantOrbit {
 				return
 			}
-			for _, want := range []string{"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_query", "gitlab_orbit_graph_status"} {
+			for _, want := range []string{"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_dsl", "gitlab_orbit_query", "gitlab_orbit_graph_status"} {
 				if !slices.Contains(names, want) {
 					t.Fatalf("RegisterAll() missing %s for GitLab.com enterprise client", want)
 				}

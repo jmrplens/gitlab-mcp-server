@@ -245,9 +245,23 @@ func TestQuery_LLMResponseFormat_RawError(t *testing.T) {
 	}
 }
 
+// TestQueryType_NonString_ReturnsEmpty verifies that queryType ignores malformed query_type values.
+//
+// The test passes a non-string query_type and expects an empty result. This keeps raw LLM response
+// metadata safe when user-provided Orbit query JSON contains an unexpected value type.
 func TestQueryType_NonString_ReturnsEmpty(t *testing.T) {
 	if got := queryType(map[string]any{"query_type": 42}); got != "" {
 		t.Fatalf("queryType() = %q, want empty", got)
+	}
+}
+
+// TestResponseFormatName_NilDefaultsToRaw verifies that responseFormatName treats a nil format as raw.
+//
+// The test covers the default branch used by Orbit handlers when the GitLab client option omits an
+// explicit response format. This preserves the public raw-format default expected by the tool schema.
+func TestResponseFormatName_NilDefaultsToRaw(t *testing.T) {
+	if got := responseFormatName(nil); got != string(gl.OrbitResponseFormatRaw) {
+		t.Fatalf("responseFormatName(nil) = %q, want raw", got)
 	}
 }
 

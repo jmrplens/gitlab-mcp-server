@@ -18,7 +18,6 @@ type orbitNotFoundOutput struct {
 	Identifier string
 }
 
-
 // init registers all Markdown formatters for Orbit MCP tool outputs.
 //
 // Each formatter converts the tool output struct to a Markdown summary for LLM and user-facing documentation.
@@ -32,14 +31,13 @@ func init() {
 	toolutil.RegisterMarkdown[GraphStatusOutput](FormatGraphStatusMarkdown)
 }
 
-
 // formatOrbitNotFound returns a [*mcp.CallToolResult] with actionable hints when an Orbit resource is not found.
 // Used by all Orbit MCP tool handlers to provide LLM-friendly error output for HTTP 404.
 func formatOrbitNotFound(out orbitNotFoundOutput) *mcp.CallToolResult {
-       return toolutil.NotFoundResult(out.Resource, out.Identifier,
-	       "Verify GitLab Orbit is enabled on GitLab.com for the requested token",
-	       "Check that the token can access a Knowledge Graph-enabled namespace or project",
-       )
+	return toolutil.NotFoundResult(out.Resource, out.Identifier,
+		"Verify GitLab Orbit is enabled on GitLab.com for the requested token",
+		"Check that the token can access a Knowledge Graph-enabled namespace or project",
+	)
 }
 
 // FormatStatusMarkdown returns a Markdown-formatted summary of Orbit cluster health for LLM consumption.
@@ -220,56 +218,52 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	return b.String()
 }
 
-
 // writeKV writes a Markdown bullet list item for a key-value pair, skipping empty values.
 // Used by all Orbit Markdown formatters for summary fields.
 func writeKV(b *strings.Builder, key, value string) {
-       if value == "" {
-	       return
-       }
-       fmt.Fprintf(b, "- %s: %s\n", key, value)
+	if value == "" {
+		return
+	}
+	fmt.Fprintf(b, "- %s: %s\n", key, value)
 }
-
 
 // prettyAny returns a pretty-printed JSON string for any value, or falls back to fmt.Sprint on error.
 // Used to render Orbit query results in Markdown.
 func prettyAny(value any) string {
-       buf, err := json.MarshalIndent(value, "", "  ")
-       if err != nil {
-	       return fmt.Sprint(value)
-       }
-       return string(buf)
+	buf, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Sprint(value)
+	}
+	return string(buf)487846
 }
-
 
 // fencedBlock returns a Markdown fenced code block for the given language and content.
 // The fence length is auto-detected to avoid conflicts with backticks in the content.
 func fencedBlock(language, content string) string {
-       fence := markdownFence(content)
-       if language != "" {
-	       return fmt.Sprintf("%s%s\n%s\n%s\n", fence, language, content, fence)
-       }
-       return fmt.Sprintf("%s\n%s\n%s\n", fence, content, fence)
+	fence := markdownFence(content)
+	if language != "" {
+		return fmt.Sprintf("%s%s\n%s\n%s\n", fence, language, content, fence)
+	}
+	return fmt.Sprintf("%s\n%s\n%s\n", fence, content, fence)
 }
-
 
 // markdownFence returns the appropriate Markdown code fence for a content block.
 // If the content contains 3 or more consecutive backticks, the fence is lengthened to avoid collision.
 func markdownFence(content string) string {
-       longest := 0
-       current := 0
-       for _, char := range content {
-	       if char == '`' {
-		       current++
-		       if current > longest {
-			       longest = current
-		       }
-		       continue
-	       }
-	       current = 0
-       }
-       if longest < 3 {
-	       return "```"
-       }
-       return strings.Repeat("`", longest+1)
+	longest := 0
+	current := 0
+	for _, char := range content {
+		if char == '`' {
+			current++
+			if current > longest {
+				longest = current
+			}
+			continue
+		}
+		current = 0
+	}
+	if longest < 3 {
+		return "```"
+	}
+	return strings.Repeat("`", longest+1)
 }
