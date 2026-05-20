@@ -132,6 +132,27 @@ func TestActionSpecs_SettingsAndMetadataUsageGuidance(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_SystemHookDescriptionsIncludeOutputGuidance verifies the
+// model-facing individual tool descriptions carry explicit return semantics.
+func TestActionSpecs_SystemHookDescriptionsIncludeOutputGuidance(t *testing.T) {
+	specs := specsByName(t, ActionSpecs(nil))
+
+	for _, actionName := range []string{
+		"system_hook_edit",
+		"system_hook_set_url_variable",
+		"system_hook_delete_url_variable",
+	} {
+		t.Run(actionName, func(t *testing.T) {
+			description := specs[actionName].IndividualTool.Description
+			for _, want := range []string{"Returns:", "See also:"} {
+				if !strings.Contains(description, want) {
+					t.Fatalf("%s description = %q, want %q", actionName, description, want)
+				}
+			}
+		})
+	}
+}
+
 func specsByName(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {
 	t.Helper()
 	byName := make(map[string]toolutil.ActionSpec, len(specs))

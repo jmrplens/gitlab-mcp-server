@@ -21,7 +21,7 @@ A step-by-step tutorial to get gitlab-mcp-server running and make your first Git
 
 ## Step 1: Download the Binary
 
-Download the latest release for your platform from the project [Releases](../../releases) page:
+Download the latest release for your platform from the project [Releases](https://github.com/jmrplens/gitlab-mcp-server/releases) page:
 
 | Platform            | Binary                                |
 | ------------------- | ------------------------------------- |

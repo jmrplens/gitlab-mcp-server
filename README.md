@@ -84,7 +84,7 @@ The server handles the translation from natural language to GitLab API calls. Yo
 
 ### 1. Get the server
 
-Download the latest binary for your platform from [GitHub Releases](../../releases) and make it executable:
+Download the latest binary for your platform from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases) and make it executable:
 
 ```bash
 chmod +x gitlab-mcp-server-*  # Linux/macOS only
@@ -339,7 +339,7 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.26+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.0  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.28.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.29.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Building from Source

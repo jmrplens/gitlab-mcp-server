@@ -1,8 +1,8 @@
 // Command audit_metrics generates a comprehensive metrics summary for the
 // gitlab-mcp-server MCP server. It creates in-memory MCP servers to count tools,
 // meta-tools, resources, and prompts at runtime — the only reliable counting
-// method. It also scans the filesystem for sub-packages, source files, and
-// test files.
+// method. It also scans the filesystem for Go packages, source files, and test
+// files.
 //
 // Usage:
 //
@@ -14,10 +14,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -80,25 +83,18 @@ func main() {
 	staticResources, templateResources := countResources(client)
 	resourceCount := staticResources + templateResources + 1 // +1 for workspace_roots
 	promptCount := countPrompts(client)
-
-	subPkgs := countSubPackages()
+	toolPackages := countToolPackages()
 	srcFiles, testFiles := countSourceFiles()
 
-	// Classify individual tools by domain.
 	samplingCount := 0
 	elicitationCount := 0
-	domains := map[string]int{}
-	for _, t := range individualTools {
-		parts := strings.SplitN(t.Name, "_", 3) // gitlab_{domain}_{action}
-		if len(parts) >= 2 {
-			domains[parts[1]]++
-		}
-		if strings.HasPrefix(t.Name, "gitlab_analyze_") || strings.HasPrefix(t.Name, "gitlab_summarize_") ||
-			strings.HasPrefix(t.Name, "gitlab_generate_") || strings.HasPrefix(t.Name, "gitlab_review_mr_security") ||
-			strings.HasPrefix(t.Name, "gitlab_find_technical_debt") {
+	for _, tool := range individualTools {
+		if strings.HasPrefix(tool.Name, "gitlab_analyze_") || strings.HasPrefix(tool.Name, "gitlab_summarize_") ||
+			strings.HasPrefix(tool.Name, "gitlab_generate_") || strings.HasPrefix(tool.Name, "gitlab_review_mr_security") ||
+			strings.HasPrefix(tool.Name, "gitlab_find_technical_debt") {
 			samplingCount++
 		}
-		if strings.HasPrefix(t.Name, "gitlab_interactive_") {
+		if strings.HasPrefix(tool.Name, "gitlab_interactive_") {
 			elicitationCount++
 		}
 	}
@@ -148,14 +144,14 @@ func main() {
 
 	fmt.Println("## Codebase Metrics")
 	fmt.Println()
-	printRow("Tool sub-packages", subPkgs)
+	printRow("internal/tools Go packages", toolPackages)
 	printRow("Source files (.go)", srcFiles)
 	printRow("Test files (_test.go)", testFiles)
 	fmt.Println()
 
-	fmt.Println("## Domain Breakdown (top 20)")
+	fmt.Println("## Catalog Domain Breakdown (GitLab.com enterprise, top 20)")
 	fmt.Println()
-	printDomainTable(domains)
+	printDomainTable(countCatalogDomains(dynamicGitLabComEnterpriseCatalog))
 	fmt.Println()
 
 	printEnterpriseActionSpecAudit(enterpriseActionAudit)
@@ -164,31 +160,117 @@ func main() {
 	fmt.Println("## Meta-tools List")
 	fmt.Println()
 	fmt.Println("### Base (" + strconv.Itoa(len(metaBase)) + ")")
-	for _, t := range metaBase {
-		fmt.Printf(toolListFormat, t.Name)
+	for _, tool := range metaBase {
+		fmt.Printf(toolListFormat, tool.Name)
 	}
 	fmt.Println()
 	fmt.Println("### Enterprise-only (" + strconv.Itoa(diffByName(metaEnterprise, metaBase)) + ")")
 	baseNames := map[string]bool{}
-	for _, t := range metaBase {
-		baseNames[t.Name] = true
+	for _, tool := range metaBase {
+		baseNames[tool.Name] = true
 	}
-	for _, t := range metaEnterprise {
-		if !baseNames[t.Name] {
-			fmt.Printf(toolListFormat, t.Name)
+	for _, tool := range metaEnterprise {
+		if !baseNames[tool.Name] {
+			fmt.Printf(toolListFormat, tool.Name)
 		}
 	}
 	fmt.Println()
 	fmt.Println("### GitLab.com-only enterprise (" + strconv.Itoa(diffByName(metaGitLabComEnterprise, metaEnterprise)) + ")")
 	enterpriseNames := map[string]bool{}
-	for _, t := range metaEnterprise {
-		enterpriseNames[t.Name] = true
+	for _, tool := range metaEnterprise {
+		enterpriseNames[tool.Name] = true
 	}
-	for _, t := range metaGitLabComEnterprise {
-		if !enterpriseNames[t.Name] {
-			fmt.Printf(toolListFormat, t.Name)
+	for _, tool := range metaGitLabComEnterprise {
+		if !enterpriseNames[tool.Name] {
+			fmt.Printf(toolListFormat, tool.Name)
 		}
 	}
+}
+
+// countToolPackages counts Go packages under internal/tools using the Go tool,
+// matching the catalog-first architecture where ordinary tool packages no longer
+// carry package-local register.go files.
+func countToolPackages() int {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "list", "./internal/tools/...")
+	cmd.Dir = repositoryRoot()
+	output, err := cmd.Output()
+	if err == nil {
+		return countNonEmptyLines(output)
+	}
+	fmt.Fprintf(os.Stderr, "go list ./internal/tools/...: %v\n", err)
+	return countToolPackageDirsAt(filepath.Join(repositoryRoot(), "internal", "tools"))
+}
+
+func repositoryRoot() string {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return "."
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+}
+
+func countNonEmptyLines(output []byte) int {
+	count := 0
+	for line := range strings.SplitSeq(string(output), "\n") {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	return count
+}
+
+func countToolPackageDirsAt(toolsDir string) int {
+	count := 0
+	if directoryHasGoFile(toolsDir) {
+		count++
+	}
+	entries, err := os.ReadDir(toolsDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ReadDir %s: %v\n", toolsDir, err)
+		return count
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if directoryHasGoFile(filepath.Join(toolsDir, entry.Name())) {
+			count++
+		}
+	}
+	return count
+}
+
+func directoryHasGoFile(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
+			return true
+		}
+	}
+	return false
+}
+
+func countCatalogDomains(catalog *actioncatalog.Catalog) map[string]int {
+	domains := map[string]int{}
+	if catalog == nil {
+		return domains
+	}
+	for _, action := range catalog.Actions() {
+		domain := action.Domain
+		if domain == "" {
+			domain, _, _ = strings.Cut(string(action.ID), ".")
+		}
+		if domain == "" {
+			domain = "unknown"
+		}
+		domains[domain]++
+	}
+	return domains
 }
 
 type enterpriseActionSpecAudit struct {
@@ -427,32 +509,10 @@ func countPrompts(client *gitlabclient.Client) int {
 	return len(result.Prompts)
 }
 
-// countSubPackages counts directories under internal/tools/ that contain
-// a register.go file (the convention for tool sub-packages).
-func countSubPackages() int {
-	toolsDir := filepath.Join("internal", "tools")
-	entries, err := os.ReadDir(toolsDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ReadDir %s: %v\n", toolsDir, err)
-		return 0
-	}
-	count := 0
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		regFile := filepath.Join(toolsDir, e.Name(), "register.go")
-		if _, statErr := os.Stat(regFile); statErr == nil {
-			count++
-		}
-	}
-	return count
-}
-
 // countSourceFiles walks the internal/ directory and counts .go source files
 // and _test.go test files separately.
 func countSourceFiles() (src, test int) {
-	err := filepath.Walk("internal", func(path string, info os.FileInfo, walkErr error) error {
+	err := filepath.Walk(filepath.Join(repositoryRoot(), "internal"), func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}

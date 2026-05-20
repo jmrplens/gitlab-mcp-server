@@ -12662,7 +12662,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_delete_system_hook_url_variable
 
-Delete System Hook URL Variable.
+Delete one URL variable from an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_set_system_hook_url_variable, gitlab_get_system_hook.
 
 **Parameters:**
 
@@ -13229,7 +13229,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_edit_system_hook
 
-Edit an instance system hook.
+Edit an instance system hook, including event triggers, SSL verification, and URL settings. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook.
 
 **Parameters:**
 
@@ -22982,7 +22982,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_set_system_hook_url_variable
 
-Set System Hook URL Variable.
+Create or update one URL variable for an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook.
 
 **Parameters:**
 

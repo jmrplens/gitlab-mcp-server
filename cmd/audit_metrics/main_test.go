@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -39,9 +40,9 @@ func newAuditMetricsClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
-// TestCountResources_IncludesMetaSchema verifies resource metrics include the
-// meta-schema resource registration path used by the audit command.
-func TestCountResources_IncludesMetaSchema(t *testing.T) {
+// TestCountResources_IncludesToolManifest verifies resource metrics include the
+// surface-aware tool manifest registration path used by the audit command.
+func TestCountResources_IncludesToolManifest(t *testing.T) {
 	static, templates := countResources(newAuditMetricsClient(t))
 	if static == 0 {
 		t.Fatal("countResources() static = 0, want registered resources")
@@ -86,6 +87,48 @@ func TestCountActionRoutes_CountsCatalogActions(t *testing.T) {
 
 	if got := countActionRoutes(routes); got != 3 {
 		t.Fatalf("countActionRoutes() = %d, want 3", got)
+	}
+}
+
+// TestCountToolPackages_ReportsCatalogFirstPackages verifies package metrics do
+// not depend on the removed package-local register.go convention.
+func TestCountToolPackages_ReportsCatalogFirstPackages(t *testing.T) {
+	if got := countToolPackages(); got < 100 {
+		t.Fatalf("countToolPackages() = %d, want catalog-first package count", got)
+	}
+}
+
+// TestCountToolPackageDirsAt_IncludesPackagesWithoutRegisterGo verifies the
+// filesystem fallback counts Go packages even when no register.go file exists.
+func TestCountToolPackageDirsAt_IncludesPackagesWithoutRegisterGo(t *testing.T) {
+	toolsDir := t.TempDir()
+	writeTestFile(t, toolsDir, "root.go")
+	writeTestFile(t, filepath.Join(toolsDir, "alpha"), "alpha.go")
+	writeTestFile(t, filepath.Join(toolsDir, "beta"), "beta_test.go")
+	if err := os.Mkdir(filepath.Join(toolsDir, "empty"), 0o755); err != nil {
+		t.Fatalf("Mkdir(empty): %v", err)
+	}
+
+	if got := countToolPackageDirsAt(toolsDir); got != 3 {
+		t.Fatalf("countToolPackageDirsAt() = %d, want 3", got)
+	}
+}
+
+// TestCountCatalogDomains_UsesCanonicalActionDomains verifies domain metrics are
+// based on Action.Domain rather than individual tool name segments.
+func TestCountCatalogDomains_UsesCanonicalActionDomains(t *testing.T) {
+	catalog := catalogWithActions(t,
+		catalogActionFixture{toolName: "gitlab_project", actionName: "get", specBacked: true},
+		catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true},
+		catalogActionFixture{toolName: "gitlab_issue", actionName: "get", specBacked: true},
+	)
+
+	domains := countCatalogDomains(catalog)
+	if domains["project"] != 2 {
+		t.Fatalf("domains[project] = %d, want 2", domains["project"])
+	}
+	if domains["issue"] != 1 {
+		t.Fatalf("domains[issue] = %d, want 1", domains["issue"])
 	}
 }
 
@@ -232,6 +275,16 @@ func catalogWithActions(t *testing.T, fixtures ...catalogActionFixture) *actionc
 		}
 	}
 	return catalog
+}
+
+func writeTestFile(t *testing.T, dir string, name string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s): %v", dir, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("package fixture\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s): %v", name, err)
+	}
 }
 
 func captureStdout(t *testing.T, fn func()) string {

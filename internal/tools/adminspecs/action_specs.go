@@ -57,8 +57,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminCreateSpec("system_hook_add", toolutil.RouteAction(client, systemhooks.Add), "gitlab_add_system_hook"),
 		adminSystemHookEditSpec(client),
 		adminSystemHookTestSpec(client),
-		adminUpdateSpec("system_hook_set_url_variable", toolutil.RouteVoidAction(client, systemhooks.SetURLVariable), "gitlab_set_system_hook_url_variable"),
-		adminDeleteSpec("system_hook_delete_url_variable", toolutil.DestructiveVoidAction(client, systemhooks.DeleteURLVariable), "gitlab_delete_system_hook_url_variable"),
+		adminSystemHookSetURLVariableSpec(client),
+		adminSystemHookDeleteURLVariableSpec(client),
 		adminDeleteSpec("system_hook_delete", toolutil.DestructiveVoidAction(client, systemhooks.Delete), "gitlab_delete_system_hook"),
 		adminReadSpec("sidekiq_queue_metrics", toolutil.RouteAction(client, sidekiq.GetQueueMetrics), "gitlab_get_sidekiq_queue_metrics"),
 		adminReadSpec("sidekiq_process_metrics", toolutil.RouteAction(client, sidekiq.GetProcessMetrics), "gitlab_get_sidekiq_process_metrics"),
@@ -178,8 +178,23 @@ func adminSystemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 func adminSystemHookEditSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_edit_system_hook")
 	options.Idempotent = true
-	options.IndividualTool.Description = "Edit an instance system hook."
+	options.IndividualTool.Description = "Edit an instance system hook, including event triggers, SSL verification, and URL settings. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook."
 	return toolutil.NewActionSpec("system_hook_edit", toolutil.RouteAction(client, systemhooks.Edit), options)
+}
+
+func adminSystemHookSetURLVariableSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := adminOptions("gitlab_set_system_hook_url_variable")
+	options.Idempotent = true
+	options.IndividualTool.Description = "Create or update one URL variable for an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook."
+	return toolutil.NewActionSpec("system_hook_set_url_variable", toolutil.RouteVoidAction(client, systemhooks.SetURLVariable), options)
+}
+
+func adminSystemHookDeleteURLVariableSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := adminOptions("gitlab_delete_system_hook_url_variable")
+	options.Destructive = true
+	options.Idempotent = true
+	options.IndividualTool.Description = "Delete one URL variable from an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_set_system_hook_url_variable, gitlab_get_system_hook."
+	return toolutil.NewActionSpec("system_hook_delete_url_variable", toolutil.DestructiveVoidAction(client, systemhooks.DeleteURLVariable), options)
 }
 
 func adminSettingsGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
