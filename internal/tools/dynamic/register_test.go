@@ -757,11 +757,39 @@ func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 	if _, hasConfirmParam := schemaProperties(action.InputSchema)["confirm"]; hasConfirmParam {
 		t.Fatalf("InputSchema includes params.confirm for dynamic action: %+v", action.InputSchema)
 	}
+	if required, _ := action.InputSchema["required"].([]any); slices.Contains(required, any("confirm")) {
+		t.Fatalf("InputSchema requires params.confirm for dynamic action: %+v", action.InputSchema)
+	}
 	if action.Example.Arguments["confirm"] != true {
 		t.Fatalf("example missing confirm param: %+v", action.Example)
 	}
 	if action.SchemaURI != "gitlab://tools/project.delete" {
 		t.Fatalf("SchemaURI = %q, want tool detail URI", action.SchemaURI)
+	}
+}
+
+// TestDynamicInputSchema_RemovesConfirmFromRequired verifies dynamic action
+// schemas keep destructive confirmation at gitlab_execute_tool.confirm only.
+func TestDynamicInputSchema_RemovesConfirmFromRequired(t *testing.T) {
+	schema := dynamicInputSchema(actionEntry{
+		ID:          "project.delete",
+		Tool:        "gitlab_project",
+		Action:      "delete",
+		Destructive: true,
+		Route: toolutil.ActionRoute{InputSchema: map[string]any{
+			"type":     "object",
+			"required": []any{"project_id", "confirm"},
+			"properties": map[string]any{
+				"project_id": map[string]any{"type": "integer"},
+				"confirm":    map[string]any{"type": "boolean"},
+			},
+		}},
+	})
+	if _, hasConfirm := schemaProperties(schema)["confirm"]; hasConfirm {
+		t.Fatalf("schema properties include confirm: %+v", schema)
+	}
+	if required, _ := schema["required"].([]any); slices.Contains(required, any("confirm")) {
+		t.Fatalf("schema required includes confirm: %+v", schema)
 	}
 }
 

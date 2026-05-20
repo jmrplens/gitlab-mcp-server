@@ -55,7 +55,13 @@ func TestModelUsageAdd_AccumulatesAllTokenBuckets(t *testing.T) {
 func TestModelProviderCallError_WrapsProviderTrace(t *testing.T) {
 	base := errors.New("provider failed")
 	err := &modelProviderCallError{err: base, Trace: &modelProviderTrace{ResponseStatus: 500}}
-	if err.Error() != "provider failed" || !errors.Is(err, base) || err.Trace.ResponseStatus != 500 {
-		t.Fatalf("modelProviderCallError = %+v, unwrap %v", err, errors.Unwrap(err))
+	if err.Error() != "provider failed" {
+		t.Fatalf("Error() = %q, want provider failed", err.Error())
+	}
+	if !errors.Is(err, base) {
+		t.Fatalf("errors.Is(err, base) = false, unwrap %v", errors.Unwrap(err))
+	}
+	if err.Trace.ResponseStatus != 500 {
+		t.Fatalf("trace status = %d, want 500", err.Trace.ResponseStatus)
 	}
 }

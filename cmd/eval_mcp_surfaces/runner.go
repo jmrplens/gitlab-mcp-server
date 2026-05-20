@@ -428,7 +428,7 @@ func discoveryBudgetFeedback(task evalTask, step evalStep, toolUse modelContentB
 // isRedundantDiscoveryTool reports whether a tool call repeats avoidable dynamic discovery.
 func isRedundantDiscoveryTool(toolName string) bool {
 	switch toolName {
-	case dynamicFindTool, "gitlab":
+	case dynamicFindTool, "gitlab", "gitlab_server":
 		return true
 	default:
 		return false

@@ -65,6 +65,39 @@ func TestWriteComparisonReport_BuildsEvaluationAndTokenSections(t *testing.T) {
 	}
 }
 
+// TestWriteUsageComparison_UsesLegacyToolCallFallback verifies older reports
+// with Tool calls but no Tool calls emitted still render usage comparisons.
+func TestWriteUsageComparison_UsesLegacyToolCallFallback(t *testing.T) {
+	var b strings.Builder
+	writeUsageComparison(&b, []comparisonInput{{
+		Kind:  "evaluation",
+		Label: "old-report",
+		Usage: map[string]string{
+			usageModelRequests: "2",
+			usageToolCalls:     "3",
+		},
+	}})
+	if !strings.Contains(b.String(), "| `old-report` | 2 | 3 | 0 | 0 | - |") {
+		t.Fatalf("usage comparison = %s", b.String())
+	}
+}
+
+// TestWriteDiagnosticsComparison_RendersValidSeparator verifies dynamic
+// diagnostic columns do not add an extra empty Markdown table column.
+func TestWriteDiagnosticsComparison_RendersValidSeparator(t *testing.T) {
+	var b strings.Builder
+	writeDiagnosticsComparison(&b, []comparisonInput{{
+		Label:       "run-a",
+		Diagnostics: map[string]int{"model route miss": 1, "fixture gap": 2},
+	}})
+	if strings.Contains(b.String(), "| --- | ---: | ---: | |") {
+		t.Fatalf("diagnostics table has an extra empty column:\n%s", b.String())
+	}
+	if !strings.Contains(b.String(), "| --- | ---: | ---: |") {
+		t.Fatalf("diagnostics table missing separator:\n%s", b.String())
+	}
+}
+
 // TestSortedIntKeys_ReturnsDeterministicOrder verifies map-key rendering is
 // stable for comparison reports.
 func TestSortedIntKeys_ReturnsDeterministicOrder(t *testing.T) {

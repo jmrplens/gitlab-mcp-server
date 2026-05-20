@@ -64,9 +64,37 @@ func TestDynamicExampleParamValue_UsesPromptMarkers(t *testing.T) {
 // TestDynamicConfirmPrompt_RewritesMetaConfirmGuidance verifies destructive
 // instructions are converted to the dynamic top-level confirm shape.
 func TestDynamicConfirmPrompt_RewritesMetaConfirmGuidance(t *testing.T) {
-	got := dynamicConfirmPrompt("Include confirm:true in params for every destructive tool call and confirm must be inside params, never a top-level field")
+	got := dynamicConfirmPrompt("Include confirm:true in params for every destructive tool call and confirm must be inside params, never a top-level field. Delete with params.confirm=true.")
 	if !strings.Contains(got, "top-level confirm:true") || strings.Contains(got, "confirm must be inside params") {
 		t.Fatalf("dynamicConfirmPrompt() = %q, want top-level guidance", got)
+	}
+}
+
+// TestTaskPrompt_IssueLinkConfirmationStaysSurfaceSpecific verifies shared
+// prompts use params.confirm until dynamic rewriting changes the call shape.
+func TestTaskPrompt_IssueLinkConfirmationStaysSurfaceSpecific(t *testing.T) {
+	task := evalTask{ID: "MS-link", Prompt: "Run issue link CRUD.", Steps: []evalStep{
+		{ExpectedTool: "gitlab_issue", ExpectedAction: actionIssueCreate},
+		{ExpectedTool: "gitlab_issue", ExpectedAction: "link_create"},
+	}}
+	metaPrompt := taskPromptForSurface(task, config.ToolSurfaceMeta)
+	if !strings.Contains(metaPrompt, "with params.confirm=true") || strings.Contains(metaPrompt, "gitlab_execute_tool") {
+		t.Fatalf("meta prompt = %s", metaPrompt)
+	}
+	dynamicPrompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
+	if !strings.Contains(dynamicPrompt, "top-level confirm:true") {
+		t.Fatalf("dynamic prompt = %s", dynamicPrompt)
+	}
+}
+
+// TestCompactExactTaskPrompt_UsesExpectedToolName verifies compact exact prompts
+// do not force unified gitlab when a split meta-tool is expected.
+func TestCompactExactTaskPrompt_UsesExpectedToolName(t *testing.T) {
+	task := evalTask{ID: "MT-job", Prompt: "Download attestation for project `1` job `2`."}
+	step := evalStep{ExpectedTool: "gitlab_attestation", ExpectedAction: "attestation.download", RequiredParams: []string{"project_id", "job_id"}}
+	got := compactExactTaskPrompt(task, "No", step)
+	if !strings.Contains(got, "Use the gitlab_attestation tool once") {
+		t.Fatalf("compact prompt = %s", got)
 	}
 }
 

@@ -13,6 +13,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const maxUncoveredRoutesInReport = 200
+
 func shouldWriteStartupReport(opts options) bool {
 	return opts.Output != "" && !opts.FixturesOnly
 }
@@ -574,7 +576,7 @@ func buildRouteCoverageReport(opts options, results []taskResult, routes map[str
 
 	fmt.Fprintf(&b, "\n## Uncovered High-Risk Routes\n\n")
 	fmt.Fprintf(&b, "| Route | Risk classes |\n| --- | --- |\n")
-	limit := min(200, len(uncovered))
+	limit := min(maxUncoveredRoutesInReport, len(uncovered))
 	for _, route := range uncovered[:limit] {
 		fmt.Fprintf(&b, "| `%s/%s` | `%s` |\n", route.Tool, route.Action, strings.Join(route.Risks, "`, `"))
 	}
@@ -684,6 +686,12 @@ func uncoveredHighRiskByDomain(routes []uncoveredRoute) []domainCount {
 
 // routeDomainName returns the domain portion of a legacy or unified catalog route.
 func routeDomainName(tool, action string) string {
+	if tool == dynamicExecuteTool && action != "" {
+		if before, _, ok := strings.Cut(action, "."); ok {
+			return before
+		}
+		return action
+	}
 	if tool != "gitlab" || action == "" {
 		return strings.TrimPrefix(tool, "gitlab_")
 	}

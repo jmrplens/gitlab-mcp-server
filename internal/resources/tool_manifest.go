@@ -133,7 +133,7 @@ func registerToolManifestTemplate(server *mcp.Server, snapshot toolSurfaceSnapsh
 		Name:        "tool_detail",
 		Title:       "Tool Detail",
 		MIMEType:    mimeJSON,
-		Description: "Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID such as project.get, gitlab_project.get, or gitlab_project_get.",
+		Description: "Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID from the active surface, such as project.get in dynamic mode, gitlab_project.get in meta mode, or gitlab_get_project in individual mode.",
 		Annotations: toolutil.ContentDetail,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -225,7 +225,7 @@ func visibleToolSnapshots(tools []*mcp.Tool) ([]ToolSurfaceVisibleTool, []toolSn
 }
 
 func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Catalog) {
-	if catalog == nil {
+	if catalog == nil || !snapshot.hasVisibleTool("gitlab_execute_tool") {
 		return
 	}
 	for _, action := range catalog.Actions() {
@@ -254,6 +254,15 @@ func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Ca
 		}
 		snapshot.addEntry(entry, call, dynamicActionSchema(action))
 	}
+}
+
+func (snapshot *toolSurfaceSnapshot) hasVisibleTool(name string) bool {
+	for _, tool := range snapshot.manifest.VisibleTools {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catalog, routes map[string]toolutil.ActionMap) {

@@ -9,14 +9,21 @@ around `cmd/eval_mcp_surfaces`.
 
 ## Source Map
 
-| Path                                                            | Purpose                                                                          |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `cmd/eval_mcp_surfaces/main.go`                                 | Evaluation runner, task filtering, MCP execution, report writing, trace writing. |
-| `cmd/eval_mcp_surfaces/providers.go`                            | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs.       |
-| `cmd/eval_mcp_surfaces/fixtures.go`                             | Docker GitLab fixture preparation and placeholder replacement.                   |
-| `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md` | Canonical task corpus.                                                           |
-| `dist/evaluation/mcp-surfaces/`                                 | Generated reports, traces, and fixture state; ignored by Git.                    |
-| `docs/testing/model-results.md`                                 | Current published benchmark result copied from generated reports.                |
+| Path                                                            | Purpose                                                                               |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `cmd/eval_mcp_surfaces/main.go`                                 | Command entry point and high-level orchestration.                                     |
+| `cmd/eval_mcp_surfaces/options.go`                              | CLI flags, presets, and tool-surface normalization.                                   |
+| `cmd/eval_mcp_surfaces/runner.go`                               | Model loop, tool-call budgets, validation feedback, and simulated tool results.       |
+| `cmd/eval_mcp_surfaces/sessions.go`                             | Mock and live MCP server sessions, resource/prompt registration, and catalog routing. |
+| `cmd/eval_mcp_surfaces/bridge.go`                               | MCP capability bridge tools for resources, prompts, completions, and capabilities.    |
+| `cmd/eval_mcp_surfaces/live_targets.go`                         | Just-in-time Docker fixture resources for tasks that need fresh mutable targets.      |
+| `cmd/eval_mcp_surfaces/report.go`                               | Per-run Markdown reports, metrics, diagnostics, usage, and coverage output.           |
+| `cmd/eval_mcp_surfaces/comparison.go`                           | Cross-report comparison for model, token, diagnostic, usage, and coverage trends.     |
+| `cmd/eval_mcp_surfaces/providers.go`                            | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs.            |
+| `cmd/eval_mcp_surfaces/fixtures.go`                             | Docker GitLab fixture preparation and placeholder replacement.                        |
+| `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md` | Canonical task corpus.                                                                |
+| `dist/evaluation/mcp-surfaces/`                                 | Generated reports, traces, and fixture state; ignored by Git.                         |
+| `docs/testing/model-results.md`                                 | Current published benchmark result copied from generated reports.                     |
 
 ## Environment
 
@@ -48,6 +55,28 @@ a focused run requires different models:
 ```bash
 EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 ```
+
+## Surfaces And Capability Access
+
+`cmd/eval_mcp_surfaces` evaluates the model-facing MCP surface, not a reduced
+test-only catalog. The default `--tool-surface` is `dynamic`, matching the
+server default. Add `--tool-surface meta` when you need a meta-tool baseline.
+The evaluator intentionally does not support `individual` today because the
+individual catalog is too large for the model-compatibility matrix and is
+already covered by unit and E2E tool registration tests.
+
+Every live evaluator session registers the same public capability shape as a
+normal full server: GitLab resources, workflow guides, prompts, completions, and
+the surface-aware `gitlab://tools` / `gitlab://tools/{id}` manifest. When a task
+needs to inspect those MCP primitives, the evaluator exposes bridge tools such
+as `gitlab_list_resources`, `gitlab_read_resource`, `gitlab_list_prompts`,
+`gitlab_get_prompt`, and `gitlab_complete`. These bridge tools represent client
+MCP calls; they do not replace or hide the normal GitLab operation tools.
+
+Use the `docker-capability-discovery` preset only for targeted capability
+fallback work. For ordinary dynamic or meta full runs, keep the classic Docker
+presets (`docker-read`, `docker-mutating-safe`, and `docker-destructive-safe`) so
+the model sees the same broad MCP server surface while executing GitLab tasks.
 
 ## Run Schema Evaluation
 
@@ -90,6 +119,8 @@ initial fixture.
 ## Run Docker Evaluation For One Model
 
 This is the cheapest full Docker pass when using the current OpenAI nano model.
+It evaluates the default dynamic surface. Add `--tool-surface meta` to each
+command when comparing against the meta-tool surface.
 
 ```bash
 timeout 10800s bash -lc '
@@ -114,6 +145,10 @@ done
 ```
 
 ## Run Docker Evaluation For All Models
+
+This runs the classic Docker presets against the default dynamic surface. To
+publish a meta-tool comparison, repeat the same loop with `--tool-surface meta`
+and separate output file names.
 
 ```bash
 timeout 21600s bash -lc '
@@ -187,6 +222,18 @@ timeout 1800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
 | `--publish-label`                  | Human-readable label for the published snapshot.                                                                                                          |
 | `--check-docs`                     | Verify committed docs match the selected `--publish-from` reports without writing files.                                                                  |
 
+### Tool Surface Flags
+
+| Flag value               | Model-facing catalog                                                                           | Primary use                                                            |
+| ------------------------ | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `--tool-surface dynamic` | `gitlab_find_action`, `gitlab_execute_tool`, and optional MCP capability bridge tools.         | Default full Docker and schema runs for the current server experience. |
+| `--tool-surface meta`    | Consolidated domain meta-tools plus standalone tools and optional MCP capability bridge tools. | Compatibility baseline and comparison with the pre-dynamic default.    |
+
+Capability bridge tools are enabled by task and evaluator options, not by
+`CAPABILITY_SURFACE=minimal`. The evaluator should expose the resources,
+prompts, and completions a normal full server exposes unless a test explicitly
+targets a capability-discovery fallback.
+
 ## Outputs
 
 Each model-backed run writes:
@@ -211,10 +258,13 @@ output is only progress logging and stays in the log file by default.
 3. Classify the failure as model route miss, parameter shape miss, provider
    adapter issue, fixture gap, GitLab edition limitation, sampling support gap,
    or MCP implementation bug.
-4. Fix harness noise before judging model quality.
-5. Re-run the targeted task set.
-6. Re-run the affected preset.
-7. Publish the reviewed reports with `cmd/eval_mcp_surfaces --publish-docs`.
+4. Check whether the trace used the intended tool surface. Dynamic traces should
+  usually call `gitlab_find_action` only when the action or params schema was
+  ambiguous; exact dynamic tasks may go straight to `gitlab_execute_tool`.
+5. Fix harness noise before judging model quality.
+6. Re-run the targeted task set.
+7. Re-run the affected preset.
+8. Publish the reviewed reports with `cmd/eval_mcp_surfaces --publish-docs`.
 
 Use `--publish-from` once per reviewed Markdown report and set a clear
 `--publish-label`. The publication phase updates only the managed marker blocks

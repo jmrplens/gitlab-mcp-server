@@ -41,9 +41,11 @@ func toolManifestResourceSession(t *testing.T, client *gitlabclient.Client, ente
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, connectErr := server.Connect(ctx, st, nil); connectErr != nil {
+	serverSession, connectErr := server.Connect(ctx, st, nil)
+	if connectErr != nil {
 		t.Fatalf("server connect: %v", connectErr)
 	}
+	t.Cleanup(func() { _ = serverSession.Close() })
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
@@ -161,6 +163,9 @@ func TestToolManifestResource_NotFound(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected ResourceNotFoundError")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "not found") {
+		t.Fatalf("ReadResource error = %v, want not found", err)
 	}
 }
 

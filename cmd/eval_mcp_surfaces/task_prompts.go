@@ -431,7 +431,7 @@ func appendIssueGuidance(task evalTask, steps []evalStep, guidance string) strin
 	lowerPrompt := strings.ToLower(task.Prompt)
 	firstCreatesIssue := len(steps) > 1 && (steps[0].ExpectedAction == actionIssueCreate || steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create")
 	if firstCreatesIssue && strings.Contains(lowerPrompt, "issue link crud") {
-		guidance += ` For issue link CRUD, keep the source issue IID from the first create call. Create the link with issue.link_create, not issue.link. After link_list, call issue.link_delete with params.project_id, params.issue_iid set to the source issue IID, params.issue_link_id from the returned link, and top-level confirm:true on gitlab_execute_tool.`
+		guidance += ` For issue link CRUD, keep the source issue IID from the first create call. Create the link with issue.link_create, not issue.link. After link_list, call issue.link_delete with params.project_id, params.issue_iid set to the source issue IID, params.issue_link_id from the returned link, with params.confirm=true.`
 	}
 	if firstCreatesIssue && strings.Contains(lowerPrompt, "issue time tracking") {
 		guidance += ` For issue time tracking, follow exactly this order: issue.create, issue.time_estimate_set, issue.spent_time_add, issue.spent_time_reset, issue.time_estimate_reset, issue.delete. After issue.create, use the returned issue_iid for every later issue time-tracking and delete step. Set the estimate before adding spent time; reset spent time before resetting the estimate.`
@@ -649,6 +649,13 @@ func actionGuidanceExample(step evalStep, params map[string]any) map[string]any 
 	return arguments
 }
 
+func expectedPromptToolName(step evalStep) string {
+	if step.ExpectedTool != "" {
+		return step.ExpectedTool
+	}
+	return "gitlab"
+}
+
 // usesCompactExactPrompt builds uses compact exact prompt for evaluator prompts.
 func usesCompactExactPrompt(step evalStep) bool {
 	switch step.ExpectedAction {
@@ -679,14 +686,15 @@ func compactExactTaskPrompt(task evalTask, destructive string, step evalStep) st
 	}
 	example := actionGuidanceExample(step, params)
 	data, err := marshalGuidanceExample(example)
+	toolName := expectedPromptToolName(step)
 	if err != nil {
-		return fmt.Sprintf("Task %s: %s\nDestructive: %s\nUse the gitlab tool once with action %s and the params named in the task. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, step.ExpectedAction)
+		return fmt.Sprintf("Task %s: %s\nDestructive: %s\nUse the %s tool once with action %s and the params named in the task. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, toolName, step.ExpectedAction)
 	}
 	if step.ExpectedAction == "group.credential_revoke_pat" {
-		return fmt.Sprintf("Task %s: Exact required call: %s. Call the gitlab tool once with this exact JSON object.\nDestructive: %s. The action value is the string literal group.credential_revoke_pat and the params are already complete. Do not infer a different action from nearby action enum names. The final task call should perform the requested GitLab operation.", task.ID, data, destructive)
+		return fmt.Sprintf("Task %s: Exact required call: %s. Call the %s tool once with this exact JSON object.\nDestructive: %s. The action value is the string literal group.credential_revoke_pat and the params are already complete. Do not infer a different action from nearby action enum names. The final task call should perform the requested GitLab operation.", task.ID, data, toolName, destructive)
 	}
 	if step.ExpectedAction == "group.epic_create" {
-		return fmt.Sprintf("Exact required call: %s. Call the gitlab tool once with this exact JSON object.\nDestructive: %s. The action value is group.epic_create and params.title is already complete. The final task call should perform the requested GitLab operation.", data, destructive)
+		return fmt.Sprintf("Exact required call: %s. Call the %s tool once with this exact JSON object.\nDestructive: %s. The action value is group.epic_create and params.title is already complete. The final task call should perform the requested GitLab operation.", data, toolName, destructive)
 	}
 	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
 		return fmt.Sprintf("Task %s: %s\nDestructive: %s Exact required call: %s. A gitlab_execute_tool call with only action and confirm is invalid; copy the params object exactly, including every required ID.\nUse gitlab_execute_tool once with exactly that action envelope. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, data)
@@ -695,7 +703,7 @@ func compactExactTaskPrompt(task evalTask, destructive string, step evalStep) st
 	if compactExactPromptUsesID(step.RequiredParams) {
 		mapping = "The supplied ID maps to the matching *_id param in that JSON envelope."
 	}
-	return fmt.Sprintf("Task %s: %s\nDestructive: %s Exact required call: %s. %s\nUse the gitlab tool once with exactly that action envelope. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, data, mapping)
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s Exact required call: %s. %s\nUse the %s tool once with exactly that action envelope. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, data, mapping, toolName)
 }
 
 // compactExactPromptUsesID builds compact exact prompt uses ID for evaluator prompts.

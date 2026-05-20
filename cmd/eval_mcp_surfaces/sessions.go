@@ -431,7 +431,8 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, serverErr := server.Connect(ctx, st, nil); serverErr != nil {
+	serverSession, serverErr := server.Connect(ctx, st, nil)
+	if serverErr != nil {
 		return nil, nil, nil, nil, fmt.Errorf("server connect: %w", serverErr)
 	}
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "eval-mcp-surfaces-client", Version: "0.0.1"}, &mcp.ClientOptions{
@@ -440,9 +441,13 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 	})
 	session, err = mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
+		_ = serverSession.Close()
 		return nil, nil, nil, nil, fmt.Errorf("client connect: %w", err)
 	}
-	return session, func() { _ = session.Close() }, mcpTools, routes, nil
+	return session, func() {
+		_ = session.Close()
+		_ = serverSession.Close()
+	}, mcpTools, routes, nil
 }
 
 // inspectEvalTools returns the tool list before evaluator resources are attached.

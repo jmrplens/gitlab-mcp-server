@@ -41,6 +41,21 @@ operations:
 
 ## Evaluation Modes
 
+The evaluator runs against the same model-facing tool surfaces as the server.
+`dynamic` is the default surface and exposes `gitlab_find_action` plus
+`gitlab_execute_tool` over the canonical action catalog. `meta` exposes the
+domain grouped meta-tools. The evaluator does not reduce the server to only the
+manifest resources; when capability bridge tools are enabled they let the model
+inspect the resources, prompts, completions, and capability metadata that a full
+MCP session exposes.
+
+The surface-aware `gitlab://tools` manifest is available in both surfaces. In
+dynamic mode it lists canonical `domain.action` IDs accepted by
+`gitlab_execute_tool`; in meta mode it lists `gitlab_<domain>.<action>` entries
+and their `{action, params}` call shapes. Reading this manifest is useful for
+capability-discovery tasks, but ordinary task success is measured by the final
+GitLab operation, not by whether the model read the manifest first.
+
 ### Schema Evaluation
 
 Schema evaluation calls real model providers with the MCP tool catalog, but it
@@ -92,10 +107,14 @@ as harness noise and should be fixed in fixtures before judging the model.
 | Final task success proxy        | The evaluator's final success signal after validation and optional MCP execution.                                                    |
 | Model requests                  | Number of provider calls made by the evaluator.                                                                                      |
 | Tool calls emitted              | Number of tool calls emitted by the model.                                                                                           |
+| MCP bridge calls                | Calls to evaluator bridge tools that represent MCP client capability access, such as reading resources or prompts.                   |
 
 For clear single-operation tasks, the target is `model_calls=1` and
 `tool_calls=1`. Extra calls are acceptable only when the prompt is genuinely
 ambiguous, the task is multi-step, or a real GitLab error requires recovery.
+For exact dynamic tasks, an extra `gitlab_find_action` or schema lookup usually
+means the tool descriptions are costing context or calls; for ambiguous dynamic
+tasks, using `gitlab_find_action` is expected.
 
 ## Failure Categories
 

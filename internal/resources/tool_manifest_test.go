@@ -19,9 +19,11 @@ func toolManifestSession(t *testing.T, opts ToolSurfaceResourceOptions) *mcp.Cli
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
+	t.Cleanup(func() { _ = serverSession.Close() })
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
@@ -68,6 +70,20 @@ func TestToolManifest_DynamicSurfaceUsesCanonicalActionIDs(t *testing.T) {
 	confirmation := schema["x_confirmation"].(map[string]any)
 	if confirmation["location"] != "gitlab_execute_tool.confirm" {
 		t.Fatalf("x_confirmation = %+v, want gitlab_execute_tool.confirm", confirmation)
+	}
+}
+
+func TestToolManifest_DynamicSurfaceSkipsActionsWithoutExecuteTool(t *testing.T) {
+	catalog := widgetCatalog(t)
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Surface: toolSurfaceDynamic,
+		Tools:   []*mcp.Tool{{Name: "gitlab_find_action", Title: "Find"}},
+		Catalog: catalog,
+	})
+
+	manifest := readToolManifest(t, session, "gitlab://tools")
+	if manifest.VisibleToolCount != 1 || manifest.EntryCount != 0 {
+		t.Fatalf("manifest = %+v, want visible find tool and no executable action entries", manifest)
 	}
 }
 

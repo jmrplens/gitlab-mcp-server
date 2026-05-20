@@ -24318,7 +24318,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 - **URI Template**: `gitlab://tools/{id}`
 - **MIME**: application/json
-- **Description**: Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID such as project.get, gitlab_project.get, or gitlab_project_get.
+- **Description**: Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID from the active surface, such as project.get in dynamic mode, gitlab_project.get in meta mode, or gitlab_get_project in individual mode.
 
 ### Workspace Roots
 

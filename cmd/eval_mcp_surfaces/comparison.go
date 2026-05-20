@@ -220,8 +220,12 @@ func writeUsageComparison(b *strings.Builder, inputs []comparisonInput) {
 		if requests == "" {
 			requests = input.Usage["Anthropic requests"]
 		}
+		toolCalls := input.Usage[usageToolCallsEmitted]
+		if toolCalls == "" {
+			toolCalls = input.Usage[usageToolCalls]
+		}
 		fmt.Fprintf(b, "| `%s` | %s | %s | %s | %s | %s |\n",
-			escapeTable(input.Label), valueOrZero(requests), valueOrZero(input.Usage[usageToolCallsEmitted]), valueOrZero(input.Usage[usageInputTokens]), valueOrZero(input.Usage[usageOutputTokens]), emptyDash(input.Usage[usageEstimatedCost]))
+			escapeTable(input.Label), valueOrZero(requests), valueOrZero(toolCalls), valueOrZero(input.Usage[usageInputTokens]), valueOrZero(input.Usage[usageOutputTokens]), emptyDash(input.Usage[usageEstimatedCost]))
 	}
 }
 
@@ -241,7 +245,7 @@ func writeDiagnosticsComparison(b *strings.Builder, inputs []comparisonInput) {
 	}
 	fmt.Fprintf(b, "\n## Failure Diagnostics\n\n")
 	fmt.Fprintf(b, "| Label | %s |\n", strings.Join(categories, " | "))
-	fmt.Fprintf(b, "| --- |%s |\n", strings.Repeat(" ---: |", len(categories)))
+	fmt.Fprintf(b, "| --- |%s\n", strings.Repeat(" ---: |", len(categories)))
 	for _, input := range inputs {
 		fmt.Fprintf(b, "| `%s`", escapeTable(input.Label))
 		for _, category := range categories {

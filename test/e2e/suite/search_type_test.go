@@ -104,7 +104,7 @@ func TestSearchType_SchemasExposeEnum(t *testing.T) {
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
-	if sess.glClient == nil || sess.meta == nil {
+	if sess.glClient == nil {
 		t.Skip("tool manifest session not configured")
 	}
 

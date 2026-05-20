@@ -103,13 +103,36 @@ func filterTasksByMutation(tasks []evalTask, skipMutating, onlyMutating bool) ([
 // filterTasksByAvailableRoutes filters tasks by available routes using evaluator options.
 func filterTasksByAvailableRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap) []evalTask {
 	filtered := make([]evalTask, 0, len(tasks))
-	enterprise := catalogHasRoute(routes, "gitlab", "merge_train.list_project")
+	enterprise := catalogHasEnterpriseRoutes(routes)
 	for _, task := range tasks {
 		if taskRoutesAvailable(task, routes, enterprise) {
 			filtered = append(filtered, task)
 		}
 	}
 	return filtered
+}
+
+func catalogHasEnterpriseRoutes(routes map[string]toolutil.ActionMap) bool {
+	for tool, actions := range routes {
+		for action := range actions {
+			if routeSignalsEnterpriseCatalog(tool, action) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func routeSignalsEnterpriseCatalog(tool, action string) bool {
+	route := canonicalRouteID(tool, action)
+	for _, prefix := range []string{
+		"attestation.", "audit_event.", "compliance_policy.", "dependency.", "dora_metrics.", "enterprise_user.", "external_status_check.", "geo.", "member_role.", "merge_train.", "project_alias.", "security_finding.", "security_setting.", "storage_move.", "vulnerability.",
+	} {
+		if strings.HasPrefix(route, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // taskRoutesAvailable reports whether task routes available.

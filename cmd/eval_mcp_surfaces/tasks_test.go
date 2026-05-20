@@ -60,6 +60,24 @@ func TestTaskRoutesAvailable_HandlesStandaloneBridgeAndMissingRoutes(t *testing.
 	}
 }
 
+// TestCatalogHasEnterpriseRoutes_DetectsRouteMapShapes verifies Enterprise
+// detection works for unified, dynamic, and split meta route maps.
+func TestCatalogHasEnterpriseRoutes_DetectsRouteMapShapes(t *testing.T) {
+	cases := []map[string]toolutil.ActionMap{
+		{"gitlab": {"merge_train.list_project": toolutil.ActionRoute{}}},
+		{dynamicExecuteTool: {"merge_train.list_project": toolutil.ActionRoute{}}},
+		{"gitlab_merge_train": {"list_project": toolutil.ActionRoute{}}},
+	}
+	for _, routes := range cases {
+		if !catalogHasEnterpriseRoutes(routes) {
+			t.Fatalf("catalogHasEnterpriseRoutes(%v) = false, want true", routes)
+		}
+	}
+	if catalogHasEnterpriseRoutes(map[string]toolutil.ActionMap{"gitlab_project": {"get": toolutil.ActionRoute{}}}) {
+		t.Fatal("catalogHasEnterpriseRoutes(base route) = true, want false")
+	}
+}
+
 // TestNormalizeExpectedRoutes_RewritesMetaAndDynamicRoutes verifies task route
 // normalization maps unified and dynamic catalogs to the executable route shape.
 func TestNormalizeExpectedRoutes_RewritesMetaAndDynamicRoutes(t *testing.T) {

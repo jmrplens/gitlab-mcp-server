@@ -147,3 +147,14 @@ func TestWriteCoverageReportIfRequested_WritesOnlyWhenConfigured(t *testing.T) {
 		t.Fatalf("coverage report = %s, want missing delete route", content)
 	}
 }
+
+// TestRouteDomainName_UsesDynamicActionDomain verifies dynamic coverage reports
+// group execute_tool routes by their canonical action domain.
+func TestRouteDomainName_UsesDynamicActionDomain(t *testing.T) {
+	if got := routeDomainName(dynamicExecuteTool, "repository.file_delete"); got != "repository" {
+		t.Fatalf("routeDomainName(dynamic execute) = %q, want repository", got)
+	}
+	if got := routeDomainName("gitlab", "merge_request.create"); got != "merge_request" {
+		t.Fatalf("routeDomainName(unified) = %q, want merge_request", got)
+	}
+}

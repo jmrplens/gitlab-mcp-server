@@ -1529,6 +1529,7 @@ func dynamicInputSchema(entry actionEntry) map[string]any {
 		if properties, ok := schema["properties"].(map[string]any); ok {
 			delete(properties, "confirm")
 		}
+		removeDynamicRequiredParam(schema, "confirm")
 		schema["x_destructive"] = true
 		schema["x_confirmation"] = map[string]any{
 			"location":    "gitlab_execute_tool.confirm",
@@ -1536,6 +1537,36 @@ func dynamicInputSchema(entry actionEntry) map[string]any {
 		}
 	}
 	return schema
+}
+
+func removeDynamicRequiredParam(schema map[string]any, name string) {
+	switch required := schema["required"].(type) {
+	case []any:
+		filtered := make([]any, 0, len(required))
+		for _, raw := range required {
+			if value, ok := raw.(string); ok && value == name {
+				continue
+			}
+			filtered = append(filtered, raw)
+		}
+		if len(filtered) == 0 {
+			delete(schema, "required")
+			return
+		}
+		schema["required"] = filtered
+	case []string:
+		filtered := make([]string, 0, len(required))
+		for _, value := range required {
+			if value != name {
+				filtered = append(filtered, value)
+			}
+		}
+		if len(filtered) == 0 {
+			delete(schema, "required")
+			return
+		}
+		schema["required"] = filtered
+	}
 }
 
 func toolDetailURIForID(id string) string {

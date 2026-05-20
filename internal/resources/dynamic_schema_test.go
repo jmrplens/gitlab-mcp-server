@@ -21,9 +21,11 @@ func dynamicSchemaSession(t *testing.T, catalog *actioncatalog.Catalog) *mcp.Cli
 
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-	if _, err := server.Connect(ctx, st, nil); err != nil {
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
+	t.Cleanup(func() { _ = serverSession.Close() })
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
