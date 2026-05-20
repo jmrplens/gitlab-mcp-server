@@ -85,6 +85,9 @@ func TestTaskPrompt_IssueLinkConfirmationStaysSurfaceSpecific(t *testing.T) {
 	if !strings.Contains(dynamicPrompt, "top-level confirm:true") {
 		t.Fatalf("dynamic prompt = %s", dynamicPrompt)
 	}
+	if strings.Contains(dynamicPrompt, "params.confirm") {
+		t.Fatalf("dynamic prompt kept params.confirm guidance: %s", dynamicPrompt)
+	}
 }
 
 // TestCompactExactTaskPrompt_UsesExpectedToolName verifies compact exact prompts

@@ -1126,15 +1126,7 @@ func effectiveFirstOutcome(result taskResult) (toolOK, actionOK, firstPassOK boo
 	toolOK = result.FirstTool == first.ExpectedTool
 	actionOK = result.FirstAction == first.ExpectedAction
 	firstPassOK = result.FirstPass
-	if acceptsAlternativeDynamicFirstPath(result, steps) {
-		return true, true, true
-	}
 	return toolOK, actionOK, firstPassOK
-}
-
-// acceptsAlternativeDynamicFirstPath recognizes dynamic first calls that are valid workflow shortcuts.
-func acceptsAlternativeDynamicFirstPath(_ taskResult, _ []evalStep) bool {
-	return false
 }
 
 // percent converts a count and total into a percentage, treating empty samples as complete.
