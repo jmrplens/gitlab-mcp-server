@@ -112,11 +112,34 @@ func TestDynamicSchemaTemplate_ReturnsDynamicParamsSchema(t *testing.T) {
 	}
 }
 
+func TestDynamicSchemaTemplate_ReturnsDefaultSchemaWhenInputSchemaMissing(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
+	group.SetAction(actioncatalog.Action{Name: "ping", Route: toolutil.ActionRoute{}})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	session := dynamicSchemaSession(t, catalog)
+
+	result, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: "gitlab://schema/dynamic/widget.ping"})
+	if err != nil {
+		t.Fatalf("read default dynamic action schema: %v", err)
+	}
+	var schema map[string]any
+	if uErr := json.Unmarshal([]byte(result.Contents[0].Text), &schema); uErr != nil {
+		t.Fatalf("unmarshal: %v", uErr)
+	}
+	if schema["type"] != "object" || schema["additionalProperties"] != true {
+		t.Fatalf("schema = %+v, want permissive object fallback", schema)
+	}
+}
+
 func TestDynamicSchemaTemplate_NotFound(t *testing.T) {
 	session := dynamicSchemaSession(t, nil)
 
 	for _, uri := range []string{
 		"gitlab://schema/dynamic/unknown.action",
+		"gitlab://schema/dynamic/   ",
 		"gitlab://schema/dynamic/a/b",
 		"unrelated://uri",
 	} {
@@ -129,9 +152,36 @@ func TestDynamicSchemaTemplate_NotFound(t *testing.T) {
 	}
 }
 
+func TestReadDynamicSchemaResource_RejectsInvalidURI(t *testing.T) {
+	if _, err := readDynamicSchemaResource(actioncatalog.NewCatalog(), "gitlab://schema/dynamic/   "); err == nil {
+		t.Fatal("expected ResourceNotFoundError")
+	}
+}
+
+func TestParseDynamicSchemaURI_NormalizesAndRejectsInvalidURIs(t *testing.T) {
+	if got := parseDynamicSchemaURI("gitlab://schema/dynamic/Project.Get"); got != "project.get" {
+		t.Fatalf("parseDynamicSchemaURI() = %q, want project.get", got)
+	}
+	for _, uri := range []string{"unrelated://uri", "gitlab://schema/dynamic/", "gitlab://schema/dynamic/a/b"} {
+		if got := parseDynamicSchemaURI(uri); got != "" {
+			t.Fatalf("parseDynamicSchemaURI(%q) = %q, want empty", uri, got)
+		}
+	}
+}
+
 func TestDynamicRequiredParams_IncludesAnyOfAndOneOf(t *testing.T) {
+	if got := dynamicRequiredParams(nil); got != nil {
+		t.Fatalf("dynamicRequiredParams(nil) = %v, want nil", got)
+	}
+	if got := dedupeDynamicStrings(nil); got != nil {
+		t.Fatalf("dedupeDynamicStrings(nil) = %v, want nil", got)
+	}
+	if got := dedupeDynamicStrings([]string{"", "branch", "branch"}); strings.Join(got, ",") != "branch" {
+		t.Fatalf("dedupeDynamicStrings() = %v, want branch", got)
+	}
 	schema := map[string]any{
 		"anyOf": []any{
+			"ignored",
 			map[string]any{"required": []any{"project_id"}},
 		},
 		"oneOf": []any{

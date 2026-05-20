@@ -71,6 +71,8 @@ const (
 	partitionCapabilityFallback = "capability-fallback"
 	// flagSkipDestructive identifies the flag skip destructive constant used by this package.
 	flagSkipDestructive = "skip-destructive"
+	// flagSkipMutating identifies the flag skip mutating constant used by this package.
+	flagSkipMutating = "skip-mutating"
 	// flagSkipUnavailable identifies the flag skip unavailable constant used by this package.
 	flagSkipUnavailable = "skip-unavailable"
 	// promptMarkerIssue identifies the prompt marker issue constant used by this package.

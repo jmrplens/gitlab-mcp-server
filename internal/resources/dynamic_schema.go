@@ -74,16 +74,20 @@ func registerDynamicSchemaTemplate(server *mcp.Server, catalog *actioncatalog.Ca
 		Annotations: toolutil.ContentDetail,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		actionID := parseDynamicSchemaURI(req.Params.URI)
-		if actionID == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		action, ok := catalog.Action(actioncatalog.ActionID(actionID))
-		if !ok {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		return marshalResourceJSON(dynamicActionSchema(action))
+		return readDynamicSchemaResource(catalog, req.Params.URI)
 	})
+}
+
+func readDynamicSchemaResource(catalog *actioncatalog.Catalog, uri string) (*mcp.ReadResourceResult, error) {
+	actionID := parseDynamicSchemaURI(uri)
+	if actionID == "" {
+		return nil, mcp.ResourceNotFoundError(uri)
+	}
+	action, ok := catalog.Action(actioncatalog.ActionID(actionID))
+	if !ok {
+		return nil, mcp.ResourceNotFoundError(uri)
+	}
+	return marshalResourceJSON(dynamicActionSchema(action))
 }
 
 func buildDynamicSchemaIndex(catalog *actioncatalog.Catalog) DynamicSchemaIndex {

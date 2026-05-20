@@ -1515,13 +1515,6 @@ func describeEntry(entry actionEntry) ActionDescription {
 
 func dynamicInputSchema(entry actionEntry) map[string]any {
 	schema, _ := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{entry.Tool: {entry.Action: entry.Route}}, entry.Tool, entry.Action)
-	if schema == nil {
-		schema = map[string]any{
-			"type":                 "object",
-			"description":          "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise.",
-			"additionalProperties": true,
-		}
-	}
 	if entry.Route.InputSchema == nil {
 		schema["description"] = "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise."
 	}
@@ -1529,7 +1522,7 @@ func dynamicInputSchema(entry actionEntry) map[string]any {
 		if properties, ok := schema["properties"].(map[string]any); ok {
 			delete(properties, "confirm")
 		}
-		removeDynamicRequiredParam(schema, "confirm")
+		removeDynamicRequiredConfirmParam(schema)
 		schema["x_destructive"] = true
 		schema["x_confirmation"] = map[string]any{
 			"location":    "gitlab_execute_tool.confirm",
@@ -1539,12 +1532,12 @@ func dynamicInputSchema(entry actionEntry) map[string]any {
 	return schema
 }
 
-func removeDynamicRequiredParam(schema map[string]any, name string) {
+func removeDynamicRequiredConfirmParam(schema map[string]any) {
 	switch required := schema["required"].(type) {
 	case []any:
 		filtered := make([]any, 0, len(required))
 		for _, raw := range required {
-			if value, ok := raw.(string); ok && value == name {
+			if value, ok := raw.(string); ok && value == "confirm" {
 				continue
 			}
 			filtered = append(filtered, raw)
@@ -1557,7 +1550,7 @@ func removeDynamicRequiredParam(schema map[string]any, name string) {
 	case []string:
 		filtered := make([]string, 0, len(required))
 		for _, value := range required {
-			if value != name {
+			if value != "confirm" {
 				filtered = append(filtered, value)
 			}
 		}

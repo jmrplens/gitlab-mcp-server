@@ -87,6 +87,26 @@ func TestToolManifest_DynamicSurfaceSkipsActionsWithoutExecuteTool(t *testing.T)
 	}
 }
 
+func TestToolManifest_UnknownSurfaceUsesIndividualDefaults(t *testing.T) {
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Surface: "unknown",
+		Tools: []*mcp.Tool{
+			nil,
+			{Name: ""},
+			{Name: "gitlab_delete_project", Title: "Delete Project", InputSchema: "invalid", Annotations: &mcp.ToolAnnotations{DestructiveHint: new(true)}},
+		},
+	})
+
+	manifest := readToolManifest(t, session, "gitlab://tools")
+	if manifest.Surface != toolSurfaceIndividual || manifest.VisibleToolCount != 1 || manifest.EntryCount != 1 {
+		t.Fatalf("manifest = %+v, want individual surface with one valid tool", manifest)
+	}
+	detail := readToolDetail(t, session, "gitlab://tools/gitlab_delete_project")
+	if len(detail.RequiredParams) != 0 || detail.Call.ConfirmLocation != "arguments.confirm" {
+		t.Fatalf("detail = %+v, want no required params and destructive argument confirmation", detail)
+	}
+}
+
 func TestToolManifest_MetaSurfaceUsesToolActionIDs(t *testing.T) {
 	catalog := widgetCatalog(t)
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{
@@ -124,6 +144,58 @@ func TestToolManifest_MetaSurfaceUsesToolActionIDs(t *testing.T) {
 	visibleTool := readToolDetail(t, session, "gitlab://tools/gitlab_widget")
 	if visibleTool.Kind != toolManifestKindVisibleTool || visibleTool.Call.ParamsLocation != "arguments" {
 		t.Fatalf("visible tool detail = %+v, want direct meta-tool shape", visibleTool)
+	}
+}
+
+func TestToolManifest_MetaSurfaceIncludesRouteOnlyActions(t *testing.T) {
+	catalog := widgetCatalog(t)
+	routes := catalog.ActionMaps()
+	routes["gitlab_widget"]["archive"] = toolutil.ActionRoute{InputSchema: map[string]any{
+		"type":     "object",
+		"required": []string{"project_id"},
+	}}
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Surface:    toolSurfaceMeta,
+		Tools:      []*mcp.Tool{{Name: "gitlab_widget", Title: "Widget"}},
+		Catalog:    catalog,
+		MetaRoutes: routes,
+	})
+
+	detail := readToolDetail(t, session, "gitlab://tools/gitlab_widget.archive")
+	if detail.Kind != toolManifestKindMetaAction || detail.Tool != "gitlab_widget" || detail.Action != "archive" {
+		t.Fatalf("detail = %+v, want route-only meta action", detail)
+	}
+	if len(detail.RequiredParams) != 1 || detail.RequiredParams[0] != "project_id" {
+		t.Fatalf("required params = %v, want project_id", detail.RequiredParams)
+	}
+}
+
+func TestToolManifest_MetaSurfaceSkipsCatalogActionsMissingFromRoutes(t *testing.T) {
+	catalog := widgetCatalog(t)
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_widget": {
+			"create": catalog.ActionMaps()["gitlab_widget"]["create"],
+		},
+	}
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Surface:    toolSurfaceMeta,
+		Tools:      []*mcp.Tool{{Name: "gitlab_widget", Title: "Widget"}},
+		Catalog:    catalog,
+		MetaRoutes: routes,
+	})
+
+	manifest := readToolManifest(t, session, "gitlab://tools")
+	if manifest.EntryCount != 1 || manifest.Entries[0].ID != "gitlab_widget.create" {
+		t.Fatalf("entries = %+v, want only route-visible create action", manifest.Entries)
+	}
+}
+
+func TestToolManifestHelpers_DefensiveBranches(t *testing.T) {
+	if title := actionTitle(actioncatalog.Action{}); title != "" {
+		t.Fatalf("actionTitle(empty) = %q, want empty", title)
+	}
+	if metaRouteVisible(nil, "gitlab_widget", "create") {
+		t.Fatal("metaRouteVisible(nil) = true, want false")
 	}
 }
 
@@ -185,7 +257,7 @@ func widgetCatalog(t *testing.T) *actioncatalog.Catalog {
 			"properties": map[string]any{"project_id": map[string]any{"type": "string"}},
 		},
 		Destructive: true,
-	}})
+	}, IndividualTool: toolutil.IndividualToolSpec{Title: "Delete Widget", Description: "Delete a widget."}})
 	group.SetAction(actioncatalog.Action{Name: "create", Route: toolutil.ActionRoute{InputSchema: map[string]any{"type": "object"}}})
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)

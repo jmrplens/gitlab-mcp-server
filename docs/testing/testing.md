@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,337 |
-| Unit test functions                                   | 10,086 |
+| Total test functions                                  | 10,346 |
+| Unit test functions                                   | 10,095 |
 | E2E test functions                                    |    251 |
 | cmd test functions                                    |    629 |
 | Test files (internal/)                                |    428 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,279 | 89.8% |
+| `TestFunc_Scenario` (2-part)           | 9,288 | 89.8% |
 | `TestFunc` (no underscore)             |   768 |  7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) |   290 |  2.8% |
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          1,752 |         85 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          1,759 |         85 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (171) |          7,421 |        331 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (171) |          7,423 |        331 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            629 |         39 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,337** |    **576** |                                                                                                 |
+| **Total**               |     **10,346** |    **576** |                                                                                                 |
 
 ### Core Packages
 
@@ -67,14 +67,14 @@
 | oauth        |        35 |    98.6% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                           |
 | progress     |        17 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                     |
 | prompts      |       207 |    96.2% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                        |
-| resources    |       172 |    95.8% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
+| resources    |       179 |    98.1% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
 | roots        |        21 |    98.5% | Package roots provides client workspace discovery via the MCP Roots capability.                                                                                                                                   |
 | sampling     |        83 |    99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis.                                                          |
 | serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | testutil     |        25 |    91.9% | Package testutil provides shared test utilities for MCP tool tests.                                                                                                                                               |
 | toolutil     |       466 |    96.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard       |       252 |    93.1% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,752** |          |                                                                                                                                                                                                                   |
+| **Subtotal** | **1,759** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -85,8 +85,8 @@
 | issues            |   207 |   100.0% |    21 |
 | users             |   186 |   100.0% |    36 |
 | samplingtools     |   166 |   100.0% |    11 |
+| dynamic           |   130 |    99.3% |     2 |
 | jobs              |   129 |    99.8% |    17 |
-| dynamic           |   128 |    99.0% |     2 |
 | groups            |   127 |   100.0% |    18 |
 | search            |   116 |   100.0% |    10 |
 | packages          |   111 |    99.1% |     8 |
@@ -152,7 +152,7 @@
 | deploytokens            |        63 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |        14 |          1 |   100.0% |         2 |
 | dorametrics             |         8 |          2 |   100.0% |         2 |
-| dynamic                 |       128 |          8 |    99.0% |         2 |
+| dynamic                 |       130 |          8 |    99.3% |         2 |
 | elicitationtools        |        61 |          2 |   100.0% |         4 |
 | enterpriseusers         |        32 |          3 |   100.0% |         4 |
 | environments            |        48 |          2 |   100.0% |         6 |
@@ -284,7 +284,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,421** |    **331** |          | **1,118** |
+| **Total**               | **7,423** |    **331** |          | **1,118** |
 
 </details>
 
@@ -329,7 +329,7 @@
 | oauth       |    98.6% |
 | progress    |   100.0% |
 | prompts     |    96.2% |
-| resources   |    95.8% |
+| resources   |    98.1% |
 | roots       |    98.5% |
 | sampling    |    99.5% |
 | serverpool  |    99.6% |
@@ -381,7 +381,7 @@
 | deploytokens            |   100.0% |
 | dockerfiletemplates     |   100.0% |
 | dorametrics             |   100.0% |
-| dynamic                 |    99.0% |
+| dynamic                 |    99.3% |
 | elicitationtools        |   100.0% |
 | enterpriseusers         |   100.0% |
 | environments            |   100.0% |

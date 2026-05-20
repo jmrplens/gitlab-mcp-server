@@ -62,7 +62,7 @@ func parseFlags() options {
 	flag.BoolVar(&opts.UseFixtures, "use-fixtures", false, "Replace fixture placeholder IDs in task prompts with IDs from --fixtures")
 	flag.BoolVar(&opts.SkipDestructive, flagSkipDestructive, false, "Skip tasks with destructive calls or destructive workflow steps")
 	flag.BoolVar(&opts.OnlyDestructive, "only-destructive", false, "Run only tasks with destructive calls or destructive workflow steps")
-	flag.BoolVar(&opts.SkipMutating, "skip-mutating", false, "Skip tasks whose expected calls mutate GitLab state")
+	flag.BoolVar(&opts.SkipMutating, flagSkipMutating, false, "Skip tasks whose expected calls mutate GitLab state")
 	flag.BoolVar(&opts.OnlyMutating, "only-mutating", false, "Run only tasks whose expected calls mutate GitLab state")
 	flag.BoolVar(&opts.SkipUnavailable, flagSkipUnavailable, false, "Skip tasks whose expected routes or live fixtures are unavailable")
 	flag.BoolVar(&opts.PrintOutput, "print-output", false, "Echo command progress and optional report output to the terminal in addition to --terminal-log")
@@ -91,7 +91,7 @@ func applyPresetDefaults(opts options) (options, error) {
 		setBoolDefault(&opts.SkipUnavailable, opts, flagSkipUnavailable)
 	case presetDockerRead:
 		applyDockerPresetDefaults(&opts, partitionBaseRead)
-		setBoolDefault(&opts.SkipMutating, opts, "skip-mutating")
+		setBoolDefault(&opts.SkipMutating, opts, flagSkipMutating)
 		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	case presetDockerMutatingSafe:
 		applyDockerPresetDefaults(&opts, partitionBaseMutating)
@@ -102,7 +102,7 @@ func applyPresetDefaults(opts options) (options, error) {
 		setBoolDefault(&opts.OnlyDestructive, opts, "only-destructive")
 	case presetDockerCapabilityDiscovery:
 		applyDockerPresetDefaults(&opts, partitionCapabilityFallback)
-		setBoolDefault(&opts.SkipMutating, opts, "skip-mutating")
+		setBoolDefault(&opts.SkipMutating, opts, flagSkipMutating)
 		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	}
 	return opts, nil

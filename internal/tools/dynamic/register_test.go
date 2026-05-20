@@ -793,6 +793,41 @@ func TestDynamicInputSchema_RemovesConfirmFromRequired(t *testing.T) {
 	}
 }
 
+func TestDynamicInputSchema_DefaultsWhenRouteSchemaMissing(t *testing.T) {
+	schema := dynamicInputSchema(actionEntry{
+		ID:     "widget.ping",
+		Tool:   "gitlab_widget",
+		Action: "ping",
+		Route:  toolutil.ActionRoute{},
+	})
+	if schema["type"] != "object" || schema["additionalProperties"] != true {
+		t.Fatalf("schema = %+v, want permissive object fallback", schema)
+	}
+	if description, _ := schema["description"].(string); !strings.Contains(description, "no captured parameter schema") {
+		t.Fatalf("schema description = %q, want fallback guidance", description)
+	}
+}
+
+func TestRemoveDynamicRequiredConfirmParam_HandlesStringRequiredLists(t *testing.T) {
+	anySchema := map[string]any{"required": []any{"confirm"}}
+	removeDynamicRequiredConfirmParam(anySchema)
+	if _, ok := anySchema["required"]; ok {
+		t.Fatalf("required should be deleted for []any when empty: %+v", anySchema)
+	}
+
+	schema := map[string]any{"required": []string{"project_id", "confirm"}}
+	removeDynamicRequiredConfirmParam(schema)
+	if required, _ := schema["required"].([]string); len(required) != 1 || required[0] != "project_id" {
+		t.Fatalf("required = %+v, want project_id", schema["required"])
+	}
+
+	schema = map[string]any{"required": []string{"confirm"}}
+	removeDynamicRequiredConfirmParam(schema)
+	if _, ok := schema["required"]; ok {
+		t.Fatalf("required should be deleted when empty: %+v", schema)
+	}
+}
+
 // TestDescribe_IncludesOutputSchema verifies that dynamic descriptions expose
 // the action result schema when the backing catalog route has one.
 func TestDescribe_IncludesOutputSchema(t *testing.T) {

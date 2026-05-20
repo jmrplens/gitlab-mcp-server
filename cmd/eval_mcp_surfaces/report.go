@@ -13,7 +13,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const maxUncoveredRoutesInReport = 200
+const (
+	maxUncoveredRoutesInReport = 200
+	accessRequestedInactive    = "requested but not active"
+)
 
 func shouldWriteStartupReport(opts options) bool {
 	return opts.Output != "" && !opts.FixturesOnly
@@ -83,10 +86,10 @@ func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	promptAccess := "disabled"
 	completionAccess := "disabled"
 	if opts.ExposeResources {
-		capabilityAccess = "requested but not active"
-		resourceAccess = "requested but not active"
-		promptAccess = "requested but not active"
-		completionAccess = "requested but not active"
+		capabilityAccess = accessRequestedInactive
+		resourceAccess = accessRequestedInactive
+		promptAccess = accessRequestedInactive
+		completionAccess = accessRequestedInactive
 		if opts.CapabilityAccessActive {
 			capabilityAccess = "enabled"
 		}
