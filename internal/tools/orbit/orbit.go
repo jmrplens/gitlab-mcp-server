@@ -237,7 +237,7 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 		if err != nil {
 			return QueryOutput{}, wrapOrbitErr("orbit_query", err)
 		}
-		return QueryOutput{FormattedText: raw.String()}, nil
+		return QueryOutput{FormattedText: raw.String(), QueryType: queryType(input.Query)}, nil
 	}
 
 	result, _, err := client.GL().Orbit.Query(request, gl.WithContext(ctx))
@@ -299,6 +299,14 @@ func validateQuery(query map[string]any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("query must be a JSON object: %w", err)
 	}
 	return json.RawMessage(buf), nil
+}
+
+func queryType(query map[string]any) string {
+	queryTypeValue, ok := query["query_type"].(string)
+	if !ok {
+		return ""
+	}
+	return queryTypeValue
 }
 
 func graphStatusOptions(input GraphStatusInput) (*gl.GetGraphStatusOptions, error) {

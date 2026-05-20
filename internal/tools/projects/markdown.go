@@ -67,7 +67,7 @@ func FormatMarkdown(p Output) string {
 			fmt.Fprintf(&b, "- **MR Title Regex Description**: %s\n", p.MergeRequestTitleRegexDescription)
 		}
 	}
-	if p.ProtectMergeRequestPipelines {
+	if p.ProtectMergeRequestPipelines != nil && *p.ProtectMergeRequestPipelines {
 		fmt.Fprintf(&b, "- **Protected MR Pipelines**: enabled\n")
 	}
 	toolutil.WriteHints(&b,

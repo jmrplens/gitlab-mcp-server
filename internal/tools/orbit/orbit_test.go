@@ -178,8 +178,32 @@ func TestQuery_LLMResponseFormat_UsesRawResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query() error: %v", err)
 	}
-	if !strings.Contains(out.FormattedText, "@header") || out.Result != nil {
-		t.Fatalf("Query() = %+v, want raw formatted text only", out)
+	if !strings.Contains(out.FormattedText, "@header") || out.Result != nil || out.QueryType != "traversal" {
+		t.Fatalf("Query() = %+v, want raw formatted text with query type", out)
+	}
+}
+
+// TestQuery_LLMResponseFormat_RawError verifies raw Orbit API failures are
+// wrapped instead of falling back to JSON decoding.
+func TestQuery_LLMResponseFormat_RawError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	_, err := Query(context.Background(), client, QueryInput{
+		Query:               map[string]any{"query_type": "traversal"},
+		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestQueryType_NonString_ReturnsEmpty(t *testing.T) {
+	if got := queryType(map[string]any{"query_type": 42}); got != "" {
+		t.Fatalf("queryType() = %q, want empty", got)
 	}
 }
 
@@ -697,7 +721,7 @@ func TestOrbitMarkdownFormatters_IncludeExpectedSections(t *testing.T) {
 		{
 			name: "query formatted",
 			md:   FormatQueryMarkdown(QueryOutput{FormattedText: "@header\nProject(name: gitlab)"}),
-			want: []string{"Orbit Query Result", "```text", "@header"},
+			want: []string{"Orbit Query Result", "```text", "@header", "Use gitlab_orbit graph_status"},
 		},
 		{
 			name: "graph status structured",
@@ -721,6 +745,9 @@ func TestOrbitMarkdownFormatters_IncludeExpectedSections(t *testing.T) {
 				if !strings.Contains(tt.md, want) {
 					t.Fatalf("markdown = %q, want substring %q", tt.md, want)
 				}
+			}
+			if tt.name == "query formatted" && strings.Contains(tt.md, "Query type") {
+				t.Fatalf("markdown = %q, want formatted text without structured query fields", tt.md)
 			}
 		})
 	}

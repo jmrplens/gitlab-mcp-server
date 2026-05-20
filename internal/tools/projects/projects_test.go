@@ -2671,6 +2671,7 @@ func TestShareProjectOutput_ContainsRoleName(t *testing.T) {
 
 // TestFormatMarkdown verifies FormatMarkdown.
 func TestFormatMarkdown(t *testing.T) {
+	protectMRPipelines := true
 	out := Output{
 		ID:                                1,
 		Name:                              "test-project",
@@ -2690,9 +2691,10 @@ func TestFormatMarkdown(t *testing.T) {
 		SSHURLToRepo:                      "git@gitlab.example.com:group/test-project.git",
 		MergeRequestTitleRegex:            `^(feat|fix):`,
 		MergeRequestTitleRegexDescription: "Conventional MR titles",
+		ProtectMergeRequestPipelines:      &protectMRPipelines,
 	}
 	md := FormatMarkdown(out)
-	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2026", mdHTTPClone, mdSSHClone, "MR Title Regex", "Conventional MR titles"} {
+	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2026", mdHTTPClone, mdSSHClone, "MR Title Regex", "Conventional MR titles", "Protected MR Pipelines"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("FormatMarkdown missing %q", want)
 		}
@@ -6839,6 +6841,9 @@ func TestToOutput_NilOptionalFields(t *testing.T) {
 	if out.ForkedFromProject != "" {
 		t.Error("expected empty ForkedFromProject")
 	}
+	if out.ProtectMergeRequestPipelines == nil || *out.ProtectMergeRequestPipelines {
+		t.Error("expected ProtectMergeRequestPipelines to be explicit false")
+	}
 }
 
 // TestAddHook_APIError exercises the error return branch in AddHook.
@@ -6950,7 +6955,7 @@ func TestToOutput_WithAllOptionals(t *testing.T) {
 	if out.MarkedForDeletionOn == "" {
 		t.Error("expected non-empty MarkedForDeletionOn")
 	}
-	if !out.ProtectMergeRequestPipelines {
+	if out.ProtectMergeRequestPipelines == nil || !*out.ProtectMergeRequestPipelines {
 		t.Error("expected ProtectMergeRequestPipelines to be true")
 	}
 	if out.CreatedAt == "" {

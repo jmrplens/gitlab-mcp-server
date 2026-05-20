@@ -11,7 +11,7 @@
 | ------------- | --------------------------------------------------- |
 | Language      | Go 1.26+                                            |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.28.0       |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.29.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
 | Version       | 2.0.3                                               |

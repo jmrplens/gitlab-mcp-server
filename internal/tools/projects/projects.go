@@ -127,7 +127,7 @@ type Output struct {
 	AllowMergeOnSkippedPipeline               bool     `json:"allow_merge_on_skipped_pipeline"`
 	MergePipelinesEnabled                     bool     `json:"merge_pipelines_enabled"`
 	MergeTrainsEnabled                        bool     `json:"merge_trains_enabled"`
-	ProtectMergeRequestPipelines              bool     `json:"protect_merge_request_pipelines,omitempty"`
+	ProtectMergeRequestPipelines              *bool    `json:"protect_merge_request_pipelines,omitempty"`
 	MergeCommitTemplate                       string   `json:"merge_commit_template,omitempty"`
 	SquashCommitTemplate                      string   `json:"squash_commit_template,omitempty"`
 	AutocloseReferencedIssues                 bool     `json:"autoclose_referenced_issues"`
@@ -289,7 +289,7 @@ func ToOutput(p *gl.Project) Output {
 		AllowMergeOnSkippedPipeline:               p.AllowMergeOnSkippedPipeline,
 		MergePipelinesEnabled:                     p.MergePipelinesEnabled,
 		MergeTrainsEnabled:                        p.MergeTrainsEnabled,
-		ProtectMergeRequestPipelines:              p.ProtectMergeRequestPipelines,
+		ProtectMergeRequestPipelines:              &p.ProtectMergeRequestPipelines,
 		MergeCommitTemplate:                       p.MergeCommitTemplate,
 		SquashCommitTemplate:                      p.SquashCommitTemplate,
 		AutocloseReferencedIssues:                 p.AutocloseReferencedIssues,

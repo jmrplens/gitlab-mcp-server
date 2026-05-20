@@ -2568,7 +2568,10 @@
           "type": "string"
         },
         "protect_merge_request_pipelines": {
-          "type": "boolean"
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "public_builds": {
           "type": "boolean"
