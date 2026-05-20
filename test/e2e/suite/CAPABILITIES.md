@@ -33,10 +33,10 @@ This inventory records the highest-risk E2E test patterns and the capability gat
 | `capabilities_test.go::TestCapability_Roots` | `metadata` | No | Yes | None | Verifies roots discovery through MCP resource reads. |
 | `capabilities_test.go::TestCapability_RootsListChanged` | `metadata` | No | Yes | None | Verifies roots/list_changed notification handling. |
 | `capabilities_test.go::TestCapability_Completions` | `project`, `metadata` | No | Yes | None | Creates a project to provide completion data, then runs parallel read-only subtests. |
-| `meta_schema_resource_test.go::TestMetaSchemaResource_ListsTemplate` | `metadata` | No | Yes | None | Verifies meta-schema resource templates. |
-| `meta_schema_resource_test.go::TestMetaSchemaResource_ReadMergeRequestCreate` | `metadata` | No | Yes | None | Reads and validates merge-request create schema. |
-| `meta_schema_resource_test.go::TestMetaSchemaResource_NotFound` | `metadata` | No | Yes | None | Verifies invalid schema resources fail cleanly. |
-| `meta_schema_resource_test.go::TestMetaSchemaResource_IndexEnumeratesMetaTools` | `metadata` | No | Yes | None | Verifies the schema index includes meta-tools. |
+| `meta_schema_resource_test.go::TestToolManifestResource_ListsTemplate` | `metadata` | No | Yes | None | Verifies tool manifest resource templates. |
+| `meta_schema_resource_test.go::TestToolManifestResource_ReadMergeRequestCreate` | `metadata` | No | Yes | None | Reads and validates merge-request create schema. |
+| `meta_schema_resource_test.go::TestToolManifestResource_NotFound` | `metadata` | No | Yes | None | Verifies invalid tool manifest resources fail cleanly. |
+| `meta_schema_resource_test.go::TestToolManifestResource_IndexEnumeratesMetaTools` | `metadata` | No | Yes | None | Verifies the surface-aware tool manifest includes meta-tools. |
 
 ## Capability Rules
 

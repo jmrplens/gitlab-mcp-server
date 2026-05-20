@@ -32,7 +32,7 @@ The harness does not start an external MCP process. It always uses in-memory MCP
 | `--backend=gitlab` mode | Loads `GITLAB_URL` and `GITLAB_TOKEN` from the environment or `--gitlab-env-file`, pings the target GitLab, and builds the MCP catalog from that real client. |
 | `--tools-file` mode | Skips local catalog generation and validates against a saved `tools/list` JSON snapshot. |
 | Final GitLab operation calls | Simulated by default. With `--execute-tools`, the harness executes validated calls through MCP `tools/call` and returns the real MCP result to the model. |
-| Schema lookup calls | Simulated from local `toolutil` route metadata, returning the real schema index or action schema. |
+| Schema lookup calls | Simulated from local `toolutil` route metadata, returning the real tool manifest or action schema. |
 | Model provider API | Real model API in model-backed mode; skipped entirely in `--dry-run` mode. |
 
 ## Live Docker Backend
@@ -125,7 +125,7 @@ flowchart TD
     D -->|model-backed| F[Send catalog and fixed system prompt to configured model provider]
     F --> G[Send wrapped task prompt]
     G --> H{Model tool_use}
-    H -->|schema lookup| I[Return real schema index/action schema]
+    H -->|schema lookup| I[Return real tool manifest/action schema]
     H -->|final operation| J[Validate tool/action/params/confirm]
     J -->|valid call, simulated| K[Return ok; continue]
     J -->|valid call, --execute-tools| O[Call MCP tools/call]

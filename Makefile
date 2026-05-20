@@ -2,7 +2,7 @@
        run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker coverage \
        lint fmt goimports goimports-check gofmt-check clean version release release-check checksum \
        vet modernize modernize-fix golangci-lint gosec staticcheck govulncheck \
-       mdlint mdlint-fix \
+	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-testing-docs \
@@ -253,6 +253,26 @@ mdlint:
 mdlint-fix:
 	@echo === markdownlint --fix ===
 	npx markdownlint-cli2 --fix "**/*.md" "#plan"
+
+## check-doc-links: verify tracked Markdown/MDX local links resolve.
+check-doc-links:
+	@echo === documentation local links ===
+	node scripts/check-doc-links.mjs
+
+## audit-docs: run the complete documentation quality gate.
+audit-docs:
+	npx markdownlint-cli2 README.md AGENTS.md CLAUDE.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md "docs/**/*.md" "test/e2e/**/*.md" "cmd/eval_mcp_surfaces/**/*.md" "site/src/content/docs/**/*.mdx" "site/src/content/i18n/**/*.md"
+	go run ./cmd/format_md_tables/ --check
+	go run ./cmd/gen_llms/ --check
+	go run ./cmd/gen_testing_docs/ --check
+	$(MAKE) check-doc-links
+	go run ./cmd/audit_godocs/
+	go run ./cmd/audit_tools/
+	go run ./cmd/audit_dynamic_aliases/
+	go run ./cmd/audit_output/
+	cd site && pnpm run check
+	cd site && pnpm run build
+	cd site && pnpm run lint
 
 # ─── Static Analysis (combined) ─────────────────────────────────────────────
 # These targets orchestrate multiple tools for convenience.

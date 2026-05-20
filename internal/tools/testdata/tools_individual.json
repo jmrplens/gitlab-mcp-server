@@ -13684,7 +13684,7 @@
   },
   {
     "name": "gitlab_delete_system_hook_url_variable",
-    "description": "Delete System Hook URL Variable.",
+    "description": "Delete one URL variable from an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_set_system_hook_url_variable, gitlab_get_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -17719,7 +17719,7 @@
   },
   {
     "name": "gitlab_edit_system_hook",
-    "description": "Edit an instance system hook.",
+    "description": "Edit an instance system hook, including event triggers, SSL verification, and URL settings. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -107187,7 +107187,7 @@
   },
   {
     "name": "gitlab_set_system_hook_url_variable",
-    "description": "Set System Hook URL Variable.",
+    "description": "Create or update one URL variable for an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

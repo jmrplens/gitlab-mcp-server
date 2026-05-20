@@ -108,7 +108,7 @@ graph TD
 7. **Capabilities** provide logging, completions, roots, progress, sampling, and elicitation
 8. **Server** runs over stdio (default) or HTTP (`--http`)
 
-See [Architecture Overview](architecture.md) for detailed diagrams and component descriptions.
+See [Architecture Overview](../architecture.md) for detailed diagrams and component descriptions.
 
 ## Version Management
 

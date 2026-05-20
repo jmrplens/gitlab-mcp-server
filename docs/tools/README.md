@@ -8,6 +8,8 @@ The server exposes its individual tools through a curated set of meta-tools, eac
 
 The [dynamic toolset](../dynamic-tools.md) reuses the same canonical action catalog as meta-tools. In dynamic mode, clients see only `gitlab_find_action` and `gitlab_execute_tool`, then discover and execute the same canonical domain actions progressively.
 
+This directory is a domain-oriented reference, not a one-heading-per-runtime-tool dump. The table below groups related actions into stable user-facing domains so humans can scan the API surface without reading more than a thousand individual entries. For the exact runtime catalog exposed by the current `TOOL_SURFACE`, including every action ID, input schema, output schema, annotations, compatibility names, and deprecation state, read `gitlab://tools` and then `gitlab://tools/{id}` from the MCP server.
+
 ## Domains
 
 | Domain                                | Tools | Meta-tool                                                                              | Document                                                 |

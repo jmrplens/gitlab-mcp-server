@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,349 |
-| Unit test functions                                   | 10,098 |
+| Total test functions                                  | 10,353 |
+| Unit test functions                                   | 10,102 |
 | E2E test functions                                    |    251 |
-| cmd test functions                                    |    629 |
+| cmd test functions                                    |    632 |
 | Test files (internal/)                                |    428 |
 | Test files (cmd/)                                     |     39 |
 | Test files (test/e2e/suite/)                          |    109 |
@@ -29,13 +29,13 @@
 | Core packages tested                                  |     18 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  89.8% |
 | Overall coverage (`go test ./internal/...`)           |  99.0% |
-| Average package coverage                              |  95.6% |
+| Average package coverage                              |  95.7% |
 
 ### Naming Convention Stats
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,288 | 89.7% |
+| `TestFunc_Scenario` (2-part)           | 9,292 | 89.8% |
 | `TestFunc` (no underscore)             |   768 |  7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) |   293 |  2.8% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,759 |         85 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (171) |          7,426 |        331 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (171) |          7,427 |        331 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            629 |         39 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,349** |    **576** |                                                                                                 |
+| cmd packages            |            632 |         39 | server entry point and developer command utilities                                              |
+| **Total**               |     **10,353** |    **576** |                                                                                                 |
 
 ### Core Packages
 
@@ -117,7 +117,7 @@
 | accesstokens            |        87 |          2 |    99.0% |        18 |
 | actioncatalog           |        26 |          4 |    98.6% |         0 |
 | actioncompat            |        15 |          2 |    98.9% |         0 |
-| adminspecs              |         3 |          1 |   100.0% |        91 |
+| adminspecs              |         4 |          1 |   100.0% |        91 |
 | alertmanagement         |        28 |          2 |    98.9% |         4 |
 | appearance              |        10 |          1 |   100.0% |         2 |
 | applications            |        15 |          1 |   100.0% |         3 |
@@ -284,7 +284,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,426** |    **331** |          | **1,118** |
+| **Total**               | **7,427** |    **331** |          | **1,118** |
 
 </details>
 
@@ -299,7 +299,7 @@
 | cmd/audit_dynamic_aliases       |    60.0% |
 | cmd/audit_godocs                |    50.7% |
 | cmd/audit_meta_schema           |    82.6% |
-| cmd/audit_metrics               |    28.8% |
+| cmd/audit_metrics               |    35.4% |
 | cmd/audit_output                |    23.9% |
 | cmd/audit_test_names            |    81.6% |
 | cmd/audit_tokens                |    19.5% |
@@ -520,8 +520,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_output** (23.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_testing_docs** (27.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_llms** (27.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_metrics** (28.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_readme** (35.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_metrics** (35.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tools** (36.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (50.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
