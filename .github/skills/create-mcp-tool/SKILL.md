@@ -32,7 +32,7 @@ In `{domain}.go`:
 ```go
 package {domain}
 
-import "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+import "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 type ListInput struct {
     toolutil.PaginationInput
@@ -114,14 +114,14 @@ Error handling rules:
 
 ## Step 3: Add ActionSpecs
 
-In `action_specs.go`, define the canonical route metadata once. Meta-tools, Dynamic search/describe/execute, schema resources, audits, and individual tool projection consume this spec.
+In `action_specs.go`, define the canonical route metadata once. Meta-tools, dynamic find/execute, `gitlab://tools` resources, audits, and individual tool projection consume this spec.
 
 ```go
 package {domain}
 
 import (
-    gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"
-    "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+    gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+    "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // ActionSpecs returns canonical specs for {domain} actions.
@@ -162,7 +162,7 @@ import (
     "fmt"
     "strings"
 
-    "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"
+    "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 func init() {
@@ -243,7 +243,7 @@ import (
     "net/http"
     "testing"
 
-    "github.com/jmrplens/gitlab-mcp-server/internal/testutil"
+    "github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 func TestList_Success(t *testing.T) {
@@ -313,9 +313,9 @@ Test categories (all required):
 
 ## Step 7: Update Documentation
 
-1. Add entry to `docs/tools/{domain}.md`
-2. Update `docs/tools/README.md` tool count
-3. Run `go run ./cmd/gen_testing_docs/` to refresh `docs/testing/testing.md` with new test counts and coverage values
+1. Add or update `docs/tools/{domain}.md`
+2. Update `docs/tools/README.md` only when the domain index changes
+3. At the end of the tool implementation phase, run `go run ./cmd/gen_testing_docs/` to refresh `docs/testing/testing.md` with new test counts and coverage values
 
 ## Step 8: Verify
 

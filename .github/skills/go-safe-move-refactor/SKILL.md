@@ -47,7 +47,7 @@ Record:
 2. List all non-test handler files in the source package to find everything that exists
 3. Check `action_specs.go` and catalog aggregation for the domain's canonical runtime exposure
 4. Look for related files (e.g., a domain might span `{domain}.go` + `{domain}_extra.go`)
-5. If `docs/api-mapping/{domain}.md` exists, read it for supplementary field mapping context — but do NOT skip the move if no doc exists
+5. If `docs/tools/{domain}.md` exists, read it for supplementary user-facing context — but do NOT skip the move if no doc exists
 
 ### Step 2: Analyze Dependencies
 
@@ -127,7 +127,7 @@ Verify: `go build ./...` — MUST pass before continuing.
 Find all files that reference the moved symbols:
 
 ```bash
-grep -rn "branchCreate\|BranchCreateInput\|BranchOutput" internal/ --include="*.go" | grep -v "_test.go" | grep -v "branches/"
+rg -n "branchCreate|BranchCreateInput|BranchOutput" internal/ --glob "*.go" --glob "!*_test.go" --glob "!internal/tools/branches/**"
 ```
 
 Update each consumer to import from the new package:
@@ -338,8 +338,8 @@ After moving a tool handler to a sub-package, ensure these imports:
 ```go
 import (
     gl "gitlab.com/gitlab-org/api/client-go/v2"                        // For gl.*Options, gl.Ptr(), gl.WithContext()
-    gitlabclient "github.com/jmrplens/gitlab-mcp-server/internal/gitlab"  // For client type
-    "github.com/jmrplens/gitlab-mcp-server/internal/toolutil"             // For shared utilities
+    gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"  // For client type
+    "github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"             // For shared utilities
     "github.com/modelcontextprotocol/go-sdk/mcp"                          // For tool registration
 )
 ```
@@ -360,5 +360,5 @@ Before moving any domain:
 
 1. **Inspect client-go types first**: Run `go doc gitlab.com/gitlab-org/api/client-go/v2.{Type}` for the domain's key types (e.g., `gl.Branch`, `gl.CreateBranchOptions`). This defines the canonical fields and API contract — use it to validate that type renames and field mappings are correct after the move.
 2. **Read the source file(s)** (`internal/tools/{domain}.go`) to understand our implementation: handler functions, `client.GL().{Service}.*` calls, and our Input/Output struct subset.
-3. **If `docs/api-mapping/{domain}.md` exists**, read it for supplementary field-level context. If no doc exists, `go doc` + source code provide everything needed.
+3. **If `docs/tools/{domain}.md` exists**, read it for supplementary user-facing context. If no doc exists, `go doc` + source code provide everything needed.
 4. **Check catalog exposure**: verify the domain appears in `ActionSpecs` and catalog aggregation. Uncataloged files are in-progress features — still move them, but note the gap.

@@ -35,12 +35,12 @@ This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab 
 
 | Component          | Technology                                              |
 | ------------------ | ------------------------------------------------------- |
-| Language           | Go 1.26+                                                |
+| Language           | Go 1.26.3                                               |
 | MCP SDK            | `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.0    |
-| GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v2` v2.24.1        |
+| GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v2` v2.29.0        |
 | Self-Update        | `github.com/creativeprojects/go-selfupdate` v1.5.2     |
 | Transport          | stdio (primary), HTTP (optional)                        |
-| Architecture       | 165 domain sub-packages under `internal/tools/`         |
+| Architecture       | 172 domain sub-packages under `internal/tools/`         |
 | Test Infrastructure| `net/http/httptest` mocks, `testutil.NewTestClient`     |
 | Static Analysis    | golangci-lint v2, gosec, staticcheck, govulncheck       |
 
@@ -114,7 +114,7 @@ You operate in different modes depending on the type of plan requested. Always i
 **Key questions to investigate**:
 
 - Does this contradict any existing ADR?
-- How does this affect the 165 sub-package structure?
+- How does this affect the 172 sub-package structure?
 - What is the impact on HTTP mode vs stdio mode?
 - Does this require changes to the MCP SDK usage patterns?
 
@@ -202,7 +202,7 @@ Before producing any plan, you MUST complete these steps:
 
 ```text
 1. List the target directory structure
-2. Read key files (register.go, handler files, test files)
+2. Read key files (action_specs.go, handler files, catalog aggregation, test files)
 3. Search for related patterns across the project
 4. Check usages of affected symbols
 ```

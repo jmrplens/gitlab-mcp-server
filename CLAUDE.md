@@ -9,7 +9,7 @@
 
 | Attribute     | Value                                               |
 | ------------- | --------------------------------------------------- |
-| Language      | Go 1.26+                                            |
+| Language      | Go 1.26.3                                           |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.0 |
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.29.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
@@ -37,16 +37,26 @@
 ```text
 gitlab-mcp-server/
 ├── cmd/
-│   ├── server/main.go          # Entry point, transport setup, graceful shutdown
-│   │   └── shutdown.go         # --shutdown flag: terminate all running instances
-│   ├── add_docs/main.go        # AST-based tool: adds godoc comments to undocumented symbols
-│   ├── audit_output/main.go    # Audits MCP tool output quality (OutputSchema, annotations)
-│   ├── audit_metrics/main.go   # Audits MCP tool metrics (tool count, resource count, etc.)
-│   ├── audit_tools/main.go     # Audits MCP tool metadata violations (naming, annotations)
-│   ├── audit_test_names/main.go # Audits test function naming convention compliance
-│   ├── format_md_tables/main.go # Formats Markdown pipe tables in README.md and docs/
-│   ├── gen_llms/main.go        # Generates llms.txt and llms-full.txt for LLM discovery
-│   └── find_dupes/main.go      # Finds duplicated string literals missing constants
+│   ├── server/                  # MCP server entry point and --shutdown support
+│   ├── add_docs/                # AST-based tool: adds godoc comments to undocumented symbols
+│   ├── audit_action_spec_coverage/ # Audits ActionSpec catalog coverage
+│   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
+│   ├── audit_eval_coverage/     # Audits evaluation case coverage
+│   ├── audit_godocs/            # Audits Go documentation coverage
+│   ├── audit_meta_schema/       # Audits meta-tool schema generation
+│   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
+│   ├── audit_output/            # Audits MCP tool output quality
+│   ├── audit_test_names/        # Audits test function naming convention compliance
+│   ├── audit_tokens/            # Audits token usage for model-facing surfaces
+│   ├── audit_tools/             # Audits MCP tool metadata violations
+│   ├── eval_mcp_surfaces/       # Evaluates model-facing MCP surface behavior
+│   ├── find_dupes/              # Finds duplicated string literals missing constants
+│   ├── format_md_tables/        # Formats Markdown pipe tables in README.md and docs/
+│   ├── gen_action_catalog_manifest/ # Generates audited action catalog manifest
+│   ├── gen_docker_tools/        # Generates Docker-related tool metadata
+│   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
+│   ├── gen_readme/              # Generates README sections from source metadata
+│   └── gen_testing_docs/        # Generates docs/testing/testing.md
 ├── internal/
 │   ├── autoupdate/              # Self-update: pre-start check, rename trick, syscall.Exec (Unix)
 │   ├── config/                  # Configuration loading (.env, flags, env vars)
@@ -151,7 +161,7 @@ gitlab-mcp-server/
 8. Add clickable `[text](url)` links in Markdown table columns where applicable (MRs, issues, pipelines, etc.)
 9. Meta-tools automatically get `next_steps` in JSON via `enrichWithHints()` — no extra work needed
 10. Update `docs/tools/{domain}.md` and `docs/tools/README.md`
-11. Run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs` to refresh `docs/testing/testing.md` with new test counts and coverage values
+11. After completing a test-focused tool implementation phase, run `go run ./cmd/gen_testing_docs/` or `make gen-testing-docs` to refresh `docs/testing/testing.md`, then verify with `go run ./cmd/gen_testing_docs/ --check`
 
 See `docs/output-format.md` for the complete response format specification.
 
@@ -330,7 +340,7 @@ Agents are invoked explicitly for specific development tasks. Each agent has a f
 
 | Agent           | File                    | When to Use                                                                                                                                                                                              |
 | --------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Test Expert** | `test-expert.agent.md`  | Writing, analyzing, and improving Go tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, mandatory test documentation, and refreshing `docs/testing/testing.md` with `cmd/gen_testing_docs`. Uses Context7 for up-to-date Go testing docs. |
+| **Test Expert** | `test-expert.agent.md`  | Writing, analyzing, and improving Go tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, mandatory test documentation, and refreshing `docs/testing/testing.md` with `cmd/gen_testing_docs` at phase completion. Uses Context7 for up-to-date Go testing docs. |
 
 #### Planning & Architecture
 
@@ -399,7 +409,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 
 | Skill                       | Directory                  | Purpose                                                                                                           |
 | --------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| **Create MCP Tool**         | `create-mcp-tool/`         | End-to-end workflow for creating a new MCP tool: sub-package, structs, handler, markdown, tests, registration.    |
+| **Create MCP Tool**         | `create-mcp-tool/`         | End-to-end workflow for creating a new MCP tool: sub-package, structs, handler, ActionSpec metadata, markdown, tests, catalog projection, and documentation. |
 | **Upstream Contribution**   | `upstream-contribution/`   | Contribute fixes to upstream gitlab.com/gitlab-org/api/client-go. Fork → branch → fix → test → MR workflow.       |
 
 ---
@@ -418,7 +428,7 @@ Skills are task templates that can be invoked by any agent or directly. They def
 
 ### Increasing test coverage
 
-1. Use `@Test Expert` agent — it runs `go test -coverprofile`, identifies gaps, detects false passes, generates documented tests, and refreshes `docs/testing/testing.md` with `go run ./cmd/gen_testing_docs/`
+1. Use `@Test Expert` agent — it runs `go test -coverprofile`, identifies gaps, detects false passes, generates documented tests, and refreshes `docs/testing/testing.md` with `go run ./cmd/gen_testing_docs/` at the end of the test phase
 2. Or use `increase-test-coverage` skill for the same workflow invoked from any agent
 
 ### Reviewing code quality

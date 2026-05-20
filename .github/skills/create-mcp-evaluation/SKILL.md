@@ -68,6 +68,32 @@ For each question:
 3. Confirm it requires multiple tool calls
 4. Ensure no write operations are needed
 
+### Step 5: Project Evaluator Execution
+
+For this repository, use `cmd/eval_mcp_surfaces` to validate model-facing MCP behavior after creating or updating evaluation tasks. The default task file is `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md`, and the default tool surface is `dynamic` (`gitlab_find_action` plus `gitlab_execute_tool`). See `cmd/eval_mcp_surfaces/README.md` for the full option matrix.
+
+Dry-run the current catalog without model calls:
+
+```bash
+GITLAB_ENTERPRISE=false timeout 180s go run ./cmd/eval_mcp_surfaces \
+  --dry-run \
+  --repeat=1 \
+  --out /tmp/eval-dry.md
+```
+
+Run a targeted model-backed schema sample:
+
+```bash
+timeout 900s go run ./cmd/eval_mcp_surfaces \
+  --model anthropic:claude-haiku-4-5-20251001 \
+  --task MS-001,MF-001 \
+  --repeat=1 \
+  --pause=250ms \
+  --retries=8 \
+  --retry-wait=65s \
+  --out dist/evaluation/mcp-surfaces/schema-sample.md
+```
+
 ## Output Format
 
 ```xml

@@ -90,7 +90,7 @@ Present a documentation plan to the user:
 ```text
 File                              Symbols   Documented   Missing   Action
 internal/tools/branches/branch.go    12         4          8       Add file header, doc 8 symbols
-internal/tools/branches/register.go   3         1          2       Add file header, doc 2 funcs
+internal/tools/branches/action_specs.go 3       1          2       Add file header, doc 2 funcs
 internal/tools/branches/branch_test.go 6        0          6       Add file header, doc 6 tests
 ```
 
@@ -340,7 +340,7 @@ func branchToOutput(b *gl.Branch) BranchOutput {
 
 ```go
 // ActionSpecs returns canonical branch action specs. The specs feed meta-tools,
-// dynamic discovery, schema resources, audits, and individual tool projection.
+// dynamic discovery, gitlab://tools resources, audits, and individual tool projection.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 ```
 
@@ -550,7 +550,7 @@ Package: internal/tools/branches
 
 Source Files:
   branches.go     — 12/12 symbols documented  ✅
-  register.go     —  3/3  symbols documented  ✅
+    action_specs.go —  3/3  symbols documented  ✅
   markdown.go     —  4/4  symbols documented  ✅
 
 Test Files:
