@@ -663,13 +663,14 @@ func (m tuiModel) renderProgress(width int) string {
 	var parts []string
 	for i, s := range steps {
 		var icon, label string
-		if s.completed {
+		switch {
+		case s.completed:
 			icon = tuiProgressDone.Render("✓")
 			label = tuiProgressDone.Render(s.name)
-		} else if s.active {
+		case s.active:
 			icon = tuiProgressActive.Render("●")
 			label = tuiProgressActive.Render(s.name)
-		} else {
+		default:
 			icon = tuiProgressPending.Render("○")
 			label = tuiProgressPending.Render(s.name)
 		}

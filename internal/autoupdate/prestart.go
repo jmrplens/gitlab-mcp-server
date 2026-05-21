@@ -151,8 +151,8 @@ func (u *Updater) downloadToStaging(ctx context.Context) (version, tmpPath strin
 	exe, _ = filepath.EvalSymlinks(exe)
 
 	tmpPath = exe + ".tmp"
-	if err = writeToFile(tmpPath, body); err != nil {
-		return "", "", err
+	if writeErr := writeToFile(tmpPath, body); writeErr != nil {
+		return "", "", writeErr
 	}
 
 	return latest.Version(), tmpPath, nil

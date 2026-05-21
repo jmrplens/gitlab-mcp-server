@@ -111,11 +111,12 @@ func formatChangesSection(changes mrchanges.Output) string {
 	fmt.Fprintf(&b, "\n## Changed Files (%d)\n\n", len(changes.Changes))
 	for _, c := range changes.Changes {
 		action := "modified"
-		if c.NewFile {
+		switch {
+		case c.NewFile:
 			action = "added"
-		} else if c.DeletedFile {
+		case c.DeletedFile:
 			action = "deleted"
-		} else if c.RenamedFile {
+		case c.RenamedFile:
 			action = fmt.Sprintf("renamed from %s", c.OldPath)
 		}
 		fmt.Fprintf(&b, "### %s (%s)\n\n```diff\n%s\n```\n\n", c.NewPath, action, c.Diff)

@@ -39,8 +39,8 @@ func Apply(w io.Writer, result *Result) error {
 		client := clients[idx]
 
 		if client.DisplayOnly {
-			if err = printJetBrainsConfig(w, result.Config); err != nil {
-				return err
+			if printErr := printJetBrainsConfig(w, result.Config); printErr != nil {
+				return printErr
 			}
 			configured = append(configured, client)
 			continue

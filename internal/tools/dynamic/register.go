@@ -2877,16 +2877,17 @@ func formatFindOutput(output FindOutput) string {
 	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
 	withExplanations := hasFindExplanations(output.Results)
 	withGuidance := hasFindGuidance(output.Results)
-	if withExplanations && withGuidance {
+	switch {
+	case withExplanations && withGuidance:
 		b.WriteString("| Action ID | Score | Destructive | Required Params | Guidance | Why |\n")
 		b.WriteString("| --- | ---: | --- | --- | --- | --- |\n")
-	} else if withExplanations {
+	case withExplanations:
 		b.WriteString("| Action ID | Score | Destructive | Required Params | Why |\n")
 		b.WriteString("| --- | ---: | --- | --- | --- |\n")
-	} else if withGuidance {
+	case withGuidance:
 		b.WriteString("| Action ID | Score | Destructive | Required Params | Guidance |\n")
 		b.WriteString("| --- | ---: | --- | --- | --- |\n")
-	} else {
+	default:
 		b.WriteString("| Action ID | Score | Destructive | Required Params |\n")
 		b.WriteString("| --- | ---: | --- | --- |\n")
 	}
@@ -2895,13 +2896,14 @@ func formatFindOutput(output FindOutput) string {
 		if len(result.RequiredParams) > 0 {
 			required = strings.Join(result.RequiredParams, ", ")
 		}
-		if withExplanations && withGuidance {
+		switch {
+		case withExplanations && withGuidance:
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s | %s |\n", result.ID, result.Score, result.Destructive, required, compactFindGuidance(result), explanationSummary(result.Explanation))
-		} else if withExplanations {
+		case withExplanations:
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s |\n", result.ID, result.Score, result.Destructive, required, explanationSummary(result.Explanation))
-		} else if withGuidance {
+		case withGuidance:
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s |\n", result.ID, result.Score, result.Destructive, required, compactFindGuidance(result))
-		} else {
+		default:
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s |\n", result.ID, result.Score, result.Destructive, required)
 		}
 	}

@@ -113,13 +113,12 @@ linters:
     gosec:
       excludes:
         - G104 # Unhandled errors (covered by errcheck)
-        - G304 # File path from variable (many legitimate uses in tools)
       config:
         global:
-          audit: "false"
+          audit: "true"
 
     revive:
-      severity: warning
+      severity: error
       enable-all-rules: false
       enable-default-rules: true
       rules:
@@ -155,11 +154,11 @@ linters:
         - diagnostic
         - performance
         - style
+        - opinionated
+        - experimental
       disabled-checks:
         - hugeParam # Too strict for tool input/output structs
         - rangeValCopy # Often false positives with simple structs
-        - ifElseChain # Sometimes clearer than switch
-        - sloppyReassign # Conflicts with govet shadow strict mode
 
     misspell:
       locale: US
@@ -175,8 +174,14 @@ linters:
     nolintlint:
       require-explanation: true
       require-specific: true
+      allow-unused: false
 
     usetesting:
+      context-background: false # Too noisy across existing tests
+      context-todo: true
+      os-chdir: true
+      os-mkdir-temp: true
+      os-setenv: true
       os-temp-dir: true
 
     gocyclo:

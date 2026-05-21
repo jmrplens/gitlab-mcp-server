@@ -30,8 +30,8 @@ func totalFromResponse(resp *gl.Response) int {
 // searchProjects returns project entries matching the query plus the total
 // match count from the GitLab pagination header (X-Total) when available.
 func searchProjects(ctx context.Context, client *gitlabclient.Client, query string) (values []string, total int, err error) {
-	if err = ctx.Err(); err != nil {
-		return nil, 0, err
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, 0, ctxErr
 	}
 	opts := &gl.ListProjectsOptions{
 		Membership: new(true),
@@ -54,8 +54,8 @@ func searchProjects(ctx context.Context, client *gitlabclient.Client, query stri
 // searchGroups returns group entries matching the query plus the total
 // match count from the GitLab pagination header.
 func searchGroups(ctx context.Context, client *gitlabclient.Client, query string) (values []string, total int, err error) {
-	if err = ctx.Err(); err != nil {
-		return nil, 0, err
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, 0, ctxErr
 	}
 	opts := &gl.ListGroupsOptions{}
 	opts.PerPage = searchPerPage
@@ -76,8 +76,8 @@ func searchGroups(ctx context.Context, client *gitlabclient.Client, query string
 // searchUsers returns usernames matching the query plus the total match
 // count from the GitLab pagination header.
 func searchUsers(ctx context.Context, client *gitlabclient.Client, query string) (values []string, total int, err error) {
-	if err = ctx.Err(); err != nil {
-		return nil, 0, err
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, 0, ctxErr
 	}
 	opts := &gl.ListUsersOptions{
 		Active: new(true),
@@ -146,8 +146,8 @@ func searchIssues(ctx context.Context, client *gitlabclient.Client, projectID, q
 // searchBranches returns branch names matching the query plus the total
 // match count from the GitLab pagination header.
 func searchBranches(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
-	if err = ctx.Err(); err != nil {
-		return nil, 0, err
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, 0, ctxErr
 	}
 	opts := &gl.ListBranchesOptions{}
 	opts.PerPage = searchPerPage
@@ -168,8 +168,8 @@ func searchBranches(ctx context.Context, client *gitlabclient.Client, projectID,
 // searchTags returns tag names matching the query plus the total match
 // count from the GitLab pagination header.
 func searchTags(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
-	if err = ctx.Err(); err != nil {
-		return nil, 0, err
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, 0, ctxErr
 	}
 	opts := &gl.ListTagsOptions{}
 	opts.PerPage = searchPerPage
@@ -234,8 +234,8 @@ func searchCommits(ctx context.Context, client *gitlabclient.Client, projectID, 
 // searchLabels returns label names for a project matching the query plus
 // the total match count from the GitLab pagination header.
 func searchLabels(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
-	if err = ctx.Err(); err != nil {
-		return nil, 0, err
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, 0, ctxErr
 	}
 	opts := &gl.ListLabelsOptions{}
 	opts.PerPage = searchPerPage
@@ -256,8 +256,8 @@ func searchLabels(ctx context.Context, client *gitlabclient.Client, projectID, q
 // searchMilestones returns milestone entries for a project plus the total
 // match count from the GitLab pagination header.
 func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
-	if err = ctx.Err(); err != nil {
-		return nil, 0, err
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, 0, ctxErr
 	}
 	opts := &gl.ListMilestonesOptions{
 		State: new("active"),
@@ -281,8 +281,8 @@ func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectI
 // Unlike [searchMilestones], it returns plain titles (not "id: title") for use as
 // completion values for prompt arguments that accept a milestone title.
 func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
-	if err = ctx.Err(); err != nil {
-		return nil, 0, err
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, 0, ctxErr
 	}
 	opts := &gl.ListMilestonesOptions{
 		State: new("active"),
@@ -306,8 +306,8 @@ func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, pro
 // Used by prompts that scope milestones to a group rather than a project (for
 // example group_milestone_progress).
 func searchGroupMilestoneTitles(ctx context.Context, client *gitlabclient.Client, groupID, query string) (values []string, total int, err error) {
-	if err = ctx.Err(); err != nil {
-		return nil, 0, err
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, 0, ctxErr
 	}
 	opts := &gl.ListGroupMilestonesOptions{
 		State: new("active"),

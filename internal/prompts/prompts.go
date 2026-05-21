@@ -716,11 +716,12 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 	fmt.Fprintf(&b, "\n## File Changes (%d)\n\n", len(comparison.Diffs))
 	for _, d := range comparison.Diffs {
 		ct := "modified"
-		if d.NewFile {
+		switch {
+		case d.NewFile:
 			ct = "new"
-		} else if d.DeletedFile {
+		case d.DeletedFile:
 			ct = "deleted"
-		} else if d.RenamedFile {
+		case d.RenamedFile:
 			ct = "renamed"
 		}
 		fmt.Fprintf(&b, fmtListItem, d.NewPath, ct)

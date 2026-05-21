@@ -280,8 +280,8 @@ func Load() (*Config, error) {
 		MetaParamSchema:    metaParamSchema,
 	}
 
-	if err = cfg.validate(); err != nil {
-		return nil, err
+	if validateErr := cfg.validate(); validateErr != nil {
+		return nil, validateErr
 	}
 
 	return cfg, nil
