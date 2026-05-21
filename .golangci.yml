@@ -230,7 +230,6 @@ linters:
           - wastedassign
           - dupl
           - fatcontext
-          - nilnil
 
       # Main entry point: allow os.Exit
       - path: "cmd/server/main\\.go"
