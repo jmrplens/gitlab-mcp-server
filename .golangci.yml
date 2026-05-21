@@ -224,7 +224,6 @@ linters:
           - gocritic
           - revive
           - unparam
-          - noctx
           - dupl
 
       # Main entry point: allow os.Exit

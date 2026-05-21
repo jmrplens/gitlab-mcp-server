@@ -2037,7 +2037,7 @@ func TestHealthHandler_ReturnsOK(t *testing.T) {
 	t.Parallel()
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
 	healthHandler(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -2891,7 +2891,7 @@ func TestHostValidationMiddleware_BlockedHost(t *testing.T) {
 	})
 	handler := hostValidationMiddleware(allowed, inner)
 
-	req := httptest.NewRequest(http.MethodGet, "http://evil.example.com/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://evil.example.com/", nil)
 	req.Host = "evil.example.com"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -2910,7 +2910,7 @@ func TestHostValidationMiddleware_AllowedHost(t *testing.T) {
 	})
 	handler := hostValidationMiddleware(allowed, inner)
 
-	req := httptest.NewRequest(http.MethodGet, "http://localhost/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost/", nil)
 	req.Host = "localhost"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -2929,7 +2929,7 @@ func TestHostValidationMiddleware_HostWithPort(t *testing.T) {
 	})
 	handler := hostValidationMiddleware(allowed, inner)
 
-	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:8080/", nil)
 	req.Host = "localhost:8080"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -2949,7 +2949,7 @@ func TestCrossOriginProtectionMiddleware_AllowsNonBrowserPost(t *testing.T) {
 	})
 	handler := crossOriginProtectionMiddleware(inner)
 
-	req := httptest.NewRequest(http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
 	req.Header.Set(hdrContentType, mimeJSON)
 	req.Header.Set("Accept", mimeJSONSSE)
 	rr := httptest.NewRecorder()
@@ -2973,7 +2973,7 @@ func TestCrossOriginProtectionMiddleware_AllowsSameOriginPost(t *testing.T) {
 	})
 	handler := crossOriginProtectionMiddleware(inner)
 
-	req := httptest.NewRequest(http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
 	req.Header.Set(hdrContentType, mimeJSON)
 	req.Header.Set("Accept", mimeJSONSSE)
 	req.Header.Set("Origin", "http://mcp.example")

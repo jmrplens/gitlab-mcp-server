@@ -3,6 +3,7 @@
 package oauth
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -15,7 +16,7 @@ import (
 func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
 	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -62,7 +63,7 @@ func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
 func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
 	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -76,7 +77,7 @@ func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
 func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
 	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
 
-	req := httptest.NewRequest(http.MethodOptions, "/.well-known/oauth-protected-resource", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -90,7 +91,7 @@ func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
 func TestNewProtectedResourceHandler_PostMethodNotAllowed(t *testing.T) {
 	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
 
-	req := httptest.NewRequest(http.MethodPost, "/.well-known/oauth-protected-resource", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

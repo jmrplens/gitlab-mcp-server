@@ -37,7 +37,7 @@ func TestCaptureSlog(t *testing.T) {
 // TestAssertRequestMethod verifies AssertRequestMethod does not fail the test
 // when the expected method matches.
 func TestAssertRequestMethod(t *testing.T) {
-	r := httptest.NewRequest(http.MethodPost, "/test", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", nil)
 	fakeT := &testing.T{}
 	AssertRequestMethod(fakeT, r, http.MethodPost)
 	if fakeT.Failed() {
@@ -48,7 +48,7 @@ func TestAssertRequestMethod(t *testing.T) {
 // TestAssertRequestMethod_Mismatch verifies AssertRequestMethod marks the
 // test as failed when the method does not match.
 func TestAssertRequestMethod_Mismatch(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/test", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	fakeT := &testing.T{}
 	AssertRequestMethod(fakeT, r, http.MethodPost)
 	if !fakeT.Failed() {
@@ -59,7 +59,7 @@ func TestAssertRequestMethod_Mismatch(t *testing.T) {
 // TestAssertRequestPath verifies AssertRequestPath does not fail the test
 // when the expected path matches.
 func TestAssertRequestPath(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/v4/projects", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v4/projects", nil)
 	fakeT := &testing.T{}
 	AssertRequestPath(fakeT, r, "/api/v4/projects")
 	if fakeT.Failed() {
@@ -70,7 +70,7 @@ func TestAssertRequestPath(t *testing.T) {
 // TestAssertRequestPath_Mismatch verifies AssertRequestPath marks the test
 // as failed when the path does not match.
 func TestAssertRequestPath_Mismatch(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/api/v4/projects", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v4/projects", nil)
 	fakeT := &testing.T{}
 	AssertRequestPath(fakeT, r, "/api/v4/issues")
 	if !fakeT.Failed() {
@@ -81,7 +81,7 @@ func TestAssertRequestPath_Mismatch(t *testing.T) {
 // TestAssertQueryParam verifies AssertQueryParam does not fail when the
 // query parameter matches.
 func TestAssertQueryParam(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/test?page=2&per_page=20", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test?page=2&per_page=20", nil)
 	fakeT := &testing.T{}
 	AssertQueryParam(fakeT, r, "page", "2")
 	if fakeT.Failed() {
@@ -92,7 +92,7 @@ func TestAssertQueryParam(t *testing.T) {
 // TestAssertQueryParam_Mismatch verifies AssertQueryParam marks the test
 // as failed when the parameter value does not match.
 func TestAssertQueryParam_Mismatch(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/test?page=1", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test?page=1", nil)
 	fakeT := &testing.T{}
 	AssertQueryParam(fakeT, r, "page", "2")
 	if !fakeT.Failed() {
@@ -103,7 +103,7 @@ func TestAssertQueryParam_Mismatch(t *testing.T) {
 // TestAssertQueryParam_Missing verifies AssertQueryParam fails when the
 // parameter is not present in the URL.
 func TestAssertQueryParam_Missing(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/test", nil)
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	fakeT := &testing.T{}
 	AssertQueryParam(fakeT, r, "page", "1")
 	if !fakeT.Failed() {
