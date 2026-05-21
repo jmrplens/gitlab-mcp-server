@@ -139,8 +139,8 @@ Meta-tools remain available because they are the most broadly compatible consoli
 
 ### GitLab.com Enterprise/Premium Meta-Tools (1)
 
-| #   | Tool Name      | Actions | Source                                                                                                   |
-| --- | -------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| #   | Tool Name      | Actions | Source                                                                                                          |
+| --- | -------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
 | 33  | `gitlab_orbit` | 6       | Experimental GitLab.com Orbit Knowledge Graph API (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) |
 
 ---
