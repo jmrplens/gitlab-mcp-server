@@ -75,7 +75,7 @@ func TestInstallBinary_OverwritesExisting(t *testing.T) {
 	destPath := filepath.Join(destDir, DefaultBinaryName())
 
 	// Create a dummy file at the destination
-	if err := os.WriteFile(destPath, []byte("old"), 0o644); err != nil {
+	if err := os.WriteFile(destPath, []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -132,10 +132,10 @@ func TestInstallBinaryImpl_MkdirAllFails(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	blocked := filepath.Join(tmpDir, "readonly")
-	if err := os.Mkdir(blocked, 0o555); err != nil {
+	if err := os.Mkdir(blocked, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(blocked, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(blocked, 0o700) }) //nolint:gosec // Cleanup restores directory traversal after readonly-permission test.
 
 	deepDir := filepath.Join(blocked, "nested", "dir")
 	_, err := installBinaryImpl(deepDir)
@@ -173,7 +173,7 @@ func TestGetVersionFromBinary_Scenarios(t *testing.T) {
 			setup: func(t *testing.T) string {
 				t.Helper()
 				p := filepath.Join(t.TempDir(), "notexec")
-				if err := os.WriteFile(p, []byte("not a binary"), 0o644); err != nil {
+				if err := os.WriteFile(p, []byte("not a binary"), 0o600); err != nil {
 					t.Fatal(err)
 				}
 				return p
@@ -210,7 +210,7 @@ func TestGetVersionFromBinary_Scenarios(t *testing.T) {
 				t.Helper()
 				p := filepath.Join(t.TempDir(), "fail")
 				script := "#!/bin/sh\nexit 1\n"
-				if err := os.WriteFile(p, []byte(script), 0o755); err != nil {
+				if err := os.WriteFile(p, []byte(script), 0o755); err != nil { //nolint:gosec // Executable fixture is required to simulate version output.
 					t.Fatal(err)
 				}
 				return p
@@ -247,7 +247,7 @@ func writeFakeVersionBinary(t *testing.T, output string) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "fake-binary")
 	script := "#!/bin/sh\necho '" + output + "'\n"
-	if err := os.WriteFile(p, []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(p, []byte(script), 0o755); err != nil { //nolint:gosec // Executable fixture is required to simulate version output.
 		t.Fatal(err)
 	}
 	return p

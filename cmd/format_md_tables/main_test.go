@@ -107,7 +107,7 @@ func writeFormatterCaseFiles(t *testing.T, root string, tt runTableDrivenCase) {
 		writeTestFile(t, filepath.Join(root, filepath.FromSlash(path)), content)
 	}
 	for _, dir := range tt.dirs {
-		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(dir)), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(dir)), 0o750); err != nil {
 			t.Fatalf("mkdir %s: %v", dir, err)
 		}
 	}
@@ -207,7 +207,7 @@ func TestRun_RejectsSymlinkEscapingRoot(t *testing.T) {
 	outside := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "README.md"), "# Title\n")
 	writeTestFile(t, filepath.Join(outside, "target.md"), "| A | B |\n| --- | --- |\n")
-	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o750); err != nil {
 		t.Fatalf("mkdir docs: %v", err)
 	}
 	if err := os.Symlink(filepath.Join(outside, "target.md"), filepath.Join(root, "docs", "link.md")); err != nil {
@@ -233,7 +233,7 @@ func TestRun_RejectsSymlinkEscapingRoot(t *testing.T) {
 func TestRun_ReturnsStdoutWriteErrors(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "README.md"), "# Title\n")
-	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o750); err != nil {
 		t.Fatalf("mkdir docs: %v", err)
 	}
 
@@ -254,10 +254,10 @@ func (errWriter) Write([]byte) (int, error) {
 
 func writeTestFile(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }

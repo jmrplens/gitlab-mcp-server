@@ -121,7 +121,7 @@ func TestValidateBinaryMagic_AllFormats(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, "binary")
-			if err := os.WriteFile(path, tt.header, 0o644); err != nil {
+			if err := os.WriteFile(path, tt.header, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			if err := validateBinaryMagic(path); err != nil {
@@ -135,7 +135,7 @@ func TestValidateBinaryMagic_AllFormats(t *testing.T) {
 func TestValidateBinaryMagic_Rejected(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "not-binary")
-	if err := os.WriteFile(path, []byte(`{"message":"404 Not found"}`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"message":"404 Not found"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	err := validateBinaryMagic(path)
@@ -170,7 +170,7 @@ func TestValidateBinaryMagic_TooShortForHeader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "short")
-			if err := os.WriteFile(path, tt.data, 0o644); err != nil {
+			if err := os.WriteFile(path, tt.data, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			err := validateBinaryMagic(path)
@@ -189,7 +189,7 @@ func TestValidateBinaryMagic_TooShortForHeader(t *testing.T) {
 func TestHasPendingUpdate_WithTmpFile(t *testing.T) {
 	exe := stubExecutablePath(t)
 	tmpPath := exe + ".tmp"
-	if err := os.WriteFile(tmpPath, []byte("staged"), 0o644); err != nil {
+	if err := os.WriteFile(tmpPath, []byte("staged"), 0o600); err != nil {
 		t.Fatalf("cannot create .tmp file: %v", err)
 	}
 
@@ -208,7 +208,7 @@ func TestHasPendingUpdate_WithNewFile(t *testing.T) {
 	exe := stubExecutablePath(t)
 
 	newPath := exe + ".new"
-	if err := os.WriteFile(newPath, []byte("staged"), 0o644); err != nil {
+	if err := os.WriteFile(newPath, []byte("staged"), 0o600); err != nil {
 		t.Fatalf("cannot create .new file: %v", err)
 	}
 

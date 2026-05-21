@@ -111,7 +111,7 @@ func TestCountToolPackageDirsAt_IncludesPackagesWithoutRegisterGo(t *testing.T) 
 	writeTestFile(t, filepath.Join(toolsDir, "alpha"), "alpha.go")
 	writeTestFile(t, filepath.Join(toolsDir, "beta"), "beta_test.go")
 	writeTestFile(t, filepath.Join(toolsDir, "nested", "gamma"), "gamma.go")
-	if err := os.Mkdir(filepath.Join(toolsDir, "empty"), 0o755); err != nil {
+	if err := os.Mkdir(filepath.Join(toolsDir, "empty"), 0o750); err != nil {
 		t.Fatalf("Mkdir(empty): %v", err)
 	}
 
@@ -285,10 +285,10 @@ func catalogWithActions(t *testing.T, fixtures ...catalogActionFixture) *actionc
 
 func writeTestFile(t *testing.T, dir string, name string) {
 	t.Helper()
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatalf("MkdirAll(%s): %v", dir, err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte("package fixture\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("package fixture\n"), 0o600); err != nil {
 		t.Fatalf("WriteFile(%s): %v", name, err)
 	}
 }

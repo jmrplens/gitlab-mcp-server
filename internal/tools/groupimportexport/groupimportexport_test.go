@@ -116,7 +116,7 @@ func TestImportFile_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -141,7 +141,7 @@ func TestImportFile_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("fake"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -284,7 +284,7 @@ func TestImportFile_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("fake"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -310,7 +310,7 @@ func TestImportFile_WithParentID(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -459,7 +459,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0600); err != nil {
 		t.Fatal(err)
 	}
 

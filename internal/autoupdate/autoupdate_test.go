@@ -1639,7 +1639,7 @@ func stubExecutablePath(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	fakeBin := filepath.Join(dir, "gitlab-mcp-server")
-	if err := os.WriteFile(fakeBin, []byte("fake-binary"), 0o755); err != nil {
+	if err := os.WriteFile(fakeBin, []byte("fake-binary"), 0o600); err != nil {
 		t.Fatalf("cannot create fake binary: %v", err)
 	}
 

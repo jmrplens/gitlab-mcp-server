@@ -59,7 +59,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 
 	t.Run("publish_directory", func(t *testing.T) {
 		pubDir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(pubDir, "test.bin"), []byte("data"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(pubDir, "test.bin"), []byte("data"), 0600); err != nil {
 			t.Fatalf("write package fixture: %v", err)
 		}
 		result, err := byTool["gitlab_package_publish_directory"].Route.Handler(t.Context(), map[string]any{

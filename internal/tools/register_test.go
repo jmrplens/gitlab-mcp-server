@@ -2691,10 +2691,10 @@ func compareOrUpdate(t *testing.T, goldenPath string, current []toolSnapshot) {
 	}
 
 	if os.Getenv("UPDATE_TOOLSNAPS") == "true" {
-		if mkdirErr := os.MkdirAll(filepath.Dir(goldenPath), 0o755); mkdirErr != nil {
+		if mkdirErr := os.MkdirAll(filepath.Dir(goldenPath), 0o750); mkdirErr != nil {
 			t.Fatalf("create testdata dir: %v", mkdirErr)
 		}
-		if writeErr := os.WriteFile(goldenPath, got, 0o644); writeErr != nil {
+		if writeErr := os.WriteFile(goldenPath, got, 0o600); writeErr != nil {
 			t.Fatalf("write golden file: %v", writeErr)
 		}
 		t.Logf("Updated golden file: %s (%d tools)", goldenPath, len(current))

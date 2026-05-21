@@ -783,7 +783,7 @@ func TestGet_ServerError(t *testing.T) {
 func TestUploadAttachment_FilePath(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, testFileName)
-	if err := os.WriteFile(tmpFile, []byte("hello"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("hello"), 0600); err != nil {
 		t.Fatalf("write temp file: %v", err)
 	}
 

@@ -186,7 +186,7 @@ func TestRepositoryRoot_FindsNearestGoMod(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, "go.mod", "module example.com/test\n")
 	nested := filepath.Join(root, "a", "b")
-	if err := os.MkdirAll(nested, 0o755); err != nil {
+	if err := os.MkdirAll(nested, 0o750); err != nil {
 		t.Fatalf("MkdirAll(%q) error = %v", nested, err)
 	}
 
@@ -214,10 +214,10 @@ func TestRepositoryRoot_MissingGoModReturnsError(t *testing.T) {
 func writeTestFile(t *testing.T, root string, name string, content string) {
 	t.Helper()
 	path := filepath.Join(root, name)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatalf("MkdirAll(%q) error = %v", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("WriteFile(%q) error = %v", path, err)
 	}
 }

@@ -6,6 +6,7 @@ package releaselinks
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -324,7 +325,7 @@ func TestReleaseLinkCreateBatch_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathReleaseLinks {
 			callCount++
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":`+string(rune('0'+callCount))+`,"name":"link","url":"https://example.com","link_type":"package","external":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":`+strconv.Itoa(callCount)+`,"name":"link","url":"https://example.com","link_type":"package","external":true}`)
 			return
 		}
 		http.NotFound(w, r)

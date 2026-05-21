@@ -220,11 +220,22 @@ linters:
       - path: "_test\\.go"
         linters:
           - errcheck
-          - gosec
           - gocritic
           - revive
           - unparam
           - dupl
+
+      # Test fixtures intentionally use fake tokens, passwords, and keys.
+      - path: "_test\\.go"
+        linters:
+          - gosec
+        text: "G101: Potential hardcoded credentials"
+
+      # The OAuth E2E helper talks to disposable TLS test servers.
+      - path: "test/e2e/suite/oauth_helpers_test\\.go"
+        linters:
+          - gosec
+        text: "G402: TLS InsecureSkipVerify set to true"
 
       # Main entry point: allow os.Exit
       - path: "cmd/server/main\\.go"

@@ -203,7 +203,7 @@ func TestMergeServerEntry_PreservesExisting(t *testing.T) {
 	path := filepath.Join(dir, "config.json")
 
 	existing := `{"mcpServers": {"other-server": {"command": "other"}}, "authToken": "secret"}`
-	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(existing), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -238,7 +238,7 @@ func TestMergeServerEntry_OverwritesExistingGitlab(t *testing.T) {
 	path := filepath.Join(dir, "config.json")
 
 	existing := `{"mcpServers": {"gitlab": {"command": "old"}}}`
-	if err := os.WriteFile(path, []byte(existing), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(existing), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -280,7 +280,7 @@ func TestMergeServerEntry_JSONC(t *testing.T) {
     },
   },
 }`
-	if err := os.WriteFile(path, []byte(jsonc), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(jsonc), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

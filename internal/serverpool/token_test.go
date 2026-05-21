@@ -4,6 +4,7 @@ package serverpool
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -282,15 +283,7 @@ func TestResolveRequestOptions_ServerManagedHeadersIgnoredWithoutDefault(t *test
 
 // slicesEqual compares two string slices in order for ignored-option tests.
 func slicesEqual(got, want []string) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for index := range got {
-		if got[index] != want[index] {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(got, want)
 }
 
 // TestAppendOptionName_DeduplicatesExisting verifies the internal option-name
