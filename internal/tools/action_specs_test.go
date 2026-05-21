@@ -211,6 +211,15 @@ func sourceToolPackageNames(t *testing.T) map[string]struct{} {
 
 // TestActionSpecSurfacePolicy_MetadataProjectsPerSurface verifies ActionSpecSurfacePolicy when metadata projects per surface.
 func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
+	spec, handlerCalled := surfacePolicyTestSpec(t)
+	metaRoutes := assertSurfacePolicyMetaProjection(t, spec, handlerCalled)
+	assertSurfacePolicyDynamicProjection(t, spec)
+	assertSurfacePolicySchemaProjection(t, metaRoutes)
+	assertSurfacePolicyIndividualProjection(t, spec)
+}
+
+func surfacePolicyTestSpec(t *testing.T) (toolutil.ActionSpec, *bool) {
+	t.Helper()
 	openWorldOverride := false
 	handlerCalled := false
 	route := toolutil.ActionRoute{
@@ -264,7 +273,11 @@ func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
 			},
 		},
 	})
+	return spec, &handlerCalled
+}
 
+func assertSurfacePolicyMetaProjection(t *testing.T, spec toolutil.ActionSpec, handlerCalled *bool) toolutil.ActionMap {
+	t.Helper()
 	metaRoutes, err := toolutil.ActionSpecsToMapWithError([]toolutil.ActionSpec{spec})
 	if err != nil {
 		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
@@ -276,7 +289,7 @@ func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
 	if _, handlerErr := metaRoute.Handler(context.Background(), map[string]any{"project_id": "123"}); handlerErr != nil {
 		t.Fatalf("meta route handler error = %v", handlerErr)
 	}
-	if !handlerCalled {
+	if !*handlerCalled {
 		t.Fatal("meta route handler was not called")
 	}
 	if got := metaRoute.ParameterGuidance["project_id"].SemanticRole; got != "gitlab project id" {
@@ -296,7 +309,11 @@ func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
 	if strings.Contains(metaPrefix, "Delete a GitLab project.") {
 		t.Fatalf("meta description prefix leaked individual tool prose: %q", metaPrefix)
 	}
+	return metaRoutes
+}
 
+func assertSurfacePolicyDynamicProjection(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
 	group, err := actioncatalog.GroupFromSpecs(actioncatalog.GroupOptions{ToolName: "gitlab_project"}, []toolutil.ActionSpec{spec})
 	if err != nil {
 		t.Fatalf("GroupFromSpecs() error = %v", err)
@@ -339,7 +356,10 @@ func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
 	if description.Example.Arguments["action"] != "project.delete" {
 		t.Fatalf("describe example action = %v", description.Example.Arguments["action"])
 	}
+}
 
+func assertSurfacePolicySchemaProjection(t *testing.T, metaRoutes toolutil.ActionMap) {
+	t.Helper()
 	schema, ok := toolutil.LookupMetaActionSchema(map[string]toolutil.ActionMap{"gitlab_project": metaRoutes}, "gitlab_project", "delete")
 	if !ok {
 		t.Fatal("schema resource lookup failed")
@@ -356,7 +376,10 @@ func TestActionSpecSurfacePolicy_MetadataProjectsPerSurface(t *testing.T) {
 	if projectGuidance["semantic_role"] != "gitlab project id" || projectGuidance["value_source"] != "prompt project reference" {
 		t.Fatalf("schema parameter guidance = %+v", projectGuidance)
 	}
+}
 
+func assertSurfacePolicyIndividualProjection(t *testing.T, spec toolutil.ActionSpec) {
+	t.Helper()
 	individual, err := toolutil.IndividualToolFromActionSpec(spec, toolutil.IndividualToolProjectionOptions{Description: "fallback description", Icons: toolutil.IconProject})
 	if err != nil {
 		t.Fatalf("IndividualToolFromActionSpec() error = %v", err)

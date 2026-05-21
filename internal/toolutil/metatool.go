@@ -743,45 +743,62 @@ func normalizeParamAliasesWithFields(params map[string]any, fields map[string]st
 	for _, pair := range commonParamAliases {
 		value, hasAlias := out[pair.Alias]
 		_, hasCanonical := out[pair.Canonical]
-		if !hasAlias {
-			continue
-		}
-		if hasCanonical {
-			if accepts(pair.Canonical) && !accepts(pair.Alias) {
-				delete(clone(), pair.Alias)
-			}
-			continue
-		}
-		if !accepts(pair.Canonical) || accepts(pair.Alias) {
+		if !hasAlias || !accepts(pair.Canonical) || accepts(pair.Alias) {
 			continue
 		}
 		updated := clone()
-		updated[pair.Canonical] = value
+		if !hasCanonical {
+			updated[pair.Canonical] = value
+		}
 		delete(updated, pair.Alias)
 	}
 	normalizeIDAlias(out, fields, accepts, clone)
-	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
-		if _, hasPaused := out["paused"]; !hasPaused {
-			if active, ok := value.(bool); ok {
-				updated := clone()
-				updated["paused"] = !active
-				delete(updated, "active")
-			}
-		}
+	normalizeActiveAlias(out, accepts, clone)
+	normalizeFilePathAlias(out, accepts, clone)
+	normalizeBranchAliases(out, accepts, clone)
+	return out
+}
+
+func normalizeActiveAlias(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
+	value, hasActive := out["active"]
+	if !hasActive || !accepts("paused") || accepts("active") {
+		return
 	}
-	if value, hasFilePath := out["file_path"]; hasFilePath && accepts("path") && accepts("filename") && !accepts("file_path") {
-		if _, hasPath := out["path"]; !hasPath {
-			if _, hasFilename := out["filename"]; !hasFilename {
-				if filePath, ok := value.(string); ok && filePath != "" {
-					path, filename := splitPackageFilePath(filePath)
-					updated := clone()
-					updated["path"] = path
-					updated["filename"] = filename
-					delete(updated, "file_path")
-				}
-			}
-		}
+	if _, hasPaused := out["paused"]; hasPaused {
+		return
 	}
+	active, ok := value.(bool)
+	if !ok {
+		return
+	}
+	updated := clone()
+	updated["paused"] = !active
+	delete(updated, "active")
+}
+
+func normalizeFilePathAlias(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
+	value, hasFilePath := out["file_path"]
+	if !hasFilePath || !accepts("path") || !accepts("filename") || accepts("file_path") {
+		return
+	}
+	if _, hasPath := out["path"]; hasPath {
+		return
+	}
+	if _, hasFilename := out["filename"]; hasFilename {
+		return
+	}
+	filePath, ok := value.(string)
+	if !ok || filePath == "" {
+		return
+	}
+	path, filename := splitPackageFilePath(filePath)
+	updated := clone()
+	updated["path"] = path
+	updated["filename"] = filename
+	delete(updated, "file_path")
+}
+
+func normalizeBranchAliases(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
 	if accepts("source_branch") && accepts("target_branch") {
 		if _, hasSource := out["source_branch"]; !hasSource {
 			for _, key := range []string{"ref", "branch", "from"} {
@@ -808,7 +825,6 @@ func normalizeParamAliasesWithFields(params map[string]any, fields map[string]st
 			}
 		}
 	}
-	return out
 }
 
 func nonEmptyStringValue(value any) bool {

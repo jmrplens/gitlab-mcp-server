@@ -681,60 +681,8 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 		}
 	}
 
-	// --- Resources ---
-	b.WriteString("## Resources\n\n")
-	fmt.Fprintf(&b, "%d resources providing read-only access to GitLab data.\n\n", resourceCount)
-	for _, r := range catalog.Resources {
-		fmt.Fprintf(&b, toolutil.FmtMdH3, r.Name)
-		fmt.Fprintf(&b, "- **URI**: `%s`\n", r.URI)
-		if r.MIMEType != "" {
-			fmt.Fprintf(&b, "- **MIME**: %s\n", r.MIMEType)
-		}
-		if r.Description != "" {
-			fmt.Fprintf(&b, "- **Description**: %s\n", r.Description)
-		}
-		b.WriteString("\n")
-	}
-	for _, r := range catalog.ResourceTemplates {
-		fmt.Fprintf(&b, toolutil.FmtMdH3, r.Name)
-		fmt.Fprintf(&b, "- **URI Template**: `%s`\n", r.URITemplate)
-		if r.MIMEType != "" {
-			fmt.Fprintf(&b, "- **MIME**: %s\n", r.MIMEType)
-		}
-		if r.Description != "" {
-			fmt.Fprintf(&b, "- **Description**: %s\n", r.Description)
-		}
-		b.WriteString("\n")
-	}
-	b.WriteString("### Workspace Roots\n\n")
-	b.WriteString("- **URI**: `gitlab://workspace/roots`\n")
-	b.WriteString("- **Description**: Lists workspace root directories reported by the MCP client\n\n")
-
-	// --- Prompts ---
-	b.WriteString("## Prompts\n\n")
-	fmt.Fprintf(&b, "%d prompt templates for AI-assisted GitLab workflows.\n\n", len(catalog.Prompts))
-	for _, p := range catalog.Prompts {
-		fmt.Fprintf(&b, toolutil.FmtMdH3, p.Name)
-		if p.Description != "" {
-			b.WriteString(p.Description)
-			b.WriteString("\n\n")
-		}
-		if len(p.Arguments) > 0 {
-			b.WriteString("**Arguments:**\n\n")
-			for _, a := range p.Arguments {
-				req := ""
-				if a.Required {
-					req = " (required)"
-				}
-				desc := a.Description
-				if desc == "" {
-					desc = a.Name
-				}
-				fmt.Fprintf(&b, "- `%s`%s: %s\n", a.Name, req, desc)
-			}
-			b.WriteString("\n")
-		}
-	}
+	writeLLMSFullResources(&b, catalog, resourceCount)
+	writeLLMSFullPrompts(&b, catalog.Prompts)
 
 	content := b.String()
 	if err := validateLLMSFullTxt(content); err != nil {
@@ -744,6 +692,64 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 		return fmt.Errorf("write llms-full.txt: %w", err)
 	}
 	return nil
+}
+
+func writeLLMSFullResources(b *strings.Builder, catalog llmsCatalog, resourceCount int) {
+	b.WriteString("## Resources\n\n")
+	fmt.Fprintf(b, "%d resources providing read-only access to GitLab data.\n\n", resourceCount)
+	for _, resource := range catalog.Resources {
+		writeLLMSResource(b, resource.Name, resource.URI, "URI", resource.MIMEType, resource.Description)
+	}
+	for _, template := range catalog.ResourceTemplates {
+		writeLLMSResource(b, template.Name, template.URITemplate, "URI Template", template.MIMEType, template.Description)
+	}
+	b.WriteString("### Workspace Roots\n\n")
+	b.WriteString("- **URI**: `gitlab://workspace/roots`\n")
+	b.WriteString("- **Description**: Lists workspace root directories reported by the MCP client\n\n")
+}
+
+func writeLLMSResource(b *strings.Builder, name, uri, uriLabel, mimeType, description string) {
+	fmt.Fprintf(b, toolutil.FmtMdH3, name)
+	fmt.Fprintf(b, "- **%s**: `%s`\n", uriLabel, uri)
+	if mimeType != "" {
+		fmt.Fprintf(b, "- **MIME**: %s\n", mimeType)
+	}
+	if description != "" {
+		fmt.Fprintf(b, "- **Description**: %s\n", description)
+	}
+	b.WriteString("\n")
+}
+
+func writeLLMSFullPrompts(b *strings.Builder, promptDefs []*mcp.Prompt) {
+	b.WriteString("## Prompts\n\n")
+	fmt.Fprintf(b, "%d prompt templates for AI-assisted GitLab workflows.\n\n", len(promptDefs))
+	for _, prompt := range promptDefs {
+		fmt.Fprintf(b, toolutil.FmtMdH3, prompt.Name)
+		if prompt.Description != "" {
+			b.WriteString(prompt.Description)
+			b.WriteString("\n\n")
+		}
+		writeLLMSPromptArguments(b, prompt.Arguments)
+	}
+}
+
+func writeLLMSPromptArguments(b *strings.Builder, arguments []*mcp.PromptArgument) {
+	if len(arguments) == 0 {
+		return
+	}
+	b.WriteString("**Arguments:**\n\n")
+	for _, argument := range arguments {
+		req := ""
+		if argument.Required {
+			req = " (required)"
+		}
+		desc := argument.Description
+		if desc == "" {
+			desc = argument.Name
+		}
+		fmt.Fprintf(b, "- `%s`%s: %s\n", argument.Name, req, desc)
+	}
+	b.WriteString("\n")
 }
 
 // writeAnnotations writes tool annotation hints to the builder.

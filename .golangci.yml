@@ -179,7 +179,7 @@ linters:
       os-temp-dir: true
 
     cyclop:
-      max-complexity: 55
+      max-complexity: 30
       package-average: 0
 
     perfsprint:
@@ -215,7 +215,6 @@ linters:
           - wastedassign
           - fatcontext
           - nilnil
-          - cyclop
 
       # Main entry point: allow os.Exit
       - path: "cmd/server/main\\.go"

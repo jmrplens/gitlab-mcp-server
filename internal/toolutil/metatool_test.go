@@ -735,6 +735,15 @@ func TestCoerceNumericStrings(t *testing.T) {
 // TestCoercionHelpers_CoverNumericAndSchemaBranches verifies lower-level
 // coercion helpers across integer, unsigned, float, slice, and schema paths.
 func TestCoercionHelpers_CoverNumericAndSchemaBranches(t *testing.T) {
+	assertNumericIDStringBranches(t)
+	assertNumericValueCoercionBranches(t)
+	assertSliceValueCoercionBranches(t)
+	assertSchemaCoercionBranches(t)
+	assertStringListAndJSONHelpers(t)
+}
+
+func assertNumericIDStringBranches(t *testing.T) {
+	t.Helper()
 	numericValues := []any{int(1), int8(2), int16(3), int32(4), int64(5), uint(6), uint8(7), uint16(8), uint32(9), uint64(10), json.Number("11"), float32(12), float64(13)}
 	for _, value := range numericValues {
 		if text, ok := numericIDString(value); !ok || text == "" {
@@ -749,7 +758,10 @@ func TestCoercionHelpers_CoverNumericAndSchemaBranches(t *testing.T) {
 	if text, ok := integerFloatString(1.5); ok || text != "" {
 		t.Fatalf("integerFloatString(1.5) = %q/%v, want empty false", text, ok)
 	}
+}
 
+func assertNumericValueCoercionBranches(t *testing.T) {
+	t.Helper()
 	unsigned, changed, err := coerceUnsignedIntegerValue("count", "7")
 	if err != nil || !changed || unsigned != uint64(7) {
 		t.Fatalf("coerceUnsignedIntegerValue() = %#v/%v/%v", unsigned, changed, err)
@@ -767,6 +779,19 @@ func TestCoercionHelpers_CoverNumericAndSchemaBranches(t *testing.T) {
 		t.Fatal("coerceFloatValue(bad) error = nil, want error")
 	}
 
+	if value, valueChanged, valueErr := coerceValueForTargetType("count", "8", reflect.TypeFor[uint]()); valueErr != nil || !valueChanged || value != uint64(8) {
+		t.Fatalf("coerceValueForTargetType(uint) = %#v/%v/%v", value, valueChanged, valueErr)
+	}
+	if value, valueChanged, valueErr := coerceValueForTargetType("weight", "4.25", reflect.TypeFor[*float64]()); valueErr != nil || !valueChanged || value != 4.25 {
+		t.Fatalf("coerceValueForTargetType(*float64) = %#v/%v/%v", value, valueChanged, valueErr)
+	}
+	if value, valueChanged, valueErr := coerceValueForTargetType("name", "project", reflect.TypeFor[string]()); valueErr != nil || valueChanged || value != "project" {
+		t.Fatalf("coerceValueForTargetType(string) = %#v/%v/%v", value, valueChanged, valueErr)
+	}
+}
+
+func assertSliceValueCoercionBranches(t *testing.T) {
+	t.Helper()
 	sliceValue, changed, err := coerceSliceValueForTargetType("ids", []string{"1", "2"}, reflect.TypeFor[int64]())
 	if err != nil || !changed || !reflect.DeepEqual(sliceValue, []any{int64(1), int64(2)}) {
 		t.Fatalf("coerceSliceValueForTargetType() = %#v/%v/%v", sliceValue, changed, err)
@@ -777,22 +802,16 @@ func TestCoercionHelpers_CoverNumericAndSchemaBranches(t *testing.T) {
 	if value, sliceChanged, sliceErr := coerceSliceValueForTargetType("names", []string{"a"}, reflect.TypeFor[string]()); sliceErr != nil || sliceChanged || !reflect.DeepEqual(value, []string{"a"}) {
 		t.Fatalf("coerceSliceValueForTargetType(non-numeric) = %#v/%v/%v", value, sliceChanged, sliceErr)
 	}
-	if value, valueChanged, valueErr := coerceValueForTargetType("count", "8", reflect.TypeFor[uint]()); valueErr != nil || !valueChanged || value != uint64(8) {
-		t.Fatalf("coerceValueForTargetType(uint) = %#v/%v/%v", value, valueChanged, valueErr)
-	}
-	if value, valueChanged, valueErr := coerceValueForTargetType("weight", "4.25", reflect.TypeFor[*float64]()); valueErr != nil || !valueChanged || value != 4.25 {
-		t.Fatalf("coerceValueForTargetType(*float64) = %#v/%v/%v", value, valueChanged, valueErr)
-	}
-	if value, valueChanged, valueErr := coerceValueForTargetType("name", "project", reflect.TypeFor[string]()); valueErr != nil || valueChanged || value != "project" {
-		t.Fatalf("coerceValueForTargetType(string) = %#v/%v/%v", value, valueChanged, valueErr)
-	}
 	if value, valueChanged, valueErr := coerceValueForTargetType("ids", []any{int64(1)}, reflect.TypeFor[[]int64]()); valueErr != nil || valueChanged || !reflect.DeepEqual(value, []any{int64(1)}) {
 		t.Fatalf("coerceValueForTargetType([]int64 unchanged) = %#v/%v/%v", value, valueChanged, valueErr)
 	}
 	if items, ok := sliceItems(42); ok || items != nil {
 		t.Fatalf("sliceItems(non-slice) = %#v/%v, want nil false", items, ok)
 	}
+}
 
+func assertSchemaCoercionBranches(t *testing.T) {
+	t.Helper()
 	integerArraySchema := map[string]any{"type": "array", "items": map[string]any{"type": "integer"}}
 	arrayValue, changed := coerceSchemaArrayValue([]string{"1", "2"}, integerArraySchema)
 	if !changed || !reflect.DeepEqual(arrayValue, []any{int64(1), int64(2)}) {
@@ -812,6 +831,16 @@ func TestCoercionHelpers_CoverNumericAndSchemaBranches(t *testing.T) {
 	if schemaPropertyHasType("not-map", "string") {
 		t.Fatal("schemaPropertyHasType(non-map) = true, want false")
 	}
+	if schemaPropertyIsStringArray("not-map") || schemaPropertyIsStringArray(map[string]any{"type": "array"}) {
+		t.Fatal("schemaPropertyIsStringArray() accepted invalid schema")
+	}
+	if schemaPropertyIsString("not-map") {
+		t.Fatal("schemaPropertyIsString(non-map) = true, want false")
+	}
+}
+
+func assertStringListAndJSONHelpers(t *testing.T) {
+	t.Helper()
 	if value, integerErr := integerFromString("3.0"); integerErr != nil || value != 3 {
 		t.Fatalf("integerFromString(3.0) = %d/%v, want 3", value, integerErr)
 	}
@@ -829,12 +858,6 @@ func TestCoercionHelpers_CoverNumericAndSchemaBranches(t *testing.T) {
 	}
 	if got := coerceStringListParamsForSchema(params, map[string]any{}); !reflect.DeepEqual(got, params) {
 		t.Fatalf("coerceStringListParamsForSchema(no props) = %#v", got)
-	}
-	if schemaPropertyIsStringArray("not-map") || schemaPropertyIsStringArray(map[string]any{"type": "array"}) {
-		t.Fatal("schemaPropertyIsStringArray() accepted invalid schema")
-	}
-	if schemaPropertyIsString("not-map") {
-		t.Fatal("schemaPropertyIsString(non-map) = true, want false")
 	}
 	if jsonFieldTypes(nil) != nil || jsonFieldTypes(reflect.TypeFor[int]()) != nil {
 		t.Fatal("jsonFieldTypes(non-struct) returned non-nil")
@@ -3217,7 +3240,8 @@ func TestWithVoidOutput_NilResult_ReturnsSuccessOutput(t *testing.T) {
 	t.Parallel()
 
 	sentinel := struct{ OK bool }{OK: true}
-	inner := func(_ context.Context, _ map[string]any) (any, error) { return nil, nil }
+	var nilResult any
+	inner := func(_ context.Context, _ map[string]any) (any, error) { return nilResult, nil }
 	wrapped := withVoidOutput(inner, sentinel)
 
 	result, err := wrapped(context.Background(), nil)

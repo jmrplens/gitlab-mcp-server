@@ -2296,80 +2296,46 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 		ExpectedAction: "project.list",
 	}
 	prompt := taskPrompt(task)
-	if !strings.Contains(prompt, "exactly one tool call") {
-		t.Fatalf("taskPrompt() = %q, want one-tool guidance", prompt)
-	}
-	if !strings.Contains(prompt, "A schema lookup before the task call is a failure") {
-		t.Fatalf("taskPrompt() = %q, want constrained schema lookup guidance", prompt)
-	}
-	if !strings.Contains(prompt, "Do not look up schemas for ordinary parameter names already supplied by the task prompt") {
-		t.Fatalf("taskPrompt() = %q, want ordinary-param no-lookup guidance", prompt)
-	}
-	if !strings.Contains(prompt, "do not add any params that the task did not ask for") {
-		t.Fatalf("taskPrompt() = %q, want no-extra-param guidance", prompt)
-	}
-	if !strings.Contains(prompt, "Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow") {
-		t.Fatalf("taskPrompt() = %q, want interactive tool disambiguation", prompt)
-	}
-	if !strings.Contains(prompt, "A value like group/project is params.project_id, not remote_url") {
-		t.Fatalf("taskPrompt() = %q, want project path vs remote URL guidance", prompt)
-	}
-	if !strings.Contains(prompt, "never call gitlab without an input object containing action and params") {
-		t.Fatalf("taskPrompt() = %q, want non-empty dispatcher input guidance", prompt)
-	}
-	if !strings.Contains(prompt, "server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check") {
-		t.Fatalf("taskPrompt() = %q, want health_check standalone guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For subgroup creation with group.create, use params.name, params.path, and params.parent_id") {
-		t.Fatalf("taskPrompt() = %q, want subgroup create guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For merge request creation, from is params.source_branch, into is params.target_branch, and titled is params.title") {
-		t.Fatalf("taskPrompt() = %q, want merge request create guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For merge request notes or comments, use mr_review.note_create") || !strings.Contains(prompt, "Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion") {
-		t.Fatalf("taskPrompt() = %q, want merge request note/discussion guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For personal snippets, snippet ID is params.snippet_id") || !strings.Contains(prompt, "or file_path") {
-		t.Fatalf("taskPrompt() = %q, want snippet_id guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For custom emoji group operations, use custom_emoji.list with params.group_path") {
-		t.Fatalf("taskPrompt() = %q, want custom emoji group_path guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For project access tokens, scope names go in params.scopes as an array") {
-		t.Fatalf("taskPrompt() = %q, want access token scopes guidance", prompt)
-	}
-	if !strings.Contains(prompt, "expiring dates go in params.expires_at") {
-		t.Fatalf("taskPrompt() = %q, want access token expiration guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For broadcast messages, saying maps to params.message") {
-		t.Fatalf("taskPrompt() = %q, want broadcast message guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For job.play variables, use params.variables as an array") {
-		t.Fatalf("taskPrompt() = %q, want job.play variables guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id") || !strings.Contains(prompt, "for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id") || !strings.Contains(prompt, "use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied") {
-		t.Fatalf("taskPrompt() = %q, want project/group/instance CI variable action guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For runner.list_project, use params.project_id by default") || !strings.Contains(prompt, "Do not send params.paused, params.type, params.tag_list") {
-		t.Fatalf("taskPrompt() = %q, want runner list filter guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message") {
-		t.Fatalf("taskPrompt() = %q, want repository file write guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For CI variables, variable name maps to params.key, value maps to params.value, and environment_scope or production scope maps to params.environment_scope") {
-		t.Fatalf("taskPrompt() = %q, want CI variable field mapping guidance", prompt)
-	}
-	if !strings.Contains(prompt, "linking to a URL means params.link_url and image means params.image_url") {
-		t.Fatalf("taskPrompt() = %q, want badge field mapping guidance", prompt)
-	}
-	if !strings.Contains(prompt, "latest pipelines plural means pipeline.list") {
-		t.Fatalf("taskPrompt() = %q, want pipeline plural disambiguation", prompt)
-	}
-	if !strings.Contains(prompt, "do not send empty arrays or objects") {
-		t.Fatalf("taskPrompt() = %q, want empty optional guidance", prompt)
-	}
-	if !strings.Contains(prompt, "call the selected action with params:{}") {
-		t.Fatalf("taskPrompt() = %q, want no-parameter action guidance", prompt)
+	assertTaskPromptContains(t, prompt,
+		"exactly one tool call",
+		"A schema lookup before the task call is a failure",
+		"Do not look up schemas for ordinary parameter names already supplied by the task prompt",
+		"do not add any params that the task did not ask for",
+		"Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow",
+		"A value like group/project is params.project_id, not remote_url",
+		"never call gitlab without an input object containing action and params",
+		"server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check",
+		"For subgroup creation with group.create, use params.name, params.path, and params.parent_id",
+		"For merge request creation, from is params.source_branch, into is params.target_branch, and titled is params.title",
+		"For merge request notes or comments, use mr_review.note_create",
+		"Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion",
+		"For personal snippets, snippet ID is params.snippet_id",
+		"or file_path",
+		"For custom emoji group operations, use custom_emoji.list with params.group_path",
+		"For project access tokens, scope names go in params.scopes as an array",
+		"expiring dates go in params.expires_at",
+		"For broadcast messages, saying maps to params.message",
+		"For job.play variables, use params.variables as an array",
+		"For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id",
+		"for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id",
+		"use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied",
+		"For runner.list_project, use params.project_id by default",
+		"Do not send params.paused, params.type, params.tag_list",
+		"For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message",
+		"For CI variables, variable name maps to params.key, value maps to params.value, and environment_scope or production scope maps to params.environment_scope",
+		"linking to a URL means params.link_url and image means params.image_url",
+		"latest pipelines plural means pipeline.list",
+		"do not send empty arrays or objects",
+		"call the selected action with params:{}",
+	)
+}
+
+func assertTaskPromptContains(t *testing.T, prompt string, snippets ...string) {
+	t.Helper()
+	for _, snippet := range snippets {
+		if !strings.Contains(prompt, snippet) {
+			t.Fatalf("taskPrompt() = %q, want %q", prompt, snippet)
+		}
 	}
 }
 

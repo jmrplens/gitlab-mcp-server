@@ -88,59 +88,11 @@ type resourceSnapshot struct {
 // before running tests, and verifies they remain unchanged after tests
 // complete. In Docker mode (E2E_MODE=docker), snapshots are skipped.
 func TestMain(m *testing.M) {
-	// Allow overriding the project prefix.
-	if p := os.Getenv("E2E_PROJECT_PREFIX"); p != "" {
-		e2eProjectPrefix = p
-	}
-	e2eRunID = configuredE2ERunID(time.Now())
-	log.Printf("e2e: run ID %s", e2eRunID)
-
-	// Load .env — Docker mode uses a different file.
-	if isDockerMode() {
-		_ = godotenv.Load("../../../test/e2e/.env.docker")
-		_ = godotenv.Load("../.env.docker")
-	} else {
-		_ = godotenv.Load("../../../.env")
-	}
+	configureE2EStartupEnvironment()
 
 	enterprise := strings.EqualFold(os.Getenv("GITLAB_ENTERPRISE"), "true")
-
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("e2e: load config: %v", err)
-	}
-
-	glClient, err := gitlabclient.NewClient(cfg)
-	if err != nil {
-		log.Fatalf("e2e: create GitLab client: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if _, err = glClient.Ping(ctx); err != nil {
-		log.Fatalf("e2e: gitlab ping failed: %v", err)
-	}
-
-	disableRateLimiting(glClient)
-
-	// In Docker mode, wait for the API to handle concurrent requests reliably.
-	// The readiness probe returns OK before nginx/puma workers are fully warmed
-	// up, causing EOF/connection-reset under burst traffic from parallel tests.
-	if isDockerMode() {
-		log.Println("e2e: warming up GitLab API for concurrent load...")
-		if stableErr := waitForAPIStable(glClient, 60*time.Second); stableErr != nil {
-			log.Fatalf("e2e: %v", stableErr)
-		}
-		log.Println("e2e: API stable — proceeding with test setup")
-	}
-
-	// Auto-detect authenticated username from token.
-	userInfo, userErr := currentUserWithRetry(glClient, 60*time.Second)
-	if userErr != nil {
-		log.Fatalf("e2e: auto-detect username: %v", userErr)
-	}
-	username := userInfo.Username
-	log.Printf("e2e: authenticated as %s", username)
+	glClient := mustE2EGitLabClient()
+	username := mustE2EUsername(glClient)
 
 	// Create MCP server with all individual tools registered.
 	server := mcp.NewServer(&mcp.Implementation{
@@ -302,7 +254,6 @@ func TestMain(m *testing.M) {
 		elicitServerCancel()
 		log.Fatalf("e2e: connect elicit MCP client: %v", err)
 	}
-
 	// Create an MCP server with Safe Mode enabled (mutating tools return previews).
 	safeModeServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "gitlab-mcp-server-e2e-safemode",
@@ -387,6 +338,54 @@ func TestMain(m *testing.M) {
 	_ = safeModeSession.Close()
 	safeModeServerCancel()
 	os.Exit(code)
+}
+
+func configureE2EStartupEnvironment() {
+	if p := os.Getenv("E2E_PROJECT_PREFIX"); p != "" {
+		e2eProjectPrefix = p
+	}
+	e2eRunID = configuredE2ERunID(time.Now())
+	log.Printf("e2e: run ID %s", e2eRunID)
+	if isDockerMode() {
+		_ = godotenv.Load("../../../test/e2e/.env.docker")
+		_ = godotenv.Load("../.env.docker")
+		return
+	}
+	_ = godotenv.Load("../../../.env")
+}
+
+func mustE2EGitLabClient() *gitlabclient.Client {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("e2e: load config: %v", err)
+	}
+	glClient, err := gitlabclient.NewClient(cfg)
+	if err != nil {
+		log.Fatalf("e2e: create GitLab client: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err = glClient.Ping(ctx); err != nil {
+		log.Fatalf("e2e: gitlab ping failed: %v", err)
+	}
+	disableRateLimiting(glClient)
+	if isDockerMode() {
+		log.Println("e2e: warming up GitLab API for concurrent load...")
+		if stableErr := waitForAPIStable(glClient, 60*time.Second); stableErr != nil {
+			log.Fatalf("e2e: %v", stableErr)
+		}
+		log.Println("e2e: API stable — proceeding with test setup")
+	}
+	return glClient
+}
+
+func mustE2EUsername(glClient *gitlabclient.Client) string {
+	userInfo, userErr := currentUserWithRetry(glClient, 60*time.Second)
+	if userErr != nil {
+		log.Fatalf("e2e: auto-detect username: %v", userErr)
+	}
+	log.Printf("e2e: authenticated as %s", userInfo.Username)
+	return userInfo.Username
 }
 
 // mockCreateMessageHandler returns a deterministic mock LLM response for

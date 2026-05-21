@@ -49,12 +49,7 @@ func TestSampling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("analyze MR changes: %v", err)
 		}
-		if out.Analysis == "" {
-			t.Fatal("expected non-empty analysis")
-		}
-		if out.Model != "e2e-mock-model" {
-			t.Fatalf("expected mock model, got %q", out.Model)
-		}
+		assertSamplingOutput(t, out.Analysis, out.Model, "analysis")
 	})
 
 	t.Run("SummarizeIssue", func(t *testing.T) {
@@ -65,12 +60,7 @@ func TestSampling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("summarize issue: %v", err)
 		}
-		if out.Summary == "" {
-			t.Fatal("expected non-empty summary")
-		}
-		if out.Model != "e2e-mock-model" {
-			t.Fatalf("expected mock model, got %q", out.Model)
-		}
+		assertSamplingOutput(t, out.Summary, out.Model, "summary")
 	})
 
 	t.Run("GenerateReleaseNotes", func(t *testing.T) {
@@ -82,12 +72,7 @@ func TestSampling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("generate release notes: %v", err)
 		}
-		if out.ReleaseNotes == "" {
-			t.Fatal("expected non-empty release notes")
-		}
-		if out.Model != "e2e-mock-model" {
-			t.Fatalf("expected mock model, got %q", out.Model)
-		}
+		assertSamplingOutput(t, out.ReleaseNotes, out.Model, "release notes")
 	})
 
 	t.Run("SummarizeMRReview", func(t *testing.T) {
@@ -98,12 +83,7 @@ func TestSampling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("summarize MR review: %v", err)
 		}
-		if out.Summary == "" {
-			t.Fatal("expected non-empty summary")
-		}
-		if out.Model != "e2e-mock-model" {
-			t.Fatalf("expected mock model, got %q", out.Model)
-		}
+		assertSamplingOutput(t, out.Summary, out.Model, "summary")
 	})
 
 	t.Run("AnalyzeCIConfig", func(t *testing.T) {
@@ -114,12 +94,7 @@ func TestSampling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("analyze CI config: %v", err)
 		}
-		if out.Analysis == "" {
-			t.Fatal("expected non-empty analysis")
-		}
-		if out.Model != "e2e-mock-model" {
-			t.Fatalf("expected mock model, got %q", out.Model)
-		}
+		assertSamplingOutput(t, out.Analysis, out.Model, "analysis")
 	})
 
 	t.Run("AnalyzeIssueScope", func(t *testing.T) {
@@ -130,12 +105,7 @@ func TestSampling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("analyze issue scope: %v", err)
 		}
-		if out.Analysis == "" {
-			t.Fatal("expected non-empty analysis")
-		}
-		if out.Model != "e2e-mock-model" {
-			t.Fatalf("expected mock model, got %q", out.Model)
-		}
+		assertSamplingOutput(t, out.Analysis, out.Model, "analysis")
 	})
 
 	t.Run("ReviewMRSecurity", func(t *testing.T) {
@@ -146,12 +116,7 @@ func TestSampling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("review MR security: %v", err)
 		}
-		if out.Review == "" {
-			t.Fatal("expected non-empty review")
-		}
-		if out.Model != "e2e-mock-model" {
-			t.Fatalf("expected mock model, got %q", out.Model)
-		}
+		assertSamplingOutput(t, out.Review, out.Model, "review")
 	})
 
 	t.Run("FindTechnicalDebt", func(t *testing.T) {
@@ -162,9 +127,7 @@ func TestSampling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("find technical debt: %v", err)
 		}
-		if out.Analysis == "" {
-			t.Fatal("expected non-empty analysis")
-		}
+		assertNonEmptySamplingText(t, out.Analysis, "analysis")
 		if strings.Contains(out.Analysis, "No technical debt markers") {
 			t.Logf("No technical debt found (LLM not invoked): analysis=%q", out.Analysis)
 		} else if out.Model != "e2e-mock-model" {
@@ -179,9 +142,7 @@ func TestSampling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("analyze deployment history: %v", err)
 		}
-		if out.Analysis == "" {
-			t.Fatal("expected non-empty analysis")
-		}
+		assertNonEmptySamplingText(t, out.Analysis, "analysis")
 		if strings.Contains(out.Analysis, "No deployments found") {
 			t.Logf("No deployments found (LLM not invoked): analysis=%q", out.Analysis)
 		} else if out.Model != "e2e-mock-model" {
@@ -197,12 +158,7 @@ func TestSampling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("generate milestone report: %v", err)
 		}
-		if out.Report == "" {
-			t.Fatal("expected non-empty report")
-		}
-		if out.Model != "e2e-mock-model" {
-			t.Fatalf("expected mock model, got %q", out.Model)
-		}
+		assertSamplingOutput(t, out.Report, out.Model, "report")
 	})
 
 	// Suppress unused variable warnings.
@@ -210,4 +166,19 @@ func TestSampling(t *testing.T) {
 	_ = ms
 	_ = commit
 	_ = mr
+}
+
+func assertSamplingOutput(t *testing.T, text, model, label string) {
+	t.Helper()
+	assertNonEmptySamplingText(t, text, label)
+	if model != "e2e-mock-model" {
+		t.Fatalf("expected mock model, got %q", model)
+	}
+}
+
+func assertNonEmptySamplingText(t *testing.T, text, label string) {
+	t.Helper()
+	if text == "" {
+		t.Fatalf("expected non-empty %s", label)
+	}
 }

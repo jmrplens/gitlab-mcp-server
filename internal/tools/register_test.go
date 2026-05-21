@@ -1713,42 +1713,55 @@ func TestAllHintReferencesValid(t *testing.T) {
 	reToolRef := regexp.MustCompile("`(gitlab_\\w+)`")
 	reActionRef := regexp.MustCompile(`action '(\w+)'`)
 
-	var toolErrors, actionErrors int
-
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		mdPath := filepath.Join(e.Name(), "markdown.go")
-		src, readErr := os.ReadFile(mdPath)
-		if readErr != nil {
-			continue
-		}
-
-		// Extract lines that belong to WriteHints calls.
-		hintLines := extractWriteHintLines(string(src))
-		for _, line := range hintLines {
-			// Check backtick-quoted tool references.
-			for _, m := range reToolRef.FindAllStringSubmatch(line, -1) {
-				toolName := m[1]
-				if !validTools[toolName] {
-					t.Errorf("%s: hint references non-existent tool %q", e.Name(), toolName)
-					toolErrors++
-				}
-			}
-			// Check action name references.
-			for _, m := range reActionRef.FindAllStringSubmatch(line, -1) {
-				actionName := m[1]
-				if !validActions[actionName] {
-					t.Errorf("%s: hint references non-existent action %q", e.Name(), actionName)
-					actionErrors++
-				}
-			}
-		}
-	}
+	toolErrors, actionErrors := validateWriteHintReferences(t, entries, validTools, validActions, reToolRef, reActionRef)
 
 	t.Logf("validated hints across all packages: %d valid tools, %d valid actions, %d tool errors, %d action errors",
 		len(validTools), len(validActions), toolErrors, actionErrors)
+}
+
+func validateWriteHintReferences(t *testing.T, entries []os.DirEntry, validTools, validActions map[string]bool, reToolRef, reActionRef *regexp.Regexp) (int, int) {
+	t.Helper()
+	var toolErrors, actionErrors int
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		src, readErr := os.ReadFile(filepath.Join(entry.Name(), "markdown.go"))
+		if readErr != nil {
+			continue
+		}
+		for _, line := range extractWriteHintLines(string(src)) {
+			toolErrors += reportInvalidToolReferences(t, entry.Name(), line, validTools, reToolRef)
+			actionErrors += reportInvalidActionReferences(t, entry.Name(), line, validActions, reActionRef)
+		}
+	}
+	return toolErrors, actionErrors
+}
+
+func reportInvalidToolReferences(t *testing.T, packageName, line string, validTools map[string]bool, reToolRef *regexp.Regexp) int {
+	t.Helper()
+	errors := 0
+	for _, match := range reToolRef.FindAllStringSubmatch(line, -1) {
+		toolName := match[1]
+		if !validTools[toolName] {
+			t.Errorf("%s: hint references non-existent tool %q", packageName, toolName)
+			errors++
+		}
+	}
+	return errors
+}
+
+func reportInvalidActionReferences(t *testing.T, packageName, line string, validActions map[string]bool, reActionRef *regexp.Regexp) int {
+	t.Helper()
+	errors := 0
+	for _, match := range reActionRef.FindAllStringSubmatch(line, -1) {
+		actionName := match[1]
+		if !validActions[actionName] {
+			t.Errorf("%s: hint references non-existent action %q", packageName, actionName)
+			errors++
+		}
+	}
+	return errors
 }
 
 // extractWriteHintLines finds string literal lines inside WriteHints() calls.

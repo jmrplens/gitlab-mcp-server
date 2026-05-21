@@ -32,6 +32,43 @@ type modelRunner struct {
 	traceBodies bool
 }
 
+type capabilityBridgeStepContext struct {
+	task                   evalTask
+	steps                  []evalStep
+	toolUse                modelContentBlock
+	routes                 map[string]toolutil.ActionMap
+	result                 *taskResult
+	firstFinalAttempt      *bool
+	lastInvalidFingerprint *string
+	repairAlreadySent      bool
+	repairCount            *int
+	stepIndex              *int
+	followups              *[]modelContentBlock
+}
+
+type lookupFollowupContext struct {
+	task      evalTask
+	steps     []evalStep
+	stepIndex int
+	toolUse   modelContentBlock
+	budget    taskCallBudget
+	routes    map[string]toolutil.ActionMap
+	result    *taskResult
+	followups *[]modelContentBlock
+	dynamic   bool
+}
+
+type validToolStepContext struct {
+	steps              []evalStep
+	stepIndex          *int
+	toolUse            modelContentBlock
+	result             *taskResult
+	followups          *[]modelContentBlock
+	simulationAttempts map[int]int
+	repairCount        int
+	simulatedErrorSeen *bool
+}
+
 // evaluateTask handles evaluate task for modelRunner.
 func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) taskResult {
 	steps := taskSteps(task)
@@ -68,19 +105,9 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 		usage := response.Usage
 		result.Trace.Events = append(result.Trace.Events, traceEvent{Turn: result.ModelCalls, Kind: "assistant_message", Role: "assistant", Blocks: response.Content, Usage: &usage, Provider: response.ProviderTrace})
 		if len(toolUses) == 0 {
-			result.Notes = append(result.Notes, "model returned no tool_use block")
-			if firstFinalAttempt {
-				result.FirstPass = false
-				firstFinalAttempt = false
-			}
-			if repairCount >= repairLimit {
+			if stop := handleNoToolUseResult(&result, &messages, &firstFinalAttempt, &repairCount, repairLimit, stepIndex, steps); stop {
 				return result
 			}
-			result.RepairAttempted = true
-			repairCount++
-			repairMessage := noToolUseRepairMessage(stepIndex, steps)
-			messages = append(messages, modelMessage{Role: "user", Content: []modelContentBlock{{Type: "text", Text: repairMessage}}})
-			result.Trace.Events = append(result.Trace.Events, traceEvent{Turn: result.ModelCalls, Kind: "repair_prompt", Role: "user", Content: repairMessage})
 			continue
 		}
 		var followups []modelContentBlock
@@ -88,105 +115,22 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 		for _, toolUse := range toolUses {
 			result.Trace.Events = append(result.Trace.Events, traceToolUseEvent(result.ModelCalls, toolUse))
 			if stepIndex < len(steps) && expectedCapabilityBridgeStep(steps[stepIndex]) && isCapabilityBridge(toolUse) {
-				validation := validateStepCallWithRoutes(steps[stepIndex], toolUse.Name, toolUse.Input, routes)
-				result.Trace.Events = append(result.Trace.Events, traceValidationEvent(result.ModelCalls, validation))
-				if firstFinalAttempt {
-					result.FirstTool = toolUse.Name
-					result.FirstAction = validation.Action
-					result.FirstPass = validation.Valid
-					firstFinalAttempt = false
-				}
-				result.FinalTool = toolUse.Name
-				result.FinalAction = validation.Action
-				result.DestructiveSafe = result.DestructiveSafe && validation.DestructiveSafe
-				if validation.Valid {
-					lastInvalidFingerprint = ""
-					recordCapabilityBridgeMetrics(&result, toolUse)
-					resourceResult := r.capabilityBridgeResult(ctx, toolUse)
-					block := toolResultBlock(toolUse.ID, resourceResult.Content, resourceResult.Err)
-					followups = append(followups, block)
-					result.Trace.Events = append(result.Trace.Events, traceToolResultEventWithMCP(result.ModelCalls, block, resourceResult.MCP))
-					if resourceResult.Err != nil {
-						result.Notes = append(result.Notes, resourceResult.Err.Error())
-						continue
-					}
-					stepIndex++
-					result.CompletedSteps = stepIndex
-					if repairCount > 0 {
-						result.RepairSuccess = true
-					}
-					if stepIndex == len(steps) {
-						result.FinalSuccess = true
-						return result
-					}
-					continue
-				}
-
-				invalidFingerprint := invalidToolUseFingerprint(toolUse)
-				if invalidFingerprint != "" && invalidFingerprint == lastInvalidFingerprint {
-					result.Notes = append(result.Notes, fmt.Sprintf("step %d repeated invalid retry: %s", stepIndex+1, validation.Message))
+				bridgeCtx := capabilityBridgeStepContext{task: task, steps: steps, toolUse: toolUse, routes: routes, result: &result, firstFinalAttempt: &firstFinalAttempt, lastInvalidFingerprint: &lastInvalidFingerprint, repairAlreadySent: repairAlreadySent, repairCount: &repairCount, stepIndex: &stepIndex, followups: &followups}
+				if stop := r.handleExpectedCapabilityBridgeStep(ctx, bridgeCtx); stop {
 					return result
 				}
-				lastInvalidFingerprint = invalidFingerprint
-				result.Notes = append(result.Notes, fmt.Sprintf("step %d: %s", stepIndex+1, validation.Message))
-				if repairAlreadySent {
-					return result
-				}
-				result.RepairAttempted = true
-				repairCount++
-				repairMessage := validationRepairMessage(task, steps[stepIndex], validation, toolUse.Input)
-				block := toolResultBlock(toolUse.ID, repairMessage, errors.New(repairMessage))
-				followups = append(followups, block)
-				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
 				continue
 			}
 			if isCapabilityBridge(toolUse) {
-				recordCapabilityBridgeMetrics(&result, toolUse)
-				resourceResult := r.capabilityBridgeResult(ctx, toolUse)
-				block := toolResultBlock(toolUse.ID, resourceResult.Content, resourceResult.Err)
-				followups = append(followups, block)
-				result.Trace.Events = append(result.Trace.Events, traceToolResultEventWithMCP(result.ModelCalls, block, resourceResult.MCP))
-				if resourceResult.Err != nil {
-					result.Notes = append(result.Notes, resourceResult.Err.Error())
-				}
+				r.appendCapabilityBridgeFollowup(ctx, toolUse, &result, &followups)
 				continue
 			}
 			if isSchemaLookup(toolUse) {
-				result.SchemaLookupUsed = true
-				if stepIndex < len(steps) {
-					if message, blocked := discoveryBudgetFeedback(task, steps[stepIndex], toolUse, callBudget); blocked {
-						block := toolResultBlock(toolUse.ID, message, errors.New(message))
-						followups = append(followups, block)
-						result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
-						continue
-					}
-				}
-				payload, lookupErr := schemaLookupResult(routes, toolUse.Input)
-				block := toolResultBlock(toolUse.ID, payload, lookupErr)
-				followups = append(followups, block)
-				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
-				if lookupErr != nil {
-					result.Notes = append(result.Notes, lookupErr.Error())
-				}
+				r.appendLookupFollowup(ctx, lookupFollowupContext{task: task, steps: steps, stepIndex: stepIndex, toolUse: toolUse, budget: callBudget, routes: routes, result: &result, followups: &followups})
 				continue
 			}
 			if isDynamicDiscovery(toolUse) {
-				result.SchemaLookupUsed = true
-				if stepIndex < len(steps) {
-					if message, blocked := discoveryBudgetFeedback(task, steps[stepIndex], toolUse, callBudget); blocked {
-						block := toolResultBlock(toolUse.ID, message, errors.New(message))
-						followups = append(followups, block)
-						result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
-						continue
-					}
-				}
-				payload, lookupErr := dynamicDiscoveryResult(ctx, routes, toolUse)
-				block := toolResultBlock(toolUse.ID, payload, lookupErr)
-				followups = append(followups, block)
-				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
-				if lookupErr != nil {
-					result.Notes = append(result.Notes, lookupErr.Error())
-				}
+				r.appendLookupFollowup(ctx, lookupFollowupContext{task: task, steps: steps, stepIndex: stepIndex, toolUse: toolUse, budget: callBudget, routes: routes, result: &result, followups: &followups, dynamic: true})
 				continue
 			}
 			if stepIndex >= len(steps) {
@@ -199,86 +143,22 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			validation := validateStepCallWithRoutes(steps[stepIndex], toolUse.Name, toolUse.Input, routes)
 			result.Trace.Events = append(result.Trace.Events, traceValidationEvent(result.ModelCalls, validation))
 			if acceptsDynamicPreludeCall(r.toolSurface, steps[stepIndex], validation) {
-				if firstFinalAttempt {
-					result.FirstTool = toolUse.Name
-					result.FirstAction = validation.Action
-					result.FirstPass = true
-					firstFinalAttempt = false
-				}
-				result.FinalTool = toolUse.Name
-				result.FinalAction = validation.Action
-				block := toolResultBlock(toolUse.ID, successfulSimulatedToolContent(steps[stepIndex], toolUse, stepIndex+1, len(steps)), nil)
-				followups = append(followups, block)
-				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
+				appendDynamicPreludeFollowup(steps, stepIndex, toolUse, validation, &result, &firstFinalAttempt, &followups)
 				continue
 			}
-			if firstFinalAttempt {
-				result.FirstTool = toolUse.Name
-				result.FirstAction = validation.Action
-				result.FirstPass = validation.Valid
-				firstFinalAttempt = false
-			}
-			result.FinalTool = toolUse.Name
-			result.FinalAction = validation.Action
-			result.DestructiveSafe = result.DestructiveSafe && validation.DestructiveSafe
+			recordValidationAttempt(&result, toolUse, validation, &firstFinalAttempt)
 			if validation.Valid {
 				lastInvalidFingerprint = ""
-				completedStep := steps[stepIndex]
-				simulation := r.validatedToolResult(ctx, steps[stepIndex], toolUse, simulationAttempts[stepIndex], stepIndex+1, len(steps))
-				if simulation.Injected {
-					hadPreviousAttempt := simulationAttempts[stepIndex] > 0
-					simulationAttempts[stepIndex]++
-					if simulation.Err != nil {
-						result.RepairAttempted = true
-						simulatedErrorSeen = true
-						result.Notes = append(result.Notes, toolExecutionNote(stepIndex+1, steps[stepIndex], simulation.Err))
-					} else if hadPreviousAttempt {
-						result.RepairSuccess = true
-					}
-					block := toolResultBlock(toolUse.ID, simulation.Content, simulation.Err)
-					followups = append(followups, block)
-					result.Trace.Events = append(result.Trace.Events, traceToolResultEventWithMCP(result.ModelCalls, block, simulation.MCP))
-					if simulation.Advance {
-						stepIndex++
-						result.CompletedSteps = stepIndex
-						if stepIndex == len(steps) {
-							result.FinalSuccess = simulation.Err == nil
-							if result.FinalSuccess && (repairCount > 0 || simulatedErrorSeen) {
-								result.RepairSuccess = true
-							}
-							return result
-						}
-					}
-					continue
-				}
-				if simulationAttempts[stepIndex] > 0 {
-					result.RepairSuccess = true
-				}
-				stepIndex++
-				result.CompletedSteps = stepIndex
-				if repairCount > 0 {
-					result.RepairSuccess = true
-				}
-				block := toolResultBlock(toolUse.ID, successfulSimulatedToolContent(completedStep, toolUse, stepIndex+1, len(steps)), nil)
-				followups = append(followups, block)
-				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
-				if stepIndex == len(steps) {
-					result.FinalSuccess = true
-					if simulatedErrorSeen {
-						result.RepairSuccess = true
-					}
+				validCtx := validToolStepContext{steps: steps, stepIndex: &stepIndex, toolUse: toolUse, result: &result, followups: &followups, simulationAttempts: simulationAttempts, repairCount: repairCount, simulatedErrorSeen: &simulatedErrorSeen}
+				if stop := r.handleValidToolStep(ctx, validCtx); stop {
 					return result
 				}
 				continue
 			}
 
-			invalidFingerprint := invalidToolUseFingerprint(toolUse)
-			if invalidFingerprint != "" && invalidFingerprint == lastInvalidFingerprint {
-				result.Notes = append(result.Notes, fmt.Sprintf("step %d repeated invalid retry: %s", stepIndex+1, validation.Message))
+			if repeated := recordInvalidToolUse(&result, stepIndex, validation, toolUse, &lastInvalidFingerprint); repeated {
 				return result
 			}
-			lastInvalidFingerprint = invalidFingerprint
-			result.Notes = append(result.Notes, fmt.Sprintf("step %d: %s", stepIndex+1, validation.Message))
 			if repairAlreadySent {
 				return result
 			}
@@ -308,6 +188,199 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 
 	result.Notes = append(result.Notes, fmt.Sprintf("tool-call step limit reached after %d/%d scenario steps", result.CompletedSteps, len(steps)))
 	return result
+}
+
+func (r *modelRunner) handleValidToolStep(ctx context.Context, validCtx validToolStepContext) bool {
+	stepIndex := *validCtx.stepIndex
+	completedStep := validCtx.steps[stepIndex]
+	simulation := r.validatedToolResult(ctx, completedStep, validCtx.toolUse, validCtx.simulationAttempts[stepIndex], stepIndex+1, len(validCtx.steps))
+	if simulation.Injected {
+		hadPreviousAttempt := validCtx.simulationAttempts[stepIndex] > 0
+		validCtx.simulationAttempts[stepIndex]++
+		if simulation.Err != nil {
+			validCtx.result.RepairAttempted = true
+			*validCtx.simulatedErrorSeen = true
+			validCtx.result.Notes = append(validCtx.result.Notes, toolExecutionNote(stepIndex+1, completedStep, simulation.Err))
+		} else if hadPreviousAttempt {
+			validCtx.result.RepairSuccess = true
+		}
+		block := toolResultBlock(validCtx.toolUse.ID, simulation.Content, simulation.Err)
+		*validCtx.followups = append(*validCtx.followups, block)
+		validCtx.result.Trace.Events = append(validCtx.result.Trace.Events, traceToolResultEventWithMCP(validCtx.result.ModelCalls, block, simulation.MCP))
+		return advanceInjectedSimulation(validCtx, simulation.Err, simulation.Advance)
+	}
+	if validCtx.simulationAttempts[stepIndex] > 0 {
+		validCtx.result.RepairSuccess = true
+	}
+	*validCtx.stepIndex++
+	validCtx.result.CompletedSteps = *validCtx.stepIndex
+	if validCtx.repairCount > 0 {
+		validCtx.result.RepairSuccess = true
+	}
+	block := toolResultBlock(validCtx.toolUse.ID, successfulSimulatedToolContent(completedStep, validCtx.toolUse, *validCtx.stepIndex+1, len(validCtx.steps)), nil)
+	*validCtx.followups = append(*validCtx.followups, block)
+	validCtx.result.Trace.Events = append(validCtx.result.Trace.Events, traceToolResultEvent(validCtx.result.ModelCalls, block))
+	if *validCtx.stepIndex == len(validCtx.steps) {
+		validCtx.result.FinalSuccess = true
+		if *validCtx.simulatedErrorSeen {
+			validCtx.result.RepairSuccess = true
+		}
+		return true
+	}
+	return false
+}
+
+func advanceInjectedSimulation(validCtx validToolStepContext, simulationErr error, advance bool) bool {
+	if !advance {
+		return false
+	}
+	*validCtx.stepIndex++
+	validCtx.result.CompletedSteps = *validCtx.stepIndex
+	if *validCtx.stepIndex != len(validCtx.steps) {
+		return false
+	}
+	validCtx.result.FinalSuccess = simulationErr == nil
+	if validCtx.result.FinalSuccess && (validCtx.repairCount > 0 || *validCtx.simulatedErrorSeen) {
+		validCtx.result.RepairSuccess = true
+	}
+	return true
+}
+
+func handleNoToolUseResult(result *taskResult, messages *[]modelMessage, firstFinalAttempt *bool, repairCount *int, repairLimit, stepIndex int, steps []evalStep) bool {
+	result.Notes = append(result.Notes, "model returned no tool_use block")
+	if *firstFinalAttempt {
+		result.FirstPass = false
+		*firstFinalAttempt = false
+	}
+	if *repairCount >= repairLimit {
+		return true
+	}
+	result.RepairAttempted = true
+	(*repairCount)++
+	repairMessage := noToolUseRepairMessage(stepIndex, steps)
+	*messages = append(*messages, modelMessage{Role: "user", Content: []modelContentBlock{{Type: "text", Text: repairMessage}}})
+	result.Trace.Events = append(result.Trace.Events, traceEvent{Turn: result.ModelCalls, Kind: "repair_prompt", Role: "user", Content: repairMessage})
+	return false
+}
+
+func (r *modelRunner) handleExpectedCapabilityBridgeStep(ctx context.Context, bridgeCtx capabilityBridgeStepContext) bool {
+	step := bridgeCtx.steps[*bridgeCtx.stepIndex]
+	validation := validateStepCallWithRoutes(step, bridgeCtx.toolUse.Name, bridgeCtx.toolUse.Input, bridgeCtx.routes)
+	bridgeCtx.result.Trace.Events = append(bridgeCtx.result.Trace.Events, traceValidationEvent(bridgeCtx.result.ModelCalls, validation))
+	recordValidationAttempt(bridgeCtx.result, bridgeCtx.toolUse, validation, bridgeCtx.firstFinalAttempt)
+	if !validation.Valid {
+		return handleInvalidCapabilityBridgeCall(bridgeCtx, step, validation)
+	}
+	*bridgeCtx.lastInvalidFingerprint = ""
+	recordCapabilityBridgeMetrics(bridgeCtx.result, bridgeCtx.toolUse)
+	resourceResult := r.capabilityBridgeResult(ctx, bridgeCtx.toolUse)
+	block := toolResultBlock(bridgeCtx.toolUse.ID, resourceResult.Content, resourceResult.Err)
+	*bridgeCtx.followups = append(*bridgeCtx.followups, block)
+	bridgeCtx.result.Trace.Events = append(bridgeCtx.result.Trace.Events, traceToolResultEventWithMCP(bridgeCtx.result.ModelCalls, block, resourceResult.MCP))
+	if resourceResult.Err != nil {
+		bridgeCtx.result.Notes = append(bridgeCtx.result.Notes, resourceResult.Err.Error())
+		return false
+	}
+	(*bridgeCtx.stepIndex)++
+	bridgeCtx.result.CompletedSteps = *bridgeCtx.stepIndex
+	if *bridgeCtx.repairCount > 0 {
+		bridgeCtx.result.RepairSuccess = true
+	}
+	if *bridgeCtx.stepIndex == len(bridgeCtx.steps) {
+		bridgeCtx.result.FinalSuccess = true
+		return true
+	}
+	return false
+}
+
+func handleInvalidCapabilityBridgeCall(bridgeCtx capabilityBridgeStepContext, step evalStep, validation validationResult) bool {
+	if repeated := recordInvalidToolUse(bridgeCtx.result, *bridgeCtx.stepIndex, validation, bridgeCtx.toolUse, bridgeCtx.lastInvalidFingerprint); repeated {
+		return true
+	}
+	if bridgeCtx.repairAlreadySent {
+		return true
+	}
+	bridgeCtx.result.RepairAttempted = true
+	(*bridgeCtx.repairCount)++
+	repairMessage := validationRepairMessage(bridgeCtx.task, step, validation, bridgeCtx.toolUse.Input)
+	block := toolResultBlock(bridgeCtx.toolUse.ID, repairMessage, errors.New(repairMessage))
+	*bridgeCtx.followups = append(*bridgeCtx.followups, block)
+	bridgeCtx.result.Trace.Events = append(bridgeCtx.result.Trace.Events, traceToolResultEvent(bridgeCtx.result.ModelCalls, block))
+	return false
+}
+
+func recordValidationAttempt(result *taskResult, toolUse modelContentBlock, validation validationResult, firstFinalAttempt *bool) {
+	if *firstFinalAttempt {
+		result.FirstTool = toolUse.Name
+		result.FirstAction = validation.Action
+		result.FirstPass = validation.Valid
+		*firstFinalAttempt = false
+	}
+	result.FinalTool = toolUse.Name
+	result.FinalAction = validation.Action
+	result.DestructiveSafe = result.DestructiveSafe && validation.DestructiveSafe
+}
+
+func appendDynamicPreludeFollowup(steps []evalStep, stepIndex int, toolUse modelContentBlock, validation validationResult, result *taskResult, firstFinalAttempt *bool, followups *[]modelContentBlock) {
+	if *firstFinalAttempt {
+		result.FirstTool = toolUse.Name
+		result.FirstAction = validation.Action
+		result.FirstPass = true
+		*firstFinalAttempt = false
+	}
+	result.FinalTool = toolUse.Name
+	result.FinalAction = validation.Action
+	block := toolResultBlock(toolUse.ID, successfulSimulatedToolContent(steps[stepIndex], toolUse, stepIndex+1, len(steps)), nil)
+	*followups = append(*followups, block)
+	result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
+}
+
+func (r *modelRunner) appendCapabilityBridgeFollowup(ctx context.Context, toolUse modelContentBlock, result *taskResult, followups *[]modelContentBlock) {
+	recordCapabilityBridgeMetrics(result, toolUse)
+	resourceResult := r.capabilityBridgeResult(ctx, toolUse)
+	block := toolResultBlock(toolUse.ID, resourceResult.Content, resourceResult.Err)
+	*followups = append(*followups, block)
+	result.Trace.Events = append(result.Trace.Events, traceToolResultEventWithMCP(result.ModelCalls, block, resourceResult.MCP))
+	if resourceResult.Err != nil {
+		result.Notes = append(result.Notes, resourceResult.Err.Error())
+	}
+}
+
+func (r *modelRunner) appendLookupFollowup(ctx context.Context, lookupCtx lookupFollowupContext) {
+	lookupCtx.result.SchemaLookupUsed = true
+	if lookupCtx.stepIndex < len(lookupCtx.steps) {
+		if message, blocked := discoveryBudgetFeedback(lookupCtx.task, lookupCtx.steps[lookupCtx.stepIndex], lookupCtx.toolUse, lookupCtx.budget); blocked {
+			block := toolResultBlock(lookupCtx.toolUse.ID, message, errors.New(message))
+			*lookupCtx.followups = append(*lookupCtx.followups, block)
+			lookupCtx.result.Trace.Events = append(lookupCtx.result.Trace.Events, traceToolResultEvent(lookupCtx.result.ModelCalls, block))
+			return
+		}
+	}
+	payload, lookupErr := lookupToolResult(ctx, lookupCtx.routes, lookupCtx.toolUse, lookupCtx.dynamic)
+	block := toolResultBlock(lookupCtx.toolUse.ID, payload, lookupErr)
+	*lookupCtx.followups = append(*lookupCtx.followups, block)
+	lookupCtx.result.Trace.Events = append(lookupCtx.result.Trace.Events, traceToolResultEvent(lookupCtx.result.ModelCalls, block))
+	if lookupErr != nil {
+		lookupCtx.result.Notes = append(lookupCtx.result.Notes, lookupErr.Error())
+	}
+}
+
+func lookupToolResult(ctx context.Context, routes map[string]toolutil.ActionMap, toolUse modelContentBlock, dynamic bool) (string, error) {
+	if dynamic {
+		return dynamicDiscoveryResult(ctx, routes, toolUse)
+	}
+	return schemaLookupResult(routes, toolUse.Input)
+}
+
+func recordInvalidToolUse(result *taskResult, stepIndex int, validation validationResult, toolUse modelContentBlock, lastInvalidFingerprint *string) bool {
+	invalidFingerprint := invalidToolUseFingerprint(toolUse)
+	if invalidFingerprint != "" && invalidFingerprint == *lastInvalidFingerprint {
+		result.Notes = append(result.Notes, fmt.Sprintf("step %d repeated invalid retry: %s", stepIndex+1, validation.Message))
+		return true
+	}
+	*lastInvalidFingerprint = invalidFingerprint
+	result.Notes = append(result.Notes, fmt.Sprintf("step %d: %s", stepIndex+1, validation.Message))
+	return false
 }
 
 // noToolUseRepairMessage builds no tool use repair message for retry and repair feedback.

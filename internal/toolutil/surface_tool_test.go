@@ -68,7 +68,7 @@ func TestRegisterSurfaceToolFromSpec_ExplicitConfirmBypassesPrompt(t *testing.T)
 
 	session := newSurfaceToolSession(t, server, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 		t.Fatal("elicitation should not run when confirm is true")
-		return nil, nil
+		return &mcp.ElicitResult{}, nil
 	})
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "gitlab_test_delete", Arguments: map[string]any{"id": 1, "confirm": true}})
 	if err != nil {

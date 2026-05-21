@@ -438,7 +438,7 @@ func TestMustIndividualToolFromCatalogAction_InvalidActionPanics(t *testing.T) {
 	action := actioncatalog.Action{
 		Name: "broken",
 		Route: toolutil.ActionRoute{
-			Handler:     func(context.Context, map[string]any) (any, error) { return nil, nil },
+			Handler:     func(context.Context, map[string]any) (any, error) { return struct{}{}, nil },
 			InputSchema: map[string]any{"type": "object"},
 		},
 		OwnerPackage:   "tools",

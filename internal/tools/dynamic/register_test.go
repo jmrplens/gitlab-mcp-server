@@ -1641,16 +1641,22 @@ func TestExecute_CanonicalizesAlias(t *testing.T) {
 	}
 }
 
+type executeNormalizationCase struct {
+	name   string
+	input  ExecuteInput
+	assert func(t *testing.T, output any)
+}
+
 // TestExecute_NormalizesActionScopedParameterAliases verifies dynamic execute
 // accepts ambiguous model aliases only for actions where the schema is clear.
 func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
+	runExecuteNormalizationCases(t, registry, coreActionScopedParameterAliasCases())
+	runExecuteNormalizationCases(t, registry, resourceActionScopedParameterAliasCases())
+}
 
-	tests := []struct {
-		name   string
-		input  ExecuteInput
-		assert func(t *testing.T, output any)
-	}{
+func coreActionScopedParameterAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name:  "job status to scope",
 			input: ExecuteInput{Action: "job.list", Params: map[string]any{"project_id": 123, "pipeline_id": 456, "status": "failed"}},
@@ -1798,6 +1804,11 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 				}
 			},
 		},
+	}
+}
+
+func resourceActionScopedParameterAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name:  "group label update name alias",
 			input: ExecuteInput{Action: "group.group_label_update", Params: map[string]any{"group_id": "my-org", "label_id": 31, "name": "next-label"}},
@@ -1928,7 +1939,10 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 			},
 		},
 	}
+}
 
+func runExecuteNormalizationCases(t *testing.T, registry *Registry, tests []executeNormalizationCase) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, output, err := registry.Execute(t.Context(), nil, tt.input)

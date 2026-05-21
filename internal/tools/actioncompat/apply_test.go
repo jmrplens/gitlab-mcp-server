@@ -32,7 +32,7 @@ func TestApplyToGroupSpecs_ProjectsAllGroups(t *testing.T) {
 // TestApplyToGroupSpec_ClonesAndUsesToolNameDomain verifies group projection clones inputs and falls back to the tool name domain.
 func TestApplyToGroupSpec_ClonesAndUsesToolNameDomain(t *testing.T) {
 	route := toolutil.ActionRoute{
-		Handler:     func(_ context.Context, _ map[string]any) (any, error) { return nil, nil },
+		Handler:     func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil },
 		InputSchema: map[string]any{"properties": map[string]any{"scope": map[string]any{}}},
 	}
 	original := actioncatalog.CatalogGroupSpec{
@@ -55,7 +55,7 @@ func TestApplyToGroupSpec_ClonesAndUsesToolNameDomain(t *testing.T) {
 // TestApplyToActionSpecs_ProjectsCompatibilityMetadata verifies ApplyToActionSpecs projects compatibility metadata.
 func TestApplyToActionSpecs_ProjectsCompatibilityMetadata(t *testing.T) {
 	route := toolutil.ActionRoute{
-		Handler: func(_ context.Context, _ map[string]any) (any, error) { return nil, nil },
+		Handler: func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil },
 		InputSchema: map[string]any{"properties": map[string]any{
 			"project_id": map[string]any{},
 			"scope":      map[string]any{},
