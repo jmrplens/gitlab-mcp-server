@@ -1081,8 +1081,10 @@ func verbSynonyms() map[string][]string {
 	return verbSynonymsMap
 }
 
-type tagCollector func(values ...string)
-type actionTagger func(tagCollector, string, string, string) bool
+type (
+	tagCollector func(values ...string)
+	actionTagger func(tagCollector, string, string, string) bool
+)
 
 var actionTaggers = []actionTagger{
 	addIDPatternTags,

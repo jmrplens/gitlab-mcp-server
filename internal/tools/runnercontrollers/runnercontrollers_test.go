@@ -370,8 +370,10 @@ func TestDelete_ContextCancelled(t *testing.T) {
 
 // TestFormatOutputMarkdown verifies Markdown formatting with and without timestamps.
 func TestFormatOutputMarkdown(t *testing.T) {
-	out := Output{ID: 1, Description: "ctrl-1", State: "enabled",
-		CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z"}
+	out := Output{
+		ID: 1, Description: "ctrl-1", State: "enabled",
+		CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z",
+	}
 
 	md := FormatOutputMarkdown(out)
 	for _, want := range []string{"ctrl-1", "enabled", "Created At", "Updated At"} {

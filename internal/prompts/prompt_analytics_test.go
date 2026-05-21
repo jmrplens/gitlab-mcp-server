@@ -34,10 +34,14 @@ func TestMergeVelocity_CalculatesMetrics(t *testing.T) {
 
 	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, r *http.Request) {
 		mrs := []*gl.BasicMergeRequest{
-			{IID: 1, Title: "Feature A", SourceBranch: "feat/a", TargetBranch: "main",
-				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created, MergedAt: &merged},
-			{IID: 2, Title: "Feature B", SourceBranch: "feat/b", TargetBranch: "main",
-				Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created, MergedAt: &merged2},
+			{
+				IID: 1, Title: "Feature A", SourceBranch: "feat/a", TargetBranch: "main",
+				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created, MergedAt: &merged,
+			},
+			{
+				IID: 2, Title: "Feature B", SourceBranch: "feat/b", TargetBranch: "main",
+				Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created, MergedAt: &merged2,
+			},
 		}
 		data, _ := json.Marshal(mrs)
 		respondJSON(w, http.StatusOK, string(data))
@@ -106,10 +110,14 @@ func TestReleaseReadiness_ShowsBlockers(t *testing.T) {
 
 	mux.HandleFunc(routeProjectMergeRequests, func(w http.ResponseWriter, r *http.Request) {
 		mrs := []*gl.BasicMergeRequest{
-			{IID: 1, Title: "Feature A", SourceBranch: "feat/a", TargetBranch: testReleaseBranch,
-				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created, Draft: true},
-			{IID: 2, Title: "Feature B", SourceBranch: "feat/b", TargetBranch: testReleaseBranch,
-				Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created, HasConflicts: true},
+			{
+				IID: 1, Title: "Feature A", SourceBranch: "feat/a", TargetBranch: testReleaseBranch,
+				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created, Draft: true,
+			},
+			{
+				IID: 2, Title: "Feature B", SourceBranch: "feat/b", TargetBranch: testReleaseBranch,
+				Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created, HasConflicts: true,
+			},
 		}
 		data, _ := json.Marshal(mrs)
 		respondJSON(w, http.StatusOK, string(data))
@@ -270,17 +278,21 @@ func TestWeeklyTeam_RecapCombinesData(t *testing.T) {
 		state := r.URL.Query().Get("state")
 		if state == "merged" {
 			mrs := []*gl.BasicMergeRequest{
-				{IID: 1, Title: "Merged feature", SourceBranch: "feat/done", TargetBranch: "main",
+				{
+					IID: 1, Title: "Merged feature", SourceBranch: "feat/done", TargetBranch: "main",
 					Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created, MergedAt: &merged,
-					References: &gl.IssueReferences{Full: "group/alpha!1"}},
+					References: &gl.IssueReferences{Full: "group/alpha!1"},
+				},
 			}
 			data, _ := json.Marshal(mrs)
 			respondJSON(w, http.StatusOK, string(data))
 		} else {
 			mrs := []*gl.BasicMergeRequest{
-				{IID: 2, Title: "Open MR", SourceBranch: "feat/wip", TargetBranch: "main",
+				{
+					IID: 2, Title: "Open MR", SourceBranch: "feat/wip", TargetBranch: "main",
 					Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created, Draft: true,
-					References: &gl.IssueReferences{Full: "group/alpha!2"}},
+					References: &gl.IssueReferences{Full: "group/alpha!2"},
+				},
 			}
 			data, _ := json.Marshal(mrs)
 			respondJSON(w, http.StatusOK, string(data))

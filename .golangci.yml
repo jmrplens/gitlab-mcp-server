@@ -254,7 +254,17 @@ output:
 formatters:
   enable:
     - goimports # Import grouping and ordering
+    - gofumpt # Stricter gofmt-compatible formatting
+    - gci # Enforce deterministic import section grouping
   settings:
+    gofumpt:
+      module-path: github.com/jmrplens/gitlab-mcp-server/v2
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/jmrplens/gitlab-mcp-server/v2)
+      custom-order: true
     goimports:
       local-prefixes:
-        - github.com/jmrplens/gitlab-mcp-server
+        - github.com/jmrplens/gitlab-mcp-server/v2

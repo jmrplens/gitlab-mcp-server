@@ -11,12 +11,11 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 const (

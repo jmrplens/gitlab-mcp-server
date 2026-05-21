@@ -93,13 +93,17 @@ func TestTeamOverview_MemberWorkload(t *testing.T) {
 			return
 		}
 		mrs := []*gl.BasicMergeRequest{
-			{IID: 1, Title: "MR1", ProjectID: 10, SourceBranch: "a", TargetBranch: "main",
+			{
+				IID: 1, Title: "MR1", ProjectID: 10, SourceBranch: "a", TargetBranch: "main",
 				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created,
 				Reviewers:  []*gl.BasicUser{{Username: "bob"}},
-				References: &gl.IssueReferences{Full: "group/proj!1"}},
-			{IID: 2, Title: "MR2", ProjectID: 10, SourceBranch: "b", TargetBranch: "main",
+				References: &gl.IssueReferences{Full: "group/proj!1"},
+			},
+			{
+				IID: 2, Title: "MR2", ProjectID: 10, SourceBranch: "b", TargetBranch: "main",
 				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created,
-				References: &gl.IssueReferences{Full: "group/proj!2"}},
+				References: &gl.IssueReferences{Full: "group/proj!2"},
+			},
 		}
 		data, _ := json.Marshal(mrs)
 		respondJSON(w, http.StatusOK, string(data))
@@ -148,12 +152,16 @@ func TestTeamMRDashboard_GroupsByProject(t *testing.T) {
 
 	mux.HandleFunc("GET /api/v4/groups/mygroup/merge_requests", func(w http.ResponseWriter, r *http.Request) {
 		mrs := []*gl.BasicMergeRequest{
-			{IID: 10, Title: "Feature A", ProjectID: 10, SourceBranch: "feat/a", TargetBranch: "main",
+			{
+				IID: 10, Title: "Feature A", ProjectID: 10, SourceBranch: "feat/a", TargetBranch: "main",
 				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created,
-				References: &gl.IssueReferences{Full: "group/alpha!10"}},
-			{IID: 20, Title: "Feature B", ProjectID: 20, SourceBranch: "feat/b", TargetBranch: "main",
+				References: &gl.IssueReferences{Full: "group/alpha!10"},
+			},
+			{
+				IID: 20, Title: "Feature B", ProjectID: 20, SourceBranch: "feat/b", TargetBranch: "main",
 				Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created, Draft: true,
-				References: &gl.IssueReferences{Full: "group/beta!20"}},
+				References: &gl.IssueReferences{Full: "group/beta!20"},
+			},
 		}
 		data, _ := json.Marshal(mrs)
 		respondJSON(w, http.StatusOK, string(data))
@@ -244,14 +252,18 @@ func TestReviewerWorkload_Distribution(t *testing.T) {
 	})
 	mux.HandleFunc("GET /api/v4/groups/mygroup/merge_requests", func(w http.ResponseWriter, r *http.Request) {
 		mrs := []*gl.BasicMergeRequest{
-			{IID: 1, Title: "MR1", ProjectID: 10, SourceBranch: "a", TargetBranch: "main",
+			{
+				IID: 1, Title: "MR1", ProjectID: 10, SourceBranch: "a", TargetBranch: "main",
 				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created,
 				Reviewers:  []*gl.BasicUser{{Username: "bob"}, {Username: "charlie"}},
-				References: &gl.IssueReferences{Full: "group/proj!1"}},
-			{IID: 2, Title: "MR2", ProjectID: 10, SourceBranch: "b", TargetBranch: "main",
+				References: &gl.IssueReferences{Full: "group/proj!1"},
+			},
+			{
+				IID: 2, Title: "MR2", ProjectID: 10, SourceBranch: "b", TargetBranch: "main",
 				Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created,
 				Reviewers:  []*gl.BasicUser{{Username: "bob"}},
-				References: &gl.IssueReferences{Full: "group/proj!2"}},
+				References: &gl.IssueReferences{Full: "group/proj!2"},
+			},
 		}
 		data, _ := json.Marshal(mrs)
 		respondJSON(w, http.StatusOK, string(data))

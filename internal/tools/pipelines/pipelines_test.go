@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -1383,8 +1383,10 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_ClickablePipelineLinks(t *testing.T) {
 	out := ListOutput{
 		Pipelines: []Output{
-			{ID: 42, Status: "success", Source: "push", Ref: "main", SHA: "abc12345",
-				WebURL: "https://gitlab.example.com/-/pipelines/42"},
+			{
+				ID: 42, Status: "success", Source: "push", Ref: "main", SHA: "abc12345",
+				WebURL: "https://gitlab.example.com/-/pipelines/42",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}

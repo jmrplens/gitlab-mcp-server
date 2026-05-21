@@ -11,12 +11,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/sampling"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestFormatPipelineFailureForAnalysis verifies the Markdown document produced

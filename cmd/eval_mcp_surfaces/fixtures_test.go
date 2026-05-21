@@ -502,7 +502,6 @@ func TestReplacePromptJobID(t *testing.T) {
 	prompt := "Play manual job `496` in project `my-org/tools/gitlab-mcp-server` with variable `DEPLOY_ENV=staging`."
 
 	got, err := replacePromptJobID(prompt, 1234)
-
 	if err != nil {
 		t.Fatalf("replacePromptJobID() error = %v", err)
 	}
@@ -655,7 +654,6 @@ func TestReplacePromptBacktickValueAfter(t *testing.T) {
 	prompt := "Delete pipeline trigger token ID `77` from project `my-org/tools/gitlab-mcp-server`."
 
 	got, err := replacePromptBacktickValueAfter(prompt, "pipeline trigger token ID ", 1234)
-
 	if err != nil {
 		t.Fatalf("replacePromptBacktickValueAfter() error = %v", err)
 	}

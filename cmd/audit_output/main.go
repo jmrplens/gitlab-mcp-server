@@ -117,8 +117,10 @@ func auditDescriptionReturns(tls []*mcp.Tool, kind string) []finding {
 		desc := lower(t.Description)
 		hasReturns := strings.Contains(desc, "returns") || strings.Contains(desc, "returns:")
 		if !hasReturns {
-			fs = append(fs, finding{t.Name, "description-returns",
-				fmt.Sprintf("%s description lacks 'Returns:' info (%d chars)", kind, len(t.Description))})
+			fs = append(fs, finding{
+				t.Name, "description-returns",
+				fmt.Sprintf("%s description lacks 'Returns:' info (%d chars)", kind, len(t.Description)),
+			})
 		}
 	}
 	return fs
@@ -140,8 +142,10 @@ func auditSeeAlso(tls []*mcp.Tool, kind string) []finding {
 	var fs []finding
 	for _, t := range tls {
 		if !strings.Contains(strings.ToLower(t.Description), "see also:") {
-			fs = append(fs, finding{t.Name, "see-also",
-				kind + " description lacks 'See also:' cross-references"})
+			fs = append(fs, finding{
+				t.Name, "see-also",
+				kind + " description lacks 'See also:' cross-references",
+			})
 		}
 	}
 	return fs

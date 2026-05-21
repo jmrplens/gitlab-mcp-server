@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	gitlab "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // errExpectedErr identifies the err expected err constant used by this package.

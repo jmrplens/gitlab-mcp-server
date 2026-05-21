@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
 )
 
 // setupMRProject creates a project with a feature branch that has

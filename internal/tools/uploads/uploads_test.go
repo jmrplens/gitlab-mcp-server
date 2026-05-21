@@ -293,7 +293,7 @@ func TestProjectUpload_FilePath_Success(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "upload.txt")
 	content := []byte("file content for upload")
-	if err := os.WriteFile(path, content, 0600); err != nil {
+	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -432,7 +432,7 @@ func TestProjectUpload_FilePath_TooLarge(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "huge.bin")
 	// Create a file just over the configured max (5 MB)
-	if err := os.WriteFile(path, make([]byte, 6*1024*1024), 0600); err != nil {
+	if err := os.WriteFile(path, make([]byte, 6*1024*1024), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

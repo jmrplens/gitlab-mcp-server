@@ -13,8 +13,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const errRunnerIDRequired = "runner_id is required and must be > 0"
-const errControllerIDRequired = "controller_id is required and must be > 0"
+const (
+	errRunnerIDRequired     = "runner_id is required and must be > 0"
+	errControllerIDRequired = "controller_id is required and must be > 0"
+)
 
 // ---------------------------------------------------------------------------
 // Output types

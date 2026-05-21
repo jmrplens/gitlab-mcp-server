@@ -172,10 +172,14 @@ func TestRichContentHint(t *testing.T) {
 		{name: "empty features", features: "", webURL: "https://gitlab.com/p/1", want: ""},
 		{name: "empty webURL", features: "mermaid", webURL: "", want: ""},
 		{name: "both empty", features: "", webURL: "", want: ""},
-		{name: "single feature", features: "mermaid", webURL: "https://gitlab.com/p/1",
-			want: "\n> **Contains**: mermaid — [view in GitLab](https://gitlab.com/p/1) for full rendering.\n"},
-		{name: "multiple features", features: "mermaid, math, HTML", webURL: "https://gitlab.com/p/2",
-			want: "\n> **Contains**: mermaid, math, HTML — [view in GitLab](https://gitlab.com/p/2) for full rendering.\n"},
+		{
+			name: "single feature", features: "mermaid", webURL: "https://gitlab.com/p/1",
+			want: "\n> **Contains**: mermaid — [view in GitLab](https://gitlab.com/p/1) for full rendering.\n",
+		},
+		{
+			name: "multiple features", features: "mermaid, math, HTML", webURL: "https://gitlab.com/p/2",
+			want: "\n> **Contains**: mermaid, math, HTML — [view in GitLab](https://gitlab.com/p/2) for full rendering.\n",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

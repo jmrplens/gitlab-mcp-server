@@ -147,7 +147,6 @@ func TestPoll_ImmediateSuccess(t *testing.T) {
 		calls++
 		return true, "ready", nil
 	})
-
 	if err != nil {
 		t.Fatalf("Poll() error = %v, want nil", err)
 	}
@@ -167,7 +166,6 @@ func TestPoll_RetrySuccess(t *testing.T) {
 		}
 		return true, "ready", nil
 	})
-
 	if err != nil {
 		t.Fatalf("Poll() error = %v, want nil", err)
 	}
@@ -237,7 +235,6 @@ func TestRetryWithBackoffInterval_RetrySuccess(t *testing.T) {
 		}
 		return 42, false, "", nil
 	})
-
 	if err != nil {
 		t.Fatalf("retryWithBackoffInterval() error = %v, want nil", err)
 	}

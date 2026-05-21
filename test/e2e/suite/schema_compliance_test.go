@@ -113,7 +113,7 @@ func TestSchema_PaginationHasMore(t *testing.T) {
 
 	// Call a list tool that returns paginated results.
 	// gitlab_list_projects is reliable for this test as it always has results.
-	var session = sess.meta
+	session := sess.meta
 	toolName := "gitlab_project"
 	input := map[string]any{
 		"action": "list",

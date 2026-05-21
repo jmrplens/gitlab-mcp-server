@@ -16,6 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
@@ -24,9 +27,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // ProjectFixture holds identifiers for a test project created by a fixture builder.

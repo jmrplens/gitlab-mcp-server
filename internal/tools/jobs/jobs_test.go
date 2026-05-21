@@ -1637,8 +1637,10 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_ClickableJobLinks(t *testing.T) {
 	out := ListOutput{
 		Jobs: []Output{
-			{ID: 200, Name: "deploy", Stage: "deploy", Status: "success", Duration: 10.0,
-				WebURL: "https://gitlab.example.com/-/jobs/200"},
+			{
+				ID: 200, Name: "deploy", Stage: "deploy", Status: "success", Duration: 10.0,
+				WebURL: "https://gitlab.example.com/-/jobs/200",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}

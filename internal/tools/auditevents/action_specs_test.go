@@ -11,8 +11,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const registerEventJSON = `{"id":1,"author_id":10,"entity_id":42,"entity_type":"Project","details":{"change":"updated"},"created_at":"2026-01-01T00:00:00Z"}`
-const registerEventListJSON = `[{"id":1,"author_id":10,"entity_id":42,"entity_type":"Project","details":{},"created_at":"2026-01-01T00:00:00Z"}]`
+const (
+	registerEventJSON     = `{"id":1,"author_id":10,"entity_id":42,"entity_type":"Project","details":{"change":"updated"},"created_at":"2026-01-01T00:00:00Z"}`
+	registerEventListJSON = `[{"id":1,"author_id":10,"entity_id":42,"entity_type":"Project","details":{},"created_at":"2026-01-01T00:00:00Z"}]`
+)
 
 // TestActionSpecs_Metadata verifies audit event action spec metadata.
 func TestActionSpecs_Metadata(t *testing.T) {

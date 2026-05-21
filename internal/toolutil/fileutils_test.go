@@ -23,7 +23,7 @@ import (
 func TestOpenAndValidateFile_RegularFile(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "test.txt")
-	if err := os.WriteFile(path, []byte("hello"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -63,7 +63,7 @@ func TestOpenAndValidateFile_NotFound(t *testing.T) {
 func TestOpenAndValidateFile_TooLarge(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "large.bin")
-	if err := os.WriteFile(path, make([]byte, 2048), 0600); err != nil {
+	if err := os.WriteFile(path, make([]byte, 2048), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -91,7 +91,7 @@ func TestOpenAndValidateFile_EmptyPath(t *testing.T) {
 func TestOpenAndValidateFile_ZeroMaxSize(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "any.bin")
-	if err := os.WriteFile(path, make([]byte, 4096), 0600); err != nil {
+	if err := os.WriteFile(path, make([]byte, 4096), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -107,7 +107,7 @@ func TestOpenAndValidateFile_ZeroMaxSize(t *testing.T) {
 func TestCanonicalImportArchivePath_TempArchive(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "project-export.tar.gz")
-	if err := os.WriteFile(path, []byte("archive"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("archive"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	want, err := filepath.EvalSymlinks(path)
@@ -129,7 +129,7 @@ func TestCanonicalImportArchivePath_TempArchive(t *testing.T) {
 func TestCanonicalImportArchivePath_RejectsWrongExtension(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "project-export.zip")
-	if err := os.WriteFile(path, []byte("archive"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("archive"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -151,7 +151,7 @@ func TestCanonicalImportArchivePath_RejectsSymlinkEscape(t *testing.T) {
 	t.Chdir(allowed)
 
 	target := filepath.Join(outside, "project-export.tar.gz")
-	if err := os.WriteFile(target, []byte("archive"), 0600); err != nil {
+	if err := os.WriteFile(target, []byte("archive"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(allowed, "linked-export.tar.gz")
@@ -178,7 +178,7 @@ func TestCanonicalImportArchivePath_AllowsConfiguredDirectory(t *testing.T) {
 	t.Chdir(cwd)
 
 	path := filepath.Join(configured, "project-export.tar.gz")
-	if err := os.WriteFile(path, []byte("archive"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("archive"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	want, err := filepath.EvalSymlinks(path)
@@ -214,7 +214,7 @@ func TestCanonicalImportArchivePath_RejectsInvalidInputs(t *testing.T) {
 
 	t.Run("directory archive", func(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "project-export.tar.gz")
-		if err := os.Mkdir(dir, 0750); err != nil {
+		if err := os.Mkdir(dir, 0o750); err != nil {
 			t.Fatal(err)
 		}
 		_, err := CanonicalImportArchivePath(dir)
@@ -231,10 +231,10 @@ func TestCanonicalImportArchivePath_RejectsUnsafePermissions(t *testing.T) {
 		t.Skip("permission bits are not enforced on Windows")
 	}
 	path := filepath.Join(t.TempDir(), "project-export.tar.gz")
-	if err := os.WriteFile(path, []byte("archive"), 0666); err != nil { //nolint:gosec // Intentionally creates unsafe permissions for validation coverage.
+	if err := os.WriteFile(path, []byte("archive"), 0o666); err != nil { //nolint:gosec // Intentionally creates unsafe permissions for validation coverage.
 		t.Fatal(err)
 	}
-	if err := os.Chmod(path, 0666); err != nil { //nolint:gosec // Intentionally creates unsafe permissions for validation coverage.
+	if err := os.Chmod(path, 0o666); err != nil { //nolint:gosec // Intentionally creates unsafe permissions for validation coverage.
 		t.Fatal(err)
 	}
 
@@ -249,7 +249,7 @@ func TestCanonicalImportArchivePath_RejectsUnsafePermissions(t *testing.T) {
 func TestAllowedImportArchiveDirs_SkipsInvalidConfiguredDirectory(t *testing.T) {
 	base := t.TempDir()
 	invalid := filepath.Join(base, "not-a-directory")
-	if err := os.WriteFile(invalid, []byte("file"), 0600); err != nil {
+	if err := os.WriteFile(invalid, []byte("file"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv(ImportArchiveAllowlistEnv, invalid)
@@ -272,7 +272,7 @@ func TestCanonicalDirPath_RejectsInvalidDirectories(t *testing.T) {
 		t.Fatal("canonicalDirPath(missing) error = nil, want error")
 	}
 	file := filepath.Join(t.TempDir(), "file")
-	if err := os.WriteFile(file, []byte("x"), 0600); err != nil {
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := canonicalDirPath(file); err == nil || !strings.Contains(err.Error(), "not a directory") {
@@ -303,7 +303,7 @@ func TestComputeSHA256_KnownHash(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "known.txt")
 	content := []byte("Hello, World!")
-	if err := os.WriteFile(path, content, 0600); err != nil {
+	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -323,7 +323,7 @@ func TestComputeSHA256_KnownHash(t *testing.T) {
 func TestComputeSHA256_EmptyFile(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "empty.bin")
-	if err := os.WriteFile(path, nil, 0600); err != nil {
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 

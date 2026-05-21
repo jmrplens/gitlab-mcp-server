@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accesstokens"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/branches"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/cilint"
@@ -49,8 +51,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/wikis"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Markdown test fixtures and assertion messages shared by formatter tests.

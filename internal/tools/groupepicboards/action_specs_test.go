@@ -9,8 +9,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const registerBoardJSON = `{"id":1,"name":"Board","labels":[{"name":"bug"},null],"lists":[{"id":1,"position":0,"label":{"id":10,"name":"To Do"}},{"id":2,"position":1,"label":null},null]}`
-const registerBoardsJSON = `[{"id":1,"name":"Board","labels":[{"name":"bug"}],"lists":[{"id":1,"position":0,"label":{"id":10,"name":"To Do"}}]}]`
+const (
+	registerBoardJSON  = `{"id":1,"name":"Board","labels":[{"name":"bug"},null],"lists":[{"id":1,"position":0,"label":{"id":10,"name":"To Do"}},{"id":2,"position":1,"label":null},null]}`
+	registerBoardsJSON = `[{"id":1,"name":"Board","labels":[{"name":"bug"}],"lists":[{"id":1,"position":0,"label":{"id":10,"name":"To Do"}}]}]`
+)
 
 // TestActionSpecs_Metadata verifies group epic board action spec metadata.
 func TestActionSpecs_Metadata(t *testing.T) {

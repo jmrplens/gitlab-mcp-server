@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/sampling"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/cilint"
@@ -20,8 +22,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrapprovals"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrdiscussions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestFormatCIConfigForAnalysis verifies CI config Markdown output.

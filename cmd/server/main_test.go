@@ -1183,6 +1183,7 @@ func assertManifestDetailReadable(t *testing.T, session *mcp.ClientSession, tool
 		t.Fatalf("tool manifest detail should be readable: %v", err)
 	}
 }
+
 func resourceListHasURI(items []*mcp.Resource, uri string) bool {
 	for _, item := range items {
 		if item.URI == uri {

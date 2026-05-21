@@ -9,10 +9,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const registerAccountJSON = `{"id":1,"name":"svc","username":"svc-user","email":"svc@test.com"}`
-const registerAccountsJSON = `[{"id":1,"name":"svc","username":"svc-user","email":"svc@test.com"}]`
-const registerPATJSON = `{"id":10,"name":"tok","scopes":["api"],"active":true,"revoked":false}`
-const registerPATsJSON = `[{"id":10,"name":"tok","scopes":["api"],"active":true,"revoked":false}]`
+const (
+	registerAccountJSON  = `{"id":1,"name":"svc","username":"svc-user","email":"svc@test.com"}`
+	registerAccountsJSON = `[{"id":1,"name":"svc","username":"svc-user","email":"svc@test.com"}]`
+	registerPATJSON      = `{"id":10,"name":"tok","scopes":["api"],"active":true,"revoked":false}`
+	registerPATsJSON     = `[{"id":10,"name":"tok","scopes":["api"],"active":true,"revoked":false}]`
+)
 
 // TestActionSpecs_Metadata verifies canonical metadata for group service account actions.
 func TestActionSpecs_Metadata(t *testing.T) {

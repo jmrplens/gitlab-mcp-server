@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // Test endpoint paths and format strings for project member operation tests.
@@ -935,8 +935,10 @@ func TestFormatListMarkdownString_WithMembers(t *testing.T) {
 func TestFormatListMarkdownString_ClickableUsernameLinks(t *testing.T) {
 	lo := ListOutput{
 		Members: []Output{
-			{Username: "alice", Name: "Alice", AccessLevelDescription: "Developer",
-				State: "active", WebURL: "https://gitlab.example.com/alice"},
+			{
+				Username: "alice", Name: "Alice", AccessLevelDescription: "Developer",
+				State: "active", WebURL: "https://gitlab.example.com/alice",
+			},
 		},
 	}
 	got := FormatListMarkdownString(lo)

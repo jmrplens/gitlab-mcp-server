@@ -3289,8 +3289,10 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_ClickableProjectLinks(t *testing.T) {
 	out := ListOutput{
 		Projects: []Output{
-			{ID: 1, Name: "My Project", PathWithNamespace: "ns/my-project",
-				Visibility: testPublic, WebURL: "https://gitlab.example.com/ns/my-project"},
+			{
+				ID: 1, Name: "My Project", PathWithNamespace: "ns/my-project",
+				Visibility: testPublic, WebURL: "https://gitlab.example.com/ns/my-project",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}

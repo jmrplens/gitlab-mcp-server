@@ -13,8 +13,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const actionSpecScheduleJSON = `{"id":1,"description":"Nightly","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,"owner":{"username":"admin"}}`
-const actionSpecVariableJSON = `{"key":"K","value":"V","variable_type":"env_var"}`
+const (
+	actionSpecScheduleJSON = `{"id":1,"description":"Nightly","ref":"main","cron":"0 1 * * *","cron_timezone":"UTC","active":true,"owner":{"username":"admin"}}`
+	actionSpecVariableJSON = `{"key":"K","value":"V","variable_type":"env_var"}`
+)
 
 // TestActionSpecs_CallAllRoutes exercises every pipeline schedule tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {

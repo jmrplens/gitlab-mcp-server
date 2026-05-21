@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 const (
@@ -407,8 +407,10 @@ func TestFormatListMarkdownString_WithItems(t *testing.T) {
 func TestFormatListMarkdownString_ClickableTargetLinks(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{
 		Todos: []Output{
-			{ID: 1, ActionName: "assigned", TargetTitle: "Fix bug", TargetType: "Issue",
-				State: "pending", ProjectName: "proj", TargetURL: "https://gitlab.example.com/issues/1"},
+			{
+				ID: 1, ActionName: "assigned", TargetTitle: "Fix bug", TargetType: "Issue",
+				State: "pending", ProjectName: "proj", TargetURL: "https://gitlab.example.com/issues/1",
+			},
 		},
 	})
 	if !strings.Contains(s, "[Fix bug](https://gitlab.example.com/issues/1)") {
@@ -421,8 +423,10 @@ func TestFormatListMarkdownString_ClickableTargetLinks(t *testing.T) {
 func TestFormatListMarkdownString_NoLinkWithoutTargetURL(t *testing.T) {
 	s := FormatListMarkdownString(ListOutput{
 		Todos: []Output{
-			{ID: 1, ActionName: "assigned", TargetTitle: "Fix bug", TargetType: "Issue",
-				State: "pending", ProjectName: "proj"},
+			{
+				ID: 1, ActionName: "assigned", TargetTitle: "Fix bug", TargetType: "Issue",
+				State: "pending", ProjectName: "proj",
+			},
 		},
 	})
 	if strings.Contains(s, "[Fix bug](") {

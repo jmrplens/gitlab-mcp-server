@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/sampling"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestFormatDeploymentHistoryForAnalysis verifies deployment history Markdown output.

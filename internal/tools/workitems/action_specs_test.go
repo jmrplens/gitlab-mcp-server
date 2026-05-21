@@ -14,11 +14,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const actionSpecWorkItemGraphQLResponse = `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"ActionSpec test","author":{"username":"dev"},"widgets":[]}}}}`
-const actionSpecWorkItemsListGraphQLResponse = `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"ActionSpec test","author":{"username":"dev"},"widgets":[]}],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`
-const actionSpecWorkItemCreateGraphQLResponse = `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"ActionSpec test","author":{"username":"dev"},"widgets":[]}}}}`
-const actionSpecWorkItemUpdateGraphQLResponse = `{"data":{"workItemUpdate":{"workItem":{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"ActionSpec updated","author":{"username":"dev"},"widgets":[]}}}}`
-const actionSpecWorkItemDeleteGraphQLResponse = `{"data":{"workItemDelete":{"errors":[]}}}`
+const (
+	actionSpecWorkItemGraphQLResponse       = `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"ActionSpec test","author":{"username":"dev"},"widgets":[]}}}}`
+	actionSpecWorkItemsListGraphQLResponse  = `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"ActionSpec test","author":{"username":"dev"},"widgets":[]}],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`
+	actionSpecWorkItemCreateGraphQLResponse = `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"ActionSpec test","author":{"username":"dev"},"widgets":[]}}}}`
+	actionSpecWorkItemUpdateGraphQLResponse = `{"data":{"workItemUpdate":{"workItem":{"id":"gid://gitlab/WorkItem/10","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"ActionSpec updated","author":{"username":"dev"},"widgets":[]}}}}`
+	actionSpecWorkItemDeleteGraphQLResponse = `{"data":{"workItemDelete":{"errors":[]}}}`
+)
 
 // TestActionSpecs_CallAllRoutes exercises every work item tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {

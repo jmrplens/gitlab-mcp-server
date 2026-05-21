@@ -14,10 +14,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // errExpectedErr identifies the err expected err constant used by this package.
@@ -116,7 +116,7 @@ func TestImportFile_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0600); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -141,7 +141,7 @@ func TestImportFile_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake"), 0600); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("fake"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -284,7 +284,7 @@ func TestImportFile_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake"), 0600); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("fake"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -310,7 +310,7 @@ func TestImportFile_WithParentID(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0600); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -459,7 +459,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 
 	tmpFile := filepath.Join(t.TempDir(), "export.tar.gz")
-	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0600); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("fake-archive"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

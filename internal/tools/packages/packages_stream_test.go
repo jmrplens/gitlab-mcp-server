@@ -204,7 +204,7 @@ func TestStreamDownloadPackageFile_APIError(t *testing.T) {
 // TestComputeSHA256_ViaToolutil verifies ComputeSHA256 when via toolutil.
 func TestComputeSHA256_ViaToolutil(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "test.bin")
-	os.WriteFile(f, []byte("hello"), 0600)
+	os.WriteFile(f, []byte("hello"), 0o600)
 
 	hash, err := toolutil.ComputeSHA256(f)
 	if err != nil {
@@ -223,7 +223,7 @@ func TestStreamDownload_UnwritablePath(t *testing.T) {
 
 	// Create a file where a directory is expected, so os.Create fails.
 	blocker := filepath.Join(t.TempDir(), "blocker")
-	os.WriteFile(blocker, []byte("x"), 0600)
+	os.WriteFile(blocker, []byte("x"), 0o600)
 	badPath := filepath.Join(blocker, "sub", testOutputBin)
 
 	_, err := Download(context.Background(), nil, client, DownloadInput{

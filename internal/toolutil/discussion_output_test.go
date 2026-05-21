@@ -44,7 +44,7 @@ func TestDiscussionOutputFromGitLab(t *testing.T) {
 // TestDiscussionOutputsFromGitLabHandlesNil verifies nil API elements do not
 // panic and keep slice cardinality so callers can preserve response shape.
 func TestDiscussionOutputsFromGitLabHandlesNil(t *testing.T) {
-	out := DiscussionOutputsFromGitLab([]*gl.Discussion{nil, &gl.Discussion{ID: "discussion-2"}})
+	out := DiscussionOutputsFromGitLab([]*gl.Discussion{nil, {ID: "discussion-2"}})
 
 	if len(out) != 2 {
 		t.Fatalf("outputs length = %d, want 2", len(out))

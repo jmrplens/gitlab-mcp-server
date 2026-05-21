@@ -9,8 +9,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const registerProtEnvJSON = `{"name":"production","deploy_access_levels":[{"access_level":40}]}`
-const registerProtEnvListJSON = `[{"name":"production","deploy_access_levels":[{"access_level":40}]}]`
+const (
+	registerProtEnvJSON     = `{"name":"production","deploy_access_levels":[{"access_level":40}]}`
+	registerProtEnvListJSON = `[{"name":"production","deploy_access_levels":[{"access_level":40}]}]`
+)
 
 // TestActionSpecs_Metadata verifies canonical metadata for group protected environment actions.
 func TestActionSpecs_Metadata(t *testing.T) {

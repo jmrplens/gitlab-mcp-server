@@ -79,7 +79,7 @@ func TestPickDirectory_LinuxDialogTools(t *testing.T) {
 func writeFakeDialogTool(t *testing.T, dir, name, script string) {
 	t.Helper()
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(script), 0755); err != nil { //nolint:gosec // Executable dialog fixture is required for PATH lookup.
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil { //nolint:gosec // Executable dialog fixture is required for PATH lookup.
 		t.Fatal(err)
 	}
 }

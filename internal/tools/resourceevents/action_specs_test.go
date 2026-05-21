@@ -9,16 +9,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const regIterationEventJSON = `{"id":1,"action":"add","user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"iteration":{"id":5,"title":"Sprint 1","iid":1},"created_at":"2026-01-01T00:00:00Z"}`
-const regIterationEventsJSON = `[` + regIterationEventJSON + `]`
-const regWeightEventJSON = `{"id":2,"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"weight":5,"previous_weight":3,"created_at":"2026-01-01T00:00:00Z"}`
-const regWeightEventsJSON = `[` + regWeightEventJSON + `]`
-const regLabelEventJSON = `{"id":1,"action":"add","label":{"id":1,"name":"bug"},"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
-const regLabelEventsJSON = `[` + regLabelEventJSON + `]`
-const regMilestoneEventJSON = `{"id":1,"action":"add","milestone":{"id":1,"title":"v1.0","iid":1},"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
-const regMilestoneEventsJSON = `[` + regMilestoneEventJSON + `]`
-const regStateEventJSON = `{"id":1,"state":"closed","user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
-const regStateEventsJSON = `[` + regStateEventJSON + `]`
+const (
+	regIterationEventJSON  = `{"id":1,"action":"add","user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"iteration":{"id":5,"title":"Sprint 1","iid":1},"created_at":"2026-01-01T00:00:00Z"}`
+	regIterationEventsJSON = `[` + regIterationEventJSON + `]`
+	regWeightEventJSON     = `{"id":2,"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"weight":5,"previous_weight":3,"created_at":"2026-01-01T00:00:00Z"}`
+	regWeightEventsJSON    = `[` + regWeightEventJSON + `]`
+	regLabelEventJSON      = `{"id":1,"action":"add","label":{"id":1,"name":"bug"},"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
+	regLabelEventsJSON     = `[` + regLabelEventJSON + `]`
+	regMilestoneEventJSON  = `{"id":1,"action":"add","milestone":{"id":1,"title":"v1.0","iid":1},"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
+	regMilestoneEventsJSON = `[` + regMilestoneEventJSON + `]`
+	regStateEventJSON      = `{"id":1,"state":"closed","user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
+	regStateEventsJSON     = `[` + regStateEventJSON + `]`
+)
 
 // TestActionSpecs_Metadata verifies canonical metadata for resource event actions.
 func TestActionSpecs_Metadata(t *testing.T) {

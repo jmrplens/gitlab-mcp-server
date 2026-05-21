@@ -283,7 +283,6 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		return GetOutput{}, toolutil.WrapErrWithMessage("get_integration", fmt.Errorf("unsupported integration slug: %s", input.Slug))
 	}
 	result, err := getter(ctx, client.GL().Services, string(input.ProjectID))
-
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_integration", err, http.StatusNotFound,
 			"verify slug is a valid integration name (e.g. slack, jira, microsoft-teams, jenkins); integration must be active on the project; use gitlab_list_integrations to enumerate enabled integrations")

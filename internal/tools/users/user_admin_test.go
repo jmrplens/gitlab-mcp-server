@@ -211,7 +211,8 @@ func runAdminActionCases(t *testing.T, action struct {
 	path       string
 	mockStatus int
 	wantAction string
-}) {
+},
+) {
 	t.Helper()
 	t.Run(action.name+"_Success", func(t *testing.T) { assertAdminActionSuccess(t, action) })
 	t.Run(action.name+"_ValidationError", func(t *testing.T) { assertAdminActionValidationError(t, action) })
@@ -226,7 +227,8 @@ func assertAdminActionSuccess(t *testing.T, action struct {
 	path       string
 	mockStatus int
 	wantAction string
-}) {
+},
+) {
 	t.Helper()
 	client := testutil.NewTestClient(t, adminActionSuccessHandler(action.method, action.path, action.mockStatus))
 	out, err := action.fn(context.Background(), client, AdminActionInput{UserID: 42})
@@ -261,7 +263,8 @@ func assertAdminActionValidationError(t *testing.T, action struct {
 	path       string
 	mockStatus int
 	wantAction string
-}) {
+},
+) {
 	t.Helper()
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) }))
 	_, err := action.fn(context.Background(), client, AdminActionInput{UserID: 0})
@@ -277,7 +280,8 @@ func assertAdminActionAPIError(t *testing.T, action struct {
 	path       string
 	mockStatus int
 	wantAction string
-}) {
+},
+) {
 	t.Helper()
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -295,7 +299,8 @@ func assertAdminActionCancelledContext(t *testing.T, action struct {
 	path       string
 	mockStatus int
 	wantAction string
-}) {
+},
+) {
 	t.Helper()
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) }))
 	_, err := action.fn(testutil.CancelledCtx(t), client, AdminActionInput{UserID: 42})
