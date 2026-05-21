@@ -498,33 +498,44 @@ type MetaDataOutput struct {
 
 // GetMetaData retrieves file metadata without content from a GitLab repository.
 func GetMetaData(ctx context.Context, client *gitlabclient.Client, input MetaDataInput) (MetaDataOutput, error) {
+	return getFileMetadata(ctx, input.ProjectID, input.FilePath, input.Ref, "fileGetMetaData", "fileGetMetaData: project_id is required",
+		func(projectID, filePath, ref string) (*gl.File, error) {
+			opts := &gl.GetFileMetaDataOptions{}
+			if ref != "" {
+				opts.Ref = new(ref)
+			}
+			file, _, err := client.GL().RepositoryFiles.GetFileMetaData(projectID, filePath, opts, gl.WithContext(ctx))
+			return file, err
+		})
+}
+
+func getFileMetadata(ctx context.Context, projectID toolutil.StringOrInt, filePath, ref, operation, missingProjectMsg string, get func(string, string, string) (*gl.File, error)) (MetaDataOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return MetaDataOutput{}, err
 	}
-	if input.ProjectID == "" {
-		return MetaDataOutput{}, errors.New("fileGetMetaData: project_id is required")
+	if projectID == "" {
+		return MetaDataOutput{}, errors.New(missingProjectMsg)
 	}
-	opts := &gl.GetFileMetaDataOptions{}
-	if input.Ref != "" {
-		opts.Ref = new(input.Ref)
-	}
-	f, _, err := client.GL().RepositoryFiles.GetFileMetaData(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
+	file, err := get(string(projectID), filePath, ref)
 	if err != nil {
-		return MetaDataOutput{}, toolutil.WrapErrWithStatusHint("fileGetMetaData", err, http.StatusNotFound,
-			hintVerifyFilePathRef)
+		return MetaDataOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, hintVerifyFilePathRef)
 	}
+	return fileMetadataOutput(file), nil
+}
+
+func fileMetadataOutput(file *gl.File) MetaDataOutput {
 	return MetaDataOutput{
-		FileName:        f.FileName,
-		FilePath:        f.FilePath,
-		Size:            f.Size,
-		Encoding:        f.Encoding,
-		Ref:             f.Ref,
-		BlobID:          f.BlobID,
-		CommitID:        f.CommitID,
-		LastCommitID:    f.LastCommitID,
-		ExecuteFilemode: f.ExecuteFilemode,
-		SHA256:          f.SHA256,
-	}, nil
+		FileName:        file.FileName,
+		FilePath:        file.FilePath,
+		Size:            file.Size,
+		Encoding:        file.Encoding,
+		Ref:             file.Ref,
+		BlobID:          file.BlobID,
+		CommitID:        file.CommitID,
+		LastCommitID:    file.LastCommitID,
+		ExecuteFilemode: file.ExecuteFilemode,
+		SHA256:          file.SHA256,
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -612,31 +623,13 @@ type RawMetaDataInput struct {
 // (HEAD request). Returns the same metadata as GetFileMetaData but uses
 // a different API endpoint. Useful for checking file existence efficiently.
 func GetRawFileMetaData(ctx context.Context, client *gitlabclient.Client, input RawMetaDataInput) (MetaDataOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return MetaDataOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return MetaDataOutput{}, errors.New("fileGetRawMetaData: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
-	}
-	opts := &gl.GetRawFileOptions{}
-	if input.Ref != "" {
-		opts.Ref = new(input.Ref)
-	}
-	f, _, err := client.GL().RepositoryFiles.GetRawFileMetaData(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
-	if err != nil {
-		return MetaDataOutput{}, toolutil.WrapErrWithStatusHint("fileGetRawMetaData", err, http.StatusNotFound,
-			hintVerifyFilePathRef)
-	}
-	return MetaDataOutput{
-		FileName:        f.FileName,
-		FilePath:        f.FilePath,
-		Size:            f.Size,
-		Encoding:        f.Encoding,
-		Ref:             f.Ref,
-		BlobID:          f.BlobID,
-		CommitID:        f.CommitID,
-		LastCommitID:    f.LastCommitID,
-		ExecuteFilemode: f.ExecuteFilemode,
-		SHA256:          f.SHA256,
-	}, nil
+	return getFileMetadata(ctx, input.ProjectID, input.FilePath, input.Ref, "fileGetRawMetaData", "fileGetRawMetaData: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
+		func(projectID, filePath, ref string) (*gl.File, error) {
+			opts := &gl.GetRawFileOptions{}
+			if ref != "" {
+				opts.Ref = new(ref)
+			}
+			file, _, err := client.GL().RepositoryFiles.GetRawFileMetaData(projectID, filePath, opts, gl.WithContext(ctx))
+			return file, err
+		})
 }

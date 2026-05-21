@@ -22,22 +22,39 @@ func FormatExportStatusMarkdown(out ExportStatusOutput) *mcp.CallToolResult {
 	if out.ID == 0 {
 		return nil
 	}
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Export Status: %s\n\n", out.Name)
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&sb, "| Path | %s |\n", out.PathWithNamespace)
-	fmt.Fprintf(&sb, "| Status | %s |\n", out.ExportStatus)
-	if out.Message != "" {
-		fmt.Fprintf(&sb, "| Message | %s |\n", out.Message)
-	}
+	rows := []statusRow{{"Status", out.ExportStatus}}
+	appendNonEmptyStatusRow(&rows, "Message", out.Message)
 	if out.APIURL != "" {
-		fmt.Fprintf(&sb, "| API URL | %s |\n", out.APIURL)
+		appendNonEmptyStatusRow(&rows, "API URL", out.APIURL)
 	}
 	if out.WebURL != "" {
-		fmt.Fprintf(&sb, "| Web URL | %s |\n", out.WebURL)
+		appendNonEmptyStatusRow(&rows, "Web URL", out.WebURL)
 	}
-	toolutil.WriteHints(&sb, "Use `gitlab_download_project_export` when the export status is 'finished'")
+	return projectImportExportStatusResult("Export Status", out.Name, out.ID, out.PathWithNamespace, rows,
+		"Use `gitlab_download_project_export` when the export status is 'finished'")
+}
+
+type statusRow struct {
+	Field string
+	Value string
+}
+
+func appendNonEmptyStatusRow(rows *[]statusRow, field, value string) {
+	if value != "" {
+		*rows = append(*rows, statusRow{Field: field, Value: value})
+	}
+}
+
+func projectImportExportStatusResult(title, name string, id int64, path string, rows []statusRow, hint string) *mcp.CallToolResult {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "## %s: %s\n\n", title, name)
+	sb.WriteString("| Field | Value |\n|---|---|\n")
+	fmt.Fprintf(&sb, "| ID | %d |\n", id)
+	fmt.Fprintf(&sb, "| Path | %s |\n", path)
+	for _, row := range rows {
+		fmt.Fprintf(&sb, "| %s | %s |\n", row.Field, row.Value)
+	}
+	toolutil.WriteHints(&sb, hint)
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
@@ -54,23 +71,12 @@ func FormatImportStatusMarkdown(out ImportStatusOutput) *mcp.CallToolResult {
 	if out.ID == 0 {
 		return nil
 	}
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## Import Status: %s\n\n", out.Name)
-	sb.WriteString("| Field | Value |\n|---|---|\n")
-	fmt.Fprintf(&sb, "| ID | %d |\n", out.ID)
-	fmt.Fprintf(&sb, "| Path | %s |\n", out.PathWithNamespace)
-	fmt.Fprintf(&sb, "| Status | %s |\n", out.ImportStatus)
-	if out.ImportType != "" {
-		fmt.Fprintf(&sb, "| Type | %s |\n", out.ImportType)
-	}
-	if out.CorrelationID != "" {
-		fmt.Fprintf(&sb, "| Correlation ID | %s |\n", out.CorrelationID)
-	}
-	if out.ImportError != "" {
-		fmt.Fprintf(&sb, "| Error | %s |\n", out.ImportError)
-	}
-	toolutil.WriteHints(&sb, "Monitor import progress by checking status periodically")
-	return toolutil.ToolResultWithMarkdown(sb.String())
+	rows := []statusRow{{"Status", out.ImportStatus}}
+	appendNonEmptyStatusRow(&rows, "Type", out.ImportType)
+	appendNonEmptyStatusRow(&rows, "Correlation ID", out.CorrelationID)
+	appendNonEmptyStatusRow(&rows, "Error", out.ImportError)
+	return projectImportExportStatusResult("Import Status", out.Name, out.ID, out.PathWithNamespace, rows,
+		"Monitor import progress by checking status periodically")
 }
 
 func init() {

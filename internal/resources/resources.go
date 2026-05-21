@@ -50,6 +50,25 @@ type MemberResourceOutput struct {
 	WebURL      string `json:"web_url"`
 }
 
+func memberResourceOutput(id int64, username, name, state string, accessLevel gl.AccessLevelValue, webURL string) MemberResourceOutput {
+	return MemberResourceOutput{
+		ID:          id,
+		Username:    username,
+		Name:        name,
+		State:       state,
+		AccessLevel: int(accessLevel),
+		WebURL:      webURL,
+	}
+}
+
+func projectMemberResourceOutput(member *gl.ProjectMember) MemberResourceOutput {
+	return memberResourceOutput(member.ID, member.Username, member.Name, member.State, member.AccessLevel, member.WebURL)
+}
+
+func groupMemberResourceOutput(member *gl.GroupMember) MemberResourceOutput {
+	return memberResourceOutput(member.ID, member.Username, member.Name, member.State, member.AccessLevel, member.WebURL)
+}
+
 // PipelineResourceOutput is the output for a pipeline.
 type PipelineResourceOutput struct {
 	ID     int64  `json:"id"`
@@ -449,35 +468,21 @@ func registerProjectResource(server *mcp.Server, client *gitlabclient.Client) {
 // template resource that lists all members of a GitLab project, including
 // inherited members from parent groups.
 func registerProjectMembersResource(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddResourceTemplate(&mcp.ResourceTemplate{
+	registerMembersResource(server, &mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/members",
 		Name:        "project_members",
 		Title:       "Project Members",
-		MIMEType:    mimeJSON,
 		Description: "List all members of a GitLab project with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members from parent groups.",
-		Annotations: toolutil.ContentList,
-		Icons:       toolutil.IconUser,
-	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/members")
-		if projectID == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
+	}, uriProjectPrefix, "failed to list project members", func(ctx context.Context, projectID string) ([]MemberResourceOutput, error) {
 		members, _, err := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{}, gl.WithContext(ctx))
 		if err != nil {
-			return nil, wrapErr("failed to list project members", err)
+			return nil, err
 		}
 		out := make([]MemberResourceOutput, len(members))
 		for i, m := range members {
-			out[i] = MemberResourceOutput{
-				ID:          m.ID,
-				Username:    m.Username,
-				Name:        m.Name,
-				State:       m.State,
-				AccessLevel: int(m.AccessLevel),
-				WebURL:      m.WebURL,
-			}
+			out[i] = projectMemberResourceOutput(m)
 		}
-		return marshalResourceJSON(out)
+		return out, nil
 	})
 }
 
@@ -520,20 +525,14 @@ func registerPipelineResource(server *mcp.Server, client *gitlabclient.Client) {
 		Annotations: toolutil.ContentDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		projectID, pipelineIDStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/pipeline/")
-		if projectID == "" || pipelineIDStr == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		pipelineID, err := strconv.ParseInt(pipelineIDStr, 10, 64)
-		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		p, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(ctx))
-		if err != nil {
-			return nil, wrapErr("failed to get pipeline", err)
-		}
-		out := pipelineToResourceOutput(p)
-		return marshalResourceJSON(out)
+		return readProjectIntResource(ctx, req, "/pipeline/", "failed to get pipeline",
+			func(projectID string, pipelineID int64) (PipelineResourceOutput, error) {
+				p, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(ctx))
+				if err != nil {
+					return PipelineResourceOutput{}, err
+				}
+				return pipelineToResourceOutput(p), nil
+			})
 	})
 }
 
@@ -772,33 +771,36 @@ func registerGroupResource(server *mcp.Server, client *gitlabclient.Client) {
 // "gitlab://group/{group_id}/members" template resource that lists all
 // members of a GitLab group, including inherited members.
 func registerGroupMembersResource(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddResourceTemplate(&mcp.ResourceTemplate{
+	registerMembersResource(server, &mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/members",
 		Name:        "group_members",
 		Title:       "Group Members",
-		MIMEType:    mimeJSON,
 		Description: "List all members of a GitLab group with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members.",
-		Annotations: toolutil.ContentList,
-		Icons:       toolutil.IconUser,
-	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		groupID := extractMiddle(req.Params.URI, uriGroupPrefix, "/members")
-		if groupID == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
+	}, uriGroupPrefix, "failed to list group members", func(ctx context.Context, groupID string) ([]MemberResourceOutput, error) {
 		members, _, err := client.GL().Groups.ListAllGroupMembers(groupID, &gl.ListGroupMembersOptions{}, gl.WithContext(ctx))
 		if err != nil {
-			return nil, wrapErr("failed to list group members", err)
+			return nil, err
 		}
 		out := make([]MemberResourceOutput, len(members))
 		for i, m := range members {
-			out[i] = MemberResourceOutput{
-				ID:          m.ID,
-				Username:    m.Username,
-				Name:        m.Name,
-				State:       m.State,
-				AccessLevel: int(m.AccessLevel),
-				WebURL:      m.WebURL,
-			}
+			out[i] = groupMemberResourceOutput(m)
+		}
+		return out, nil
+	})
+}
+
+func registerMembersResource(server *mcp.Server, tmpl *mcp.ResourceTemplate, uriPrefix, operation string, list func(context.Context, string) ([]MemberResourceOutput, error)) {
+	tmpl.MIMEType = mimeJSON
+	tmpl.Annotations = toolutil.ContentList
+	tmpl.Icons = toolutil.IconUser
+	server.AddResourceTemplate(tmpl, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		scopeID := extractMiddle(req.Params.URI, uriPrefix, "/members")
+		if scopeID == "" {
+			return nil, mcp.ResourceNotFoundError(req.Params.URI)
+		}
+		out, err := list(ctx, scopeID)
+		if err != nil {
+			return nil, wrapErr(operation, err)
 		}
 		return marshalResourceJSON(out)
 	})
@@ -886,20 +888,14 @@ func registerIssueResource(server *mcp.Server, client *gitlabclient.Client) {
 		Annotations: toolutil.ContentDetail,
 		Icons:       toolutil.IconIssue,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		projectID, issueIIDStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/issue/")
-		if projectID == "" || issueIIDStr == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		issueIID, err := strconv.ParseInt(issueIIDStr, 10, 64)
-		if err != nil {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		issue, _, err := client.GL().Issues.GetIssue(projectID, issueIID, gl.WithContext(ctx))
-		if err != nil {
-			return nil, wrapErr("failed to get issue", err)
-		}
-		out := issueToResourceOutput(issue)
-		return marshalResourceJSON(out)
+		return readProjectIntResource(ctx, req, "/issue/", "failed to get issue",
+			func(projectID string, issueIID int64) (IssueResourceOutput, error) {
+				issue, _, err := client.GL().Issues.GetIssue(projectID, issueIID, gl.WithContext(ctx))
+				if err != nil {
+					return IssueResourceOutput{}, err
+				}
+				return issueToResourceOutput(issue), nil
+			})
 	})
 }
 
@@ -1300,21 +1296,14 @@ func registerTagResource(server *mcp.Server, client *gitlabclient.Client) {
 		Annotations: toolutil.ContentDetail,
 		Icons:       toolutil.IconTag,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		projectID, tagName := extractTwoParts(req.Params.URI, uriProjectPrefix, "/tag/")
-		if projectID == "" || tagName == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		t, _, err := client.GL().Tags.GetTag(projectID, tagName, gl.WithContext(ctx))
-		if err != nil {
-			return nil, wrapErr("failed to get tag", err)
-		}
-		out := TagResourceOutput{
-			Name:      t.Name,
-			Message:   t.Message,
-			Target:    t.Target,
-			Protected: t.Protected,
-		}
-		return marshalResourceJSON(out)
+		return readProjectNamedResource(ctx, req, "/tag/", "failed to get tag",
+			func(projectID, tagName string) (TagResourceOutput, error) {
+				t, _, err := client.GL().Tags.GetTag(projectID, tagName, gl.WithContext(ctx))
+				if err != nil {
+					return TagResourceOutput{}, err
+				}
+				return TagResourceOutput{Name: t.Name, Message: t.Message, Target: t.Target, Protected: t.Protected}, nil
+			})
 	})
 }
 
@@ -1507,6 +1496,34 @@ func extractTwoParts(uri, prefix, separator string) (first, second string) {
 		return "", ""
 	}
 	return parts[0], parts[1]
+}
+
+func readProjectIntResource[O any](_ context.Context, req *mcp.ReadResourceRequest, separator, operation string, read func(string, int64) (O, error)) (*mcp.ReadResourceResult, error) {
+	projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, separator)
+	if projectID == "" || idStr == "" {
+		return nil, mcp.ResourceNotFoundError(req.Params.URI)
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		return nil, mcp.ResourceNotFoundError(req.Params.URI)
+	}
+	out, err := read(projectID, id)
+	if err != nil {
+		return nil, wrapErr(operation, err)
+	}
+	return marshalResourceJSON(out)
+}
+
+func readProjectNamedResource[O any](_ context.Context, req *mcp.ReadResourceRequest, separator, operation string, read func(string, string) (O, error)) (*mcp.ReadResourceResult, error) {
+	projectID, name := extractTwoParts(req.Params.URI, uriProjectPrefix, separator)
+	if projectID == "" || name == "" {
+		return nil, mcp.ResourceNotFoundError(req.Params.URI)
+	}
+	out, err := read(projectID, name)
+	if err != nil {
+		return nil, wrapErr(operation, err)
+	}
+	return marshalResourceJSON(out)
 }
 
 // marshalResourceJSON marshals a value to JSON and wraps it as a ReadResourceResult.
@@ -1739,21 +1756,14 @@ func registerFeatureFlagResource(server *mcp.Server, client *gitlabclient.Client
 		Annotations: toolutil.ContentDetail,
 		Icons:       toolutil.IconConfig,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		projectID, name := extractTwoParts(req.Params.URI, uriProjectPrefix, "/feature_flag/")
-		if projectID == "" || name == "" {
-			return nil, mcp.ResourceNotFoundError(req.Params.URI)
-		}
-		f, _, err := client.GL().ProjectFeatureFlags.GetProjectFeatureFlag(projectID, name, gl.WithContext(ctx))
-		if err != nil {
-			return nil, wrapErr("failed to get feature flag", err)
-		}
-		out := FeatureFlagResourceOutput{
-			Name:        f.Name,
-			Description: f.Description,
-			Active:      f.Active,
-			Version:     f.Version,
-		}
-		return marshalResourceJSON(out)
+		return readProjectNamedResource(ctx, req, "/feature_flag/", "failed to get feature flag",
+			func(projectID, name string) (FeatureFlagResourceOutput, error) {
+				f, _, err := client.GL().ProjectFeatureFlags.GetProjectFeatureFlag(projectID, name, gl.WithContext(ctx))
+				if err != nil {
+					return FeatureFlagResourceOutput{}, err
+				}
+				return FeatureFlagResourceOutput{Name: f.Name, Description: f.Description, Active: f.Active, Version: f.Version}, nil
+			})
 	})
 }
 

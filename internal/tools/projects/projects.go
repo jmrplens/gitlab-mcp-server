@@ -1689,27 +1689,27 @@ type ListUserProjectsInput struct {
 
 // ListUserProjects lists projects owned by the given user.
 func ListUserProjects(ctx context.Context, client *gitlabclient.Client, input ListUserProjectsInput) (ListOutput, error) {
-	if input.UserID == "" {
-		return ListOutput{}, errors.New("projectListUserProjects: user_id is required. Use gitlab_get_user to find the user ID")
+	return listUserScopedProjects(ctx, input.UserID, "projectListUserProjects", "projectListUserProjects: user_id is required. Use gitlab_get_user to find the user ID",
+		"user not found - use gitlab_get_user to verify user_id (numeric ID or exact username)", userProjectFilter{
+			Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
+			OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
+			Page: input.Page, PerPage: input.PerPage,
+		}, client.GL().Projects.ListUserProjects)
+}
+
+func listUserScopedProjects(ctx context.Context, userID toolutil.StringOrInt, operation, missingUserMsg, notFoundHint string, filters userProjectFilter, list func(any, *gl.ListProjectsOptions, ...gl.RequestOptionFunc) ([]*gl.Project, *gl.Response, error)) (ListOutput, error) {
+	if userID == "" {
+		return ListOutput{}, errors.New(missingUserMsg)
 	}
-	opts := buildUserProjectOpts(userProjectFilter{
-		Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
-		OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
-		Page: input.Page, PerPage: input.PerPage,
-	})
-	projects, resp, err := client.GL().Projects.ListUserProjects(string(input.UserID), opts, gl.WithContext(ctx))
+	projects, resp, err := list(string(userID), buildUserProjectOpts(filters), gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectListUserProjects", err, http.StatusNotFound,
-			"user not found \u2014 use gitlab_get_user to verify user_id (numeric ID or exact username)")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
 	}
 	out := make([]Output, len(projects))
-	for i, p := range projects {
-		out[i] = ToOutput(p)
+	for i, project := range projects {
+		out[i] = ToOutput(project)
 	}
-	return ListOutput{
-		Projects:   out,
-		Pagination: toolutil.PaginationFromResponse(resp),
-	}, nil
+	return ListOutput{Projects: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -2086,27 +2086,12 @@ type ListUserContributedProjectsInput struct {
 
 // ListUserContributedProjects lists projects a specific user has contributed to.
 func ListUserContributedProjects(ctx context.Context, client *gitlabclient.Client, input ListUserContributedProjectsInput) (ListOutput, error) {
-	if input.UserID == "" {
-		return ListOutput{}, errors.New("projectListUserContributed: user_id is required. Use gitlab_get_user to find the user ID")
-	}
-	opts := buildUserProjectOpts(userProjectFilter{
-		Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
-		OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
-		Page: input.Page, PerPage: input.PerPage,
-	})
-	projects, resp, err := client.GL().Projects.ListUserContributedProjects(string(input.UserID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectListUserContributed", err, http.StatusNotFound,
-			"user not found \u2014 use gitlab_get_user to verify user_id")
-	}
-	out := make([]Output, len(projects))
-	for i, p := range projects {
-		out[i] = ToOutput(p)
-	}
-	return ListOutput{
-		Projects:   out,
-		Pagination: toolutil.PaginationFromResponse(resp),
-	}, nil
+	return listUserScopedProjects(ctx, input.UserID, "projectListUserContributed", "projectListUserContributed: user_id is required. Use gitlab_get_user to find the user ID",
+		"user not found - use gitlab_get_user to verify user_id", userProjectFilter{
+			Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
+			OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
+			Page: input.Page, PerPage: input.PerPage,
+		}, client.GL().Projects.ListUserContributedProjects)
 }
 
 // ---------------------------------------------------------------------------
@@ -2127,27 +2112,12 @@ type ListUserStarredProjectsInput struct {
 
 // ListUserStarredProjects lists projects starred by a specific user.
 func ListUserStarredProjects(ctx context.Context, client *gitlabclient.Client, input ListUserStarredProjectsInput) (ListOutput, error) {
-	if input.UserID == "" {
-		return ListOutput{}, errors.New("projectListUserStarred: user_id is required. Use gitlab_get_user to find the user ID")
-	}
-	opts := buildUserProjectOpts(userProjectFilter{
-		Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
-		OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
-		Page: input.Page, PerPage: input.PerPage,
-	})
-	projects, resp, err := client.GL().Projects.ListUserStarredProjects(string(input.UserID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectListUserStarred", err, http.StatusNotFound,
-			"user not found \u2014 use gitlab_get_user to verify user_id")
-	}
-	out := make([]Output, len(projects))
-	for i, p := range projects {
-		out[i] = ToOutput(p)
-	}
-	return ListOutput{
-		Projects:   out,
-		Pagination: toolutil.PaginationFromResponse(resp),
-	}, nil
+	return listUserScopedProjects(ctx, input.UserID, "projectListUserStarred", "projectListUserStarred: user_id is required. Use gitlab_get_user to find the user ID",
+		"user not found - use gitlab_get_user to verify user_id", userProjectFilter{
+			Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
+			OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
+			Page: input.Page, PerPage: input.PerPage,
+		}, client.GL().Projects.ListUserStarredProjects)
 }
 
 // userProjectFilter holds the filter parameters for user-scoped project listings.

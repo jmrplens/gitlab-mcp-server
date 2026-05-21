@@ -1749,17 +1749,21 @@ func cleanupLiveInstanceVariables(ctx context.Context, client *gitlabclient.Clie
 
 // waitForFailedJob waits for a failed job in the pipeline and returns its ID.
 func waitForFailedJob(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64) (int64, error) {
+	return waitForPipelineJobStatus(ctx, client, projectID, pipelineID, "failed", "prepare failed-job fixture jobs", "prepare failed-job fixture failed job")
+}
+
+func waitForPipelineJobStatus(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64, targetStatus, listContext, notFoundContext string) (int64, error) {
 	deadline := time.Now().Add(4 * time.Minute)
 	var lastStatuses []string
 	for time.Now().Before(deadline) {
 		jobs, _, err := client.GL().Jobs.ListPipelineJobs(projectID, pipelineID, &gl.ListJobsOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
 		if err != nil {
-			return 0, fmt.Errorf("prepare failed-job fixture jobs: %w", err)
+			return 0, fmt.Errorf("%s: %w", listContext, err)
 		}
 		lastStatuses = lastStatuses[:0]
 		for _, job := range jobs {
 			lastStatuses = append(lastStatuses, fmt.Sprintf("%s:%s", job.Name, job.Status))
-			if job.Status == "failed" {
+			if job.Status == targetStatus {
 				return job.ID, nil
 			}
 		}
@@ -1767,7 +1771,7 @@ func waitForFailedJob(ctx context.Context, client *gitlabclient.Client, projectI
 			return 0, waitErr
 		}
 	}
-	return 0, fmt.Errorf("prepare failed-job fixture failed job not found for pipeline %d; last statuses: %s", pipelineID, strings.Join(lastStatuses, ", "))
+	return 0, fmt.Errorf("%s not found for pipeline %d; last statuses: %s", notFoundContext, pipelineID, strings.Join(lastStatuses, ", "))
 }
 
 // ensureLiveManualJob handles ensure live manual job and returns [evalTask].
@@ -1800,25 +1804,7 @@ func ensureLiveManualJob(ctx context.Context, client *gitlabclient.Client, task 
 
 // waitForManualJob handles wait for manual job and returns [int64].
 func waitForManualJob(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64) (int64, error) {
-	deadline := time.Now().Add(4 * time.Minute)
-	var lastStatuses []string
-	for time.Now().Before(deadline) {
-		jobs, _, err := client.GL().Jobs.ListPipelineJobs(projectID, pipelineID, &gl.ListJobsOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
-		if err != nil {
-			return 0, fmt.Errorf("prepare MT-064 fixture jobs: %w", err)
-		}
-		lastStatuses = lastStatuses[:0]
-		for _, job := range jobs {
-			lastStatuses = append(lastStatuses, fmt.Sprintf("%s:%s", job.Name, job.Status))
-			if job.Status == "manual" {
-				return job.ID, nil
-			}
-		}
-		if waitErr := waitForContext(ctx, 5*time.Second); waitErr != nil {
-			return 0, waitErr
-		}
-	}
-	return 0, fmt.Errorf("prepare MT-064 fixture manual job not found for pipeline %d; last statuses: %s", pipelineID, strings.Join(lastStatuses, ", "))
+	return waitForPipelineJobStatus(ctx, client, projectID, pipelineID, "manual", "prepare MT-064 fixture jobs", "prepare MT-064 fixture manual job")
 }
 
 // replacePromptJobID handles replace prompt job ID and returns [string].

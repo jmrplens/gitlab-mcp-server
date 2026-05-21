@@ -154,6 +154,110 @@ type ListOutput struct {
 	Pagination    toolutil.PaginationOutput `json:"pagination"`
 }
 
+type mergeRequestListFilters struct {
+	State            string
+	Labels           string
+	NotLabels        string
+	Milestone        string
+	Scope            string
+	Search           string
+	SourceBranch     string
+	TargetBranch     string
+	AuthorUsername   string
+	ReviewerUsername string
+	Draft            *bool
+	CreatedAfter     string
+	CreatedBefore    string
+	UpdatedAfter     string
+	UpdatedBefore    string
+	OrderBy          string
+	Sort             string
+	Page             int
+	PerPage          int
+}
+
+type mergeRequestListTarget struct {
+	state            func(*string)
+	labels           func(*gl.LabelOptions)
+	notLabels        func(*gl.LabelOptions)
+	milestone        func(*string)
+	scope            func(*string)
+	search           func(*string)
+	sourceBranch     func(*string)
+	targetBranch     func(*string)
+	authorUsername   func(*string)
+	reviewerUsername func(*string)
+	draft            func(*bool)
+	createdAfter     func(*time.Time)
+	createdBefore    func(*time.Time)
+	updatedAfter     func(*time.Time)
+	updatedBefore    func(*time.Time)
+	orderBy          func(*string)
+	sort             func(*string)
+	page             func(int64)
+	perPage          func(int64)
+}
+
+func mergeRequestListOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) ListOutput {
+	out := make([]Output, len(mrs))
+	for i, m := range mrs {
+		out[i] = BasicToOutput(m)
+	}
+	return ListOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}
+}
+
+func labelOptions(csv string) *gl.LabelOptions {
+	if csv == "" {
+		return nil
+	}
+	labels := gl.LabelOptions(strings.Split(csv, ","))
+	return &labels
+}
+
+func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeRequestListTarget) {
+	setString(input.State, target.state)
+	setString(input.Milestone, target.milestone)
+	setString(input.Scope, target.scope)
+	setString(input.Search, target.search)
+	setString(input.SourceBranch, target.sourceBranch)
+	setString(input.TargetBranch, target.targetBranch)
+	setString(input.AuthorUsername, target.authorUsername)
+	setString(input.ReviewerUsername, target.reviewerUsername)
+	setString(input.OrderBy, target.orderBy)
+	setString(input.Sort, target.sort)
+	if labels := labelOptions(input.Labels); labels != nil && target.labels != nil {
+		target.labels(labels)
+	}
+	if labels := labelOptions(input.NotLabels); labels != nil && target.notLabels != nil {
+		target.notLabels(labels)
+	}
+	if input.Draft != nil && target.draft != nil {
+		target.draft(input.Draft)
+	}
+	setTime(toolutil.ParseOptionalTime(input.CreatedAfter), target.createdAfter)
+	setTime(toolutil.ParseOptionalTime(input.CreatedBefore), target.createdBefore)
+	setTime(toolutil.ParseOptionalTime(input.UpdatedAfter), target.updatedAfter)
+	setTime(toolutil.ParseOptionalTime(input.UpdatedBefore), target.updatedBefore)
+	if input.Page > 0 && target.page != nil {
+		target.page(int64(input.Page))
+	}
+	if input.PerPage > 0 && target.perPage != nil {
+		target.perPage(int64(input.PerPage))
+	}
+}
+
+func setString(value string, setter func(*string)) {
+	if value != "" && setter != nil {
+		setter(&value)
+	}
+}
+
+func setTime(value *time.Time, setter func(*time.Time)) {
+	if value != nil && setter != nil {
+		setter(value)
+	}
+}
+
 // UpdateInput defines parameters for updating a merge request.
 type UpdateInput struct {
 	ProjectID          toolutil.StringOrInt `json:"project_id"                    jsonschema:"Project ID or URL-encoded path,required"`
@@ -443,69 +547,42 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrList", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get")
 	}
-	out := make([]Output, len(mrs))
-	for i, m := range mrs {
-		out[i] = BasicToOutput(m)
-	}
-	return ListOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return mergeRequestListOutput(mrs, resp), nil
 }
 
 // buildListOptions maps ListInput fields to the GitLab API list options,
 // applying only non-zero values so that unset filters are omitted.
 func buildListOptions(input ListInput) *gl.ListProjectMergeRequestsOptions {
 	opts := &gl.ListProjectMergeRequestsOptions{}
-	if input.State != "" {
-		opts.State = new(input.State)
-	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
-	}
-	if input.Milestone != "" {
-		opts.Milestone = new(input.Milestone)
-	}
-	if input.Scope != "" {
-		opts.Scope = new(input.Scope)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if input.SourceBranch != "" {
-		opts.SourceBranch = new(input.SourceBranch)
-	}
-	if input.TargetBranch != "" {
-		opts.TargetBranch = new(input.TargetBranch)
-	}
-	if input.AuthorUsername != "" {
-		opts.AuthorUsername = new(input.AuthorUsername)
-	}
-	if input.Draft != nil {
-		opts.Draft = input.Draft
-	}
+	applyMergeRequestListFilters(projectMRListFilters(input), projectMergeRequestListTarget(opts))
 	if len(input.IIDs) > 0 {
 		opts.IIDs = &input.IIDs
 	}
-	if input.NotLabels != "" {
-		labels := gl.LabelOptions(strings.Split(input.NotLabels, ","))
-		opts.NotLabels = &labels
-	}
-	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
-	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
-	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
-	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
-	if input.OrderBy != "" {
-		opts.OrderBy = new(input.OrderBy)
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
 	return opts
+}
+
+func projectMRListFilters(input ListInput) mergeRequestListFilters {
+	return mergeRequestListFilters{
+		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
+		Scope: input.Scope, Search: input.Search, SourceBranch: input.SourceBranch, TargetBranch: input.TargetBranch,
+		AuthorUsername: input.AuthorUsername, Draft: input.Draft, CreatedAfter: input.CreatedAfter,
+		CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
+		OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
+	}
+}
+
+func projectMergeRequestListTarget(opts *gl.ListProjectMergeRequestsOptions) mergeRequestListTarget {
+	return mergeRequestListTarget{
+		state: func(value *string) { opts.State = value }, labels: func(value *gl.LabelOptions) { opts.Labels = value },
+		notLabels: func(value *gl.LabelOptions) { opts.NotLabels = value }, milestone: func(value *string) { opts.Milestone = value },
+		scope: func(value *string) { opts.Scope = value }, search: func(value *string) { opts.Search = value },
+		sourceBranch: func(value *string) { opts.SourceBranch = value }, targetBranch: func(value *string) { opts.TargetBranch = value },
+		authorUsername: func(value *string) { opts.AuthorUsername = value }, draft: func(value *bool) { opts.Draft = value },
+		createdAfter: func(value *time.Time) { opts.CreatedAfter = value }, createdBefore: func(value *time.Time) { opts.CreatedBefore = value },
+		updatedAfter: func(value *time.Time) { opts.UpdatedAfter = value }, updatedBefore: func(value *time.Time) { opts.UpdatedBefore = value },
+		orderBy: func(value *string) { opts.OrderBy = value }, sort: func(value *string) { opts.Sort = value },
+		page: func(value int64) { opts.Page = value }, perPage: func(value int64) { opts.PerPage = value },
+	}
 }
 
 // buildUpdateOpts maps UpdateInput fields to the GitLab API update options,
@@ -719,37 +796,49 @@ type CommitsOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
+func setMergeRequestPagination(page, perPage int, setPage, setPerPage func(int64)) {
+	if page > 0 {
+		setPage(int64(page))
+	}
+	if perPage > 0 {
+		setPerPage(int64(perPage))
+	}
+}
+
+func listMergeRequestItems[T any, O any, R any](ctx context.Context, projectID toolutil.StringOrInt, mrIID int64, page, perPage int, operation, missingProjectMsg, notFoundHint string, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]T, *gl.Response, error), convert func(T) O, buildOutput func([]O, toolutil.PaginationOutput) R) (R, error) {
+	var zero R
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	if projectID == "" {
+		return zero, errors.New(missingProjectMsg)
+	}
+	if mrIID <= 0 {
+		return zero, toolutil.ErrRequiredInt64(operation, "merge_request_iid")
+	}
+	items, resp, err := list(string(projectID), mrIID, page, perPage, gl.WithContext(ctx))
+	if err != nil {
+		return zero, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
+	}
+	out := make([]O, len(items))
+	for i, item := range items {
+		out[i] = convert(item)
+	}
+	return buildOutput(out, toolutil.PaginationFromResponse(resp)), nil
+}
+
 // Commits retrieves the list of commits in a merge request.
 func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInput) (CommitsOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return CommitsOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return CommitsOutput{}, errors.New("mrCommits: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
-	}
-	if input.MRIID <= 0 {
-		return CommitsOutput{}, toolutil.ErrRequiredInt64("mrCommits", "merge_request_iid")
-	}
-
-	opts := &gl.GetMergeRequestCommitsOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-
-	commitList, resp, err := client.GL().MergeRequests.GetMergeRequestCommits(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return CommitsOutput{}, toolutil.WrapErrWithStatusHint("mrCommits", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid (project-scoped IID, not global merge_request_id) with gitlab_mr_get")
-	}
-
-	out := make([]commits.Output, len(commitList))
-	for i, c := range commitList {
-		out[i] = commits.ToOutput(c)
-	}
-	return CommitsOutput{Commits: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listMergeRequestItems(ctx, input.ProjectID, input.MRIID, input.Page, input.PerPage, "mrCommits",
+		"mrCommits: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
+		"verify project_id and merge_request_iid (project-scoped IID, not global merge_request_id) with gitlab_mr_get",
+		func(projectID string, mrIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.Commit, *gl.Response, error) {
+			listOptions := &gl.GetMergeRequestCommitsOptions{}
+			setMergeRequestPagination(page, perPage, func(value int64) { listOptions.Page = value }, func(value int64) { listOptions.PerPage = value })
+			return client.GL().MergeRequests.GetMergeRequestCommits(projectID, mrIID, listOptions, opts...)
+		}, commits.ToOutput, func(out []commits.Output, pagination toolutil.PaginationOutput) CommitsOutput {
+			return CommitsOutput{Commits: out, Pagination: pagination}
+		})
 }
 
 // PipelinesInput defines parameters for listing pipelines of a merge request.
@@ -898,68 +987,60 @@ func ListGlobal(ctx context.Context, client *gitlabclient.Client, input ListGlob
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrListGlobal", err, http.StatusUnauthorized,
 			"global MR listing requires an authenticated token; results are scoped to MRs visible to the calling user (use scope=created_by_me or scope=assigned_to_me to narrow further)")
 	}
-	out := make([]Output, len(mrs))
-	for i, m := range mrs {
-		out[i] = BasicToOutput(m)
-	}
-	return ListOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return mergeRequestListOutput(mrs, resp), nil
 }
 
 // buildGlobalListOptions maps ListGlobalInput to the GitLab API list options.
 func buildGlobalListOptions(input ListGlobalInput) *gl.ListMergeRequestsOptions {
 	opts := &gl.ListMergeRequestsOptions{}
-	if input.State != "" {
-		opts.State = new(input.State)
-	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
-	}
-	if input.NotLabels != "" {
-		labels := gl.LabelOptions(strings.Split(input.NotLabels, ","))
-		opts.NotLabels = &labels
-	}
-	if input.Milestone != "" {
-		opts.Milestone = new(input.Milestone)
-	}
-	if input.Scope != "" {
-		opts.Scope = new(input.Scope)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if input.SourceBranch != "" {
-		opts.SourceBranch = new(input.SourceBranch)
-	}
-	if input.TargetBranch != "" {
-		opts.TargetBranch = new(input.TargetBranch)
-	}
-	if input.AuthorUsername != "" {
-		opts.AuthorUsername = new(input.AuthorUsername)
-	}
-	if input.ReviewerUsername != "" {
-		opts.ReviewerUsername = new(input.ReviewerUsername)
-	}
-	if input.Draft != nil {
-		opts.Draft = input.Draft
-	}
-	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
-	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
-	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
-	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
-	if input.OrderBy != "" {
-		opts.OrderBy = new(input.OrderBy)
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	applyMergeRequestListFilters(globalMRListFilters(input), globalMergeRequestListTarget(opts))
 	return opts
+}
+
+func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
+	return mergeRequestListFilters{
+		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
+		Scope: input.Scope, Search: input.Search, SourceBranch: input.SourceBranch, TargetBranch: input.TargetBranch,
+		AuthorUsername: input.AuthorUsername, ReviewerUsername: input.ReviewerUsername, Draft: input.Draft,
+		CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
+		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
+	}
+}
+
+func globalMergeRequestListTarget(opts *gl.ListMergeRequestsOptions) mergeRequestListTarget {
+	return newMergeRequestListTarget(&opts.State, &opts.Labels, &opts.NotLabels, &opts.Milestone, &opts.Scope, &opts.Search, &opts.SourceBranch, &opts.TargetBranch, &opts.AuthorUsername, &opts.ReviewerUsername, &opts.Draft, &opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore, &opts.OrderBy, &opts.Sort, &opts.Page, &opts.PerPage)
+}
+
+func newMergeRequestListTarget(state **string, labels, notLabels **gl.LabelOptions, milestone, scope, search, sourceBranch, targetBranch, authorUsername, reviewerUsername **string, draft **bool, createdAfter, createdBefore, updatedAfter, updatedBefore **time.Time, orderBy, sort **string, page, perPage *int64) mergeRequestListTarget {
+	return mergeRequestListTarget{
+		state: setStringPtr(state), labels: setLabelOptionsPtr(labels), notLabels: setLabelOptionsPtr(notLabels),
+		milestone: setStringPtr(milestone), scope: setStringPtr(scope), search: setStringPtr(search),
+		sourceBranch: setStringPtr(sourceBranch), targetBranch: setStringPtr(targetBranch),
+		authorUsername: setStringPtr(authorUsername), reviewerUsername: setStringPtr(reviewerUsername),
+		draft: setBoolPtr(draft), createdAfter: setTimePtr(createdAfter), createdBefore: setTimePtr(createdBefore),
+		updatedAfter: setTimePtr(updatedAfter), updatedBefore: setTimePtr(updatedBefore), orderBy: setStringPtr(orderBy),
+		sort: setStringPtr(sort), page: setInt64Value(page), perPage: setInt64Value(perPage),
+	}
+}
+
+func setStringPtr(target **string) func(*string) {
+	return func(value *string) { *target = value }
+}
+
+func setLabelOptionsPtr(target **gl.LabelOptions) func(*gl.LabelOptions) {
+	return func(value *gl.LabelOptions) { *target = value }
+}
+
+func setBoolPtr(target **bool) func(*bool) {
+	return func(value *bool) { *target = value }
+}
+
+func setTimePtr(target **time.Time) func(*time.Time) {
+	return func(value *time.Time) { *target = value }
+}
+
+func setInt64Value(target *int64) func(int64) {
+	return func(value int64) { *target = value }
 }
 
 // ListGroupInput defines filters for listing merge requests in a group.
@@ -1009,58 +1090,22 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 // buildGroupListOptions maps ListGroupInput to the GitLab API list options.
 func buildGroupListOptions(input ListGroupInput) *gl.ListGroupMergeRequestsOptions {
 	opts := &gl.ListGroupMergeRequestsOptions{}
-	if input.State != "" {
-		opts.State = new(input.State)
-	}
-	if input.Labels != "" {
-		labels := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &labels
-	}
-	if input.NotLabels != "" {
-		labels := gl.LabelOptions(strings.Split(input.NotLabels, ","))
-		opts.NotLabels = &labels
-	}
-	if input.Milestone != "" {
-		opts.Milestone = new(input.Milestone)
-	}
-	if input.Scope != "" {
-		opts.Scope = new(input.Scope)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if input.SourceBranch != "" {
-		opts.SourceBranch = new(input.SourceBranch)
-	}
-	if input.TargetBranch != "" {
-		opts.TargetBranch = new(input.TargetBranch)
-	}
-	if input.AuthorUsername != "" {
-		opts.AuthorUsername = new(input.AuthorUsername)
-	}
-	if input.ReviewerUsername != "" {
-		opts.ReviewerUsername = new(input.ReviewerUsername)
-	}
-	if input.Draft != nil {
-		opts.Draft = input.Draft
-	}
-	opts.CreatedAfter = toolutil.ParseOptionalTime(input.CreatedAfter)
-	opts.CreatedBefore = toolutil.ParseOptionalTime(input.CreatedBefore)
-	opts.UpdatedAfter = toolutil.ParseOptionalTime(input.UpdatedAfter)
-	opts.UpdatedBefore = toolutil.ParseOptionalTime(input.UpdatedBefore)
-	if input.OrderBy != "" {
-		opts.OrderBy = new(input.OrderBy)
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	applyMergeRequestListFilters(groupMRListFilters(input), groupMergeRequestListTarget(opts))
 	return opts
+}
+
+func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
+	return mergeRequestListFilters{
+		State: input.State, Labels: input.Labels, NotLabels: input.NotLabels, Milestone: input.Milestone,
+		Scope: input.Scope, Search: input.Search, SourceBranch: input.SourceBranch, TargetBranch: input.TargetBranch,
+		AuthorUsername: input.AuthorUsername, ReviewerUsername: input.ReviewerUsername, Draft: input.Draft,
+		CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
+		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
+	}
+}
+
+func groupMergeRequestListTarget(opts *gl.ListGroupMergeRequestsOptions) mergeRequestListTarget {
+	return newMergeRequestListTarget(&opts.State, &opts.Labels, &opts.NotLabels, &opts.Milestone, &opts.Scope, &opts.Search, &opts.SourceBranch, &opts.TargetBranch, &opts.AuthorUsername, &opts.ReviewerUsername, &opts.Draft, &opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore, &opts.OrderBy, &opts.Sort, &opts.Page, &opts.PerPage)
 }
 
 // ---------------------------------------------------------------------------
@@ -1232,32 +1277,21 @@ type IssuesClosedOutput struct {
 // IssuesClosed retrieves the list of issues that would be closed when
 // the specified merge request is merged.
 func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input IssuesClosedInput) (IssuesClosedOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return IssuesClosedOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return IssuesClosedOutput{}, errors.New("mrIssuesClosed: project_id is required")
-	}
-	if input.MRIID <= 0 {
-		return IssuesClosedOutput{}, toolutil.ErrRequiredInt64("mrIssuesClosed", "merge_request_iid")
-	}
-	opts := &gl.GetIssuesClosedOnMergeOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-	issueList, resp, err := client.GL().MergeRequests.GetIssuesClosedOnMerge(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return IssuesClosedOutput{}, toolutil.WrapErrWithStatusHint("mrIssuesClosed", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_get \u2014 only issues referenced via 'Closes #N' in MR description/commits are returned")
-	}
-	out := make([]issues.Output, len(issueList))
-	for i, issue := range issueList {
-		out[i] = issues.ToOutput(issue)
-	}
-	return IssuesClosedOutput{Issues: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listMergeRequestIssues(ctx, input.ProjectID, input.MRIID, input.Page, input.PerPage, "mrIssuesClosed",
+		"mrIssuesClosed: project_id is required",
+		"verify project_id and merge_request_iid with gitlab_mr_get - only issues referenced via 'Closes #N' in MR description/commits are returned",
+		func(projectID string, mrIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
+			listOptions := &gl.GetIssuesClosedOnMergeOptions{}
+			setMergeRequestPagination(page, perPage, func(value int64) { listOptions.Page = value }, func(value int64) { listOptions.PerPage = value })
+			return client.GL().MergeRequests.GetIssuesClosedOnMerge(projectID, mrIID, listOptions, opts...)
+		})
+}
+
+func listMergeRequestIssues(ctx context.Context, projectID toolutil.StringOrInt, mrIID int64, page, perPage int, operation, missingProjectMsg, notFoundHint string, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (IssuesClosedOutput, error) {
+	return listMergeRequestItems(ctx, projectID, mrIID, page, perPage, operation, missingProjectMsg, notFoundHint,
+		list, issues.ToOutput, func(out []issues.Output, pagination toolutil.PaginationOutput) IssuesClosedOutput {
+			return IssuesClosedOutput{Issues: out, Pagination: pagination}
+		})
 }
 
 // ---------------------------------------------------------------------------
@@ -1507,32 +1541,21 @@ type RelatedIssuesOutput struct {
 
 // RelatedIssues retrieves the list of issues related to a merge request.
 func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input RelatedIssuesInput) (RelatedIssuesOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return RelatedIssuesOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return RelatedIssuesOutput{}, errors.New("mrRelatedIssues: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
-	}
-	if input.MRIID <= 0 {
-		return RelatedIssuesOutput{}, toolutil.ErrRequiredInt64("mrRelatedIssues", "merge_request_iid")
-	}
-	opts := &gl.ListRelatedIssuesOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-	issueList, resp, err := client.GL().MergeRequests.ListRelatedIssues(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return RelatedIssuesOutput{}, toolutil.WrapErrWithStatusHint("mrRelatedIssues", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_get \u2014 only issues referenced in MR description/commits/notes are returned")
-	}
-	out := make([]issues.Output, len(issueList))
-	for i, issue := range issueList {
-		out[i] = issues.ToOutput(issue)
-	}
-	return RelatedIssuesOutput{Issues: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listMergeRequestRelatedIssues(ctx, input.ProjectID, input.MRIID, input.Page, input.PerPage, "mrRelatedIssues",
+		"mrRelatedIssues: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
+		"verify project_id and merge_request_iid with gitlab_mr_get - only issues referenced in MR description/commits/notes are returned",
+		func(projectID string, mrIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
+			listOptions := &gl.ListRelatedIssuesOptions{}
+			setMergeRequestPagination(page, perPage, func(value int64) { listOptions.Page = value }, func(value int64) { listOptions.PerPage = value })
+			return client.GL().MergeRequests.ListRelatedIssues(projectID, mrIID, listOptions, opts...)
+		})
+}
+
+func listMergeRequestRelatedIssues(ctx context.Context, projectID toolutil.StringOrInt, mrIID int64, page, perPage int, operation, missingProjectMsg, notFoundHint string, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (RelatedIssuesOutput, error) {
+	return listMergeRequestItems(ctx, projectID, mrIID, page, perPage, operation, missingProjectMsg, notFoundHint,
+		list, issues.ToOutput, func(out []issues.Output, pagination toolutil.PaginationOutput) RelatedIssuesOutput {
+			return RelatedIssuesOutput{Issues: out, Pagination: pagination}
+		})
 }
 
 // ---------------------------------------------------------------------------

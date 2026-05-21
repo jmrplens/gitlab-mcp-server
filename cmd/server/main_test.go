@@ -814,13 +814,16 @@ func TestRunWithContext_HTTPInvalidURL(t *testing.T) {
 // TestCreateServer_ReturnsConfiguredServer verifies that [createServer]
 // produces a valid MCP server with tools, resources, and prompts registered.
 func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
-	client := newMockGitLabClient(t)
-	cfg := &config.ServerConfig{MetaTools: false}
-	server := mustCreateServer(t, client, cfg)
+	serverInfo := initializeTestServer(t, &config.ServerConfig{MetaTools: false})
+	if name := serverInfo["name"]; name != serverName {
+		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
+	}
+}
 
-	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		return server
-	}, nil)
+func initializeTestServer(t *testing.T, cfg *config.ServerConfig) map[string]any {
+	t.Helper()
+	server := mustCreateServer(t, newMockGitLabClient(t), cfg)
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { return server }, nil)
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
@@ -837,7 +840,6 @@ func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 
 	sessionID := resp.Header.Get(hdrMCPSessionID)
 	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
-
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -851,9 +853,7 @@ func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 	if !ok {
 		t.Fatalf("response missing 'serverInfo': %v", res)
 	}
-	if name := serverInfo["name"]; name != serverName {
-		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
-	}
+	return serverInfo
 }
 
 // TestPrintHelp_ContainsExpectedSections verifies that printHelp outputs
@@ -996,43 +996,7 @@ func TestProjectMetadata_Constants(t *testing.T) {
 // TestCreateServer_MetaToolsEnabled verifies that createServer registers
 // meta-tools when MetaTools is true and returns an operational MCP server.
 func TestCreateServer_MetaToolsEnabled(t *testing.T) {
-	client := newMockGitLabClient(t)
-	cfg := &config.ServerConfig{MetaTools: true}
-	server := mustCreateServer(t, client, cfg)
-
-	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		return server
-	}, nil)
-	ts := httptest.NewServer(handler)
-	t.Cleanup(ts.Close)
-
-	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
-	req.Header.Set(hdrContentType, mimeJSON)
-	req.Header.Set("Accept", mimeJSONSSE)
-
-	resp, err := testHTTPClient.Do(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	sessionID := resp.Header.Get(hdrMCPSessionID)
-	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
-
-	result := parseJSONRPCResponse(t, resp)
-	res, ok := result["result"].(map[string]any)
-	if !ok {
-		t.Fatalf("response missing 'result': %v", result)
-	}
-	serverInfo, ok := res["serverInfo"].(map[string]any)
-	if !ok {
-		t.Fatalf("response missing 'serverInfo': %v", res)
-	}
+	serverInfo := initializeTestServer(t, &config.ServerConfig{MetaTools: true})
 	if name := serverInfo["name"]; name != serverName {
 		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
 	}

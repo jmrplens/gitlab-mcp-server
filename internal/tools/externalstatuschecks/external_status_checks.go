@@ -87,29 +87,40 @@ type ListProjectStatusChecksInput struct {
 
 // ListProjectStatusChecks lists project-level external status checks.
 func ListProjectStatusChecks(ctx context.Context, client *gitlabclient.Client, input ListProjectStatusChecksInput) (ListProjectStatusCheckOutput, error) {
+	return listProjectStatusChecks(ctx, input.ProjectID, input.Page, input.PerPage, "listProjectStatusChecks",
+		"deprecated endpoint - prefer gitlab_list_project_external_status_checks; requires Maintainer role and Premium/Ultimate license",
+		func(projectID string, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error) {
+			listOptions := &gl.ListOptions{}
+			setStatusCheckPagination(&listOptions.Page, &listOptions.PerPage, page, perPage)
+			return client.GL().ExternalStatusChecks.ListProjectStatusChecks(projectID, listOptions, opts...)
+		})
+}
+
+func listProjectStatusChecks(ctx context.Context, projectID toolutil.StringOrInt, page, perPage int, operation, forbiddenHint string, list func(string, int, int, ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error)) (ListProjectStatusCheckOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListProjectStatusCheckOutput{}, err
 	}
-	if input.ProjectID == "" {
+	if projectID == "" {
 		return ListProjectStatusCheckOutput{}, toolutil.ErrFieldRequired("project_id")
 	}
-	opts := &gl.ListOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-	checks, resp, err := client.GL().ExternalStatusChecks.ListProjectStatusChecks(string(input.ProjectID), opts, gl.WithContext(ctx))
+	checks, resp, err := list(string(projectID), page, perPage, gl.WithContext(ctx))
 	if err != nil {
-		return ListProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("listProjectStatusChecks", err, http.StatusForbidden,
-			"deprecated endpoint \u2014 prefer gitlab_list_project_external_status_checks; requires Maintainer role and Premium/Ultimate license")
+		return ListProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusForbidden, forbiddenHint)
 	}
 	items := make([]ProjectStatusCheckOutput, len(checks))
 	for i, c := range checks {
 		items[i] = toProjectStatusCheckOutput(c)
 	}
 	return ListProjectStatusCheckOutput{Items: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+}
+
+func setStatusCheckPagination(pageField, perPageField *int64, page, perPage int) {
+	if page > 0 {
+		*pageField = int64(page)
+	}
+	if perPage > 0 {
+		*perPageField = int64(perPage)
+	}
 }
 
 // ListProjectMRInput defines parameters for the ListProjectMRExternalStatusChecks action.
@@ -157,29 +168,13 @@ type ListProjectInput struct {
 
 // ListProjectExternalStatusChecks lists external status checks for a project.
 func ListProjectExternalStatusChecks(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListProjectStatusCheckOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return ListProjectStatusCheckOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return ListProjectStatusCheckOutput{}, toolutil.ErrFieldRequired("project_id")
-	}
-	opts := &gl.ListProjectExternalStatusChecksOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-	checks, resp, err := client.GL().ExternalStatusChecks.ListProjectExternalStatusChecks(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListProjectStatusCheckOutput{}, toolutil.WrapErrWithStatusHint("listProjectExternalStatusChecks", err, http.StatusForbidden,
-			"requires Maintainer role and Premium/Ultimate license; verify project_id with gitlab_project_get")
-	}
-	items := make([]ProjectStatusCheckOutput, len(checks))
-	for i, c := range checks {
-		items[i] = toProjectStatusCheckOutput(c)
-	}
-	return ListProjectStatusCheckOutput{Items: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listProjectStatusChecks(ctx, input.ProjectID, input.Page, input.PerPage, "listProjectExternalStatusChecks",
+		"requires Maintainer role and Premium/Ultimate license; verify project_id with gitlab_project_get",
+		func(projectID string, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.ProjectStatusCheck, *gl.Response, error) {
+			listOptions := &gl.ListProjectExternalStatusChecksOptions{}
+			setStatusCheckPagination(&listOptions.Page, &listOptions.PerPage, page, perPage)
+			return client.GL().ExternalStatusChecks.ListProjectExternalStatusChecks(projectID, listOptions, opts...)
+		})
 }
 
 // CreateProjectInput defines parameters for the CreateProjectExternalStatusCheck action.

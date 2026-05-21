@@ -1502,9 +1502,26 @@ func TestCreateAPIErrors(t *testing.T) {
 
 // TestActionSpecs_CreateErrors validates create routes return API errors.
 func TestActionSpecs_CreateErrors(t *testing.T) {
+	assertActionSpecMutationErrors(t, http.MethodPost, []awardEmojiActionSpecCase{
+		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "name": "thumbsup"}},
+		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "name": "thumbsup"}},
+		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "name": "thumbsup"}},
+		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "name": "thumbsup"}},
+	})
+}
+
+type awardEmojiActionSpecCase struct {
+	name string
+	args map[string]any
+}
+
+func assertActionSpecMutationErrors(t *testing.T, method string, cases []awardEmojiActionSpecCase) {
+	t.Helper()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
+		if r.Method == method {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -1513,19 +1530,7 @@ func TestActionSpecs_CreateErrors(t *testing.T) {
 
 	client := testutil.NewTestClient(t, mux)
 	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
-
-	createTools := []struct {
-		name string
-		args map[string]any
-	}{
-		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "name": "thumbsup"}},
-		{"gitlab_issue_note_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_mr_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "name": "thumbsup"}},
-		{"gitlab_mr_note_emoji_create", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "name": "thumbsup"}},
-		{"gitlab_snippet_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "name": "thumbsup"}},
-		{"gitlab_snippet_note_emoji_create", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "name": "thumbsup"}},
-	}
-	for _, tc := range createTools {
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
 			if err == nil {
@@ -1537,37 +1542,14 @@ func TestActionSpecs_CreateErrors(t *testing.T) {
 
 // TestActionSpecs_DeleteErrors validates delete routes return API errors.
 func TestActionSpecs_DeleteErrors(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
-		testutil.RespondJSON(w, http.StatusOK, covEmojiJSON)
-	})
-
-	client := testutil.NewTestClient(t, mux)
-	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))
-
-	deleteTools := []struct {
-		name string
-		args map[string]any
-	}{
+	assertActionSpecMutationErrors(t, http.MethodDelete, []awardEmojiActionSpecCase{
 		{"gitlab_issue_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
 		{"gitlab_issue_note_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "note_id": 1, "award_id": 1}},
 		{"gitlab_mr_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "award_id": 1}},
 		{"gitlab_mr_note_emoji_delete", map[string]any{"project_id": "p", "merge_request_iid": 1, "note_id": 1, "award_id": 1}},
 		{"gitlab_snippet_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "award_id": 1}},
 		{"gitlab_snippet_note_emoji_delete", map[string]any{"project_id": "p", "snippet_id": 1, "note_id": 1, "award_id": 1}},
-	}
-	for _, tc := range deleteTools {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := byTool[tc.name].Route.Handler(t.Context(), tc.args)
-			if err == nil {
-				t.Fatalf("Route.Handler(%s) expected error, got nil", tc.name)
-			}
-		})
-	}
+	})
 }
 
 // TestDeleteAwardEmoji_NotFoundHints covers delete not-found hint branches.

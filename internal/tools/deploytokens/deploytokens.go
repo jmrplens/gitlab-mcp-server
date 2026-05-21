@@ -234,74 +234,76 @@ func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupIn
 
 // CreateProject creates a deploy token for a project.
 func CreateProject(ctx context.Context, client *gitlabclient.Client, input CreateProjectInput) (Output, error) {
-	if input.ProjectID == "" {
-		return Output{}, toolutil.ErrFieldRequired("project_id")
-	}
-	if input.Name == "" {
-		return Output{}, toolutil.ErrFieldRequired("name")
-	}
-	if len(input.Scopes) == 0 {
-		return Output{}, toolutil.ErrFieldRequired("scopes")
-	}
-
-	opts := &gl.CreateProjectDeployTokenOptions{
-		Name:   new(input.Name),
-		Scopes: &input.Scopes,
-	}
-	if input.Username != "" {
-		opts.Username = new(input.Username)
-	}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse("2006-01-02", input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf("invalid expires_at format, use YYYY-MM-DD: %w", err)
-		}
-		opts.ExpiresAt = &t
-	}
-
-	token, _, err := client.GL().DeployTokens.CreateProjectDeployToken(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("deploy_token_create_project", err, http.StatusBadRequest,
-			"scopes must be one of {read_repository, read_registry, write_registry, read_package_registry, write_package_registry, read_virtual_registry}; name unique within project; requires Maintainer role")
-	}
-
-	return toOutput(token), nil
+	return createDeployToken(ctx, input.ProjectID, "project_id", deployTokenCreateRequest{
+		Name: input.Name, Username: input.Username, ExpiresAt: input.ExpiresAt, Scopes: input.Scopes,
+	}, "deploy_token_create_project",
+		"scopes must be one of {read_repository, read_registry, write_registry, read_package_registry, write_package_registry, read_virtual_registry}; name unique within project; requires Maintainer role",
+		func(scopeID string, req deployTokenCreateRequest, expiresAt *time.Time) (*gl.DeployToken, *gl.Response, error) {
+			opts := &gl.CreateProjectDeployTokenOptions{Name: new(req.Name), Scopes: &req.Scopes, ExpiresAt: expiresAt}
+			if req.Username != "" {
+				opts.Username = new(req.Username)
+			}
+			return client.GL().DeployTokens.CreateProjectDeployToken(scopeID, opts, gl.WithContext(ctx))
+		})
 }
 
 // CreateGroup creates a deploy token for a group.
 func CreateGroup(ctx context.Context, client *gitlabclient.Client, input CreateGroupInput) (Output, error) {
-	if input.GroupID == "" {
-		return Output{}, toolutil.ErrFieldRequired("group_id")
+	return createDeployToken(ctx, input.GroupID, "group_id", deployTokenCreateRequest{
+		Name: input.Name, Username: input.Username, ExpiresAt: input.ExpiresAt, Scopes: input.Scopes,
+	}, "deploy_token_create_group",
+		"scopes must be one of {read_repository, read_registry, write_registry, read_package_registry, write_package_registry, read_virtual_registry}; name unique within group; requires Owner role",
+		func(scopeID string, req deployTokenCreateRequest, expiresAt *time.Time) (*gl.DeployToken, *gl.Response, error) {
+			opts := &gl.CreateGroupDeployTokenOptions{Name: new(req.Name), Scopes: &req.Scopes, ExpiresAt: expiresAt}
+			if req.Username != "" {
+				opts.Username = new(req.Username)
+			}
+			return client.GL().DeployTokens.CreateGroupDeployToken(scopeID, opts, gl.WithContext(ctx))
+		})
+}
+
+type deployTokenCreateRequest struct {
+	Name      string
+	Username  string
+	ExpiresAt string
+	Scopes    []string
+}
+
+func createDeployToken(_ context.Context, scopeID toolutil.StringOrInt, requiredField string, req deployTokenCreateRequest, operation, badRequestHint string, create func(string, deployTokenCreateRequest, *time.Time) (*gl.DeployToken, *gl.Response, error)) (Output, error) {
+	if scopeID == "" {
+		return Output{}, toolutil.ErrFieldRequired(requiredField)
 	}
-	if input.Name == "" {
+	if req.Name == "" {
 		return Output{}, toolutil.ErrFieldRequired("name")
 	}
-	if len(input.Scopes) == 0 {
+	if len(req.Scopes) == 0 {
 		return Output{}, toolutil.ErrFieldRequired("scopes")
 	}
 
-	opts := &gl.CreateGroupDeployTokenOptions{
-		Name:   new(input.Name),
-		Scopes: &input.Scopes,
-	}
-	if input.Username != "" {
-		opts.Username = new(input.Username)
-	}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse("2006-01-02", input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf("invalid expires_at format, use YYYY-MM-DD: %w", err)
-		}
-		opts.ExpiresAt = &t
-	}
-
-	token, _, err := client.GL().DeployTokens.CreateGroupDeployToken(string(input.GroupID), opts, gl.WithContext(ctx))
+	expiresAtValue, hasExpiresAt, err := parseDeployTokenExpiresAt(req.ExpiresAt)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("deploy_token_create_group", err, http.StatusBadRequest,
-			"scopes must be one of {read_repository, read_registry, write_registry, read_package_registry, write_package_registry, read_virtual_registry}; name unique within group; requires Owner role")
+		return Output{}, err
 	}
-
+	var expiresAt *time.Time
+	if hasExpiresAt {
+		expiresAt = &expiresAtValue
+	}
+	token, _, err := create(string(scopeID), req, expiresAt)
+	if err != nil {
+		return Output{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusBadRequest, badRequestHint)
+	}
 	return toOutput(token), nil
+}
+
+func parseDeployTokenExpiresAt(value string) (time.Time, bool, error) {
+	if value == "" {
+		return time.Time{}, false, nil
+	}
+	expiresAt, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("invalid expires_at format, use YYYY-MM-DD: %w", err)
+	}
+	return expiresAt, true, nil
 }
 
 // DeleteProject deletes a project deploy token.
@@ -339,7 +341,3 @@ func DeleteGroup(ctx context.Context, client *gitlabclient.Client, input DeleteG
 
 	return nil
 }
-
-// ---------------------------------------------------------------------------
-// Markdown formatters
-// ---------------------------------------------------------------------------.

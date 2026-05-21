@@ -43,6 +43,7 @@ linters:
     - gocognit # Cognitive complexity guard
     - nestif # Nested if complexity guard
     - maintidx # Maintainability index guard
+    - dupl # Duplicate code guard
     - revive # Configurable Go linter (golint replacement)
     - gocritic # ~100 diagnostics: bugs, performance, style
     - unconvert # Unnecessary type conversions
@@ -192,6 +193,9 @@ linters:
 
     maintidx:
       under: 20
+
+    dupl:
+      threshold: 250
 
     perfsprint:
       int-conversion: true

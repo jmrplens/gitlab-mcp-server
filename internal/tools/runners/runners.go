@@ -123,6 +123,113 @@ func toDetailsOutput(d *gl.RunnerDetails) DetailsOutput {
 	return out
 }
 
+type runnerListRequest struct {
+	Type    string
+	Status  string
+	Paused  *bool
+	TagList string
+	Page    int
+	PerPage int
+}
+
+func splitRunnerTagList(raw string) *[]string {
+	if raw == "" {
+		return nil
+	}
+	tags := strings.Split(raw, ",")
+	for i := range tags {
+		tags[i] = strings.TrimSpace(tags[i])
+	}
+	return &tags
+}
+
+func applyRunnerListFields(req runnerListRequest, setType, setStatus func(*string), setTagList func(*[]string), setPage, setPerPage func(int64)) {
+	if req.Type != "" {
+		setType(&req.Type)
+	}
+	if req.Status != "" {
+		setStatus(&req.Status)
+	}
+	if tags := splitRunnerTagList(req.TagList); tags != nil {
+		setTagList(tags)
+	}
+	if req.Page > 0 {
+		setPage(int64(req.Page))
+	}
+	if req.PerPage > 0 {
+		setPerPage(int64(req.PerPage))
+	}
+}
+
+func buildListRunnersOptions(req runnerListRequest) *gl.ListRunnersOptions {
+	opts := &gl.ListRunnersOptions{Paused: req.Paused}
+	applyRunnerListFields(req,
+		func(value *string) { opts.Type = value },
+		func(value *string) { opts.Status = value },
+		func(value *[]string) { opts.TagList = value },
+		func(value int64) { opts.Page = value },
+		func(value int64) { opts.PerPage = value },
+	)
+	return opts
+}
+
+func buildProjectRunnersOptions(req runnerListRequest) *gl.ListProjectRunnersOptions {
+	opts := &gl.ListProjectRunnersOptions{}
+	applyRunnerListFields(req,
+		func(value *string) { opts.Type = value },
+		func(value *string) { opts.Status = value },
+		func(value *[]string) { opts.TagList = value },
+		func(value int64) { opts.Page = value },
+		func(value int64) { opts.PerPage = value },
+	)
+	return opts
+}
+
+func buildGroupRunnersOptions(req runnerListRequest) *gl.ListGroupsRunnersOptions {
+	opts := &gl.ListGroupsRunnersOptions{}
+	applyRunnerListFields(req,
+		func(value *string) { opts.Type = value },
+		func(value *string) { opts.Status = value },
+		func(value *[]string) { opts.TagList = value },
+		func(value int64) { opts.Page = value },
+		func(value int64) { opts.PerPage = value },
+	)
+	return opts
+}
+
+func listOutput(runners []*gl.Runner, resp *gl.Response) ListOutput {
+	items := make([]Output, len(runners))
+	for i, r := range runners {
+		items[i] = toOutput(r)
+	}
+	return ListOutput{Runners: items, Pagination: toolutil.PaginationFromResponse(resp)}
+}
+
+func listRunners(ctx context.Context, req runnerListRequest, operation, hint string, list func(*gl.ListRunnersOptions, ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error)) (ListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
+	}
+	runners, resp, err := list(buildListRunnersOptions(req), gl.WithContext(ctx))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusUnprocessableEntity, hint)
+	}
+	return listOutput(runners, resp), nil
+}
+
+func listScopedRunners(ctx context.Context, scopeID toolutil.StringOrInt, requiredField, operation, hint string, req runnerListRequest, list func(string, runnerListRequest, ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error)) (ListOutput, error) {
+	if scopeID == "" {
+		return ListOutput{}, toolutil.ErrFieldRequired(requiredField)
+	}
+	if err := ctx.Err(); err != nil {
+		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
+	}
+	runners, resp, err := list(string(scopeID), req, gl.WithContext(ctx))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, hint)
+	}
+	return listOutput(runners, resp), nil
+}
+
 // ---------------------------------------------------------------------------
 // ListRunners — list owned runners
 // ---------------------------------------------------------------------------.
@@ -138,45 +245,10 @@ type ListInput struct {
 
 // List returns owned runners with optional filters.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
-	}
-
-	opts := &gl.ListRunnersOptions{}
-	if input.Type != "" {
-		opts.Type = new(input.Type)
-	}
-	if input.Status != "" {
-		opts.Status = new(input.Status)
-	}
-	if input.Paused != nil {
-		opts.Paused = input.Paused
-	}
-	if input.TagList != "" {
-		tags := strings.Split(input.TagList, ",")
-		for i := range tags {
-			tags[i] = strings.TrimSpace(tags[i])
-		}
-		opts.TagList = &tags
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-
-	runners, resp, err := client.GL().Runners.ListRunners(opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list runners", err, http.StatusUnprocessableEntity,
-			"status filter must be one of active|paused|online|offline|never_contacted|stale and type must be instance_type|group_type|project_type")
-	}
-
-	items := make([]Output, len(runners))
-	for i, r := range runners {
-		items[i] = toOutput(r)
-	}
-	return ListOutput{Runners: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listRunners(ctx, runnerListRequest{
+		Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList, Page: input.Page, PerPage: input.PerPage,
+	}, "list runners", "status filter must be one of active|paused|online|offline|never_contacted|stale and type must be instance_type|group_type|project_type",
+		client.GL().Runners.ListRunners)
 }
 
 // ---------------------------------------------------------------------------
@@ -366,45 +438,12 @@ type ListProjectInput struct {
 
 // ListProject returns runners assigned to a specific project.
 func ListProject(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListOutput, error) {
-	if input.ProjectID == "" {
-		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
-	}
-	if err := ctx.Err(); err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
-	}
-
-	opts := &gl.ListProjectRunnersOptions{}
-	if input.Type != "" {
-		opts.Type = new(input.Type)
-	}
-	if input.Status != "" {
-		opts.Status = new(input.Status)
-	}
-	if input.TagList != "" {
-		tags := strings.Split(input.TagList, ",")
-		for i := range tags {
-			tags[i] = strings.TrimSpace(tags[i])
-		}
-		opts.TagList = &tags
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-
-	runners, resp, err := client.GL().Runners.ListProjectRunners(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list project runners", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get \u2014 use namespace/project path or numeric ID")
-	}
-
-	items := make([]Output, len(runners))
-	for i, r := range runners {
-		items[i] = toOutput(r)
-	}
-	return ListOutput{Runners: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listScopedRunners(ctx, input.ProjectID, "project_id", "list project runners",
+		"verify the project exists with gitlab_project_get - use namespace/project path or numeric ID",
+		runnerListRequest{Type: input.Type, Status: input.Status, TagList: input.TagList, Page: input.Page, PerPage: input.PerPage},
+		func(scopeID string, req runnerListRequest, opts ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error) {
+			return client.GL().Runners.ListProjectRunners(scopeID, buildProjectRunnersOptions(req), opts...)
+		})
 }
 
 // ---------------------------------------------------------------------------
@@ -490,45 +529,12 @@ type ListGroupInput struct {
 
 // ListGroup returns runners available in a specific group.
 func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroupInput) (ListOutput, error) {
-	if input.GroupID == "" {
-		return ListOutput{}, toolutil.ErrFieldRequired("group_id")
-	}
-	if err := ctx.Err(); err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
-	}
-
-	opts := &gl.ListGroupsRunnersOptions{}
-	if input.Type != "" {
-		opts.Type = new(input.Type)
-	}
-	if input.Status != "" {
-		opts.Status = new(input.Status)
-	}
-	if input.TagList != "" {
-		tags := strings.Split(input.TagList, ",")
-		for i := range tags {
-			tags[i] = strings.TrimSpace(tags[i])
-		}
-		opts.TagList = &tags
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-
-	runners, resp, err := client.GL().Runners.ListGroupsRunners(string(input.GroupID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group runners", err, http.StatusNotFound,
-			"verify the group exists with gitlab_group_get \u2014 use group full_path or numeric ID")
-	}
-
-	items := make([]Output, len(runners))
-	for i, r := range runners {
-		items[i] = toOutput(r)
-	}
-	return ListOutput{Runners: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listScopedRunners(ctx, input.GroupID, "group_id", "list group runners",
+		"verify the group exists with gitlab_group_get - use group full_path or numeric ID",
+		runnerListRequest{Type: input.Type, Status: input.Status, TagList: input.TagList, Page: input.Page, PerPage: input.PerPage},
+		func(scopeID string, req runnerListRequest, opts ...gl.RequestOptionFunc) ([]*gl.Runner, *gl.Response, error) {
+			return client.GL().Runners.ListGroupsRunners(scopeID, buildGroupRunnersOptions(req), opts...)
+		})
 }
 
 // ---------------------------------------------------------------------------
@@ -701,45 +707,10 @@ type ListAllInput struct {
 
 // ListAll returns all runners across the GitLab instance (admin endpoint).
 func ListAll(ctx context.Context, client *gitlabclient.Client, input ListAllInput) (ListOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return ListOutput{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
-	}
-
-	opts := &gl.ListRunnersOptions{}
-	if input.Type != "" {
-		opts.Type = new(input.Type)
-	}
-	if input.Status != "" {
-		opts.Status = new(input.Status)
-	}
-	if input.Paused != nil {
-		opts.Paused = input.Paused
-	}
-	if input.TagList != "" {
-		tags := strings.Split(input.TagList, ",")
-		for i := range tags {
-			tags[i] = strings.TrimSpace(tags[i])
-		}
-		opts.TagList = &tags
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-
-	runners, resp, err := client.GL().Runners.ListAllRunners(opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list all runners", err, http.StatusForbidden,
-			"listing all instance runners requires an admin token \u2014 use gitlab_runner_list (scoped to your accessible runners) instead")
-	}
-
-	items := make([]Output, len(runners))
-	for i, r := range runners {
-		items[i] = toOutput(r)
-	}
-	return ListOutput{Runners: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listRunners(ctx, runnerListRequest{
+		Type: input.Type, Status: input.Status, Paused: input.Paused, TagList: input.TagList, Page: input.Page, PerPage: input.PerPage,
+	}, "list all runners", "listing all instance runners requires an admin token - use gitlab_runner_list (scoped to your accessible runners) instead",
+		client.GL().Runners.ListAllRunners)
 }
 
 // ---------------------------------------------------------------------------

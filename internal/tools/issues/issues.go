@@ -780,29 +780,10 @@ type SubscribeInput struct {
 
 // Subscribe subscribes the authenticated user to an issue for notifications.
 func Subscribe(ctx context.Context, client *gitlabclient.Client, input SubscribeInput) (Output, error) {
-	if err := ctx.Err(); err != nil {
-		return Output{}, err
-	}
-	if input.ProjectID == "" {
-		return Output{}, errors.New("issueSubscribe: project_id is required")
-	}
-	if input.IssueIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("issueSubscribe", "issue_iid")
-	}
-	issue, _, err := client.GL().Issues.SubscribeToIssue(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
-	if err != nil {
-		// GitLab returns 304 Not Modified with empty body when already subscribed,
-		// which causes EOF during JSON decode. Fall back to Get.
-		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
-			return Get(ctx, client, GetInput(input))
-		}
-		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return Output{}, toolutil.WrapErrWithHint("issueSubscribe", err,
-				hintConfirmIssueExists)
-		}
-		return Output{}, toolutil.WrapErrWithMessage("issueSubscribe", err)
-	}
-	return ToOutput(issue), nil
+	return changeIssueSubscription(ctx, client, input.ProjectID, input.IssueIID, "issueSubscribe",
+		func(projectID string, issueIID int64) (*gl.Issue, *gl.Response, error) {
+			return client.GL().Issues.SubscribeToIssue(projectID, issueIID, gl.WithContext(ctx))
+		})
 }
 
 // UnsubscribeInput defines parameters for unsubscribing from an issue.
@@ -813,25 +794,31 @@ type UnsubscribeInput struct {
 
 // Unsubscribe removes the authenticated user's subscription from an issue.
 func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input UnsubscribeInput) (Output, error) {
+	return changeIssueSubscription(ctx, client, input.ProjectID, input.IssueIID, "issueUnsubscribe",
+		func(projectID string, issueIID int64) (*gl.Issue, *gl.Response, error) {
+			return client.GL().Issues.UnsubscribeFromIssue(projectID, issueIID, gl.WithContext(ctx))
+		})
+}
+
+func changeIssueSubscription(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt, issueIID int64, operation string, change func(string, int64) (*gl.Issue, *gl.Response, error)) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	if input.ProjectID == "" {
-		return Output{}, errors.New("issueUnsubscribe: project_id is required")
+	if projectID == "" {
+		return Output{}, fmt.Errorf("%s: project_id is required", operation)
 	}
-	if input.IssueIID <= 0 {
-		return Output{}, toolutil.ErrRequiredInt64("issueUnsubscribe", "issue_iid")
+	if issueIID <= 0 {
+		return Output{}, toolutil.ErrRequiredInt64(operation, "issue_iid")
 	}
-	issue, _, err := client.GL().Issues.UnsubscribeFromIssue(string(input.ProjectID), input.IssueIID, gl.WithContext(ctx))
+	issue, _, err := change(string(projectID), issueIID)
 	if err != nil {
 		if errors.Is(err, io.EOF) || toolutil.IsHTTPStatus(err, http.StatusNotModified) {
-			return Get(ctx, client, GetInput(input))
+			return Get(ctx, client, GetInput{ProjectID: projectID, IssueIID: issueIID})
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return Output{}, toolutil.WrapErrWithHint("issueUnsubscribe", err,
-				hintConfirmIssueExists)
+			return Output{}, toolutil.WrapErrWithHint(operation, err, hintConfirmIssueExists)
 		}
-		return Output{}, toolutil.WrapErrWithMessage("issueUnsubscribe", err)
+		return Output{}, toolutil.WrapErrWithMessage(operation, err)
 	}
 	return ToOutput(issue), nil
 }
@@ -1120,6 +1107,40 @@ func basicMRToOutput(mr *gl.BasicMergeRequest) RelatedMROutput {
 	return out
 }
 
+func relatedMRsOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) RelatedMRsOutput {
+	out := make([]RelatedMROutput, len(mrs))
+	for i, mr := range mrs {
+		out[i] = basicMRToOutput(mr)
+	}
+	return RelatedMRsOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}
+}
+
+func setPagination(opts *gl.ListOptions, page, perPage int) {
+	if page > 0 {
+		opts.Page = int64(page)
+	}
+	if perPage > 0 {
+		opts.PerPage = int64(perPage)
+	}
+}
+
+func listIssueMergeRequests(ctx context.Context, projectID toolutil.StringOrInt, issueIID int64, page, perPage int, operation, hint string, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error)) (RelatedMRsOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return RelatedMRsOutput{}, err
+	}
+	if projectID == "" {
+		return RelatedMRsOutput{}, fmt.Errorf("%s: project_id is required", operation)
+	}
+	if issueIID <= 0 {
+		return RelatedMRsOutput{}, toolutil.ErrRequiredInt64(operation, "issue_iid")
+	}
+	mrs, resp, err := list(string(projectID), issueIID, page, perPage, gl.WithContext(ctx))
+	if err != nil {
+		return RelatedMRsOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, hint)
+	}
+	return relatedMRsOutput(mrs, resp), nil
+}
+
 // ListMRsClosingInput defines parameters for listing MRs that close an issue on merge.
 type ListMRsClosingInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
@@ -1129,32 +1150,13 @@ type ListMRsClosingInput struct {
 
 // ListMRsClosing retrieves merge requests that will close this issue on merge.
 func ListMRsClosing(ctx context.Context, client *gitlabclient.Client, input ListMRsClosingInput) (RelatedMRsOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return RelatedMRsOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return RelatedMRsOutput{}, errors.New("issueListMRsClosing: project_id is required")
-	}
-	if input.IssueIID <= 0 {
-		return RelatedMRsOutput{}, toolutil.ErrRequiredInt64("issueListMRsClosing", "issue_iid")
-	}
-	opts := &gl.ListMergeRequestsClosingIssueOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-	mrs, resp, err := client.GL().Issues.ListMergeRequestsClosingIssue(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return RelatedMRsOutput{}, toolutil.WrapErrWithStatusHint("issueListMRsClosing", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get \u2014 only MRs that include 'Closes #N' are returned")
-	}
-	out := make([]RelatedMROutput, len(mrs))
-	for i, mr := range mrs {
-		out[i] = basicMRToOutput(mr)
-	}
-	return RelatedMRsOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listIssueMergeRequests(ctx, input.ProjectID, input.IssueIID, input.Page, input.PerPage, "issueListMRsClosing",
+		"verify project_id and issue_iid with gitlab_issue_get - only MRs that include 'Closes #N' are returned",
+		func(projectID string, issueIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
+			listOptions := &gl.ListMergeRequestsClosingIssueOptions{}
+			setPagination(&listOptions.ListOptions, page, perPage)
+			return client.GL().Issues.ListMergeRequestsClosingIssue(projectID, issueIID, listOptions, opts...)
+		})
 }
 
 // ListMRsRelatedInput defines parameters for listing MRs related to an issue.
@@ -1166,32 +1168,13 @@ type ListMRsRelatedInput struct {
 
 // ListMRsRelated retrieves merge requests related to this issue.
 func ListMRsRelated(ctx context.Context, client *gitlabclient.Client, input ListMRsRelatedInput) (RelatedMRsOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return RelatedMRsOutput{}, err
-	}
-	if input.ProjectID == "" {
-		return RelatedMRsOutput{}, errors.New("issueListMRsRelated: project_id is required")
-	}
-	if input.IssueIID <= 0 {
-		return RelatedMRsOutput{}, toolutil.ErrRequiredInt64("issueListMRsRelated", "issue_iid")
-	}
-	opts := &gl.ListMergeRequestsRelatedToIssueOptions{}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
-	mrs, resp, err := client.GL().Issues.ListMergeRequestsRelatedToIssue(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return RelatedMRsOutput{}, toolutil.WrapErrWithStatusHint("issueListMRsRelated", err, http.StatusNotFound,
-			"verify project_id and issue_iid with gitlab_issue_get \u2014 returns MRs mentioning the issue in description/notes (broader than 'closing')")
-	}
-	out := make([]RelatedMROutput, len(mrs))
-	for i, mr := range mrs {
-		out[i] = basicMRToOutput(mr)
-	}
-	return RelatedMRsOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
+	return listIssueMergeRequests(ctx, input.ProjectID, input.IssueIID, input.Page, input.PerPage, "issueListMRsRelated",
+		"verify project_id and issue_iid with gitlab_issue_get - returns MRs mentioning the issue in description/notes (broader than 'closing')",
+		func(projectID string, issueIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
+			listOptions := &gl.ListMergeRequestsRelatedToIssueOptions{}
+			setPagination(&listOptions.ListOptions, page, perPage)
+			return client.GL().Issues.ListMergeRequestsRelatedToIssue(projectID, issueIID, listOptions, opts...)
+		})
 }
 
 // Markdown formatting.
