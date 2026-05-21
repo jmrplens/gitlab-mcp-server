@@ -4,6 +4,7 @@ package wizard
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -503,7 +504,7 @@ func TestApply_WriteEnvFileFails(t *testing.T) {
 
 	orig := writeEnvFileFn
 	writeEnvFileFn = func(ServerConfig) (string, error) {
-		return "", fmt.Errorf("disk full")
+		return "", errors.New("disk full")
 	}
 	t.Cleanup(func() { writeEnvFileFn = orig })
 

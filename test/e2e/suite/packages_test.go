@@ -8,7 +8,6 @@ package suite
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"strconv"
 	"testing"
 
@@ -218,7 +217,7 @@ func testMetaPackageLifecycle(ctx context.Context, t *testing.T, projM ProjectFi
 			"action": "file_list",
 			"params": map[string]any{
 				"project_id": projM.pidStr(),
-				"package_id": fmt.Sprintf("%d", mPkgID),
+				"package_id": strconv.FormatInt(mPkgID, 10),
 			},
 		})
 		if err != nil {
@@ -255,8 +254,8 @@ func testMetaPackageLifecycle(ctx context.Context, t *testing.T, projM ProjectFi
 			"action": "file_delete",
 			"params": map[string]any{
 				"project_id":      projM.pidStr(),
-				"package_id":      fmt.Sprintf("%d", mPkgID),
-				"package_file_id": fmt.Sprintf("%d", mFileID),
+				"package_id":      strconv.FormatInt(mPkgID, 10),
+				"package_file_id": strconv.FormatInt(mFileID, 10),
 			},
 		})
 		if err != nil {
@@ -269,7 +268,7 @@ func testMetaPackageLifecycle(ctx context.Context, t *testing.T, projM ProjectFi
 			"action": "delete",
 			"params": map[string]any{
 				"project_id": projM.pidStr(),
-				"package_id": fmt.Sprintf("%d", mPkgID),
+				"package_id": strconv.FormatInt(mPkgID, 10),
 			},
 		})
 		if err != nil {

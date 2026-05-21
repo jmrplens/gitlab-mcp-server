@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -39,7 +40,7 @@ func testStreamServer(t *testing.T, fileBody string, statusCode int) http.Handle
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/packages/generic/"):
 			w.Header().Set(headerContentType, testOctetStream)
-			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(fileBody)))
+			w.Header().Set("Content-Length", strconv.Itoa(len(fileBody)))
 			w.WriteHeader(statusCode)
 			w.Write([]byte(fileBody))
 		default:

@@ -4,6 +4,7 @@ package wizard
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -100,7 +101,7 @@ func TestStepInstall_EOF(t *testing.T) {
 func TestStepInstall_InstallBinaryFails(t *testing.T) {
 	orig := installBinaryFn
 	installBinaryFn = func(string) (string, error) {
-		return "", fmt.Errorf("permission denied")
+		return "", errors.New("permission denied")
 	}
 	t.Cleanup(func() { installBinaryFn = orig })
 

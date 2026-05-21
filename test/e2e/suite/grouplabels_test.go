@@ -82,7 +82,7 @@ func TestMeta_GroupLabels(t *testing.T) {
 			"action": "group_label_delete",
 			"params": map[string]any{
 				"group_id": gid,
-				"label_id": fmt.Sprintf("%d", labelID),
+				"label_id": strconv.FormatInt(labelID, 10),
 			},
 		})
 		requireNoError(t, err, "group label delete")

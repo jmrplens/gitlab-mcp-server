@@ -8,6 +8,7 @@ package suite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -474,7 +475,7 @@ func waitForBranchOn(ctx context.Context, t *testing.T, client *gitlabclient.Cli
 // non-retryable branch lookup error.
 func waitForBranch(ctx context.Context, client *gitlabclient.Client, projectID int64, branch string) error {
 	if client == nil {
-		return fmt.Errorf("gitlab client not configured")
+		return errors.New("gitlab client not configured")
 	}
 	pid := int(projectID)
 

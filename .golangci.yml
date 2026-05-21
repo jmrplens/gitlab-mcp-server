@@ -221,15 +221,11 @@ linters:
         linters:
           - errcheck
           - gosec
-          - bodyclose
           - gocritic
           - revive
           - unparam
-          - perfsprint
           - noctx
-          - wastedassign
           - dupl
-          - fatcontext
 
       # Main entry point: allow os.Exit
       - path: "cmd/server/main\\.go"

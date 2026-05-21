@@ -5,6 +5,7 @@ package packages
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -721,7 +722,7 @@ func (failingDirEntry) IsDir() bool { return false }
 
 func (failingDirEntry) Type() fs.FileMode { return 0 }
 
-func (failingDirEntry) Info() (fs.FileInfo, error) { return nil, fmt.Errorf("stat missing.bin") }
+func (failingDirEntry) Info() (fs.FileInfo, error) { return nil, errors.New("stat missing.bin") }
 
 // TestShouldIncludeFile_InfoError verifies shouldIncludeFile returns stat errors.
 func TestShouldIncludeFile_InfoError(t *testing.T) {

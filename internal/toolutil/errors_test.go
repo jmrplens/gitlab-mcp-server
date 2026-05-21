@@ -104,7 +104,7 @@ func TestClassifyError_HTTPStatuses(t *testing.T) {
 
 // TestClassifyError_ConnectionRefused verifies detection of connection refused errors.
 func TestClassifyError_ConnectionRefused(t *testing.T) {
-	err := fmt.Errorf("dial tcp 10.0.0.1:443: connection refused")
+	err := errors.New("dial tcp 10.0.0.1:443: connection refused")
 	got := ClassifyError(err)
 	if !strings.Contains(got, "unreachable") {
 		t.Errorf("ClassifyError(conn refused) = %q, want 'unreachable'", got)
@@ -123,7 +123,7 @@ func TestClassifyError_DNS(t *testing.T) {
 
 // TestClassifyError_TLS verifies detection of TLS/certificate errors.
 func TestClassifyError_TLS(t *testing.T) {
-	err := fmt.Errorf("Get https://gitlab.example.com: x509: certificate signed by unknown authority")
+	err := errors.New("Get https://gitlab.example.com: x509: certificate signed by unknown authority")
 	got := ClassifyError(err)
 	if !strings.Contains(got, "TLS") {
 		t.Errorf("ClassifyError(TLS) = %q, want 'TLS'", got)
@@ -780,27 +780,27 @@ func TestIsNotFound(t *testing.T) {
 		},
 		{
 			name: "plain text 404 Not Found",
-			err:  fmt.Errorf("404 Not Found"),
+			err:  errors.New("404 Not Found"),
 			want: true,
 		},
 		{
 			name: "wrapped plain text 404 Not Found",
-			err:  fmt.Errorf("GET http://example.com/api: 404 Not Found"),
+			err:  errors.New("GET http://example.com/api: 404 Not Found"),
 			want: true,
 		},
 		{
 			name: "403 error should not match",
-			err:  fmt.Errorf("GET http://example.com/api: 403 Forbidden"),
+			err:  errors.New("GET http://example.com/api: 403 Forbidden"),
 			want: false,
 		},
 		{
 			name: "port containing 404 should not match",
-			err:  fmt.Errorf("GET http://127.0.0.1:40456/api/v4/projects: 403 Forbidden"),
+			err:  errors.New("GET http://127.0.0.1:40456/api/v4/projects: 403 Forbidden"),
 			want: false,
 		},
 		{
 			name: "port 40400 should not match",
-			err:  fmt.Errorf("GET http://127.0.0.1:40400/api/v4/projects: 500 Internal Server Error"),
+			err:  errors.New("GET http://127.0.0.1:40400/api/v4/projects: 500 Internal Server Error"),
 			want: false,
 		},
 	}

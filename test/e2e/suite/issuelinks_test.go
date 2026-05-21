@@ -7,7 +7,7 @@ package suite
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -36,7 +36,7 @@ func TestIndividual_IssueLinks(t *testing.T) {
 			ProjectID:       proj.pidOf(),
 			IssueIID:        int(issue1.IID),
 			TargetProjectID: proj.pidStr(),
-			TargetIssueIID:  fmt.Sprintf("%d", issue2.IID),
+			TargetIssueIID:  strconv.FormatInt(issue2.IID, 10),
 		})
 		requireNoError(t, err, "create issue link")
 		requireTruef(t, out.ID > 0, "expected link ID")
@@ -99,7 +99,7 @@ func TestMeta_IssueLinks(t *testing.T) {
 				"project_id":        proj.pidStr(),
 				"issue_iid":         issue1.IID,
 				"target_project_id": proj.pidStr(),
-				"target_issue_iid":  fmt.Sprintf("%d", issue2.IID),
+				"target_issue_iid":  strconv.FormatInt(issue2.IID, 10),
 			},
 		})
 		requireNoError(t, err, "meta create issue link")

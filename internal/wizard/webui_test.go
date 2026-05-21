@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"maps"
 	"net/http"
 	"net/http/httptest"
@@ -609,7 +609,7 @@ func TestNormalizeConfigureRequest_DefaultsAndLogLevel(t *testing.T) {
 // TestHandlePickDirectory_NoDialogAvailable verifies the handler returns
 // the stubbed directory path when pickDirectoryFn is overridden.
 func TestHandlePickDirectory_NoDialogAvailable(t *testing.T) {
-	stubPickDirectory(t, "", fmt.Errorf("no dialog"))
+	stubPickDirectory(t, "", errors.New("no dialog"))
 	handler := handlePickDirectory()
 
 	body := `{"start_dir":"/tmp"}`
@@ -870,7 +870,7 @@ func TestHandleConfigure_WithRegularClient(t *testing.T) {
 // TestHandlePickDirectory_InvalidJSON verifies handlePickDirectory handles
 // unparseable JSON body gracefully.
 func TestHandlePickDirectory_InvalidJSON(t *testing.T) {
-	stubPickDirectory(t, "", fmt.Errorf("no dialog"))
+	stubPickDirectory(t, "", errors.New("no dialog"))
 	handler := handlePickDirectory()
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/pick-directory", strings.NewReader("{bad"))

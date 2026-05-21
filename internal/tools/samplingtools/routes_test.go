@@ -5,7 +5,7 @@ package samplingtools
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -73,7 +73,7 @@ func TestWrapSamplingAction_HandlerError(t *testing.T) {
 	type testOutput struct{}
 
 	fn := func(_ context.Context, _ *mcp.CallToolRequest, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
-		return testOutput{}, fmt.Errorf("api error")
+		return testOutput{}, errors.New("api error")
 	}
 
 	action := wrapSamplingAction[testInput, testOutput](nil, fn)
