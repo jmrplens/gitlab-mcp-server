@@ -22,102 +22,154 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client, session *mcp.ClientSession, task evalTask, toolSurface string) (evalTask, error) {
-	switch task.ID {
-	case "MT-008":
+type liveAttemptResourceHandler func(context.Context, *gitlabclient.Client, *mcp.ClientSession, evalTask, string) (evalTask, error)
+
+var liveAttemptResourceHandlers = map[string]liveAttemptResourceHandler{
+	"MT-008": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveSubgroupDeleteTarget(ctx, client, task)
-	case "MT-013":
+	},
+	"MT-013": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveIssueDeleteTarget(ctx, client, task)
-	case "MT-017":
+	},
+	"MT-017": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveMergeRequestMergeTarget(ctx, client, task)
-	case "MT-027":
+	},
+	"MT-027": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveProjectVariableUpdateTarget(ctx, client, task.Prompt)
-	case "MT-028":
+	},
+	"MT-028": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveProjectVariableDeleteTarget(ctx, client, task.Prompt)
-	case "MT-015":
+	},
+	"MT-015": func(ctx context.Context, _ *gitlabclient.Client, session *mcp.ClientSession, task evalTask, toolSurface string) (evalTask, error) {
 		if session == nil {
 			return task, errors.New("prepare MT-015 fixture requires an MCP session")
 		}
 		return task, ensureLiveMergeRequestSource(ctx, session, task.Prompt, toolSurface)
-	case "MT-081":
+	},
+	"MT-081": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveInteractiveMergeRequestTarget(ctx, client, task.Prompt)
-	case "MT-083":
+	},
+	"MT-083": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveInteractiveReleaseTarget(ctx, client, task.Prompt)
-	case "MT-031":
+	},
+	"MT-031": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveRepositoryFileDeleteTarget(ctx, client, task.Prompt)
-	case "MT-035":
+	},
+	"MT-035": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveMilestoneDeleteTarget(ctx, client, task)
-	case "MT-037":
+	},
+	"MT-037": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
-	case "MT-044":
+	},
+	"MT-044": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLivePackageDeleteTarget(ctx, client, task)
-	case "MT-049":
+	},
+	"MT-049": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveEnvironmentStopTarget(ctx, client, task)
-	case "MT-054":
+	},
+	"MT-054": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveBroadcastMessageDeleteTarget(ctx, client, task)
-	case "MT-063":
+	},
+	"MT-063": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveDraftNotePublishAllTarget(ctx, client, task)
-	case "MT-066":
+	},
+	"MT-066": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveJobTokenScopeRemoveProjectTarget(ctx, client, task)
-	case "MT-107":
+	},
+	"MT-107": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveCustomEmojiDeleteTarget(ctx, client, task)
-	case "MT-114":
+	},
+	"MT-114": func(ctx context.Context, _ *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveTerraformStateUnlockTarget(ctx, task)
-	case "MT-116":
+	},
+	"MT-116": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveMirrorForcePushTarget(ctx, client, task)
-	case "MS-004":
+	},
+	"MS-004": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
-	case "MS-007":
+	},
+	"MS-007": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLivePackageDeleteTarget(ctx, client, task)
-	case "MS-013":
+	},
+	"MS-013": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveFeatureFlagDeleteTarget(ctx, client, task.Prompt)
-	case "MT-047":
+	},
+	"MT-047": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveRunnerRemoveTarget(ctx, client, task)
-	case "MT-051":
+	},
+	"MT-051": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveSnippetDeleteTarget(ctx, client, task)
-	case "MT-057":
+	},
+	"MT-057": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveHookDeleteTarget(ctx, client, task)
-	case "MT-023", "MT-024", "MT-065":
+	},
+	"MT-023": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveFailedJobTarget(ctx, client, task)
-	}
-	switch task.ID {
-	case "MT-059":
+	},
+	"MT-024": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
+		return ensureLiveFailedJobTarget(ctx, client, task)
+	},
+	"MT-065": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
+		return ensureLiveFailedJobTarget(ctx, client, task)
+	},
+	"MT-059": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveBadgeDeleteTarget(ctx, client, task)
-	case "MT-099":
+	},
+	"MT-099": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveBranchDeleteTarget(ctx, client, task.Prompt)
-	case "MT-100":
+	},
+	"MT-100": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveTagDeleteTarget(ctx, client, task.Prompt)
-	case "MT-101":
+	},
+	"MT-101": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLivePipelineDeleteTarget(ctx, client, task)
-	case "MT-102":
+	},
+	"MT-102": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLivePipelineTriggerDeleteTarget(ctx, client, task)
-	case "MT-103":
+	},
+	"MT-103": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLivePipelineScheduleDeleteTarget(ctx, client, task)
-	case "MT-106":
+	},
+	"MT-106": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveFeatureFlagDeleteTarget(ctx, client, task.Prompt)
-	case "MT-108":
+	},
+	"MT-108": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveWikiDeleteTarget(ctx, client, task.Prompt)
-	case "MT-109":
+	},
+	"MT-109": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveMRAwardDeleteTarget(ctx, client, task)
-	case "MT-110":
+	},
+	"MT-110": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveIssueAwardDeleteTarget(ctx, client, task)
-	case "MT-111":
+	},
+	"MT-111": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveDeployKeyDeleteTarget(ctx, client, task)
-	case "MT-112":
+	},
+	"MT-112": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveDeployTokenDeleteTarget(ctx, client, task)
-	case "MT-113":
+	},
+	"MT-113": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveCommitDiscussionNoteDeleteTarget(ctx, client, task)
-	case "MS-034":
+	},
+	"MS-034": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveProjectMemberAbsent(ctx, client, task.Prompt)
-	case "MT-068":
+	},
+	"MT-068": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, cleanupLiveInstanceVariables(ctx, client, "INSTANCE_EVAL_TOKEN")
-	case "MT-069":
+	},
+	"MT-069": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveInstanceVariableDeleteTarget(ctx, client, task.Prompt)
-	case "MT-064":
+	},
+	"MT-064": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveManualJob(ctx, client, task)
-	default:
-		return task, nil
+	},
+}
+
+func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client, session *mcp.ClientSession, task evalTask, toolSurface string) (evalTask, error) {
+	if handler, ok := liveAttemptResourceHandlers[task.ID]; ok {
+		return handler(ctx, client, session, task, toolSurface)
 	}
+	return task, nil
 }
 
 // ensureLiveProjectActive ensures live project active exists for live evaluation.

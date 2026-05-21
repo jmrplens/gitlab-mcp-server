@@ -19,6 +19,42 @@ import (
 
 const helperReportsWhetherTemplate = "%s reports whether %s."
 
+type insertion struct {
+	startLine int
+	endLine   int
+	comment   string
+}
+
+var generatedDocMarkers = []string{
+	"verifies the behavior of ",
+	"verifies the expected behavior of ",
+	"measures the performance of the ",
+	"is an internal helper for the ",
+	"holds data for ",
+	" i ds",
+	" open ai ",
+	" git lab ",
+	" m rs",
+	" 2 fa",
+	" using the GitLab API and returns ",
+}
+
+var generatedDocMarkerPairs = [][2]string{
+	{" handles the ", " scenario correctly"},
+	{"validates ", " across multiple scenarios using table-driven subtests"},
+	{" performs the ", " operation"},
+	{" handles ", " for the "},
+	{" supports ", " tests for "},
+	{" provides ", " test support for "},
+	{" coordinates ", " logic for "},
+	{" groups ", " fields used by "},
+	{"describes ", " data used by the "},
+	{" defines the ", " constant."},
+	{" names the ", " value shared by this package."},
+	{" stores the ", " value."},
+	{" provides the ", " value shared by this package."},
+}
+
 // main walks the specified paths and adds godoc comments to undocumented symbols.
 func main() {
 	if len(os.Args) < 2 {
@@ -85,64 +121,7 @@ func processFile(path string) {
 	pkgName := node.Name.Name
 	isTest := strings.HasSuffix(cleanPath, "_test.go")
 
-	type insertion struct {
-		startLine int
-		endLine   int
-		comment   string
-	}
-	var insertions []insertion
-
-	for _, decl := range node.Decls {
-		switch d := decl.(type) {
-		case *ast.FuncDecl:
-			if d.Doc != nil && len(d.Doc.List) > 0 && !isGeneratedDoc(d.Doc.Text()) {
-				continue
-			}
-			if d.Name.Name == "init" {
-				continue
-			}
-			startLine, endLine := editRangeForDoc(fset, d.Doc, d.Pos())
-			comment := generateFuncDoc(d, pkgName, isTest)
-			if comment != "" {
-				insertions = append(insertions, insertion{startLine: startLine, endLine: endLine, comment: comment})
-			}
-		case *ast.GenDecl:
-			for _, spec := range d.Specs {
-				switch s := spec.(type) {
-				case *ast.TypeSpec:
-					if d.Tok != token.TYPE {
-						continue
-					}
-					if s.Doc != nil && len(s.Doc.List) > 0 && !isGeneratedDoc(s.Doc.Text()) {
-						continue
-					}
-					if s.Doc == nil && d.Doc != nil && len(d.Doc.List) > 0 && !isGeneratedDoc(d.Doc.Text()) {
-						continue
-					}
-					startLine, endLine := editRangeForDoc(fset, firstDoc(s.Doc, d.Doc), s.Pos())
-					comment := generateTypeDoc(s, pkgName)
-					if comment != "" {
-						insertions = append(insertions, insertion{startLine: startLine, endLine: endLine, comment: comment})
-					}
-				case *ast.ValueSpec:
-					if d.Tok != token.CONST && d.Tok != token.VAR {
-						continue
-					}
-					if s.Doc != nil && len(s.Doc.List) > 0 && !isGeneratedDoc(s.Doc.Text()) {
-						continue
-					}
-					if s.Doc == nil && d.Doc != nil && len(d.Doc.List) > 0 && !isGeneratedDoc(d.Doc.Text()) {
-						continue
-					}
-					startLine, endLine := editRangeForDoc(fset, firstDoc(s.Doc, d.Doc), s.Pos())
-					comment := generateValueDoc(s, d.Tok)
-					if comment != "" {
-						insertions = append(insertions, insertion{startLine: startLine, endLine: endLine, comment: comment})
-					}
-				}
-			}
-		}
-	}
+	insertions := collectDocInsertions(fset, node, pkgName, isTest)
 
 	if len(insertions) == 0 {
 		return
@@ -178,6 +157,82 @@ func processFile(path string) {
 	fmt.Printf("documented %s (%d symbols)\n", cleanPath, len(insertions))
 }
 
+func collectDocInsertions(fset *token.FileSet, node *ast.File, pkgName string, isTest bool) []insertion {
+	insertions := make([]insertion, 0)
+	for _, decl := range node.Decls {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			if ins, ok := funcDocInsertion(fset, d, pkgName, isTest); ok {
+				insertions = append(insertions, ins)
+			}
+		case *ast.GenDecl:
+			insertions = append(insertions, genDeclDocInsertions(fset, d, pkgName)...)
+		}
+	}
+	return insertions
+}
+
+func funcDocInsertion(fset *token.FileSet, decl *ast.FuncDecl, pkgName string, isTest bool) (insertion, bool) {
+	if reusableDoc(decl.Doc) || decl.Name.Name == "init" {
+		return insertion{}, false
+	}
+	comment := generateFuncDoc(decl, pkgName, isTest)
+	if comment == "" {
+		return insertion{}, false
+	}
+	startLine, endLine := editRangeForDoc(fset, decl.Doc, decl.Pos())
+	return insertion{startLine: startLine, endLine: endLine, comment: comment}, true
+}
+
+func genDeclDocInsertions(fset *token.FileSet, decl *ast.GenDecl, pkgName string) []insertion {
+	insertions := make([]insertion, 0)
+	for _, spec := range decl.Specs {
+		switch s := spec.(type) {
+		case *ast.TypeSpec:
+			if ins, ok := typeSpecDocInsertion(fset, decl, s, pkgName); ok {
+				insertions = append(insertions, ins)
+			}
+		case *ast.ValueSpec:
+			if ins, ok := valueSpecDocInsertion(fset, decl, s); ok {
+				insertions = append(insertions, ins)
+			}
+		}
+	}
+	return insertions
+}
+
+func typeSpecDocInsertion(fset *token.FileSet, decl *ast.GenDecl, spec *ast.TypeSpec, pkgName string) (insertion, bool) {
+	if decl.Tok != token.TYPE || reusableSpecDoc(spec.Doc, decl.Doc) {
+		return insertion{}, false
+	}
+	comment := generateTypeDoc(spec, pkgName)
+	if comment == "" {
+		return insertion{}, false
+	}
+	startLine, endLine := editRangeForDoc(fset, firstDoc(spec.Doc, decl.Doc), spec.Pos())
+	return insertion{startLine: startLine, endLine: endLine, comment: comment}, true
+}
+
+func valueSpecDocInsertion(fset *token.FileSet, decl *ast.GenDecl, spec *ast.ValueSpec) (insertion, bool) {
+	if decl.Tok != token.CONST && decl.Tok != token.VAR || reusableSpecDoc(spec.Doc, decl.Doc) {
+		return insertion{}, false
+	}
+	comment := generateValueDoc(spec, decl.Tok)
+	if comment == "" {
+		return insertion{}, false
+	}
+	startLine, endLine := editRangeForDoc(fset, firstDoc(spec.Doc, decl.Doc), spec.Pos())
+	return insertion{startLine: startLine, endLine: endLine, comment: comment}, true
+}
+
+func reusableSpecDoc(primary, fallback *ast.CommentGroup) bool {
+	return reusableDoc(primary) || primary == nil && reusableDoc(fallback)
+}
+
+func reusableDoc(doc *ast.CommentGroup) bool {
+	return doc != nil && len(doc.List) > 0 && !isGeneratedDoc(doc.Text())
+}
+
 // editRangeForDoc returns the line range to replace for an existing doc comment,
 // or an empty insertion range immediately before pos when no doc exists.
 func editRangeForDoc(fset *token.FileSet, doc *ast.CommentGroup, pos token.Pos) (startLine, endLine int) {
@@ -201,30 +256,17 @@ func firstDoc(primary, fallback *ast.CommentGroup) *ast.CommentGroup {
 // by earlier versions of this helper and can be safely regenerated.
 func isGeneratedDoc(text string) bool {
 	text = strings.TrimSpace(text)
-	return strings.Contains(text, " handles the ") && strings.Contains(text, " scenario correctly") ||
-		strings.Contains(text, "validates ") && strings.Contains(text, " across multiple scenarios using table-driven subtests") ||
-		strings.Contains(text, "verifies the behavior of ") ||
-		strings.Contains(text, "verifies the expected behavior of ") ||
-		strings.Contains(text, " performs the ") && strings.Contains(text, " operation") ||
-		strings.Contains(text, " handles ") && strings.Contains(text, " for the ") ||
-		strings.Contains(text, " supports ") && strings.Contains(text, " tests for ") ||
-		strings.Contains(text, " provides ") && strings.Contains(text, " test support for ") ||
-		strings.Contains(text, " coordinates ") && strings.Contains(text, " logic for ") ||
-		strings.Contains(text, "measures the performance of the ") ||
-		strings.Contains(text, "is an internal helper for the ") ||
-		strings.Contains(text, "holds data for ") ||
-		strings.Contains(text, " groups ") && strings.Contains(text, " fields used by ") ||
-		strings.Contains(text, "describes ") && strings.Contains(text, " data used by the ") ||
-		strings.Contains(text, " i ds") ||
-		strings.Contains(text, " open ai ") ||
-		strings.Contains(text, " git lab ") ||
-		strings.Contains(text, " m rs") ||
-		strings.Contains(text, " 2 fa") ||
-		strings.Contains(text, " using the GitLab API and returns ") ||
-		strings.Contains(text, " defines the ") && strings.Contains(text, " constant.") ||
-		strings.Contains(text, " names the ") && strings.Contains(text, " value shared by this package.") ||
-		strings.Contains(text, " stores the ") && strings.Contains(text, " value.") ||
-		strings.Contains(text, " provides the ") && strings.Contains(text, " value shared by this package.")
+	for _, marker := range generatedDocMarkers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	for _, pair := range generatedDocMarkerPairs {
+		if strings.Contains(text, pair[0]) && strings.Contains(text, pair[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 // splitLines splits a string into individual lines.

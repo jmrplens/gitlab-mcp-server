@@ -1672,48 +1672,59 @@ func replacePipelinePlaceholders(taskID, prompt string, state *liveFixtureState)
 	return prompt
 }
 
+type resourceIDReplacement struct {
+	label string
+	oldID int64
+	value func(*liveFixtureState) int64
+}
+
+var resourceIDReplacements = map[string]resourceIDReplacement{
+	"MT-035": {label: "milestone IID", oldID: 7, value: func(state *liveFixtureState) int64 { return state.MilestoneDeleteIID }},
+	"MT-042": {label: "project access token ID", oldID: 77, value: func(state *liveFixtureState) int64 { return state.ProjectTokenID }},
+	"MT-044": {label: "package ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.PackageID }},
+	"MS-007": {label: "package ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.PackageID }},
+	"MT-046": {label: "runner ID", oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
+	"MT-047": {label: "runner ID", oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
+	"MS-008": {label: "runner ID", oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
+	"MT-049": {label: "environment ID", oldID: 7, value: func(state *liveFixtureState) int64 { return state.EnvironmentID }},
+	"MT-050": {label: "personal snippet ID", oldID: 33, value: func(state *liveFixtureState) int64 { return state.SnippetID }},
+	"MT-051": {label: "personal snippet ID", oldID: 33, value: func(state *liveFixtureState) int64 { return state.SnippetID }},
+	"MT-174": {label: "numeric snippet ID", oldID: 44, value: func(state *liveFixtureState) int64 { return state.SnippetID }},
+	"MT-057": {label: "webhook ID", oldID: 5, value: func(state *liveFixtureState) int64 { return state.HookDeleteID }},
+	"MT-059": {label: "badge ID", oldID: 8, value: func(state *liveFixtureState) int64 { return state.BadgeDeleteID }},
+	"MT-102": {label: "pipeline trigger token ID", oldID: 77, value: func(state *liveFixtureState) int64 { return state.PipelineTriggerID }},
+	"MT-104": {label: "user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
+	"MT-105": {label: "user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
+	"MS-034": {label: "user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
+	"MT-111": {label: "deploy key ID", oldID: 88, value: func(state *liveFixtureState) int64 { return state.DeployKeyID }},
+	"MT-112": {label: "project deploy token ID", oldID: 66, value: func(state *liveFixtureState) int64 { return state.DeployTokenID }},
+}
+
+func replaceSimpleResourceIDPlaceholder(taskID, prompt string, state *liveFixtureState) string {
+	replacement, ok := resourceIDReplacements[taskID]
+	if !ok {
+		return prompt
+	}
+	return replaceID(prompt, replacement.label, replacement.oldID, replacement.value(state))
+}
+
 // replaceResourcePlaceholders replaces resource placeholders placeholders in evaluation prompts.
 func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState) string {
+	prompt = replaceSimpleResourceIDPlaceholder(taskID, prompt, state)
 	switch taskID {
 	case "MT-007":
 		prompt = replaceID(prompt, "group ID", 123, state.GroupID)
 		if suffix := fixtureUniqueSuffix(state); suffix != "" {
 			prompt = strings.ReplaceAll(prompt, "`eval-temp`", fmt.Sprintf("`eval-temp-%s`", suffix))
 		}
-	case "MT-035":
-		prompt = replaceID(prompt, "milestone IID", 7, state.MilestoneDeleteIID)
-	case "MT-042":
-		prompt = replaceID(prompt, "project access token ID", 77, state.ProjectTokenID)
-	case "MT-044", "MS-007":
-		prompt = replaceID(prompt, "package ID", 55, state.PackageID)
-	case "MT-046", "MT-047", "MS-008":
-		prompt = replaceID(prompt, "runner ID", 99, state.RunnerID)
-	case "MT-049":
-		prompt = replaceID(prompt, "environment ID", 7, state.EnvironmentID)
-	case "MT-050", "MT-051":
-		prompt = replaceID(prompt, "personal snippet ID", 33, state.SnippetID)
-	case "MT-174":
-		prompt = replaceID(prompt, "numeric snippet ID", 44, state.SnippetID)
 	case "MT-054", "MS-009":
 		return prompt
-	case "MT-057":
-		prompt = replaceID(prompt, "webhook ID", 5, state.HookDeleteID)
-	case "MT-059":
-		prompt = replaceID(prompt, "badge ID", 8, state.BadgeDeleteID)
-	case "MT-102":
-		prompt = replaceID(prompt, "pipeline trigger token ID", 77, state.PipelineTriggerID)
 	case taskPipelineScheduleID:
 		scheduleID := state.PipelineScheduleID
 		if state.PipelineSchedulePlayID > 0 && strings.Contains(prompt, "play") {
 			scheduleID = state.PipelineSchedulePlayID
 		}
 		prompt = replaceID(prompt, "pipeline schedule ID", 12, scheduleID)
-	case "MT-104", "MT-105", "MS-034":
-		prompt = replaceID(prompt, "user ID", 55, state.UserID)
-	case "MT-111":
-		prompt = replaceID(prompt, "deploy key ID", 88, state.DeployKeyID)
-	case "MT-112":
-		prompt = replaceID(prompt, "project deploy token ID", 66, state.DeployTokenID)
 	case "MT-113":
 		prompt = replaceID(prompt, "commit discussion note", 999, state.CommitDiscussionNoteID)
 		if state.CommitDiscussionID != "" {
