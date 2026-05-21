@@ -195,7 +195,7 @@ linters:
       under: 20
 
     dupl:
-      threshold: 250
+      threshold: 150
 
     perfsprint:
       int-conversion: true
@@ -228,6 +228,7 @@ linters:
           - perfsprint
           - noctx
           - wastedassign
+          - dupl
           - fatcontext
           - nilnil
 
