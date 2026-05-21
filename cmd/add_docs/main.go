@@ -585,13 +585,13 @@ func generateHandlerDoc(d *ast.FuncDecl, pkgName string) string {
 		return fmt.Sprintf("%s %s and returns [%s].", name, action, returnType)
 	}
 	if strings.Contains(name, "ToOutput") || strings.HasPrefix(name, "to") {
-		return fmt.Sprintf("%s converts the GitLab API response to the tool output format.", name)
+		return name + " converts the GitLab API response to the tool output format."
 	}
 	if strings.HasPrefix(name, "format") || strings.HasPrefix(name, "Format") {
-		return fmt.Sprintf("%s renders the result as a formatted string.", name)
+		return name + " renders the result as a formatted string."
 	}
 	if strings.HasPrefix(name, "build") || strings.HasPrefix(name, "Build") {
-		return fmt.Sprintf("%s constructs the request parameters from the input.", name)
+		return name + " constructs the request parameters from the input."
 	}
 	return helperIntentDoc(name, pkgName)
 }

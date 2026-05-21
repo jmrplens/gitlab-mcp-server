@@ -336,7 +336,7 @@ func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, re
 	var b strings.Builder
 	branchInfo := ""
 	if opts.TargetBranch != nil {
-		branchInfo = fmt.Sprintf(" targeting %s", *opts.TargetBranch)
+		branchInfo = " targeting " + *opts.TargetBranch
 	}
 	fmt.Fprintf(&b, "# Group MR Dashboard — %s (%d %s MRs%s)\n\n", groupID, len(mrs), state, branchInfo)
 

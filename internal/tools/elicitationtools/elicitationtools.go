@@ -140,7 +140,7 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 		summary += fmt.Sprintf(fmtDescSummary, description)
 	}
 	if len(labels) > 0 {
-		summary += fmt.Sprintf("\n**Labels**: %s", strings.Join(labels, ", "))
+		summary += "\n**Labels**: " + strings.Join(labels, ", ")
 	}
 	if confidential != nil && *confidential {
 		summary += "\n**Confidential**: Yes"
@@ -318,7 +318,7 @@ func buildMRSummary(p mrSummaryParams) string {
 		summary += fmt.Sprintf(fmtDescSummary, p.Description)
 	}
 	if len(p.Labels) > 0 {
-		summary += fmt.Sprintf("\n**Labels**: %s", strings.Join(p.Labels, ", "))
+		summary += "\n**Labels**: " + strings.Join(p.Labels, ", ")
 	}
 	if p.RemoveSource != nil && *p.RemoveSource {
 		summary += "\n**Remove source branch**: Yes"
@@ -448,7 +448,7 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 		summary += "\n**README**: Yes"
 	}
 	if defaultBranch != "" {
-		summary += fmt.Sprintf("\n**Default Branch**: %s", defaultBranch)
+		summary += "\n**Default Branch**: " + defaultBranch
 	}
 
 	confirmed, err := ec.Confirm(ctx, summary)

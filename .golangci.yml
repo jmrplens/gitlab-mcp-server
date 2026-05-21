@@ -200,11 +200,12 @@ linters:
       threshold: 150
 
     perfsprint:
+      integer-format: true
       int-conversion: true
       err-error: true
       errorf: true
       sprintf1: true
-      strconcat: false
+      strconcat: true
 
   exclusions:
     # Keep focused package runs warning-free when exclusions for unrelated

@@ -4729,5 +4729,5 @@ func benchmarkName(query string) string {
 	if len(parts) == 0 {
 		return "empty"
 	}
-	return fmt.Sprintf("q_%s", strings.Join(parts, "_"))
+	return "q_" + strings.Join(parts, "_")
 }

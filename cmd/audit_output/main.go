@@ -103,7 +103,7 @@ func auditOutputSchema(tls []*mcp.Tool, kind string) []finding {
 	var fs []finding
 	for _, t := range tls {
 		if t.OutputSchema == nil {
-			fs = append(fs, finding{t.Name, "output-schema", fmt.Sprintf("%s tool missing OutputSchema", kind)})
+			fs = append(fs, finding{t.Name, "output-schema", kind + " tool missing OutputSchema"})
 		}
 	}
 	return fs
@@ -129,7 +129,7 @@ func auditTitle(tls []*mcp.Tool, kind string) []finding {
 	var fs []finding
 	for _, t := range tls {
 		if t.Title == "" {
-			fs = append(fs, finding{t.Name, "title", fmt.Sprintf("%s tool missing Title field", kind)})
+			fs = append(fs, finding{t.Name, "title", kind + " tool missing Title field"})
 		}
 	}
 	return fs
@@ -141,7 +141,7 @@ func auditSeeAlso(tls []*mcp.Tool, kind string) []finding {
 	for _, t := range tls {
 		if !strings.Contains(strings.ToLower(t.Description), "see also:") {
 			fs = append(fs, finding{t.Name, "see-also",
-				fmt.Sprintf("%s description lacks 'See also:' cross-references", kind)})
+				kind + " description lacks 'See also:' cross-references"})
 		}
 	}
 	return fs

@@ -26,7 +26,7 @@ func FormatOutputMarkdown(out Output) string {
 		case c.DeletedFile:
 			status = "deleted"
 		case c.RenamedFile:
-			status = fmt.Sprintf("renamed from %s", c.OldPath)
+			status = "renamed from " + c.OldPath
 		}
 		if c.Diff == "" && !c.DeletedFile {
 			truncated = append(truncated, c.NewPath)
@@ -115,7 +115,7 @@ func FormatDiffVersionGetMarkdown(out DiffVersionOutput) string {
 			case d.DeletedFile:
 				status = "deleted"
 			case d.RenamedFile:
-				status = fmt.Sprintf("renamed from %s", d.OldPath)
+				status = "renamed from " + d.OldPath
 			}
 			fmt.Fprintf(&b, "| %s | %s |\n",
 				toolutil.EscapeMdTableCell(d.NewPath), status)

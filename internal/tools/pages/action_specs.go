@@ -2,7 +2,6 @@ package pages
 
 import (
 	"context"
-	"fmt"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -35,7 +34,7 @@ func deleteDomainOutput(ctx context.Context, client *gitlabclient.Client, input 
 	if err := DeleteDomain(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
-	_, out, _ := toolutil.DeleteResult(fmt.Sprintf("pages domain %s", input.Domain))
+	_, out, _ := toolutil.DeleteResult("pages domain " + input.Domain)
 	return out, nil
 }
 

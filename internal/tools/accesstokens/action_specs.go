@@ -97,8 +97,8 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	options.Aliases = []string{fmt.Sprintf("%s %s access token", operationText, scope)}
 	if operation == "list" {
 		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action lists %s-scoped API tokens.", scope, scope)
-		options.Tags = append(options.Tags, fmt.Sprintf("%s_access_tokens", scope))
-		options.Aliases = append(options.Aliases, fmt.Sprintf("%s access tokens", scope), fmt.Sprintf("list %s access tokens", scope))
+		options.Tags = append(options.Tags, scope+"_access_tokens")
+		options.Aliases = append(options.Aliases, scope+" access tokens", fmt.Sprintf("list %s access tokens", scope))
 	}
 	options.RelatedActions = accessTokenRelatedActions(scope)
 	if accessTokenNeedsTokenID(operation) {

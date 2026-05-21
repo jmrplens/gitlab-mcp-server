@@ -546,13 +546,13 @@ func validateTaskFixture(tasks []evalTask) []string {
 				stepLabel = fmt.Sprintf("%s step %d", task.ID, stepIndex+1)
 			}
 			if hasParam(step.RequiredParams, "project_id") && !promptNamesEntity(task.Prompt, "project") {
-				problems = append(problems, fmt.Sprintf("%s requires project_id but prompt does not name a project", stepLabel))
+				problems = append(problems, stepLabel+" requires project_id but prompt does not name a project")
 			}
 			if hasParam(step.RequiredParams, "group_id") && !promptNamesEntity(task.Prompt, "group") {
-				problems = append(problems, fmt.Sprintf("%s requires group_id but prompt does not name a group", stepLabel))
+				problems = append(problems, stepLabel+" requires group_id but prompt does not name a group")
 			}
 			if step.Destructive && !hasParam(step.OptionalParams, "confirm") && !hasParam(step.RequiredParams, "confirm") {
-				problems = append(problems, fmt.Sprintf("%s is destructive but does not list confirm as a parameter", stepLabel))
+				problems = append(problems, stepLabel+" is destructive but does not list confirm as a parameter")
 			}
 		}
 	}

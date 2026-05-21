@@ -165,7 +165,7 @@ func auditAnnotations(tls []*mcp.Tool, kind string) []violation {
 	var vs []violation
 	for _, t := range tls {
 		if t.Annotations == nil {
-			vs = append(vs, violation{t.Name, "annotations", fmt.Sprintf("%s tool has nil Annotations", kind)})
+			vs = append(vs, violation{t.Name, "annotations", kind + " tool has nil Annotations"})
 			continue
 		}
 		if t.Annotations.ReadOnlyHint && t.Annotations.DestructiveHint != nil && *t.Annotations.DestructiveHint {
@@ -236,7 +236,7 @@ func auditAdditionalProperties(tls []*mcp.Tool, kind string) []violation {
 		raw, present := schema["additionalProperties"]
 		if !present {
 			vs = append(vs, violation{t.Name, "additional-properties",
-				fmt.Sprintf("%s tool inputSchema missing additionalProperties:false", kind)})
+				kind + " tool inputSchema missing additionalProperties:false"})
 			continue
 		}
 		if v, isBool := raw.(bool); !isBool || v {

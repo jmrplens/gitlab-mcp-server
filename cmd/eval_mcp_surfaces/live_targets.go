@@ -203,7 +203,7 @@ func ensureLiveSubgroupDeleteTarget(ctx context.Context, client *gitlabclient.Cl
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-008 fixture parent group: %w", err)
 	}
-	path := fmt.Sprintf("eval-temp-%s", liveUniqueSuffix())
+	path := "eval-temp-" + liveUniqueSuffix()
 	visibility := gl.PrivateVisibility
 	group, _, err := client.GL().Groups.CreateGroup(&gl.CreateGroupOptions{
 		Name:       new(path),
@@ -238,7 +238,7 @@ func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	issue, _, err := client.GL().Issues.CreateIssue(projectID, &gl.CreateIssueOptions{
-		Title:       new(fmt.Sprintf("Evaluation issue safe to delete %s", liveUniqueSuffix())),
+		Title:       new("Evaluation issue safe to delete " + liveUniqueSuffix()),
 		Description: new("Temporary issue for destructive evaluator coverage."),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
@@ -268,7 +268,7 @@ func ensureLiveMergeRequestMergeTarget(ctx context.Context, client *gitlabclient
 	if targetBranch == "" {
 		targetBranch = liveFixtureDefaultRef
 	}
-	sourceBranch := fmt.Sprintf("eval-merge-%s", liveUniqueSuffix())
+	sourceBranch := "eval-merge-" + liveUniqueSuffix()
 	if branchErr := ensureLiveBranchExists(setupCtx, client, projectID, sourceBranch, targetBranch); branchErr != nil {
 		return task, fmt.Errorf("prepare MT-017 fixture branch: %w", branchErr)
 	}
@@ -363,7 +363,7 @@ func createLiveDraftNoteMergeRequest(ctx context.Context, client *gitlabclient.C
 	if targetBranch == "" {
 		targetBranch = liveFixtureDefaultRef
 	}
-	sourceBranch := fmt.Sprintf("eval-draft-note-%s", liveUniqueSuffix())
+	sourceBranch := "eval-draft-note-" + liveUniqueSuffix()
 	if branchErr := ensureLiveBranchExists(ctx, client, projectID, sourceBranch, targetBranch); branchErr != nil {
 		return "", 0, branchErr
 	}
@@ -413,7 +413,7 @@ func ensureLiveCustomEmojiDeleteTarget(ctx context.Context, client *gitlabclient
 	}
 	created, err := customemoji.Create(setupCtx, client, customemoji.CreateInput{
 		GroupPath: groupPath,
-		Name:      fmt.Sprintf("eval_delete_%s", liveUniqueSuffix()),
+		Name:      "eval_delete_" + liveUniqueSuffix(),
 		URL:       emojiURL,
 	})
 	if err != nil {
@@ -433,7 +433,7 @@ func ensureLiveTerraformStateUnlockTarget(ctx context.Context, task evalTask) (e
 	if !ok {
 		return task, fmt.Errorf("prepare MT-114 fixture: project path not found in prompt %q", task.Prompt)
 	}
-	stateName := fmt.Sprintf("eval-unlock-%s", liveUniqueSuffix())
+	stateName := "eval-unlock-" + liveUniqueSuffix()
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	if err := createLiveTerraformStateLock(setupCtx, projectID, stateName); err != nil {
@@ -644,7 +644,7 @@ func ensureLiveMilestoneDeleteTarget(ctx context.Context, client *gitlabclient.C
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	milestone, _, err := client.GL().Milestones.CreateMilestone(projectID, &gl.CreateMilestoneOptions{
-		Title:       new(fmt.Sprintf("Evaluation Sprint Delete %s", liveUniqueSuffix())),
+		Title:       new("Evaluation Sprint Delete " + liveUniqueSuffix()),
 		Description: new("Temporary milestone for destructive evaluator coverage."),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
@@ -819,7 +819,7 @@ func ensureLiveEnvironmentStopTarget(ctx context.Context, client *gitlabclient.C
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	name := fmt.Sprintf("eval-stop-%s", liveUniqueSuffix())
+	name := "eval-stop-" + liveUniqueSuffix()
 	env, _, err := client.GL().Environments.CreateEnvironment(projectID, &gl.CreateEnvironmentOptions{
 		Name:        new(name),
 		Description: new("Temporary environment for destructive evaluator coverage"),
@@ -845,7 +845,7 @@ func ensureLiveBroadcastMessageDeleteTarget(ctx context.Context, client *gitlabc
 	defer cancel()
 	startsAt := time.Now().UTC().Add(24 * time.Hour)
 	endsAt := startsAt.Add(time.Hour)
-	message := fmt.Sprintf("Evaluation broadcast safe to delete %s", liveUniqueSuffix())
+	message := "Evaluation broadcast safe to delete " + liveUniqueSuffix()
 	broadcastType := "banner"
 	dismissable := true
 	msg, _, err := client.GL().BroadcastMessage.CreateBroadcastMessage(&gl.CreateBroadcastMessageOptions{
@@ -1017,7 +1017,7 @@ func createLiveTerraformStateLock(ctx context.Context, projectID, stateName stri
 		return errors.New("prepare MT-114 fixture requires GITLAB_TOKEN")
 	}
 	lockBody, err := json.Marshal(map[string]string{
-		"ID":        fmt.Sprintf("eval-lock-%s", liveUniqueSuffix()),
+		"ID":        "eval-lock-" + liveUniqueSuffix(),
 		"Operation": "OperationTypeApply",
 		"Info":      "eval_mcp_surfaces terraform unlock fixture",
 		"Who":       "eval_mcp_surfaces",
@@ -1164,7 +1164,7 @@ func ensureLiveRunnerRemoveTarget(ctx context.Context, client *gitlabclient.Clie
 	runner, _, err := client.GL().Users.CreateUserRunner(&gl.CreateUserRunnerOptions{
 		RunnerType:  new("project_type"),
 		ProjectID:   new(project.ID),
-		Description: new(fmt.Sprintf("eval-remove-runner-%s", liveUniqueSuffix())),
+		Description: new("eval-remove-runner-" + liveUniqueSuffix()),
 		Paused:      new(false),
 		Locked:      new(false),
 		RunUntagged: new(true),
@@ -1189,7 +1189,7 @@ func ensureLiveSnippetDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	defer cancel()
 	visibility := gl.PrivateVisibility
 	snippet, _, err := client.GL().Snippets.CreateSnippet(&gl.CreateSnippetOptions{
-		Title:      new(fmt.Sprintf("Evaluation snippet safe to delete %s", liveUniqueSuffix())),
+		Title:      new("Evaluation snippet safe to delete " + liveUniqueSuffix()),
 		FileName:   new("eval.txt"),
 		Content:    new("evaluation snippet content\n"),
 		Visibility: &visibility,
@@ -1647,7 +1647,7 @@ func ensureLiveDeployKeyDeleteTarget(ctx context.Context, client *gitlabclient.C
 		return task, fmt.Errorf("prepare MT-111 fixture public key: %w", err)
 	}
 	deployKey, _, err := client.GL().DeployKeys.AddDeployKey(projectID, &gl.AddDeployKeyOptions{
-		Title:   new(fmt.Sprintf("eval-delete-key-%s", liveUniqueSuffix())),
+		Title:   new("eval-delete-key-" + liveUniqueSuffix()),
 		Key:     &key,
 		CanPush: new(false),
 	}, gl.WithContext(setupCtx))
@@ -1675,7 +1675,7 @@ func ensureLiveDeployTokenDeleteTarget(ctx context.Context, client *gitlabclient
 	defer cancel()
 	expiresAt := time.Now().UTC().AddDate(0, 1, 0)
 	deployToken, _, err := client.GL().DeployTokens.CreateProjectDeployToken(projectID, &gl.CreateProjectDeployTokenOptions{
-		Name:      new(fmt.Sprintf("eval-delete-deploy-token-%s", liveUniqueSuffix())),
+		Name:      new("eval-delete-deploy-token-" + liveUniqueSuffix()),
 		ExpiresAt: &expiresAt,
 		Scopes:    &[]string{"read_repository"},
 	}, gl.WithContext(setupCtx))
@@ -1705,7 +1705,7 @@ func ensureLiveCommitDiscussionNoteDeleteTarget(ctx context.Context, client *git
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	body := fmt.Sprintf("delete fixture %s", liveUniqueSuffix())
+	body := "delete fixture " + liveUniqueSuffix()
 	discussion, _, err := client.GL().Discussions.CreateCommitDiscussion(projectID, commitSHA, &gl.CreateCommitDiscussionOptions{Body: &body}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-113 fixture commit discussion: %w", err)

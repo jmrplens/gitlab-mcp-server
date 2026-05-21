@@ -1537,7 +1537,7 @@ func TestNewUpdaterWithSource_Defaults(t *testing.T) {
 // the reader fails mid-stream.
 func TestWriteToFile_CopyError(t *testing.T) {
 	dir := t.TempDir()
-	path := fmt.Sprintf("%s/test-binary", dir)
+	path := dir + "/test-binary"
 	errReader := &failingReader{err: errors.New("read explosion")}
 
 	err := writeToFile(path, errReader)

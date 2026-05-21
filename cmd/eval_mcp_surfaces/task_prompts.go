@@ -73,11 +73,11 @@ func dynamicWorkflowPlanPreamble(task evalTask) string {
 			required = strings.Join(step.RequiredParams, ", ")
 		}
 		parts := []string{
-			fmt.Sprintf("action=%s", step.ExpectedAction),
-			fmt.Sprintf("required_params=%s", required),
+			"action=" + step.ExpectedAction,
+			"required_params=" + required,
 		}
 		if optional := dynamicWorkflowOptionalParams(step.OptionalParams); len(optional) > 0 {
-			parts = append(parts, fmt.Sprintf("optional_params=%s", strings.Join(optional, ", ")))
+			parts = append(parts, "optional_params="+strings.Join(optional, ", "))
 		}
 		if step.Destructive {
 			parts = append(parts, "destructive_confirm=true")

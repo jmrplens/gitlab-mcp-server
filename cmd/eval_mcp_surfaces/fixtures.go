@@ -1135,7 +1135,7 @@ func (p *liveFixturePreparer) ensureFixtureMergeRequest(ctx context.Context, sou
 		return nil, err
 	}
 	filePath := strings.TrimPrefix(sourceBranch, "feature/") + ".txt"
-	if err := p.ensureFile(ctx, filePath, sourceBranch, fmt.Sprintf("%s\n", title), "Seed MR fixture file"); err != nil {
+	if err := p.ensureFile(ctx, filePath, sourceBranch, title+"\n", "Seed MR fixture file"); err != nil {
 		return nil, err
 	}
 	open := "opened"

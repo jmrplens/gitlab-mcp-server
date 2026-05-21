@@ -100,14 +100,14 @@ func badgeGuidance(actionName string, options toolutil.ActionSpecOptions) toolut
 	verb := strings.TrimPrefix(actionName, "badge_")
 	options.Usage = fmt.Sprintf("%s Use %s for %s badge operations; do not use %s. %s", badgeActionDescription(verb, scope), idParam, scope, otherParam, badgeScopeBoundary(scope))
 	if scope == "group" {
-		options.Aliases = []string{fmt.Sprintf("%s group badge", verb), fmt.Sprintf("%s badge in group", verb)}
+		options.Aliases = []string{verb + " group badge", verb + " badge in group"}
 	} else {
-		options.Aliases = []string{fmt.Sprintf("%s project badge", verb), fmt.Sprintf("%s badge in project", verb)}
+		options.Aliases = []string{verb + " project badge", verb + " badge in project"}
 	}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		idParam: {
-			SemanticRole: fmt.Sprintf("scope_%s", scope),
-			ValueSource:  fmt.Sprintf("%s that owns the badge.", badgeTitle(scope)),
+			SemanticRole: "scope_" + scope,
+			ValueSource:  badgeTitle(scope) + " that owns the badge.",
 			CommonConfusions: []string{
 				fmt.Sprintf("Do not use %s for %s badge actions.", otherParam, scope),
 			},

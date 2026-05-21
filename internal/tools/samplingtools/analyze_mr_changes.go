@@ -117,7 +117,7 @@ func formatChangesSection(changes mrchanges.Output) string {
 		case c.DeletedFile:
 			action = "deleted"
 		case c.RenamedFile:
-			action = fmt.Sprintf("renamed from %s", c.OldPath)
+			action = "renamed from " + c.OldPath
 		}
 		fmt.Fprintf(&b, "### %s (%s)\n\n```diff\n%s\n```\n\n", c.NewPath, action, c.Diff)
 	}

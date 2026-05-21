@@ -1812,7 +1812,7 @@ func diagnoseMergeBlocker(mrIID int64, mr *gl.MergeRequest, originalErr error) e
 		reasons = append(reasons, fmt.Sprintf("merge request state is %q (must be opened)", mr.State))
 	}
 	if mr.MergeError != "" {
-		reasons = append(reasons, fmt.Sprintf("GitLab merge error: %s", mr.MergeError))
+		reasons = append(reasons, "GitLab merge error: "+mr.MergeError)
 	}
 
 	if len(reasons) == 0 {

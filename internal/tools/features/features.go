@@ -193,7 +193,7 @@ func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetO
 		body["repository"] = input.Repository
 	}
 
-	path := fmt.Sprintf("features/%s", gl.PathEscape(input.Name))
+	path := "features/" + gl.PathEscape(input.Name)
 	req, err := client.GL().NewRequest("POST", path, body, nil)
 	if err != nil {
 		return SetOutput{}, toolutil.WrapErrWithMessage("feature_set", err)

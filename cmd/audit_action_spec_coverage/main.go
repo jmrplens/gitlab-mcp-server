@@ -244,16 +244,16 @@ func assertCoverageInvariants(domains []domainCoverage) error {
 	var gaps []string
 	for _, domain := range domains {
 		if domain.HasRegisterTools {
-			gaps = append(gaps, fmt.Sprintf("%s still defines package-local RegisterTools; use ActionSpecs and catalog-backed surface specs", domain.Package))
+			gaps = append(gaps, domain.Package+" still defines package-local RegisterTools; use ActionSpecs and catalog-backed surface specs")
 		}
 		if domain.HasRegisterMeta {
-			gaps = append(gaps, fmt.Sprintf("%s still defines package-level RegisterMeta", domain.Package))
+			gaps = append(gaps, domain.Package+" still defines package-level RegisterMeta")
 		}
 		if !domain.HasRegisterTools && domain.HasIndividualTools && !domain.HasMetaSpecs {
-			gaps = append(gaps, fmt.Sprintf("%s has GitLab-client RegisterTools without canonical ActionSpecs", domain.Package))
+			gaps = append(gaps, domain.Package+" has GitLab-client RegisterTools without canonical ActionSpecs")
 		}
 		if domain.SurfaceClassification == "individual-only" {
-			gaps = append(gaps, fmt.Sprintf("%s is individual-only; ordinary GitLab actions must be catalog-backed", domain.Package))
+			gaps = append(gaps, domain.Package+" is individual-only; ordinary GitLab actions must be catalog-backed")
 		}
 	}
 	if len(gaps) > 0 {

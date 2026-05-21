@@ -257,7 +257,7 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 	for _, j := range jobs {
 		line := fmt.Sprintf("- **%s** (%s): %s", j.Name, j.Stage, j.Status)
 		if j.FailureReason != "" {
-			line += fmt.Sprintf(" — reason: %s", j.FailureReason)
+			line += " — reason: " + j.FailureReason
 		}
 		switch j.Status {
 		case "failed":
