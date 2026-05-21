@@ -1096,29 +1096,11 @@ func exampleParamValue(param, prompt string) any {
 			return "failed"
 		}
 	case "scopes":
-		if strings.Contains(lowerPrompt, "read_api") {
-			return []string{"read_api"}
-		}
-		if strings.Contains(lowerPrompt, "read_repository") {
-			return []string{"read_repository"}
-		}
+		return exampleScopesValue(lowerPrompt)
 	case "access_level":
-		if strings.Contains(lowerPrompt, "reporter") {
-			return 20
-		}
-		if strings.Contains(lowerPrompt, "developer") {
-			return 30
-		}
-		if strings.Contains(lowerPrompt, "maintainer") {
-			return 40
-		}
+		return exampleAccessLevelValue(lowerPrompt)
 	case "paused":
-		if strings.Contains(lowerPrompt, "paused=true") {
-			return true
-		}
-		if strings.Contains(lowerPrompt, "paused=false") {
-			return false
-		}
+		return examplePausedValue(lowerPrompt)
 	case "project_id":
 		if value, ok := exampleProjectIDValue(prompt); ok {
 			return value
@@ -1127,6 +1109,42 @@ func exampleParamValue(param, prompt string) any {
 		return false
 	}
 	return fallbackExampleParamValue(param)
+}
+
+func exampleScopesValue(lowerPrompt string) any {
+	if strings.Contains(lowerPrompt, "read_api") {
+		return []string{"read_api"}
+	}
+	if strings.Contains(lowerPrompt, "read_repository") {
+		return []string{"read_repository"}
+	}
+	return fallbackExampleParamValue("scopes")
+}
+
+func exampleAccessLevelValue(lowerPrompt string) any {
+	for _, accessLevel := range []struct {
+		marker string
+		value  int
+	}{
+		{marker: "reporter", value: 20},
+		{marker: "developer", value: 30},
+		{marker: "maintainer", value: 40},
+	} {
+		if strings.Contains(lowerPrompt, accessLevel.marker) {
+			return accessLevel.value
+		}
+	}
+	return fallbackExampleParamValue("access_level")
+}
+
+func examplePausedValue(lowerPrompt string) any {
+	if strings.Contains(lowerPrompt, "paused=true") {
+		return true
+	}
+	if strings.Contains(lowerPrompt, "paused=false") {
+		return false
+	}
+	return fallbackExampleParamValue("paused")
 }
 
 // examplePromptMarkerValue handles example prompt marker value and returns [any].

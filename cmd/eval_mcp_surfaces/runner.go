@@ -69,6 +69,21 @@ type validToolStepContext struct {
 	simulatedErrorSeen *bool
 }
 
+type auxiliaryToolUseContext struct {
+	task                   evalTask
+	steps                  []evalStep
+	stepIndex              *int
+	toolUse                modelContentBlock
+	callBudget             taskCallBudget
+	routes                 map[string]toolutil.ActionMap
+	result                 *taskResult
+	firstFinalAttempt      *bool
+	lastInvalidFingerprint *string
+	repairAlreadySent      bool
+	repairCount            *int
+	followups              *[]modelContentBlock
+}
+
 // evaluateTask handles evaluate task for modelRunner.
 func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) taskResult {
 	steps := taskSteps(task)
@@ -114,29 +129,12 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 		repairAlreadySent := repairCount >= repairLimit
 		for _, toolUse := range toolUses {
 			result.Trace.Events = append(result.Trace.Events, traceToolUseEvent(result.ModelCalls, toolUse))
-			if stepIndex < len(steps) && expectedCapabilityBridgeStep(steps[stepIndex]) && isCapabilityBridge(toolUse) {
-				bridgeCtx := capabilityBridgeStepContext{task: task, steps: steps, toolUse: toolUse, routes: routes, result: &result, firstFinalAttempt: &firstFinalAttempt, lastInvalidFingerprint: &lastInvalidFingerprint, repairAlreadySent: repairAlreadySent, repairCount: &repairCount, stepIndex: &stepIndex, followups: &followups}
-				if stop := r.handleExpectedCapabilityBridgeStep(ctx, bridgeCtx); stop {
-					return result
-				}
-				continue
+			auxCtx := auxiliaryToolUseContext{task: task, steps: steps, stepIndex: &stepIndex, toolUse: toolUse, callBudget: callBudget, routes: routes, result: &result, firstFinalAttempt: &firstFinalAttempt, lastInvalidFingerprint: &lastInvalidFingerprint, repairAlreadySent: repairAlreadySent, repairCount: &repairCount, followups: &followups}
+			handled, stop := r.handleAuxiliaryToolUse(ctx, auxCtx)
+			if stop {
+				return result
 			}
-			if isCapabilityBridge(toolUse) {
-				r.appendCapabilityBridgeFollowup(ctx, toolUse, &result, &followups)
-				continue
-			}
-			if isSchemaLookup(toolUse) {
-				r.appendLookupFollowup(ctx, lookupFollowupContext{task: task, steps: steps, stepIndex: stepIndex, toolUse: toolUse, budget: callBudget, routes: routes, result: &result, followups: &followups})
-				continue
-			}
-			if isDynamicDiscovery(toolUse) {
-				r.appendLookupFollowup(ctx, lookupFollowupContext{task: task, steps: steps, stepIndex: stepIndex, toolUse: toolUse, budget: callBudget, routes: routes, result: &result, followups: &followups, dynamic: true})
-				continue
-			}
-			if stepIndex >= len(steps) {
-				block := toolResultBlock(toolUse.ID, "scenario already completed", errors.New("scenario already completed"))
-				followups = append(followups, block)
-				result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
+			if handled {
 				continue
 			}
 
@@ -150,7 +148,7 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 			if validation.Valid {
 				lastInvalidFingerprint = ""
 				validCtx := validToolStepContext{steps: steps, stepIndex: &stepIndex, toolUse: toolUse, result: &result, followups: &followups, simulationAttempts: simulationAttempts, repairCount: repairCount, simulatedErrorSeen: &simulatedErrorSeen}
-				if stop := r.handleValidToolStep(ctx, validCtx); stop {
+				if shouldStop := r.handleValidToolStep(ctx, validCtx); shouldStop {
 					return result
 				}
 				continue
@@ -244,6 +242,33 @@ func advanceInjectedSimulation(validCtx validToolStepContext, simulationErr erro
 		validCtx.result.RepairSuccess = true
 	}
 	return true
+}
+
+func (r *modelRunner) handleAuxiliaryToolUse(ctx context.Context, auxCtx auxiliaryToolUseContext) (handled, stop bool) {
+	stepIndex := *auxCtx.stepIndex
+	if stepIndex < len(auxCtx.steps) && expectedCapabilityBridgeStep(auxCtx.steps[stepIndex]) && isCapabilityBridge(auxCtx.toolUse) {
+		bridgeCtx := capabilityBridgeStepContext{task: auxCtx.task, steps: auxCtx.steps, toolUse: auxCtx.toolUse, routes: auxCtx.routes, result: auxCtx.result, firstFinalAttempt: auxCtx.firstFinalAttempt, lastInvalidFingerprint: auxCtx.lastInvalidFingerprint, repairAlreadySent: auxCtx.repairAlreadySent, repairCount: auxCtx.repairCount, stepIndex: auxCtx.stepIndex, followups: auxCtx.followups}
+		return true, r.handleExpectedCapabilityBridgeStep(ctx, bridgeCtx)
+	}
+	if isCapabilityBridge(auxCtx.toolUse) {
+		r.appendCapabilityBridgeFollowup(ctx, auxCtx.toolUse, auxCtx.result, auxCtx.followups)
+		return true, false
+	}
+	if isSchemaLookup(auxCtx.toolUse) {
+		r.appendLookupFollowup(ctx, lookupFollowupContext{task: auxCtx.task, steps: auxCtx.steps, stepIndex: stepIndex, toolUse: auxCtx.toolUse, budget: auxCtx.callBudget, routes: auxCtx.routes, result: auxCtx.result, followups: auxCtx.followups})
+		return true, false
+	}
+	if isDynamicDiscovery(auxCtx.toolUse) {
+		r.appendLookupFollowup(ctx, lookupFollowupContext{task: auxCtx.task, steps: auxCtx.steps, stepIndex: stepIndex, toolUse: auxCtx.toolUse, budget: auxCtx.callBudget, routes: auxCtx.routes, result: auxCtx.result, followups: auxCtx.followups, dynamic: true})
+		return true, false
+	}
+	if stepIndex >= len(auxCtx.steps) {
+		block := toolResultBlock(auxCtx.toolUse.ID, "scenario already completed", errors.New("scenario already completed"))
+		*auxCtx.followups = append(*auxCtx.followups, block)
+		auxCtx.result.Trace.Events = append(auxCtx.result.Trace.Events, traceToolResultEvent(auxCtx.result.ModelCalls, block))
+		return true, false
+	}
+	return false, false
 }
 
 func handleNoToolUseResult(result *taskResult, messages *[]modelMessage, firstFinalAttempt *bool, repairCount *int, repairLimit, stepIndex int, steps []evalStep) bool {
@@ -545,6 +570,15 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 	}
 	params, _ := toolUse.Input["params"].(map[string]any)
 	addSimulatedResourceIDs(result, action, params)
+	populateSimulatedToolResult(result, step, toolUse, action, params)
+	data, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Sprintf("ok; continue with step %d of %d", nextStep, totalSteps)
+	}
+	return string(data)
+}
+
+func populateSimulatedToolResult(result map[string]any, step evalStep, toolUse modelContentBlock, action string, params map[string]any) {
 	switch {
 	case toolUse.Name == "gitlab_discover_project" || action == actionDiscoverProjectResolve:
 		remoteURL, _ := toolUse.Input["remote_url"].(string)
@@ -572,7 +606,18 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 			"project_path":   project["path_with_namespace"],
 			"default_branch": project["default_branch"],
 		}}
-	case action == actionProjectGet:
+	default:
+		if applyActionSimulation(result, toolUse, action, params) {
+			return
+		}
+		result["expected_tool"] = step.ExpectedTool
+		result["expected_action"] = step.ExpectedAction
+	}
+}
+
+func applyActionSimulation(result map[string]any, toolUse modelContentBlock, action string, params map[string]any) bool {
+	switch action {
+	case actionProjectGet:
 		projectID, _ := params["project_id"].(string)
 		result["project"] = map[string]any{
 			"id":                  42,
@@ -581,32 +626,38 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 			"name":                projectNameFromPath(projectID),
 			"default_branch":      "main",
 		}
-	case action == actionProjectList:
+		return true
+	case actionProjectList:
 		result["projects"] = []map[string]any{simulatedProjectFromLookup(toolUse.Input, params)}
-	case action == "pipeline.trigger_list":
+		return true
+	case "pipeline.trigger_list":
 		result["triggers"] = []map[string]any{{
 			"id":          119,
 			"trigger_id":  119,
 			"project_id":  params["project_id"],
 			"description": "eval-crud-trigger",
 		}}
-	case action == "package.publish_directory" || action == "publish_directory":
+		return true
+	case "package.publish_directory", "publish_directory":
 		result["published"] = simulatedPackageDirectoryItems(params)
 		result["total_files"] = len(packageReleaseFixtureFiles)
-	case action == "group.group_label_list":
+		return true
+	case "group.group_label_list":
 		result["labels"] = []map[string]any{{
 			"id":       120,
 			"label_id": 120,
 			"group_id": params["group_id"],
 			"name":     "eval-group-label",
 		}}
-	case action == "wiki.list":
+		return true
+	case "wiki.list":
 		result["pages"] = []map[string]any{{
 			"slug":       "eval-wiki-page",
 			"title":      "Evaluation wiki page",
 			"project_id": params["project_id"],
 		}}
-	case action == "release.get":
+		return true
+	case "release.get":
 		result["release"] = map[string]any{
 			"project_id": params["project_id"],
 			"tag_name":   params["tag_name"],
@@ -617,41 +668,40 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 				}},
 			},
 		}
-	case action == "environment.list":
+		return true
+	case "environment.list":
 		result["environments"] = []map[string]any{{
 			"id":          122,
 			"name":        "production",
 			"environment": "production",
 			"project_id":  params["project_id"],
 		}}
-	case action == actionEnvironmentProtectedList:
+		return true
+	case actionEnvironmentProtectedList:
 		result["protected_environments"] = []map[string]any{{
 			"name":        "production",
 			"environment": "production",
 			"project_id":  params["project_id"],
 		}}
-	case action == "repository.file_get":
+		return true
+	case "repository.file_get":
 		result["file"] = map[string]any{
 			"project_id": params["project_id"],
 			"file_path":  params["file_path"],
 			"ref":        params["ref"],
 			"encoding":   "base64",
 		}
-	case action == actionPipelineGet:
+		return true
+	case actionPipelineGet:
 		result["pipeline"] = map[string]any{
 			"project_id":  params["project_id"],
 			"pipeline_id": params["pipeline_id"],
 			"status":      "success",
 		}
+		return true
 	default:
-		result["expected_tool"] = step.ExpectedTool
-		result["expected_action"] = step.ExpectedAction
+		return false
 	}
-	data, err := json.Marshal(result)
-	if err != nil {
-		return fmt.Sprintf("ok; continue with step %d of %d", nextStep, totalSteps)
-	}
-	return string(data)
 }
 
 // simulatedPackageDirectoryItems returns package file URLs for simulated package-directory publishes.

@@ -39,51 +39,15 @@ func FormatMarkdown(mr Output) string {
 	}
 	fmt.Fprintf(&b, "- **Source**: %s → **Target**: %s\n", mr.SourceBranch, mr.TargetBranch)
 	fmt.Fprintf(&b, "- **Merge Status**: %s\n", mr.MergeStatus)
-	if mr.HasConflicts {
-		fmt.Fprintf(&b, "- %s **Has Conflicts**\n", toolutil.EmojiWarning)
-	}
-	if mr.Author != "" {
-		fmt.Fprintf(&b, toolutil.FmtMdAuthorAt, mr.Author)
-	}
-	if len(mr.Assignees) > 0 {
-		fmt.Fprintf(&b, "- **Assignees**: %s\n", strings.Join(prefixAt(mr.Assignees), ", "))
-	}
-	if len(mr.Reviewers) > 0 {
-		fmt.Fprintf(&b, "- **Reviewers**: %s\n", strings.Join(prefixAt(mr.Reviewers), ", "))
-	}
-	if mr.Milestone != "" {
-		fmt.Fprintf(&b, "- **Milestone**: %s\n", mr.Milestone)
-	}
-	if len(mr.Labels) > 0 {
-		fmt.Fprintf(&b, "- **Labels**: %s\n", strings.Join(mr.Labels, ", "))
-	}
-	if mr.PipelineID > 0 {
-		if mr.PipelineWebURL != "" {
-			fmt.Fprintf(&b, "- **Pipeline**: [#%d](%s)\n", mr.PipelineID, mr.PipelineWebURL)
-		} else {
-			fmt.Fprintf(&b, "- **Pipeline**: #%d\n", mr.PipelineID)
-		}
-	}
+	writeMergeRequestPeopleAndLabels(&b, mr)
+	writeMergeRequestPipeline(&b, mr)
 	if mr.ChangesCount != "" {
 		fmt.Fprintf(&b, "- **Changes**: %s files\n", mr.ChangesCount)
 	}
 	if mr.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(mr.CreatedAt))
 	}
-	if mr.State == "merged" && mr.MergedBy != "" {
-		fmt.Fprintf(&b, "- **Merged By**: @%s", mr.MergedBy)
-		if mr.MergedAt != "" {
-			fmt.Fprintf(&b, " on %s", toolutil.FormatTime(mr.MergedAt))
-		}
-		b.WriteByte('\n')
-	}
-	if mr.State == "closed" && mr.ClosedBy != "" {
-		fmt.Fprintf(&b, "- **Closed By**: @%s", mr.ClosedBy)
-		if mr.ClosedAt != "" {
-			fmt.Fprintf(&b, " on %s", toolutil.FormatTime(mr.ClosedAt))
-		}
-		b.WriteByte('\n')
-	}
+	writeMergeRequestTerminalActor(&b, mr)
 	if mr.UserNotesCount > 0 {
 		fmt.Fprintf(&b, "- **Comments**: %d\n", mr.UserNotesCount)
 	}
@@ -98,6 +62,55 @@ func FormatMarkdown(mr Output) string {
 		"Use gitlab_merge_request action 'approve' or 'merge' to progress the MR",
 	)
 	return b.String()
+}
+
+func writeMergeRequestPeopleAndLabels(b *strings.Builder, mr Output) {
+	if mr.HasConflicts {
+		fmt.Fprintf(b, "- %s **Has Conflicts**\n", toolutil.EmojiWarning)
+	}
+	if mr.Author != "" {
+		fmt.Fprintf(b, toolutil.FmtMdAuthorAt, mr.Author)
+	}
+	if len(mr.Assignees) > 0 {
+		fmt.Fprintf(b, "- **Assignees**: %s\n", strings.Join(prefixAt(mr.Assignees), ", "))
+	}
+	if len(mr.Reviewers) > 0 {
+		fmt.Fprintf(b, "- **Reviewers**: %s\n", strings.Join(prefixAt(mr.Reviewers), ", "))
+	}
+	if mr.Milestone != "" {
+		fmt.Fprintf(b, "- **Milestone**: %s\n", mr.Milestone)
+	}
+	if len(mr.Labels) > 0 {
+		fmt.Fprintf(b, "- **Labels**: %s\n", strings.Join(mr.Labels, ", "))
+	}
+}
+
+func writeMergeRequestPipeline(b *strings.Builder, mr Output) {
+	if mr.PipelineID <= 0 {
+		return
+	}
+	if mr.PipelineWebURL != "" {
+		fmt.Fprintf(b, "- **Pipeline**: [#%d](%s)\n", mr.PipelineID, mr.PipelineWebURL)
+		return
+	}
+	fmt.Fprintf(b, "- **Pipeline**: #%d\n", mr.PipelineID)
+}
+
+func writeMergeRequestTerminalActor(b *strings.Builder, mr Output) {
+	if mr.State == "merged" && mr.MergedBy != "" {
+		writeMergeRequestActorLine(b, "Merged By", mr.MergedBy, mr.MergedAt)
+	}
+	if mr.State == "closed" && mr.ClosedBy != "" {
+		writeMergeRequestActorLine(b, "Closed By", mr.ClosedBy, mr.ClosedAt)
+	}
+}
+
+func writeMergeRequestActorLine(b *strings.Builder, label, user, at string) {
+	fmt.Fprintf(b, "- **%s**: @%s", label, user)
+	if at != "" {
+		fmt.Fprintf(b, " on %s", toolutil.FormatTime(at))
+	}
+	b.WriteByte('\n')
 }
 
 // prefixAt adds '@' before each username for Markdown @mention formatting.

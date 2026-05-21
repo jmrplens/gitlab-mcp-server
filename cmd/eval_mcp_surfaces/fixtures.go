@@ -1711,6 +1711,15 @@ func replaceSimpleResourceIDPlaceholder(taskID, prompt string, state *liveFixtur
 // replaceResourcePlaceholders replaces resource placeholders placeholders in evaluation prompts.
 func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState) string {
 	prompt = replaceSimpleResourceIDPlaceholder(taskID, prompt, state)
+	prompt = replaceTaskSpecificResourcePlaceholders(taskID, prompt, state)
+	prompt = replaceSuffixResourcePlaceholders(taskID, prompt, state)
+	if taskID == taskPipelineScheduleID && state.PipelineTriggerRunID > 0 && strings.Contains(prompt, "run trigger") {
+		prompt = replaceID(prompt, "pipeline trigger token ID", 77, state.PipelineTriggerRunID)
+	}
+	return prompt
+}
+
+func replaceTaskSpecificResourcePlaceholders(taskID, prompt string, state *liveFixtureState) string {
 	switch taskID {
 	case "MT-007":
 		prompt = replaceID(prompt, "group ID", 123, state.GroupID)
@@ -1748,6 +1757,10 @@ func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState)
 			prompt = strings.ReplaceAll(prompt, "`eval_flag`", fmt.Sprintf("`%s`", state.FeatureFlagName))
 		}
 	}
+	return prompt
+}
+
+func replaceSuffixResourcePlaceholders(taskID, prompt string, state *liveFixtureState) string {
 	if suffix := fixtureUniqueSuffix(state); suffix != "" {
 		switch taskID {
 		case taskFileCreateID:
@@ -1757,9 +1770,6 @@ func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState)
 		case "MT-036":
 			prompt = strings.ReplaceAll(prompt, "`v0.0.0-eval`", fmt.Sprintf("`v0.0.0-eval-%s`", suffix))
 		}
-	}
-	if taskID == taskPipelineScheduleID && state.PipelineTriggerRunID > 0 && strings.Contains(prompt, "run trigger") {
-		prompt = replaceID(prompt, "pipeline trigger token ID", 77, state.PipelineTriggerRunID)
 	}
 	return prompt
 }

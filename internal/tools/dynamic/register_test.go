@@ -72,12 +72,7 @@ func TestSearch_ExplainIsOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search(default) error = %v", err)
 	}
-	if defaultResult == nil || defaultResult.IsError {
-		t.Fatalf("Search(default) result = %+v, want non-error", defaultResult)
-	}
-	if defaultOutput.Count == 0 {
-		t.Fatal("Search(default) returned no matches")
-	}
+	assertSearchNonError(t, "default", defaultResult, defaultOutput)
 	if defaultOutput.Results[0].Explanation != nil {
 		t.Fatalf("Search(default) explanation = %+v, want nil", defaultOutput.Results[0].Explanation)
 	}
@@ -89,12 +84,25 @@ func TestSearch_ExplainIsOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search(explain) error = %v", err)
 	}
-	if explainResult == nil || explainResult.IsError {
-		t.Fatalf("Search(explain) result = %+v, want non-error", explainResult)
+	assertSearchNonError(t, "explain", explainResult, explainOutput)
+	assertSearchExplanation(t, explainOutput)
+	if !strings.Contains(textContent(explainResult), "| Why |") || !strings.Contains(textContent(explainResult), "matched") {
+		t.Fatalf("Search(explain) markdown missing Why explanation: %s", textContent(explainResult))
 	}
-	if explainOutput.Count == 0 {
-		t.Fatal("Search(explain) returned no matches")
+}
+
+func assertSearchNonError(t *testing.T, label string, result *mcp.CallToolResult, output SearchOutput) {
+	t.Helper()
+	if result == nil || result.IsError {
+		t.Fatalf("Search(%s) result = %+v, want non-error", label, result)
 	}
+	if output.Count == 0 {
+		t.Fatalf("Search(%s) returned no matches", label)
+	}
+}
+
+func assertSearchExplanation(t *testing.T, explainOutput SearchOutput) {
+	t.Helper()
 	explanation := explainOutput.Results[0].Explanation
 	if explanation == nil {
 		t.Fatal("Search(explain) explanation is nil")
@@ -107,9 +115,6 @@ func TestSearch_ExplainIsOptIn(t *testing.T) {
 	}
 	if explanation.Reasons[0].Field == "" || explanation.Reasons[0].QueryTerm == "" || explanation.Reasons[0].MatchedValue == "" {
 		t.Fatalf("Search(explain) first reason = %+v, want field, query term, and matched value", explanation.Reasons[0])
-	}
-	if !strings.Contains(textContent(explainResult), "| Why |") || !strings.Contains(textContent(explainResult), "matched") {
-		t.Fatalf("Search(explain) markdown missing Why explanation: %s", textContent(explainResult))
 	}
 }
 
@@ -386,51 +391,68 @@ func TestDynamicSearchCorpus(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.Category, func(t *testing.T) {
-			registry := baseRegistry
-			if len(tc.CustomAliases) > 0 {
-				aliases := append([]actionAlias(nil), actionAliases()...)
-				for _, customAlias := range tc.CustomAliases {
-					aliases = append(aliases, actionAlias{Alias: customAlias.Alias, Canonical: customAlias.Canonical, Source: aliasSourceCompatibility, Searchable: true})
-				}
-				registry = newRegistryFromCatalog(baseCatalog, aliases)
-			}
+			registry := registryForCorpusCase(baseRegistry, baseCatalog, tc)
 
 			_, output, searchErr := registry.Search(t.Context(), nil, SearchInput{Query: tc.Query, Limit: tc.Limit})
 			if searchErr != nil {
 				t.Fatalf("Search() error = %v", searchErr)
 			}
-			if tc.ExpectZero {
-				if len(output.Results) != 0 {
-					t.Fatalf("Search(%q) results = %+v, want zero results", tc.Query, output.Results)
-				}
-				return
-			}
-			if len(output.Results) == 0 {
-				t.Fatalf("Search(%q) returned no results; notes: %s", tc.Query, tc.Notes)
-			}
-			if tc.Limit > 0 && len(output.Results) > tc.Limit {
-				t.Fatalf("Search(%q) returned %d results, want at most limit=%d", tc.Query, len(output.Results), tc.Limit)
-			}
-			if tc.WantTop != "" && output.Results[0].ID != tc.WantTop {
-				t.Fatalf("Search(%q) top = %s, want %s; results = %+v", tc.Query, output.Results[0].ID, tc.WantTop, output.Results)
-			}
-			for _, want := range tc.WantTopN {
-				if !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return result.ID == want }) {
-					t.Fatalf("Search(%q) results = %+v, want top-N action %s", tc.Query, output.Results, want)
-				}
-			}
-			if tc.ExpectAmbiguous {
-				if !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return len(result.AmbiguousWith) > 0 }) {
-					t.Fatalf("Search(%q) results = %+v, want ambiguity annotation", tc.Query, output.Results)
-				}
-			}
-			if tc.ExpectDestructiveTop && !output.Results[0].Destructive {
-				t.Fatalf("Search(%q) top = %+v, want destructive top result", tc.Query, output.Results[0])
-			}
-			if tc.ForbidDestructiveTop && output.Results[0].Destructive {
-				t.Fatalf("Search(%q) top = %+v, want non-destructive top result", tc.Query, output.Results[0])
-			}
+			assertDynamicSearchCorpusCase(t, tc, output)
 		})
+	}
+}
+
+func registryForCorpusCase(baseRegistry *Registry, baseCatalog *actioncatalog.Catalog, tc dynamicSearchCorpusCase) *Registry {
+	if len(tc.CustomAliases) == 0 {
+		return baseRegistry
+	}
+	aliases := append([]actionAlias(nil), actionAliases()...)
+	for _, customAlias := range tc.CustomAliases {
+		aliases = append(aliases, actionAlias{Alias: customAlias.Alias, Canonical: customAlias.Canonical, Source: aliasSourceCompatibility, Searchable: true})
+	}
+	return newRegistryFromCatalog(baseCatalog, aliases)
+}
+
+func assertDynamicSearchCorpusCase(t *testing.T, tc dynamicSearchCorpusCase, output SearchOutput) {
+	t.Helper()
+	if tc.ExpectZero {
+		if len(output.Results) != 0 {
+			t.Fatalf("Search(%q) results = %+v, want zero results", tc.Query, output.Results)
+		}
+		return
+	}
+	assertDynamicSearchCorpusResults(t, tc, output)
+}
+
+func assertDynamicSearchCorpusResults(t *testing.T, tc dynamicSearchCorpusCase, output SearchOutput) {
+	t.Helper()
+	if len(output.Results) == 0 {
+		t.Fatalf("Search(%q) returned no results; notes: %s", tc.Query, tc.Notes)
+	}
+	if tc.Limit > 0 && len(output.Results) > tc.Limit {
+		t.Fatalf("Search(%q) returned %d results, want at most limit=%d", tc.Query, len(output.Results), tc.Limit)
+	}
+	if tc.WantTop != "" && output.Results[0].ID != tc.WantTop {
+		t.Fatalf("Search(%q) top = %s, want %s; results = %+v", tc.Query, output.Results[0].ID, tc.WantTop, output.Results)
+	}
+	assertDynamicSearchCorpusExpectations(t, tc, output)
+}
+
+func assertDynamicSearchCorpusExpectations(t *testing.T, tc dynamicSearchCorpusCase, output SearchOutput) {
+	t.Helper()
+	for _, want := range tc.WantTopN {
+		if !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return result.ID == want }) {
+			t.Fatalf("Search(%q) results = %+v, want top-N action %s", tc.Query, output.Results, want)
+		}
+	}
+	if tc.ExpectAmbiguous && !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return len(result.AmbiguousWith) > 0 }) {
+		t.Fatalf("Search(%q) results = %+v, want ambiguity annotation", tc.Query, output.Results)
+	}
+	if tc.ExpectDestructiveTop && !output.Results[0].Destructive {
+		t.Fatalf("Search(%q) top = %+v, want destructive top result", tc.Query, output.Results[0])
+	}
+	if tc.ForbidDestructiveTop && output.Results[0].Destructive {
+		t.Fatalf("Search(%q) top = %+v, want non-destructive top result", tc.Query, output.Results[0])
 	}
 }
 
@@ -611,36 +633,37 @@ func TestAddStandaloneCatalog_NilCatalogWithExcludedInteractiveActions(t *testin
 // mode can consume registry-native action metadata without rebuilding it from
 // legacy route maps.
 func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
+	registry := NewRegistryFromCatalog(customCatalogForDynamicTest(t))
+	assertCustomCatalogSearch(t, registry)
+	assertCustomCatalogDescribe(t, registry)
+	assertCustomCatalogFind(t, registry)
+}
+
+func customCatalogForDynamicTest(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_custom"})
-	route := toolutil.ActionRoute{
-		Handler: func(_ context.Context, params map[string]any) (any, error) {
-			return map[string]any{"target": params["target"]}, nil
-		},
-		InputSchema: map[string]any{
-			"type":     "object",
-			"required": []any{"target"},
-			"properties": map[string]any{
-				"target": map[string]any{"type": "string"},
-			},
-		},
-	}.
-		WithUsage("Use for custom catalog metadata.").
-		WithRelatedActions("custom.audit").
-		WithParameterGuidance(map[string]toolutil.ParameterGuidance{
-			"target": {SemanticRole: "custom_target", CommonConfusions: []string{"Do not use source."}},
-		})
-	group.SetAction(actioncatalog.Action{
-		Name:    "inspect",
-		Aliases: []string{"custom.lookup"},
-		Tags:    []string{"bespoke"},
-		Route:   route,
-	})
+	group.SetAction(actioncatalog.Action{Name: "inspect", Aliases: []string{"custom.lookup"}, Tags: []string{"bespoke"}, Route: customCatalogRouteForDynamicTest()})
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)
 	}
+	return catalog
+}
 
-	registry := NewRegistryFromCatalog(catalog)
+func customCatalogRouteForDynamicTest() toolutil.ActionRoute {
+	return toolutil.ActionRoute{
+		Handler: func(_ context.Context, params map[string]any) (any, error) {
+			return map[string]any{"target": params["target"]}, nil
+		},
+		InputSchema: map[string]any{"type": "object", "required": []any{"target"}, "properties": map[string]any{"target": map[string]any{"type": "string"}}},
+	}.
+		WithUsage("Use for custom catalog metadata.").
+		WithRelatedActions("custom.audit").
+		WithParameterGuidance(map[string]toolutil.ParameterGuidance{"target": {SemanticRole: "custom_target", CommonConfusions: []string{"Do not use source."}}})
+}
+
+func assertCustomCatalogSearch(t *testing.T, registry *Registry) {
+	t.Helper()
 	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "bespoke", Limit: 1})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
@@ -651,7 +674,10 @@ func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
 	if output.Count != 1 || output.Results[0].ID != "custom.inspect" {
 		t.Fatalf("Search() output = %+v, want custom.inspect", output)
 	}
+}
 
+func assertCustomCatalogDescribe(t *testing.T, registry *Registry) {
+	t.Helper()
 	result, described, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "custom.lookup"})
 	if err != nil {
 		t.Fatalf("Describe() error = %v", err)
@@ -674,7 +700,10 @@ func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
 	if got := describedAgain.Actions[0].ParamGuidance["target"].SemanticRole; got != "custom_target" {
 		t.Fatalf("second describe ParamGuidance target role = %q, want cloned custom_target", got)
 	}
+}
 
+func assertCustomCatalogFind(t *testing.T, registry *Registry) {
+	t.Helper()
 	findResult, found, err := registry.Find(t.Context(), nil, FindInput{Query: "bespoke", Limit: 1})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
@@ -1268,6 +1297,13 @@ func TestBuildSearchDocument_CapturesTypedFields(t *testing.T) {
 	if document.CanonicalID != "repository.tree" {
 		t.Fatalf("CanonicalID = %q, want repository.tree", document.CanonicalID)
 	}
+	assertSearchDocumentIdentity(t, document)
+	assertSearchDocumentText(t, document)
+	assertSearchDocumentSchemaFields(t, document)
+}
+
+func assertSearchDocumentIdentity(t *testing.T, document searchDocument) {
+	t.Helper()
 	for _, want := range []string{"repository", "tree"} {
 		if !slices.Contains(document.IDWords, want) {
 			t.Fatalf("IDWords = %v, want %q", document.IDWords, want)
@@ -1279,6 +1315,10 @@ func TestBuildSearchDocument_CapturesTypedFields(t *testing.T) {
 	if document.Backend != "gitlab" || document.Capability != "source_control" || document.Resource != "repository" || document.Operation != "tree" || document.Scope != "project" {
 		t.Fatalf("document cross-backend fields = %+v", document)
 	}
+}
+
+func assertSearchDocumentText(t *testing.T, document searchDocument) {
+	t.Helper()
 	if !slices.Contains(document.Aliases, "repository_tree") || !slices.Contains(document.Aliases, "repo.files") {
 		t.Fatalf("Aliases = %v, want hidden and visible aliases", document.Aliases)
 	}
@@ -1293,6 +1333,10 @@ func TestBuildSearchDocument_CapturesTypedFields(t *testing.T) {
 	if !slices.Contains(document.Tags, "read") || !slices.Contains(document.RequiredParams, "project_id") {
 		t.Fatalf("document tags/required params = %+v", document)
 	}
+}
+
+func assertSearchDocumentSchemaFields(t *testing.T, document searchDocument) {
+	t.Helper()
 	if strings.Join(document.OptionalParams, ",") != "author_username,state" {
 		t.Fatalf("OptionalParams = %v, want sorted author_username,state", document.OptionalParams)
 	}

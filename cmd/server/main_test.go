@@ -3242,8 +3242,13 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(data, &card); unmarshalErr != nil {
 		t.Fatalf("buildServerCard() returned invalid JSON: %v", unmarshalErr)
 	}
+	toolsRaw := assertServerCardBasics(t, card)
+	assertServerCardCatalogs(t, card)
+	assertServerCardToolMetadata(t, toolsRaw)
+}
 
-	// Verify serverInfo
+func assertServerCardBasics(t *testing.T, card map[string]any) []any {
+	t.Helper()
 	serverInfo, siOK := card["serverInfo"].(map[string]any)
 	if !siOK {
 		t.Fatal("card missing 'serverInfo' object")
@@ -3269,8 +3274,6 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	if len(toolsRaw) == 0 {
 		t.Fatal("tools array is empty, expected registered tools")
 	}
-
-	// Spot-check first tool has name and description
 	firstRaw := toolsRaw[0]
 	tool, toolOK := firstRaw.(map[string]any)
 	if !toolOK {
@@ -3282,11 +3285,11 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	if desc, descOK := tool["description"].(string); !descOK || desc == "" {
 		t.Error("tools[0] missing or empty 'description'")
 	}
+	return toolsRaw
+}
 
-	// Verify the card carries resources, resourceTemplates, and prompts.
-	// These are gated by configured registration in createServer; if any
-	// is empty the external scanners (Smithery, Glama) report 0 and the
-	// quality score drops, so we treat empty as a regression.
+func assertServerCardCatalogs(t *testing.T, card map[string]any) {
+	t.Helper()
 	if resourcesRaw, ok := card["resources"].([]any); !ok || len(resourcesRaw) == 0 {
 		t.Error("card 'resources' array missing or empty")
 	}
@@ -3296,9 +3299,10 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	if promptsRaw, ok := card["prompts"].([]any); !ok || len(promptsRaw) == 0 {
 		t.Error("card 'prompts' array missing or empty")
 	}
+}
 
-	// Verify per-tool metadata: at least one tool must expose
-	// outputSchema and annotations so external scanners pick them up.
+func assertServerCardToolMetadata(t *testing.T, toolsRaw []any) {
+	t.Helper()
 	var withOutputSchema, withAnnotations int
 	for _, raw := range toolsRaw {
 		tEntry, _ := raw.(map[string]any)

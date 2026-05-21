@@ -738,7 +738,12 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 	input.PerPage = 50
 
 	opts := buildListOpts(input)
+	assertPipelineListStringFilters(t, opts)
+	assertPipelineListTimeAndPaginationFilters(t, opts)
+}
 
+func assertPipelineListStringFilters(t *testing.T, opts *gl.ListProjectPipelinesOptions) {
+	t.Helper()
 	if opts.Scope == nil || *opts.Scope != "running" {
 		t.Errorf("Scope = %v, want running", opts.Scope)
 	}
@@ -769,6 +774,10 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 	if opts.Sort == nil || *opts.Sort != "desc" {
 		t.Errorf("Sort = %v, want desc", opts.Sort)
 	}
+}
+
+func assertPipelineListTimeAndPaginationFilters(t *testing.T, opts *gl.ListProjectPipelinesOptions) {
+	t.Helper()
 	if opts.CreatedAfter == nil {
 		t.Error("CreatedAfter should not be nil")
 	}

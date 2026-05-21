@@ -60,19 +60,16 @@ func run() (runErr error) {
 		return err
 	}
 	finalReportWritten := false
-	if shouldWriteStartupReport(opts) {
-		if writeErr := writeStartupReport(opts.Output, opts); writeErr != nil {
-			return writeErr
-		}
-		defer func() {
-			if runErr == nil || finalReportWritten {
-				return
-			}
-			if writeErr := writeErrorReport(opts.Output, opts, runErr); writeErr != nil {
-				runErr = errors.Join(runErr, writeErr)
-			}
-		}()
+	cleanupReport, err := prepareRunFailureReport(
+		opts,
+		func() error { return runErr },
+		func(err error) { runErr = err },
+		func() bool { return finalReportWritten },
+	)
+	if err != nil {
+		return err
 	}
+	defer cleanupReport()
 	tasks, fixtures, err := prepareRunTasks(opts)
 	if err != nil {
 		return err
@@ -108,6 +105,23 @@ func run() (runErr error) {
 		return coverageErr
 	}
 	return writeTraceArtifacts(runtime.opts.TraceDir, results, runtime.opts.TraceProviderBodies)
+}
+
+func prepareRunFailureReport(opts options, currentRunErr func() error, setRunErr func(error), finalReportWritten func() bool) (func(), error) {
+	if !shouldWriteStartupReport(opts) {
+		return func() {}, nil
+	}
+	if writeErr := writeStartupReport(opts.Output, opts); writeErr != nil {
+		return nil, writeErr
+	}
+	return func() {
+		if currentRunErr() == nil || finalReportWritten() {
+			return
+		}
+		if writeErr := writeErrorReport(opts.Output, opts, currentRunErr()); writeErr != nil {
+			setRunErr(errors.Join(currentRunErr(), writeErr))
+		}
+	}, nil
 }
 
 func prepareRunOptions() (options, func() error, error) {

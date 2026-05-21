@@ -1615,95 +1615,17 @@ func TestAllMarkdownFormattersRegistered(t *testing.T) {
 //   - Backtick-quoted `gitlab_*` tool references must match a registered tool name
 //   - `action 'xxx'` references must match a meta-tool action key
 func TestAllHintReferencesValid(t *testing.T) {
-	// 1. Build set of all registered individual tool names from sub-package register.go files.
-	validTools := make(map[string]bool)
-	reToolName := regexp.MustCompile(`Name:\s+"(gitlab_\w+)"`)
-
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)
 	}
-
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		regPath := filepath.Join(e.Name(), "register.go")
-		src, readErr := os.ReadFile(regPath)
-		if readErr != nil {
-			continue
-		}
-		for _, m := range reToolName.FindAllStringSubmatch(string(src), -1) {
-			validTools[m[1]] = true
-		}
-	}
-	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Actions {
-			if name := strings.TrimSpace(spec.IndividualTool.Name); name != "" {
-				validTools[name] = true
-			}
-		}
-	}
-
-	// Also add meta-tool names from register_meta*.go files.
 	metaSrc := readRegisterMetaSource(t)
-	reMetaTool := regexp.MustCompile(`add(?:ReadOnly)?MetaTool\(server,\s+"(gitlab_\w+)"`)
-	for _, m := range reMetaTool.FindAllStringSubmatch(metaSrc, -1) {
-		validTools[m[1]] = true
-	}
-
-	// Also add meta-tools from sub-package RegisterMeta (via mcp.AddTool Name).
-	// These are already captured by reToolName above if they use Name: "gitlab_*".
+	validTools := collectValidHintTools(t, entries, metaSrc)
 
 	if len(validTools) == 0 {
 		t.Fatal("no tool names found — parsing may be broken")
 	}
-
-	// 2. Build set of all meta-tool action keys from route maps.
-	validActions := make(map[string]bool)
-	// Pattern for register_meta*.go: "key": wrapAction/wrapVoidAction/wrapDelegateAction (map literal)
-	reInlineAction := regexp.MustCompile(`"(\w+)":\s+(?:route|destructive)(?:Action|VoidAction|ActionWithRequest)\b`)
-	for _, m := range reInlineAction.FindAllStringSubmatch(metaSrc, -1) {
-		validActions[m[1]] = true
-	}
-	// Pattern for register_meta*.go: routes["key"] = route/destructiveRoute/routeAction/etc. (enterprise assignment)
-	reRouteAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*(?:route(?:Action|VoidAction|ActionWithRequest)?|destructive(?:Route|Action|VoidAction|ActionWithRequest))\b`)
-	for _, m := range reRouteAssign.FindAllStringSubmatch(metaSrc, -1) {
-		validActions[m[1]] = true
-	}
-	// Also match custom action variables wrapped in route/destructiveRoute (e.g., "publish": route(publishAction)).
-	reCustomAction := regexp.MustCompile(`"(\w+)":\s+(?:route|destructiveRoute)\(\w+Action\b`)
-	for _, m := range reCustomAction.FindAllStringSubmatch(metaSrc, -1) {
-		validActions[m[1]] = true
-	}
-
-	// Pattern for sub-package register.go: "key": toolutil.RouteAction/RouteVoidAction/Route/DestructiveAction etc.
-	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
-	// Pattern for sub-package register.go: routes["key"] = toolutil.Route/DestructiveRoute(...) (enterprise)
-	reDelegatedAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		regPath := filepath.Join(e.Name(), "register.go")
-		src, readErr := os.ReadFile(regPath)
-		if readErr != nil {
-			continue
-		}
-		for _, m := range reDelegatedAction.FindAllStringSubmatch(string(src), -1) {
-			validActions[m[1]] = true
-		}
-		for _, m := range reDelegatedAssign.FindAllStringSubmatch(string(src), -1) {
-			validActions[m[1]] = true
-		}
-	}
-	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Actions {
-			if actionName := strings.TrimSpace(spec.Name); actionName != "" {
-				validActions[actionName] = true
-			}
-		}
-	}
+	validActions := collectValidHintActions(entries, metaSrc)
 
 	if len(validActions) == 0 {
 		t.Fatal("no action keys found — parsing may be broken")
@@ -1717,6 +1639,65 @@ func TestAllHintReferencesValid(t *testing.T) {
 
 	t.Logf("validated hints across all packages: %d valid tools, %d valid actions, %d tool errors, %d action errors",
 		len(validTools), len(validActions), toolErrors, actionErrors)
+}
+
+func collectValidHintTools(t *testing.T, entries []os.DirEntry, metaSrc string) map[string]bool {
+	t.Helper()
+	validTools := make(map[string]bool)
+	reToolName := regexp.MustCompile(`Name:\s+"(gitlab_\w+)"`)
+	for _, entry := range entries {
+		addRegisterFileMatches(validTools, entry, reToolName)
+	}
+	for _, group := range CollectActionSpecs(nil, true) {
+		for _, spec := range group.Actions {
+			if name := strings.TrimSpace(spec.IndividualTool.Name); name != "" {
+				validTools[name] = true
+			}
+		}
+	}
+	reMetaTool := regexp.MustCompile(`add(?:ReadOnly)?MetaTool\(server,\s+"(gitlab_\w+)"`)
+	for _, match := range reMetaTool.FindAllStringSubmatch(metaSrc, -1) {
+		validTools[match[1]] = true
+	}
+	return validTools
+}
+
+func collectValidHintActions(entries []os.DirEntry, metaSrc string) map[string]bool {
+	validActions := make(map[string]bool)
+	addMatches(validActions, regexp.MustCompile(`"(\w+)":\s+(?:route|destructive)(?:Action|VoidAction|ActionWithRequest)\b`), metaSrc)
+	addMatches(validActions, regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*(?:route(?:Action|VoidAction|ActionWithRequest)?|destructive(?:Route|Action|VoidAction|ActionWithRequest))\b`), metaSrc)
+	addMatches(validActions, regexp.MustCompile(`"(\w+)":\s+(?:route|destructiveRoute)\(\w+Action\b`), metaSrc)
+	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
+	reDelegatedAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
+	for _, entry := range entries {
+		addRegisterFileMatches(validActions, entry, reDelegatedAction)
+		addRegisterFileMatches(validActions, entry, reDelegatedAssign)
+	}
+	for _, group := range CollectActionSpecs(nil, true) {
+		for _, spec := range group.Actions {
+			if actionName := strings.TrimSpace(spec.Name); actionName != "" {
+				validActions[actionName] = true
+			}
+		}
+	}
+	return validActions
+}
+
+func addRegisterFileMatches(values map[string]bool, entry os.DirEntry, pattern *regexp.Regexp) {
+	if !entry.IsDir() {
+		return
+	}
+	src, readErr := os.ReadFile(filepath.Join(entry.Name(), "register.go"))
+	if readErr != nil {
+		return
+	}
+	addMatches(values, pattern, string(src))
+}
+
+func addMatches(values map[string]bool, pattern *regexp.Regexp, src string) {
+	for _, match := range pattern.FindAllStringSubmatch(src, -1) {
+		values[match[1]] = true
+	}
 }
 
 func validateWriteHintReferences(t *testing.T, entries []os.DirEntry, validTools, validActions map[string]bool, reToolRef, reActionRef *regexp.Regexp) (int, int) {
@@ -2718,6 +2699,16 @@ func routeReleases(w http.ResponseWriter, r *http.Request, b mockBodies) bool {
 func routeMergeRequests(w http.ResponseWriter, r *http.Request, b mockBodies) bool {
 	p := r.URL.Path
 	hasMR1 := strings.Contains(p, "/merge_requests/1")
+	if routeMergeRequestReadWrite(w, r, b, p, hasMR1) {
+		return true
+	}
+	if routeMergeRequestReview(w, r, b, p) {
+		return true
+	}
+	return false
+}
+
+func routeMergeRequestReadWrite(w http.ResponseWriter, r *http.Request, b mockBodies, p string, hasMR1 bool) bool {
 	switch {
 	case r.Method == http.MethodPost && strings.HasSuffix(p, "/merge_requests"):
 		respondJSON(w, http.StatusCreated, b.mr)
@@ -2729,6 +2720,14 @@ func routeMergeRequests(w http.ResponseWriter, r *http.Request, b mockBodies) bo
 		respondJSON(w, http.StatusOK, b.mr)
 	case r.Method == http.MethodPut && strings.HasSuffix(p, "/merge"):
 		respondJSON(w, http.StatusOK, b.mr)
+	default:
+		return false
+	}
+	return true
+}
+
+func routeMergeRequestReview(w http.ResponseWriter, r *http.Request, b mockBodies, p string) bool {
+	switch {
 	case r.Method == http.MethodPost && strings.HasSuffix(p, "/approve"):
 		respondJSON(w, http.StatusOK, `{}`)
 	case r.Method == http.MethodPost && strings.HasSuffix(p, "/unapprove"):

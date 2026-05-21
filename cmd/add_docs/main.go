@@ -423,44 +423,74 @@ func isReorderablePredicate(word string) bool {
 func generateTestHelperDoc(d *ast.FuncDecl, pkgName string) string {
 	name := d.Name.Name
 	phrase := camelToWords(name)
-	switch {
-	case strings.HasPrefix(name, "assert"):
-		return fmt.Sprintf("%s checks %s invariants for tests.", name, camelToWords(strings.TrimPrefix(name, "assert")))
-	case strings.HasPrefix(name, "require"):
-		return fmt.Sprintf("%s returns %s test data or fails the test.", name, camelToWords(strings.TrimPrefix(name, "require")))
-	case strings.HasPrefix(name, "mustBuild"):
-		return fmt.Sprintf("%s builds %s test fixtures and fails the test on error.", name, camelToWords(strings.TrimPrefix(name, "mustBuild")))
-	case strings.HasPrefix(name, "must"):
-		return fmt.Sprintf("%s prepares %s test fixtures and fails the test on error.", name, camelToWords(strings.TrimPrefix(name, "must")))
-	case strings.HasPrefix(name, "write"):
-		return fmt.Sprintf("%s writes %s fixture data for tests.", name, camelToWords(strings.TrimPrefix(name, "write")))
-	case strings.HasPrefix(name, "find"):
-		return fmt.Sprintf("%s locates %s fixture data for assertions.", name, camelToWords(strings.TrimPrefix(name, "find")))
-	case strings.HasPrefix(name, "has") || strings.HasPrefix(name, "contains") || strings.HasPrefix(name, "is"):
-		return fmt.Sprintf(helperReportsWhetherTemplate, name, phrase)
-	case strings.HasPrefix(name, "load"):
-		return fmt.Sprintf("%s loads %s fixture data for tests.", name, camelToWords(strings.TrimPrefix(name, "load")))
-	case strings.HasPrefix(name, "new"):
-		return fmt.Sprintf("%s constructs %s test fixtures.", name, camelToWords(strings.TrimPrefix(name, "new")))
-	case strings.HasPrefix(name, "seed"):
-		return fmt.Sprintf("%s seeds %s test fixtures.", name, camelToWords(strings.TrimPrefix(name, "seed")))
-	case strings.HasPrefix(name, "schema"):
-		return fmt.Sprintf("%s extracts %s details for schema assertions.", name, phrase)
-	case strings.HasPrefix(name, "normalize") || strings.HasPrefix(name, "normalized"):
-		return fmt.Sprintf("%s normalizes %s for stable test assertions.", name, camelToWords(strings.TrimPrefix(strings.TrimPrefix(name, "normalized"), "normalize")))
-	case strings.HasPrefix(name, "compare"):
-		return fmt.Sprintf("%s compares %s snapshots and reports drift.", name, camelToWords(strings.TrimPrefix(name, "compare")))
-	case strings.HasPrefix(name, "append"):
-		return fmt.Sprintf("%s appends %s diagnostics to the test diff.", name, camelToWords(strings.TrimPrefix(name, "append")))
-	case strings.HasPrefix(name, "sort"):
-		return fmt.Sprintf("%s sorts %s fixtures into deterministic order.", name, camelToWords(strings.TrimPrefix(name, "sort")))
-	case strings.HasPrefix(name, "missing"):
-		return fmt.Sprintf("%s returns missing %s values for assertion messages.", name, camelToWords(strings.TrimPrefix(name, "missing")))
-	case strings.HasPrefix(name, "text"):
-		return fmt.Sprintf("%s extracts %s from MCP result content for assertions.", name, phrase)
-	default:
-		return fmt.Sprintf("%s supports %s assertions in %s tests.", name, phrase, pkgName)
+	if doc := testHelperPrefixDoc(name, phrase); doc != "" {
+		return doc
 	}
+	return fmt.Sprintf("%s supports %s assertions in %s tests.", name, phrase, pkgName)
+}
+
+func testHelperPrefixDoc(name, phrase string) string {
+	type prefixRule struct {
+		prefixes []string
+		doc      func(prefix string) string
+	}
+	rules := []prefixRule{
+		{[]string{"assert"}, func(prefix string) string {
+			return fmt.Sprintf("%s checks %s invariants for tests.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"require"}, func(prefix string) string {
+			return fmt.Sprintf("%s returns %s test data or fails the test.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"mustBuild"}, func(prefix string) string {
+			return fmt.Sprintf("%s builds %s test fixtures and fails the test on error.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"must"}, func(prefix string) string {
+			return fmt.Sprintf("%s prepares %s test fixtures and fails the test on error.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"write"}, func(prefix string) string {
+			return fmt.Sprintf("%s writes %s fixture data for tests.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"find"}, func(prefix string) string {
+			return fmt.Sprintf("%s locates %s fixture data for assertions.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"has", "contains", "is"}, func(string) string { return fmt.Sprintf(helperReportsWhetherTemplate, name, phrase) }},
+		{[]string{"load"}, func(prefix string) string {
+			return fmt.Sprintf("%s loads %s fixture data for tests.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"new"}, func(prefix string) string {
+			return fmt.Sprintf("%s constructs %s test fixtures.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"seed"}, func(prefix string) string {
+			return fmt.Sprintf("%s seeds %s test fixtures.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"schema"}, func(string) string { return fmt.Sprintf("%s extracts %s details for schema assertions.", name, phrase) }},
+		{[]string{"normalize", "normalized"}, func(string) string {
+			return fmt.Sprintf("%s normalizes %s for stable test assertions.", name, camelToWords(strings.TrimPrefix(strings.TrimPrefix(name, "normalized"), "normalize")))
+		}},
+		{[]string{"compare"}, func(prefix string) string {
+			return fmt.Sprintf("%s compares %s snapshots and reports drift.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"append"}, func(prefix string) string {
+			return fmt.Sprintf("%s appends %s diagnostics to the test diff.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"sort"}, func(prefix string) string {
+			return fmt.Sprintf("%s sorts %s fixtures into deterministic order.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"missing"}, func(prefix string) string {
+			return fmt.Sprintf("%s returns missing %s values for assertion messages.", name, camelToWords(strings.TrimPrefix(name, prefix)))
+		}},
+		{[]string{"text"}, func(string) string {
+			return fmt.Sprintf("%s extracts %s from MCP result content for assertions.", name, phrase)
+		}},
+	}
+	for _, rule := range rules {
+		for _, prefix := range rule.prefixes {
+			if strings.HasPrefix(name, prefix) {
+				return rule.doc(prefix)
+			}
+		}
+	}
+	return ""
 }
 
 // generateMethodDoc generates a doc comment for a method based on its
@@ -475,46 +505,60 @@ func generateMethodDoc(d *ast.FuncDecl) string {
 	if subject == "" {
 		subject = "receiver"
 	}
-	switch name {
-	case "String":
-		return fmt.Sprintf("String returns the display label for %s.", subject)
-	case "Error":
-		return fmt.Sprintf("Error returns the error message for %s.", subject)
-	case "Read":
-		return fmt.Sprintf("Read streams data from %s into p.", subject)
-	case "RoundTrip":
-		return fmt.Sprintf("RoundTrip executes an HTTP request through %s.", subject)
-	case "MarshalJSON":
-		return fmt.Sprintf("MarshalJSON encodes %s into the JSON shape expected by the provider.", subject)
-	case "UnmarshalJSON":
-		return fmt.Sprintf("UnmarshalJSON decodes %s from the provider JSON shape.", subject)
-	case "callOnce":
-		return fmt.Sprintf("callOnce sends one model request through %s and reports whether failures are retryable.", subject)
-	case "prepare":
-		return fmt.Sprintf("prepare creates or updates the live fixture resources tracked by %s.", subject)
-	case "bestEffort":
-		return fmt.Sprintf("bestEffort runs cleanup work for %s without aborting fixture preparation.", subject)
-	case "notef":
-		return fmt.Sprintf("notef records a fixture preparation note for %s.", subject)
+	if doc, ok := exactMethodDoc(name, subject); ok {
+		return doc
+	}
+	if doc, ok := prefixMethodDoc(name, subject); ok {
+		return doc
 	}
 	if d.Type.Results != nil && len(d.Type.Results.List) == 1 {
 		if ident, ok := d.Type.Results.List[0].Type.(*ast.Ident); ok && ident.Name == "bool" {
 			return fmt.Sprintf("%s reports whether the %s satisfies the %s condition.", name, recvType, camelToWords(name))
 		}
 	}
+	return fmt.Sprintf("%s handles %s for %s.", name, camelToWords(name), subject)
+}
+
+func exactMethodDoc(name, subject string) (string, bool) {
+	switch name {
+	case "String":
+		return fmt.Sprintf("String returns the display label for %s.", subject), true
+	case "Error":
+		return fmt.Sprintf("Error returns the error message for %s.", subject), true
+	case "Read":
+		return fmt.Sprintf("Read streams data from %s into p.", subject), true
+	case "RoundTrip":
+		return fmt.Sprintf("RoundTrip executes an HTTP request through %s.", subject), true
+	case "MarshalJSON":
+		return fmt.Sprintf("MarshalJSON encodes %s into the JSON shape expected by the provider.", subject), true
+	case "UnmarshalJSON":
+		return fmt.Sprintf("UnmarshalJSON decodes %s from the provider JSON shape.", subject), true
+	case "callOnce":
+		return fmt.Sprintf("callOnce sends one model request through %s and reports whether failures are retryable.", subject), true
+	case "prepare":
+		return fmt.Sprintf("prepare creates or updates the live fixture resources tracked by %s.", subject), true
+	case "bestEffort":
+		return fmt.Sprintf("bestEffort runs cleanup work for %s without aborting fixture preparation.", subject), true
+	case "notef":
+		return fmt.Sprintf("notef records a fixture preparation note for %s.", subject), true
+	}
+	return "", false
+}
+
+func prefixMethodDoc(name, subject string) (string, bool) {
 	if suffix, ok := strings.CutPrefix(name, "Get"); ok {
-		return fmt.Sprintf("%s returns the %s value from %s.", name, camelToWords(suffix), subject)
+		return fmt.Sprintf("%s returns the %s value from %s.", name, camelToWords(suffix), subject), true
 	}
 	if suffix, ok := strings.CutPrefix(name, "Set"); ok {
-		return fmt.Sprintf("%s updates the %s value on %s.", name, camelToWords(suffix), subject)
+		return fmt.Sprintf("%s updates the %s value on %s.", name, camelToWords(suffix), subject), true
 	}
 	if suffix, ok := strings.CutPrefix(name, "ensure"); ok {
-		return fmt.Sprintf("%s ensures %s exists for %s.", name, camelToWords(suffix), subject)
+		return fmt.Sprintf("%s ensures %s exists for %s.", name, camelToWords(suffix), subject), true
 	}
 	if strings.HasPrefix(name, "cleanup") || strings.HasPrefix(name, "delete") {
-		return fmt.Sprintf("%s removes %s fixture resources for %s when present.", name, camelToWords(name), subject)
+		return fmt.Sprintf("%s removes %s fixture resources for %s when present.", name, camelToWords(name), subject), true
 	}
-	return fmt.Sprintf("%s handles %s for %s.", name, camelToWords(name), subject)
+	return "", false
 }
 
 // generateHandlerDoc generates a doc comment for an MCP tool handler

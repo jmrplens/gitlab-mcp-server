@@ -1655,39 +1655,35 @@ func TestProjectListHooks_Success(t *testing.T) {
 	if len(out.Hooks) != 1 {
 		t.Fatalf("len(Hooks) = %d, want 1", len(out.Hooks))
 	}
-	if out.Hooks[0].URL != testHookURL {
-		t.Errorf("URL = %q, want %q", out.Hooks[0].URL, testHookURL)
-	}
-	if !out.Hooks[0].PushEvents {
-		t.Error("PushEvents = false, want true")
-	}
-	if !out.Hooks[0].EnableSSLVerification {
-		t.Error("EnableSSLVerification = false, want true")
-	}
-	if !out.Hooks[0].TokenPresent || !out.Hooks[0].SigningTokenPresent {
-		t.Error("expected token presence flags to be true")
-	}
-	if !out.Hooks[0].MilestoneEvents || !out.Hooks[0].FeatureFlagEvents || !out.Hooks[0].VulnerabilityEvents {
-		t.Error("expected milestone, feature flag, and vulnerability events to be true")
-	}
-	if !out.Hooks[0].ResourceDeployTokenEvents {
-		t.Error("ResourceDeployTokenEvents = false, want true")
-	}
-	if out.Hooks[0].DisabledUntil == "" {
-		t.Error("DisabledUntil is empty, want timestamp")
-	}
-	if len(out.Hooks[0].URLVariables) != 1 || out.Hooks[0].URLVariables[0].Key != "env" {
-		t.Fatalf("unexpected URL variables: %+v", out.Hooks[0].URLVariables)
-	}
-	if len(out.Hooks[0].CustomHeaders) != 1 || out.Hooks[0].CustomHeaders[0].Key != "X-Env" {
-		t.Fatalf("unexpected custom headers: %+v", out.Hooks[0].CustomHeaders)
-	}
+	assertProjectHookOutput(t, out.Hooks[0])
 	encodedHook, err := json.Marshal(out.Hooks[0])
 	if err != nil {
 		t.Fatalf("marshal hook output: %v", err)
 	}
 	if strings.Contains(string(encodedHook), `"value"`) || strings.Contains(string(encodedHook), "prod") {
 		t.Fatalf("hook output exposed secret-bearing values: %s", encodedHook)
+	}
+}
+
+func assertProjectHookOutput(t *testing.T, hook HookOutput) {
+	t.Helper()
+	if hook.URL != testHookURL || !hook.PushEvents || !hook.EnableSSLVerification {
+		t.Fatalf("hook core fields = %+v, want URL, push events, and SSL verification", hook)
+	}
+	if !hook.TokenPresent || !hook.SigningTokenPresent {
+		t.Error("expected token presence flags to be true")
+	}
+	if !hook.MilestoneEvents || !hook.FeatureFlagEvents || !hook.VulnerabilityEvents || !hook.ResourceDeployTokenEvents {
+		t.Error("expected milestone, feature flag, vulnerability, and resource deploy token events to be true")
+	}
+	if hook.DisabledUntil == "" {
+		t.Error("DisabledUntil is empty, want timestamp")
+	}
+	if len(hook.URLVariables) != 1 || hook.URLVariables[0].Key != "env" {
+		t.Fatalf("unexpected URL variables: %+v", hook.URLVariables)
+	}
+	if len(hook.CustomHeaders) != 1 || hook.CustomHeaders[0].Key != "X-Env" {
+		t.Fatalf("unexpected custom headers: %+v", hook.CustomHeaders)
 	}
 }
 
@@ -3795,6 +3791,12 @@ func assertEditProjectCoreOpts(t *testing.T, opts *gl.EditProjectOptions) {
 // assertEditProjectAdvancedOpts checks edit project advanced opts invariants for tests.
 func assertEditProjectAdvancedOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	t.Helper()
+	assertEditProjectMergeOpts(t, opts)
+	assertEditProjectAccessOpts(t, opts)
+}
+
+func assertEditProjectMergeOpts(t *testing.T, opts *gl.EditProjectOptions) {
+	t.Helper()
 	if opts.BuildsAccessLevel == nil {
 		t.Error("BuildsAccessLevel not set")
 	}
@@ -3835,6 +3837,10 @@ func assertEditProjectAdvancedOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	if opts.LFSEnabled == nil {
 		t.Error("LFSEnabled not set")
 	}
+}
+
+func assertEditProjectAccessOpts(t *testing.T, opts *gl.EditProjectOptions) {
+	t.Helper()
 	if opts.RequestAccessEnabled == nil {
 		t.Error("RequestAccessEnabled not set")
 	}

@@ -586,19 +586,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | %d dynamic tools | %d resources | %d prompts\n\n",
 		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 
-	b.WriteString("## Dynamic Toolset\n\n")
-	b.WriteString("Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.\n\n")
-	for _, t := range catalog.Dynamic {
-		fmt.Fprintf(&b, toolutil.FmtMdH3, t.Name)
-		if t.Title != "" {
-			fmt.Fprintf(&b, llmsBoldTitleFormat, t.Title)
-		}
-		b.WriteString(t.Description)
-		b.WriteString("\n\n")
-		writeInputSchema(&b, t.InputSchema)
-		writeAnnotations(&b, t.Annotations)
-		b.WriteString("\n")
-	}
+	writeLLMSFullDynamicTools(&b, catalog.Dynamic)
 
 	// --- Meta-tools ---
 	b.WriteString("## Meta-Tools\n\n")
@@ -692,6 +680,22 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 		return fmt.Errorf("write llms-full.txt: %w", err)
 	}
 	return nil
+}
+
+func writeLLMSFullDynamicTools(b *strings.Builder, dynamicTools []*mcp.Tool) {
+	b.WriteString("## Dynamic Toolset\n\n")
+	b.WriteString("Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.\n\n")
+	for _, tool := range dynamicTools {
+		fmt.Fprintf(b, toolutil.FmtMdH3, tool.Name)
+		if tool.Title != "" {
+			fmt.Fprintf(b, llmsBoldTitleFormat, tool.Title)
+		}
+		b.WriteString(tool.Description)
+		b.WriteString("\n\n")
+		writeInputSchema(b, tool.InputSchema)
+		writeAnnotations(b, tool.Annotations)
+		b.WriteString("\n")
+	}
 }
 
 func writeLLMSFullResources(b *strings.Builder, catalog llmsCatalog, resourceCount int) {

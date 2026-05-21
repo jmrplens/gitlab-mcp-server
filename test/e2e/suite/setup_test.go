@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -93,251 +94,158 @@ func TestMain(m *testing.M) {
 	enterprise := strings.EqualFold(os.Getenv("GITLAB_ENTERPRISE"), "true")
 	glClient := mustE2EGitLabClient()
 	username := mustE2EUsername(glClient)
+	runtime := startE2ERuntime(glClient, enterprise)
+	sess = runtime.sessions
+	sess.username = username
+	sess.glClient = glClient
+	sess.enterprise = enterprise
+	captureE2ESnapshot(glClient)
 
-	// Create MCP server with all individual tools registered.
-	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e",
-		Version: "test",
-	}, nil)
-	tools.RegisterAll(server, glClient, enterprise)
-	resources.Register(server, glClient)
-	resources.RegisterWorkflowGuides(server)
+	code := m.Run()
+	code = verifyE2ESnapshotAfterRun(glClient, code)
+	cleanupOrphanedProjects(glClient)
+	closeE2ESessions(runtime.running)
+	os.Exit(code)
+}
 
+type runningE2ESession struct {
+	session *mcp.ClientSession
+	cancel  context.CancelFunc
+}
+
+type e2eRuntime struct {
+	sessions sessions
+	running  []runningE2ESession
+}
+
+func startE2ERuntime(glClient *gitlabclient.Client, enterprise bool) e2eRuntime {
+	runtime := e2eRuntime{}
+	runtime.sessions.individual = mustStartE2ESession(&runtime, "individual", "gitlab-mcp-server-e2e", "e2e-test-client", nil, configureIndividualE2EServer(glClient, enterprise))
+	runtime.sessions.meta = mustStartE2ESession(&runtime, "meta", "gitlab-mcp-server-e2e-meta", "e2e-test-meta-client", nil, configureMetaE2EServer(glClient, enterprise))
+	runtime.sessions.dynamic = mustStartE2ESession(&runtime, "dynamic", "gitlab-mcp-server-e2e-dynamic", "e2e-test-dynamic-client", nil, configureDynamicE2EServer(glClient, enterprise))
+	runtime.sessions.sampling = mustStartE2ESession(&runtime, "sampling", "gitlab-mcp-server-e2e-sampling", "e2e-test-sampling-client", samplingClientOptions(), configureToolOnlyE2EServer(glClient, enterprise))
+	runtime.sessions.elicitation = mustStartE2ESession(&runtime, "elicitation", "gitlab-mcp-server-e2e-elicit", "e2e-test-elicit-client", elicitationClientOptions(), configureToolOnlyE2EServer(glClient, enterprise))
+	runtime.sessions.safeMode = mustStartE2ESession(&runtime, "safemode", "gitlab-mcp-server-e2e-safemode", "e2e-test-safemode-client", nil, configureSafeModeE2EServer(glClient, enterprise))
+	return runtime
+}
+
+func mustStartE2ESession(runtime *e2eRuntime, label, serverName, clientName string, clientOptions *mcp.ClientOptions, configure func(*mcp.Server) error) *mcp.ClientSession {
+	running, err := startE2ESession(serverName, clientName, clientOptions, configure)
+	if err != nil {
+		closeE2ESessions(runtime.running)
+		log.Fatalf("e2e: %s session: %v", label, err)
+	}
+	runtime.running = append(runtime.running, running)
+	return running.session
+}
+
+func startE2ESession(serverName, clientName string, clientOptions *mcp.ClientOptions, configure func(*mcp.Server) error) (runningE2ESession, error) {
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: "test"}, nil)
+	if err := configure(server); err != nil {
+		return runningE2ESession{}, err
+	}
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
 	serverCtx, serverCancel := context.WithCancel(context.Background())
 	go func() {
 		if srvErr := server.Run(serverCtx, serverTransport); srvErr != nil && serverCtx.Err() == nil {
-			log.Printf("e2e: server stopped unexpectedly: %v", srvErr)
+			log.Printf("e2e: %s server stopped unexpectedly: %v", serverName, srvErr)
 		}
 	}()
 
-	mcpClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-client",
-		Version: "test",
-	}, nil)
-	session, err := mcpClient.Connect(context.Background(), clientTransport, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: "test"}, clientOptions)
+	session, err := client.Connect(context.Background(), clientTransport, nil)
 	if err != nil {
 		serverCancel()
-		log.Fatalf("e2e: connect MCP client: %v", err)
+		return runningE2ESession{}, fmt.Errorf("connect %s MCP client: %w", clientName, err)
 	}
+	return runningE2ESession{session: session, cancel: serverCancel}, nil
+}
 
-	// Create a second MCP server with meta-tools for meta-tool E2E tests.
-	metaServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-meta",
-		Version: "test",
-	}, nil)
-	if registerErr := tools.RegisterAllMeta(metaServer, glClient, enterprise); registerErr != nil {
-		log.Fatalf("e2e: register meta tools: %v", registerErr)
+func configureIndividualE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		tools.RegisterAll(server, glClient, enterprise)
+		resources.Register(server, glClient)
+		resources.RegisterWorkflowGuides(server)
+		return nil
 	}
+}
 
-	metaServerTransport, metaClientTransport := mcp.NewInMemoryTransports()
+func configureMetaE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		return tools.RegisterAllMeta(server, glClient, enterprise)
+	}
+}
 
-	metaServerCtx, metaServerCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := metaServer.Run(metaServerCtx, metaServerTransport); srvErr != nil && metaServerCtx.Err() == nil {
-			log.Printf("e2e: meta server stopped unexpectedly: %v", srvErr)
+func configureDynamicE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		catalog, err := tools.BuildActionCatalog(glClient, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
+		if err != nil {
+			return fmt.Errorf("build dynamic action catalog: %w", err)
 		}
-	}()
-
-	metaClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-meta-client",
-		Version: "test",
-	}, nil)
-	metaSession, err := metaClient.Connect(context.Background(), metaClientTransport, nil)
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		log.Fatalf("e2e: connect meta MCP client: %v", err)
-	}
-
-	// Create a dynamic MCP server/client pair with the low-token find and
-	// execute surface backed by the canonical action catalog.
-	dynamicServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-dynamic",
-		Version: "test",
-	}, nil)
-	dynamicCatalog, err := tools.BuildActionCatalog(glClient, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		log.Fatalf("e2e: build dynamic action catalog: %v", err)
-	}
-	dynamicCatalog, err = dynamictools.AddStandaloneCatalog(dynamicCatalog, glClient, dynamictools.StandaloneOptions{})
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		log.Fatalf("e2e: add standalone dynamic catalog: %v", err)
-	}
-	dynamictools.RegisterCatalogFindExecuteTools(dynamicServer, dynamicCatalog)
-
-	dynamicServerTransport, dynamicClientTransport := mcp.NewInMemoryTransports()
-
-	dynamicServerCtx, dynamicServerCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := dynamicServer.Run(dynamicServerCtx, dynamicServerTransport); srvErr != nil && dynamicServerCtx.Err() == nil {
-			log.Printf("e2e: dynamic server stopped unexpectedly: %v", srvErr)
+		catalog, err = dynamictools.AddStandaloneCatalog(catalog, glClient, dynamictools.StandaloneOptions{})
+		if err != nil {
+			return fmt.Errorf("add standalone dynamic catalog: %w", err)
 		}
-	}()
+		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+		return nil
+	}
+}
 
-	dynamicClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-dynamic-client",
-		Version: "test",
-	}, nil)
-	dynamicSession, err := dynamicClient.Connect(context.Background(), dynamicClientTransport, nil)
+func configureToolOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		tools.RegisterAll(server, glClient, enterprise)
+		return nil
+	}
+}
+
+func configureSafeModeE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		tools.RegisterAll(server, glClient, enterprise)
+		tools.WrapMutatingToolsForSafeMode(server)
+		return nil
+	}
+}
+
+func samplingClientOptions() *mcp.ClientOptions {
+	return &mcp.ClientOptions{CreateMessageHandler: mockCreateMessageHandler}
+}
+
+func elicitationClientOptions() *mcp.ClientOptions {
+	return &mcp.ClientOptions{ElicitationHandler: mockElicitHandler}
+}
+
+func captureE2ESnapshot(glClient *gitlabclient.Client) {
+	if isDockerMode() {
+		return
+	}
+	snap, err := snapshotState(glClient)
 	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		dynamicServerCancel()
-		log.Fatalf("e2e: connect dynamic MCP client: %v", err)
+		log.Fatalf("e2e: snapshot pre-existing state: %v", err)
 	}
+	sess.snapshot = snap
+	log.Printf("e2e: snapshot captured — %d groups, %d projects", len(snap.groups), len(snap.projects))
+}
 
-	// Create an MCP server/client pair with sampling capability (mock LLM).
-	samplingServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-sampling",
-		Version: "test",
-	}, nil)
-	tools.RegisterAll(samplingServer, glClient, enterprise)
-
-	samplingServerTransport, samplingClientTransport := mcp.NewInMemoryTransports()
-
-	samplingServerCtx, samplingServerCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := samplingServer.Run(samplingServerCtx, samplingServerTransport); srvErr != nil && samplingServerCtx.Err() == nil {
-			log.Printf("e2e: sampling server stopped unexpectedly: %v", srvErr)
+func verifyE2ESnapshotAfterRun(glClient *gitlabclient.Client, code int) int {
+	if isDockerMode() || sess.snapshot == nil {
+		return code
+	}
+	if err := verifySnapshotIntegrity(glClient, sess.snapshot); err != nil {
+		log.Printf("e2e: SNAPSHOT INTEGRITY FAILURE: %v", err)
+		if code == 0 {
+			return 1
 		}
-	}()
-
-	samplingClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-sampling-client",
-		Version: "test",
-	}, &mcp.ClientOptions{
-		CreateMessageHandler: mockCreateMessageHandler,
-	})
-	samplingSession, err := samplingClient.Connect(context.Background(), samplingClientTransport, nil)
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		dynamicServerCancel()
-		samplingServerCancel()
-		log.Fatalf("e2e: connect sampling MCP client: %v", err)
+		return code
 	}
+	log.Println("e2e: snapshot integrity verified — all pre-existing resources unchanged")
+	return code
+}
 
-	// Create an MCP server/client pair with elicitation capability (auto-accept mock).
-	elicitServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-elicit",
-		Version: "test",
-	}, nil)
-	tools.RegisterAll(elicitServer, glClient, enterprise)
-
-	elicitServerTransport, elicitClientTransport := mcp.NewInMemoryTransports()
-
-	elicitServerCtx, elicitServerCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := elicitServer.Run(elicitServerCtx, elicitServerTransport); srvErr != nil && elicitServerCtx.Err() == nil {
-			log.Printf("e2e: elicit server stopped unexpectedly: %v", srvErr)
-		}
-	}()
-
-	elicitClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-elicit-client",
-		Version: "test",
-	}, &mcp.ClientOptions{
-		ElicitationHandler: mockElicitHandler,
-	})
-	elicitSession, err := elicitClient.Connect(context.Background(), elicitClientTransport, nil)
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		dynamicServerCancel()
-		samplingServerCancel()
-		elicitServerCancel()
-		log.Fatalf("e2e: connect elicit MCP client: %v", err)
+func closeE2ESessions(running []runningE2ESession) {
+	for _, runningSession := range slices.Backward(running) {
+		_ = runningSession.session.Close()
+		runningSession.cancel()
 	}
-	// Create an MCP server with Safe Mode enabled (mutating tools return previews).
-	safeModeServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-safemode",
-		Version: "test",
-	}, nil)
-	tools.RegisterAll(safeModeServer, glClient, enterprise)
-	tools.WrapMutatingToolsForSafeMode(safeModeServer)
-
-	safeModeServerTransport, safeModeClientTransport := mcp.NewInMemoryTransports()
-
-	safeModeServerCtx, safeModeServerCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := safeModeServer.Run(safeModeServerCtx, safeModeServerTransport); srvErr != nil && safeModeServerCtx.Err() == nil {
-			log.Printf("e2e: safemode server stopped unexpectedly: %v", srvErr)
-		}
-	}()
-
-	safeModeClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-safemode-client",
-		Version: "test",
-	}, nil)
-	safeModeSession, err := safeModeClient.Connect(context.Background(), safeModeClientTransport, nil)
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		dynamicServerCancel()
-		samplingServerCancel()
-		elicitServerCancel()
-		safeModeServerCancel()
-		log.Fatalf("e2e: connect safemode MCP client: %v", err)
-	}
-
-	sess = sessions{
-		individual:  session,
-		meta:        metaSession,
-		dynamic:     dynamicSession,
-		sampling:    samplingSession,
-		elicitation: elicitSession,
-		safeMode:    safeModeSession,
-		glClient:    glClient,
-		username:    username,
-		enterprise:  enterprise,
-	}
-
-	// Snapshot pre-existing resources in self-hosted mode.
-	if !isDockerMode() {
-		snap, snapErr := snapshotState(glClient)
-		if snapErr != nil {
-			log.Fatalf("e2e: snapshot pre-existing state: %v", snapErr)
-		}
-		sess.snapshot = snap
-		log.Printf("e2e: snapshot captured — %d groups, %d projects", len(snap.groups), len(snap.projects))
-	}
-
-	code := m.Run()
-
-	// Verify snapshot integrity in self-hosted mode.
-	if !isDockerMode() && sess.snapshot != nil {
-		if intErr := verifySnapshotIntegrity(glClient, sess.snapshot); intErr != nil {
-			log.Printf("e2e: SNAPSHOT INTEGRITY FAILURE: %v", intErr)
-			if code == 0 {
-				code = 1
-			}
-		} else {
-			log.Println("e2e: snapshot integrity verified — all pre-existing resources unchanged")
-		}
-	}
-
-	// Cleanup: delete any orphaned test projects (prefix-based).
-	cleanupOrphanedProjects(glClient)
-
-	_ = session.Close()
-	serverCancel()
-	_ = metaSession.Close()
-	metaServerCancel()
-	_ = dynamicSession.Close()
-	dynamicServerCancel()
-	_ = samplingSession.Close()
-	samplingServerCancel()
-	_ = elicitSession.Close()
-	elicitServerCancel()
-	_ = safeModeSession.Close()
-	safeModeServerCancel()
-	os.Exit(code)
 }
 
 func configureE2EStartupEnvironment() {

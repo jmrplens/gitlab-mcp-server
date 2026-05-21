@@ -211,25 +211,7 @@ func TestList(t *testing.T) {
 				if len(out.Issues) != 1 {
 					t.Fatalf("got %d issues, want 1", len(out.Issues))
 				}
-				issue := out.Issues[0]
-				if issue.ID != "gid://gitlab/WorkItem/10" {
-					t.Errorf("ID = %q, want gid://gitlab/WorkItem/10", issue.ID)
-				}
-				if issue.IID != 10 {
-					t.Errorf("IID = %d, want 10", issue.IID)
-				}
-				if issue.Title != "Fix login bug" {
-					t.Errorf("Title = %q, want %q", issue.Title, "Fix login bug")
-				}
-				if issue.State != "opened" {
-					t.Errorf("State = %q, want opened", issue.State)
-				}
-				if issue.Author != "alice" {
-					t.Errorf("Author = %q, want alice", issue.Author)
-				}
-				if len(issue.Labels) != 2 || issue.Labels[0] != "bug" {
-					t.Errorf("Labels = %v, want [bug critical]", issue.Labels)
-				}
+				assertChildIssueFields(t, out.Issues[0])
 			},
 		},
 		{
@@ -340,6 +322,16 @@ func TestList(t *testing.T) {
 				tt.check(t, out)
 			}
 		})
+	}
+}
+
+func assertChildIssueFields(t *testing.T, issue ChildOutput) {
+	t.Helper()
+	if issue.ID != "gid://gitlab/WorkItem/10" || issue.IID != 10 || issue.Title != "Fix login bug" || issue.State != "opened" || issue.Author != "alice" {
+		t.Fatalf("child issue = %+v, want full issue fields", issue)
+	}
+	if len(issue.Labels) != 2 || issue.Labels[0] != "bug" {
+		t.Errorf("Labels = %v, want [bug critical]", issue.Labels)
 	}
 }
 

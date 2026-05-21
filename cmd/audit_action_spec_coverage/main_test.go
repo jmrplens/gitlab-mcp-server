@@ -26,6 +26,12 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	if report.Summary.DomainCount == 0 {
 		t.Fatal("expected discovered domains")
 	}
+	assertArchitectureCoverage(t, report)
+	assertDomainCoverage(t, report)
+}
+
+func assertArchitectureCoverage(t *testing.T, report coverageReport) {
+	t.Helper()
 	if report.Architecture.CatalogSource == "" || report.Architecture.MetaRegistrationSource == "" || report.Architecture.IndividualRegistrationSource == "" {
 		t.Fatalf("architecture report missing source fields: %+v", report.Architecture)
 	}
@@ -38,7 +44,10 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 	if report.Architecture.DynamicActionAliasCount == 0 || report.Architecture.DynamicParameterAliasCount == 0 {
 		t.Fatalf("architecture dynamic alias counts missing: %+v", report.Architecture)
 	}
+}
 
+func assertDomainCoverage(t *testing.T, report coverageReport) {
+	t.Helper()
 	projects := requireDomain(t, report, "projects")
 	if !projects.HasIndividualTools || !projects.HasMetaSpecs || !projects.HasDynamicCatalogEntries {
 		t.Fatalf("projects coverage missing expected surfaces: %+v", projects)

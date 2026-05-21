@@ -27,34 +27,9 @@ func validateStepCall(step evalStep, toolName string, input map[string]any) vali
 
 // validateStepCallWithRoutes validates step call with routes for the main package.
 func validateStepCallWithRoutes(step evalStep, toolName string, input map[string]any, routes map[string]toolutil.ActionMap) validationResult {
-	if step.ExpectedAction != "" && toolName == step.ExpectedTool {
-		if toolRoutes, routesOK := routes[step.ExpectedTool]; routesOK {
-			if action, actionOK := input["action"].(string); actionOK {
-				if step.ExpectedTool == dynamicExecuteTool {
-					if normalized, ok := dynamictools.NormalizeCompatibilityActionAlias(action); ok {
-						input = cloneToolInputWithAction(input, normalized)
-						action = normalized
-					}
-				}
-				if normalized := toolutil.NormalizeActionAlias(action, toolRoutes); normalized != action {
-					input = cloneToolInputWithAction(input, normalized)
-				}
-			}
-		}
-	}
+	input = normalizeRouteActionInput(step, toolName, input, routes)
 	route, ok := routes[step.ExpectedTool][step.ExpectedAction]
-	validationInput := input
-	schemaInput := input
-	if step.ExpectedAction != "" && toolName == step.ExpectedTool && ok && route.InputSchema != nil {
-		if params, paramsOK := input["params"].(map[string]any); paramsOK {
-			normalizedParams := toolutil.NormalizeParamAliasesForSchema(params, route.InputSchema)
-			if step.ExpectedTool == dynamicExecuteTool {
-				normalizedParams = dynamictools.NormalizeActionScopedParams(step.ExpectedAction, normalizedParams, route.InputSchema)
-			}
-			validationInput = cloneToolInputWithParams(input, mergeOriginalAndNormalizedParams(params, normalizedParams))
-			schemaInput = cloneToolInputWithParams(input, normalizedParams)
-		}
-	}
+	validationInput, schemaInput := normalizeRouteParamsInput(step, toolName, input, route, ok)
 	result := validateStepCall(step, toolName, validationInput)
 	if step.ExpectedAction == "" || toolName != step.ExpectedTool || result.Action != step.ExpectedAction {
 		return result
@@ -84,6 +59,43 @@ func validateStepCallWithRoutes(step evalStep, toolName string, input map[string
 		result.Message += "; " + message
 	}
 	return result
+}
+
+func normalizeRouteActionInput(step evalStep, toolName string, input map[string]any, routes map[string]toolutil.ActionMap) map[string]any {
+	if step.ExpectedAction == "" || toolName != step.ExpectedTool {
+		return input
+	}
+	toolRoutes, routesOK := routes[step.ExpectedTool]
+	action, actionOK := input["action"].(string)
+	if !routesOK || !actionOK {
+		return input
+	}
+	if step.ExpectedTool == dynamicExecuteTool {
+		if normalized, ok := dynamictools.NormalizeCompatibilityActionAlias(action); ok {
+			input = cloneToolInputWithAction(input, normalized)
+			action = normalized
+		}
+	}
+	if normalized := toolutil.NormalizeActionAlias(action, toolRoutes); normalized != action {
+		return cloneToolInputWithAction(input, normalized)
+	}
+	return input
+}
+
+func normalizeRouteParamsInput(step evalStep, toolName string, input map[string]any, route toolutil.ActionRoute, routeOK bool) (validationInput, schemaInput map[string]any) {
+	if step.ExpectedAction == "" || toolName != step.ExpectedTool || !routeOK || route.InputSchema == nil {
+		return input, input
+	}
+	params, paramsOK := input["params"].(map[string]any)
+	if !paramsOK {
+		return input, input
+	}
+	normalizedParams := toolutil.NormalizeParamAliasesForSchema(params, route.InputSchema)
+	if step.ExpectedTool == dynamicExecuteTool {
+		normalizedParams = dynamictools.NormalizeActionScopedParams(step.ExpectedAction, normalizedParams, route.InputSchema)
+	}
+	validationInput = cloneToolInputWithParams(input, mergeOriginalAndNormalizedParams(params, normalizedParams))
+	return validationInput, cloneToolInputWithParams(input, normalizedParams)
 }
 
 // cloneToolInputWithAction clones tool input with action without sharing mutable maps.

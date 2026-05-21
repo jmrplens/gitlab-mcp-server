@@ -158,65 +158,67 @@ func scanGoFile(path string, isE2E, isTest bool, s *repoStats) (int, error) {
 
 	for sc.Scan() {
 		lines++
-		line := sc.Text()
-		trimmed := strings.TrimSpace(line)
-
-		// Function declarations.
-		if strings.HasPrefix(trimmed, "func ") {
-			name := extractFuncName(trimmed)
-			switch {
-			case isE2E && strings.HasPrefix(name, "Test"):
-				s.E2ETestFuncs++
-			case isTest && strings.HasPrefix(name, "Test"):
-				s.TestFuncs++
-				if len(name) > len(s.LongestTestName) {
-					s.LongestTestName = name
-				}
-			case !isTest && !isE2E:
-				if name != "" && unicode.IsUpper(rune(name[0])) {
-					s.ExportedFuncs++
-				} else {
-					s.UnexportedFuncs++
-				}
-				if len(name) > len(s.LongestFuncName) {
-					s.LongestFuncName = name
-				}
-			}
-		}
-
-		// Subtests (all test files).
-		if (isTest || isE2E) && strings.Contains(line, "t.Run(") {
-			s.Subtests++
-		}
-
-		// Patterns counted across all files.
-		if strings.HasPrefix(trimmed, "defer ") {
-			s.DeferStmts++
-		}
-		if strings.Contains(line, "if err != nil") {
-			s.ErrChecks++
-		}
-		if strings.Contains(line, "//nolint") {
-			s.Nolints++
-		}
-		if isTODOComment(trimmed) {
-			s.TODOs++
-		}
-
-		// Source-only metrics.
-		if !isTest && !isE2E {
-			if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, "struct") {
-				s.StructTypes++
-			}
-			if strings.HasPrefix(trimmed, "//") {
-				s.CommentLines++
-			}
-			if strings.Contains(strings.ToLower(line), "gitlab") {
-				s.GitlabLines++
-			}
-		}
+		scanGoLine(sc.Text(), isE2E, isTest, s)
 	}
 	return lines, sc.Err()
+}
+
+func scanGoLine(line string, isE2E, isTest bool, s *repoStats) {
+	trimmed := strings.TrimSpace(line)
+	if strings.HasPrefix(trimmed, "func ") {
+		updateFunctionStats(extractFuncName(trimmed), isE2E, isTest, s)
+	}
+	if (isTest || isE2E) && strings.Contains(line, "t.Run(") {
+		s.Subtests++
+	}
+	if strings.HasPrefix(trimmed, "defer ") {
+		s.DeferStmts++
+	}
+	if strings.Contains(line, "if err != nil") {
+		s.ErrChecks++
+	}
+	if strings.Contains(line, "//nolint") {
+		s.Nolints++
+	}
+	if isTODOComment(trimmed) {
+		s.TODOs++
+	}
+	if !isTest && !isE2E {
+		updateSourceLineStats(line, trimmed, s)
+	}
+}
+
+func updateFunctionStats(name string, isE2E, isTest bool, s *repoStats) {
+	switch {
+	case isE2E && strings.HasPrefix(name, "Test"):
+		s.E2ETestFuncs++
+	case isTest && strings.HasPrefix(name, "Test"):
+		s.TestFuncs++
+		if len(name) > len(s.LongestTestName) {
+			s.LongestTestName = name
+		}
+	case !isTest && !isE2E:
+		if name != "" && unicode.IsUpper(rune(name[0])) {
+			s.ExportedFuncs++
+		} else {
+			s.UnexportedFuncs++
+		}
+		if len(name) > len(s.LongestFuncName) {
+			s.LongestFuncName = name
+		}
+	}
+}
+
+func updateSourceLineStats(line, trimmed string, s *repoStats) {
+	if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, "struct") {
+		s.StructTypes++
+	}
+	if strings.HasPrefix(trimmed, "//") {
+		s.CommentLines++
+	}
+	if strings.Contains(strings.ToLower(line), "gitlab") {
+		s.GitlabLines++
+	}
 }
 
 // extractFuncName returns the identifier from a trimmed "func ..." line.

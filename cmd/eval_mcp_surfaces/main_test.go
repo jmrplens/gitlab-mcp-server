@@ -4479,39 +4479,10 @@ Task attempts: 3
 	if err != nil {
 		t.Fatalf("parseComparisonInput(eval) error = %v", err)
 	}
-	if evalInput.Kind != "evaluation" || evalInput.Label != "current-abc123" || evalInput.TaskAttempts != 3 {
-		t.Fatalf("eval input = %+v", evalInput)
-	}
-	if evalInput.Metrics["Action-selection accuracy"] != 99.5 || evalInput.Diagnostics["model_parameter_shape_miss"] != 1 || evalInput.Coverage["Missing action routes"] != 651 {
-		t.Fatalf("eval metrics = %+v diagnostics=%+v coverage=%+v", evalInput.Metrics, evalInput.Diagnostics, evalInput.Coverage)
-	}
+	assertEvaluationComparisonInput(t, evalInput)
 
-	dynamicPath := filepath.Join(tmp, "current-abc123", "dynamic-base-read.md")
-	dynamicReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# Dynamic Surface Model Evaluation", 1)
-	dynamicReport = strings.Replace(dynamicReport, "Model: `claude-sonnet-4-6`", "Model: `test:model`\nTool surface: `dynamic`", 1)
-	if writeErr := os.WriteFile(dynamicPath, []byte(dynamicReport), 0o600); writeErr != nil {
-		t.Fatalf("write dynamic report: %v", writeErr)
-	}
-	dynamicInput, err := parseComparisonInput(dynamicPath)
-	if err != nil {
-		t.Fatalf("parseComparisonInput(dynamic) error = %v", err)
-	}
-	if dynamicInput.Kind != "evaluation" || dynamicInput.ToolSurface != config.ToolSurfaceDynamic || dynamicInput.TaskAttempts != 3 {
-		t.Fatalf("dynamic input = %+v", dynamicInput)
-	}
-
-	defaultTitlePath := filepath.Join(tmp, "current-abc123", "default-title.md")
-	defaultTitleReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# MCP Surface Model Evaluation", 1)
-	if writeErr := os.WriteFile(defaultTitlePath, []byte(defaultTitleReport), 0o600); writeErr != nil {
-		t.Fatalf("write default title report: %v", writeErr)
-	}
-	defaultTitleInput, err := parseComparisonInput(defaultTitlePath)
-	if err != nil {
-		t.Fatalf("parseComparisonInput(default title) error = %v", err)
-	}
-	if defaultTitleInput.Kind != "evaluation" || defaultTitleInput.TaskAttempts != 3 {
-		t.Fatalf("default title input = %+v", defaultTitleInput)
-	}
+	assertDynamicComparisonInput(t, tmp, evalReport)
+	assertDefaultTitleComparisonInput(t, tmp, evalReport)
 
 	tokenPath := filepath.Join(tmp, "current-abc123", "tokens.md")
 	tokenReport := `# Tools Snapshot Token Audit
@@ -4540,6 +4511,49 @@ Tools file: ` + "`dist/evaluation/mcp-surfaces/snapshots/current-abc123/tools.js
 		if !strings.Contains(comparison, want) {
 			t.Fatalf("comparison missing %q:\n%s", want, comparison)
 		}
+	}
+}
+
+func assertEvaluationComparisonInput(t *testing.T, evalInput comparisonInput) {
+	t.Helper()
+	if evalInput.Kind != "evaluation" || evalInput.Label != "current-abc123" || evalInput.TaskAttempts != 3 {
+		t.Fatalf("eval input = %+v", evalInput)
+	}
+	if evalInput.Metrics["Action-selection accuracy"] != 99.5 || evalInput.Diagnostics["model_parameter_shape_miss"] != 1 || evalInput.Coverage["Missing action routes"] != 651 {
+		t.Fatalf("eval metrics = %+v diagnostics=%+v coverage=%+v", evalInput.Metrics, evalInput.Diagnostics, evalInput.Coverage)
+	}
+}
+
+func assertDynamicComparisonInput(t *testing.T, tmp, evalReport string) {
+	t.Helper()
+	dynamicPath := filepath.Join(tmp, "current-abc123", "dynamic-base-read.md")
+	dynamicReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# Dynamic Surface Model Evaluation", 1)
+	dynamicReport = strings.Replace(dynamicReport, "Model: `claude-sonnet-4-6`", "Model: `test:model`\nTool surface: `dynamic`", 1)
+	if writeErr := os.WriteFile(dynamicPath, []byte(dynamicReport), 0o600); writeErr != nil {
+		t.Fatalf("write dynamic report: %v", writeErr)
+	}
+	dynamicInput, err := parseComparisonInput(dynamicPath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(dynamic) error = %v", err)
+	}
+	if dynamicInput.Kind != "evaluation" || dynamicInput.ToolSurface != config.ToolSurfaceDynamic || dynamicInput.TaskAttempts != 3 {
+		t.Fatalf("dynamic input = %+v", dynamicInput)
+	}
+}
+
+func assertDefaultTitleComparisonInput(t *testing.T, tmp, evalReport string) {
+	t.Helper()
+	defaultTitlePath := filepath.Join(tmp, "current-abc123", "default-title.md")
+	defaultTitleReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# MCP Surface Model Evaluation", 1)
+	if writeErr := os.WriteFile(defaultTitlePath, []byte(defaultTitleReport), 0o600); writeErr != nil {
+		t.Fatalf("write default title report: %v", writeErr)
+	}
+	defaultTitleInput, err := parseComparisonInput(defaultTitlePath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(default title) error = %v", err)
+	}
+	if defaultTitleInput.Kind != "evaluation" || defaultTitleInput.TaskAttempts != 3 {
+		t.Fatalf("default title input = %+v", defaultTitleInput)
 	}
 }
 

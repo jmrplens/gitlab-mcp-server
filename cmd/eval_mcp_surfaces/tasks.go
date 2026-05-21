@@ -212,26 +212,17 @@ func taskMatchesPartition(task evalTask, partition string) bool {
 	mutating := taskHasMutatingStep(task)
 	readOnly := !mutating && !destructive
 	special := strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) || taskUsesCapabilityFallback(task)
-	switch partition {
-	case partitionBaseRead:
-		return !enterprise && readOnly && !special
-	case partitionBaseMutating:
-		return !enterprise && mutating && !destructive && !special
-	case partitionBaseDestructive:
-		return !enterprise && destructive && !special
-	case partitionEnterpriseRead:
-		return enterprise && readOnly && !special
-	case partitionEnterpriseMutating:
-		return enterprise && mutating && !destructive && !special
-	case partitionEnterpriseDestructive:
-		return enterprise && destructive && !special
-	case partitionErrorRecovery:
-		return strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task)
-	case partitionCapabilityFallback:
-		return taskUsesCapabilityFallback(task)
-	default:
-		return false
+	checks := map[string]bool{
+		partitionBaseRead:              !enterprise && readOnly && !special,
+		partitionBaseMutating:          !enterprise && mutating && !destructive && !special,
+		partitionBaseDestructive:       !enterprise && destructive && !special,
+		partitionEnterpriseRead:        enterprise && readOnly && !special,
+		partitionEnterpriseMutating:    enterprise && mutating && !destructive && !special,
+		partitionEnterpriseDestructive: enterprise && destructive && !special,
+		partitionErrorRecovery:         strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task),
+		partitionCapabilityFallback:    taskUsesCapabilityFallback(task),
 	}
+	return checks[partition]
 }
 
 // filterTasksByPreset handles filter tasks by preset and returns [[]evalTask].

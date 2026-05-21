@@ -27,7 +27,6 @@ func TestPackages(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 
-	// --- Individual tool session ---
 	proj := createProject(ctx, t, sess.individual)
 	commitFile(ctx, t, sess.individual, proj, "main", "init.txt", "init", "init commit")
 
@@ -37,17 +36,34 @@ func TestPackages(t *testing.T) {
 		fileName   = "data.txt"
 	)
 	fileContent := base64.StdEncoding.EncodeToString([]byte("hello package"))
+	fixture := packageLifecycleFixture{pkgName: pkgName, pkgVersion: pkgVersion, fileName: fileName, fileContent: fileContent}
 
+	testIndividualPackageLifecycle(ctx, t, proj, fixture)
+
+	projM := createProjectMeta(ctx, t, sess.meta)
+	commitFileMeta(ctx, t, sess.meta, projM, "main", "init.txt", "init", "init commit")
+	testMetaPackageLifecycle(ctx, t, projM, fixture)
+}
+
+type packageLifecycleFixture struct {
+	pkgName     string
+	pkgVersion  string
+	fileName    string
+	fileContent string
+}
+
+func testIndividualPackageLifecycle(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture) {
+	t.Helper()
 	var packageID int64
 	var packageFileID int64
 
 	t.Run("Individual/Publish", func(t *testing.T) {
 		out, err := callToolOn[packages.PublishOutput](ctx, sess.individual, "gitlab_package_publish", packages.PublishInput{
 			ProjectID:      proj.pidOf(),
-			PackageName:    pkgName,
-			PackageVersion: pkgVersion,
-			FileName:       fileName,
-			ContentBase64:  fileContent,
+			PackageName:    fixture.pkgName,
+			PackageVersion: fixture.pkgVersion,
+			FileName:       fixture.fileName,
+			ContentBase64:  fixture.fileContent,
 		})
 		if err != nil {
 			t.Fatalf("publish: %v", err)
@@ -72,13 +88,13 @@ func TestPackages(t *testing.T) {
 		}
 		found := false
 		for _, p := range out.Packages {
-			if p.Name == pkgName {
+			if p.Name == fixture.pkgName {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Fatalf("package %q not found in list", pkgName)
+			t.Fatalf("package %q not found in list", fixture.pkgName)
 		}
 	})
 
@@ -93,8 +109,8 @@ func TestPackages(t *testing.T) {
 		if len(out.Files) == 0 {
 			t.Fatal("expected at least one file")
 		}
-		if out.Files[0].FileName != fileName {
-			t.Fatalf("expected file %q, got %q", fileName, out.Files[0].FileName)
+		if out.Files[0].FileName != fixture.fileName {
+			t.Fatalf("expected file %q, got %q", fixture.fileName, out.Files[0].FileName)
 		}
 	})
 
@@ -103,9 +119,9 @@ func TestPackages(t *testing.T) {
 		outPath := tmpDir + "/downloaded.txt"
 		out, err := callToolOn[packages.DownloadOutput](ctx, sess.individual, "gitlab_package_download", packages.DownloadInput{
 			ProjectID:      proj.pidOf(),
-			PackageName:    pkgName,
-			PackageVersion: pkgVersion,
-			FileName:       fileName,
+			PackageName:    fixture.pkgName,
+			PackageVersion: fixture.pkgVersion,
+			FileName:       fixture.fileName,
 			OutputPath:     outPath,
 		})
 		if err != nil {
@@ -137,11 +153,10 @@ func TestPackages(t *testing.T) {
 			t.Fatalf("delete: %v", err)
 		}
 	})
+}
 
-	// --- Meta-tool session ---
-	projM := createProjectMeta(ctx, t, sess.meta)
-	commitFileMeta(ctx, t, sess.meta, projM, "main", "init.txt", "init", "init commit")
-
+func testMetaPackageLifecycle(ctx context.Context, t *testing.T, projM ProjectFixture, fixture packageLifecycleFixture) {
+	t.Helper()
 	var mPkgID int64
 	var mFileID int64
 
@@ -150,10 +165,10 @@ func TestPackages(t *testing.T) {
 			"action": "publish",
 			"params": map[string]any{
 				"project_id":      projM.pidStr(),
-				"package_name":    pkgName,
-				"package_version": pkgVersion,
-				"file_name":       fileName,
-				"content_base64":  fileContent,
+				"package_name":    fixture.pkgName,
+				"package_version": fixture.pkgVersion,
+				"file_name":       fixture.fileName,
+				"content_base64":  fixture.fileContent,
 			},
 		})
 		if err != nil {
@@ -202,9 +217,9 @@ func TestPackages(t *testing.T) {
 			"action": "download",
 			"params": map[string]any{
 				"project_id":      projM.pidStr(),
-				"package_name":    pkgName,
-				"package_version": pkgVersion,
-				"file_name":       fileName,
+				"package_name":    fixture.pkgName,
+				"package_version": fixture.pkgVersion,
+				"file_name":       fixture.fileName,
 				"output_path":     outPath,
 			},
 		})

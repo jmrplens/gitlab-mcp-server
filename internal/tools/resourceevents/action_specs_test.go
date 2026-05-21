@@ -46,31 +46,7 @@ func TestActionSpecs_CallThroughRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		switch {
-		// Iteration events
-		case r.Method == http.MethodGet && strings.Contains(path, "/resource_iteration_events/"):
-			testutil.RespondJSON(w, http.StatusOK, regIterationEventJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/resource_iteration_events"):
-			testutil.RespondJSON(w, http.StatusOK, regIterationEventsJSON)
-		// Weight events
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/resource_weight_events"):
-			testutil.RespondJSON(w, http.StatusOK, regWeightEventsJSON)
-		// Label events
-		case r.Method == http.MethodGet && strings.Contains(path, "/resource_label_events/"):
-			testutil.RespondJSON(w, http.StatusOK, regLabelEventJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/resource_label_events"):
-			testutil.RespondJSON(w, http.StatusOK, regLabelEventsJSON)
-		// Milestone events
-		case r.Method == http.MethodGet && strings.Contains(path, "/resource_milestone_events/"):
-			testutil.RespondJSON(w, http.StatusOK, regMilestoneEventJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/resource_milestone_events"):
-			testutil.RespondJSON(w, http.StatusOK, regMilestoneEventsJSON)
-		// State events
-		case r.Method == http.MethodGet && strings.Contains(path, "/resource_state_events/"):
-			testutil.RespondJSON(w, http.StatusOK, regStateEventJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/resource_state_events"):
-			testutil.RespondJSON(w, http.StatusOK, regStateEventsJSON)
-		default:
+		if !respondResourceEventRoute(w, r, path) {
 			http.NotFound(w, r)
 		}
 	})
@@ -108,6 +84,35 @@ func TestActionSpecs_CallThroughRoutes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func respondResourceEventRoute(w http.ResponseWriter, r *http.Request, path string) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	switch {
+	case strings.Contains(path, "/resource_iteration_events/"):
+		testutil.RespondJSON(w, http.StatusOK, regIterationEventJSON)
+	case strings.HasSuffix(path, "/resource_iteration_events"):
+		testutil.RespondJSON(w, http.StatusOK, regIterationEventsJSON)
+	case strings.HasSuffix(path, "/resource_weight_events"):
+		testutil.RespondJSON(w, http.StatusOK, regWeightEventsJSON)
+	case strings.Contains(path, "/resource_label_events/"):
+		testutil.RespondJSON(w, http.StatusOK, regLabelEventJSON)
+	case strings.HasSuffix(path, "/resource_label_events"):
+		testutil.RespondJSON(w, http.StatusOK, regLabelEventsJSON)
+	case strings.Contains(path, "/resource_milestone_events/"):
+		testutil.RespondJSON(w, http.StatusOK, regMilestoneEventJSON)
+	case strings.HasSuffix(path, "/resource_milestone_events"):
+		testutil.RespondJSON(w, http.StatusOK, regMilestoneEventsJSON)
+	case strings.Contains(path, "/resource_state_events/"):
+		testutil.RespondJSON(w, http.StatusOK, regStateEventJSON)
+	case strings.HasSuffix(path, "/resource_state_events"):
+		testutil.RespondJSON(w, http.StatusOK, regStateEventsJSON)
+	default:
+		return false
+	}
+	return true
 }
 
 func resourceEventSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {

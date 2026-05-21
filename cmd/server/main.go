@@ -367,28 +367,47 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 // request via the GITLAB-URL header when no global URL is configured. At least
 // one URL source must be available for each request.
 func runHTTP(ctx context.Context, hcfg *httpConfig) error {
-	if hcfg.gitlabURL != "" {
-		u, err := url.Parse(hcfg.gitlabURL)
-		if err != nil {
-			return fmt.Errorf("--gitlab-url is not a valid URL: %w", err)
-		}
-		if u.Scheme != "http" && u.Scheme != "https" {
-			return fmt.Errorf("--gitlab-url must use http:// or https:// scheme, got %q", u.Scheme)
-		}
-		if u.Host == "" {
-			return errors.New("--gitlab-url must include a host")
-		}
-		// Normalize so that --gitlab-url=https://x.com/ and a header value
-		// of https://x.com hash to the same server-pool session key.
-		hcfg.gitlabURL = strings.TrimRight(hcfg.gitlabURL, "/")
+	if err := normalizeFixedGitLabURL(hcfg); err != nil {
+		return err
 	}
 
 	toolSurface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(hcfg))
 	if err != nil {
 		return fmt.Errorf("parse tool surface: %w", err)
 	}
+	cfg := configFromHTTPFlags(hcfg, toolSurface, metaTools)
+	if validationErr := validateHTTPRuntimeConfig(cfg); validationErr != nil {
+		return validationErr
+	}
 
-	cfg := &config.Config{
+	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
+	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
+	autoupdate.CleanupOldBinary()
+	startAutoUpdate(ctx, cfg)
+
+	return serveHTTP(ctx, cfg, hcfg.addr)
+}
+
+func normalizeFixedGitLabURL(hcfg *httpConfig) error {
+	if hcfg.gitlabURL == "" {
+		return nil
+	}
+	u, err := url.Parse(hcfg.gitlabURL)
+	if err != nil {
+		return fmt.Errorf("--gitlab-url is not a valid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("--gitlab-url must use http:// or https:// scheme, got %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return errors.New("--gitlab-url must include a host")
+	}
+	hcfg.gitlabURL = strings.TrimRight(hcfg.gitlabURL, "/")
+	return nil
+}
+
+func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool) *config.Config {
+	return &config.Config{
 		GitLabURL:            hcfg.gitlabURL,
 		SkipTLSVerify:        hcfg.skipTLSVerify,
 		MetaTools:            metaTools,
@@ -416,13 +435,54 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		RateLimitBurst:       hcfg.rateLimitBurst,
 		MetaParamSchema:      hcfg.metaParamSchema,
 	}
+}
 
+func validateHTTPRuntimeConfig(cfg *config.Config) error {
+	if err := validateHTTPAuthConfig(cfg); err != nil {
+		return err
+	}
+	if err := validateHTTPSurfaceConfig(cfg); err != nil {
+		return err
+	}
+	if err := validateHTTPDurationConfig(cfg); err != nil {
+		return err
+	}
+	if rateErr := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); rateErr != nil {
+		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", rateErr)
+	}
+	return nil
+}
+
+func validateHTTPAuthConfig(cfg *config.Config) error {
 	if cfg.AuthMode == "" {
 		cfg.AuthMode = "legacy"
 	}
 	if cfg.AuthMode != "legacy" && cfg.AuthMode != "oauth" {
 		return fmt.Errorf("--auth-mode must be 'legacy' or 'oauth', got %q", cfg.AuthMode)
 	}
+	if cfg.AuthMode != "oauth" {
+		return nil
+	}
+	if cfg.GitLabURL == "" {
+		return errors.New("--auth-mode=oauth requires --gitlab-url")
+	}
+	return validateOAuthCacheTTL(cfg.OAuthCacheTTL)
+}
+
+func validateOAuthCacheTTL(ttl time.Duration) error {
+	if ttl <= 0 {
+		return nil
+	}
+	if ttl < config.MinOAuthCacheTTL {
+		return fmt.Errorf("--oauth-cache-ttl %s is below minimum of %s", ttl, config.MinOAuthCacheTTL)
+	}
+	if ttl > config.MaxOAuthCacheTTL {
+		return fmt.Errorf("--oauth-cache-ttl %s exceeds maximum of %s", ttl, config.MaxOAuthCacheTTL)
+	}
+	return nil
+}
+
+func validateHTTPSurfaceConfig(cfg *config.Config) error {
 	switch cfg.MetaParamSchema {
 	case "":
 		cfg.MetaParamSchema = config.DefaultMetaParamSchema
@@ -439,22 +499,10 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 		return fmt.Errorf("--capability-surface must be %q or %q, got %q",
 			config.CapabilitySurfaceFull, config.CapabilitySurfaceMinimal, cfg.CapabilitySurface)
 	}
-	// OAuth mode requires a fixed --gitlab-url because the RFC 9728
-	// protected-resource metadata and token verifier are initialized at
-	// startup and tied to one GitLab instance. Without it, token
-	// verification and discovery would be misconfigured.
-	if cfg.AuthMode == "oauth" && cfg.GitLabURL == "" {
-		return errors.New("--auth-mode=oauth requires --gitlab-url")
-	}
-	if cfg.AuthMode == "oauth" && cfg.OAuthCacheTTL > 0 {
-		if cfg.OAuthCacheTTL < config.MinOAuthCacheTTL {
-			return fmt.Errorf("--oauth-cache-ttl %s is below minimum of %s", cfg.OAuthCacheTTL, config.MinOAuthCacheTTL)
-		}
-		if cfg.OAuthCacheTTL > config.MaxOAuthCacheTTL {
-			return fmt.Errorf("--oauth-cache-ttl %s exceeds maximum of %s", cfg.OAuthCacheTTL, config.MaxOAuthCacheTTL)
-		}
-	}
+	return nil
+}
 
+func validateHTTPDurationConfig(cfg *config.Config) error {
 	if cfg.SessionTimeout > config.MaxSessionTimeout {
 		return fmt.Errorf("--session-timeout %s exceeds maximum of %s", cfg.SessionTimeout, config.MaxSessionTimeout)
 	}
@@ -467,20 +515,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	if cfg.AutoUpdateTimeout > config.MaxAutoUpdateTimeout {
 		return fmt.Errorf("--auto-update-timeout %s exceeds maximum of %s", cfg.AutoUpdateTimeout, config.MaxAutoUpdateTimeout)
 	}
-
-	if rateErr := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); rateErr != nil {
-		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", rateErr)
-	}
-
-	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
-	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
-
-	// Clean up leftover .old binary from previous updates.
-	autoupdate.CleanupOldBinary()
-
-	startAutoUpdate(ctx, cfg)
-
-	return serveHTTP(ctx, cfg, hcfg.addr)
+	return nil
 }
 
 func legacyMetaToolsFlagValue(hcfg *httpConfig) string {
@@ -488,6 +523,11 @@ func legacyMetaToolsFlagValue(hcfg *httpConfig) string {
 		return ""
 	}
 	return strconv.FormatBool(hcfg.metaTools)
+}
+
+type serverSurfaceRegistration struct {
+	metaSchemaRoutes map[string]toolutil.ActionMap
+	surfaceCatalog   *actioncatalog.Catalog
 }
 
 // runStdio loads configuration from environment variables (GITLAB_TOKEN
@@ -637,71 +677,20 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	if toolSurface != config.ToolSurfaceIndividual {
 		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
 	}
-	switch toolSurface {
-	case config.ToolSurfaceDynamic:
-		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
-		if catalogErr != nil {
-			return nil, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
-		}
-		metaSchemaRoutes = actionCatalog.ActionMaps()
-		surfaceCatalog = actionCatalog
-		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
-	case config.ToolSurfaceMeta:
-		actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
-			Enterprise: cfg.Enterprise,
-			IncludeMCP: true,
-			Updater:    updater,
-		})
-		if catalogErr != nil {
-			slog.Warn("failed to build meta action catalog", "error", catalogErr)
-			actionCatalog = actioncatalog.NewCatalog()
-		}
-		filteredCatalog, filterErr := filterActionCatalog(actionCatalog, cfg)
-		if filterErr != nil {
-			return nil, fmt.Errorf("filter meta action catalog: %w", filterErr)
-		}
-		actionCatalog = filteredCatalog
-		metaSchemaRoutes = actionCatalog.ActionMaps()
-		surfaceCatalog = actionCatalog
-		gitlabtools.RegisterMetaCatalog(server, actionCatalog)
-		gitlabtools.RegisterMetaStandaloneTools(server, client)
-	default:
-		gitlabtools.RegisterAll(server, client, cfg.Enterprise)
-		gitlabtools.RegisterServerMaintenanceSurfaceTools(server, updater)
+	surfaceRegistration, err := registerConfiguredToolSurface(server, client, cfg, updater, toolSurface)
+	if err != nil {
+		return nil, err
 	}
+	metaSchemaRoutes = surfaceRegistration.metaSchemaRoutes
+	surfaceCatalog = surfaceRegistration.surfaceCatalog
 
-	if len(cfg.ExcludeTools) > 0 {
-		removed := removeExcludedTools(server, cfg.ExcludeTools)
-		slog.Info("excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
-	}
-
-	if cfg.TokenScopes != nil {
-		removed := gitlabtools.RemoveScopeFilteredTools(server, cfg.TokenScopes)
-		if removed > 0 {
-			slog.Info("scope-filtered tools", "removed", removed)
-		}
-	}
-
-	if cfg.ReadOnly {
-		removed := removeNonReadOnlyTools(server)
-		slog.Info("read-only mode: removed write tools", "removed", removed)
-	} else if cfg.SafeMode {
-		wrapped := gitlabtools.WrapMutatingToolsForSafeMode(server)
-		slog.Info("safe mode: wrapped mutating tools with preview handler", "wrapped", wrapped)
-	}
+	applyToolVisibilityConfig(server, cfg)
 
 	toolCount, err := countRegisteredTools(server)
 	if err != nil {
 		slog.Warn("failed to count registered tools", "error", err)
 	}
-	switch toolSurface {
-	case config.ToolSurfaceDynamic:
-		slog.Info("registered dynamic toolset", "tools", toolCount, "catalog_groups", len(metaSchemaRoutes), "catalog_actions", countCatalogActions(metaSchemaRoutes))
-	case config.ToolSurfaceMeta:
-		slog.Info("registered meta-tools", "tools", toolCount)
-	default:
-		slog.Info("registered individual tools", "tools", toolCount)
-	}
+	logRegisteredToolSurface(toolSurface, toolCount, metaSchemaRoutes)
 
 	if toolSurface == config.ToolSurfaceMeta {
 		var routesErr error
@@ -711,14 +700,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		}
 	}
 
-	if capabilitySurface == config.CapabilitySurfaceFull {
-		resources.Register(server, client)
-	}
-	resources.RegisterWorkspaceRoots(server, rootsManager)
-	if capabilitySurface == config.CapabilitySurfaceFull {
-		resources.RegisterWorkflowGuides(server)
-		prompts.Register(server, client)
-	}
+	registerConfiguredCapabilities(server, client, rootsManager, capabilitySurface)
 
 	// Force `additionalProperties: false` on tool input schemas so unknown
 	// properties produce actionable validation errors LLMs can self-correct
@@ -757,6 +739,79 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 
 	return server, nil
+}
+
+func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig) {
+	if len(cfg.ExcludeTools) > 0 {
+		removed := removeExcludedTools(server, cfg.ExcludeTools)
+		slog.Info("excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
+	}
+	if cfg.TokenScopes != nil {
+		removed := gitlabtools.RemoveScopeFilteredTools(server, cfg.TokenScopes)
+		if removed > 0 {
+			slog.Info("scope-filtered tools", "removed", removed)
+		}
+	}
+	if cfg.ReadOnly {
+		removed := removeNonReadOnlyTools(server)
+		slog.Info("read-only mode: removed write tools", "removed", removed)
+		return
+	}
+	if cfg.SafeMode {
+		wrapped := gitlabtools.WrapMutatingToolsForSafeMode(server)
+		slog.Info("safe mode: wrapped mutating tools with preview handler", "wrapped", wrapped)
+	}
+}
+
+func logRegisteredToolSurface(toolSurface string, toolCount int, metaSchemaRoutes map[string]toolutil.ActionMap) {
+	switch toolSurface {
+	case config.ToolSurfaceDynamic:
+		slog.Info("registered dynamic toolset", "tools", toolCount, "catalog_groups", len(metaSchemaRoutes), "catalog_actions", countCatalogActions(metaSchemaRoutes))
+	case config.ToolSurfaceMeta:
+		slog.Info("registered meta-tools", "tools", toolCount)
+	default:
+		slog.Info("registered individual tools", "tools", toolCount)
+	}
+}
+
+func registerConfiguredCapabilities(server *mcp.Server, client *gitlabclient.Client, rootsManager *roots.Manager, capabilitySurface string) {
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		resources.Register(server, client)
+	}
+	resources.RegisterWorkspaceRoots(server, rootsManager)
+	if capabilitySurface == config.CapabilitySurfaceFull {
+		resources.RegisterWorkflowGuides(server)
+		prompts.Register(server, client)
+	}
+}
+
+func registerConfiguredToolSurface(server *mcp.Server, client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater, toolSurface string) (serverSurfaceRegistration, error) {
+	switch toolSurface {
+	case config.ToolSurfaceDynamic:
+		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
+		if catalogErr != nil {
+			return serverSurfaceRegistration{}, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
+		}
+		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
+		return serverSurfaceRegistration{metaSchemaRoutes: actionCatalog.ActionMaps(), surfaceCatalog: actionCatalog}, nil
+	case config.ToolSurfaceMeta:
+		actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Enterprise: cfg.Enterprise, IncludeMCP: true, Updater: updater})
+		if catalogErr != nil {
+			slog.Warn("failed to build meta action catalog", "error", catalogErr)
+			actionCatalog = actioncatalog.NewCatalog()
+		}
+		filteredCatalog, filterErr := filterActionCatalog(actionCatalog, cfg)
+		if filterErr != nil {
+			return serverSurfaceRegistration{}, fmt.Errorf("filter meta action catalog: %w", filterErr)
+		}
+		gitlabtools.RegisterMetaCatalog(server, filteredCatalog)
+		gitlabtools.RegisterMetaStandaloneTools(server, client)
+		return serverSurfaceRegistration{metaSchemaRoutes: filteredCatalog.ActionMaps(), surfaceCatalog: filteredCatalog}, nil
+	default:
+		gitlabtools.RegisterAll(server, client, cfg.Enterprise)
+		gitlabtools.RegisterServerMaintenanceSurfaceTools(server, updater)
+		return serverSurfaceRegistration{}, nil
+	}
 }
 
 // httpShutdownTimeout bounds graceful HTTP shutdown after the process context
@@ -806,109 +861,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 		_, _ = w.Write(serverCardJSON)
 	})
 
-	if cfg.AuthMode == "oauth" {
-		// In OAuth mode, auth.RequireBearerToken middleware rejects invalid
-		// tokens (401) before reaching the server-selector, so authLimiter
-		// is unnecessary. The server-selector only needs to extract the
-		// pre-validated token for per-token server pool lookup.
-		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
-			token := serverpool.ExtractToken(r)
-			if token == "" {
-				slog.Error("request rejected: missing token after OAuth middleware (unexpected)")
-				return nil
-			}
-			requestOptions, err := serverpool.ResolveRequestOptions(r, cfg.GitLabURL)
-			if err != nil {
-				slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
-				return nil
-			}
-			logIgnoredRequestOptions(token, requestOptions)
-			server, err := pool.GetOrCreate(token, requestOptions.GitLabURL)
-			if err != nil {
-				slog.Error("failed to create server for token", "error", err)
-				return nil
-			}
-			return server
-		}, &mcp.StreamableHTTPOptions{
-			SessionTimeout: cfg.SessionTimeout,
-		})
-
-		tokenCache := oauth.NewTokenCache()
-		verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
-		resourceMetadataURL := "http://" + httpAddr + "/.well-known/oauth-protected-resource"
-		authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{
-			ResourceMetadataURL: resourceMetadataURL,
-			Scopes:              []string{"api"},
-		})
-
-		mux.Handle("GET /.well-known/oauth-protected-resource",
-			oauth.NewProtectedResourceHandler("http://"+httpAddr+"/mcp", cfg.GitLabURL))
-		mux.Handle("/", oauth.NormalizeAuthHeader(authMiddleware(mcpHandler)))
-
-		go func() {
-			ticker := time.NewTicker(5 * time.Minute)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					tokenCache.Cleanup()
-				}
-			}
-		}()
-
-		slog.Info("oauth mode enabled",
-			"cache_ttl", cfg.OAuthCacheTTL,
-			"metadata_endpoint", "/.well-known/oauth-protected-resource",
-		)
-	} else {
-		authLimiter := serverpool.NewAuthRateLimiter(10, 1*time.Minute)
-		go func() {
-			ticker := time.NewTicker(5 * time.Minute)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-ticker.C:
-					authLimiter.Cleanup()
-				}
-			}
-		}()
-
-		mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
-			ip := clientIP(r, cfg.TrustedProxyHeader)
-			if authLimiter.IsBlocked(ip) {
-				slog.Warn("request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
-				return nil
-			}
-
-			token := serverpool.ExtractToken(r)
-			if token == "" {
-				authLimiter.RecordFailure(ip)
-				slog.Error("request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
-				return nil
-			}
-			requestOptions, err := serverpool.ResolveRequestOptions(r, cfg.GitLabURL)
-			if err != nil {
-				slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
-				return nil
-			}
-			logIgnoredRequestOptions(token, requestOptions)
-			server, err := pool.GetOrCreate(token, requestOptions.GitLabURL)
-			if err != nil {
-				authLimiter.RecordFailure(ip)
-				slog.Error("failed to create server for token", "error", err)
-				return nil
-			}
-			return server
-		}, &mcp.StreamableHTTPOptions{
-			SessionTimeout: cfg.SessionTimeout,
-		})
-
-		mux.Handle("/", mcpHandler)
-	}
+	registerHTTPMCPHandlers(ctx, cfg, httpAddr, pool, mux)
 
 	var rootHandler http.Handler = mux
 	rootHandler = crossOriginProtectionMiddleware(rootHandler)
@@ -946,6 +899,91 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 	case err := <-serverErr:
 		return fmt.Errorf("mcp server error (http): %w", err)
 	}
+}
+
+func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, mux *http.ServeMux) {
+	if cfg.AuthMode == "oauth" {
+		registerOAuthMCPHandlers(ctx, cfg, httpAddr, pool, mux)
+		return
+	}
+	registerLegacyMCPHandlers(ctx, cfg, pool, mux)
+}
+
+func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, mux *http.ServeMux) {
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
+		token := serverpool.ExtractToken(r)
+		if token == "" {
+			slog.Error("request rejected: missing token after OAuth middleware (unexpected)")
+			return nil
+		}
+		requestOptions, err := serverpool.ResolveRequestOptions(r, cfg.GitLabURL)
+		if err != nil {
+			slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
+			return nil
+		}
+		logIgnoredRequestOptions(token, requestOptions)
+		server, err := pool.GetOrCreate(token, requestOptions.GitLabURL)
+		if err != nil {
+			slog.Error("failed to create server for token", "error", err)
+			return nil
+		}
+		return server
+	}, &mcp.StreamableHTTPOptions{SessionTimeout: cfg.SessionTimeout})
+
+	tokenCache := oauth.NewTokenCache()
+	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
+	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: "http://" + httpAddr + "/.well-known/oauth-protected-resource", Scopes: []string{"api"}})
+	mux.Handle("GET /.well-known/oauth-protected-resource", oauth.NewProtectedResourceHandler("http://"+httpAddr+"/mcp", cfg.GitLabURL))
+	mux.Handle("/", oauth.NormalizeAuthHeader(authMiddleware(mcpHandler)))
+	startPeriodicCleanup(ctx, tokenCache.Cleanup)
+	slog.Info("oauth mode enabled", "cache_ttl", cfg.OAuthCacheTTL, "metadata_endpoint", "/.well-known/oauth-protected-resource")
+}
+
+func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, mux *http.ServeMux) {
+	authLimiter := serverpool.NewAuthRateLimiter(10, 1*time.Minute)
+	startPeriodicCleanup(ctx, authLimiter.Cleanup)
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
+		ip := clientIP(r, cfg.TrustedProxyHeader)
+		if authLimiter.IsBlocked(ip) {
+			slog.Warn("request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
+			return nil
+		}
+		token := serverpool.ExtractToken(r)
+		if token == "" {
+			authLimiter.RecordFailure(ip)
+			slog.Error("request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
+			return nil
+		}
+		requestOptions, err := serverpool.ResolveRequestOptions(r, cfg.GitLabURL)
+		if err != nil {
+			slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
+			return nil
+		}
+		logIgnoredRequestOptions(token, requestOptions)
+		server, err := pool.GetOrCreate(token, requestOptions.GitLabURL)
+		if err != nil {
+			authLimiter.RecordFailure(ip)
+			slog.Error("failed to create server for token", "error", err)
+			return nil
+		}
+		return server
+	}, &mcp.StreamableHTTPOptions{SessionTimeout: cfg.SessionTimeout})
+	mux.Handle("/", mcpHandler)
+}
+
+func startPeriodicCleanup(ctx context.Context, cleanup func()) {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				cleanup()
+			}
+		}
+	}()
 }
 
 // healthResponse is the JSON body returned by the /health endpoint.

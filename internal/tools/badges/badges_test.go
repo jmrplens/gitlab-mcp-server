@@ -954,6 +954,12 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("%s should be destructive", toolName)
 		}
 	}
+	assertBadgeEditNameGuidance(t, byTool)
+	assertBadgeCreateScopeGuidance(t, byTool)
+}
+
+func assertBadgeEditNameGuidance(t *testing.T, byTool map[string]toolutil.ActionSpec) {
+	t.Helper()
 	for _, toolName := range []string{"gitlab_edit_project_badge", "gitlab_edit_group_badge"} {
 		guidance := byTool[toolName].ParameterGuidance["name"]
 		if guidance.SemanticRole != "badge_display_name" {
@@ -963,6 +969,10 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("%s name CommonConfusions = %v, want new_name warning", toolName, guidance.CommonConfusions)
 		}
 	}
+}
+
+func assertBadgeCreateScopeGuidance(t *testing.T, byTool map[string]toolutil.ActionSpec) {
+	t.Helper()
 	projectAdd := byTool["gitlab_add_project_badge"]
 	if !strings.Contains(projectAdd.Usage, "project badge") || !strings.Contains(projectAdd.Usage, "project_id") || !strings.Contains(projectAdd.Usage, "group_id") || !strings.Contains(projectAdd.Usage, "do not use gitlab_group") {
 		t.Fatalf("project badge add Usage = %q, want project_id guidance", projectAdd.Usage)

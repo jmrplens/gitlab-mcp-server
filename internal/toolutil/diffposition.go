@@ -102,40 +102,55 @@ func ValidateDiffPosition(diffLines []DiffLine, newLine, oldLine int) error {
 	}
 
 	for _, dl := range diffLines {
-		switch {
-		case newLine != 0 && oldLine != 0:
-			if dl.Type == LineContext && dl.NewLine == newLine && dl.OldLine == oldLine {
-				return nil
-			}
-		case newLine != 0 && oldLine == 0:
-			if dl.Type == LineAdded && dl.NewLine == newLine {
-				return nil
-			}
-			// Detect the common mistake: specifying only new_line for a context line
-			if dl.Type == LineContext && dl.NewLine == newLine {
-				return fmt.Errorf(
-					"new_line %d is an unchanged context line, not an added line — "+
-						"for context lines set BOTH old_line=%d and new_line=%d. "+
-						"Use new_line alone only for added (+) lines",
-					newLine, dl.OldLine, dl.NewLine,
-				)
-			}
-		case oldLine != 0 && newLine == 0:
-			if dl.Type == LineRemoved && dl.OldLine == oldLine {
-				return nil
-			}
-			if dl.Type == LineContext && dl.OldLine == oldLine {
-				return fmt.Errorf(
-					"old_line %d is an unchanged context line, not a removed line — "+
-						"for context lines set BOTH old_line=%d and new_line=%d. "+
-						"Use old_line alone only for removed (-) lines",
-					oldLine, dl.OldLine, dl.NewLine,
-				)
-			}
+		if matched, err := validateDiffLinePosition(dl, newLine, oldLine); matched {
+			return err
 		}
 	}
 
 	return buildPositionError(diffLines, newLine, oldLine)
+}
+
+func validateDiffLinePosition(dl DiffLine, newLine, oldLine int) (bool, error) {
+	switch {
+	case newLine != 0 && oldLine != 0:
+		return dl.Type == LineContext && dl.NewLine == newLine && dl.OldLine == oldLine, nil
+	case newLine != 0 && oldLine == 0:
+		return validateNewLineOnlyPosition(dl, newLine)
+	case oldLine != 0 && newLine == 0:
+		return validateOldLineOnlyPosition(dl, oldLine)
+	default:
+		return false, nil
+	}
+}
+
+func validateNewLineOnlyPosition(dl DiffLine, newLine int) (bool, error) {
+	if dl.Type == LineAdded && dl.NewLine == newLine {
+		return true, nil
+	}
+	if dl.Type == LineContext && dl.NewLine == newLine {
+		return true, fmt.Errorf(
+			"new_line %d is an unchanged context line, not an added line — "+
+				"for context lines set BOTH old_line=%d and new_line=%d. "+
+				"Use new_line alone only for added (+) lines",
+			newLine, dl.OldLine, dl.NewLine,
+		)
+	}
+	return false, nil
+}
+
+func validateOldLineOnlyPosition(dl DiffLine, oldLine int) (bool, error) {
+	if dl.Type == LineRemoved && dl.OldLine == oldLine {
+		return true, nil
+	}
+	if dl.Type == LineContext && dl.OldLine == oldLine {
+		return true, fmt.Errorf(
+			"old_line %d is an unchanged context line, not a removed line — "+
+				"for context lines set BOTH old_line=%d and new_line=%d. "+
+				"Use old_line alone only for removed (-) lines",
+			oldLine, dl.OldLine, dl.NewLine,
+		)
+	}
+	return false, nil
 }
 
 // buildPositionError constructs a descriptive error when a line is not found

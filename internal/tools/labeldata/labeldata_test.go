@@ -36,11 +36,21 @@ func TestOutputConverters_NilInput(t *testing.T) {
 // and label-specific filters for project and group list requests.
 func TestListOptions_ApplyFilters(t *testing.T) {
 	project := NewProjectListOptions(2, 50, "bug", true, true)
+	assertProjectListOptions(t, project)
+
+	group := NewGroupListOptions(3, 25, "feature", true, true, true, true)
+	assertGroupListOptions(t, group)
+}
+
+func assertProjectListOptions(t *testing.T, project *gl.ListLabelsOptions) {
+	t.Helper()
 	if project.Page != 2 || project.PerPage != 50 || project.Search == nil || *project.Search != "bug" || project.WithCounts == nil || !*project.WithCounts || project.IncludeAncestorGroups == nil || !*project.IncludeAncestorGroups {
 		t.Fatalf("NewProjectListOptions() = %+v, want pagination and filters", project)
 	}
+}
 
-	group := NewGroupListOptions(3, 25, "feature", true, true, true, true)
+func assertGroupListOptions(t *testing.T, group *gl.ListGroupLabelsOptions) {
+	t.Helper()
 	if group.Page != 3 || group.PerPage != 25 || group.Search == nil || *group.Search != "feature" || group.WithCounts == nil || !*group.WithCounts || group.IncludeAncestorGroups == nil || !*group.IncludeAncestorGroups || group.IncludeDescendantGroups == nil || !*group.IncludeDescendantGroups || group.OnlyGroupLabels == nil || !*group.OnlyGroupLabels {
 		t.Fatalf("NewGroupListOptions() = %+v, want pagination and filters", group)
 	}

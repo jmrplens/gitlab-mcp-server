@@ -38,37 +38,7 @@ func TestListDeps(t *testing.T) {
 				if len(out.Dependencies) != 1 {
 					t.Fatalf("got %d deps, want 1", len(out.Dependencies))
 				}
-				d := out.Dependencies[0]
-				if d.Name != "rails" {
-					t.Errorf("name = %q, want %q", d.Name, "rails")
-				}
-				if d.PackageManager != "bundler" {
-					t.Errorf("pm = %q, want %q", d.PackageManager, "bundler")
-				}
-				if d.Version != "7.0.4" {
-					t.Errorf("version = %q, want %q", d.Version, "7.0.4")
-				}
-				if d.DependencyFilePath != "Gemfile.lock" {
-					t.Errorf("path = %q, want %q", d.DependencyFilePath, "Gemfile.lock")
-				}
-				if len(d.Vulnerabilities) != 1 {
-					t.Fatalf("got %d vulns, want 1", len(d.Vulnerabilities))
-				}
-				if d.Vulnerabilities[0].Name != "CVE-2026-001" {
-					t.Errorf("vuln name = %q, want %q", d.Vulnerabilities[0].Name, "CVE-2026-001")
-				}
-				if d.Vulnerabilities[0].Severity != "high" {
-					t.Errorf("vuln severity = %q, want %q", d.Vulnerabilities[0].Severity, "high")
-				}
-				if d.Vulnerabilities[0].URL != "https://vuln.example.com/1" {
-					t.Errorf("vuln url = %q", d.Vulnerabilities[0].URL)
-				}
-				if len(d.Licenses) != 1 {
-					t.Fatalf("got %d licenses, want 1", len(d.Licenses))
-				}
-				if d.Licenses[0].Name != "MIT" {
-					t.Errorf("license = %q, want %q", d.Licenses[0].Name, "MIT")
-				}
+				assertRailsDependency(t, out.Dependencies[0])
 				if out.Pagination.TotalItems != 1 {
 					t.Errorf("total = %d, want 1", out.Pagination.TotalItems)
 				}
@@ -166,6 +136,50 @@ func TestListDeps(t *testing.T) {
 				tt.validate(t, out)
 			}
 		})
+	}
+}
+
+func assertRailsDependency(t *testing.T, d Output) {
+	t.Helper()
+	if d.Name != "rails" {
+		t.Errorf("name = %q, want %q", d.Name, "rails")
+	}
+	if d.PackageManager != "bundler" {
+		t.Errorf("pm = %q, want %q", d.PackageManager, "bundler")
+	}
+	if d.Version != "7.0.4" {
+		t.Errorf("version = %q, want %q", d.Version, "7.0.4")
+	}
+	if d.DependencyFilePath != "Gemfile.lock" {
+		t.Errorf("path = %q, want %q", d.DependencyFilePath, "Gemfile.lock")
+	}
+	assertRailsDependencyVulnerability(t, d)
+	assertRailsDependencyLicense(t, d)
+}
+
+func assertRailsDependencyVulnerability(t *testing.T, d Output) {
+	t.Helper()
+	if len(d.Vulnerabilities) != 1 {
+		t.Fatalf("got %d vulns, want 1", len(d.Vulnerabilities))
+	}
+	if d.Vulnerabilities[0].Name != "CVE-2026-001" {
+		t.Errorf("vuln name = %q, want %q", d.Vulnerabilities[0].Name, "CVE-2026-001")
+	}
+	if d.Vulnerabilities[0].Severity != "high" {
+		t.Errorf("vuln severity = %q, want %q", d.Vulnerabilities[0].Severity, "high")
+	}
+	if d.Vulnerabilities[0].URL != "https://vuln.example.com/1" {
+		t.Errorf("vuln url = %q", d.Vulnerabilities[0].URL)
+	}
+}
+
+func assertRailsDependencyLicense(t *testing.T, d Output) {
+	t.Helper()
+	if len(d.Licenses) != 1 {
+		t.Fatalf("got %d licenses, want 1", len(d.Licenses))
+	}
+	if d.Licenses[0].Name != "MIT" {
+		t.Errorf("license = %q, want %q", d.Licenses[0].Name, "MIT")
 	}
 }
 

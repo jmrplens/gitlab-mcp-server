@@ -312,7 +312,16 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if input.IID <= 0 {
 		return GetOutput{}, toolutil.ErrRequiredInt64("update_work_item", "work_item_iid")
 	}
+	opts := buildUpdateOptions(input)
+	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))
+	if err != nil {
+		return GetOutput{}, toolutil.WrapErrWithStatusHint("update_work_item", err, http.StatusBadRequest,
+			"verify full_path + iid with gitlab_work_item_list; only widget-supported fields can be updated for the type; state_event values: close|reopen")
+	}
+	return GetOutput{WorkItem: workItemToItem(wi)}, nil
+}
 
+func buildUpdateOptions(input UpdateInput) *gl.UpdateWorkItemOptions {
 	opts := &gl.UpdateWorkItemOptions{}
 	if input.Title != "" {
 		opts.Title = &input.Title
@@ -372,13 +381,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		status := mapStatusToID(input.Status)
 		opts.Status = &status
 	}
-
-	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return GetOutput{}, toolutil.WrapErrWithStatusHint("update_work_item", err, http.StatusBadRequest,
-			"verify full_path + iid with gitlab_work_item_list; only widget-supported fields can be updated for the type; state_event values: close|reopen")
-	}
-	return GetOutput{WorkItem: workItemToItem(wi)}, nil
+	return opts
 }
 
 // Delete.

@@ -2519,21 +2519,10 @@ func scoreSearchAlternativeWithReason(entry actionEntry, raw, alternative string
 		return score, match
 	}
 
+	if score, match, ok := scoreExactSearchAlternativeWithReason(document, alternative, reason); ok {
+		return score, match
+	}
 	switch {
-	case document.CanonicalID == alternative:
-		return reason(searchFieldCanonicalID, document.CanonicalID, scoreCanonicalExact)
-	case stringInSlice(document.Aliases, alternative):
-		return reason(searchFieldAlias, alternative, scoreAliasExact)
-	case stringInSlice(document.Tags, alternative):
-		return reason(searchFieldTag, alternative, scoreTagExact)
-	case document.Action == alternative:
-		return reason(searchFieldAction, document.Action, scoreDomainActionExact)
-	case document.Domain == alternative:
-		return reason(searchFieldDomain, document.Domain, scoreDomainActionExact)
-	case slices.Contains(document.ActionWords, alternative):
-		return reason(searchFieldAction, alternative, scoreDomainActionWord)
-	case slices.Contains(document.DomainWords, alternative):
-		return reason(searchFieldDomain, alternative, scoreDomainActionWord)
 	case strings.Contains(document.CanonicalID, alternative):
 		return reason(searchFieldIDContains, document.CanonicalID, scoreIDContains)
 	case containsAnySearchValue(document.DomainWords, alternative):
@@ -2559,6 +2548,34 @@ func scoreSearchAlternativeWithReason(entry actionEntry, raw, alternative string
 		return reason(searchFieldFlatText, alternative, scoreSynonymContains)
 	default:
 		return 0, MatchReason{}
+	}
+}
+
+func scoreExactSearchAlternativeWithReason(document searchDocument, alternative string, reason func(string, string, int) (int, MatchReason)) (int, MatchReason, bool) {
+	switch {
+	case document.CanonicalID == alternative:
+		score, match := reason(searchFieldCanonicalID, document.CanonicalID, scoreCanonicalExact)
+		return score, match, true
+	case stringInSlice(document.Aliases, alternative):
+		score, match := reason(searchFieldAlias, alternative, scoreAliasExact)
+		return score, match, true
+	case stringInSlice(document.Tags, alternative):
+		score, match := reason(searchFieldTag, alternative, scoreTagExact)
+		return score, match, true
+	case document.Action == alternative:
+		score, match := reason(searchFieldAction, document.Action, scoreDomainActionExact)
+		return score, match, true
+	case document.Domain == alternative:
+		score, match := reason(searchFieldDomain, document.Domain, scoreDomainActionExact)
+		return score, match, true
+	case slices.Contains(document.ActionWords, alternative):
+		score, match := reason(searchFieldAction, alternative, scoreDomainActionWord)
+		return score, match, true
+	case slices.Contains(document.DomainWords, alternative):
+		score, match := reason(searchFieldDomain, alternative, scoreDomainActionWord)
+		return score, match, true
+	default:
+		return 0, MatchReason{}, false
 	}
 }
 

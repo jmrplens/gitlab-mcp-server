@@ -50,18 +50,9 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 
 	interval := toolutil.ClampPollInterval(opts.IntervalSeconds)
 	timeout := toolutil.ClampPollTimeout(opts.TimeoutSeconds)
-	failOnError := true
-	if opts.FailOnError != nil {
-		failOnError = *opts.FailOnError
-	}
-	duration := opts.PollDuration
-	if duration == nil {
-		duration = func(seconds int) time.Duration { return time.Duration(seconds) * time.Second }
-	}
-	progressMessage := opts.ProgressMessage
-	if progressMessage == nil {
-		progressMessage = func(int) string { return "" }
-	}
+	failOnError := pollFailOnError(opts.FailOnError)
+	duration := pollDurationFunc(opts.PollDuration)
+	progressMessage := pollProgressMessage(opts.ProgressMessage)
 
 	tracker := progress.FromRequest(opts.Request)
 	timeoutDuration := duration(timeout)
@@ -142,4 +133,25 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 		case <-ticker.C:
 		}
 	}
+}
+
+func pollFailOnError(value *bool) bool {
+	if value == nil {
+		return true
+	}
+	return *value
+}
+
+func pollDurationFunc(duration DurationFunc) DurationFunc {
+	if duration != nil {
+		return duration
+	}
+	return func(seconds int) time.Duration { return time.Duration(seconds) * time.Second }
+}
+
+func pollProgressMessage(message func(attempt int) string) func(attempt int) string {
+	if message != nil {
+		return message
+	}
+	return func(int) string { return "" }
 }

@@ -378,30 +378,7 @@ func TestDoModelRequest_ContextCancellationIsNotRetryable(t *testing.T) {
 // TestOpenAIProviderCallOnce_BuildsRequestAndParsesToolCall verifies the
 // OpenAI-compatible provider shapes requests and parses tool calls.
 func TestOpenAIProviderCallOnce_BuildsRequestAndParsesToolCall(t *testing.T) {
-	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if got := req.Header.Get("Authorization"); got != "Bearer secret-key" {
-			t.Fatalf("Authorization = %q, want bearer key", got)
-		}
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			t.Fatalf("read request body: %v", err)
-		}
-		var payload openAIRequest
-		if decodeErr := json.Unmarshal(body, &payload); decodeErr != nil {
-			t.Fatalf("decode payload: %v", decodeErr)
-		}
-		if payload.MaxTokens != 32 || payload.MaxCompletionTokens != 0 {
-			t.Fatalf("token fields = max %d completion %d", payload.MaxTokens, payload.MaxCompletionTokens)
-		}
-		if payload.EnableThinking == nil || *payload.EnableThinking {
-			t.Fatalf("EnableThinking = %#v, want false pointer", payload.EnableThinking)
-		}
-		if len(payload.Tools) != 1 || payload.Tools[0].Function.Name != "gitlab_project" {
-			t.Fatalf("tools = %#v", payload.Tools)
-		}
-		responseBody := `{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"gitlab_project","arguments":"{\"project_id\":\"42\"}"}}]}}],"usage":{"prompt_tokens":3,"completion_tokens":4}}`
-		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(responseBody)), Header: make(http.Header)}, nil
-	})}
+	client := openAIProviderTestClient(t)
 
 	response, retry, err := openAIProvider{endpoint: "https://qwen.example/chat", name: providerQwen, maxTokenField: "max_tokens", disableThinking: true}.callOnce(context.Background(), client, "secret-key", modelProviderRequest{
 		Model:       "qwen-max",
@@ -417,6 +394,44 @@ func TestOpenAIProviderCallOnce_BuildsRequestAndParsesToolCall(t *testing.T) {
 	if retry {
 		t.Fatal("retry = true, want false")
 	}
+	assertOpenAIProviderResponse(t, response)
+}
+
+func openAIProviderTestClient(t *testing.T) *http.Client {
+	t.Helper()
+	return &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		assertOpenAIProviderRequest(t, req)
+		responseBody := `{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"gitlab_project","arguments":"{\"project_id\":\"42\"}"}}]}}],"usage":{"prompt_tokens":3,"completion_tokens":4}}`
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(responseBody)), Header: make(http.Header)}, nil
+	})}
+}
+
+func assertOpenAIProviderRequest(t *testing.T, req *http.Request) {
+	t.Helper()
+	if got := req.Header.Get("Authorization"); got != "Bearer secret-key" {
+		t.Fatalf("Authorization = %q, want bearer key", got)
+	}
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		t.Fatalf("read request body: %v", err)
+	}
+	var payload openAIRequest
+	if decodeErr := json.Unmarshal(body, &payload); decodeErr != nil {
+		t.Fatalf("decode payload: %v", decodeErr)
+	}
+	if payload.MaxTokens != 32 || payload.MaxCompletionTokens != 0 {
+		t.Fatalf("token fields = max %d completion %d", payload.MaxTokens, payload.MaxCompletionTokens)
+	}
+	if payload.EnableThinking == nil || *payload.EnableThinking {
+		t.Fatalf("EnableThinking = %#v, want false pointer", payload.EnableThinking)
+	}
+	if len(payload.Tools) != 1 || payload.Tools[0].Function.Name != "gitlab_project" {
+		t.Fatalf("tools = %#v", payload.Tools)
+	}
+}
+
+func assertOpenAIProviderResponse(t *testing.T, response modelResponse) {
+	t.Helper()
 	if len(response.Content) != 1 || response.Content[0].Name != "gitlab_project" || response.Content[0].Input["project_id"] != "42" {
 		t.Fatalf("content = %#v", response.Content)
 	}

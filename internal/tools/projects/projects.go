@@ -775,6 +775,11 @@ func buildUpdateOpts(input UpdateInput) *gl.EditProjectOptions {
 
 // applyUpdateFeatureOpts sets optional feature toggles and advanced merge settings.
 func applyUpdateFeatureOpts(opts *gl.EditProjectOptions, input UpdateInput) {
+	applyUpdateMergeOpts(opts, input)
+	applyUpdateAccessOpts(opts, input)
+}
+
+func applyUpdateMergeOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.CIConfigPath != "" {
 		opts.CIConfigPath = new(input.CIConfigPath)
 	}
@@ -812,6 +817,9 @@ func applyUpdateFeatureOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.LFSEnabled != nil {
 		opts.LFSEnabled = input.LFSEnabled
 	}
+}
+
+func applyUpdateAccessOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.RequestAccessEnabled != nil {
 		opts.RequestAccessEnabled = input.RequestAccessEnabled
 	}

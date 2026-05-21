@@ -30,6 +30,13 @@ type finding struct {
 	detail   string
 }
 
+type toolQualityStats struct {
+	Schema  int
+	Returns int
+	Title   int
+	SeeAlso int
+}
+
 // main runs the MCP tool output audit and prints a report.
 func main() {
 	client, cleanup, err := auditclient.NewMock()
@@ -175,67 +182,24 @@ func printReport(individual, meta []*mcp.Tool, fs []finding) {
 	fmt.Printf("# MCP Output Quality Audit Report\n\n")
 	fmt.Printf("Generated: %s\n\n", now)
 
-	// Compute stats
-	iSchema, mSchema := 0, 0
-	for _, t := range individual {
-		if t.OutputSchema != nil {
-			iSchema++
-		}
-	}
-	for _, t := range meta {
-		if t.OutputSchema != nil {
-			mSchema++
-		}
-	}
-
-	iReturns, mReturns := 0, 0
-	for _, t := range individual {
-		d := strings.ToLower(t.Description)
-		if strings.Contains(d, "returns") {
-			iReturns++
-		}
-	}
-	for _, t := range meta {
-		d := strings.ToLower(t.Description)
-		if strings.Contains(d, "returns") {
-			mReturns++
-		}
-	}
-
-	iTitle, mTitle := 0, 0
-	for _, t := range individual {
-		if t.Title != "" {
-			iTitle++
-		}
-	}
-	for _, t := range meta {
-		if t.Title != "" {
-			mTitle++
-		}
-	}
-
-	iSeeAlso := 0
-	for _, t := range individual {
-		if strings.Contains(strings.ToLower(t.Description), "see also:") {
-			iSeeAlso++
-		}
-	}
+	individualStats := collectToolQualityStats(individual)
+	metaStats := collectToolQualityStats(meta)
 
 	fmt.Printf("## Summary\n\n")
 	fmt.Printf("| Metric | Individual | Meta |\n")
 	fmt.Printf("| --- | --- | --- |\n")
 	fmt.Printf("| Total tools | %d | %d |\n", len(individual), len(meta))
 	fmt.Printf("| OutputSchema present | %d/%d (%d%%) | %d/%d (%d%%) |\n",
-		iSchema, len(individual), pct(iSchema, len(individual)),
-		mSchema, len(meta), pct(mSchema, len(meta)))
+		individualStats.Schema, len(individual), pct(individualStats.Schema, len(individual)),
+		metaStats.Schema, len(meta), pct(metaStats.Schema, len(meta)))
 	fmt.Printf("| Description has 'Returns' | %d/%d (%d%%) | %d/%d (%d%%) |\n",
-		iReturns, len(individual), pct(iReturns, len(individual)),
-		mReturns, len(meta), pct(mReturns, len(meta)))
+		individualStats.Returns, len(individual), pct(individualStats.Returns, len(individual)),
+		metaStats.Returns, len(meta), pct(metaStats.Returns, len(meta)))
 	fmt.Printf("| Title field set | %d/%d (%d%%) | %d/%d (%d%%) |\n",
-		iTitle, len(individual), pct(iTitle, len(individual)),
-		mTitle, len(meta), pct(mTitle, len(meta)))
+		individualStats.Title, len(individual), pct(individualStats.Title, len(individual)),
+		metaStats.Title, len(meta), pct(metaStats.Title, len(meta)))
 	fmt.Printf("| Description has 'See also' | %d/%d (%d%%) | — |\n\n",
-		iSeeAlso, len(individual), pct(iSeeAlso, len(individual)))
+		individualStats.SeeAlso, len(individual), pct(individualStats.SeeAlso, len(individual)))
 
 	fmt.Printf("| Finding | Count |\n")
 	fmt.Printf("| --- | --- |\n")
@@ -268,6 +232,26 @@ func printReport(individual, meta []*mcp.Tool, fs []finding) {
 		}
 		fmt.Println()
 	}
+}
+
+func collectToolQualityStats(toolList []*mcp.Tool) toolQualityStats {
+	var stats toolQualityStats
+	for _, tool := range toolList {
+		if tool.OutputSchema != nil {
+			stats.Schema++
+		}
+		description := strings.ToLower(tool.Description)
+		if strings.Contains(description, "returns") {
+			stats.Returns++
+		}
+		if strings.Contains(description, "see also:") {
+			stats.SeeAlso++
+		}
+		if tool.Title != "" {
+			stats.Title++
+		}
+	}
+	return stats
 }
 
 // pct calculates a percentage from count and total.

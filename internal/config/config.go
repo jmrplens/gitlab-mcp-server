@@ -209,9 +209,9 @@ func Load() (*Config, error) {
 		_ = godotenv.Load(filepath.Join(home, EnvFileName))
 	}
 
-	skipTLS, err := parseBool(os.Getenv("GITLAB_SKIP_TLS_VERIFY"), false)
+	bools, err := loadBooleanEnv()
 	if err != nil {
-		return nil, fmt.Errorf("invalid GITLAB_SKIP_TLS_VERIFY value: %w", err)
+		return nil, err
 	}
 
 	toolSurface, metaTools, err := ParseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
@@ -224,85 +224,18 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid CAPABILITY_SURFACE value: %w", err)
 	}
 
-	enterprise, err := parseBool(os.Getenv("GITLAB_ENTERPRISE"), false)
+	limits, err := loadLimitEnv()
 	if err != nil {
-		return nil, fmt.Errorf("invalid GITLAB_ENTERPRISE value: %w", err)
+		return nil, err
 	}
 
-	readOnly, err := parseBool(os.Getenv("GITLAB_READ_ONLY"), false)
+	updates, err := loadAutoUpdateEnv()
 	if err != nil {
-		return nil, fmt.Errorf("invalid GITLAB_READ_ONLY value: %w", err)
+		return nil, err
 	}
-
-	safeMode, err := parseBool(os.Getenv("GITLAB_SAFE_MODE"), false)
+	auth, err := loadAuthEnv()
 	if err != nil {
-		return nil, fmt.Errorf("invalid GITLAB_SAFE_MODE value: %w", err)
-	}
-
-	embeddedResources, err := parseBool(os.Getenv("EMBEDDED_RESOURCES"), true)
-	if err != nil {
-		return nil, fmt.Errorf("invalid EMBEDDED_RESOURCES value: %w", err)
-	}
-
-	ignoreScopes, err := parseBool(os.Getenv("GITLAB_IGNORE_SCOPES"), false)
-	if err != nil {
-		return nil, fmt.Errorf("invalid GITLAB_IGNORE_SCOPES value: %w", err)
-	}
-
-	maxFileSize, err := parseSize(os.Getenv("UPLOAD_MAX_FILE_SIZE"), DefaultMaxFileSize)
-	if err != nil {
-		return nil, fmt.Errorf("invalid UPLOAD_MAX_FILE_SIZE value: %w", err)
-	}
-
-	maxHTTPClients, err := parseInt(os.Getenv("MAX_HTTP_CLIENTS"), DefaultMaxHTTPClients)
-	if err != nil {
-		return nil, fmt.Errorf("invalid MAX_HTTP_CLIENTS value: %w", err)
-	}
-
-	sessionTimeout, err := parseDuration(os.Getenv("SESSION_TIMEOUT"), DefaultSessionTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("invalid SESSION_TIMEOUT value: %w", err)
-	}
-	if sessionTimeout > MaxSessionTimeout {
-		return nil, fmt.Errorf("SESSION_TIMEOUT %s exceeds maximum of %s", sessionTimeout, MaxSessionTimeout)
-	}
-
-	revalidateInterval, err := parseDuration(os.Getenv("SESSION_REVALIDATE_INTERVAL"), DefaultRevalidateInterval)
-	if err != nil {
-		return nil, fmt.Errorf("invalid SESSION_REVALIDATE_INTERVAL value: %w", err)
-	}
-	if revalidateInterval > MaxRevalidateInterval {
-		return nil, fmt.Errorf("SESSION_REVALIDATE_INTERVAL %s exceeds maximum of %s", revalidateInterval, MaxRevalidateInterval)
-	}
-
-	autoUpdateRepo := os.Getenv("AUTO_UPDATE_REPO")
-	if autoUpdateRepo == "" {
-		autoUpdateRepo = DefaultAutoUpdateRepo
-	}
-
-	autoUpdateInterval, err := parseDuration(os.Getenv("AUTO_UPDATE_INTERVAL"), DefaultAutoUpdateInterval)
-	if err != nil {
-		return nil, fmt.Errorf("invalid AUTO_UPDATE_INTERVAL value: %w", err)
-	}
-
-	autoUpdateTimeout, err := parseDuration(os.Getenv("AUTO_UPDATE_TIMEOUT"), DefaultAutoUpdateTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("invalid AUTO_UPDATE_TIMEOUT value: %w", err)
-	}
-
-	autoUpdate := os.Getenv("AUTO_UPDATE")
-	if autoUpdate == "" {
-		autoUpdate = "true"
-	}
-
-	authMode := os.Getenv("AUTH_MODE")
-	if authMode == "" {
-		authMode = "legacy"
-	}
-
-	oauthCacheTTL, err := parseDuration(os.Getenv("OAUTH_CACHE_TTL"), DefaultOAuthCacheTTL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
+		return nil, err
 	}
 
 	rateLimitRPS, err := parseFloatNonNegative(os.Getenv("RATE_LIMIT_RPS"), 0)
@@ -322,26 +255,26 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		GitLabURL:          gitLabURLFromEnv(),
 		GitLabToken:        os.Getenv("GITLAB_TOKEN"),
-		SkipTLSVerify:      skipTLS,
+		SkipTLSVerify:      bools.skipTLS,
 		MetaTools:          metaTools,
 		ToolSurface:        toolSurface,
 		CapabilitySurface:  capabilitySurface,
-		Enterprise:         enterprise,
-		ReadOnly:           readOnly,
-		SafeMode:           safeMode,
-		EmbeddedResources:  embeddedResources,
-		UploadMaxFileSize:  maxFileSize,
-		MaxHTTPClients:     maxHTTPClients,
-		SessionTimeout:     sessionTimeout,
-		RevalidateInterval: revalidateInterval,
-		AutoUpdate:         autoUpdate,
-		AutoUpdateRepo:     autoUpdateRepo,
-		AutoUpdateInterval: autoUpdateInterval,
-		AutoUpdateTimeout:  autoUpdateTimeout,
-		AuthMode:           authMode,
-		OAuthCacheTTL:      oauthCacheTTL,
+		Enterprise:         bools.enterprise,
+		ReadOnly:           bools.readOnly,
+		SafeMode:           bools.safeMode,
+		EmbeddedResources:  bools.embeddedResources,
+		UploadMaxFileSize:  limits.maxFileSize,
+		MaxHTTPClients:     limits.maxHTTPClients,
+		SessionTimeout:     limits.sessionTimeout,
+		RevalidateInterval: limits.revalidateInterval,
+		AutoUpdate:         updates.mode,
+		AutoUpdateRepo:     updates.repo,
+		AutoUpdateInterval: updates.interval,
+		AutoUpdateTimeout:  updates.timeout,
+		AuthMode:           auth.mode,
+		OAuthCacheTTL:      auth.oauthCacheTTL,
 		ExcludeTools:       ParseCSV(os.Getenv("EXCLUDE_TOOLS")),
-		IgnoreScopes:       ignoreScopes,
+		IgnoreScopes:       bools.ignoreScopes,
 		RateLimitRPS:       rateLimitRPS,
 		RateLimitBurst:     rateLimitBurst,
 		MetaParamSchema:    metaParamSchema,
@@ -354,6 +287,125 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+type booleanEnv struct {
+	skipTLS           bool
+	enterprise        bool
+	readOnly          bool
+	safeMode          bool
+	embeddedResources bool
+	ignoreScopes      bool
+}
+
+type limitEnv struct {
+	maxFileSize        int64
+	maxHTTPClients     int
+	sessionTimeout     time.Duration
+	revalidateInterval time.Duration
+}
+
+type autoUpdateEnv struct {
+	mode     string
+	repo     string
+	interval time.Duration
+	timeout  time.Duration
+}
+
+type authEnv struct {
+	mode          string
+	oauthCacheTTL time.Duration
+}
+
+func loadBooleanEnv() (booleanEnv, error) {
+	values := booleanEnv{}
+	var err error
+	if values.skipTLS, err = parseEnvBool("GITLAB_SKIP_TLS_VERIFY", false); err != nil {
+		return booleanEnv{}, err
+	}
+	if values.enterprise, err = parseEnvBool("GITLAB_ENTERPRISE", false); err != nil {
+		return booleanEnv{}, err
+	}
+	if values.readOnly, err = parseEnvBool("GITLAB_READ_ONLY", false); err != nil {
+		return booleanEnv{}, err
+	}
+	if values.safeMode, err = parseEnvBool("GITLAB_SAFE_MODE", false); err != nil {
+		return booleanEnv{}, err
+	}
+	if values.embeddedResources, err = parseEnvBool("EMBEDDED_RESOURCES", true); err != nil {
+		return booleanEnv{}, err
+	}
+	if values.ignoreScopes, err = parseEnvBool("GITLAB_IGNORE_SCOPES", false); err != nil {
+		return booleanEnv{}, err
+	}
+	return values, nil
+}
+
+func parseEnvBool(name string, defaultValue bool) (bool, error) {
+	value, err := parseBool(os.Getenv(name), defaultValue)
+	if err != nil {
+		return false, fmt.Errorf("invalid %s value: %w", name, err)
+	}
+	return value, nil
+}
+
+func loadLimitEnv() (limitEnv, error) {
+	values := limitEnv{}
+	var err error
+	if values.maxFileSize, err = parseSize(os.Getenv("UPLOAD_MAX_FILE_SIZE"), DefaultMaxFileSize); err != nil {
+		return limitEnv{}, fmt.Errorf("invalid UPLOAD_MAX_FILE_SIZE value: %w", err)
+	}
+	if values.maxHTTPClients, err = parseInt(os.Getenv("MAX_HTTP_CLIENTS"), DefaultMaxHTTPClients); err != nil {
+		return limitEnv{}, fmt.Errorf("invalid MAX_HTTP_CLIENTS value: %w", err)
+	}
+	if values.sessionTimeout, err = parseBoundedDurationEnv("SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout); err != nil {
+		return limitEnv{}, err
+	}
+	if values.revalidateInterval, err = parseBoundedDurationEnv("SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval); err != nil {
+		return limitEnv{}, err
+	}
+	return values, nil
+}
+
+func parseBoundedDurationEnv(name string, defaultValue, maxValue time.Duration) (time.Duration, error) {
+	value, err := parseDuration(os.Getenv(name), defaultValue)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s value: %w", name, err)
+	}
+	if value > maxValue {
+		return 0, fmt.Errorf("%s %s exceeds maximum of %s", name, value, maxValue)
+	}
+	return value, nil
+}
+
+func loadAutoUpdateEnv() (autoUpdateEnv, error) {
+	values := autoUpdateEnv{mode: os.Getenv("AUTO_UPDATE"), repo: os.Getenv("AUTO_UPDATE_REPO")}
+	if values.mode == "" {
+		values.mode = "true"
+	}
+	if values.repo == "" {
+		values.repo = DefaultAutoUpdateRepo
+	}
+	var err error
+	if values.interval, err = parseDuration(os.Getenv("AUTO_UPDATE_INTERVAL"), DefaultAutoUpdateInterval); err != nil {
+		return autoUpdateEnv{}, fmt.Errorf("invalid AUTO_UPDATE_INTERVAL value: %w", err)
+	}
+	if values.timeout, err = parseDuration(os.Getenv("AUTO_UPDATE_TIMEOUT"), DefaultAutoUpdateTimeout); err != nil {
+		return autoUpdateEnv{}, fmt.Errorf("invalid AUTO_UPDATE_TIMEOUT value: %w", err)
+	}
+	return values, nil
+}
+
+func loadAuthEnv() (authEnv, error) {
+	mode := os.Getenv("AUTH_MODE")
+	if mode == "" {
+		mode = "legacy"
+	}
+	oauthCacheTTL, err := parseDuration(os.Getenv("OAUTH_CACHE_TTL"), DefaultOAuthCacheTTL)
+	if err != nil {
+		return authEnv{}, fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
+	}
+	return authEnv{mode: mode, oauthCacheTTL: oauthCacheTTL}, nil
+}
+
 func gitLabURLFromEnv() string {
 	gitLabURL := strings.TrimSpace(os.Getenv("GITLAB_URL"))
 	if gitLabURL == "" {
@@ -364,6 +416,19 @@ func gitLabURLFromEnv() string {
 
 // validate checks that all required configuration fields are present and valid.
 func (c *Config) validate() error {
+	if err := c.validateURLAndToken(); err != nil {
+		return err
+	}
+	if err := c.validateLimits(); err != nil {
+		return err
+	}
+	if err := c.validateModeEnums(); err != nil {
+		return err
+	}
+	return c.validateDurationsAndRates()
+}
+
+func (c *Config) validateURLAndToken() error {
 	if c.GitLabURL == "" {
 		return errors.New("GITLAB_URL cannot be empty")
 	}
@@ -380,6 +445,10 @@ func (c *Config) validate() error {
 	if c.GitLabToken == "" {
 		return errors.New("GITLAB_TOKEN is required")
 	}
+	return nil
+}
+
+func (c *Config) validateLimits() error {
 	if c.UploadMaxFileSize > MaxFileSize {
 		return fmt.Errorf("UPLOAD_MAX_FILE_SIZE exceeds maximum of 1 TB (got %d bytes)", c.UploadMaxFileSize)
 	}
@@ -389,44 +458,68 @@ func (c *Config) validate() error {
 	if c.MaxHTTPClients > MaxHTTPClients {
 		return fmt.Errorf("MAX_HTTP_CLIENTS exceeds maximum of %d (got %d)", MaxHTTPClients, c.MaxHTTPClients)
 	}
+	return nil
+}
+
+func (c *Config) validateModeEnums() error {
 	if c.AuthMode != "" && c.AuthMode != "legacy" && c.AuthMode != "oauth" {
 		return fmt.Errorf("AUTH_MODE must be 'legacy' or 'oauth' (got %q)", c.AuthMode)
 	}
-	if c.ToolSurface != "" {
-		switch c.ToolSurface {
-		case ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic:
-		default:
-			return fmt.Errorf("TOOL_SURFACE must be one of %s (got %q)", validToolSurfaceList(), c.ToolSurface)
-		}
+	if err := validateToolSurface(c.ToolSurface); err != nil {
+		return err
 	}
-	if c.CapabilitySurface != "" {
-		switch c.CapabilitySurface {
-		case CapabilitySurfaceFull, CapabilitySurfaceMinimal:
-		default:
-			return fmt.Errorf("CAPABILITY_SURFACE must be %q or %q (got %q)", CapabilitySurfaceFull, CapabilitySurfaceMinimal, c.CapabilitySurface)
-		}
+	return validateCapabilitySurface(c.CapabilitySurface)
+}
+
+func validateToolSurface(toolSurface string) error {
+	if toolSurface == "" {
+		return nil
 	}
-	if c.OAuthCacheTTL != 0 {
-		if c.OAuthCacheTTL < MinOAuthCacheTTL {
-			return fmt.Errorf("OAUTH_CACHE_TTL %s is below minimum of %s", c.OAuthCacheTTL, MinOAuthCacheTTL)
-		}
-		if c.OAuthCacheTTL > MaxOAuthCacheTTL {
-			return fmt.Errorf("OAUTH_CACHE_TTL %s exceeds maximum of %s", c.OAuthCacheTTL, MaxOAuthCacheTTL)
-		}
+	switch toolSurface {
+	case ToolSurfaceMeta, ToolSurfaceIndividual, ToolSurfaceDynamic:
+		return nil
+	default:
+		return fmt.Errorf("TOOL_SURFACE must be one of %s (got %q)", validToolSurfaceList(), toolSurface)
 	}
-	if c.AutoUpdateTimeout != 0 {
-		if c.AutoUpdateTimeout < MinAutoUpdateTimeout {
-			return fmt.Errorf("AUTO_UPDATE_TIMEOUT %s is below minimum of %s", c.AutoUpdateTimeout, MinAutoUpdateTimeout)
-		}
-		if c.AutoUpdateTimeout > MaxAutoUpdateTimeout {
-			return fmt.Errorf("AUTO_UPDATE_TIMEOUT %s exceeds maximum of %s", c.AutoUpdateTimeout, MaxAutoUpdateTimeout)
-		}
+}
+
+func validateCapabilitySurface(capabilitySurface string) error {
+	if capabilitySurface == "" {
+		return nil
+	}
+	switch capabilitySurface {
+	case CapabilitySurfaceFull, CapabilitySurfaceMinimal:
+		return nil
+	default:
+		return fmt.Errorf("CAPABILITY_SURFACE must be %q or %q (got %q)", CapabilitySurfaceFull, CapabilitySurfaceMinimal, capabilitySurface)
+	}
+}
+
+func (c *Config) validateDurationsAndRates() error {
+	if err := validateDurationRange("OAUTH_CACHE_TTL", c.OAuthCacheTTL, MinOAuthCacheTTL, MaxOAuthCacheTTL); err != nil {
+		return err
+	}
+	if err := validateDurationRange("AUTO_UPDATE_TIMEOUT", c.AutoUpdateTimeout, MinAutoUpdateTimeout, MaxAutoUpdateTimeout); err != nil {
+		return err
 	}
 	if c.RateLimitRPS < 0 {
 		return fmt.Errorf("RATE_LIMIT_RPS must be >= 0 (got %g)", c.RateLimitRPS)
 	}
 	if c.RateLimitRPS > 0 && c.RateLimitBurst < 1 {
 		return fmt.Errorf("RATE_LIMIT_BURST must be >= 1 when RATE_LIMIT_RPS > 0 (got %d)", c.RateLimitBurst)
+	}
+	return nil
+}
+
+func validateDurationRange(name string, value, minValue, maxValue time.Duration) error {
+	if value == 0 {
+		return nil
+	}
+	if value < minValue {
+		return fmt.Errorf("%s %s is below minimum of %s", name, value, minValue)
+	}
+	if value > maxValue {
+		return fmt.Errorf("%s %s exceeds maximum of %s", name, value, maxValue)
 	}
 	return nil
 }

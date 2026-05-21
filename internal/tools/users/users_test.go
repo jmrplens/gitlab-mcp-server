@@ -598,6 +598,13 @@ func TestCurrent_FullFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
+	assertCurrentUserProfileFields(t, out)
+	assertCurrentUserAccessFields(t, out)
+	assertCurrentUserAuditFields(t, out)
+}
+
+func assertCurrentUserProfileFields(t *testing.T, out Output) {
+	t.Helper()
 	if !out.IsAdmin {
 		t.Error("expected IsAdmin = true")
 	}
@@ -613,6 +620,13 @@ func TestCurrent_FullFields(t *testing.T) {
 	if out.PublicEmail != "pub@example.com" {
 		t.Errorf("PublicEmail = %q, want %q", out.PublicEmail, "pub@example.com")
 	}
+	if out.Note != "VIP" {
+		t.Errorf("Note = %q, want %q", out.Note, "VIP")
+	}
+}
+
+func assertCurrentUserAccessFields(t *testing.T, out Output) {
+	t.Helper()
 	if !out.TwoFactorEnabled {
 		t.Error("expected TwoFactorEnabled = true")
 	}
@@ -628,12 +642,13 @@ func TestCurrent_FullFields(t *testing.T) {
 	if !out.CanCreateGroup {
 		t.Error("expected CanCreateGroup = true")
 	}
-	if out.Note != "VIP" {
-		t.Errorf("Note = %q, want %q", out.Note, "VIP")
-	}
 	if !out.UsingLicenseSeat {
 		t.Error("expected UsingLicenseSeat = true")
 	}
+}
+
+func assertCurrentUserAuditFields(t *testing.T, out Output) {
+	t.Helper()
 	if out.ThemeID != 2 {
 		t.Errorf("ThemeID = %d, want 2", out.ThemeID)
 	}

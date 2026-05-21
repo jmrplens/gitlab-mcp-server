@@ -43,6 +43,11 @@ func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 		t.Fatalf("GroupFromSpecs() error = %v", err)
 	}
 	action := group.Actions["get"]
+	assertProjectedActionMetadata(t, action)
+}
+
+func assertProjectedActionMetadata(t *testing.T, action Action) {
+	t.Helper()
 	if action.ID != "project.get" || action.SchemaURI != "gitlab://schema/meta/gitlab_project/get" {
 		t.Fatalf("action identity = %q %q, want normalized project.get schema URI", action.ID, action.SchemaURI)
 	}
