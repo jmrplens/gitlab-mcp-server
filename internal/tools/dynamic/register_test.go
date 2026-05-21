@@ -3221,577 +3221,587 @@ func sortedPropertyNames(properties map[string]any) []string {
 // testRoutes supports test routes assertions in dynamic tests.
 func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 	t.Helper()
-	return map[string]toolutil.ActionMap{
-		"gitlab_project": {
-			"get": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"project_id": params["project_id"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-					},
-				},
-				OutputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-					},
+	return cloneTestRoutes(testRouteFixtures)
+}
+
+func cloneTestRoutes(routes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
+	cloned := make(map[string]toolutil.ActionMap, len(routes))
+	for toolName, actions := range routes {
+		cloned[toolName] = maps.Clone(actions)
+	}
+	return cloned
+}
+
+var testRouteFixtures = map[string]toolutil.ActionMap{
+	"gitlab_project": {
+		"get": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"project_id": params["project_id"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
 				},
 			},
-			"hook_list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"hooks": true}, nil
-				},
-			},
-			"hook_add": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"url": params["url"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "url"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"url":        map[string]any{"type": "string"},
-					},
-				},
-			},
-			"member_edit": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"member": "edited", "access_level": params["access_level"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "user_id", "access_level"},
-					"properties": map[string]any{
-						"project_id":   map[string]any{"type": "integer"},
-						"user_id":      map[string]any{"type": "integer"},
-						"access_level": map[string]any{"type": "integer"},
-					},
-				},
-			},
-			"member_add": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"member": "added", "access_level": params["access_level"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "user_id", "access_level"},
-					"properties": map[string]any{
-						"project_id":   map[string]any{"type": "integer"},
-						"user_id":      map[string]any{"type": "integer"},
-						"access_level": map[string]any{"type": "integer"},
-					},
-				},
-			},
-			"member_delete": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"member": "deleted"}, nil
-				},
-			},
-			"delete": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"deleted": true, "confirm": params["confirm"]}, nil
-				},
-				Destructive: true,
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-					},
-				},
-			},
-			"list": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"owned": params["owned"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"owned": map[string]any{"type": "boolean"},
-					},
+			OutputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
 				},
 			},
 		},
-		"gitlab_merge_request": {
-			"list": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"state": params["state"], "author_username": params["author_username"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"project_id":      map[string]any{"type": "integer"},
-						"state":           map[string]any{"type": "string"},
-						"author_username": map[string]any{"type": "string"},
-					},
-				},
-			},
-			"approve": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"approved": true}, nil
-				},
-			},
-			"merge": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"merged": true}, nil
-				},
-			},
-			"time_estimate_set": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"time": "set"}, nil
-				},
-			},
-			"spent_time_add": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"spent": "added", "summary": params["summary"], "note": params["note"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "merge_request_iid", "duration"},
-					"properties": map[string]any{
-						"project_id":        map[string]any{"type": "integer"},
-						"merge_request_iid": map[string]any{"type": "integer"},
-						"duration":          map[string]any{"type": "string"},
-						"summary":           map[string]any{"type": "string"},
-					},
-				},
-			},
-			"emoji_mr_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return maps.Clone(params), nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "merge_request_iid", "name"},
-					"properties": map[string]any{
-						"project_id":        map[string]any{"type": "integer"},
-						"merge_request_iid": map[string]any{"type": "integer"},
-						"name":              map[string]any{"type": "string"},
-					},
-				},
-			},
-			"emoji_mr_delete": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"award_id": params["award_id"]}, nil
-				},
-				Destructive: true,
+		"hook_list": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"hooks": true}, nil
 			},
 		},
-		"gitlab_issue": {
-			"note_list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"notes": true}, nil
-				},
+		"hook_add": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"url": params["url"]}, nil
 			},
-			"spent_time_add": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return maps.Clone(params), nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "issue_iid", "duration"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"issue_iid":  map[string]any{"type": "integer"},
-						"duration":   map[string]any{"type": "string"},
-						"summary":    map[string]any{"type": "string"},
-					},
-				},
-			},
-			"link_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"target_issue_iid": params["target_issue_iid"], "target_project_id": params["target_project_id"], "link_type": params["link_type"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "issue_iid", "target_project_id", "target_issue_iid"},
-					"properties": map[string]any{
-						"project_id":        map[string]any{"type": "integer"},
-						"issue_iid":         map[string]any{"type": "integer"},
-						"target_project_id": map[string]any{"type": "integer"},
-						"target_issue_iid":  map[string]any{"type": "integer"},
-						"link_type":         map[string]any{"type": "string"},
-					},
-				},
-			},
-			"update": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"state_event": params["state_event"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "issue_iid", "state_event"},
-					"properties": map[string]any{
-						"project_id":  map[string]any{"type": "integer"},
-						"issue_iid":   map[string]any{"type": "integer"},
-						"state_event": map[string]any{"type": "string"},
-					},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "url"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"url":        map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_ci_variable": {
-			"create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"key": params["key"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "key", "value"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"key":        map[string]any{"type": "string"},
-						"value":      map[string]any{"type": "string"},
-					},
-				},
+		"member_edit": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"member": "edited", "access_level": params["access_level"]}, nil
 			},
-			"group_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"key": params["key"]}, nil
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "user_id", "access_level"},
+				"properties": map[string]any{
+					"project_id":   map[string]any{"type": "integer"},
+					"user_id":      map[string]any{"type": "integer"},
+					"access_level": map[string]any{"type": "integer"},
 				},
 			},
 		},
-		"gitlab_branch": {
-			"get_protected": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"branch_name": params["branch_name"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "branch_name"},
-					"properties": map[string]any{
-						"project_id":  map[string]any{"type": "integer"},
-						"branch_name": map[string]any{"type": "string"},
-					},
-				},
+		"member_add": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"member": "added", "access_level": params["access_level"]}, nil
 			},
-			"protect": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{
-						"push_access_level":  params["push_access_level"],
-						"merge_access_level": params["merge_access_level"],
-					}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "branch_name"},
-					"properties": map[string]any{
-						"project_id":         map[string]any{"type": "integer"},
-						"branch_name":        map[string]any{"type": "string"},
-						"push_access_level":  map[string]any{"type": "integer"},
-						"merge_access_level": map[string]any{"type": "integer"},
-						"allow_force_push":   map[string]any{"type": "boolean"},
-					},
-				},
-			},
-			"update_protected": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"allow_force_push": params["allow_force_push"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "branch_name"},
-					"properties": map[string]any{
-						"project_id":       map[string]any{"type": "integer"},
-						"branch_name":      map[string]any{"type": "string"},
-						"allow_force_push": map[string]any{"type": "boolean"},
-					},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "user_id", "access_level"},
+				"properties": map[string]any{
+					"project_id":   map[string]any{"type": "integer"},
+					"user_id":      map[string]any{"type": "integer"},
+					"access_level": map[string]any{"type": "integer"},
 				},
 			},
 		},
-		"gitlab_pipeline": {
-			"schedule_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return params, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "description", "ref", "cron"},
-					"properties": map[string]any{
-						"project_id":  map[string]any{"type": "integer"},
-						"description": map[string]any{"type": "string"},
-						"ref":         map[string]any{"type": "string"},
-						"cron":        map[string]any{"type": "string"},
-						"active":      map[string]any{"type": "boolean"},
-					},
-				},
+		"member_delete": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"member": "deleted"}, nil
 			},
-			"schedule_create_variable": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return params, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "schedule_id", "key", "value"},
-					"properties": map[string]any{
-						"project_id":    map[string]any{"type": "integer"},
-						"schedule_id":   map[string]any{"type": "integer"},
-						"key":           map[string]any{"type": "string"},
-						"value":         map[string]any{"type": "string"},
-						"variable_type": map[string]any{"type": "string"},
-					},
-				},
+		},
+		"delete": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"deleted": true, "confirm": params["confirm"]}, nil
 			},
-			"schedule_edit_variable": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return params, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "schedule_id", "key", "value"},
-					"properties": map[string]any{
-						"project_id":    map[string]any{"type": "integer"},
-						"schedule_id":   map[string]any{"type": "integer"},
-						"key":           map[string]any{"type": "string"},
-						"value":         map[string]any{"type": "string"},
-						"variable_type": map[string]any{"type": "string"},
-					},
+			Destructive: true,
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
 				},
 			},
 		},
-		"gitlab_repository": {
-			"file_get": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"action": "repository.file_get", "file_path": params["file_path"], "ref": params["ref"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "file_path", "ref"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"file_path":  map[string]any{"type": "string"},
-						"ref":        map[string]any{"type": "string"},
-					},
+		"list": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"owned": params["owned"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"owned": map[string]any{"type": "boolean"},
 				},
 			},
 		},
-		"gitlab_access": {
-			"deploy_key_add": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"deploy_key": "added"}, nil
-				},
+	},
+	"gitlab_merge_request": {
+		"list": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"state": params["state"], "author_username": params["author_username"]}, nil
 			},
-			"deploy_key_delete": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"deploy_key_id": params["deploy_key_id"], "deleted": true}, nil
-				},
-				Destructive: true,
-			},
-			"deploy_key_get": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"deploy_key_id": params["deploy_key_id"]}, nil
-				},
-			},
-			"deploy_key_update": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"deploy_key_id": params["deploy_key_id"], "updated": true}, nil
-				},
-			},
-			"token_project_create": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"token": "created"}, nil
-				},
-			},
-			"deploy_token_create_project": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"deploy_token": "created"}, nil
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id":      map[string]any{"type": "integer"},
+					"state":           map[string]any{"type": "string"},
+					"author_username": map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_runner": {
-			"update": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"paused": params["paused"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"runner_id", "paused"},
-					"properties": map[string]any{
-						"runner_id": map[string]any{"type": "integer"},
-						"paused":    map[string]any{"type": "boolean"},
-					},
+		"approve": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"approved": true}, nil
+			},
+		},
+		"merge": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"merged": true}, nil
+			},
+		},
+		"time_estimate_set": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"time": "set"}, nil
+			},
+		},
+		"spent_time_add": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"spent": "added", "summary": params["summary"], "note": params["note"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "merge_request_iid", "duration"},
+				"properties": map[string]any{
+					"project_id":        map[string]any{"type": "integer"},
+					"merge_request_iid": map[string]any{"type": "integer"},
+					"duration":          map[string]any{"type": "string"},
+					"summary":           map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_group": {
-			"group_label_update": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return params, nil
-				},
+		"emoji_mr_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return maps.Clone(params), nil
 			},
-			"ldap_link_delete_for_provider": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"deleted": true}, nil
-				},
-			},
-		},
-		"gitlab_storage_move": {
-			"schedule_project": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"destination_storage_name": params["destination_storage_name"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id"},
-					"properties": map[string]any{
-						"project_id":               map[string]any{"type": "integer"},
-						"destination_storage_name": map[string]any{"type": "string"},
-					},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "merge_request_iid", "name"},
+				"properties": map[string]any{
+					"project_id":        map[string]any{"type": "integer"},
+					"merge_request_iid": map[string]any{"type": "integer"},
+					"name":              map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_mr_review": {
-			"changes_get": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"changes": true}, nil
-				},
+		"emoji_mr_delete": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"award_id": params["award_id"]}, nil
 			},
-			"draft_note_publish_all": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"published": true}, nil
+			Destructive: true,
+		},
+	},
+	"gitlab_issue": {
+		"note_list": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"notes": true}, nil
+			},
+		},
+		"spent_time_add": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return maps.Clone(params), nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "issue_iid", "duration"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"issue_iid":  map[string]any{"type": "integer"},
+					"duration":   map[string]any{"type": "string"},
+					"summary":    map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_external_status_check": {
-			"list_project": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"checks": true}, nil
+		"link_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"target_issue_iid": params["target_issue_iid"], "target_project_id": params["target_project_id"], "link_type": params["link_type"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "issue_iid", "target_project_id", "target_issue_iid"},
+				"properties": map[string]any{
+					"project_id":        map[string]any{"type": "integer"},
+					"issue_iid":         map[string]any{"type": "integer"},
+					"target_project_id": map[string]any{"type": "integer"},
+					"target_issue_iid":  map[string]any{"type": "integer"},
+					"link_type":         map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_package": {
-			"list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"packages": true}, nil
-				},
+		"update": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"state_event": params["state_event"]}, nil
 			},
-			"file_list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"files": true}, nil
-				},
-			},
-			"delete": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"deleted": true}, nil
-				},
-				Destructive: true,
-			},
-		},
-		"gitlab_audit_event": {
-			"list_group": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"events": true}, nil
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "issue_iid", "state_event"},
+				"properties": map[string]any{
+					"project_id":  map[string]any{"type": "integer"},
+					"issue_iid":   map[string]any{"type": "integer"},
+					"state_event": map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_job": {
-			"list": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"jobs": true, "scope": params["scope"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"project_id":  map[string]any{"type": "integer"},
-						"pipeline_id": map[string]any{"type": "integer"},
-						"scope":       map[string]any{"type": "string"},
-					},
-				},
+	},
+	"gitlab_ci_variable": {
+		"create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"key": params["key"]}, nil
 			},
-			"token_scope_list_inbound": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"allowlist": true}, nil
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "key", "value"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"key":        map[string]any{"type": "string"},
+					"value":      map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_release": {
-			"list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"releases": true}, nil
-				},
+		"group_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"key": params["key"]}, nil
 			},
-			"link_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"link": "created", "tag_name": params["tag_name"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "tag_name", "name", "url"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"tag_name":   map[string]any{"type": "string"},
-						"name":       map[string]any{"type": "string"},
-						"url":        map[string]any{"type": "string"},
-					},
+		},
+	},
+	"gitlab_branch": {
+		"get_protected": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"branch_name": params["branch_name"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "branch_name"},
+				"properties": map[string]any{
+					"project_id":  map[string]any{"type": "integer"},
+					"branch_name": map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_feature_flags": {
-			"feature_flag_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"version": params["version"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "name", "version"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"name":       map[string]any{"type": "string"},
-						"version":    map[string]any{"type": "string"},
-					},
-				},
+		"protect": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{
+					"push_access_level":  params["push_access_level"],
+					"merge_access_level": params["merge_access_level"],
+				}, nil
 			},
-			"ff_user_list_list": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return params, nil
-				},
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"page":       map[string]any{"type": "integer"},
-						"per_page":   map[string]any{"type": "integer"},
-					},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "branch_name"},
+				"properties": map[string]any{
+					"project_id":         map[string]any{"type": "integer"},
+					"branch_name":        map[string]any{"type": "string"},
+					"push_access_level":  map[string]any{"type": "integer"},
+					"merge_access_level": map[string]any{"type": "integer"},
+					"allow_force_push":   map[string]any{"type": "boolean"},
 				},
 			},
 		},
-		"gitlab_snippet": {
-			"project_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"files": params["files"]}, nil
+		"update_protected": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"allow_force_push": params["allow_force_push"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "branch_name"},
+				"properties": map[string]any{
+					"project_id":       map[string]any{"type": "integer"},
+					"branch_name":      map[string]any{"type": "string"},
+					"allow_force_push": map[string]any{"type": "boolean"},
 				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "title"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"title":      map[string]any{"type": "string"},
-						"files": map[string]any{
-							"type": "array",
-							"items": map[string]any{
-								"type": "object",
-								"properties": map[string]any{
-									"file_path": map[string]any{"type": "string"},
-									"content":   map[string]any{"type": "string"},
-								},
+			},
+		},
+	},
+	"gitlab_pipeline": {
+		"schedule_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return params, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "description", "ref", "cron"},
+				"properties": map[string]any{
+					"project_id":  map[string]any{"type": "integer"},
+					"description": map[string]any{"type": "string"},
+					"ref":         map[string]any{"type": "string"},
+					"cron":        map[string]any{"type": "string"},
+					"active":      map[string]any{"type": "boolean"},
+				},
+			},
+		},
+		"schedule_create_variable": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return params, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "schedule_id", "key", "value"},
+				"properties": map[string]any{
+					"project_id":    map[string]any{"type": "integer"},
+					"schedule_id":   map[string]any{"type": "integer"},
+					"key":           map[string]any{"type": "string"},
+					"value":         map[string]any{"type": "string"},
+					"variable_type": map[string]any{"type": "string"},
+				},
+			},
+		},
+		"schedule_edit_variable": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return params, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "schedule_id", "key", "value"},
+				"properties": map[string]any{
+					"project_id":    map[string]any{"type": "integer"},
+					"schedule_id":   map[string]any{"type": "integer"},
+					"key":           map[string]any{"type": "string"},
+					"value":         map[string]any{"type": "string"},
+					"variable_type": map[string]any{"type": "string"},
+				},
+			},
+		},
+	},
+	"gitlab_repository": {
+		"file_get": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"action": "repository.file_get", "file_path": params["file_path"], "ref": params["ref"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "file_path", "ref"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"file_path":  map[string]any{"type": "string"},
+					"ref":        map[string]any{"type": "string"},
+				},
+			},
+		},
+	},
+	"gitlab_access": {
+		"deploy_key_add": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"deploy_key": "added"}, nil
+			},
+		},
+		"deploy_key_delete": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"deploy_key_id": params["deploy_key_id"], "deleted": true}, nil
+			},
+			Destructive: true,
+		},
+		"deploy_key_get": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"deploy_key_id": params["deploy_key_id"]}, nil
+			},
+		},
+		"deploy_key_update": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"deploy_key_id": params["deploy_key_id"], "updated": true}, nil
+			},
+		},
+		"token_project_create": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"token": "created"}, nil
+			},
+		},
+		"deploy_token_create_project": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"deploy_token": "created"}, nil
+			},
+		},
+	},
+	"gitlab_runner": {
+		"update": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"paused": params["paused"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"runner_id", "paused"},
+				"properties": map[string]any{
+					"runner_id": map[string]any{"type": "integer"},
+					"paused":    map[string]any{"type": "boolean"},
+				},
+			},
+		},
+	},
+	"gitlab_group": {
+		"group_label_update": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return params, nil
+			},
+		},
+		"ldap_link_delete_for_provider": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"deleted": true}, nil
+			},
+		},
+	},
+	"gitlab_storage_move": {
+		"schedule_project": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"destination_storage_name": params["destination_storage_name"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id"},
+				"properties": map[string]any{
+					"project_id":               map[string]any{"type": "integer"},
+					"destination_storage_name": map[string]any{"type": "string"},
+				},
+			},
+		},
+	},
+	"gitlab_mr_review": {
+		"changes_get": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"changes": true}, nil
+			},
+		},
+		"draft_note_publish_all": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"published": true}, nil
+			},
+		},
+	},
+	"gitlab_external_status_check": {
+		"list_project": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"checks": true}, nil
+			},
+		},
+	},
+	"gitlab_package": {
+		"list": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"packages": true}, nil
+			},
+		},
+		"file_list": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"files": true}, nil
+			},
+		},
+		"delete": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"deleted": true}, nil
+			},
+			Destructive: true,
+		},
+	},
+	"gitlab_audit_event": {
+		"list_group": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"events": true}, nil
+			},
+		},
+	},
+	"gitlab_job": {
+		"list": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"jobs": true, "scope": params["scope"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id":  map[string]any{"type": "integer"},
+					"pipeline_id": map[string]any{"type": "integer"},
+					"scope":       map[string]any{"type": "string"},
+				},
+			},
+		},
+		"token_scope_list_inbound": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"allowlist": true}, nil
+			},
+		},
+	},
+	"gitlab_release": {
+		"list": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"releases": true}, nil
+			},
+		},
+		"link_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"link": "created", "tag_name": params["tag_name"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "tag_name", "name", "url"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"tag_name":   map[string]any{"type": "string"},
+					"name":       map[string]any{"type": "string"},
+					"url":        map[string]any{"type": "string"},
+				},
+			},
+		},
+	},
+	"gitlab_feature_flags": {
+		"feature_flag_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"version": params["version"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "name", "version"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"name":       map[string]any{"type": "string"},
+					"version":    map[string]any{"type": "string"},
+				},
+			},
+		},
+		"ff_user_list_list": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return params, nil
+			},
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"page":       map[string]any{"type": "integer"},
+					"per_page":   map[string]any{"type": "integer"},
+				},
+			},
+		},
+	},
+	"gitlab_snippet": {
+		"project_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"files": params["files"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "title"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"title":      map[string]any{"type": "string"},
+					"files": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"file_path": map[string]any{"type": "string"},
+								"content":   map[string]any{"type": "string"},
 							},
 						},
 					},
 				},
 			},
 		},
-		"gitlab_analyze": {
-			"release_notes": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"release_notes": true}, nil
-				},
+	},
+	"gitlab_analyze": {
+		"release_notes": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"release_notes": true}, nil
 			},
 		},
-	}
+	},
 }
 
 // textContent extracts text content from MCP result content for assertions.

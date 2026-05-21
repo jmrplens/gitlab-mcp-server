@@ -68,6 +68,8 @@ func extractFirstID(text string) int64 {
 // every registered MCP resource URI template via ReadResource and asserts
 // non-empty content with the documented MIME type. CI-runner resources are
 // skipped unless the suite runs in Docker ephemeral mode.
+//
+//nolint:maintidx // Comprehensive resource fixture workflow intentionally keeps URI coverage in one E2E scenario.
 func TestResources_ReadAll(t *testing.T) {
 	if sess.individual == nil {
 		t.Skip("individual session not configured")

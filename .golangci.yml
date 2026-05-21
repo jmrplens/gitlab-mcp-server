@@ -42,6 +42,7 @@ linters:
     - gocyclo # Function cyclomatic complexity guard
     - gocognit # Cognitive complexity guard
     - nestif # Nested if complexity guard
+    - maintidx # Maintainability index guard
     - revive # Configurable Go linter (golint replacement)
     - gocritic # ~100 diagnostics: bugs, performance, style
     - unconvert # Unnecessary type conversions
@@ -188,6 +189,9 @@ linters:
 
     nestif:
       min-complexity: 5
+
+    maintidx:
+      under: 20
 
     perfsprint:
       int-conversion: true

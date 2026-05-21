@@ -389,6 +389,8 @@ func TestMeta_UserSSHKeyLifecycle(t *testing.T) {
 // create, modify, block/unblock, deactivate/activate, ban/unban,
 // ssh_keys_for_user, add_ssh_key_for_user, emails_for_user, add_email_for_user,
 // impersonation tokens, and finally delete.
+//
+//nolint:maintidx // Ordered admin E2E workflow keeps one created user lifecycle visible through cleanup.
 func TestMeta_UserAdmin(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
