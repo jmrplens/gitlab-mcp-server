@@ -805,7 +805,7 @@ func setMergeRequestPagination(page, perPage int, setPage, setPerPage func(int64
 	}
 }
 
-func listMergeRequestItems[T any, O any, R any](ctx context.Context, projectID toolutil.StringOrInt, mrIID int64, page, perPage int, operation, missingProjectMsg, notFoundHint string, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]T, *gl.Response, error), convert func(T) O, buildOutput func([]O, toolutil.PaginationOutput) R) (R, error) {
+func listMergeRequestItems[T, O, R any](ctx context.Context, projectID toolutil.StringOrInt, mrIID int64, page, perPage int, operation, missingProjectMsg, notFoundHint string, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]T, *gl.Response, error), convert func(T) O, buildOutput func([]O, toolutil.PaginationOutput) R) (R, error) {
 	var zero R
 	if err := ctx.Err(); err != nil {
 		return zero, err

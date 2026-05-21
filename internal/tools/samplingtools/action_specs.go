@@ -26,7 +26,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
-func samplingSpec[T any, R any](name string, client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), individualTool, description string) toolutil.ActionSpec {
+func samplingSpec[T, R any](name string, client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), individualTool, description string) toolutil.ActionSpec {
 	return analyzeSpec(name, samplingRoute[T, R](client, fn, individualTool), individualTool, description)
 }
 

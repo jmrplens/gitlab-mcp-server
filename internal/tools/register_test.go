@@ -1221,7 +1221,7 @@ func auditToolMetadata(tool *mcp.Tool) (nameOK, descOK, annOK, schemaOK bool, is
 	if !schemaOK {
 		issues = append(issues, "schema")
 	}
-	return
+	return nameOK, descOK, annOK, schemaOK, issues
 }
 
 // auditMetaToolMetadata returns metadata validation flags for a meta-tool.
@@ -1231,22 +1231,22 @@ func auditMetaToolMetadata(tool *mcp.Tool) (annOK, enumOK bool, actionCount int)
 		tool.Annotations.DestructiveHint != nil
 	schema, ok := tool.InputSchema.(map[string]any)
 	if !ok {
-		return
+		return annOK, enumOK, actionCount
 	}
 	props, ok := schema["properties"].(map[string]any)
 	if !ok {
-		return
+		return annOK, enumOK, actionCount
 	}
 	action, ok := props["action"].(map[string]any)
 	if !ok {
-		return
+		return annOK, enumOK, actionCount
 	}
 	enumList, ok := action["enum"].([]any)
 	if ok {
 		enumOK = len(enumList) > 0
 		actionCount = len(enumList)
 	}
-	return
+	return annOK, enumOK, actionCount
 }
 
 // ---------- Individual tool metadata audit ----------.

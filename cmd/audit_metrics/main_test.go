@@ -283,7 +283,7 @@ func catalogWithActions(t *testing.T, fixtures ...catalogActionFixture) *actionc
 	return catalog
 }
 
-func writeTestFile(t *testing.T, dir string, name string) {
+func writeTestFile(t *testing.T, dir, name string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatalf("MkdirAll(%s): %v", dir, err)

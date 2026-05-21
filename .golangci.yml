@@ -259,6 +259,7 @@ formatters:
   settings:
     gofumpt:
       module-path: github.com/jmrplens/gitlab-mcp-server/v2
+      extra-rules: true
     gci:
       sections:
         - standard

@@ -19,7 +19,7 @@ var ErrPollTimeout = errors.New("poll timeout")
 // Poll repeatedly evaluates condition until it succeeds, fails, times out, or
 // the context is canceled. The condition should return an error only for
 // non-retryable failures; retryable observations should be reported as state.
-func Poll(ctx context.Context, interval time.Duration, timeout time.Duration, condition func() (bool, string, error)) error {
+func Poll(ctx context.Context, interval, timeout time.Duration, condition func() (bool, string, error)) error {
 	if condition == nil {
 		return errors.New("poll condition is nil")
 	}

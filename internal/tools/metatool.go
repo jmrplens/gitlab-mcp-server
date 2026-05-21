@@ -31,7 +31,7 @@ func unmarshalParams[T any](params map[string]any) (T, error) {
 }
 
 // wrapAction resolves wrap action for evaluator execution.
-func wrapAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) actionFunc {
+func wrapAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) actionFunc {
 	return toolutil.WrapAction(client, fn)
 }
 
@@ -43,7 +43,7 @@ func wrapVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Cont
 // Composite wrappers: combine wrapping + metadata in a single call.
 
 // routeAction wraps a typed function as a non-destructive ActionRoute.
-func routeAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) actionRoute {
+func routeAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) actionRoute {
 	return toolutil.RouteAction(client, fn)
 }
 

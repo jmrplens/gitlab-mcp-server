@@ -2163,7 +2163,7 @@ func TestRunToolSearch_ErrorExits(t *testing.T) {
 	}
 
 	type exitCode int
-	toolSearchRunner = func(_ string, _ string, _ bool) error {
+	toolSearchRunner = func(_, _ string, _ bool) error {
 		return errors.New("forced search failure")
 	}
 	exitProcess = func(code int) { panic(exitCode(code)) }

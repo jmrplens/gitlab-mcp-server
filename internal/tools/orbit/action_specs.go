@@ -30,7 +30,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 //
 // This ensures that MCP tools for Orbit endpoints return actionable guidance when
 // the feature is not enabled or the resource is missing, instead of a generic error.
-func orbitReadRoute[T any, R any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (R, error), resource, identifier string) toolutil.ActionRoute {
+func orbitReadRoute[T, R any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (R, error), resource, identifier string) toolutil.ActionRoute {
 	route := toolutil.RouteAction(client, fn)
 	baseHandler := route.Handler
 	route.Handler = func(ctx context.Context, input map[string]any) (any, error) {

@@ -114,7 +114,7 @@ func runScopedSearch[T any](ctx context.Context, query string, projectID, groupI
 	return items, resp, nil
 }
 
-func convertSearchResults[T any, O any](items []T, convert func(T) O) []O {
+func convertSearchResults[T, O any](items []T, convert func(T) O) []O {
 	out := make([]O, len(items))
 	for i, item := range items {
 		out[i] = convert(item)

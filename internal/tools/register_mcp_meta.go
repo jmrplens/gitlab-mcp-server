@@ -96,7 +96,7 @@ See also: gitlab_discover_project (resolve git remote URL → project_id), gitla
 
 // wrapUpdaterAction wraps a function that takes an *autoupdate.Updater (instead
 // of *gitlabclient.Client) into an actionFunc for meta-tool dispatch.
-func wrapUpdaterAction[T any, R any](updater *autoupdate.Updater, fn func(ctx context.Context, updater *autoupdate.Updater, input T) (R, error)) actionFunc {
+func wrapUpdaterAction[T, R any](updater *autoupdate.Updater, fn func(ctx context.Context, updater *autoupdate.Updater, input T) (R, error)) actionFunc {
 	return func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := unmarshalParams[T](params)
 		if err != nil {

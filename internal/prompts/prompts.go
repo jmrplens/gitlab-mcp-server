@@ -661,7 +661,7 @@ func countBranchStats(branches []*gl.Branch) (merged, stale int) {
 			}
 		}
 	}
-	return
+	return merged, stale
 }
 
 // registerCompareBranchesPrompt registers the compare_branches prompt.
@@ -1384,7 +1384,7 @@ func countDiffLines(diff string) (additions, deletions int) {
 			deletions++
 		}
 	}
-	return
+	return additions, deletions
 }
 
 // isSensitivePath reports whether a file path matches known sensitive patterns
@@ -1439,7 +1439,7 @@ func categorizeDiffs(diffs []*gl.MergeRequestDiff) (highRisk, logic, tests, docs
 			logic = append(logic, d)
 		}
 	}
-	return
+	return highRisk, logic, tests, docs
 }
 
 // writeDiffGroup writes a section with per-file metrics and full diffs.

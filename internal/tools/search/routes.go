@@ -48,7 +48,7 @@ func searchSchemaPanic(operation string, err error) {
 	}
 }
 
-func searchRoute[T any, R any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (R, error)) toolutil.ActionRoute {
+func searchRoute[T, R any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (R, error)) toolutil.ActionRoute {
 	route := toolutil.RouteAction(client, fn)
 	route.InputSchema = searchInputSchemaMap[T]()
 	return route

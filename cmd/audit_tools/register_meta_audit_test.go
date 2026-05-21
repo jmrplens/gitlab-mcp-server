@@ -211,7 +211,7 @@ func TestRepositoryRoot_MissingGoModReturnsError(t *testing.T) {
 }
 
 // writeTestFile writes test file fixture data for tests.
-func writeTestFile(t *testing.T, root string, name string, content string) {
+func writeTestFile(t *testing.T, root, name, content string) {
 	t.Helper()
 	path := filepath.Join(root, name)
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {

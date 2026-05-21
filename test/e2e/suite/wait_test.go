@@ -237,7 +237,7 @@ func waitMetaJob(ctx context.Context, t *testing.T, projM ProjectFixture, jobID 
 	})
 }
 
-func assertWaitOutput(t *testing.T, label string, finalStatus string, timedOut bool, pollCount int, waitedFor string) {
+func assertWaitOutput(t *testing.T, label, finalStatus string, timedOut bool, pollCount int, waitedFor string) {
 	t.Helper()
 	if finalStatus == "" {
 		t.Fatalf("expected non-empty FinalStatus for %s", label)

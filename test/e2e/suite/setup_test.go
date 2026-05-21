@@ -824,7 +824,7 @@ func drainSidekiq(ctx context.Context, t *testing.T, client *gitlabclient.Client
 //     errors before giving up).
 //   - Reports the final observed status in timeout errors so runner state is
 //     easy to diagnose.
-func waitForPipeline(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID int64, pipelineID int64, timeout time.Duration) string {
+func waitForPipeline(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID, pipelineID int64, timeout time.Duration) string {
 	t.Helper()
 	if client == nil {
 		t.Fatal("waitForPipeline: GitLab client not configured")

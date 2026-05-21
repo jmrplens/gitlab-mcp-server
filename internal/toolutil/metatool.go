@@ -292,7 +292,7 @@ func DestructiveRoute(fn ActionFunc) ActionRoute {
 
 // RouteFunc wraps a typed function as a non-destructive ActionRoute without a
 // GitLab client dependency and attaches input and output schemas.
-func RouteFunc[T any, R any](fn func(ctx context.Context, input T) (R, error)) ActionRoute {
+func RouteFunc[T, R any](fn func(ctx context.Context, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler: func(ctx context.Context, params map[string]any) (any, error) {
@@ -312,7 +312,7 @@ func RouteFunc[T any, R any](fn func(ctx context.Context, input T) (R, error)) A
 
 // RouteRequestFunc wraps a typed request-aware function as a non-destructive
 // ActionRoute without a GitLab client dependency and attaches schemas.
-func RouteRequestFunc[T any, R any](fn func(ctx context.Context, req *mcp.CallToolRequest, input T) (R, error)) ActionRoute {
+func RouteRequestFunc[T, R any](fn func(ctx context.Context, req *mcp.CallToolRequest, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler: func(ctx context.Context, params map[string]any) (any, error) {
@@ -332,7 +332,7 @@ func RouteRequestFunc[T any, R any](fn func(ctx context.Context, req *mcp.CallTo
 
 // DestructiveFunc wraps a typed function as a destructive ActionRoute without a
 // GitLab client dependency and attaches input and output schemas.
-func DestructiveFunc[T any, R any](fn func(ctx context.Context, input T) (R, error)) ActionRoute {
+func DestructiveFunc[T, R any](fn func(ctx context.Context, input T) (R, error)) ActionRoute {
 	route := RouteFunc(fn)
 	route.Destructive = true
 	return route
@@ -1506,7 +1506,7 @@ func coerceNumericStrings(params map[string]any) map[string]any {
 }
 
 // WrapAction wraps a typed handler (input T -> output R) into a generic ActionFunc.
-func WrapAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionFunc {
+func WrapAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionFunc {
 	return func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := UnmarshalParams[T](params)
 		if err != nil {
@@ -1530,7 +1530,7 @@ func WrapVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Cont
 // WrapActionWithRequest wraps a handler that also requires the MCP request
 // (e.g., for progress tracking). The request is extracted from context via
 // RequestFromContext; if absent, nil is passed.
-func WrapActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionFunc {
+func WrapActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionFunc {
 	return func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := UnmarshalParams[T](params)
 		if err != nil {
@@ -1576,7 +1576,7 @@ func withVoidOutput(inner ActionFunc, successOutput any) ActionFunc {
 
 // RouteAction wraps a typed function as a non-destructive ActionRoute
 // and attaches the JSON Schema for the input type T and output type R.
-func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+func RouteAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler:      WrapAction(client, fn),
@@ -1603,7 +1603,7 @@ func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Con
 
 // RouteActionWithRequest wraps a typed function that needs the MCP request
 // as a non-destructive ActionRoute and attaches input/output schemas.
-func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+func RouteActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler:      WrapActionWithRequest(client, fn),
@@ -1616,7 +1616,7 @@ func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(c
 
 // DestructiveAction wraps a typed function as a destructive ActionRoute
 // and attaches input/output schemas.
-func DestructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+func DestructiveAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler:      WrapAction(client, fn),
@@ -1643,7 +1643,7 @@ func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx conte
 
 // DestructiveActionWithRequest wraps a typed function that needs the MCP request
 // as a destructive ActionRoute and attaches input/output schemas.
-func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+func DestructiveActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler:      WrapActionWithRequest(client, fn),
