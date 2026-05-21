@@ -33,7 +33,8 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	pag := toolutil.FormatGraphQLPagination(out.Pagination, len(out.Issues))
 	if pag != "" {
-		b.WriteString("\n" + pag)
+		b.WriteString("\n")
+		b.WriteString(pag)
 	}
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,

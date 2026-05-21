@@ -13,15 +13,15 @@ func FormatMemberMarkdown(out Output) string {
 	b.WriteString("## Group Member\n\n")
 	b.WriteString("| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
-	b.WriteString("| Username | " + toolutil.EscapeMdTableCell(out.Username) + " |\n")
-	b.WriteString("| Name | " + toolutil.EscapeMdTableCell(out.Name) + " |\n")
-	b.WriteString("| State | " + out.State + " |\n")
+	fmt.Fprintf(&b, "| Username | %s |\n", toolutil.EscapeMdTableCell(out.Username))
+	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
+	fmt.Fprintf(&b, "| State | %s |\n", out.State)
 	fmt.Fprintf(&b, "| Access Level | %s (%d) |\n", out.AccessLevelDescription, out.AccessLevel)
 	if out.ExpiresAt != "" {
-		b.WriteString("| Expires | " + toolutil.FormatTime(out.ExpiresAt) + " |\n")
+		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(out.ExpiresAt))
 	}
 	if out.WebURL != "" {
-		b.WriteString("| URL | " + toolutil.MdTitleLink(out.Username, out.WebURL) + " |\n")
+		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(out.Username, out.WebURL))
 	}
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
@@ -37,10 +37,10 @@ func FormatShareMarkdown(out ShareOutput) string {
 	b.WriteString("## Group Shared\n\n")
 	b.WriteString("| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
-	b.WriteString("| Name | " + toolutil.EscapeMdTableCell(out.Name) + " |\n")
-	b.WriteString("| Path | " + toolutil.EscapeMdTableCell(out.Path) + " |\n")
+	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
+	fmt.Fprintf(&b, "| Path | %s |\n", toolutil.EscapeMdTableCell(out.Path))
 	if out.WebURL != "" {
-		b.WriteString("| URL | " + toolutil.MdTitleLink(out.Name, out.WebURL) + " |\n")
+		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(out.Name, out.WebURL))
 	}
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,

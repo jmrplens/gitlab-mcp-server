@@ -55,3 +55,26 @@ func TestFormatTemplateDetailMarkdown(t *testing.T) {
 		t.Fatalf("minimal markdown contains absent optional fields:\n%s", minimal)
 	}
 }
+
+// TestFormatTemplateDetailMarkdown_PlainFields verifies license-style template
+// detail rendering can preserve unbulleted field labels while sharing the
+// common renderer.
+func TestFormatTemplateDetailMarkdown_PlainFields(t *testing.T) {
+	md := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{
+		Title:       "License: MIT",
+		Description: "A permissive license",
+		Permissions: []string{"commercial-use"},
+		Conditions:  []string{"include-copyright"},
+		Limitations: []string{"no-liability"},
+		PlainFields: true,
+	})
+
+	for _, want := range []string{"**Description**: A permissive license", "**Permissions**: commercial-use", "**Conditions**: include-copyright", "**Limitations**: no-liability"} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("markdown missing %q:\n%s", want, md)
+		}
+	}
+	if strings.Contains(md, "- **Permissions**") {
+		t.Fatalf("plain markdown should not render bulleted detail fields:\n%s", md)
+	}
+}

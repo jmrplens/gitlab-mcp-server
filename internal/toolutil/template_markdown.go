@@ -59,6 +59,7 @@ type TemplateDetailMarkdown struct {
 	Limitations    []string
 	Content        string
 	ContentHeading string
+	PlainFields    bool
 	Hints          []string
 }
 
@@ -76,11 +77,11 @@ func FormatTemplateDetailMarkdown(detail TemplateDetailMarkdown) string {
 		b.WriteString("- **Popular**: Yes\n")
 	}
 	if detail.Description != "" {
-		fmt.Fprintf(&b, FmtMdDescription, detail.Description)
+		writeTemplateDescription(&b, detail.Description, detail.PlainFields)
 	}
-	writeTemplateDetailList(&b, "Permissions", detail.Permissions)
-	writeTemplateDetailList(&b, "Conditions", detail.Conditions)
-	writeTemplateDetailList(&b, "Limitations", detail.Limitations)
+	writeTemplateDetailList(&b, "Permissions", detail.Permissions, detail.PlainFields)
+	writeTemplateDetailList(&b, "Conditions", detail.Conditions, detail.PlainFields)
+	writeTemplateDetailList(&b, "Limitations", detail.Limitations, detail.PlainFields)
 	if detail.Content != "" {
 		if detail.ContentHeading != "" {
 			fmt.Fprintf(&b, "\n### %s\n\n", detail.ContentHeading)
@@ -93,8 +94,20 @@ func FormatTemplateDetailMarkdown(detail TemplateDetailMarkdown) string {
 	return b.String()
 }
 
-func writeTemplateDetailList(b *strings.Builder, label string, values []string) {
+func writeTemplateDescription(b *strings.Builder, description string, plain bool) {
+	if plain {
+		fmt.Fprintf(b, "**Description**: %s\n\n", description)
+		return
+	}
+	fmt.Fprintf(b, FmtMdDescription, description)
+}
+
+func writeTemplateDetailList(b *strings.Builder, label string, values []string, plain bool) {
 	if len(values) == 0 {
+		return
+	}
+	if plain {
+		fmt.Fprintf(b, "**%s**: %s\n", label, strings.Join(values, ", "))
 		return
 	}
 	fmt.Fprintf(b, "- **%s**: %s\n", label, strings.Join(values, ", "))

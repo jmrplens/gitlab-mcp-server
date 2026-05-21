@@ -13,16 +13,16 @@ func FormatTriggerMarkdown(out Output) string {
 	b.WriteString("## Pipeline Trigger\n\n")
 	b.WriteString("| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&b, "| ID | %d |\n", out.ID)
-	b.WriteString("| Description | " + toolutil.EscapeMdTableCell(out.Description) + " |\n")
-	b.WriteString("| Token | " + toolutil.EscapeMdTableCell(out.Token) + " |\n")
+	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
+	fmt.Fprintf(&b, "| Token | %s |\n", toolutil.EscapeMdTableCell(out.Token))
 	if out.OwnerName != "" {
-		b.WriteString("| Owner | " + toolutil.EscapeMdTableCell(out.OwnerName) + " |\n")
+		fmt.Fprintf(&b, "| Owner | %s |\n", toolutil.EscapeMdTableCell(out.OwnerName))
 	}
 	if out.CreatedAt != "" {
-		b.WriteString("| Created | " + toolutil.FormatTime(out.CreatedAt) + " |\n")
+		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(out.CreatedAt))
 	}
 	if out.LastUsed != "" {
-		b.WriteString("| Last Used | " + toolutil.FormatTime(out.LastUsed) + " |\n")
+		fmt.Fprintf(&b, "| Last Used | %s |\n", toolutil.FormatTime(out.LastUsed))
 	}
 	toolutil.WriteHints(&b,
 		"Use the selected tool surface's pipeline-trigger update action with the same project_id and trigger_id to modify this trigger",
@@ -65,11 +65,11 @@ func FormatRunOutputMarkdown(out RunOutput) string {
 	b.WriteString("## Pipeline Triggered\n\n")
 	b.WriteString("| Field | Value |\n|---|---|\n")
 	fmt.Fprintf(&b, "| Pipeline ID | %d |\n", out.PipelineID)
-	b.WriteString("| SHA | " + out.SHA + " |\n")
-	b.WriteString("| Ref | " + toolutil.EscapeMdTableCell(out.Ref) + " |\n")
-	b.WriteString("| Status | " + out.Status + " |\n")
+	fmt.Fprintf(&b, "| SHA | %s |\n", out.SHA)
+	fmt.Fprintf(&b, "| Ref | %s |\n", toolutil.EscapeMdTableCell(out.Ref))
+	fmt.Fprintf(&b, "| Status | %s |\n", out.Status)
 	if out.WebURL != "" {
-		b.WriteString("| URL | " + toolutil.MdTitleLink(fmt.Sprintf("Pipeline #%d", out.PipelineID), out.WebURL) + " |\n")
+		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("Pipeline #%d", out.PipelineID), out.WebURL))
 	}
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,

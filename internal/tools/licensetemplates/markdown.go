@@ -28,6 +28,7 @@ func FormatGetMarkdown(out GetOutput) string {
 		Conditions:  out.Conditions,
 		Limitations: out.Limitations,
 		Content:     out.Content,
+		PlainFields: true,
 		Hints:       []string{"Copy this template to your LICENSE file and customize it"},
 	})
 }
