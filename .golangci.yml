@@ -39,7 +39,8 @@ linters:
     - gosec # OWASP-oriented security scanner (G1xx-G7xx)
 
     # --- Code Quality ---
-    - cyclop # Function and package cyclomatic complexity guard
+    - gocyclo # Function cyclomatic complexity guard
+    - gocognit # Cognitive complexity guard
     - revive # Configurable Go linter (golint replacement)
     - gocritic # ~100 diagnostics: bugs, performance, style
     - unconvert # Unnecessary type conversions
@@ -178,9 +179,11 @@ linters:
     usetesting:
       os-temp-dir: true
 
-    cyclop:
-      max-complexity: 20
-      package-average: 0
+    gocyclo:
+      min-complexity: 20
+
+    gocognit:
+      min-complexity: 25
 
     perfsprint:
       int-conversion: true

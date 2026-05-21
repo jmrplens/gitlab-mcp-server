@@ -52,43 +52,53 @@ func RequireCapabilities(t *testing.T, caps ...Capability) {
 	t.Helper()
 
 	for _, capability := range caps {
-		switch capability {
-		case CapabilityAdmin:
-			if ok, err := hasAdminCapability(); !ok {
-				if err != nil {
-					t.Skipf("admin capability unavailable: %v", err)
-				}
-				t.Skip("admin capability unavailable")
-			}
-		case CapabilityEnterprise:
-			if !sess.enterprise {
-				t.Skip("enterprise capability unavailable")
-			}
-		case CapabilityRunner:
-			if !hasRunner(sess.glClient) {
-				t.Skip("runner capability unavailable")
-			}
-		case CapabilitySafeMode:
-			if sess.safeMode == nil {
-				t.Skip("safe-mode MCP session not configured")
-			}
-		case CapabilitySampling:
-			if sess.sampling == nil {
-				t.Skip("sampling MCP session not configured")
-			}
-		case CapabilityElicitation:
-			if sess.elicitation == nil {
-				t.Skip("elicitation MCP session not configured")
-			}
-		case CapabilityExternalNetwork:
-			if !hasExternalNetworkCapability() {
-				t.Skip("external-network capability unavailable; prefer Docker fixture endpoints; set E2E_EXTERNAL_NETWORK=true only for tests that must call public URLs")
-			}
-		case CapabilityInstanceGlobal, CapabilityCurrentUserState:
-			// These capabilities represent shared mutable state and are enforced by locks.
-		default:
-			t.Fatalf("unknown E2E capability %q", capability)
+		requireCapability(t, capability)
+	}
+}
+
+func requireCapability(t *testing.T, capability Capability) {
+	t.Helper()
+	switch capability {
+	case CapabilityAdmin:
+		requireAdminCapability(t)
+	case CapabilityEnterprise:
+		if !sess.enterprise {
+			t.Skip("enterprise capability unavailable")
 		}
+	case CapabilityRunner:
+		if !hasRunner(sess.glClient) {
+			t.Skip("runner capability unavailable")
+		}
+	case CapabilitySafeMode:
+		if sess.safeMode == nil {
+			t.Skip("safe-mode MCP session not configured")
+		}
+	case CapabilitySampling:
+		if sess.sampling == nil {
+			t.Skip("sampling MCP session not configured")
+		}
+	case CapabilityElicitation:
+		if sess.elicitation == nil {
+			t.Skip("elicitation MCP session not configured")
+		}
+	case CapabilityExternalNetwork:
+		if !hasExternalNetworkCapability() {
+			t.Skip("external-network capability unavailable; prefer Docker fixture endpoints; set E2E_EXTERNAL_NETWORK=true only for tests that must call public URLs")
+		}
+	case CapabilityInstanceGlobal, CapabilityCurrentUserState:
+		// These capabilities represent shared mutable state and are enforced by locks.
+	default:
+		t.Fatalf("unknown E2E capability %q", capability)
+	}
+}
+
+func requireAdminCapability(t *testing.T) {
+	t.Helper()
+	if ok, err := hasAdminCapability(); !ok {
+		if err != nil {
+			t.Skipf("admin capability unavailable: %v", err)
+		}
+		t.Skip("admin capability unavailable")
 	}
 }
 

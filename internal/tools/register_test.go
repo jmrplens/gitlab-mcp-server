@@ -1774,19 +1774,24 @@ func extractWriteHintLines(src string) []string {
 // and that non-destructive routes do not correspond to individual tools with
 // DeleteAnnotations. This catches misclassified routes after migration.
 func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *testing.T) {
-	// 1. Build set of sub-package actions with their destructive wrapper status.
-	type routeInfo struct {
-		pkg         string
-		destructive bool
-	}
-	routeMap := make(map[string][]routeInfo)
-
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)
 	}
+	routeMap := collectRouteDestructiveMetadata(t, entries)
+	deleteTools := collectDeleteAnnotationPackages(t, entries)
+	mismatches := validateDestructiveMetadataMatches(t, routeMap, deleteTools)
+	t.Logf("validated %d route entries across %d packages, %d mismatches", len(routeMap), len(entries), mismatches)
+}
 
-	// Patterns for destructive wrappers in sub-packages.
+type destructiveRouteInfo struct {
+	pkg         string
+	destructive bool
+}
+
+func collectRouteDestructiveMetadata(t *testing.T, entries []os.DirEntry) map[string][]destructiveRouteInfo {
+	t.Helper()
+	routeMap := make(map[string][]destructiveRouteInfo)
 	reSubDestructive := regexp.MustCompile(`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`)
 	reSubNonDestructive := regexp.MustCompile(`"(\w+)":\s+toolutil\.Route(?:Action|VoidAction|ActionWithRequest|)\b`)
 
@@ -1801,15 +1806,18 @@ func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *
 		}
 		srcStr := string(src)
 		for _, m := range reSubDestructive.FindAllStringSubmatch(srcStr, -1) {
-			routeMap[m[1]] = append(routeMap[m[1]], routeInfo{pkg: e.Name(), destructive: true})
+			routeMap[m[1]] = append(routeMap[m[1]], destructiveRouteInfo{pkg: e.Name(), destructive: true})
 		}
 		for _, m := range reSubNonDestructive.FindAllStringSubmatch(srcStr, -1) {
-			routeMap[m[1]] = append(routeMap[m[1]], routeInfo{pkg: e.Name(), destructive: false})
+			routeMap[m[1]] = append(routeMap[m[1]], destructiveRouteInfo{pkg: e.Name(), destructive: false})
 		}
 	}
+	return routeMap
+}
 
-	// 2. Build set of individual tools with DeleteAnnotations per sub-package.
-	deleteTools := make(map[string]bool) // key: "pkg/action" approximate
+func collectDeleteAnnotationPackages(t *testing.T, entries []os.DirEntry) map[string]bool {
+	t.Helper()
+	deleteTools := make(map[string]bool)
 	reDeleteAnn := regexp.MustCompile(`Annotations:\s+toolutil\.DeleteAnnotations`)
 	for _, e := range entries {
 		if !e.IsDir() {
@@ -1824,8 +1832,11 @@ func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *
 			deleteTools[e.Name()] = true
 		}
 	}
+	return deleteTools
+}
 
-	// 3. Validate: destructive routes should correspond to packages with DeleteAnnotations.
+func validateDestructiveMetadataMatches(t *testing.T, routeMap map[string][]destructiveRouteInfo, deleteTools map[string]bool) int {
+	t.Helper()
 	var mismatches int
 	for action, infos := range routeMap {
 		for _, info := range infos {
@@ -1845,8 +1856,7 @@ func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *
 			}
 		}
 	}
-
-	t.Logf("validated %d route entries across %d packages, %d mismatches", len(routeMap), len(entries), mismatches)
+	return mismatches
 }
 
 // Actions that are destructive but do NOT contain a destructive keyword.
@@ -3272,34 +3282,44 @@ func TestResponseCompliance_ContentHasTextContent(t *testing.T) {
 			if result == nil {
 				t.Skip("nil dispatch -- tracked in markdown_audit_test.go")
 			}
-
-			if len(result.Content) == 0 {
-				t.Fatal("CallToolResult.Content is empty")
-			}
-
-			var foundText bool
-			for _, c := range result.Content {
-				switch v := c.(type) {
-				case *mcp.TextContent:
-					if v.Text == "" {
-						t.Error("TextContent.Text is empty")
-					} else {
-						foundText = true
-					}
-				case *mcp.ImageContent:
-					if len(v.Data) == 0 {
-						t.Error("ImageContent.Data is empty")
-					}
-				default:
-					t.Logf("unexpected content type: %T", c)
-				}
-			}
-
-			if !foundText {
-				t.Error("no non-empty TextContent found in Content array")
-			}
+			assertResultHasTextContent(t, result)
 		})
 	}
+}
+
+func assertResultHasTextContent(t *testing.T, result *mcp.CallToolResult) {
+	t.Helper()
+	if len(result.Content) == 0 {
+		t.Fatal("CallToolResult.Content is empty")
+	}
+	foundText := false
+	for _, content := range result.Content {
+		if contentHasValidText(t, content) {
+			foundText = true
+		}
+	}
+	if !foundText {
+		t.Error("no non-empty TextContent found in Content array")
+	}
+}
+
+func contentHasValidText(t *testing.T, content mcp.Content) bool {
+	t.Helper()
+	switch typed := content.(type) {
+	case *mcp.TextContent:
+		if typed.Text == "" {
+			t.Error("TextContent.Text is empty")
+			return false
+		}
+		return true
+	case *mcp.ImageContent:
+		if len(typed.Data) == 0 {
+			t.Error("ImageContent.Data is empty")
+		}
+	default:
+		t.Logf("unexpected content type: %T", content)
+	}
+	return false
 }
 
 // TestResponseCompliance_ErrorResponseFormat verifies that tool calls
@@ -3444,27 +3464,40 @@ func TestResponseCompliance_MarkdownContentWellFormed(t *testing.T) {
 				t.Fatal("expected at least 1 TextContent entry with markdown, got 0")
 			}
 
-			for i, c := range result.Content {
-				tc, ok := c.(*mcp.TextContent)
-				if !ok {
-					continue
-				}
-				text := strings.TrimSpace(tc.Text)
-				if text == "" {
-					t.Errorf("Content[%d]: TextContent.Text is empty", i)
-					continue
-				}
-				hasMarkdown := strings.Contains(text, "**") ||
-					strings.Contains(text, "| ") ||
-					strings.Contains(text, "## ") ||
-					strings.Contains(text, "- ")
-				if !hasMarkdown {
-					t.Errorf("Content[%d]: text lacks markdown indicators (headers, bold, tables, lists)", i)
-				}
-				t.Logf("Content[%d]: well-formed markdown (%d bytes)", i, len(text))
-			}
+			assertResultMarkdownContent(t, result)
 		})
 	}
+}
+
+func assertResultMarkdownContent(t *testing.T, result *mcp.CallToolResult) {
+	t.Helper()
+	for i, content := range result.Content {
+		textContent, ok := content.(*mcp.TextContent)
+		if !ok {
+			continue
+		}
+		assertMarkdownTextContent(t, i, textContent.Text)
+	}
+}
+
+func assertMarkdownTextContent(t *testing.T, index int, text string) {
+	t.Helper()
+	text = strings.TrimSpace(text)
+	if text == "" {
+		t.Errorf("Content[%d]: TextContent.Text is empty", index)
+		return
+	}
+	if !hasMarkdownIndicator(text) {
+		t.Errorf("Content[%d]: text lacks markdown indicators (headers, bold, tables, lists)", index)
+	}
+	t.Logf("Content[%d]: well-formed markdown (%d bytes)", index, len(text))
+}
+
+func hasMarkdownIndicator(text string) bool {
+	return strings.Contains(text, "**") ||
+		strings.Contains(text, "| ") ||
+		strings.Contains(text, "## ") ||
+		strings.Contains(text, "- ")
 }
 
 // TestResponseCompliance_NilResultFallback verifies that markdownForResult

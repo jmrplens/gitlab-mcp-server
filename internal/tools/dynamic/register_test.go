@@ -1700,6 +1700,15 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 }
 
 func coreActionScopedParameterAliasCases() []executeNormalizationCase {
+	cases := append([]executeNormalizationCase{}, coreJobAndRepositoryAliasCases()...)
+	cases = append(cases, coreProjectMemberAliasCases()...)
+	cases = append(cases, coreIssueAliasCases()...)
+	cases = append(cases, coreMergeRequestAndPipelineAliasCases()...)
+	cases = append(cases, coreBranchAliasCases()...)
+	return cases
+}
+
+func coreJobAndRepositoryAliasCases() []executeNormalizationCase {
 	return []executeNormalizationCase{
 		{
 			name:  "job status to scope",
@@ -1723,6 +1732,11 @@ func coreActionScopedParameterAliasCases() []executeNormalizationCase {
 				}
 			},
 		},
+	}
+}
+
+func coreProjectMemberAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name:  "project member role to numeric access level",
 			input: ExecuteInput{Action: "project.member_add", Params: map[string]any{"project_id": 123, "user_id": 5, "access_level": "Reporter"}},
@@ -1745,6 +1759,11 @@ func coreActionScopedParameterAliasCases() []executeNormalizationCase {
 				}
 			},
 		},
+	}
+}
+
+func coreIssueAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name:  "issue link aliases same project target",
 			input: ExecuteInput{Action: "issue.link_create", Params: map[string]any{"project_id": 123, "issue_iid": 1, "linked_issue_iid": 2, "type": "relates_to"}},
@@ -1803,6 +1822,11 @@ func coreActionScopedParameterAliasCases() []executeNormalizationCase {
 				}
 			},
 		},
+	}
+}
+
+func coreMergeRequestAndPipelineAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name:  "merge request emoji drops stale duration",
 			input: ExecuteInput{Action: "merge_request.emoji_mr_create", Params: map[string]any{"project_id": 123, "merge_request_iid": 3, "name": "eyes", "duration": "15m"}},
@@ -1831,6 +1855,11 @@ func coreActionScopedParameterAliasCases() []executeNormalizationCase {
 				}
 			},
 		},
+	}
+}
+
+func coreBranchAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name: "branch protect role access levels",
 			input: ExecuteInput{Action: "branch.protect", Params: map[string]any{
@@ -1854,54 +1883,24 @@ func coreActionScopedParameterAliasCases() []executeNormalizationCase {
 func resourceActionScopedParameterAliasCases() []executeNormalizationCase {
 	return []executeNormalizationCase{
 		{
-			name:  "group label update name alias",
-			input: ExecuteInput{Action: "group.group_label_update", Params: map[string]any{"group_id": "my-org", "label_id": 31, "name": "next-label"}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				if data["new_name"] != "next-label" {
-					t.Fatalf("output = %#v, want new_name next-label", output)
-				}
-				if _, ok := data["name"]; ok {
-					t.Fatalf("output = %#v, want name alias removed", output)
-				}
-			},
+			name:   "group label update name alias",
+			input:  ExecuteInput{Action: "group.group_label_update", Params: map[string]any{"group_id": "my-org", "label_id": 31, "name": "next-label"}},
+			assert: assertOutputAll(assertOutputField("new_name", "next-label"), assertOutputMissing("name")),
 		},
 		{
-			name:  "feature flag version alias",
-			input: ExecuteInput{Action: "feature_flags.feature_flag_create", Params: map[string]any{"project_id": 123, "name": "eval", "new_version_flag": "new_version_flag"}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				if data["version"] != "new_version_flag" {
-					t.Fatalf("output = %#v, want version new_version_flag", output)
-				}
-			},
+			name:   "feature flag version alias",
+			input:  ExecuteInput{Action: "feature_flags.feature_flag_create", Params: map[string]any{"project_id": 123, "name": "eval", "new_version_flag": "new_version_flag"}},
+			assert: assertOutputField("version", "new_version_flag"),
 		},
 		{
-			name:  "feature flag user list drops feature flag name",
-			input: ExecuteInput{Action: "feature_flags.ff_user_list_list", Params: map[string]any{"project_id": 123, "name": "eval_flag", "per_page": 20}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				if _, ok := data["name"]; ok {
-					t.Fatalf("output = %#v, want name removed", output)
-				}
-				if data["per_page"] != 20 {
-					t.Fatalf("output = %#v, want per_page 20", output)
-				}
-			},
+			name:   "feature flag user list drops feature flag name",
+			input:  ExecuteInput{Action: "feature_flags.ff_user_list_list", Params: map[string]any{"project_id": 123, "name": "eval_flag", "per_page": 20}},
+			assert: assertOutputAll(assertOutputMissing("name"), assertOutputField("per_page", 20)),
 		},
 		{
-			name:  "release link tag alias",
-			input: ExecuteInput{Action: "release.link_create", Params: map[string]any{"project_id": 123, "release_tag_name": "v1.0.0", "name": "asset", "url": "https://example.com/asset"}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				if data["tag_name"] != "v1.0.0" {
-					t.Fatalf("output = %#v, want tag_name v1.0.0", output)
-				}
-			},
+			name:   "release link tag alias",
+			input:  ExecuteInput{Action: "release.link_create", Params: map[string]any{"project_id": 123, "release_tag_name": "v1.0.0", "name": "asset", "url": "https://example.com/asset"}},
+			assert: assertOutputField("tag_name", "v1.0.0"),
 		},
 		{
 			name: "snippet create drops file action",
@@ -1914,15 +1913,7 @@ func resourceActionScopedParameterAliasCases() []executeNormalizationCase {
 					"content":   "body",
 				}},
 			}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				files := data["files"].([]any)
-				file := files[0].(map[string]any)
-				if _, ok := file["action"]; ok {
-					t.Fatalf("output = %#v, want files[0].action removed", output)
-				}
-			},
+			assert: assertOutputNestedFileMissing("action"),
 		},
 		{
 			name: "snippet create builds files from single file params",
@@ -1932,21 +1923,7 @@ func resourceActionScopedParameterAliasCases() []executeNormalizationCase {
 				"file_name":  "snippet.md",
 				"content":    "body",
 			}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				files := data["files"].([]any)
-				file := files[0].(map[string]any)
-				if file["file_path"] != "snippet.md" || file["content"] != "body" {
-					t.Fatalf("output = %#v, want files[0] with file_path and content", output)
-				}
-				if _, ok := data["file_name"]; ok {
-					t.Fatalf("output = %#v, want top-level file_name removed", output)
-				}
-				if _, ok := data["content"]; ok {
-					t.Fatalf("output = %#v, want top-level content removed", output)
-				}
-			},
+			assert: assertOutputAll(assertOutputNestedFileField("file_path", "snippet.md"), assertOutputNestedFileField("content", "body"), assertOutputMissing("file_name"), assertOutputMissing("content")),
 		},
 		{
 			name: "snippet create normalizes nested file name",
@@ -1958,31 +1935,69 @@ func resourceActionScopedParameterAliasCases() []executeNormalizationCase {
 					"content":   "body",
 				}},
 			}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				files := data["files"].([]any)
-				file := files[0].(map[string]any)
-				if file["file_path"] != "snippet.md" {
-					t.Fatalf("output = %#v, want files[0].file_path snippet.md", output)
-				}
-				if _, ok := file["file_name"]; ok {
-					t.Fatalf("output = %#v, want files[0].file_name removed", output)
-				}
-			},
+			assert: assertOutputAll(assertOutputNestedFileField("file_path", "snippet.md"), assertOutputNestedFileMissing("file_name")),
 		},
 		{
-			name:  "runner paused string to bool",
-			input: ExecuteInput{Action: "runner.update", Params: map[string]any{"runner_id": 99, "paused": "true"}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				if data["paused"] != true {
-					t.Fatalf("output = %#v, want paused true", output)
-				}
-			},
+			name:   "runner paused string to bool",
+			input:  ExecuteInput{Action: "runner.update", Params: map[string]any{"runner_id": 99, "paused": "true"}},
+			assert: assertOutputField("paused", true),
 		},
 	}
+}
+
+func assertOutputAll(assertions ...func(*testing.T, any)) func(*testing.T, any) {
+	return func(t *testing.T, output any) {
+		t.Helper()
+		for _, assertion := range assertions {
+			assertion(t, output)
+		}
+	}
+}
+
+func assertOutputField(key string, want any) func(*testing.T, any) {
+	return func(t *testing.T, output any) {
+		t.Helper()
+		data := output.(map[string]any)
+		if data[key] != want {
+			t.Fatalf("output = %#v, want %s %v", output, key, want)
+		}
+	}
+}
+
+func assertOutputMissing(key string) func(*testing.T, any) {
+	return func(t *testing.T, output any) {
+		t.Helper()
+		data := output.(map[string]any)
+		if _, ok := data[key]; ok {
+			t.Fatalf("output = %#v, want %s removed", output, key)
+		}
+	}
+}
+
+func assertOutputNestedFileField(key string, want any) func(*testing.T, any) {
+	return func(t *testing.T, output any) {
+		t.Helper()
+		file := firstOutputFile(output)
+		if file[key] != want {
+			t.Fatalf("output = %#v, want files[0].%s %v", output, key, want)
+		}
+	}
+}
+
+func assertOutputNestedFileMissing(key string) func(*testing.T, any) {
+	return func(t *testing.T, output any) {
+		t.Helper()
+		file := firstOutputFile(output)
+		if _, ok := file[key]; ok {
+			t.Fatalf("output = %#v, want files[0].%s removed", output, key)
+		}
+	}
+}
+
+func firstOutputFile(output any) map[string]any {
+	data := output.(map[string]any)
+	files := data["files"].([]any)
+	return files[0].(map[string]any)
 }
 
 func runExecuteNormalizationCases(t *testing.T, registry *Registry, tests []executeNormalizationCase) {
@@ -3800,63 +3815,69 @@ func TestRegistry_DefensiveBranches(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
 	t.Run("describe requires action", func(t *testing.T) {
-		result, output, err := registry.Describe(t.Context(), nil, DescribeInput{})
-		if err != nil {
-			t.Fatalf("Describe() error = %v", err)
-		}
-		if result == nil || !result.IsError {
-			t.Fatalf("Describe() result = %+v, want tool error", result)
-		}
-		if output.Count != 0 || len(output.Actions) != 0 {
-			t.Fatalf("Describe() output = %+v, want empty output", output)
-		}
+		assertDescribeRequiresAction(t, registry)
 	})
 
 	t.Run("execute requires action", func(t *testing.T) {
-		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{})
-		if err != nil {
-			t.Fatalf("Execute() error = %v", err)
-		}
-		if result == nil || !result.IsError {
-			t.Fatalf("Execute() result = %+v, want tool error", result)
-		}
-		if output != nil {
-			t.Fatalf("Execute() output = %+v, want nil", output)
-		}
+		assertExecuteToolError(t, registry, ExecuteInput{}, false)
 	})
 
 	t.Run("execute unknown action without suggestions", func(t *testing.T) {
-		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "zzzz"})
-		if err != nil {
-			t.Fatalf("Execute() error = %v", err)
-		}
-		if result == nil || !result.IsError {
-			t.Fatalf("Execute() result = %+v, want tool error", result)
-		}
-		if output != nil {
-			t.Fatalf("Execute() output = %+v, want nil", output)
-		}
-		if strings.Contains(textContent(result), "Did you mean") {
-			t.Fatalf("Execute() error text = %q, want no suggestions", textContent(result))
-		}
+		assertExecuteToolError(t, registry, ExecuteInput{Action: "zzzz"}, true)
 	})
 
 	t.Run("execute initializes nil params", func(t *testing.T) {
-		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.hook_list"})
-		if err != nil {
-			t.Fatalf("Execute() error = %v", err)
-		}
-		if result == nil || result.IsError {
-			t.Fatalf("Execute() result = %+v, want non-error", result)
-		}
-		data, ok := output.(map[string]any)
-		if !ok {
-			t.Fatalf("Execute() output type = %T, want map[string]any", output)
-		}
-		if data["hooks"] != true {
-			t.Fatalf("Execute() output = %+v, want hooks=true", data)
-		}
+		assertExecuteInitializesNilParams(t, registry)
 	})
+}
+
+func assertDescribeRequiresAction(t *testing.T, registry *Registry) {
+	t.Helper()
+	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Describe() result = %+v, want tool error", result)
+	}
+	if output.Count != 0 || len(output.Actions) != 0 {
+		t.Fatalf("Describe() output = %+v, want empty output", output)
+	}
+}
+
+func assertExecuteToolError(t *testing.T, registry *Registry, input ExecuteInput, rejectSuggestions bool) {
+	t.Helper()
+	result, output, err := registry.Execute(t.Context(), nil, input)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	if rejectSuggestions && strings.Contains(textContent(result), "Did you mean") {
+		t.Fatalf("Execute() error text = %q, want no suggestions", textContent(result))
+	}
+}
+
+func assertExecuteInitializesNilParams(t *testing.T, registry *Registry) {
+	t.Helper()
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.hook_list"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Execute() result = %+v, want non-error", result)
+	}
+	data, ok := output.(map[string]any)
+	if !ok {
+		t.Fatalf("Execute() output type = %T, want map[string]any", output)
+	}
+	if data["hooks"] != true {
+		t.Fatalf("Execute() output = %+v, want hooks=true", data)
+	}
 }
 
 // TestRegistry_HelperCoverage validates deterministic helper behavior used by

@@ -27,7 +27,7 @@
 | Test files (test/e2e/suite/)                          |    109 |
 | Tool sub-packages tested                              |    174 |
 | Core packages tested                                  |     19 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  89.6% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  89.5% |
 | Overall coverage (`go test ./internal/...`)           |  98.8% |
 | Average package coverage                              |  95.5% |
 
@@ -72,9 +72,9 @@
 | roots        |        21 |    98.5% | Package roots provides client workspace discovery via the MCP Roots capability.                                                                                                                                   |
 | sampling     |        83 |    99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis.                                                          |
 | serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
-| testutil     |        25 |    91.9% | Package testutil provides shared test utilities for MCP tool tests.                                                                                                                                               |
+| testutil     |        25 |    93.5% | Package testutil provides shared test utilities for MCP tool tests.                                                                                                                                               |
 | toolutil     |       474 |    96.4% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
-| wizard       |       252 |    93.1% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
+| wizard       |       252 |    92.9% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
 | **Subtotal** | **1,770** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
@@ -116,7 +116,7 @@
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        41 |          2 |   100.0% |         8 |
 | accesstokens            |        87 |          2 |    99.0% |        18 |
-| actioncatalog           |        26 |          4 |    98.6% |         0 |
+| actioncatalog           |        26 |          4 |    98.7% |         0 |
 | actioncompat            |        15 |          2 |    96.3% |         0 |
 | adminspecs              |         4 |          1 |   100.0% |        91 |
 | alertmanagement         |        28 |          2 |    98.9% |         4 |
@@ -133,7 +133,7 @@
 | branchrules             |        15 |          1 |   100.0% |         1 |
 | broadcastmessages       |        28 |          2 |   100.0% |         5 |
 | bulkimports             |        35 |          2 |   100.0% |         7 |
-| cicatalog               |        19 |          1 |   100.0% |         2 |
+| cicatalog               |        19 |          1 |    99.3% |         2 |
 | cilint                  |        26 |          1 |   100.0% |         2 |
 | civariables             |        42 |          2 |   100.0% |         5 |
 | ciyamltemplates         |        21 |          1 |   100.0% |         2 |
@@ -299,7 +299,7 @@
 | Package                         | Coverage |
 | ------------------------------- | -------: |
 | cmd/add_docs                    |    61.9% |
-| cmd/audit_action_spec_coverage  |    77.0% |
+| cmd/audit_action_spec_coverage  |    77.5% |
 | cmd/audit_dynamic_aliases       |    60.0% |
 | cmd/audit_godocs                |    50.7% |
 | cmd/audit_meta_schema           |    82.6% |
@@ -308,14 +308,14 @@
 | cmd/audit_test_names            |    81.6% |
 | cmd/audit_tokens                |    19.5% |
 | cmd/audit_tools                 |    34.9% |
-| cmd/eval_mcp_surfaces           |    67.6% |
+| cmd/eval_mcp_surfaces           |    67.3% |
 | cmd/find_dupes                  |    90.1% |
-| cmd/format_md_tables            |    86.7% |
+| cmd/format_md_tables            |    87.2% |
 | cmd/gen_action_catalog_manifest |    58.3% |
 | cmd/gen_docker_tools            |    81.9% |
-| cmd/gen_llms                    |    27.3% |
+| cmd/gen_llms                    |    27.4% |
 | cmd/gen_readme                  |    34.9% |
-| cmd/gen_testing_docs            |    27.1% |
+| cmd/gen_testing_docs            |    27.6% |
 | cmd/server                      |    78.2% |
 
 ### Core Packages
@@ -338,9 +338,9 @@
 | roots       |    98.5% |
 | sampling    |    99.5% |
 | serverpool  |    99.6% |
-| testutil    |    91.9% |
+| testutil    |    93.5% |
 | toolutil    |    96.4% |
-| wizard      |    93.1% |
+| wizard      |    92.9% |
 
 ### Tool Sub-Packages
 
@@ -349,7 +349,7 @@
 | tools (orch.)           |    98.2% |
 | accessrequests          |   100.0% |
 | accesstokens            |    99.0% |
-| actioncatalog           |    98.6% |
+| actioncatalog           |    98.7% |
 | actioncompat            |    96.3% |
 | adminspecs              |   100.0% |
 | alertmanagement         |    98.9% |
@@ -366,7 +366,7 @@
 | branchrules             |   100.0% |
 | broadcastmessages       |   100.0% |
 | bulkimports             |   100.0% |
-| cicatalog               |   100.0% |
+| cicatalog               |    99.3% |
 | cilint                  |   100.0% |
 | civariables             |   100.0% |
 | ciyamltemplates         |   100.0% |
@@ -526,8 +526,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 
 - **cmd/audit_tokens** (19.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_output** (26.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_testing_docs** (27.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_llms** (27.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_llms** (27.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_testing_docs** (27.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tools** (34.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_readme** (34.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_metrics** (35.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
@@ -536,13 +536,13 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/add_docs** (61.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_mcp_surfaces** (67.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_action_spec_coverage** (77.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_mcp_surfaces** (67.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_action_spec_coverage** (77.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.2%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_test_names** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_docker_tools** (81.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_meta_schema** (82.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/format_md_tables** (86.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/format_md_tables** (87.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 
 <!-- END TESTING STATS -->
 

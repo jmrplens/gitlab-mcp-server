@@ -1391,31 +1391,7 @@ func TestListProjects_CancelledContext(t *testing.T) {
 func TestListProjects_AllOptionalFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/99/projects" {
-			q := r.URL.Query()
-			if got := q.Get("search"); got != "myapp" {
-				t.Errorf("search = %q, want %q", got, "myapp")
-			}
-			if got := q.Get("visibility"); got != "private" {
-				t.Errorf("visibility = %q, want %q", got, "private")
-			}
-			if got := q.Get("order_by"); got != "name" {
-				t.Errorf("order_by = %q, want %q", got, "name")
-			}
-			if got := q.Get("sort"); got != "asc" {
-				t.Errorf("sort = %q, want %q", got, "asc")
-			}
-			if got := q.Get("simple"); got != "true" {
-				t.Errorf("simple = %q, want %q", got, "true")
-			}
-			if got := q.Get("owned"); got != "true" {
-				t.Errorf("owned = %q, want %q", got, "true")
-			}
-			if got := q.Get("starred"); got != "true" {
-				t.Errorf("starred = %q, want %q", got, "true")
-			}
-			if got := q.Get("include_subgroups"); got != "true" {
-				t.Errorf("include_subgroups = %q, want %q", got, "true")
-			}
+			assertListProjectsOptionalQuery(t, r)
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
 		}
@@ -1440,6 +1416,26 @@ func TestListProjects_AllOptionalFilters(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+func assertListProjectsOptionalQuery(t *testing.T, r *http.Request) {
+	t.Helper()
+	q := r.URL.Query()
+	expected := map[string]string{
+		"search":            "myapp",
+		"visibility":        "private",
+		"order_by":          "name",
+		"sort":              "asc",
+		"simple":            "true",
+		"owned":             "true",
+		"starred":           "true",
+		"include_subgroups": "true",
+	}
+	for key, want := range expected {
+		if got := q.Get(key); got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
 	}
 }
 

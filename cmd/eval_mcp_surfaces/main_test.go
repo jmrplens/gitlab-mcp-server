@@ -4350,30 +4350,8 @@ func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 		if err != nil {
 			return nil, nil, err
 		}
-		if result.Action != "accept" || result.Content["confirmed"] != true {
-			return nil, nil, fmt.Errorf("elicitation result = %+v, want accepted confirmation", result)
-		}
-		if _, ok := result.Content["enabled"].(bool); !ok {
-			return nil, nil, fmt.Errorf("elicitation enabled = %T, want bool", result.Content["enabled"])
-		}
-		count, ok := result.Content["count"]
-		if !ok {
-			return nil, nil, errors.New("elicitation count must be a numeric value")
-		}
-		switch typed := count.(type) {
-		case float64:
-			if typed != 0 {
-				return nil, nil, fmt.Errorf("elicitation count = %v, want numeric zero", typed)
-			}
-		case int:
-			if typed != 0 {
-				return nil, nil, fmt.Errorf("elicitation count = %v, want numeric zero", typed)
-			}
-		default:
-			return nil, nil, fmt.Errorf("elicitation count must be a numeric value, got %T", count)
-		}
-		if result.Content["selection"] != "private" {
-			return nil, nil, fmt.Errorf("elicitation selection = %v, want private", result.Content["selection"])
+		if validationErr := validateElicitationProbeResult(result); validationErr != nil {
+			return nil, nil, validationErr
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprint(result.Content["title"])}}}, nil, nil
 	})
@@ -4397,6 +4375,41 @@ func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 	}
 	if got := toolResultContent(result); !strings.Contains(got, "Evaluation elicitation test") {
 		t.Fatalf("elicitation result = %q, want evaluator title", got)
+	}
+}
+
+func validateElicitationProbeResult(result *mcp.ElicitResult) error {
+	if result.Action != "accept" || result.Content["confirmed"] != true {
+		return fmt.Errorf("elicitation result = %+v, want accepted confirmation", result)
+	}
+	if _, ok := result.Content["enabled"].(bool); !ok {
+		return fmt.Errorf("elicitation enabled = %T, want bool", result.Content["enabled"])
+	}
+	if err := validateElicitationNumericZero(result.Content["count"]); err != nil {
+		return err
+	}
+	if result.Content["selection"] != "private" {
+		return fmt.Errorf("elicitation selection = %v, want private", result.Content["selection"])
+	}
+	return nil
+}
+
+func validateElicitationNumericZero(count any) error {
+	switch typed := count.(type) {
+	case float64:
+		if typed == 0 {
+			return nil
+		}
+		return fmt.Errorf("elicitation count = %v, want numeric zero", typed)
+	case int:
+		if typed == 0 {
+			return nil
+		}
+		return fmt.Errorf("elicitation count = %v, want numeric zero", typed)
+	case nil:
+		return errors.New("elicitation count must be a numeric value")
+	default:
+		return fmt.Errorf("elicitation count must be a numeric value, got %T", count)
 	}
 }
 

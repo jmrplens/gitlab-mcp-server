@@ -132,40 +132,56 @@ func FormatMRReviewForAnalysis(mr mergerequests.Output, discussions mrdiscussion
 	fmt.Fprintf(&b, "- **Source**: %s → %s\n", mr.SourceBranch, mr.TargetBranch)
 
 	if len(approvals.Rules) > 0 {
-		b.WriteString("\n## Approval Rules\n\n")
-		for _, rule := range approvals.Rules {
-			status := toolutil.BoolEmoji(rule.Approved)
-			if rule.Approved {
-				status += " Approved"
-			} else {
-				status += " Not approved"
-			}
-			fmt.Fprintf(&b, "- **%s**: %s (required: %d, approved by: %s)\n",
-				rule.Name, status, rule.ApprovalsRequired,
-				strings.Join(rule.ApprovedByNames, ", "))
-		}
+		writeMRReviewApprovalRules(&b, approvals.Rules)
 	}
 
 	if len(discussions.Discussions) > 0 {
-		b.WriteString("\n## Discussions\n\n")
-		for _, d := range discussions.Discussions {
-			for _, n := range d.Notes {
-				if n.System {
-					continue
-				}
-				resolved := ""
-				if n.Resolvable {
-					if n.Resolved {
-						resolved = " [RESOLVED]"
-					} else {
-						resolved = " [UNRESOLVED]"
-					}
-				}
-				fmt.Fprintf(&b, "**%s** (%s)%s:\n%s\n\n---\n\n", n.Author, toolutil.FormatTime(n.CreatedAt), resolved, n.Body)
-			}
-		}
+		writeMRReviewDiscussions(&b, discussions.Discussions)
 	}
 	return b.String()
+}
+
+func writeMRReviewApprovalRules(b *strings.Builder, rules []mrapprovals.RuleOutput) {
+	b.WriteString("\n## Approval Rules\n\n")
+	for _, rule := range rules {
+		fmt.Fprintf(b, "- **%s**: %s (required: %d, approved by: %s)\n",
+			rule.Name, mrReviewApprovalStatus(rule.Approved), rule.ApprovalsRequired,
+			strings.Join(rule.ApprovedByNames, ", "))
+	}
+}
+
+func mrReviewApprovalStatus(approved bool) string {
+	status := toolutil.BoolEmoji(approved)
+	if approved {
+		return status + " Approved"
+	}
+	return status + " Not approved"
+}
+
+func writeMRReviewDiscussions(b *strings.Builder, discussions []mrdiscussions.Output) {
+	b.WriteString("\n## Discussions\n\n")
+	for _, discussion := range discussions {
+		for _, note := range discussion.Notes {
+			writeMRReviewNote(b, note)
+		}
+	}
+}
+
+func writeMRReviewNote(b *strings.Builder, note mrdiscussions.NoteOutput) {
+	if note.System {
+		return
+	}
+	fmt.Fprintf(b, "**%s** (%s)%s:\n%s\n\n---\n\n", note.Author, toolutil.FormatTime(note.CreatedAt), mrReviewResolutionSuffix(note), note.Body)
+}
+
+func mrReviewResolutionSuffix(note mrdiscussions.NoteOutput) string {
+	if !note.Resolvable {
+		return ""
+	}
+	if note.Resolved {
+		return " [RESOLVED]"
+	}
+	return " [UNRESOLVED]"
 }
 
 // FormatSummarizeMRReviewMarkdown renders an LLM-generated MR review summary.

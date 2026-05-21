@@ -555,34 +555,44 @@ func TestProviderCallOnce_HTTPErrorTraceIncludesRequestAndRawResponse(t *testing
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-				return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(responseText)), Header: make(http.Header)}, nil
-			})}
-
-			_, retry, err := tt.provider.callOnce(context.Background(), client, "secret-key", tt.request)
-			if err == nil {
-				t.Fatal("callOnce() error = nil, want provider error")
-			}
-			if !retry {
-				t.Fatal("retry = false, want true for 503")
-			}
-			var providerErr *modelProviderCallError
-			if !errors.As(err, &providerErr) || providerErr.Trace == nil {
-				t.Fatalf("error = %v, want provider trace", err)
-			}
-			if providerErr.Trace.Provider != tt.wantProvider || providerErr.Trace.Method != http.MethodPost {
-				t.Fatalf("trace = %+v, want provider %s POST", providerErr.Trace, tt.wantProvider)
-			}
-			if providerErr.Trace.ResponseStatus != http.StatusServiceUnavailable || providerErr.Trace.ResponseBodyText != responseText {
-				t.Fatalf("trace = %+v, want raw non-JSON 503 response", providerErr.Trace)
-			}
-			if len(providerErr.Trace.RequestBody) == 0 {
-				t.Fatal("request trace is empty, want serialized provider request")
-			}
-			if !strings.Contains(string(providerErr.Trace.RequestBody), tt.request.Model) && !strings.Contains(providerErr.Trace.Endpoint, tt.request.Model) {
-				t.Fatalf("trace request = %s endpoint = %s, want model name", providerErr.Trace.RequestBody, providerErr.Trace.Endpoint)
-			}
+			assertProviderHTTPErrorTrace(t, tt.provider, tt.request, tt.wantProvider, responseText)
 		})
+	}
+}
+
+func assertProviderHTTPErrorTrace(t *testing.T, provider modelProvider, request modelProviderRequest, wantProvider, responseText string) {
+	t.Helper()
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader(responseText)), Header: make(http.Header)}, nil
+	})}
+
+	_, retry, err := provider.callOnce(context.Background(), client, "secret-key", request)
+	if err == nil {
+		t.Fatal("callOnce() error = nil, want provider error")
+	}
+	if !retry {
+		t.Fatal("retry = false, want true for 503")
+	}
+	var providerErr *modelProviderCallError
+	if !errors.As(err, &providerErr) || providerErr.Trace == nil {
+		t.Fatalf("error = %v, want provider trace", err)
+	}
+	assertProviderTrace(t, providerErr.Trace, request, wantProvider, responseText)
+}
+
+func assertProviderTrace(t *testing.T, trace *modelProviderTrace, request modelProviderRequest, wantProvider, responseText string) {
+	t.Helper()
+	if trace.Provider != wantProvider || trace.Method != http.MethodPost {
+		t.Fatalf("trace = %+v, want provider %s POST", trace, wantProvider)
+	}
+	if trace.ResponseStatus != http.StatusServiceUnavailable || trace.ResponseBodyText != responseText {
+		t.Fatalf("trace = %+v, want raw non-JSON 503 response", trace)
+	}
+	if len(trace.RequestBody) == 0 {
+		t.Fatal("request trace is empty, want serialized provider request")
+	}
+	if !strings.Contains(string(trace.RequestBody), request.Model) && !strings.Contains(trace.Endpoint, request.Model) {
+		t.Fatalf("trace request = %s endpoint = %s, want model name", trace.RequestBody, trace.Endpoint)
 	}
 }
 

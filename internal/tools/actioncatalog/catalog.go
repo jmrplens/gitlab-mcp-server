@@ -421,34 +421,55 @@ func (c *Catalog) Validate() error {
 	}
 	seenAliases := make(map[string]ActionID)
 	for _, group := range c.Groups() {
-		if strings.TrimSpace(group.ToolName) == "" {
-			return errors.New(errToolNameRequired)
-		}
-		for _, action := range group.ActionsInOrder() {
-			if strings.TrimSpace(action.Name) == "" {
-				return fmt.Errorf("action name is required for tool %q", group.ToolName)
-			}
-			if action.Route.Handler == nil {
-				return fmt.Errorf("action %q has nil handler", action.ID)
-			}
-			if action.Route.InputSchema == nil {
-				return fmt.Errorf("action %q has nil input schema", action.ID)
-			}
-			if tool, actionName := toolutil.ParseMetaSchemaURI(action.SchemaURI); tool != action.ToolName || actionName != action.Name {
-				return fmt.Errorf("action %q has malformed schema URI %q", action.ID, action.SchemaURI)
-			}
-			for _, alias := range action.Aliases {
-				alias = strings.TrimSpace(strings.ToLower(alias))
-				if alias == "" {
-					continue
-				}
-				if existing, ok := seenAliases[alias]; ok && existing != action.ID {
-					return fmt.Errorf("alias %q maps to both %q and %q", alias, existing, action.ID)
-				}
-				seenAliases[alias] = action.ID
-			}
+		if err := validateCatalogGroup(group, seenAliases); err != nil {
+			return err
 		}
 	}
+	return nil
+}
+
+func validateCatalogGroup(group Group, seenAliases map[string]ActionID) error {
+	if strings.TrimSpace(group.ToolName) == "" {
+		return errors.New(errToolNameRequired)
+	}
+	for _, action := range group.ActionsInOrder() {
+		if err := validateCatalogAction(group, action, seenAliases); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateCatalogAction(group Group, action Action, seenAliases map[string]ActionID) error {
+	if strings.TrimSpace(action.Name) == "" {
+		return fmt.Errorf("action name is required for tool %q", group.ToolName)
+	}
+	if action.Route.Handler == nil {
+		return fmt.Errorf("action %q has nil handler", action.ID)
+	}
+	if action.Route.InputSchema == nil {
+		return fmt.Errorf("action %q has nil input schema", action.ID)
+	}
+	if tool, actionName := toolutil.ParseMetaSchemaURI(action.SchemaURI); tool != action.ToolName || actionName != action.Name {
+		return fmt.Errorf("action %q has malformed schema URI %q", action.ID, action.SchemaURI)
+	}
+	for _, alias := range action.Aliases {
+		if err := recordCatalogAlias(seenAliases, action.ID, alias); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func recordCatalogAlias(seenAliases map[string]ActionID, actionID ActionID, alias string) error {
+	alias = strings.TrimSpace(strings.ToLower(alias))
+	if alias == "" {
+		return nil
+	}
+	if existing, ok := seenAliases[alias]; ok && existing != actionID {
+		return fmt.Errorf("alias %q maps to both %q and %q", alias, existing, actionID)
+	}
+	seenAliases[alias] = actionID
 	return nil
 }
 

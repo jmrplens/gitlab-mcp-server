@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -229,20 +230,8 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 		}
 
 		req.GitLabURL = effectiveGitLabURL(req.GitLabURL)
-
-		// Allow empty token when an existing config has one
-		if req.GitLabToken == "" {
-			existing, hasExisting := loadExistingConfigFn()
-			if hasExisting && existing.GitLabToken != "" {
-				req.GitLabToken = existing.GitLabToken
-			} else {
-				http.Error(rw, "GitLab token is required", http.StatusBadRequest)
-				return
-			}
-		}
-
-		if _, err := url.ParseRequestURI(req.GitLabURL); err != nil {
-			http.Error(rw, fmt.Sprintf("Invalid GitLab URL: %v", err), http.StatusBadRequest)
+		if err := validateConfigureRequest(&req); err != nil {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -251,50 +240,8 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 			return
 		}
 
-		// Install binary
-		installDir := req.InstallPath
-		binaryPath := installDir
-		if strings.HasSuffix(installDir, DefaultBinaryName()) {
-			installDir = filepath.Dir(installDir)
-		}
-		expandedDir, err := ExpandPath(installDir)
-		if err == nil {
-			installed, installErr := InstallBinary(expandedDir)
-			if installErr == nil {
-				binaryPath = installed
-				fmt.Fprintf(w, "  * Binary installed to %s\n", installed)
-			} else {
-				exe, _ := os.Executable()
-				binaryPath = exe
-				fmt.Fprintf(w, "  ! Could not install: %v (using current location)\n", installErr)
-			}
-		}
-
-		cfg := ServerConfig{
-			BinaryPath:        binaryPath,
-			GitLabURL:         req.GitLabURL,
-			GitLabToken:       req.GitLabToken,
-			SkipTLSVerify:     req.SkipTLSVerify,
-			MetaTools:         req.ToolSurface != "individual",
-			ToolSurface:       req.ToolSurface,
-			CapabilitySurface: req.CapabilitySurface,
-			MetaParamSchema:   req.MetaParamSchema,
-			Enterprise:        req.Enterprise,
-			ReadOnly:          req.ReadOnly,
-			SafeMode:          req.SafeMode,
-			EmbeddedResources: req.EmbeddedResources,
-			ExcludeTools:      req.ExcludeTools,
-			IgnoreScopes:      req.IgnoreScopes,
-			UploadMaxFileSize: req.UploadMaxFileSize,
-			AutoUpdate:        req.AutoUpdate,
-			AutoUpdateMode:    req.AutoUpdateMode,
-			AutoUpdateRepo:    req.AutoUpdateRepo,
-			AutoUpdateTimeout: req.AutoUpdateTimeout,
-			RateLimitRPS:      req.RateLimitRPS,
-			RateLimitBurst:    req.RateLimitBurst,
-			YoloMode:          req.YoloMode,
-			LogLevel:          req.LogLevel,
-		}.withDefaults()
+		installDir, binaryPath := installBinaryForConfigure(w, req.InstallPath)
+		cfg := serverConfigFromConfigureRequest(req, binaryPath)
 
 		result := &Result{
 			InstallDir:      installDir,
@@ -307,27 +254,93 @@ func handleConfigure(w io.Writer, onDone func(error)) http.HandlerFunc {
 		printSection(w, "Writing Configurations (Web UI)")
 		applyErr := Apply(w, result)
 
-		// Build response
-		clients := allClientsFn()
-		resp := configureResponse{}
-		var jbBuf strings.Builder
-		for _, idx := range req.SelectedClients {
-			if idx < 0 || idx >= len(clients) {
-				continue
-			}
-			c := clients[idx]
-			resp.Configured = append(resp.Configured, c.Name)
-			if c.DisplayOnly {
-				_ = printJetBrainsConfig(&jbBuf, result.Config)
-				resp.JetBrainsJSON = jbBuf.String()
-			}
-		}
+		resp := configureResponseForSelection(req.SelectedClients, result.Config)
 
 		rw.Header().Set(headerContentType, mimeJSON)
 		_ = json.NewEncoder(rw).Encode(resp)
 
 		onDone(applyErr)
 	}
+}
+
+func validateConfigureRequest(req *configureRequest) error {
+	if req.GitLabToken == "" {
+		existing, hasExisting := loadExistingConfigFn()
+		if !hasExisting || existing.GitLabToken == "" {
+			return errors.New("GitLab token is required")
+		}
+		req.GitLabToken = existing.GitLabToken
+	}
+	if _, err := url.ParseRequestURI(req.GitLabURL); err != nil {
+		return fmt.Errorf("invalid GitLab URL: %w", err)
+	}
+	return nil
+}
+
+func installBinaryForConfigure(w io.Writer, requestedPath string) (installDir, binaryPath string) {
+	installDir = requestedPath
+	binaryPath = installDir
+	if strings.HasSuffix(installDir, DefaultBinaryName()) {
+		installDir = filepath.Dir(installDir)
+	}
+	expandedDir, err := ExpandPath(installDir)
+	if err != nil {
+		return installDir, binaryPath
+	}
+	installed, installErr := InstallBinary(expandedDir)
+	if installErr == nil {
+		fmt.Fprintf(w, "  * Binary installed to %s\n", installed)
+		return installDir, installed
+	}
+	exe, _ := os.Executable()
+	fmt.Fprintf(w, "  ! Could not install: %v (using current location)\n", installErr)
+	return installDir, exe
+}
+
+func serverConfigFromConfigureRequest(req configureRequest, binaryPath string) ServerConfig {
+	return ServerConfig{
+		BinaryPath:        binaryPath,
+		GitLabURL:         req.GitLabURL,
+		GitLabToken:       req.GitLabToken,
+		SkipTLSVerify:     req.SkipTLSVerify,
+		MetaTools:         req.ToolSurface != "individual",
+		ToolSurface:       req.ToolSurface,
+		CapabilitySurface: req.CapabilitySurface,
+		MetaParamSchema:   req.MetaParamSchema,
+		Enterprise:        req.Enterprise,
+		ReadOnly:          req.ReadOnly,
+		SafeMode:          req.SafeMode,
+		EmbeddedResources: req.EmbeddedResources,
+		ExcludeTools:      req.ExcludeTools,
+		IgnoreScopes:      req.IgnoreScopes,
+		UploadMaxFileSize: req.UploadMaxFileSize,
+		AutoUpdate:        req.AutoUpdate,
+		AutoUpdateMode:    req.AutoUpdateMode,
+		AutoUpdateRepo:    req.AutoUpdateRepo,
+		AutoUpdateTimeout: req.AutoUpdateTimeout,
+		RateLimitRPS:      req.RateLimitRPS,
+		RateLimitBurst:    req.RateLimitBurst,
+		YoloMode:          req.YoloMode,
+		LogLevel:          req.LogLevel,
+	}.withDefaults()
+}
+
+func configureResponseForSelection(selectedClients []int, config ServerConfig) configureResponse {
+	clients := allClientsFn()
+	resp := configureResponse{}
+	var jetBrains strings.Builder
+	for _, idx := range selectedClients {
+		if idx < 0 || idx >= len(clients) {
+			continue
+		}
+		client := clients[idx]
+		resp.Configured = append(resp.Configured, client.Name)
+		if client.DisplayOnly {
+			_ = printJetBrainsConfig(&jetBrains, config)
+			resp.JetBrainsJSON = jetBrains.String()
+		}
+	}
+	return resp
 }
 
 func normalizeConfigureRequest(req *configureRequest) error {

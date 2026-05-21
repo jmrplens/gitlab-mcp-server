@@ -120,46 +120,55 @@ func parseOptions(args []string) (options, error) {
 func discoverMarkdownFiles(rootFS *os.Root, root string, paths []string) ([]string, error) {
 	files := make([]string, 0)
 	for _, item := range paths {
-		rel, err := resolveInputPath(root, item)
+		discovered, err := markdownFilesForInput(rootFS, root, item)
 		if err != nil {
 			return nil, err
 		}
-		info, err := rootFS.Stat(rel)
-		if err != nil {
-			return nil, fmt.Errorf(statPathErrorFormat, item, err)
-		}
-		if info.IsDir() {
-			walkErr := iofs.WalkDir(rootFS.FS(), filepath.ToSlash(rel), func(path string, entry iofs.DirEntry, err error) error {
-				if err != nil {
-					return err
-				}
-				if entry.IsDir() {
-					return nil
-				}
-				if strings.EqualFold(filepath.Ext(entry.Name()), ".md") {
-					relPath := filepath.FromSlash(path)
-					fileInfo, statErr := rootFS.Stat(relPath)
-					if statErr != nil {
-						return fmt.Errorf(statPathErrorFormat, relPath, statErr)
-					}
-					if !fileInfo.IsDir() {
-						files = append(files, relPath)
-					}
-				}
-				return nil
-			})
-			if walkErr != nil {
-				return nil, fmt.Errorf("walk %s: %w", item, walkErr)
-			}
-			continue
-		}
-		if strings.EqualFold(filepath.Ext(rel), ".md") {
-			files = append(files, rel)
-		}
+		files = append(files, discovered...)
 	}
 	sort.Slice(files, func(i, j int) bool {
 		return filepath.ToSlash(files[i]) < filepath.ToSlash(files[j])
 	})
+	return files, nil
+}
+
+func markdownFilesForInput(rootFS *os.Root, root, item string) ([]string, error) {
+	rel, err := resolveInputPath(root, item)
+	if err != nil {
+		return nil, err
+	}
+	info, err := rootFS.Stat(rel)
+	if err != nil {
+		return nil, fmt.Errorf(statPathErrorFormat, item, err)
+	}
+	if info.IsDir() {
+		return markdownFilesInDir(rootFS, rel, item)
+	}
+	if !strings.EqualFold(filepath.Ext(rel), ".md") {
+		return nil, nil
+	}
+	return []string{rel}, nil
+}
+
+func markdownFilesInDir(rootFS *os.Root, rel, item string) ([]string, error) {
+	files := make([]string, 0)
+	walkErr := iofs.WalkDir(rootFS.FS(), filepath.ToSlash(rel), func(path string, entry iofs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".md") {
+			return err
+		}
+		relPath := filepath.FromSlash(path)
+		fileInfo, statErr := rootFS.Stat(relPath)
+		if statErr != nil {
+			return fmt.Errorf(statPathErrorFormat, relPath, statErr)
+		}
+		if !fileInfo.IsDir() {
+			files = append(files, relPath)
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return nil, fmt.Errorf("walk %s: %w", item, walkErr)
+	}
 	return files, nil
 }
 

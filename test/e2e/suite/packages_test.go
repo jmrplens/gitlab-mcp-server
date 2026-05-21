@@ -58,101 +58,120 @@ func testIndividualPackageLifecycle(ctx context.Context, t *testing.T, proj Proj
 	var packageFileID int64
 
 	t.Run("Individual/Publish", func(t *testing.T) {
-		out, err := callToolOn[packages.PublishOutput](ctx, sess.individual, "gitlab_package_publish", packages.PublishInput{
-			ProjectID:      proj.pidOf(),
-			PackageName:    fixture.pkgName,
-			PackageVersion: fixture.pkgVersion,
-			FileName:       fixture.fileName,
-			ContentBase64:  fixture.fileContent,
-		})
-		if err != nil {
-			t.Fatalf("publish: %v", err)
-		}
-		if out.PackageID == 0 {
-			t.Fatal("expected non-zero package ID")
-		}
-		packageID = out.PackageID
-		packageFileID = out.PackageFileID
-		t.Logf("Published package ID=%d, fileID=%d", packageID, packageFileID)
+		packageID, packageFileID = publishIndividualPackage(ctx, t, proj, fixture)
 	})
 
 	t.Run("Individual/List", func(t *testing.T) {
-		out, err := callToolOn[packages.ListOutput](ctx, sess.individual, "gitlab_package_list", packages.ListInput{
-			ProjectID: proj.pidOf(),
-		})
-		if err != nil {
-			t.Fatalf("list: %v", err)
-		}
-		if len(out.Packages) == 0 {
-			t.Fatal("expected at least one package")
-		}
-		found := false
-		for _, p := range out.Packages {
-			if p.Name == fixture.pkgName {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Fatalf("package %q not found in list", fixture.pkgName)
-		}
+		assertIndividualPackageListed(ctx, t, proj, fixture)
 	})
 
 	t.Run("Individual/FileList", func(t *testing.T) {
-		out, err := callToolOn[packages.FileListOutput](ctx, sess.individual, "gitlab_package_file_list", packages.FileListInput{
-			ProjectID: proj.pidOf(),
-			PackageID: i64soi(packageID),
-		})
-		if err != nil {
-			t.Fatalf("file list: %v", err)
-		}
-		if len(out.Files) == 0 {
-			t.Fatal("expected at least one file")
-		}
-		if out.Files[0].FileName != fixture.fileName {
-			t.Fatalf("expected file %q, got %q", fixture.fileName, out.Files[0].FileName)
-		}
+		assertIndividualPackageFileListed(ctx, t, proj, fixture, packageID)
 	})
 
 	t.Run("Individual/Download", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		outPath := tmpDir + "/downloaded.txt"
-		out, err := callToolOn[packages.DownloadOutput](ctx, sess.individual, "gitlab_package_download", packages.DownloadInput{
-			ProjectID:      proj.pidOf(),
-			PackageName:    fixture.pkgName,
-			PackageVersion: fixture.pkgVersion,
-			FileName:       fixture.fileName,
-			OutputPath:     outPath,
-		})
-		if err != nil {
-			t.Fatalf("download: %v", err)
-		}
-		if out.Size == 0 {
-			t.Fatal("expected non-zero file size")
-		}
-		t.Logf("Downloaded %d bytes to %s", out.Size, out.OutputPath)
+		downloadIndividualPackage(ctx, t, proj, fixture)
 	})
 
 	t.Run("Individual/FileDelete", func(t *testing.T) {
-		err := callToolVoidOn(ctx, sess.individual, "gitlab_package_file_delete", packages.FileDeleteInput{
-			ProjectID:     proj.pidOf(),
-			PackageID:     i64soi(packageID),
-			PackageFileID: i64soi(packageFileID),
-		})
-		if err != nil {
-			t.Fatalf("file delete: %v", err)
-		}
+		deleteIndividualPackageFile(ctx, t, proj, packageID, packageFileID)
 	})
 
 	t.Run("Individual/Delete", func(t *testing.T) {
-		err := callToolVoidOn(ctx, sess.individual, "gitlab_package_delete", packages.DeleteInput{
-			ProjectID: proj.pidOf(),
-			PackageID: i64soi(packageID),
-		})
-		if err != nil {
-			t.Fatalf("delete: %v", err)
-		}
+		deleteIndividualPackage(ctx, t, proj, packageID)
 	})
+}
+
+func publishIndividualPackage(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture) (int64, int64) {
+	t.Helper()
+	out, err := callToolOn[packages.PublishOutput](ctx, sess.individual, "gitlab_package_publish", packages.PublishInput{
+		ProjectID:      proj.pidOf(),
+		PackageName:    fixture.pkgName,
+		PackageVersion: fixture.pkgVersion,
+		FileName:       fixture.fileName,
+		ContentBase64:  fixture.fileContent,
+	})
+	if err != nil {
+		t.Fatalf("publish: %v", err)
+	}
+	if out.PackageID == 0 {
+		t.Fatal("expected non-zero package ID")
+	}
+	t.Logf("Published package ID=%d, fileID=%d", out.PackageID, out.PackageFileID)
+	return out.PackageID, out.PackageFileID
+}
+
+func assertIndividualPackageListed(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture) {
+	t.Helper()
+	out, err := callToolOn[packages.ListOutput](ctx, sess.individual, "gitlab_package_list", packages.ListInput{ProjectID: proj.pidOf()})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, p := range out.Packages {
+		if p.Name == fixture.pkgName {
+			return
+		}
+	}
+	t.Fatalf("package %q not found in list", fixture.pkgName)
+}
+
+func assertIndividualPackageFileListed(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture, packageID int64) {
+	t.Helper()
+	out, err := callToolOn[packages.FileListOutput](ctx, sess.individual, "gitlab_package_file_list", packages.FileListInput{
+		ProjectID: proj.pidOf(),
+		PackageID: i64soi(packageID),
+	})
+	if err != nil {
+		t.Fatalf("file list: %v", err)
+	}
+	if len(out.Files) == 0 {
+		t.Fatal("expected at least one file")
+	}
+	if out.Files[0].FileName != fixture.fileName {
+		t.Fatalf("expected file %q, got %q", fixture.fileName, out.Files[0].FileName)
+	}
+}
+
+func downloadIndividualPackage(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture) {
+	t.Helper()
+	outPath := t.TempDir() + "/downloaded.txt"
+	out, err := callToolOn[packages.DownloadOutput](ctx, sess.individual, "gitlab_package_download", packages.DownloadInput{
+		ProjectID:      proj.pidOf(),
+		PackageName:    fixture.pkgName,
+		PackageVersion: fixture.pkgVersion,
+		FileName:       fixture.fileName,
+		OutputPath:     outPath,
+	})
+	if err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if out.Size == 0 {
+		t.Fatal("expected non-zero file size")
+	}
+	t.Logf("Downloaded %d bytes to %s", out.Size, out.OutputPath)
+}
+
+func deleteIndividualPackageFile(ctx context.Context, t *testing.T, proj ProjectFixture, packageID, packageFileID int64) {
+	t.Helper()
+	err := callToolVoidOn(ctx, sess.individual, "gitlab_package_file_delete", packages.FileDeleteInput{
+		ProjectID:     proj.pidOf(),
+		PackageID:     i64soi(packageID),
+		PackageFileID: i64soi(packageFileID),
+	})
+	if err != nil {
+		t.Fatalf("file delete: %v", err)
+	}
+}
+
+func deleteIndividualPackage(ctx context.Context, t *testing.T, proj ProjectFixture, packageID int64) {
+	t.Helper()
+	err := callToolVoidOn(ctx, sess.individual, "gitlab_package_delete", packages.DeleteInput{
+		ProjectID: proj.pidOf(),
+		PackageID: i64soi(packageID),
+	})
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
 }
 
 func testMetaPackageLifecycle(ctx context.Context, t *testing.T, projM ProjectFixture, fixture packageLifecycleFixture) {

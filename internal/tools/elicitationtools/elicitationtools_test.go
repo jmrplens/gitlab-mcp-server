@@ -15,6 +15,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -1302,42 +1303,58 @@ func TestProjectCreate_CancelAtVariousSteps(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
-			_, ss, cleanup := setupElicitationSession(t, ctx, stepHandler(tc.steps))
-			defer cleanup()
+		t.Run(tc.name, func(t *testing.T) { runProjectCreateCancelCase(t, tc.steps, tc.wantError) })
+	}
+}
 
-			var postHits atomic.Int32
-			mux := http.NewServeMux()
-			mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, r *http.Request) {
-				postHits.Add(1)
-				testutil.RespondJSON(w, http.StatusCreated, `{"id":300,"name":"proj","visibility":"private","path_with_namespace":"proj","web_url":"https://gitlab.example.com/proj","default_branch":"main"}`)
-			})
-			client := testutil.NewTestClient(t, mux)
+func runProjectCreateCancelCase(t *testing.T, steps []elicitationStep, wantError string) {
+	t.Helper()
+	ctx := context.Background()
+	_, ss, cleanup := setupElicitationSession(t, ctx, stepHandler(steps))
+	defer cleanup()
 
-			out, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, client, ProjectInput{})
-			if tc.wantError == "" {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if postHits.Load() != 1 {
-					t.Fatalf("project create POST hits = %d, want 1", postHits.Load())
-				}
-				if out.ID != 300 || out.Name != "proj" {
-					t.Fatalf("ProjectCreate() output = %+v, want created project", out)
-				}
-				return
-			}
-			if err == nil {
-				t.Fatal("expected error")
-			}
-			if postHits.Load() != 0 {
-				t.Fatalf("project create POST hits = %d, want 0 for error path", postHits.Load())
-			}
-			if !strings.Contains(err.Error(), tc.wantError) {
-				t.Errorf("error = %q, want to contain %q", err, tc.wantError)
-			}
-		})
+	var postHits atomic.Int32
+	client := testutil.NewTestClient(t, projectCreateCancelMux(&postHits))
+	out, err := ProjectCreate(ctx, &mcp.CallToolRequest{Session: ss}, client, ProjectInput{})
+	if wantError == "" {
+		assertProjectCreateCancelSuccess(t, out, err, postHits.Load())
+		return
+	}
+	assertProjectCreateCancelError(t, err, postHits.Load(), wantError)
+}
+
+func projectCreateCancelMux(postHits *atomic.Int32) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, _ *http.Request) {
+		postHits.Add(1)
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":300,"name":"proj","visibility":"private","path_with_namespace":"proj","web_url":"https://gitlab.example.com/proj","default_branch":"main"}`)
+	})
+	return mux
+}
+
+func assertProjectCreateCancelSuccess(t *testing.T, out projects.Output, err error, postHits int32) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if postHits != 1 {
+		t.Fatalf("project create POST hits = %d, want 1", postHits)
+	}
+	if out.ID != 300 || out.Name != "proj" {
+		t.Fatalf("ProjectCreate() output = %+v, want created project", out)
+	}
+}
+
+func assertProjectCreateCancelError(t *testing.T, err error, postHits int32, wantError string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if postHits != 0 {
+		t.Fatalf("project create POST hits = %d, want 0 for error path", postHits)
+	}
+	if !strings.Contains(err.Error(), wantError) {
+		t.Errorf("error = %q, want to contain %q", err, wantError)
 	}
 }
 

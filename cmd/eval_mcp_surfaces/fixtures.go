@@ -1027,42 +1027,53 @@ func (p *liveFixturePreparer) ensureWiki(ctx context.Context) error {
 // ensureAwardEmoji ensures award emoji exists for liveFixturePreparer.
 func (p *liveFixturePreparer) ensureAwardEmoji(ctx context.Context) error {
 	if p.state.IssueIID > 0 {
-		award, _, err := p.client.GL().AwardEmoji.CreateIssueAwardEmoji(p.state.ProjectID, p.state.IssueIID, &gl.CreateAwardEmojiOptions{Name: "thumbsup"}, gl.WithContext(ctx))
-		if err == nil {
-			p.state.IssueAwardID = award.ID
+		awardID, err := p.ensureIssueAwardEmoji(ctx, "thumbsup")
+		if err != nil {
+			return err
 		}
-		if p.state.IssueAwardID == 0 {
-			awards, _, listErr := p.client.GL().AwardEmoji.ListIssueAwardEmoji(p.state.ProjectID, p.state.IssueIID, &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
-			if listErr != nil {
-				return listErr
-			}
-			for _, existing := range awards {
-				if existing.Name == "thumbsup" {
-					p.state.IssueAwardID = existing.ID
-					break
-				}
-			}
-		}
+		p.state.IssueAwardID = awardID
 	}
 	if p.state.MergeRequestIID > 0 {
-		award, _, err := p.client.GL().AwardEmoji.CreateMergeRequestAwardEmoji(p.state.ProjectID, p.state.MergeRequestIID, &gl.CreateAwardEmojiOptions{Name: "rocket"}, gl.WithContext(ctx))
-		if err == nil {
-			p.state.MergeRequestAwardID = award.ID
+		awardID, err := p.ensureMergeRequestAwardEmoji(ctx, "rocket")
+		if err != nil {
+			return err
 		}
-		if p.state.MergeRequestAwardID == 0 {
-			awards, _, listErr := p.client.GL().AwardEmoji.ListMergeRequestAwardEmoji(p.state.ProjectID, p.state.MergeRequestIID, &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
-			if listErr != nil {
-				return listErr
-			}
-			for _, existing := range awards {
-				if existing.Name == "rocket" {
-					p.state.MergeRequestAwardID = existing.ID
-					break
-				}
-			}
-		}
+		p.state.MergeRequestAwardID = awardID
 	}
 	return nil
+}
+
+func (p *liveFixturePreparer) ensureIssueAwardEmoji(ctx context.Context, name string) (int64, error) {
+	award, _, err := p.client.GL().AwardEmoji.CreateIssueAwardEmoji(p.state.ProjectID, p.state.IssueIID, &gl.CreateAwardEmojiOptions{Name: name}, gl.WithContext(ctx))
+	if err == nil {
+		return award.ID, nil
+	}
+	awards, _, listErr := p.client.GL().AwardEmoji.ListIssueAwardEmoji(p.state.ProjectID, p.state.IssueIID, &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
+	if listErr != nil {
+		return 0, listErr
+	}
+	return findAwardEmojiID(awards, name), nil
+}
+
+func (p *liveFixturePreparer) ensureMergeRequestAwardEmoji(ctx context.Context, name string) (int64, error) {
+	award, _, err := p.client.GL().AwardEmoji.CreateMergeRequestAwardEmoji(p.state.ProjectID, p.state.MergeRequestIID, &gl.CreateAwardEmojiOptions{Name: name}, gl.WithContext(ctx))
+	if err == nil {
+		return award.ID, nil
+	}
+	awards, _, listErr := p.client.GL().AwardEmoji.ListMergeRequestAwardEmoji(p.state.ProjectID, p.state.MergeRequestIID, &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
+	if listErr != nil {
+		return 0, listErr
+	}
+	return findAwardEmojiID(awards, name), nil
+}
+
+func findAwardEmojiID(awards []*gl.AwardEmoji, name string) int64 {
+	for _, existing := range awards {
+		if existing.Name == name {
+			return existing.ID
+		}
+	}
+	return 0
 }
 
 // ensureDiscussions ensures discussions exists for liveFixturePreparer.

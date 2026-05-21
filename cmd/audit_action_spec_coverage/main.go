@@ -507,45 +507,73 @@ func assertDynamicCompatibilityPolicyOwnedByActionCompat(root string) error {
 func assertNoProductionSelectorCall(root, qualifier, selectorName string) error {
 	fileSet := token.NewFileSet()
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+		skip, skipErr := skipSelectorAuditEntry(entry, err)
+		if skipErr != nil {
+			return skipErr
 		}
-		if entry.IsDir() {
-			name := entry.Name()
-			if name == ".git" || name == "dist" || name == "site" {
-				return filepath.SkipDir
-			}
+		if skip {
 			return nil
 		}
-		if !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), testGoSuffix) {
-			return nil
-		}
-		file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
+		found, parseErr := productionFileCallsSelector(fileSet, path, qualifier, selectorName)
 		if parseErr != nil {
-			return fmt.Errorf(parsePathError, path, parseErr)
+			return parseErr
 		}
-		var found bool
-		ast.Inspect(file, func(node ast.Node) bool {
-			call, ok := node.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			selector, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || selector.Sel.Name != selectorName {
-				return true
-			}
-			identifier, ok := selector.X.(*ast.Ident)
-			if ok && identifier.Name == qualifier {
-				found = true
-				return false
-			}
-			return true
-		})
 		if found {
 			return fmt.Errorf("production source %s calls %s.%s; catalog construction must use specs directly", path, qualifier, selectorName)
 		}
 		return nil
 	})
+}
+
+func skipSelectorAuditEntry(entry fs.DirEntry, err error) (bool, error) {
+	if err != nil {
+		return false, err
+	}
+	if entry.IsDir() {
+		if isSelectorAuditSkippedDir(entry.Name()) {
+			return true, filepath.SkipDir
+		}
+		return true, nil
+	}
+	return !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), testGoSuffix), nil
+}
+
+func isSelectorAuditSkippedDir(name string) bool {
+	switch name {
+	case ".git", "dist", "site":
+		return true
+	default:
+		return false
+	}
+}
+
+func productionFileCallsSelector(fileSet *token.FileSet, path, qualifier, selectorName string) (bool, error) {
+	file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
+	if parseErr != nil {
+		return false, fmt.Errorf(parsePathError, path, parseErr)
+	}
+	var found bool
+	ast.Inspect(file, func(node ast.Node) bool {
+		if selectorCallsQualifier(node, qualifier, selectorName) {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found, nil
+}
+
+func selectorCallsQualifier(node ast.Node, qualifier, selectorName string) bool {
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != selectorName {
+		return false
+	}
+	identifier, ok := selector.X.(*ast.Ident)
+	return ok && identifier.Name == qualifier
 }
 
 func assertActionCatalogHasNoLegacyReferences(path string) error {

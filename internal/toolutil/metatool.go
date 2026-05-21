@@ -1723,24 +1723,9 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		formatResult = defaultFormatResult
 	}
 	return func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
-		if input.Action == "" {
-			return ErrorResult(fmt.Sprintf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes))), nil, nil
-		}
-		input.Action = NormalizeActionAlias(input.Action, routes)
-
-		route, ok := routes[input.Action]
-		if !ok {
-			return ErrorResult(fmt.Sprintf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes))), nil, nil
-		}
-
-		if input.Params == nil {
-			required := requiredParamNames(route.InputSchema)
-			if len(required) > 0 {
-				return ErrorResult(fmt.Sprintf("%s/%s: 'params' is required for this action. Required params: %s.", toolName, input.Action, strings.Join(required, ", "))), nil, nil
-			}
-		}
-		if missing := missingRequiredParamNames(route.InputSchema, input.Params); len(missing) > 0 && !hasUnknownParamNames(route.InputSchema, input.Params) {
-			return ErrorResult(fmt.Sprintf("%s/%s: missing required params: %s. Put action-specific fields under params.", toolName, input.Action, strings.Join(missing, ", "))), nil, nil
+		route, validationResult := validateMetaToolInput(toolName, routes, &input)
+		if validationResult != nil {
+			return validationResult, nil, nil
 		}
 
 		// Confirm destructive actions before execution using route metadata.
@@ -1773,6 +1758,34 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		}
 		return callResult, enrichWithHints(result, callResult), nil
 	}
+}
+
+func validateMetaToolInput(toolName string, routes ActionMap, input *MetaToolInput) (ActionRoute, *mcp.CallToolResult) {
+	if input.Action == "" {
+		return ActionRoute{}, ErrorResult(fmt.Sprintf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes)))
+	}
+	input.Action = NormalizeActionAlias(input.Action, routes)
+	route, ok := routes[input.Action]
+	if !ok {
+		return ActionRoute{}, ErrorResult(fmt.Sprintf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes)))
+	}
+	if result := validateMetaToolParams(toolName, route, input); result != nil {
+		return ActionRoute{}, result
+	}
+	return route, nil
+}
+
+func validateMetaToolParams(toolName string, route ActionRoute, input *MetaToolInput) *mcp.CallToolResult {
+	if input.Params == nil {
+		required := requiredParamNames(route.InputSchema)
+		if len(required) > 0 {
+			return ErrorResult(fmt.Sprintf("%s/%s: 'params' is required for this action. Required params: %s.", toolName, input.Action, strings.Join(required, ", ")))
+		}
+	}
+	if missing := missingRequiredParamNames(route.InputSchema, input.Params); len(missing) > 0 && !hasUnknownParamNames(route.InputSchema, input.Params) {
+		return ErrorResult(fmt.Sprintf("%s/%s: missing required params: %s. Put action-specific fields under params.", toolName, input.Action, strings.Join(missing, ", ")))
+	}
+	return nil
 }
 
 func requiredParamNames(schema map[string]any) []string {

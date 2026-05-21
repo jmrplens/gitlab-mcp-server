@@ -62,11 +62,7 @@ func stripJSONC(data []byte) []byte {
 		c := data[i]
 
 		if c == '"' {
-			backslashes := 0
-			for j := i - 1; j >= 0 && data[j] == '\\'; j-- {
-				backslashes++
-			}
-			if backslashes%2 == 0 {
+			if !isEscapedJSONByte(data, i) {
 				inString = !inString
 			}
 			out.WriteByte(c)
@@ -82,23 +78,13 @@ func stripJSONC(data []byte) []byte {
 
 		// Single-line comment
 		if c == '/' && i+1 < n && data[i+1] == '/' {
-			i += 2
-			for i < n && data[i] != '\n' {
-				i++
-			}
+			i = skipJSONCSingleLineComment(data, i+2)
 			continue
 		}
 
 		// Block comment
 		if c == '/' && i+1 < n && data[i+1] == '*' {
-			i += 2
-			for i+1 < n {
-				if data[i] == '*' && data[i+1] == '/' {
-					i += 2
-					break
-				}
-				i++
-			}
+			i = skipJSONCBlockComment(data, i+2)
 			continue
 		}
 
@@ -107,6 +93,31 @@ func stripJSONC(data []byte) []byte {
 	}
 
 	return trailingCommaRe.ReplaceAll(out.Bytes(), []byte("$1"))
+}
+
+func isEscapedJSONByte(data []byte, index int) bool {
+	backslashes := 0
+	for j := index - 1; j >= 0 && data[j] == '\\'; j-- {
+		backslashes++
+	}
+	return backslashes%2 != 0
+}
+
+func skipJSONCSingleLineComment(data []byte, start int) int {
+	for start < len(data) && data[start] != '\n' {
+		start++
+	}
+	return start
+}
+
+func skipJSONCBlockComment(data []byte, start int) int {
+	for start+1 < len(data) {
+		if data[start] == '*' && data[start+1] == '/' {
+			return start + 2
+		}
+		start++
+	}
+	return start
 }
 
 // writeJSONFile marshals a map to indented JSON and writes it to path,

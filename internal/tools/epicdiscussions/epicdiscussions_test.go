@@ -179,13 +179,7 @@ func TestResolveWorkItemGID_ErrorPaths(t *testing.T) {
 
 // TestList uses table-driven subtests to exercise List across success, pagination, empty result, missing-parent, validation, and API-error scenarios.
 func TestList(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   ListInput
-		handler http.Handler
-		wantErr string
-		check   func(t *testing.T, out ListOutput)
-	}{
+	tests := []listCase{
 		{
 			name:  "returns discussions with correct fields",
 			input: ListInput{FullPath: testFullPath, IID: 5},
@@ -281,31 +275,47 @@ func TestList(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, tt.handler)
-			ctx := t.Context()
-			if tt.name == "returns error on cancelled context" {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(ctx)
-				cancel()
-			}
-			out, err := List(ctx, client, tt.input)
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if tt.check != nil {
-				tt.check(t, out)
-			}
-		})
+		t.Run(tt.name, func(t *testing.T) { runListCase(t, tt) })
+	}
+}
+
+type listCase struct {
+	name    string
+	input   ListInput
+	handler http.Handler
+	wantErr string
+	check   func(t *testing.T, out ListOutput)
+}
+
+func runListCase(t *testing.T, tt listCase) {
+	t.Helper()
+	client := testutil.NewTestClient(t, tt.handler)
+	ctx := t.Context()
+	if tt.name == "returns error on cancelled context" {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		cancel()
+	}
+	out, err := List(ctx, client, tt.input)
+	assertListCaseResult(t, out, err, tt.wantErr, tt.check)
+}
+
+func assertListCaseResult(t *testing.T, out ListOutput, err error, wantErr string, check func(t *testing.T, out ListOutput)) {
+	t.Helper()
+	if wantErr != "" {
+		if err == nil {
+			t.Fatalf("expected error containing %q, got nil", wantErr)
+		}
+		if !strings.Contains(err.Error(), wantErr) {
+			t.Fatalf("error %q does not contain %q", err.Error(), wantErr)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if check != nil {
+		check(t, out)
 	}
 }
 
@@ -431,13 +441,7 @@ func TestGet(t *testing.T) {
 
 // TestCreate uses table-driven subtests to exercise Create across success, validation, mutation-error, and cancellation scenarios.
 func TestCreate(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   CreateInput
-		handler http.Handler
-		wantErr string
-		check   func(t *testing.T, out Output)
-	}{
+	tests := []createDiscussionCase{
 		{
 			name:  "creates discussion and returns output",
 			input: CreateInput{FullPath: testFullPath, IID: 5, Body: "new thread"},
@@ -536,31 +540,47 @@ func TestCreate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, tt.handler)
-			ctx := t.Context()
-			if tt.name == "returns error on cancelled context" {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(ctx)
-				cancel()
-			}
-			out, err := Create(ctx, client, tt.input)
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if tt.check != nil {
-				tt.check(t, out)
-			}
-		})
+		t.Run(tt.name, func(t *testing.T) { runCreateCase(t, tt) })
+	}
+}
+
+type createDiscussionCase struct {
+	name    string
+	input   CreateInput
+	handler http.Handler
+	wantErr string
+	check   func(t *testing.T, out Output)
+}
+
+func runCreateCase(t *testing.T, tt createDiscussionCase) {
+	t.Helper()
+	client := testutil.NewTestClient(t, tt.handler)
+	ctx := t.Context()
+	if tt.name == "returns error on cancelled context" {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		cancel()
+	}
+	out, err := Create(ctx, client, tt.input)
+	assertCreateCaseResult(t, out, err, tt.wantErr, tt.check)
+}
+
+func assertCreateCaseResult(t *testing.T, out Output, err error, wantErr string, check func(t *testing.T, out Output)) {
+	t.Helper()
+	if wantErr != "" {
+		if err == nil {
+			t.Fatalf("expected error containing %q, got nil", wantErr)
+		}
+		if !strings.Contains(err.Error(), wantErr) {
+			t.Fatalf("error %q does not contain %q", err.Error(), wantErr)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if check != nil {
+		check(t, out)
 	}
 }
 

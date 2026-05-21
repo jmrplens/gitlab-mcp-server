@@ -68,76 +68,9 @@ func AnalyzePipelineFailure(ctx context.Context, req *mcp.CallToolRequest, clien
 
 	tracker.Step(ctx, 2, 5, "Fetching pipeline details...")
 
-	var data, status, ref string
-
-	// Try GraphQL aggregation (replaces pipeline + job list calls) with fallback.
-	// Job traces are not available via GraphQL and are always fetched via REST.
-	gqlResult, gqlErr := BuildPipelineContext(ctx, client, string(input.ProjectID), input.PipelineID)
-	if gqlErr == nil {
-		status = gqlResult.Status
-		ref = gqlResult.Ref
-
-		tracker.Step(ctx, 3, 5, "Fetching job traces...")
-
-		var traceSection strings.Builder
-		for i, jobID := range gqlResult.FailedJobIDs {
-			if i >= 5 {
-				break
-			}
-			tr, trErr := jobs.Trace(ctx, client, jobs.TraceInput{
-				ProjectID: input.ProjectID,
-				JobID:     jobID,
-			})
-			if trErr == nil && tr.Trace != "" {
-				lines := strings.Split(tr.Trace, "\n")
-				if len(lines) > 200 {
-					lines = lines[len(lines)-200:]
-				}
-				fmt.Fprintf(&traceSection, "\n### Job #%d Trace\n\n```\n%s\n```\n\n", jobID, strings.Join(lines, "\n"))
-			}
-		}
-		data = gqlResult.Content + traceSection.String()
-	} else {
-		pipeline, err := pipelines.Get(ctx, client, pipelines.GetInput{
-			ProjectID:  input.ProjectID,
-			PipelineID: input.PipelineID,
-		})
-		if err != nil {
-			return AnalyzePipelineFailureOutput{}, fmt.Errorf("fetching pipeline: %w", err)
-		}
-		status = pipeline.Status
-		ref = pipeline.Ref
-
-		tracker.Step(ctx, 3, 5, "Fetching failed jobs and traces...")
-
-		jobList, err := jobs.List(ctx, client, jobs.ListInput{
-			ProjectID:  input.ProjectID,
-			PipelineID: input.PipelineID,
-			Scope:      []string{"failed"},
-			PaginationInput: toolutil.PaginationInput{
-				PerPage: 50,
-			},
-		})
-		if err != nil {
-			return AnalyzePipelineFailureOutput{}, fmt.Errorf("fetching jobs: %w", err)
-		}
-
-		traces := make([]JobTrace, 0, len(jobList.Jobs))
-		for i, j := range jobList.Jobs {
-			if i >= 5 {
-				break
-			}
-			tr, trErr := jobs.Trace(ctx, client, jobs.TraceInput{
-				ProjectID: input.ProjectID,
-				JobID:     j.ID,
-			})
-			trace := ""
-			if trErr == nil {
-				trace = tr.Trace
-			}
-			traces = append(traces, JobTrace{Job: j, Trace: trace})
-		}
-		data = FormatPipelineFailureForAnalysis(pipeline, traces)
+	data, status, ref, dataErr := pipelineFailureAnalysisData(ctx, tracker, client, input)
+	if dataErr != nil {
+		return AnalyzePipelineFailureOutput{}, dataErr
 	}
 
 	tracker.Step(ctx, 4, 5, "Requesting LLM analysis...")
@@ -162,6 +95,84 @@ func AnalyzePipelineFailure(ctx context.Context, req *mcp.CallToolRequest, clien
 	}, nil
 }
 
+func pipelineFailureAnalysisData(ctx context.Context, tracker progress.Tracker, client *gitlabclient.Client, input AnalyzePipelineFailureInput) (content, status, ref string, err error) {
+	data, status, ref, ok := pipelineFailureGraphQLData(ctx, tracker, client, input)
+	if ok {
+		return data, status, ref, nil
+	}
+	return pipelineFailureRESTData(ctx, tracker, client, input)
+}
+
+func pipelineFailureGraphQLData(ctx context.Context, tracker progress.Tracker, client *gitlabclient.Client, input AnalyzePipelineFailureInput) (content, status, ref string, ok bool) {
+	gqlResult, gqlErr := BuildPipelineContext(ctx, client, string(input.ProjectID), input.PipelineID)
+	if gqlErr != nil {
+		return "", "", "", false
+	}
+	tracker.Step(ctx, 3, 5, "Fetching job traces...")
+	traceSection := failedJobTraceSection(ctx, client, input.ProjectID, gqlResult.FailedJobIDs)
+	return gqlResult.Content + traceSection, gqlResult.Status, gqlResult.Ref, true
+}
+
+func failedJobTraceSection(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt, jobIDs []int64) string {
+	var traceSection strings.Builder
+	for i, jobID := range jobIDs {
+		if i >= 5 {
+			break
+		}
+		tr, trErr := jobs.Trace(ctx, client, jobs.TraceInput{ProjectID: projectID, JobID: jobID})
+		if trErr == nil && tr.Trace != "" {
+			fmt.Fprintf(&traceSection, "\n### Job #%d Trace\n\n```\n%s\n```\n\n", jobID, lastTraceLines(tr.Trace, 200))
+		}
+	}
+	return traceSection.String()
+}
+
+func pipelineFailureRESTData(ctx context.Context, tracker progress.Tracker, client *gitlabclient.Client, input AnalyzePipelineFailureInput) (content, status, ref string, err error) {
+	pipeline, err := pipelines.Get(ctx, client, pipelines.GetInput{ProjectID: input.ProjectID, PipelineID: input.PipelineID})
+	if err != nil {
+		return "", "", "", fmt.Errorf("fetching pipeline: %w", err)
+	}
+	tracker.Step(ctx, 3, 5, "Fetching failed jobs and traces...")
+	traces, err := failedPipelineJobTraces(ctx, client, input)
+	if err != nil {
+		return "", "", "", err
+	}
+	return FormatPipelineFailureForAnalysis(pipeline, traces), pipeline.Status, pipeline.Ref, nil
+}
+
+func failedPipelineJobTraces(ctx context.Context, client *gitlabclient.Client, input AnalyzePipelineFailureInput) ([]JobTrace, error) {
+	jobList, err := jobs.List(ctx, client, jobs.ListInput{
+		ProjectID:       input.ProjectID,
+		PipelineID:      input.PipelineID,
+		Scope:           []string{"failed"},
+		PaginationInput: toolutil.PaginationInput{PerPage: 50},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("fetching jobs: %w", err)
+	}
+	traces := make([]JobTrace, 0, len(jobList.Jobs))
+	for i, job := range jobList.Jobs {
+		if i >= 5 {
+			break
+		}
+		trace := ""
+		tr, trErr := jobs.Trace(ctx, client, jobs.TraceInput{ProjectID: input.ProjectID, JobID: job.ID})
+		if trErr == nil {
+			trace = tr.Trace
+		}
+		traces = append(traces, JobTrace{Job: job, Trace: trace})
+	}
+	return traces, nil
+}
+
+func lastTraceLines(trace string, limit int) string {
+	lines := strings.Split(trace, "\n")
+	if len(lines) > limit {
+		lines = lines[len(lines)-limit:]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // FormatPipelineFailureForAnalysis builds a Markdown document from pipeline
 // details and failed job traces for LLM failure analysis.
 func FormatPipelineFailureForAnalysis(pipeline pipelines.DetailOutput, traces []JobTrace) string {
@@ -184,12 +195,7 @@ func FormatPipelineFailureForAnalysis(pipeline pipelines.DetailOutput, traces []
 		}
 		fmt.Fprintf(&b, "- **Duration**: %.1fs\n", t.Job.Duration)
 		if t.Trace != "" {
-			// Keep last 200 lines of trace to focus on errors.
-			lines := strings.Split(t.Trace, "\n")
-			if len(lines) > 200 {
-				lines = lines[len(lines)-200:]
-			}
-			fmt.Fprintf(&b, "\n```\n%s\n```\n\n", strings.Join(lines, "\n"))
+			fmt.Fprintf(&b, "\n```\n%s\n```\n\n", lastTraceLines(t.Trace, 200))
 		}
 	}
 	return b.String()

@@ -258,37 +258,18 @@ func prepareRunCatalog(opts options, tasks []evalTask, fixtures *liveFixtureStat
 		}
 	}
 	tasks = normalizeTasksForCatalog(tasks, routes, opts.ToolSurface)
-	if opts.Partition != "" {
-		var partitionErr error
-		tasks, partitionErr = filterTasksByPartition(tasks, opts.Partition)
-		if partitionErr != nil {
-			return nil, nil, nil, partitionErr
-		}
-		if len(tasks) == 0 {
-			return nil, nil, nil, fmt.Errorf("no tasks selected after --partition=%s", opts.Partition)
-		}
+	var err error
+	if tasks, err = applyPartitionFilter(tasks, opts.Partition); err != nil {
+		return nil, nil, nil, err
 	}
-	if opts.SkipUnavailable {
-		tasks = filterTasksByAvailableRoutes(tasks, routes)
-		if fixtures != nil {
-			tasks = filterTasksByLiveFixtureState(tasks, fixtures)
-		}
-		if len(tasks) == 0 {
-			return nil, nil, nil, errors.New("no tasks selected after --skip-unavailable")
-		}
+	if tasks, err = applyAvailabilityFilter(tasks, routes, fixtures, opts.SkipUnavailable); err != nil {
+		return nil, nil, nil, err
 	}
 	if opts.Execute && opts.UseFixtures {
 		tasks = orderSharedFixtureDestructiveLast(tasks)
 	}
-	if opts.Preset != "" {
-		var presetFilterErr error
-		tasks, presetFilterErr = filterTasksByPreset(tasks, opts.Preset)
-		if presetFilterErr != nil {
-			return nil, nil, nil, presetFilterErr
-		}
-		if len(tasks) == 0 {
-			return nil, nil, nil, fmt.Errorf("no tasks selected after --preset=%s", opts.Preset)
-		}
+	if tasks, err = applyPresetFilter(tasks, opts.Preset); err != nil {
+		return nil, nil, nil, err
 	}
 	if opts.MaxTasks > 0 && opts.MaxTasks < len(tasks) {
 		tasks = tasks[:opts.MaxTasks]
@@ -299,6 +280,48 @@ func prepareRunCatalog(opts options, tasks []evalTask, fixtures *liveFixtureStat
 		}
 	}
 	return catalog, routes, tasks, nil
+}
+
+func applyPartitionFilter(tasks []evalTask, partition string) ([]evalTask, error) {
+	if partition == "" {
+		return tasks, nil
+	}
+	filtered, err := filterTasksByPartition(tasks, partition)
+	if err != nil {
+		return nil, err
+	}
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("no tasks selected after --partition=%s", partition)
+	}
+	return filtered, nil
+}
+
+func applyAvailabilityFilter(tasks []evalTask, routes map[string]toolutil.ActionMap, fixtures *liveFixtureState, skipUnavailable bool) ([]evalTask, error) {
+	if !skipUnavailable {
+		return tasks, nil
+	}
+	filtered := filterTasksByAvailableRoutes(tasks, routes)
+	if fixtures != nil {
+		filtered = filterTasksByLiveFixtureState(filtered, fixtures)
+	}
+	if len(filtered) == 0 {
+		return nil, errors.New("no tasks selected after --skip-unavailable")
+	}
+	return filtered, nil
+}
+
+func applyPresetFilter(tasks []evalTask, preset string) ([]evalTask, error) {
+	if preset == "" {
+		return tasks, nil
+	}
+	filtered, err := filterTasksByPreset(tasks, preset)
+	if err != nil {
+		return nil, err
+	}
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("no tasks selected after --preset=%s", preset)
+	}
+	return filtered, nil
 }
 
 func runDryRunEvaluation(opts options, tasks []evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) error {
@@ -378,55 +401,93 @@ func runModelEvaluations(ctx context.Context, opts options, tasks []evalTask, mo
 	results := make([]taskResult, 0, len(tasks)*opts.Repeat*len(modelSpecs))
 	liveAttemptRunSuffix := liveUniqueSuffix()
 	for _, spec := range modelSpecs {
-		apiKey, keyErr := apiKeyForModelProvider(spec.Provider)
-		if keyErr != nil {
-			return nil, keyErr
+		specResults, err := runModelSpecEvaluations(ctx, opts, spec, tasks, catalog, routes, runtime, liveAttemptRunSuffix)
+		if err != nil {
+			return nil, err
 		}
-		runner := &modelRunner{
-			apiKey:      apiKey,
-			provider:    spec.Provider,
-			model:       spec.Model,
-			modelLabel:  spec.String(),
-			toolSurface: opts.ToolSurface,
-			maxTokens:   opts.MaxTokens,
-			retries:     opts.Retries,
-			retryWait:   opts.RetryWait,
-			client:      &http.Client{Timeout: 60 * time.Second},
-			mcpSession:  runtime.mcpSession,
-			mcpBridge:   runtime.bridgeSupport,
-			traceBodies: opts.TraceProviderBodies,
-		}
-		for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
-			if opts.Execute && opts.UseFixtures {
-				if err := ensureLiveProjectActive(ctx, runtime.executionClient); err != nil {
-					return nil, err
-				}
-			}
-			for _, task := range tasks {
-				taskForAttempt := task
-				if opts.Execute && opts.UseFixtures {
-					taskForAttempt = addLiveAttemptResourceSuffix(taskForAttempt, spec.String(), runIndex, liveAttemptRunSuffix)
-					var err error
-					taskForAttempt, err = ensureLiveAttemptResources(ctx, runtime.executionClient, runtime.mcpSession, taskForAttempt, opts.ToolSurface)
-					if err != nil {
-						return nil, err
-					}
-				}
-				result := runner.evaluateTask(ctx, taskForAttempt, catalog, routes)
-				result.Run = runIndex
-				result.Model = spec.String()
-				result.Trace.Run = runIndex
-				result.Trace.Model = spec.String()
-				result.Trace.Summary = traceSummaryFromResult(result)
-				results = append(results, result)
-				terminalPrintf("model=%s run=%d %s: final=%t first=%s/%s final_call=%s/%s calls=%d tools=%d\n", spec.String(), runIndex, taskForAttempt.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction, result.ModelCalls, result.ToolCalls)
-				if opts.Pause > 0 {
-					time.Sleep(opts.Pause)
-				}
-			}
-		}
+		results = append(results, specResults...)
 	}
 	return results, nil
+}
+
+func runModelSpecEvaluations(ctx context.Context, opts options, spec modelSpec, tasks []evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap, runtime evaluationRuntime, liveAttemptRunSuffix string) ([]taskResult, error) {
+	runner, err := newModelRunner(opts, spec, runtime)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]taskResult, 0, len(tasks)*opts.Repeat)
+	for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
+		runResults, runErr := runModelEvaluationRound(ctx, opts, spec, runIndex, tasks, catalog, routes, runtime, runner, liveAttemptRunSuffix)
+		if runErr != nil {
+			return nil, runErr
+		}
+		results = append(results, runResults...)
+	}
+	return results, nil
+}
+
+func newModelRunner(opts options, spec modelSpec, runtime evaluationRuntime) (*modelRunner, error) {
+	apiKey, err := apiKeyForModelProvider(spec.Provider)
+	if err != nil {
+		return nil, err
+	}
+	return &modelRunner{
+		apiKey:      apiKey,
+		provider:    spec.Provider,
+		model:       spec.Model,
+		modelLabel:  spec.String(),
+		toolSurface: opts.ToolSurface,
+		maxTokens:   opts.MaxTokens,
+		retries:     opts.Retries,
+		retryWait:   opts.RetryWait,
+		client:      &http.Client{Timeout: 60 * time.Second},
+		mcpSession:  runtime.mcpSession,
+		mcpBridge:   runtime.bridgeSupport,
+		traceBodies: opts.TraceProviderBodies,
+	}, nil
+}
+
+func runModelEvaluationRound(ctx context.Context, opts options, spec modelSpec, runIndex int, tasks []evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap, runtime evaluationRuntime, runner *modelRunner, liveAttemptRunSuffix string) ([]taskResult, error) {
+	if opts.Execute && opts.UseFixtures {
+		if err := ensureLiveProjectActive(ctx, runtime.executionClient); err != nil {
+			return nil, err
+		}
+	}
+	results := make([]taskResult, 0, len(tasks))
+	for _, task := range tasks {
+		result, err := evaluateModelTaskAttempt(ctx, opts, spec, runIndex, task, catalog, routes, runtime, runner, liveAttemptRunSuffix)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+	return results, nil
+}
+
+func evaluateModelTaskAttempt(ctx context.Context, opts options, spec modelSpec, runIndex int, task evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap, runtime evaluationRuntime, runner *modelRunner, liveAttemptRunSuffix string) (taskResult, error) {
+	taskForAttempt, err := prepareTaskAttempt(ctx, opts, spec, runIndex, task, runtime, liveAttemptRunSuffix)
+	if err != nil {
+		return taskResult{}, err
+	}
+	result := runner.evaluateTask(ctx, taskForAttempt, catalog, routes)
+	result.Run = runIndex
+	result.Model = spec.String()
+	result.Trace.Run = runIndex
+	result.Trace.Model = spec.String()
+	result.Trace.Summary = traceSummaryFromResult(result)
+	terminalPrintf("model=%s run=%d %s: final=%t first=%s/%s final_call=%s/%s calls=%d tools=%d\n", spec.String(), runIndex, taskForAttempt.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction, result.ModelCalls, result.ToolCalls)
+	if opts.Pause > 0 {
+		time.Sleep(opts.Pause)
+	}
+	return result, nil
+}
+
+func prepareTaskAttempt(ctx context.Context, opts options, spec modelSpec, runIndex int, task evalTask, runtime evaluationRuntime, liveAttemptRunSuffix string) (evalTask, error) {
+	if !opts.Execute || !opts.UseFixtures {
+		return task, nil
+	}
+	task = addLiveAttemptResourceSuffix(task, spec.String(), runIndex, liveAttemptRunSuffix)
+	return ensureLiveAttemptResources(ctx, runtime.executionClient, runtime.mcpSession, task, opts.ToolSurface)
 }
 
 // parseFlags parses flags from evaluator input.

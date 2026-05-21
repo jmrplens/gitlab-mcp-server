@@ -136,8 +136,8 @@ func TestHandleConfigure_InvalidURL(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
-	if !strings.Contains(rec.Body.String(), "Invalid GitLab URL") {
-		t.Errorf("body = %q, want to contain 'Invalid GitLab URL'", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "invalid GitLab URL") {
+		t.Errorf("body = %q, want to contain 'invalid GitLab URL'", rec.Body.String())
 	}
 }
 
@@ -437,55 +437,75 @@ func TestHandleConfigure_DerivesMetaToolsFromToolSurface(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			envPath := stubWriteEnvFile(t)
-			var output bytes.Buffer
-			doneCh := make(chan error, 1)
-			handler := handleConfigure(&output, func(err error) { doneCh <- err })
-
-			reqBody := configureRequest{
-				InstallPath:     t.TempDir(),
-				GitLabURL:       "https://gitlab.example.com",
-				GitLabToken:     "test-token-placeholder",
-				ToolSurface:     tt.toolSurface,
-				LogLevel:        "info",
-				SelectedClients: []int{},
-			}
-			body, mErr := json.Marshal(reqBody)
-			if mErr != nil {
-				t.Fatalf("marshal request: %v", mErr)
-			}
-			req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
-			if err != nil {
-				t.Fatal(err)
-			}
-			req.Header.Set("Content-Type", "application/json")
-			rec := httptest.NewRecorder()
-
-			handler.ServeHTTP(rec, req)
-
-			if rec.Code != http.StatusOK {
-				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-			}
-			select {
-			case err = <-doneCh:
-				if err != nil {
-					t.Fatalf("onDone returned unexpected error: %v", err)
-				}
-			default:
-				t.Fatal("onDone callback was not called")
-			}
-
-			data, err := os.ReadFile(envPath)
-			if err != nil {
-				t.Fatalf("reading generated env file: %v", err)
-			}
-			if !strings.Contains(string(data), tt.wantLine+"\n") {
-				t.Fatalf("generated env file missing %q\ncontent:\n%s", tt.wantLine, string(data))
-			}
-			if strings.Contains(string(data), "META_TOOLS=") {
-				t.Fatalf("generated env file should not write deprecated META_TOOLS\ncontent:\n%s", string(data))
-			}
+			assertConfigureToolSurface(t, tt.toolSurface, tt.wantLine)
 		})
+	}
+}
+
+func assertConfigureToolSurface(t *testing.T, toolSurface, wantLine string) {
+	t.Helper()
+	envPath := stubWriteEnvFile(t)
+	var output bytes.Buffer
+	doneCh := make(chan error, 1)
+	handler := handleConfigure(&output, func(err error) { doneCh <- err })
+
+	req := newConfigureRequest(t, configureRequest{
+		InstallPath:     t.TempDir(),
+		GitLabURL:       "https://gitlab.example.com",
+		GitLabToken:     "test-token-placeholder",
+		ToolSurface:     toolSurface,
+		LogLevel:        "info",
+		SelectedClients: []int{},
+	})
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	assertConfigureSucceeded(t, rec, doneCh)
+	assertEnvToolSurface(t, envPath, wantLine)
+}
+
+func newConfigureRequest(t *testing.T, reqBody configureRequest) *http.Request {
+	t.Helper()
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/api/configure", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return req
+}
+
+func assertConfigureSucceeded(t *testing.T, rec *httptest.ResponseRecorder, doneCh <-chan error) {
+	t.Helper()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	select {
+	case err := <-doneCh:
+		if err != nil {
+			t.Fatalf("onDone returned unexpected error: %v", err)
+		}
+	default:
+		t.Fatal("onDone callback was not called")
+	}
+}
+
+func assertEnvToolSurface(t *testing.T, envPath, wantLine string) {
+	t.Helper()
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatalf("reading generated env file: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, wantLine+"\n") {
+		t.Fatalf("generated env file missing %q\ncontent:\n%s", wantLine, content)
+	}
+	if strings.Contains(content, "META_TOOLS=") {
+		t.Fatalf("generated env file should not write deprecated META_TOOLS\ncontent:\n%s", content)
 	}
 }
 

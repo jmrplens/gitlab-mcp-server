@@ -1120,60 +1120,76 @@ type metrics struct {
 	FinalSuccess      float64
 }
 
+type metricCounters struct {
+	toolOK             int
+	actionOK           int
+	firstOK            int
+	lookupOK           int
+	resourceLookupOK   int
+	capabilityLookupOK int
+	repairTotal        int
+	repairOK           int
+	destructiveTotal   int
+	destructiveOK      int
+	finalOK            int
+}
+
 // calculateMetrics derives evaluator success metrics from task results.
 func calculateMetrics(results []taskResult) metrics {
 	if len(results) == 0 {
 		return metrics{}
 	}
-	var toolOK, actionOK, firstOK, lookupOK, resourceLookupOK, capabilityLookupOK, destructiveTotal, destructiveOK, finalOK int
-	var repairTotal, repairOK int
+	counters := metricCounters{}
 	for _, result := range results {
-		firstToolOK, firstActionOK, firstPassOK := effectiveFirstOutcome(result)
-		if firstToolOK {
-			toolOK++
-		}
-		if firstActionOK {
-			actionOK++
-		}
-		if firstPassOK {
-			firstOK++
-		}
-		if result.SchemaLookupUsed {
-			lookupOK++
-		}
-		if result.ResourceLookupUsed {
-			resourceLookupOK++
-		}
-		if result.CapabilityLookupUsed {
-			capabilityLookupOK++
-		}
-		if result.RepairAttempted {
-			repairTotal++
-			if result.RepairSuccess {
-				repairOK++
-			}
-		}
-		if taskHasDestructiveStep(result.Task) {
-			destructiveTotal++
-			if result.DestructiveSafe {
-				destructiveOK++
-			}
-		}
-		if result.FinalSuccess {
-			finalOK++
-		}
+		counters.record(result)
 	}
 	return metrics{
-		ToolSelection:     percent(toolOK, len(results)),
-		ActionSelection:   percent(actionOK, len(results)),
-		FirstPass:         percent(firstOK, len(results)),
-		SchemaLookup:      percent(lookupOK, len(results)),
-		ResourceLookup:    percent(resourceLookupOK, len(results)),
-		CapabilityLookup:  percent(capabilityLookupOK, len(results)),
-		RepairSuccess:     percent(repairOK, repairTotal),
-		DestructiveSafety: percent(destructiveOK, destructiveTotal),
-		FinalSuccess:      percent(finalOK, len(results)),
+		ToolSelection:     percent(counters.toolOK, len(results)),
+		ActionSelection:   percent(counters.actionOK, len(results)),
+		FirstPass:         percent(counters.firstOK, len(results)),
+		SchemaLookup:      percent(counters.lookupOK, len(results)),
+		ResourceLookup:    percent(counters.resourceLookupOK, len(results)),
+		CapabilityLookup:  percent(counters.capabilityLookupOK, len(results)),
+		RepairSuccess:     percent(counters.repairOK, counters.repairTotal),
+		DestructiveSafety: percent(counters.destructiveOK, counters.destructiveTotal),
+		FinalSuccess:      percent(counters.finalOK, len(results)),
 	}
+}
+
+func (c *metricCounters) record(result taskResult) {
+	firstToolOK, firstActionOK, firstPassOK := effectiveFirstOutcome(result)
+	c.toolOK += boolCount(firstToolOK)
+	c.actionOK += boolCount(firstActionOK)
+	c.firstOK += boolCount(firstPassOK)
+	c.lookupOK += boolCount(result.SchemaLookupUsed)
+	c.resourceLookupOK += boolCount(result.ResourceLookupUsed)
+	c.capabilityLookupOK += boolCount(result.CapabilityLookupUsed)
+	c.recordRepair(result)
+	c.recordDestructiveSafety(result)
+	c.finalOK += boolCount(result.FinalSuccess)
+}
+
+func (c *metricCounters) recordRepair(result taskResult) {
+	if !result.RepairAttempted {
+		return
+	}
+	c.repairTotal++
+	c.repairOK += boolCount(result.RepairSuccess)
+}
+
+func (c *metricCounters) recordDestructiveSafety(result taskResult) {
+	if !taskHasDestructiveStep(result.Task) {
+		return
+	}
+	c.destructiveTotal++
+	c.destructiveOK += boolCount(result.DestructiveSafe)
+}
+
+func boolCount(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 // effectiveFirstOutcome returns first-call metrics after applying accepted dynamic alternatives.

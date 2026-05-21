@@ -502,30 +502,7 @@ func TestIndividualToolMetadata_CatalogBackedCoverage(t *testing.T) {
 		toolsByName[tool.Name] = tool
 	}
 
-	specNames := make(map[string]string)
-	duplicateSpecNames := make([]string, 0)
-	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Actions {
-			name := strings.TrimSpace(spec.IndividualTool.Name)
-			if name == "" {
-				t.Fatalf("%s.%s missing individual tool name", group.ToolName, spec.Name)
-			}
-			if previous, exists := specNames[name]; exists {
-				if _, ok := sharedIndividualToolSpecNames[name]; !ok {
-					duplicateSpecNames = append(duplicateSpecNames, fmt.Sprintf("%s => %s, %s.%s", name, previous, group.ToolName, spec.Name))
-				}
-			} else {
-				specNames[name] = group.ToolName + "." + spec.Name
-			}
-			if _, ok := toolsByName[name]; !ok {
-				t.Fatalf("%s.%s references unregistered individual tool %q", group.ToolName, spec.Name, name)
-			}
-		}
-	}
-	if len(duplicateSpecNames) > 0 {
-		sort.Strings(duplicateSpecNames)
-		t.Fatalf("unexpected shared individual tool references: %v", duplicateSpecNames)
-	}
+	specNames := collectCatalogBackedIndividualToolNames(t, toolsByName)
 
 	missingSpecs := make([]string, 0)
 	for _, tool := range result.Tools {
@@ -541,6 +518,50 @@ func TestIndividualToolMetadata_CatalogBackedCoverage(t *testing.T) {
 	if len(missingSpecs) > 0 {
 		t.Fatalf("individual tools missing ActionSpec metadata: %v", missingSpecs)
 	}
+}
+
+func collectCatalogBackedIndividualToolNames(t *testing.T, toolsByName map[string]*mcp.Tool) map[string]string {
+	t.Helper()
+	specNames := make(map[string]string)
+	duplicateSpecNames := make([]string, 0)
+	for _, group := range CollectActionSpecs(nil, true) {
+		duplicates := recordCatalogBackedGroupSpecs(t, specNames, toolsByName, group)
+		duplicateSpecNames = append(duplicateSpecNames, duplicates...)
+	}
+	if len(duplicateSpecNames) > 0 {
+		sort.Strings(duplicateSpecNames)
+		t.Fatalf("unexpected shared individual tool references: %v", duplicateSpecNames)
+	}
+	return specNames
+}
+
+func recordCatalogBackedGroupSpecs(t *testing.T, specNames map[string]string, toolsByName map[string]*mcp.Tool, group ActionSpecGroup) []string {
+	t.Helper()
+	duplicates := make([]string, 0)
+	for _, spec := range group.Actions {
+		name := strings.TrimSpace(spec.IndividualTool.Name)
+		if name == "" {
+			t.Fatalf("%s.%s missing individual tool name", group.ToolName, spec.Name)
+		}
+		if duplicate := recordCatalogBackedSpecName(specNames, group, spec, name); duplicate != "" {
+			duplicates = append(duplicates, duplicate)
+		}
+		if _, ok := toolsByName[name]; !ok {
+			t.Fatalf("%s.%s references unregistered individual tool %q", group.ToolName, spec.Name, name)
+		}
+	}
+	return duplicates
+}
+
+func recordCatalogBackedSpecName(specNames map[string]string, group ActionSpecGroup, spec toolutil.ActionSpec, name string) string {
+	if previous, exists := specNames[name]; exists {
+		if _, ok := sharedIndividualToolSpecNames[name]; !ok {
+			return fmt.Sprintf("%s => %s, %s.%s", name, previous, group.ToolName, spec.Name)
+		}
+		return ""
+	}
+	specNames[name] = group.ToolName + "." + spec.Name
+	return ""
 }
 
 // TestIndividualToolMetadata_SourceRegistrationUsesActionSpecProjection verifies IndividualToolMetadata when source registration uses action spec projection.

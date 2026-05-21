@@ -20,31 +20,12 @@ import (
 func TestSampling(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-
-	// Create a project with an issue, milestone, MR, and a commit for sampling tools.
-	proj := createProject(ctx, t, sess.sampling)
-	commitFile(ctx, t, sess.sampling, proj, "main", "sampling-init.txt", "# Sampling E2E\nproject init", "init commit")
-	commitFile(ctx, t, sess.sampling, proj, "main", ".gitlab-ci.yml", "stages:\n  - test\nunit_test:\n  stage: test\n  script:\n    - echo \"running tests\"", "add CI config for AnalyzeCIConfig test")
-
-	issue := createIssue(ctx, t, sess.sampling, proj, "Sampling test issue")
-
-	ms, msErr := callToolOn[milestones.Output](ctx, sess.sampling, "gitlab_milestone_create", milestones.CreateInput{
-		ProjectID:   proj.pidOf(),
-		Title:       "Sampling Milestone v1",
-		Description: "Milestone for sampling tests",
-	})
-	if msErr != nil {
-		t.Fatalf("create milestone: %v", msErr)
-	}
-
-	branch := createBranch(ctx, t, sess.sampling, proj, "sampling-feature")
-	commit := commitFile(ctx, t, sess.sampling, proj, branch.Name, "feature.go", "package main\nfunc main(){}", "add feature")
-	mr := createMR(ctx, t, sess.sampling, proj, branch.Name, "main", "Sampling MR")
+	fixture := setupSamplingFixture(ctx, t)
 
 	t.Run("AnalyzeMRChanges", func(t *testing.T) {
 		out, err := callToolOn[samplingtools.AnalyzeMRChangesOutput](ctx, sess.sampling, "gitlab_analyze_mr_changes", samplingtools.AnalyzeMRChangesInput{
-			ProjectID: proj.pidOf(),
-			MRIID:     mr.IID,
+			ProjectID: fixture.proj.pidOf(),
+			MRIID:     fixture.mr.IID,
 		})
 		if err != nil {
 			t.Fatalf("analyze MR changes: %v", err)
@@ -54,8 +35,8 @@ func TestSampling(t *testing.T) {
 
 	t.Run("SummarizeIssue", func(t *testing.T) {
 		out, err := callToolOn[samplingtools.SummarizeIssueOutput](ctx, sess.sampling, "gitlab_summarize_issue", samplingtools.SummarizeIssueInput{
-			ProjectID: proj.pidOf(),
-			IssueIID:  issue.IID,
+			ProjectID: fixture.proj.pidOf(),
+			IssueIID:  fixture.issue.IID,
 		})
 		if err != nil {
 			t.Fatalf("summarize issue: %v", err)
@@ -65,8 +46,8 @@ func TestSampling(t *testing.T) {
 
 	t.Run("GenerateReleaseNotes", func(t *testing.T) {
 		out, err := callToolOn[samplingtools.GenerateReleaseNotesOutput](ctx, sess.sampling, "gitlab_generate_release_notes", samplingtools.GenerateReleaseNotesInput{
-			ProjectID: proj.pidOf(),
-			From:      commit.SHA,
+			ProjectID: fixture.proj.pidOf(),
+			From:      fixture.commit.SHA,
 			To:        "main",
 		})
 		if err != nil {
@@ -77,8 +58,8 @@ func TestSampling(t *testing.T) {
 
 	t.Run("SummarizeMRReview", func(t *testing.T) {
 		out, err := callToolOn[samplingtools.SummarizeMRReviewOutput](ctx, sess.sampling, "gitlab_summarize_mr_review", samplingtools.SummarizeMRReviewInput{
-			ProjectID: proj.pidOf(),
-			MRIID:     mr.IID,
+			ProjectID: fixture.proj.pidOf(),
+			MRIID:     fixture.mr.IID,
 		})
 		if err != nil {
 			t.Fatalf("summarize MR review: %v", err)
@@ -88,7 +69,7 @@ func TestSampling(t *testing.T) {
 
 	t.Run("AnalyzeCIConfig", func(t *testing.T) {
 		out, err := callToolOn[samplingtools.AnalyzeCIConfigOutput](ctx, sess.sampling, "gitlab_analyze_ci_configuration", samplingtools.AnalyzeCIConfigInput{
-			ProjectID:  proj.pidOf(),
+			ProjectID:  fixture.proj.pidOf(),
 			ContentRef: "main",
 		})
 		if err != nil {
@@ -99,8 +80,8 @@ func TestSampling(t *testing.T) {
 
 	t.Run("AnalyzeIssueScope", func(t *testing.T) {
 		out, err := callToolOn[samplingtools.AnalyzeIssueScopeOutput](ctx, sess.sampling, "gitlab_analyze_issue_scope", samplingtools.AnalyzeIssueScopeInput{
-			ProjectID: proj.pidOf(),
-			IssueIID:  issue.IID,
+			ProjectID: fixture.proj.pidOf(),
+			IssueIID:  fixture.issue.IID,
 		})
 		if err != nil {
 			t.Fatalf("analyze issue scope: %v", err)
@@ -110,8 +91,8 @@ func TestSampling(t *testing.T) {
 
 	t.Run("ReviewMRSecurity", func(t *testing.T) {
 		out, err := callToolOn[samplingtools.ReviewMRSecurityOutput](ctx, sess.sampling, "gitlab_review_mr_security", samplingtools.ReviewMRSecurityInput{
-			ProjectID: proj.pidOf(),
-			MRIID:     mr.IID,
+			ProjectID: fixture.proj.pidOf(),
+			MRIID:     fixture.mr.IID,
 		})
 		if err != nil {
 			t.Fatalf("review MR security: %v", err)
@@ -120,52 +101,92 @@ func TestSampling(t *testing.T) {
 	})
 
 	t.Run("FindTechnicalDebt", func(t *testing.T) {
-		out, err := callToolOn[samplingtools.FindTechnicalDebtOutput](ctx, sess.sampling, "gitlab_find_technical_debt", samplingtools.FindTechnicalDebtInput{
-			ProjectID: proj.pidOf(),
-			Ref:       "main",
-		})
-		if err != nil {
-			t.Fatalf("find technical debt: %v", err)
-		}
-		assertNonEmptySamplingText(t, out.Analysis, "analysis")
-		if strings.Contains(out.Analysis, "No technical debt markers") {
-			t.Logf("No technical debt found (LLM not invoked): analysis=%q", out.Analysis)
-		} else if out.Model != "e2e-mock-model" {
-			t.Fatalf("expected mock model, got %q", out.Model)
-		}
+		assertFindTechnicalDebtSampling(ctx, t, fixture)
 	})
 
 	t.Run("AnalyzeDeploymentHistory", func(t *testing.T) {
-		out, err := callToolOn[samplingtools.AnalyzeDeploymentHistoryOutput](ctx, sess.sampling, "gitlab_analyze_deployment_history", samplingtools.AnalyzeDeploymentHistoryInput{
-			ProjectID: proj.pidOf(),
-		})
-		if err != nil {
-			t.Fatalf("analyze deployment history: %v", err)
-		}
-		assertNonEmptySamplingText(t, out.Analysis, "analysis")
-		if strings.Contains(out.Analysis, "No deployments found") {
-			t.Logf("No deployments found (LLM not invoked): analysis=%q", out.Analysis)
-		} else if out.Model != "e2e-mock-model" {
-			t.Fatalf("expected mock model, got %q", out.Model)
-		}
+		assertDeploymentHistorySampling(ctx, t, fixture)
 	})
 
 	t.Run("GenerateMilestoneReport", func(t *testing.T) {
 		out, err := callToolOn[samplingtools.GenerateMilestoneReportOutput](ctx, sess.sampling, "gitlab_generate_milestone_report", samplingtools.GenerateMilestoneReportInput{
-			ProjectID:    proj.pidOf(),
-			MilestoneIID: ms.IID,
+			ProjectID:    fixture.proj.pidOf(),
+			MilestoneIID: fixture.milestone.IID,
 		})
 		if err != nil {
 			t.Fatalf("generate milestone report: %v", err)
 		}
 		assertSamplingOutput(t, out.Report, out.Model, "report")
 	})
+}
 
-	// Suppress unused variable warnings.
-	_ = issue
-	_ = ms
-	_ = commit
-	_ = mr
+func assertFindTechnicalDebtSampling(ctx context.Context, t *testing.T, fixture samplingFixture) {
+	t.Helper()
+	out, err := callToolOn[samplingtools.FindTechnicalDebtOutput](ctx, sess.sampling, "gitlab_find_technical_debt", samplingtools.FindTechnicalDebtInput{
+		ProjectID: fixture.proj.pidOf(),
+		Ref:       "main",
+	})
+	if err != nil {
+		t.Fatalf("find technical debt: %v", err)
+	}
+	assertSamplingOrFallbackOutput(t, out.Analysis, out.Model, "analysis", "No technical debt markers", "No technical debt found")
+}
+
+func assertDeploymentHistorySampling(ctx context.Context, t *testing.T, fixture samplingFixture) {
+	t.Helper()
+	out, err := callToolOn[samplingtools.AnalyzeDeploymentHistoryOutput](ctx, sess.sampling, "gitlab_analyze_deployment_history", samplingtools.AnalyzeDeploymentHistoryInput{
+		ProjectID: fixture.proj.pidOf(),
+	})
+	if err != nil {
+		t.Fatalf("analyze deployment history: %v", err)
+	}
+	assertSamplingOrFallbackOutput(t, out.Analysis, out.Model, "analysis", "No deployments found", "No deployments found")
+}
+
+func assertSamplingOrFallbackOutput(t *testing.T, text, model, label, fallbackMarker, fallbackLog string) {
+	t.Helper()
+	assertNonEmptySamplingText(t, text, label)
+	if strings.Contains(text, fallbackMarker) {
+		t.Logf("%s (LLM not invoked): %s=%q", fallbackLog, label, text)
+		return
+	}
+	if model != "e2e-mock-model" {
+		t.Fatalf("expected mock model, got %q", model)
+	}
+}
+
+type samplingFixture struct {
+	proj      ProjectFixture
+	issue     IssueFixture
+	milestone milestones.Output
+	commit    CommitFixture
+	mr        MRFixture
+}
+
+func setupSamplingFixture(ctx context.Context, t *testing.T) samplingFixture {
+	t.Helper()
+	proj := createProject(ctx, t, sess.sampling)
+	commitFile(ctx, t, sess.sampling, proj, "main", "sampling-init.txt", "# Sampling E2E\nproject init", "init commit")
+	commitFile(ctx, t, sess.sampling, proj, "main", ".gitlab-ci.yml", "stages:\n  - test\nunit_test:\n  stage: test\n  script:\n    - echo \"running tests\"", "add CI config for AnalyzeCIConfig test")
+	issue := createIssue(ctx, t, sess.sampling, proj, "Sampling test issue")
+	milestone := createSamplingMilestone(ctx, t, proj)
+	branch := createBranch(ctx, t, sess.sampling, proj, "sampling-feature")
+	commit := commitFile(ctx, t, sess.sampling, proj, branch.Name, "feature.go", "package main\nfunc main(){}", "add feature")
+	mr := createMR(ctx, t, sess.sampling, proj, branch.Name, "main", "Sampling MR")
+	return samplingFixture{proj: proj, issue: issue, milestone: milestone, commit: commit, mr: mr}
+}
+
+func createSamplingMilestone(ctx context.Context, t *testing.T, proj ProjectFixture) milestones.Output {
+	t.Helper()
+	out, err := callToolOn[milestones.Output](ctx, sess.sampling, "gitlab_milestone_create", milestones.CreateInput{
+		ProjectID:   proj.pidOf(),
+		Title:       "Sampling Milestone v1",
+		Description: "Milestone for sampling tests",
+	})
+	if err != nil {
+		t.Fatalf("create milestone: %v", err)
+	}
+	return out
 }
 
 func assertSamplingOutput(t *testing.T, text, model, label string) {

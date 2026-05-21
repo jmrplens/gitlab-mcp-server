@@ -58,6 +58,12 @@ func EnrichPaginationConstraints(server *mcp.Server) {
 // enrichPaginationNode adds page/per_page numeric bounds to any matching
 // property in the given schema node, then recurses through nested schemas.
 func enrichPaginationNode(node map[string]any) {
+	enrichPaginationProperties(node)
+	enrichPaginationItems(node)
+	enrichPaginationCombinators(node)
+}
+
+func enrichPaginationProperties(node map[string]any) {
 	if props, ok := node["properties"].(map[string]any); ok {
 		if page, isPage := props["page"].(map[string]any); isPage && isIntegerLike(page) {
 			setIfAbsent(page, "minimum", float64(1))
@@ -72,18 +78,26 @@ func enrichPaginationNode(node map[string]any) {
 			}
 		}
 	}
+}
 
+func enrichPaginationItems(node map[string]any) {
 	if items, ok := node["items"].(map[string]any); ok {
 		enrichPaginationNode(items)
 	}
+}
 
+func enrichPaginationCombinators(node map[string]any) {
 	for _, key := range []string{"anyOf", "oneOf", "allOf"} {
 		if arr, ok := node[key].([]any); ok {
-			for _, v := range arr {
-				if child, isMap := v.(map[string]any); isMap {
-					enrichPaginationNode(child)
-				}
-			}
+			enrichPaginationArray(arr)
+		}
+	}
+}
+
+func enrichPaginationArray(nodes []any) {
+	for _, v := range nodes {
+		if child, isMap := v.(map[string]any); isMap {
+			enrichPaginationNode(child)
 		}
 	}
 }

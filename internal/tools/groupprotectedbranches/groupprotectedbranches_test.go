@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -156,33 +158,7 @@ func TestGet(t *testing.T) {
 				testutil.AssertRequestPath(t, r, pathGroupProtBranch)
 				testutil.RespondJSON(w, http.StatusOK, branchJSON)
 			}),
-			check: func(t *testing.T, out Output) {
-				t.Helper()
-				if out.ID != 1 {
-					t.Errorf("ID = %d, want 1", out.ID)
-				}
-				if out.Name != "main" {
-					t.Errorf("Name = %q, want %q", out.Name, "main")
-				}
-				if !out.CodeOwnerApprovalRequired {
-					t.Error("CodeOwnerApprovalRequired = false, want true")
-				}
-				if len(out.PushAccessLevels) != 1 {
-					t.Fatalf("len(PushAccessLevels) = %d, want 1", len(out.PushAccessLevels))
-				}
-				if out.PushAccessLevels[0].AccessLevel != 40 {
-					t.Errorf("PushAccessLevels[0].AccessLevel = %d, want 40", out.PushAccessLevels[0].AccessLevel)
-				}
-				if out.PushAccessLevels[0].AccessLevelDescription != "Maintainers" {
-					t.Errorf("PushAccessLevels[0].Description = %q, want %q", out.PushAccessLevels[0].AccessLevelDescription, "Maintainers")
-				}
-				if len(out.MergeAccessLevels) != 1 {
-					t.Fatalf("len(MergeAccessLevels) = %d, want 1", len(out.MergeAccessLevels))
-				}
-				if len(out.UnprotectAccessLevels) != 0 {
-					t.Errorf("len(UnprotectAccessLevels) = %d, want 0", len(out.UnprotectAccessLevels))
-				}
-			},
+			check: assertProtectedBranchAccessLevels,
 		},
 		{
 			name:  "escapes branch name with slash once",
@@ -234,6 +210,39 @@ func TestGet(t *testing.T) {
 				tt.check(t, out)
 			}
 		})
+	}
+}
+
+func assertProtectedBranchAccessLevels(t *testing.T, out Output) {
+	t.Helper()
+	if out.ID != 1 {
+		t.Errorf("ID = %d, want 1", out.ID)
+	}
+	if out.Name != "main" {
+		t.Errorf("Name = %q, want %q", out.Name, "main")
+	}
+	if !out.CodeOwnerApprovalRequired {
+		t.Error("CodeOwnerApprovalRequired = false, want true")
+	}
+	assertProtectedBranchPushAccess(t, out.PushAccessLevels)
+	if len(out.MergeAccessLevels) != 1 {
+		t.Fatalf("len(MergeAccessLevels) = %d, want 1", len(out.MergeAccessLevels))
+	}
+	if len(out.UnprotectAccessLevels) != 0 {
+		t.Errorf("len(UnprotectAccessLevels) = %d, want 0", len(out.UnprotectAccessLevels))
+	}
+}
+
+func assertProtectedBranchPushAccess(t *testing.T, levels []AccessLevelOutput) {
+	t.Helper()
+	if len(levels) != 1 {
+		t.Fatalf("len(PushAccessLevels) = %d, want 1", len(levels))
+	}
+	if levels[0].AccessLevel != 40 {
+		t.Errorf("PushAccessLevels[0].AccessLevel = %d, want 40", levels[0].AccessLevel)
+	}
+	if levels[0].AccessLevelDescription != "Maintainers" {
+		t.Errorf("PushAccessLevels[0].Description = %q, want %q", levels[0].AccessLevelDescription, "Maintainers")
 	}
 }
 
@@ -622,42 +631,15 @@ func TestToBranchPermissions(t *testing.T) {
 		permID := int64(7)
 		destroy := true
 
-		got := toBranchPermissions([]BranchPermissionInput{
-			{
-				ID:          &permID,
-				AccessLevel: &lvl,
-				UserID:      &userID,
-				GroupID:     &groupID,
-				DeployKeyID: &deployKeyID,
-				Destroy:     &destroy,
-			},
-		})
-		if got == nil {
-			t.Fatal("toBranchPermissions returned nil for non-empty input")
-		}
-		perms := *got
-		if len(perms) != 1 {
-			t.Fatalf("len(perms) = %d, want 1", len(perms))
-		}
-		p := perms[0]
-		if p.ID == nil || *p.ID != 7 {
-			t.Errorf("ID = %v, want 7", p.ID)
-		}
-		if p.UserID == nil || *p.UserID != 5 {
-			t.Errorf("UserID = %v, want 5", p.UserID)
-		}
-		if p.GroupID == nil || *p.GroupID != 10 {
-			t.Errorf("GroupID = %v, want 10", p.GroupID)
-		}
-		if p.DeployKeyID == nil || *p.DeployKeyID != 99 {
-			t.Errorf("DeployKeyID = %v, want 99", p.DeployKeyID)
-		}
-		if p.Destroy == nil || !*p.Destroy {
-			t.Errorf("Destroy = %v, want true", p.Destroy)
-		}
-		if p.AccessLevel == nil {
-			t.Fatal("AccessLevel = nil, want non-nil")
-		}
+		got := toBranchPermissions([]BranchPermissionInput{{
+			ID:          &permID,
+			AccessLevel: &lvl,
+			UserID:      &userID,
+			GroupID:     &groupID,
+			DeployKeyID: &deployKeyID,
+			Destroy:     &destroy,
+		}})
+		assertBranchPermissionWithAccessLevel(t, got)
 	})
 
 	t.Run("converts entry without access level", func(t *testing.T) {
@@ -673,6 +655,35 @@ func TestToBranchPermissions(t *testing.T) {
 			t.Errorf("AccessLevel = %v, want nil", perms[0].AccessLevel)
 		}
 	})
+}
+
+func assertBranchPermissionWithAccessLevel(t *testing.T, got *[]*gl.GroupBranchPermissionOptions) {
+	t.Helper()
+	if got == nil {
+		t.Fatal("toBranchPermissions returned nil for non-empty input")
+	}
+	perms := *got
+	if len(perms) != 1 {
+		t.Fatalf("len(perms) = %d, want 1", len(perms))
+	}
+	permission := perms[0]
+	assertInt64Pointer(t, "ID", permission.ID, 7)
+	assertInt64Pointer(t, "UserID", permission.UserID, 5)
+	assertInt64Pointer(t, "GroupID", permission.GroupID, 10)
+	assertInt64Pointer(t, "DeployKeyID", permission.DeployKeyID, 99)
+	if permission.Destroy == nil || !*permission.Destroy {
+		t.Errorf("Destroy = %v, want true", permission.Destroy)
+	}
+	if permission.AccessLevel == nil {
+		t.Fatal("AccessLevel = nil, want non-nil")
+	}
+}
+
+func assertInt64Pointer(t *testing.T, name string, got *int64, want int64) {
+	t.Helper()
+	if got == nil || *got != want {
+		t.Errorf("%s = %v, want %d", name, got, want)
+	}
 }
 
 // TestFormatOutputMarkdown validates the Markdown formatter for a single

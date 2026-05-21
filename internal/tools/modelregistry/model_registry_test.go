@@ -19,15 +19,7 @@ import (
 // validations, multiple API error status codes (401, 403, 404, 500), and
 // context cancellation.
 func TestDownload(t *testing.T) {
-	tests := []struct {
-		name       string
-		input      DownloadInput
-		handler    http.HandlerFunc
-		cancelCtx  bool
-		wantErr    bool
-		errContain string
-		validate   func(t *testing.T, out DownloadOutput)
-	}{
+	tests := []downloadCase{
 		{
 			name: "returns base64-encoded content on success",
 			input: DownloadInput{
@@ -234,28 +226,48 @@ func TestDownload(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, tt.handler)
-
-			ctx := context.Background()
-			if tt.cancelCtx {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(ctx)
-				cancel()
-			}
-
-			got, err := Download(ctx, client, tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Download() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.errContain != "" && err != nil {
-				if !strings.Contains(err.Error(), tt.errContain) {
-					t.Errorf("error = %q, want it to contain %q", err.Error(), tt.errContain)
-				}
-			}
-			if tt.validate != nil {
-				tt.validate(t, got)
-			}
+			runDownloadCase(t, tt)
 		})
+	}
+}
+
+type downloadCase struct {
+	name       string
+	input      DownloadInput
+	handler    http.HandlerFunc
+	cancelCtx  bool
+	wantErr    bool
+	errContain string
+	validate   func(t *testing.T, out DownloadOutput)
+}
+
+func runDownloadCase(t *testing.T, tt downloadCase) {
+	t.Helper()
+	client := testutil.NewTestClient(t, tt.handler)
+	got, err := Download(downloadCaseContext(tt), client, tt.input)
+	assertDownloadCaseResult(t, got, err, tt)
+}
+
+func downloadCaseContext(tt downloadCase) context.Context {
+	ctx := context.Background()
+	if tt.cancelCtx {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		cancel()
+	}
+	return ctx
+}
+
+func assertDownloadCaseResult(t *testing.T, got DownloadOutput, err error, tt downloadCase) {
+	t.Helper()
+	if (err != nil) != tt.wantErr {
+		t.Fatalf("Download() error = %v, wantErr %v", err, tt.wantErr)
+	}
+	if tt.errContain != "" && err != nil && !strings.Contains(err.Error(), tt.errContain) {
+		t.Errorf("error = %q, want it to contain %q", err.Error(), tt.errContain)
+	}
+	if tt.validate != nil {
+		tt.validate(t, got)
 	}
 }
 

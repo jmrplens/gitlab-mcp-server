@@ -48,73 +48,96 @@ func FormatGetMarkdown(out GetOutput) string {
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "## Catalog Resource: %s\n\n", r.Name)
+	writeCatalogResourceSummary(&sb, r)
+	writeCatalogResourceComponents(&sb, r.Components)
+	writeCatalogResourceVersions(&sb, r.Versions)
+	return sb.String()
+}
 
+func writeCatalogResourceSummary(sb *strings.Builder, r ResourceDetail) {
 	sb.WriteString("| Field | Value |\n|-------|-------|\n")
-	fmt.Fprintf(&sb, "| ID | %s |\n", toolutil.EscapeMdTableCell(r.ID))
-	fmt.Fprintf(&sb, "| Full Path | %s |\n", toolutil.EscapeMdTableCell(r.FullPath))
-	fmt.Fprintf(&sb, "| URL | [%s](%s) |\n", toolutil.EscapeMdTableCell(r.FullPath), r.WebURL)
-	fmt.Fprintf(&sb, "| Stars | %d |\n", r.StarCount)
-	fmt.Fprintf(&sb, "| Forks | %d |\n", r.ForksCount)
-	fmt.Fprintf(&sb, "| Open Issues | %d |\n", r.OpenIssuesCount)
-	fmt.Fprintf(&sb, "| Open MRs | %d |\n", r.OpenMRsCount)
+	fmt.Fprintf(sb, "| ID | %s |\n", toolutil.EscapeMdTableCell(r.ID))
+	fmt.Fprintf(sb, "| Full Path | %s |\n", toolutil.EscapeMdTableCell(r.FullPath))
+	fmt.Fprintf(sb, "| URL | [%s](%s) |\n", toolutil.EscapeMdTableCell(r.FullPath), r.WebURL)
+	fmt.Fprintf(sb, "| Stars | %d |\n", r.StarCount)
+	fmt.Fprintf(sb, "| Forks | %d |\n", r.ForksCount)
+	fmt.Fprintf(sb, "| Open Issues | %d |\n", r.OpenIssuesCount)
+	fmt.Fprintf(sb, "| Open MRs | %d |\n", r.OpenMRsCount)
 	if r.LatestReleasedAt != "" {
-		fmt.Fprintf(&sb, "| Latest Release | %s |\n", formatDate(r.LatestReleasedAt))
+		fmt.Fprintf(sb, "| Latest Release | %s |\n", formatDate(r.LatestReleasedAt))
 	}
 	if r.LatestVersionName != "" {
-		fmt.Fprintf(&sb, "| Latest Version | %s |\n", toolutil.EscapeMdTableCell(r.LatestVersionName))
+		fmt.Fprintf(sb, "| Latest Version | %s |\n", toolutil.EscapeMdTableCell(r.LatestVersionName))
 	}
 	if r.Description != "" {
-		fmt.Fprintf(&sb, "\n### Description\n\n%s\n", r.Description)
+		fmt.Fprintf(sb, "\n### Description\n\n%s\n", r.Description)
 	}
+}
 
-	if len(r.Components) > 0 {
-		sb.WriteString("\n### Components (Latest Version)\n\n")
-		for _, c := range r.Components {
-			fmt.Fprintf(&sb, "#### `%s`\n\n", c.Name)
-			if c.Description != "" {
-				fmt.Fprintf(&sb, "%s\n\n", c.Description)
-			}
-			fmt.Fprintf(&sb, "**Include:** `%s`\n\n", c.IncludePath)
-			if len(c.Inputs) > 0 {
-				sb.WriteString("| Input | Type | Required | Default | Description |\n")
-				sb.WriteString("|-------|------|----------|---------|-------------|\n")
-				for _, inp := range c.Inputs {
-					req := "no"
-					if inp.Required {
-						req = "**yes**"
-					}
-					fmt.Fprintf(&sb, "| `%s` | %s | %s | %s | %s |\n",
-						inp.Name,
-						toolutil.EscapeMdTableCell(inp.Type),
-						req,
-						toolutil.EscapeMdTableCell(inp.Default),
-						toolutil.EscapeMdTableCell(inp.Description),
-					)
-				}
-				sb.WriteString("\n")
-			}
-		}
+func writeCatalogResourceComponents(sb *strings.Builder, components []ComponentItem) {
+	if len(components) == 0 {
+		return
 	}
-
-	if len(r.Versions) > 0 {
-		sb.WriteString("\n### Released Versions\n\n")
-		sb.WriteString("| Version | Released | Components |\n")
-		sb.WriteString("|---------|----------|------------|\n")
-		for _, v := range r.Versions {
-			names := make([]string, 0, len(v.Components))
-			for _, c := range v.Components {
-				names = append(names, c.Name)
-			}
-			fmt.Fprintf(&sb, "| %s | %s | %s |\n",
-				toolutil.EscapeMdTableCell(v.Name),
-				formatDate(v.ReleasedAt),
-				toolutil.EscapeMdTableCell(strings.Join(names, ", ")),
-			)
-		}
-		sb.WriteString("\n")
+	sb.WriteString("\n### Components (Latest Version)\n\n")
+	for _, component := range components {
+		writeCatalogResourceComponent(sb, component)
 	}
+}
 
-	return sb.String()
+func writeCatalogResourceComponent(sb *strings.Builder, component ComponentItem) {
+	fmt.Fprintf(sb, "#### `%s`\n\n", component.Name)
+	if component.Description != "" {
+		fmt.Fprintf(sb, "%s\n\n", component.Description)
+	}
+	fmt.Fprintf(sb, "**Include:** `%s`\n\n", component.IncludePath)
+	if len(component.Inputs) == 0 {
+		return
+	}
+	sb.WriteString("| Input | Type | Required | Default | Description |\n")
+	sb.WriteString("|-------|------|----------|---------|-------------|\n")
+	for _, input := range component.Inputs {
+		writeCatalogComponentInput(sb, input)
+	}
+	sb.WriteString("\n")
+}
+
+func writeCatalogComponentInput(sb *strings.Builder, input InputItem) {
+	required := "no"
+	if input.Required {
+		required = "**yes**"
+	}
+	fmt.Fprintf(sb, "| `%s` | %s | %s | %s | %s |\n",
+		input.Name,
+		toolutil.EscapeMdTableCell(input.Type),
+		required,
+		toolutil.EscapeMdTableCell(input.Default),
+		toolutil.EscapeMdTableCell(input.Description),
+	)
+}
+
+func writeCatalogResourceVersions(sb *strings.Builder, versions []VersionItem) {
+	if len(versions) == 0 {
+		return
+	}
+	sb.WriteString("\n### Released Versions\n\n")
+	sb.WriteString("| Version | Released | Components |\n")
+	sb.WriteString("|---------|----------|------------|\n")
+	for _, version := range versions {
+		fmt.Fprintf(sb, "| %s | %s | %s |\n",
+			toolutil.EscapeMdTableCell(version.Name),
+			formatDate(version.ReleasedAt),
+			toolutil.EscapeMdTableCell(strings.Join(catalogVersionComponentNames(version), ", ")),
+		)
+	}
+	sb.WriteString("\n")
+}
+
+func catalogVersionComponentNames(version VersionItem) []string {
+	names := make([]string, 0, len(version.Components))
+	for _, component := range version.Components {
+		names = append(names, component.Name)
+	}
+	return names
 }
 
 // truncate shortens s to maxLen characters, appending "..." if truncated.

@@ -24,47 +24,53 @@ func AssertEmbeddedResource(t *testing.T, ctx context.Context, session *mcp.Clie
 	t.Run("enabled by default", func(t *testing.T) {
 		toggle(true)
 		t.Cleanup(func() { toggle(true) })
-		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-		if err != nil {
-			t.Fatalf("CallTool(%s): %v", name, err)
-		}
-		if result == nil || result.IsError {
-			t.Fatalf("CallTool(%s): expected successful result, got IsError=%v", name, result != nil && result.IsError)
-		}
-		var found *mcp.EmbeddedResource
-		for _, c := range result.Content {
-			if er, ok := c.(*mcp.EmbeddedResource); ok {
-				found = er
-				break
-			}
-		}
+		result := callToolSuccessfully(ctx, t, session, name, args)
+		found := firstEmbeddedResource(result)
 		if found == nil || found.Resource == nil {
 			t.Fatalf("expected EmbeddedResource for %s, got %d blocks", name, len(result.Content))
 		}
-		if found.Resource.URI != wantURI {
-			t.Errorf("URI = %q, want %q", found.Resource.URI, wantURI)
-		}
-		if found.Resource.MIMEType != "application/json" {
-			t.Errorf("MIMEType = %q, want application/json", found.Resource.MIMEType)
-		}
-		if found.Resource.Text == "" {
-			t.Error("Text is empty, want JSON payload")
-		}
+		assertEmbeddedResourcePayload(t, found.Resource, wantURI)
 	})
 	t.Run("disabled produces no embed", func(t *testing.T) {
 		toggle(false)
 		t.Cleanup(func() { toggle(true) })
-		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
-		if err != nil {
-			t.Fatalf("CallTool(%s): %v", name, err)
-		}
-		if result == nil || result.IsError {
-			t.Fatalf("CallTool(%s): expected successful result, got IsError=%v", name, result != nil && result.IsError)
-		}
-		for _, c := range result.Content {
-			if _, ok := c.(*mcp.EmbeddedResource); ok {
-				t.Fatalf("expected no EmbeddedResource when disabled (tool=%s)", name)
-			}
+		result := callToolSuccessfully(ctx, t, session, name, args)
+		if firstEmbeddedResource(result) != nil {
+			t.Fatalf("expected no EmbeddedResource when disabled (tool=%s)", name)
 		}
 	})
+}
+
+func callToolSuccessfully(ctx context.Context, t *testing.T, session *mcp.ClientSession, name string, args map[string]any) *mcp.CallToolResult {
+	t.Helper()
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+	if err != nil {
+		t.Fatalf("CallTool(%s): %v", name, err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("CallTool(%s): expected successful result, got IsError=%v", name, result != nil && result.IsError)
+	}
+	return result
+}
+
+func firstEmbeddedResource(result *mcp.CallToolResult) *mcp.EmbeddedResource {
+	for _, content := range result.Content {
+		if embedded, ok := content.(*mcp.EmbeddedResource); ok {
+			return embedded
+		}
+	}
+	return nil
+}
+
+func assertEmbeddedResourcePayload(t *testing.T, resource *mcp.ResourceContents, wantURI string) {
+	t.Helper()
+	if resource.URI != wantURI {
+		t.Errorf("URI = %q, want %q", resource.URI, wantURI)
+	}
+	if resource.MIMEType != "application/json" {
+		t.Errorf("MIMEType = %q, want application/json", resource.MIMEType)
+	}
+	if resource.Text == "" {
+		t.Error("Text is empty, want JSON payload")
+	}
 }

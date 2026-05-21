@@ -84,6 +84,29 @@ type auxiliaryToolUseContext struct {
 	followups              *[]modelContentBlock
 }
 
+type modelTurnContext struct {
+	task                   evalTask
+	steps                  []evalStep
+	stepIndex              *int
+	callBudget             taskCallBudget
+	routes                 map[string]toolutil.ActionMap
+	result                 *taskResult
+	firstFinalAttempt      *bool
+	lastInvalidFingerprint *string
+	repairLimit            int
+	repairCount            *int
+	simulationAttempts     map[int]int
+	simulatedErrorSeen     *bool
+	messages               *[]modelMessage
+}
+
+type stepToolUseContext struct {
+	turn              modelTurnContext
+	toolUse           modelContentBlock
+	repairAlreadySent bool
+	followups         *[]modelContentBlock
+}
+
 // evaluateTask handles evaluate task for modelRunner.
 func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) taskResult {
 	steps := taskSteps(task)
@@ -106,86 +129,106 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 		result.ModelCalls++
 		result.Usage.add(response.Usage)
 		if err != nil {
-			result.Notes = append(result.Notes, err.Error())
-			event := traceEvent{Turn: result.ModelCalls, Kind: "model_error", Content: err.Error(), IsError: true}
-			if providerErr, ok := errors.AsType[*modelProviderCallError](err); ok {
-				event.Provider = providerErr.Trace
-			}
-			result.Trace.Events = append(result.Trace.Events, event)
+			recordModelCallError(&result, err)
 			return result
 		}
-		toolUses := toolUseBlocks(response.Content)
-		result.ToolCalls += len(toolUses)
-		messages = append(messages, modelMessage{Role: "assistant", Content: response.Content})
-		usage := response.Usage
-		result.Trace.Events = append(result.Trace.Events, traceEvent{Turn: result.ModelCalls, Kind: "assistant_message", Role: "assistant", Blocks: response.Content, Usage: &usage, Provider: response.ProviderTrace})
-		if len(toolUses) == 0 {
-			if stop := handleNoToolUseResult(&result, &messages, &firstFinalAttempt, &repairCount, repairLimit, stepIndex, steps); stop {
-				return result
-			}
-			continue
-		}
-		var followups []modelContentBlock
-		repairAlreadySent := repairCount >= repairLimit
-		for _, toolUse := range toolUses {
-			result.Trace.Events = append(result.Trace.Events, traceToolUseEvent(result.ModelCalls, toolUse))
-			auxCtx := auxiliaryToolUseContext{task: task, steps: steps, stepIndex: &stepIndex, toolUse: toolUse, callBudget: callBudget, routes: routes, result: &result, firstFinalAttempt: &firstFinalAttempt, lastInvalidFingerprint: &lastInvalidFingerprint, repairAlreadySent: repairAlreadySent, repairCount: &repairCount, followups: &followups}
-			handled, stop := r.handleAuxiliaryToolUse(ctx, auxCtx)
-			if stop {
-				return result
-			}
-			if handled {
-				continue
-			}
-
-			validation := validateStepCallWithRoutes(steps[stepIndex], toolUse.Name, toolUse.Input, routes)
-			result.Trace.Events = append(result.Trace.Events, traceValidationEvent(result.ModelCalls, validation))
-			if acceptsDynamicPreludeCall(r.toolSurface, steps[stepIndex], validation) {
-				appendDynamicPreludeFollowup(steps, stepIndex, toolUse, validation, &result, &firstFinalAttempt, &followups)
-				continue
-			}
-			recordValidationAttempt(&result, toolUse, validation, &firstFinalAttempt)
-			if validation.Valid {
-				lastInvalidFingerprint = ""
-				validCtx := validToolStepContext{steps: steps, stepIndex: &stepIndex, toolUse: toolUse, result: &result, followups: &followups, simulationAttempts: simulationAttempts, repairCount: repairCount, simulatedErrorSeen: &simulatedErrorSeen}
-				if shouldStop := r.handleValidToolStep(ctx, validCtx); shouldStop {
-					return result
-				}
-				continue
-			}
-
-			if repeated := recordInvalidToolUse(&result, stepIndex, validation, toolUse, &lastInvalidFingerprint); repeated {
-				return result
-			}
-			if repairAlreadySent {
-				return result
-			}
-			result.RepairAttempted = true
-			repairCount++
-			if r.canExecuteInvalidToolCall(steps[stepIndex], validation, toolUse, routes) {
-				simulationAttempts[stepIndex]++
-				simulation := r.mcpToolResult(ctx, toolUse)
-				if simulation.Err != nil {
-					result.Notes = append(result.Notes, toolExecutionNote(stepIndex+1, steps[stepIndex], simulation.Err))
-				}
-				block := toolResultBlock(toolUse.ID, simulation.Content, simulation.Err)
-				followups = append(followups, block)
-				result.Trace.Events = append(result.Trace.Events, traceToolResultEventWithMCP(result.ModelCalls, block, simulation.MCP))
-				continue
-			}
-			repairMessage := validationRepairMessage(task, steps[stepIndex], validation, toolUse.Input)
-			block := toolResultBlock(toolUse.ID, repairMessage, errors.New(repairMessage))
-			followups = append(followups, block)
-			result.Trace.Events = append(result.Trace.Events, traceToolResultEvent(result.ModelCalls, block))
-		}
-		if len(followups) > 0 {
-			messages = append(messages, modelMessage{Role: "user", Content: followups})
-			continue
+		turnCtx := modelTurnContext{task: task, steps: steps, stepIndex: &stepIndex, callBudget: callBudget, routes: routes, result: &result, firstFinalAttempt: &firstFinalAttempt, lastInvalidFingerprint: &lastInvalidFingerprint, repairLimit: repairLimit, repairCount: &repairCount, simulationAttempts: simulationAttempts, simulatedErrorSeen: &simulatedErrorSeen, messages: &messages}
+		if stop := r.handleModelTurn(ctx, response, turnCtx); stop {
+			return result
 		}
 	}
 
 	result.Notes = append(result.Notes, fmt.Sprintf("tool-call step limit reached after %d/%d scenario steps", result.CompletedSteps, len(steps)))
 	return result
+}
+
+func recordModelCallError(result *taskResult, err error) {
+	result.Notes = append(result.Notes, err.Error())
+	event := traceEvent{Turn: result.ModelCalls, Kind: "model_error", Content: err.Error(), IsError: true}
+	if providerErr, ok := errors.AsType[*modelProviderCallError](err); ok {
+		event.Provider = providerErr.Trace
+	}
+	result.Trace.Events = append(result.Trace.Events, event)
+}
+
+func (r *modelRunner) handleModelTurn(ctx context.Context, response modelResponse, turnCtx modelTurnContext) bool {
+	toolUses := toolUseBlocks(response.Content)
+	turnCtx.result.ToolCalls += len(toolUses)
+	*turnCtx.messages = append(*turnCtx.messages, modelMessage{Role: "assistant", Content: response.Content})
+	usage := response.Usage
+	turnCtx.result.Trace.Events = append(turnCtx.result.Trace.Events, traceEvent{Turn: turnCtx.result.ModelCalls, Kind: "assistant_message", Role: "assistant", Blocks: response.Content, Usage: &usage, Provider: response.ProviderTrace})
+	if len(toolUses) == 0 {
+		return handleNoToolUseResult(turnCtx.result, turnCtx.messages, turnCtx.firstFinalAttempt, turnCtx.repairCount, turnCtx.repairLimit, *turnCtx.stepIndex, turnCtx.steps)
+	}
+
+	followups := make([]modelContentBlock, 0, len(toolUses))
+	repairAlreadySent := *turnCtx.repairCount >= turnCtx.repairLimit
+	for _, toolUse := range toolUses {
+		if stop := r.handleStepToolUse(ctx, stepToolUseContext{turn: turnCtx, toolUse: toolUse, repairAlreadySent: repairAlreadySent, followups: &followups}); stop {
+			return true
+		}
+	}
+	if len(followups) == 0 {
+		return false
+	}
+	*turnCtx.messages = append(*turnCtx.messages, modelMessage{Role: "user", Content: followups})
+	return false
+}
+
+func (r *modelRunner) handleStepToolUse(ctx context.Context, stepCtx stepToolUseContext) bool {
+	turnCtx := stepCtx.turn
+	toolUse := stepCtx.toolUse
+	turnCtx.result.Trace.Events = append(turnCtx.result.Trace.Events, traceToolUseEvent(turnCtx.result.ModelCalls, toolUse))
+	auxCtx := auxiliaryToolUseContext{task: turnCtx.task, steps: turnCtx.steps, stepIndex: turnCtx.stepIndex, toolUse: toolUse, callBudget: turnCtx.callBudget, routes: turnCtx.routes, result: turnCtx.result, firstFinalAttempt: turnCtx.firstFinalAttempt, lastInvalidFingerprint: turnCtx.lastInvalidFingerprint, repairAlreadySent: stepCtx.repairAlreadySent, repairCount: turnCtx.repairCount, followups: stepCtx.followups}
+	handled, stop := r.handleAuxiliaryToolUse(ctx, auxCtx)
+	if handled || stop {
+		return stop
+	}
+
+	stepIndex := *turnCtx.stepIndex
+	validation := validateStepCallWithRoutes(turnCtx.steps[stepIndex], toolUse.Name, toolUse.Input, turnCtx.routes)
+	turnCtx.result.Trace.Events = append(turnCtx.result.Trace.Events, traceValidationEvent(turnCtx.result.ModelCalls, validation))
+	if acceptsDynamicPreludeCall(r.toolSurface, turnCtx.steps[stepIndex], validation) {
+		appendDynamicPreludeFollowup(turnCtx.steps, stepIndex, toolUse, validation, turnCtx.result, turnCtx.firstFinalAttempt, stepCtx.followups)
+		return false
+	}
+	recordValidationAttempt(turnCtx.result, toolUse, validation, turnCtx.firstFinalAttempt)
+	if validation.Valid {
+		*turnCtx.lastInvalidFingerprint = ""
+		validCtx := validToolStepContext{steps: turnCtx.steps, stepIndex: turnCtx.stepIndex, toolUse: toolUse, result: turnCtx.result, followups: stepCtx.followups, simulationAttempts: turnCtx.simulationAttempts, repairCount: *turnCtx.repairCount, simulatedErrorSeen: turnCtx.simulatedErrorSeen}
+		return r.handleValidToolStep(ctx, validCtx)
+	}
+	return r.handleInvalidStepToolUse(ctx, stepCtx, validation)
+}
+
+func (r *modelRunner) handleInvalidStepToolUse(ctx context.Context, stepCtx stepToolUseContext, validation validationResult) bool {
+	turnCtx := stepCtx.turn
+	stepIndex := *turnCtx.stepIndex
+	toolUse := stepCtx.toolUse
+	if repeated := recordInvalidToolUse(turnCtx.result, stepIndex, validation, toolUse, turnCtx.lastInvalidFingerprint); repeated {
+		return true
+	}
+	if stepCtx.repairAlreadySent {
+		return true
+	}
+	turnCtx.result.RepairAttempted = true
+	(*turnCtx.repairCount)++
+	if r.canExecuteInvalidToolCall(turnCtx.steps[stepIndex], validation, toolUse, turnCtx.routes) {
+		turnCtx.simulationAttempts[stepIndex]++
+		simulation := r.mcpToolResult(ctx, toolUse)
+		if simulation.Err != nil {
+			turnCtx.result.Notes = append(turnCtx.result.Notes, toolExecutionNote(stepIndex+1, turnCtx.steps[stepIndex], simulation.Err))
+		}
+		block := toolResultBlock(toolUse.ID, simulation.Content, simulation.Err)
+		*stepCtx.followups = append(*stepCtx.followups, block)
+		turnCtx.result.Trace.Events = append(turnCtx.result.Trace.Events, traceToolResultEventWithMCP(turnCtx.result.ModelCalls, block, simulation.MCP))
+		return false
+	}
+	repairMessage := validationRepairMessage(turnCtx.task, turnCtx.steps[stepIndex], validation, toolUse.Input)
+	block := toolResultBlock(toolUse.ID, repairMessage, errors.New(repairMessage))
+	*stepCtx.followups = append(*stepCtx.followups, block)
+	turnCtx.result.Trace.Events = append(turnCtx.result.Trace.Events, traceToolResultEvent(turnCtx.result.ModelCalls, block))
+	return false
 }
 
 func (r *modelRunner) handleValidToolStep(ctx context.Context, validCtx validToolStepContext) bool {
