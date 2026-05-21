@@ -56,22 +56,8 @@ func pickDirectory(startDir string) (string, error) {
 		cmd = exec.CommandContext(ctx, "osascript", "-e", script) // #nosec G204 -- trusted internal command with escaped directory path
 
 	default: // Linux / FreeBSD
-		// Try zenity first, fall back to kdialog
-		if _, err = exec.LookPath("zenity"); err == nil {
-			args := []string{"--file-selection", "--directory", "--title=Select installation directory"}
-			if startDir != "" {
-				args = append(args, "--filename="+startDir+"/")
-			}
-			cmd = exec.CommandContext(ctx, "zenity", args...) // #nosec G204 -- trusted internal command
-		} else if _, err = exec.LookPath("kdialog"); err == nil {
-			args := []string{"--getexistingdirectory"}
-			if startDir != "" {
-				args = append(args, startDir)
-			} else {
-				args = append(args, ".")
-			}
-			cmd = exec.CommandContext(ctx, "kdialog", args...) // #nosec G204 -- trusted internal command
-		} else {
+		cmd, err = linuxDirectoryPickerCommand(ctx, startDir)
+		if err != nil {
 			return "", errors.New("no dialog tool available (install zenity or kdialog)")
 		}
 	}
@@ -87,4 +73,24 @@ func pickDirectory(startDir string) (string, error) {
 		return "", errors.New("no directory selected")
 	}
 	return selected, nil
+}
+
+func linuxDirectoryPickerCommand(ctx context.Context, startDir string) (*exec.Cmd, error) {
+	if _, err := exec.LookPath("zenity"); err == nil {
+		args := []string{"--file-selection", "--directory", "--title=Select installation directory"}
+		if startDir != "" {
+			args = append(args, "--filename="+startDir+"/")
+		}
+		return exec.CommandContext(ctx, "zenity", args...), nil // #nosec G204 -- trusted internal command
+	}
+	if _, err := exec.LookPath("kdialog"); err != nil {
+		return nil, err
+	}
+	args := []string{"--getexistingdirectory"}
+	if startDir != "" {
+		args = append(args, startDir)
+	} else {
+		args = append(args, ".")
+	}
+	return exec.CommandContext(ctx, "kdialog", args...), nil // #nosec G204 -- trusted internal command
 }

@@ -52,12 +52,14 @@ Phase 1 completed on 2026-05-21. The default `gocognit` rollout was completed fi
 
 | Task | Description | Completed | Date |
 |------|-------------|-----------|------|
-| TASK-007 | Update `.golangci.yml` to add `nestif` under `linters.enable` with comment `Nested if complexity guard`, and add `linters.settings.nestif.min-complexity: 5`. |  |  |
-| TASK-008 | Run `golangci-lint run --enable-only=nestif --max-issues-per-linter=0 --max-same-issues=0 ./...` and save the reported file/function list in the working notes for the phase. |  |  |
-| TASK-009 | Refactor each `nestif` finding with guard clauses, early returns, extracted validators, or extracted branch handlers. Known initial hotspots include `cmd/add_docs/main.go`, `cmd/eval_mcp_surfaces/fixtures.go`, `cmd/eval_mcp_surfaces/providers.go`, `cmd/eval_mcp_surfaces/task_prompts.go`, `cmd/eval_mcp_surfaces/validation.go`, and `cmd/format_md_tables/main.go`. |  |  |
-| TASK-010 | Run `gofmt` or `goimports` on changed Go files, then run targeted `go test` for every changed package. |  |  |
-| TASK-011 | Validate with `golangci-lint run --enable-only=nestif ./...` and `golangci-lint run ./...`. |  |  |
-| TASK-012 | If any test files changed, refresh and check `docs/testing/testing.md` with `cmd/gen_testing_docs` and `markdownlint-cli2`. |  |  |
+| TASK-007 | Update `.golangci.yml` to add `nestif` under `linters.enable` with comment `Nested if complexity guard`, and add `linters.settings.nestif.min-complexity: 5`. | Yes | 2026-05-21 |
+| TASK-008 | Run `golangci-lint run --enable-only=nestif --max-issues-per-linter=0 --max-same-issues=0 ./...` and save the reported file/function list in the working notes for the phase. | Yes | 2026-05-21 |
+| TASK-009 | Refactor each `nestif` finding with guard clauses, early returns, extracted validators, or extracted branch handlers. Known initial hotspots include `cmd/add_docs/main.go`, `cmd/eval_mcp_surfaces/fixtures.go`, `cmd/eval_mcp_surfaces/providers.go`, `cmd/eval_mcp_surfaces/task_prompts.go`, `cmd/eval_mcp_surfaces/validation.go`, and `cmd/format_md_tables/main.go`. | Yes | 2026-05-21 |
+| TASK-010 | Run `gofmt` or `goimports` on changed Go files, then run targeted `go test` for every changed package. | Yes | 2026-05-21 |
+| TASK-011 | Validate with `golangci-lint run --enable-only=nestif ./...` and `golangci-lint run ./...`. | Yes | 2026-05-21 |
+| TASK-012 | If any test files changed, refresh and check `docs/testing/testing.md` with `cmd/gen_testing_docs` and `markdownlint-cli2`. | Yes | 2026-05-21 |
+
+Phase 2 completed on 2026-05-21. The `nestif` default threshold found 13 nested conditional hotspots, which were resolved with guard clauses and focused helper extraction across production code, tests, and E2E helpers. Validation included `nestif`, full `golangci-lint`, targeted Go tests, E2E compile check, and generated testing documentation checks.
 
 ### Implementation Phase 3
 
@@ -93,7 +95,7 @@ Phase 1 completed on 2026-05-21. The default `gocognit` rollout was completed fi
 - **ALT-001**: Enable all four linters at once. Rejected because combined findings would mix independent metrics and make regressions harder to isolate.
 - **ALT-002**: Add temporary exclusions for tests. Rejected because `run.tests: true` is an explicit quality requirement.
 - **ALT-003**: Start with `dupl`. Rejected because `dupl` has the largest initial finding count and should be handled after lower-risk complexity gates are stable.
-- **ALT-004**: Use thresholds stricter than defaults. Rejected for this rollout because the goal is to reach default thresholds first.
+- **ALT-004**: Start with thresholds stricter than defaults. Rejected for this rollout because default thresholds establish the first baseline; explicitly requested ratchets can follow after the default threshold is clean.
 
 ## 4. Dependencies
 
@@ -126,7 +128,7 @@ Phase 1 completed on 2026-05-21. The default `gocognit` rollout was completed fi
 - **RISK-002**: `maintidx` can flag large data-heavy test fixtures with low cyclomatic complexity. Mitigation: split fixture data only when it improves readability and preserves assertion clarity.
 - **RISK-003**: `gocognit` and `nestif` can overlap. Mitigation: complete and validate `gocognit` first, then let the `nestif` phase handle remaining nested branches.
 - **RISK-004**: Refactoring E2E test setup can change lifecycle ordering. Mitigation: keep existing setup/cleanup semantics and run E2E compile checks after E2E changes.
-- **ASSUMPTION-001**: Initial finding counts from 2026-05-21 are approximately `gocognit` 22 at threshold 30, `nestif` 23, `maintidx` 9, and `dupl` 158. Counts may change after each phase.
+- **ASSUMPTION-001**: Initial finding counts from 2026-05-21 were approximately `gocognit` 22 at threshold 30, `nestif` 13 after the phase 1 refactors, `maintidx` 9, and `dupl` 158. Counts may change after each phase.
 - **ASSUMPTION-002**: The current `gocyclo` replacement for `cyclop` remains in place before phase 1 starts.
 
 ## 8. Related Specifications / Further Reading

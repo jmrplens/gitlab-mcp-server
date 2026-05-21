@@ -799,31 +799,27 @@ func normalizeFilePathAlias(out map[string]any, accepts func(string) bool, clone
 }
 
 func normalizeBranchAliases(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
-	if accepts("source_branch") && accepts("target_branch") {
-		if _, hasSource := out["source_branch"]; !hasSource {
-			for _, key := range []string{"ref", "branch", "from"} {
-				value, ok := out[key]
-				if !ok || !nonEmptyStringValue(value) || accepts(key) {
-					continue
-				}
-				updated := clone()
-				updated["source_branch"] = value
-				delete(updated, key)
-				break
-			}
+	if !accepts("source_branch") || !accepts("target_branch") {
+		return
+	}
+	if _, hasSource := out["source_branch"]; !hasSource {
+		copyBranchAlias(out, accepts, clone, "source_branch", []string{"ref", "branch", "from"})
+	}
+	if _, hasTarget := out["target_branch"]; !hasTarget {
+		copyBranchAlias(out, accepts, clone, "target_branch", []string{"to", "base"})
+	}
+}
+
+func copyBranchAlias(out map[string]any, accepts func(string) bool, clone func() map[string]any, target string, aliases []string) {
+	for _, key := range aliases {
+		value, ok := out[key]
+		if !ok || !nonEmptyStringValue(value) || accepts(key) {
+			continue
 		}
-		if _, hasTarget := out["target_branch"]; !hasTarget {
-			for _, key := range []string{"to", "base"} {
-				value, ok := out[key]
-				if !ok || !nonEmptyStringValue(value) || accepts(key) {
-					continue
-				}
-				updated := clone()
-				updated["target_branch"] = value
-				delete(updated, key)
-				break
-			}
-		}
+		updated := clone()
+		updated[target] = value
+		delete(updated, key)
+		return
 	}
 }
 

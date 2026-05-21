@@ -5358,28 +5358,7 @@ func TestProjectCreate_RemoveSourceBranch(t *testing.T) {
 // feature toggles set to false (issues, wiki, jobs, snippets disabled).
 func TestProjectCreate_FeatureTogglesDisabled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
-			var body map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode body: %v", err)
-			}
-			// boolToAccessLevel(false) maps to "disabled"
-			if v := body["issues_access_level"]; v != "disabled" {
-				t.Errorf("issues_access_level = %v, want disabled", v)
-			}
-			if v := body["wiki_access_level"]; v != "disabled" {
-				t.Errorf("wiki_access_level = %v, want disabled", v)
-			}
-			if v := body["builds_access_level"]; v != "disabled" {
-				t.Errorf("builds_access_level = %v, want disabled", v)
-			}
-			if v := body["snippets_access_level"]; v != "disabled" {
-				t.Errorf("snippets_access_level = %v, want disabled", v)
-			}
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":102,"name":"minimal-proj","path_with_namespace":"ns/minimal-proj","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/ns/minimal-proj","description":""}`)
-			return
-		}
-		http.NotFound(w, r)
+		handleProjectCreateFeatureTogglesDisabled(t, w, r)
 	}))
 
 	issues := false
@@ -5395,6 +5374,36 @@ func TestProjectCreate_FeatureTogglesDisabled(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+func handleProjectCreateFeatureTogglesDisabled(t *testing.T, w http.ResponseWriter, r *http.Request) {
+	t.Helper()
+	if r.Method != http.MethodPost || r.URL.Path != pathProjects {
+		http.NotFound(w, r)
+		return
+	}
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode body: %v", err)
+	}
+	assertDisabledProjectFeatureToggles(t, body)
+	testutil.RespondJSON(w, http.StatusCreated, `{"id":102,"name":"minimal-proj","path_with_namespace":"ns/minimal-proj","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/ns/minimal-proj","description":""}`)
+}
+
+func assertDisabledProjectFeatureToggles(t *testing.T, body map[string]any) {
+	t.Helper()
+	if v := body["issues_access_level"]; v != "disabled" {
+		t.Errorf("issues_access_level = %v, want disabled", v)
+	}
+	if v := body["wiki_access_level"]; v != "disabled" {
+		t.Errorf("wiki_access_level = %v, want disabled", v)
+	}
+	if v := body["builds_access_level"]; v != "disabled" {
+		t.Errorf("builds_access_level = %v, want disabled", v)
+	}
+	if v := body["snippets_access_level"]; v != "disabled" {
+		t.Errorf("snippets_access_level = %v, want disabled", v)
 	}
 }
 

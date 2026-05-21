@@ -312,33 +312,42 @@ func mockCreateMessageHandler(_ context.Context, req *mcp.CreateMessageRequest) 
 // (bool), "selection" (enum), and text fields (string) by inspecting the
 // schema properties.
 func mockElicitHandler(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-	content := make(map[string]any)
-
-	schema, ok := req.Params.RequestedSchema.(map[string]any)
-	if ok {
-		if props, pOk := schema["properties"].(map[string]any); pOk {
-			for key, val := range props {
-				prop, propOk := val.(map[string]any)
-				if !propOk {
-					continue
-				}
-				switch key {
-				case "confirmed":
-					content[key] = true
-				case "selection":
-					if enumVals, eOk := prop["enum"].([]any); eOk && len(enumVals) > 0 {
-						content[key] = enumVals[0]
-					} else {
-						content[key] = "default"
-					}
-				default:
-					content[key] = elicitTextValue(key)
-				}
-			}
-		}
-	}
-
+	content := mockElicitContent(req)
 	return &mcp.ElicitResult{Action: "accept", Content: content}, nil
+}
+
+func mockElicitContent(req *mcp.ElicitRequest) map[string]any {
+	content := make(map[string]any)
+	schema, ok := req.Params.RequestedSchema.(map[string]any)
+	if !ok {
+		return content
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return content
+	}
+	for key, val := range props {
+		prop, propOk := val.(map[string]any)
+		if !propOk {
+			continue
+		}
+		content[key] = mockElicitPropertyValue(key, prop)
+	}
+	return content
+}
+
+func mockElicitPropertyValue(key string, prop map[string]any) any {
+	switch key {
+	case "confirmed":
+		return true
+	case "selection":
+		if enumVals, ok := prop["enum"].([]any); ok && len(enumVals) > 0 {
+			return enumVals[0]
+		}
+		return "default"
+	default:
+		return elicitTextValue(key)
+	}
 }
 
 // elicitTextValue returns a plausible mock value for a text field based on

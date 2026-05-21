@@ -333,21 +333,7 @@ var testSimpleRe = regexp.MustCompile(`^Test([A-Z]\w+)$`)
 // name and the inferred scenario.
 func generateTestDoc(d *ast.FuncDecl, pkgName string) string {
 	name := d.Name.Name
-	isTableDriven := false
-	if d.Body != nil {
-		ast.Inspect(d.Body, func(n ast.Node) bool {
-			if cl, ok := n.(*ast.CompositeLit); ok {
-				var at *ast.ArrayType
-				if at, ok = cl.Type.(*ast.ArrayType); ok {
-					if _, ok = at.Elt.(*ast.StructType); ok {
-						isTableDriven = true
-						return false
-					}
-				}
-			}
-			return true
-		})
-	}
+	isTableDriven := testHasTableDrivenCases(d)
 	if m := testNameRe.FindStringSubmatch(name); m != nil {
 		funcPart := m[1]
 		scenario := m[2]
@@ -364,6 +350,34 @@ func generateTestDoc(d *ast.FuncDecl, pkgName string) string {
 		return fmt.Sprintf("%s verifies %s.", name, docIdentifier(funcPart))
 	}
 	return fmt.Sprintf("%s verifies the expected behavior of %s.", name, pkgName)
+}
+
+func testHasTableDrivenCases(d *ast.FuncDecl) bool {
+	if d.Body == nil {
+		return false
+	}
+	found := false
+	ast.Inspect(d.Body, func(n ast.Node) bool {
+		if isTableDrivenCompositeLit(n) {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+func isTableDrivenCompositeLit(n ast.Node) bool {
+	cl, ok := n.(*ast.CompositeLit)
+	if !ok {
+		return false
+	}
+	at, ok := cl.Type.(*ast.ArrayType)
+	if !ok {
+		return false
+	}
+	_, ok = at.Elt.(*ast.StructType)
+	return ok
 }
 
 // subjectScenarioPhrase combines the subject and scenario portions of a test name

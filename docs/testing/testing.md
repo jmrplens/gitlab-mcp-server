@@ -68,7 +68,7 @@
 | oauth        |        35 |    98.6% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                           |
 | progress     |        17 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                     |
 | prompts      |       207 |    96.2% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                        |
-| resources    |       179 |    98.1% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
+| resources    |       179 |    97.8% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
 | roots        |        21 |    98.5% | Package roots provides client workspace discovery via the MCP Roots capability.                                                                                                                                   |
 | sampling     |        83 |    99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis.                                                          |
 | serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
@@ -116,7 +116,7 @@
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        41 |          2 |   100.0% |         8 |
 | accesstokens            |        87 |          2 |    99.0% |        18 |
-| actioncatalog           |        26 |          4 |    98.7% |         0 |
+| actioncatalog           |        26 |          4 |    98.5% |         0 |
 | actioncompat            |        15 |          2 |    96.3% |         0 |
 | adminspecs              |         4 |          1 |   100.0% |        91 |
 | alertmanagement         |        28 |          2 |    98.9% |         4 |
@@ -298,7 +298,7 @@
 
 | Package                         | Coverage |
 | ------------------------------- | -------: |
-| cmd/add_docs                    |    61.9% |
+| cmd/add_docs                    |    62.1% |
 | cmd/audit_action_spec_coverage  |    77.5% |
 | cmd/audit_dynamic_aliases       |    60.0% |
 | cmd/audit_godocs                |    50.7% |
@@ -334,7 +334,7 @@
 | oauth       |    98.6% |
 | progress    |   100.0% |
 | prompts     |    96.2% |
-| resources   |    98.1% |
+| resources   |    97.8% |
 | roots       |    98.5% |
 | sampling    |    99.5% |
 | serverpool  |    99.6% |
@@ -349,7 +349,7 @@
 | tools (orch.)           |    98.2% |
 | accessrequests          |   100.0% |
 | accesstokens            |    99.0% |
-| actioncatalog           |    98.7% |
+| actioncatalog           |    98.5% |
 | actioncompat            |    96.3% |
 | adminspecs              |   100.0% |
 | alertmanagement         |    98.9% |
@@ -535,7 +535,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/add_docs** (61.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/add_docs** (62.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces** (67.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_action_spec_coverage** (77.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.2%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.

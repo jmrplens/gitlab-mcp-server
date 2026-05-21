@@ -478,88 +478,94 @@ func runMetaGroupMilestoneOperations(t *testing.T, ctx context.Context, groupID 
 
 func runMetaGroupBoardOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
-	if sess.enterprise {
-		var boardID int64
-
-		t.Run("BoardCreate", func(t *testing.T) {
-			requireTruef(t, groupID > 0, "groupID not set")
-			out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "group_board_create",
-				"params": map[string]any{
-					"group_id": groupIDStr,
-					"name":     "Test Board",
-				},
-			})
-			requireNoError(t, err, "group_board_create")
-			boardID = out.ID
-			t.Logf("Created group board %d", boardID)
-		})
-
-		t.Run("BoardList", func(t *testing.T) {
-			requireTruef(t, groupID > 0, "groupID not set")
-			out, err := callToolOn[groupboards.ListGroupBoardsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "group_board_list",
-				"params": map[string]any{"group_id": groupIDStr},
-			})
-			requireNoError(t, err, "group_board_list")
-			requireTruef(t, len(out.Boards) > 0, "expected at least 1 group board")
-			t.Logf("Listed %d group boards", len(out.Boards))
-			if boardID == 0 && len(out.Boards) > 0 {
-				boardID = out.Boards[0].ID
-			}
-		})
-
-		t.Run("BoardGet", func(t *testing.T) {
-			if boardID == 0 {
-				return
-			}
-			out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "group_board_get",
-				"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
-			})
-			requireNoError(t, err, "board_get")
-			requireTruef(t, out.ID == boardID, "board ID mismatch")
-			t.Logf("Got board %d: %s", out.ID, out.Name)
-		})
-
-		t.Run("BoardUpdate", func(t *testing.T) {
-			if boardID == 0 {
-				return
-			}
-			out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "group_board_update",
-				"params": map[string]any{
-					"group_id": groupIDStr,
-					"board_id": boardID,
-					"name":     "Updated Board",
-				},
-			})
-			requireNoError(t, err, "group_board_update")
-			t.Logf("Updated board %d: %s", out.ID, out.Name)
-		})
-
-		t.Run("BoardListLists", func(t *testing.T) {
-			if boardID == 0 {
-				return
-			}
-			out, err := callToolOn[groupboards.ListBoardListsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "group_board_list_lists",
-				"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
-			})
-			requireNoError(t, err, "board_list_lists")
-			t.Logf("Board has %d lists", len(out.Lists))
-		})
-
-		t.Run("BoardDelete", func(t *testing.T) {
-			if boardID == 0 {
-				return
-			}
-			err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "group_board_delete",
-				"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
-			})
-			requireNoError(t, err, "group_board_delete")
-			t.Logf("Deleted board %d", boardID)
-		})
+	if !sess.enterprise {
+		return
 	}
+	runEnterpriseMetaGroupBoardOperations(t, ctx, groupID, groupIDStr)
+}
+
+func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	var boardID int64
+
+	t.Run("BoardCreate", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_board_create",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"name":     "Test Board",
+			},
+		})
+		requireNoError(t, err, "group_board_create")
+		boardID = out.ID
+		t.Logf("Created group board %d", boardID)
+	})
+
+	t.Run("BoardList", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groupboards.ListGroupBoardsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_board_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+		requireNoError(t, err, "group_board_list")
+		requireTruef(t, len(out.Boards) > 0, "expected at least 1 group board")
+		t.Logf("Listed %d group boards", len(out.Boards))
+		if boardID == 0 && len(out.Boards) > 0 {
+			boardID = out.Boards[0].ID
+		}
+	})
+
+	t.Run("BoardGet", func(t *testing.T) {
+		if boardID == 0 {
+			return
+		}
+		out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_board_get",
+			"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
+		})
+		requireNoError(t, err, "board_get")
+		requireTruef(t, out.ID == boardID, "board ID mismatch")
+		t.Logf("Got board %d: %s", out.ID, out.Name)
+	})
+
+	t.Run("BoardUpdate", func(t *testing.T) {
+		if boardID == 0 {
+			return
+		}
+		out, err := callToolOn[groupboards.GroupBoardOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_board_update",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"board_id": boardID,
+				"name":     "Updated Board",
+			},
+		})
+		requireNoError(t, err, "group_board_update")
+		t.Logf("Updated board %d: %s", out.ID, out.Name)
+	})
+
+	t.Run("BoardListLists", func(t *testing.T) {
+		if boardID == 0 {
+			return
+		}
+		out, err := callToolOn[groupboards.ListBoardListsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_board_list_lists",
+			"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
+		})
+		requireNoError(t, err, "board_list_lists")
+		t.Logf("Board has %d lists", len(out.Lists))
+	})
+
+	t.Run("BoardDelete", func(t *testing.T) {
+		if boardID == 0 {
+			return
+		}
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_board_delete",
+			"params": map[string]any{"group_id": groupIDStr, "board_id": boardID},
+		})
+		requireNoError(t, err, "group_board_delete")
+		t.Logf("Deleted board %d", boardID)
+	})
 }

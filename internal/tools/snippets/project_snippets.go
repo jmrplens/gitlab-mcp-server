@@ -208,32 +208,42 @@ func buildProjectUpdateOptions(input ProjectUpdateInput) *gl.UpdateProjectSnippe
 		opts.Visibility = &v
 	}
 	if len(input.Files) > 0 {
-		files := make([]*gl.UpdateSnippetFileOptions, len(input.Files))
-		for i, f := range input.Files {
-			files[i] = &gl.UpdateSnippetFileOptions{
-				Action:   new(f.Action),
-				FilePath: new(f.FilePath),
-			}
-			if f.Content != "" {
-				files[i].Content = new(f.Content)
-			}
-			if f.PreviousPath != "" {
-				files[i].PreviousPath = new(f.PreviousPath)
-			}
-		}
+		files := updateSnippetFileOptions(input.Files)
 		opts.Files = &files
-	} else if input.FileName != "" || input.ContentBody != "" {
-		file := &gl.UpdateSnippetFileOptions{
-			Action: new("update"),
-		}
-		if input.FileName != "" {
-			file.FilePath = new(input.FileName)
-		}
-		if input.ContentBody != "" {
-			file.Content = new(input.ContentBody)
-		}
-		files := []*gl.UpdateSnippetFileOptions{file}
-		opts.Files = &files
+		return opts
 	}
+	if input.FileName == "" && input.ContentBody == "" {
+		return opts
+	}
+	files := []*gl.UpdateSnippetFileOptions{legacyUpdateSnippetFileOptions(input)}
+	opts.Files = &files
 	return opts
+}
+
+func updateSnippetFileOptions(inputFiles []UpdateFileInput) []*gl.UpdateSnippetFileOptions {
+	files := make([]*gl.UpdateSnippetFileOptions, len(inputFiles))
+	for i, f := range inputFiles {
+		files[i] = &gl.UpdateSnippetFileOptions{
+			Action:   new(f.Action),
+			FilePath: new(f.FilePath),
+		}
+		if f.Content != "" {
+			files[i].Content = new(f.Content)
+		}
+		if f.PreviousPath != "" {
+			files[i].PreviousPath = new(f.PreviousPath)
+		}
+	}
+	return files
+}
+
+func legacyUpdateSnippetFileOptions(input ProjectUpdateInput) *gl.UpdateSnippetFileOptions {
+	file := &gl.UpdateSnippetFileOptions{Action: new("update")}
+	if input.FileName != "" {
+		file.FilePath = new(input.FileName)
+	}
+	if input.ContentBody != "" {
+		file.Content = new(input.ContentBody)
+	}
+	return file
 }

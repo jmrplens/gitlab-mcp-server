@@ -278,18 +278,11 @@ func (c *Catalog) AddAction(toolName string, action Action, groupOptions ...Grou
 	next := c.Clone()
 	group, ok := next.groups[toolName]
 	if !ok {
-		opts := GroupOptions{ToolName: toolName}
-		if len(groupOptions) == 1 {
-			opts = groupOptions[0]
-			opts.ToolName = strings.TrimSpace(opts.ToolName)
-			if opts.ToolName == "" {
-				opts.ToolName = toolName
-			}
-			if opts.ToolName != toolName {
-				return fmt.Errorf("group options tool name %q does not match %q", opts.ToolName, toolName)
-			}
+		var err error
+		group, err = newAddActionGroup(toolName, groupOptions)
+		if err != nil {
+			return err
 		}
-		group = NewGroup(opts)
 	}
 	group.SetAction(action)
 	if ok {
@@ -306,6 +299,22 @@ func (c *Catalog) AddAction(toolName string, action Action, groupOptions ...Grou
 	c.groups = next.groups
 	c.actions = next.actions
 	return nil
+}
+
+func newAddActionGroup(toolName string, groupOptions []GroupOptions) (Group, error) {
+	opts := GroupOptions{ToolName: toolName}
+	if len(groupOptions) == 0 {
+		return NewGroup(opts), nil
+	}
+	opts = groupOptions[0]
+	opts.ToolName = strings.TrimSpace(opts.ToolName)
+	if opts.ToolName == "" {
+		opts.ToolName = toolName
+	}
+	if opts.ToolName != toolName {
+		return Group{}, fmt.Errorf("group options tool name %q does not match %q", opts.ToolName, toolName)
+	}
+	return NewGroup(opts), nil
 }
 
 // Group returns a defensive copy of one group by tool name.

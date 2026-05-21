@@ -165,29 +165,31 @@ func dynamicExampleParamValue(action, param, prompt string) any {
 }
 
 func repositoryFileDynamicExample(action, param, prompt string) (any, bool) {
-	if verb, hasFileActionPrefix := strings.CutPrefix(action, "repository.file_"); hasFileActionPrefix {
-		switch param {
-		case "file_path":
-			if value, ok := repositoryFilePathExample(prompt); ok {
-				return value, true
-			}
-		case "content":
-			if value, ok := examplePromptMarkerValue(param, prompt); ok {
-				return value, true
-			}
-			if strings.Contains(action, "update") {
-				return "Updated content for repository file CRUD", true
-			}
-			return "Initial content for repository file CRUD", true
-		case "commit_message":
-			if value, ok := examplePromptMarkerValue(param, prompt); ok {
-				return value, true
-			}
-			if filePath, ok := repositoryFilePathExample(prompt); ok {
-				return fmt.Sprintf("Evaluation %s %s", verb, filePath), true
-			}
-			return fmt.Sprintf("Evaluation %s repository file", verb), true
+	verb, hasFileActionPrefix := strings.CutPrefix(action, "repository.file_")
+	if !hasFileActionPrefix {
+		return nil, false
+	}
+	switch param {
+	case "file_path":
+		if value, ok := repositoryFilePathExample(prompt); ok {
+			return value, true
 		}
+	case "content":
+		if value, ok := examplePromptMarkerValue(param, prompt); ok {
+			return value, true
+		}
+		if strings.Contains(action, "update") {
+			return "Updated content for repository file CRUD", true
+		}
+		return "Initial content for repository file CRUD", true
+	case "commit_message":
+		if value, ok := examplePromptMarkerValue(param, prompt); ok {
+			return value, true
+		}
+		if filePath, ok := repositoryFilePathExample(prompt); ok {
+			return fmt.Sprintf("Evaluation %s %s", verb, filePath), true
+		}
+		return fmt.Sprintf("Evaluation %s repository file", verb), true
 	}
 	return nil, false
 }
