@@ -44,27 +44,19 @@ func publishAllOutput(ctx context.Context, client *gitlabclient.Client, input Pu
 }
 
 func mrDraftNoteReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mrDraftNoteOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, mrDraftNoteOptions(individualTool))
 }
 
 func mrDraftNoteCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, mrDraftNoteOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, mrDraftNoteOptions(individualTool))
 }
 
 func mrDraftNoteUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mrDraftNoteOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, mrDraftNoteOptions(individualTool))
 }
 
 func mrDraftNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mrDraftNoteOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, mrDraftNoteOptions(individualTool))
 }
 
 func mrDraftNoteOptions(individualTool string) toolutil.ActionSpecOptions {

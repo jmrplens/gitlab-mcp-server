@@ -6,6 +6,8 @@ import (
 	"log/slog"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // SafeModePreview is the structured response returned when a mutating tool
@@ -23,32 +25,15 @@ type SafeModePreview struct {
 // with a handler that returns a [SafeModePreview] instead of executing.
 // Returns the number of tools wrapped.
 func WrapMutatingToolsForSafeMode(server *mcp.Server) int {
-	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
-
-	serverSession, err := server.Connect(ctx, st, nil)
+	tools, err := toolutil.ListRegisteredTools(ctx, server, "safemode-filter")
 	if err != nil {
-		slog.Error("WrapMutatingToolsForSafeMode: server connect failed", "error", err)
-		return 0
-	}
-	defer serverSession.Close()
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "safemode-filter", Version: "0"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		slog.Error("WrapMutatingToolsForSafeMode: client connect failed", "error", err)
-		return 0
-	}
-	defer session.Close()
-
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		slog.Error("WrapMutatingToolsForSafeMode: list tools failed", "error", err)
+		slog.Error("WrapMutatingToolsForSafeMode: list registered tools failed", "error", err)
 		return 0
 	}
 
 	var wrapped int
-	for _, t := range result.Tools {
+	for _, t := range tools {
 		if t.Annotations != nil && t.Annotations.ReadOnlyHint {
 			continue
 		}

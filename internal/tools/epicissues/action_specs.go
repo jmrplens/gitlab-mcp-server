@@ -9,7 +9,7 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		epicIssueReadSpec("epic_issue_list", toolutil.RouteAction(client, List), "gitlab_epic_issue_list"),
-		toolutil.NewActionSpec("epic_issue_assign",
+		toolutil.NewCreateActionSpec("epic_issue_assign",
 			toolutil.RouteAction(client, Assign),
 			toolutil.ActionSpecOptions{
 				Tags:           []string{"group", "epic", "issue"},
@@ -43,23 +43,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func epicIssueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := epicIssueOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, epicIssueOptions(individualTool))
 }
 
 func epicIssueUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := epicIssueOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, epicIssueOptions(individualTool))
 }
 
 func epicIssueDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := epicIssueOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, epicIssueOptions(individualTool))
 }
 
 func epicIssueOptions(individualTool string) toolutil.ActionSpecOptions {

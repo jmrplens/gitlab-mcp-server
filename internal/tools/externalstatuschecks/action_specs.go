@@ -20,27 +20,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func externalStatusCheckReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := externalStatusCheckOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, externalStatusCheckOptions(individualTool))
 }
 
 func externalStatusCheckCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, externalStatusCheckOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, externalStatusCheckOptions(individualTool))
 }
 
 func externalStatusCheckUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := externalStatusCheckOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, externalStatusCheckOptions(individualTool))
 }
 
 func externalStatusCheckDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := externalStatusCheckOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, externalStatusCheckOptions(individualTool))
 }
 
 func externalStatusCheckOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -66,25 +66,19 @@ func PersonalRevokeSelfOutput(ctx context.Context, client *gitlabclient.Client, 
 }
 
 func accessTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := accessTokenOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
 func accessTokenCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, accessTokenOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
 func accessTokenRotateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, accessTokenOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
 func accessTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := accessTokenOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
 func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOptions {

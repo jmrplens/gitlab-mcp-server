@@ -37,27 +37,19 @@ func milestoneGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func milestoneReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := milestoneOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, milestoneOptions(individualTool))
 }
 
 func milestoneCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, milestoneOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, milestoneOptions(individualTool))
 }
 
 func milestoneUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := milestoneOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, milestoneOptions(individualTool))
 }
 
 func milestoneDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := milestoneOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, milestoneOptions(individualTool))
 }
 
 func milestoneOptions(individualTool string) toolutil.ActionSpecOptions {

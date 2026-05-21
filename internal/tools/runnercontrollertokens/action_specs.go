@@ -27,27 +27,19 @@ func revokeOutput(ctx context.Context, client *gitlabclient.Client, input Revoke
 }
 
 func runnerControllerTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerControllerTokenOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, runnerControllerTokenOptions(individualTool))
 }
 
 func runnerControllerTokenCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, runnerControllerTokenOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, runnerControllerTokenOptions(individualTool))
 }
 
 func runnerControllerTokenUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerControllerTokenOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, runnerControllerTokenOptions(individualTool))
 }
 
 func runnerControllerTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerControllerTokenOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, runnerControllerTokenOptions(individualTool))
 }
 
 func runnerControllerTokenOptions(individualTool string) toolutil.ActionSpecOptions {

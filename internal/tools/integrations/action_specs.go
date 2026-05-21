@@ -26,21 +26,15 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func integrationReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := integrationOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, integrationOptions(individualTool))
 }
 
 func integrationCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, integrationOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, integrationOptions(individualTool))
 }
 
 func integrationDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := integrationOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, integrationOptions(individualTool))
 }
 
 func integrationOptions(individualTool string) toolutil.ActionSpecOptions {

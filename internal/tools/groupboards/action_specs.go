@@ -38,27 +38,19 @@ func deleteGroupBoardListOutput(ctx context.Context, client *gitlabclient.Client
 }
 
 func groupBoardReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBoardOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupBoardOptions(individualTool))
 }
 
 func groupBoardCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupBoardOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupBoardOptions(individualTool))
 }
 
 func groupBoardUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBoardOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, groupBoardOptions(individualTool))
 }
 
 func groupBoardDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBoardOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, groupBoardOptions(individualTool))
 }
 
 func groupBoardOptions(individualTool string) toolutil.ActionSpecOptions {

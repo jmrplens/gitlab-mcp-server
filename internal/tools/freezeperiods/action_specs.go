@@ -17,27 +17,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func freezePeriodReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := freezePeriodOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, freezePeriodOptions(individualTool))
 }
 
 func freezePeriodCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, freezePeriodOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, freezePeriodOptions(individualTool))
 }
 
 func freezePeriodUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := freezePeriodOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, freezePeriodOptions(individualTool))
 }
 
 func freezePeriodDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := freezePeriodOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, freezePeriodOptions(individualTool))
 }
 
 func freezePeriodOptions(individualTool string) toolutil.ActionSpecOptions {

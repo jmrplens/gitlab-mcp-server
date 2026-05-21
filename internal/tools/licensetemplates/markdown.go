@@ -1,54 +1,42 @@
 package licensetemplates
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // FormatListMarkdown formats the list output as markdown.
 func FormatListMarkdown(out ListOutput) string {
-	var sb strings.Builder
-	sb.WriteString("## License Templates\n\n")
-	toolutil.WriteListSummary(&sb, len(out.Licenses), out.Pagination)
-	if len(out.Licenses) == 0 {
-		sb.WriteString("No license templates found.\n")
-		return sb.String()
+	items := make([]toolutil.TemplateAttributeListMarkdownItem, 0, len(out.Licenses))
+	for _, license := range out.Licenses {
+		items = append(items, toolutil.TemplateAttributeListMarkdownItem{Key: license.Key, Name: license.Name, Attribute: boolString(license.Featured)})
 	}
-	sb.WriteString("| Key | Name | Featured |\n|---|---|---|\n")
-	for _, l := range out.Licenses {
-		fmt.Fprintf(&sb, "| %s | %s | %v |\n",
-			toolutil.EscapeMdTableCell(l.Key), toolutil.EscapeMdTableCell(l.Name), l.Featured)
-	}
-	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb, "Use `gitlab_get_license_template` to view a specific template")
-	return sb.String()
+	return toolutil.FormatTemplateAttributeListMarkdown(items, toolutil.TemplateAttributeListMarkdownOptions{
+		Title:           "License Templates",
+		EmptyMessage:    "No license templates found.",
+		AttributeHeader: "Featured",
+		Pagination:      out.Pagination,
+		Hints:           []string{"Use `gitlab_get_license_template` to view a specific template"},
+	})
 }
 
 // FormatGetMarkdown formats the get output as markdown.
 func FormatGetMarkdown(out GetOutput) string {
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "## License: %s\n\n", out.Name)
-	if out.Description != "" {
-		fmt.Fprintf(&sb, "**Description**: %s\n\n", out.Description)
+	return toolutil.FormatTemplateDetailMarkdown(toolutil.TemplateDetailMarkdown{
+		Title:       "License: " + out.Name,
+		Description: out.Description,
+		Permissions: out.Permissions,
+		Conditions:  out.Conditions,
+		Limitations: out.Limitations,
+		Content:     out.Content,
+		Hints:       []string{"Copy this template to your LICENSE file and customize it"},
+	})
+}
+
+func boolString(value bool) string {
+	if value {
+		return "true"
 	}
-	if len(out.Permissions) > 0 {
-		fmt.Fprintf(&sb, "**Permissions**: %s\n", strings.Join(out.Permissions, ", "))
-	}
-	if len(out.Conditions) > 0 {
-		fmt.Fprintf(&sb, "**Conditions**: %s\n", strings.Join(out.Conditions, ", "))
-	}
-	if len(out.Limitations) > 0 {
-		fmt.Fprintf(&sb, "**Limitations**: %s\n", strings.Join(out.Limitations, ", "))
-	}
-	if out.Content != "" {
-		sb.WriteString("\n```\n")
-		sb.WriteString(out.Content)
-		sb.WriteString("\n```\n")
-	}
-	toolutil.WriteHints(&sb, "Copy this template to your LICENSE file and customize it")
-	return sb.String()
+	return "false"
 }
 
 func init() {

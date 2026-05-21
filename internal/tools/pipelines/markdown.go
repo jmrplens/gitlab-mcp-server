@@ -119,18 +119,8 @@ func FormatVariablesMarkdown(out VariablesOutput) string {
 func FormatTestReportMarkdown(out TestReportOutput) string {
 	var b strings.Builder
 	b.WriteString("## Pipeline Test Report\n\n")
-	fmt.Fprintf(&b, "- **Total**: %d tests (%.2fs)\n", out.TotalCount, out.TotalTime)
-	fmt.Fprintf(&b, "- **Passed**: %d | **Failed**: %d | **Skipped**: %d | **Errors**: %d\n\n",
-		out.SuccessCount, out.FailedCount, out.SkippedCount, out.ErrorCount)
-	if len(out.TestSuites) > 0 {
-		b.WriteString("### Test Suites\n\n")
-		b.WriteString("| Suite | Total | Passed | Failed | Skipped | Errors | Time |\n")
-		b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
-		for _, s := range out.TestSuites {
-			fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %d | %.2fs |\n",
-				toolutil.EscapeMdTableCell(s.Name), s.TotalCount, s.SuccessCount, s.FailedCount, s.SkippedCount, s.ErrorCount, s.TotalTime)
-		}
-	}
+	writeTestReportTotals(&b, out.TotalCount, out.TotalTime, out.SuccessCount, out.FailedCount, out.SkippedCount, out.ErrorCount)
+	writeTestSuites(&b, testSuiteOutputs(out.TestSuites))
 	toolutil.WriteHints(&b,
 		"Use `gitlab_job_list` to see individual job results",
 		"Use `gitlab_job_trace` to view job logs for failures",
@@ -142,23 +132,66 @@ func FormatTestReportMarkdown(out TestReportOutput) string {
 func FormatTestReportSummaryMarkdown(out TestReportSummaryOutput) string {
 	var b strings.Builder
 	b.WriteString("## Pipeline Test Report Summary\n\n")
-	fmt.Fprintf(&b, "- **Total**: %d tests (%.2fs)\n", out.TotalCount, out.TotalTime)
-	fmt.Fprintf(&b, "- **Passed**: %d | **Failed**: %d | **Skipped**: %d | **Errors**: %d\n\n",
-		out.SuccessCount, out.FailedCount, out.SkippedCount, out.ErrorCount)
-	if len(out.TestSuites) > 0 {
-		b.WriteString("### Test Suites\n\n")
-		b.WriteString("| Suite | Total | Passed | Failed | Skipped | Errors | Time |\n")
-		b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
-		for _, s := range out.TestSuites {
-			fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %d | %.2fs |\n",
-				toolutil.EscapeMdTableCell(s.Name), s.TotalCount, s.SuccessCount, s.FailedCount, s.SkippedCount, s.ErrorCount, s.TotalTime)
-		}
-	}
+	writeTestReportTotals(&b, out.TotalCount, out.TotalTime, out.SuccessCount, out.FailedCount, out.SkippedCount, out.ErrorCount)
+	writeTestSuites(&b, testSuiteSummaryOutputs(out.TestSuites))
 	toolutil.WriteHints(&b,
 		"Use `gitlab_pipeline_test_report` for full test details",
 		"Use `gitlab_job_list` to investigate failures",
 	)
 	return b.String()
+}
+
+type testSuiteMarkdown struct {
+	Name         string
+	TotalTime    float64
+	TotalCount   int64
+	SuccessCount int64
+	FailedCount  int64
+	SkippedCount int64
+	ErrorCount   int64
+}
+
+func writeTestReportTotals(b *strings.Builder, totalCount int64, totalTime float64, successCount, failedCount, skippedCount, errorCount int64) {
+	fmt.Fprintf(b, "- **Total**: %d tests (%.2fs)\n", totalCount, totalTime)
+	fmt.Fprintf(b, "- **Passed**: %d | **Failed**: %d | **Skipped**: %d | **Errors**: %d\n\n",
+		successCount, failedCount, skippedCount, errorCount)
+}
+
+func writeTestSuites(b *strings.Builder, suites []testSuiteMarkdown) {
+	if len(suites) == 0 {
+		return
+	}
+	b.WriteString("### Test Suites\n\n")
+	b.WriteString("| Suite | Total | Passed | Failed | Skipped | Errors | Time |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
+	for _, suite := range suites {
+		fmt.Fprintf(b, "| %s | %d | %d | %d | %d | %d | %.2fs |\n",
+			toolutil.EscapeMdTableCell(suite.Name), suite.TotalCount, suite.SuccessCount, suite.FailedCount, suite.SkippedCount, suite.ErrorCount, suite.TotalTime)
+	}
+}
+
+func testSuiteOutputs(suites []TestSuiteOutput) []testSuiteMarkdown {
+	out := make([]testSuiteMarkdown, 0, len(suites))
+	for _, suite := range suites {
+		out = append(out, testSuiteMarkdown(suite))
+	}
+	return out
+}
+
+func testSuiteSummaryOutputs(suites []TestSuiteSummaryOutput) []testSuiteMarkdown {
+	out := make([]testSuiteMarkdown, 0, len(suites))
+	for _, suite := range suites {
+		out = append(out, testSuiteMarkdown{
+			Name:         suite.Name,
+			TotalTime:    suite.TotalTime,
+			TotalCount:   suite.TotalCount,
+			SuccessCount: suite.SuccessCount,
+			FailedCount:  suite.FailedCount,
+			SkippedCount: suite.SkippedCount,
+			ErrorCount:   suite.ErrorCount,
+		})
+	}
+	return out
 }
 
 // FormatWaitMarkdown renders the wait result as a Markdown summary.

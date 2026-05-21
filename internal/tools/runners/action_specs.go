@@ -79,20 +79,15 @@ func verifyOutput(ctx context.Context, client *gitlabclient.Client, input Verify
 }
 
 func runnerReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, runnerOptions(name, individualTool))
 }
 
 func runnerCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, runnerOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, runnerOptions(name, individualTool))
 }
 
 func runnerUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerOptions(name, individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, runnerOptions(name, individualTool))
 }
 
 func runnerOptions(actionName, individualTool string) toolutil.ActionSpecOptions {

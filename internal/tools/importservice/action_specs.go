@@ -17,13 +17,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func importServiceCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, importServiceOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, importServiceOptions(individualTool))
 }
 
 func importServiceUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := importServiceOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, importServiceOptions(individualTool))
 }
 
 func importServiceOptions(individualTool string) toolutil.ActionSpecOptions {

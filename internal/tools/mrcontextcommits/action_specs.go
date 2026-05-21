@@ -15,21 +15,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func contextCommitReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := contextCommitOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, contextCommitOptions(individualTool))
 }
 
 func contextCommitCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, contextCommitOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, contextCommitOptions(individualTool))
 }
 
 func contextCommitDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := contextCommitOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, contextCommitOptions(individualTool))
 }
 
 func contextCommitOptions(individualTool string) toolutil.ActionSpecOptions {

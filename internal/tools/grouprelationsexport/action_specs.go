@@ -14,14 +14,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func groupRelationsReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupRelationsOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupRelationsOptions(individualTool))
 }
 
 func groupRelationsCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupRelationsOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupRelationsOptions(individualTool))
 }
 
 func groupRelationsOptions(individualTool string) toolutil.ActionSpecOptions {

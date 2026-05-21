@@ -16,27 +16,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func alertMetricImageReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := alertMetricImageOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, alertMetricImageOptions(individualTool))
 }
 
 func alertMetricImageCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, alertMetricImageOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, alertMetricImageOptions(individualTool))
 }
 
 func alertMetricImageUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := alertMetricImageOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, alertMetricImageOptions(individualTool))
 }
 
 func alertMetricImageDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := alertMetricImageOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, alertMetricImageOptions(individualTool))
 }
 
 func alertMetricImageOptions(individualTool string) toolutil.ActionSpecOptions {

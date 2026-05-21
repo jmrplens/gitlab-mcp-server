@@ -26,21 +26,15 @@ func removeOutput(ctx context.Context, client *gitlabclient.Client, input Remove
 }
 
 func secureFileReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := secureFileOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, secureFileOptions(individualTool))
 }
 
 func secureFileCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, secureFileOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, secureFileOptions(individualTool))
 }
 
 func secureFileDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := secureFileOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, secureFileOptions(individualTool))
 }
 
 func secureFileOptions(individualTool string) toolutil.ActionSpecOptions {

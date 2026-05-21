@@ -45,20 +45,15 @@ func deleteURLVariableOutput(ctx context.Context, client *gitlabclient.Client, i
 }
 
 func systemHookReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := systemHookOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, systemHookOptions(individualTool))
 }
 
 func systemHookCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, systemHookOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, systemHookOptions(individualTool))
 }
 
 func systemHookUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := systemHookOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, systemHookOptions(individualTool))
 }
 
 func systemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -67,14 +62,11 @@ func systemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := systemHookOptions("gitlab_test_system_hook")
 	options.IndividualTool.AnnotationOverrides.ReadOnly = &individualReadOnly
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
-	return toolutil.NewActionSpec("system_hook_test", toolutil.RouteAction(client, Test), options)
+	return toolutil.NewCreateActionSpec("system_hook_test", toolutil.RouteAction(client, Test), options)
 }
 
 func systemHookDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := systemHookOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, systemHookOptions(individualTool))
 }
 
 func systemHookOptions(individualTool string) toolutil.ActionSpecOptions {

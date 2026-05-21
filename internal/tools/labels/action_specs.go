@@ -39,27 +39,19 @@ func labelGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func labelReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := labelOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, labelOptions(individualTool))
 }
 
 func labelCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, labelOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, labelOptions(individualTool))
 }
 
 func labelUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := labelOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, labelOptions(individualTool))
 }
 
 func labelDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := labelOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, labelOptions(individualTool))
 }
 
 func labelOptions(individualTool string) toolutil.ActionSpecOptions {

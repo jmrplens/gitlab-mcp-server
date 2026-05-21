@@ -17,27 +17,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func errorTrackingReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := errorTrackingOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, errorTrackingOptions(individualTool))
 }
 
 func errorTrackingCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, errorTrackingOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, errorTrackingOptions(individualTool))
 }
 
 func errorTrackingUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := errorTrackingOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, errorTrackingOptions(individualTool))
 }
 
 func errorTrackingDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := errorTrackingOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, errorTrackingOptions(individualTool))
 }
 
 func errorTrackingOptions(individualTool string) toolutil.ActionSpecOptions {

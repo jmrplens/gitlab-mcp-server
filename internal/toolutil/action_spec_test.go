@@ -478,6 +478,33 @@ func TestNewActionSpec_SyncsOptionDestructiveToRoute(t *testing.T) {
 	}
 }
 
+// TestStandardActionSpecConstructors verifies the convenience constructors set
+// canonical read/create/update/delete behavior flags without dropping options.
+func TestStandardActionSpecConstructors(t *testing.T) {
+	tests := []struct {
+		name            string
+		spec            ActionSpec
+		wantReadOnly    bool
+		wantDestructive bool
+		wantIdempotent  bool
+	}{
+		{name: "read", spec: NewReadActionSpec("list", ActionRoute{}, ActionSpecOptions{OwnerPackage: "example"}), wantReadOnly: true, wantIdempotent: true},
+		{name: "create", spec: NewCreateActionSpec("create", ActionRoute{}, ActionSpecOptions{OwnerPackage: "example"})},
+		{name: "update", spec: NewUpdateActionSpec("update", ActionRoute{}, ActionSpecOptions{OwnerPackage: "example"}), wantIdempotent: true},
+		{name: "delete", spec: NewDeleteActionSpec("delete", ActionRoute{}, ActionSpecOptions{OwnerPackage: "example"}), wantDestructive: true, wantIdempotent: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.spec.ReadOnly != tt.wantReadOnly || tt.spec.Destructive != tt.wantDestructive || tt.spec.Route.Destructive != tt.wantDestructive || tt.spec.Idempotent != tt.wantIdempotent {
+				t.Fatalf("flags = read:%t destructive:%t routeDestructive:%t idempotent:%t, want read:%t destructive:%t idempotent:%t", tt.spec.ReadOnly, tt.spec.Destructive, tt.spec.Route.Destructive, tt.spec.Idempotent, tt.wantReadOnly, tt.wantDestructive, tt.wantIdempotent)
+			}
+			if tt.spec.OwnerPackage != "example" {
+				t.Fatalf("OwnerPackage = %q, want example", tt.spec.OwnerPackage)
+			}
+		})
+	}
+}
+
 // TestActionSpecsToMapWithError_RejectsDuplicateNames verifies ActionSpecsToMapWithError rejects duplicate names.
 func TestActionSpecsToMapWithError_RejectsDuplicateNames(t *testing.T) {
 	route := ActionRoute{}

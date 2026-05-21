@@ -40,27 +40,19 @@ func deleteDomainOutput(ctx context.Context, client *gitlabclient.Client, input 
 }
 
 func pagesReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pagesOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, pagesOptions(individualTool))
 }
 
 func pagesCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, pagesOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, pagesOptions(individualTool))
 }
 
 func pagesUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pagesOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, pagesOptions(individualTool))
 }
 
 func pagesDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pagesOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, pagesOptions(individualTool))
 }
 
 func pagesOptions(individualTool string) toolutil.ActionSpecOptions {

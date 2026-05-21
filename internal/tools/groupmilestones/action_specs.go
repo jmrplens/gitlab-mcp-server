@@ -20,27 +20,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func groupMilestoneReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupMilestoneOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupMilestoneOptions(individualTool))
 }
 
 func groupMilestoneCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupMilestoneOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupMilestoneOptions(individualTool))
 }
 
 func groupMilestoneUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupMilestoneOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, groupMilestoneOptions(individualTool))
 }
 
 func groupMilestoneDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupMilestoneOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, groupMilestoneOptions(individualTool))
 }
 
 func groupMilestoneOptions(individualTool string) toolutil.ActionSpecOptions {

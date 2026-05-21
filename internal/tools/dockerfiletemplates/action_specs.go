@@ -14,11 +14,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func dockerfileTemplateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, toolutil.ActionSpecOptions{
+	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
 		Tags:           []string{"template", "dockerfile"},
 		RelatedActions: []string{"repository.file_create", "template.gitignore_get"},
-		ReadOnly:       true,
-		Idempotent:     true,
 		OpenWorld:      true,
 		OwnerPackage:   "dockerfiletemplates",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

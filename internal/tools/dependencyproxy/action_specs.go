@@ -8,10 +8,8 @@ import (
 // ActionSpecs returns canonical specs for dependency proxy tools.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	options := dependencyProxyOptions("gitlab_purge_dependency_proxy")
-	options.Destructive = true
-	options.Idempotent = true
 	return []toolutil.ActionSpec{
-		toolutil.NewActionSpec("dependency_proxy_delete", toolutil.DestructiveVoidAction(client, Purge), options),
+		toolutil.NewDeleteActionSpec("dependency_proxy_delete", toolutil.DestructiveVoidAction(client, Purge), options),
 	}
 }
 

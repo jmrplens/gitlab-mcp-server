@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -336,7 +337,7 @@ func TestNoteToOutput_NilUpdatedAt(t *testing.T) {
 		CreatedAt: new(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 		UpdatedAt: nil,
 	}
-	out := noteToOutput(n)
+	out := toolutil.DiscussionNoteOutputFromGitLab(n)
 	if out.UpdatedAt != "" {
 		t.Errorf("expected empty UpdatedAt, got %q", out.UpdatedAt)
 	}
@@ -352,7 +353,7 @@ func TestNoteToOutput_EmptyAuthor(t *testing.T) {
 		Body:      "test",
 		CreatedAt: new(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
 	}
-	out := noteToOutput(n)
+	out := toolutil.DiscussionNoteOutputFromGitLab(n)
 	if out.Author != "" {
 		t.Errorf("expected empty Author, got %q", out.Author)
 	}
@@ -366,7 +367,7 @@ func TestNoteToOutput_ZeroCreatedAt(t *testing.T) {
 		Body:      "test",
 		CreatedAt: &zero,
 	}
-	out := noteToOutput(n)
+	out := toolutil.DiscussionNoteOutputFromGitLab(n)
 	if out.CreatedAt != "" {
 		t.Errorf("expected empty CreatedAt for zero time, got %q", out.CreatedAt)
 	}
@@ -379,7 +380,7 @@ func TestToOutput_NoNotes(t *testing.T) {
 		IndividualNote: true,
 		Notes:          nil,
 	}
-	out := toOutput(d)
+	out := toolutil.DiscussionOutputFromGitLab(d)
 	if out.ID != "d1" {
 		t.Errorf("expected d1, got %q", out.ID)
 	}

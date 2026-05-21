@@ -13,10 +13,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func groupReleaseReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupReleaseOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupReleaseOptions(individualTool))
 }
 
 func groupReleaseOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -45,21 +45,15 @@ func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func issueEmojiReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := issueEmojiOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, issueEmojiOptions(individualTool))
 }
 
 func issueEmojiCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, issueEmojiOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, issueEmojiOptions(individualTool))
 }
 
 func issueEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := issueEmojiOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, issueEmojiOptions(individualTool))
 }
 
 func issueEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
@@ -86,21 +80,15 @@ func MergeRequestActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec 
 }
 
 func mergeRequestEmojiReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mergeRequestEmojiOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, mergeRequestEmojiOptions(individualTool))
 }
 
 func mergeRequestEmojiCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, mergeRequestEmojiOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, mergeRequestEmojiOptions(individualTool))
 }
 
 func mergeRequestEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mergeRequestEmojiOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, mergeRequestEmojiOptions(individualTool))
 }
 
 func mergeRequestEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
@@ -113,21 +101,15 @@ func mergeRequestEmojiOptions(individualTool string) toolutil.ActionSpecOptions 
 }
 
 func snippetEmojiReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := snippetEmojiOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, snippetEmojiOptions(individualTool))
 }
 
 func snippetEmojiCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, snippetEmojiOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, snippetEmojiOptions(individualTool))
 }
 
 func snippetEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := snippetEmojiOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, snippetEmojiOptions(individualTool))
 }
 
 func snippetEmojiOptions(individualTool string) toolutil.ActionSpecOptions {

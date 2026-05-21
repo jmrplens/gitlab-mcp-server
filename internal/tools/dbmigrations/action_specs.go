@@ -9,11 +9,9 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	individualDestructive := false
 	options := databaseMigrationOptions("gitlab_mark_migration")
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	return []toolutil.ActionSpec{
-		toolutil.NewActionSpec("db_migration_mark", toolutil.DestructiveAction(client, Mark), options),
+		toolutil.NewDeleteActionSpec("db_migration_mark", toolutil.DestructiveAction(client, Mark), options),
 	}
 }
 

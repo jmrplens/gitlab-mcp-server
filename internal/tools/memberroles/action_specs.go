@@ -37,21 +37,15 @@ func deleteGroupOutput(ctx context.Context, client *gitlabclient.Client, input D
 }
 
 func memberRoleReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := memberRoleOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, memberRoleOptions(individualTool))
 }
 
 func memberRoleCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, memberRoleOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, memberRoleOptions(individualTool))
 }
 
 func memberRoleDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := memberRoleOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, memberRoleOptions(individualTool))
 }
 
 func memberRoleOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -21,16 +21,11 @@ func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func projectSecurityReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := projectSecurityOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, projectSecurityOptions(individualTool))
 }
 
 func projectSecurityUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := projectSecurityOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, projectSecurityOptions(individualTool))
 }
 
 func projectSecurityOptions(individualTool string) toolutil.ActionSpecOptions {
@@ -45,9 +40,7 @@ func projectSecurityOptions(individualTool string) toolutil.ActionSpecOptions {
 }
 
 func groupSecuritySettingUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupSecuritySettingsOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, groupSecuritySettingsOptions(individualTool))
 }
 
 func groupSecuritySettingsOptions(individualTool string) toolutil.ActionSpecOptions {

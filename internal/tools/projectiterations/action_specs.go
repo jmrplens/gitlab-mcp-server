@@ -15,12 +15,10 @@ func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 func issueIterationReadSpec(name string, route toolutil.ActionRoute, individualTool, ownerPackage string) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"issue", "iteration"},
-		ReadOnly:       true,
-		Idempotent:     true,
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   ownerPackage,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, options)
 }

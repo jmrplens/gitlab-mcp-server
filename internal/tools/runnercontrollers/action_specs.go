@@ -27,27 +27,19 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func runnerControllerReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerControllerOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, runnerControllerOptions(individualTool))
 }
 
 func runnerControllerCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, runnerControllerOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, runnerControllerOptions(individualTool))
 }
 
 func runnerControllerUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerControllerOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, runnerControllerOptions(individualTool))
 }
 
 func runnerControllerDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerControllerOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, runnerControllerOptions(individualTool))
 }
 
 func runnerControllerOptions(individualTool string) toolutil.ActionSpecOptions {

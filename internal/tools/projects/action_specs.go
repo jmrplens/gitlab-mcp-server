@@ -182,34 +182,25 @@ func projectPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
 
 func projectGetSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	options := projectOptions("gitlab_project_get")
-	options.ReadOnly = true
-	options.Idempotent = true
 	options.RelatedActions = []string{"project.archive", "project.delete", "project.update"}
-	return toolutil.NewActionSpec("get", route, options)
+	return toolutil.NewReadActionSpec("get", route, options)
 }
 
 func projectReadSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
 	options := projectOptions(individualTool, extraTags...)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 func projectCreateSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, projectOptions(individualTool, extraTags...))
+	return toolutil.NewCreateActionSpec(name, route, projectOptions(individualTool, extraTags...))
 }
 
 func projectMutationSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	options := projectOptions(individualTool, extraTags...)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, projectOptions(individualTool, extraTags...))
 }
 
 func projectDestructiveUpdateSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	options := projectOptions(individualTool, extraTags...)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, projectOptions(individualTool, extraTags...))
 }
 
 func projectOptions(individualTool string, extraTags ...string) toolutil.ActionSpecOptions {

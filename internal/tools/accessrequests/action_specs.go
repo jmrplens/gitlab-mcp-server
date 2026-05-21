@@ -38,27 +38,19 @@ func DenyGroupOutput(ctx context.Context, client *gitlabclient.Client, input Den
 }
 
 func accessRequestReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := accessRequestOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, accessRequestOptions(individualTool))
 }
 
 func accessRequestCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, accessRequestOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, accessRequestOptions(individualTool))
 }
 
 func accessRequestUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := accessRequestOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, accessRequestOptions(individualTool))
 }
 
 func accessRequestDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := accessRequestOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, accessRequestOptions(individualTool))
 }
 
 func accessRequestOptions(individualTool string) toolutil.ActionSpecOptions {

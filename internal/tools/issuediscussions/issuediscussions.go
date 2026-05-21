@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -64,23 +63,10 @@ type DeleteNoteInput struct {
 // Output types.
 
 // NoteOutput represents a single note within a discussion.
-type NoteOutput struct {
-	toolutil.HintableOutput
-	ID        int64  `json:"id"`
-	Body      string `json:"body"`
-	Author    string `json:"author"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	System    bool   `json:"system"`
-}
+type NoteOutput = toolutil.DiscussionNoteOutput
 
 // Output represents a discussion thread.
-type Output struct {
-	toolutil.HintableOutput
-	ID             string       `json:"id"`
-	IndividualNote bool         `json:"individual_note"`
-	Notes          []NoteOutput `json:"notes"`
-}
+type Output = toolutil.DiscussionOutput
 
 // ListOutput holds a list of issue discussions.
 type ListOutput struct {
@@ -132,7 +118,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.WrapErrWithStatusHint("issue_discussion_get", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_list_issue_discussions")
 	}
-	return toOutput(d), nil
+	return toolutil.DiscussionOutputFromGitLab(d), nil
 }
 
 // Create creates a new issue discussion thread.
@@ -154,7 +140,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("issue_discussion_create", err, http.StatusNotFound,
 			"verify project_id and issue_iid with gitlab_issue_get; creating discussions requires Reporter role or higher")
 	}
-	return toOutput(d), nil
+	return toolutil.DiscussionOutputFromGitLab(d), nil
 }
 
 // AddNote adds a note to an existing issue discussion.
@@ -179,7 +165,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("issue_discussion_add_note", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_list_issue_discussions")
 	}
-	return noteToOutput(note), nil
+	return toolutil.DiscussionNoteOutputFromGitLab(note), nil
 }
 
 // UpdateNote updates an existing issue discussion note.
@@ -207,7 +193,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("issue_discussion_update_note", err, http.StatusForbidden,
 			"only the note author can edit a discussion note")
 	}
-	return noteToOutput(note), nil
+	return toolutil.DiscussionNoteOutputFromGitLab(note), nil
 }
 
 // DeleteNote deletes an issue discussion note.
@@ -237,48 +223,12 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 
 // Converters.
 
-// noteToOutput converts the GitLab API response to the tool output format.
-func noteToOutput(n *gl.Note) NoteOutput {
-	out := NoteOutput{
-		ID:     n.ID,
-		Body:   n.Body,
-		System: n.System,
-	}
-	if n.Author.Username != "" {
-		out.Author = n.Author.Username
-	}
-	if !n.CreatedAt.IsZero() {
-		out.CreatedAt = n.CreatedAt.Format(time.RFC3339)
-	}
-	if n.UpdatedAt != nil && !n.UpdatedAt.IsZero() {
-		out.UpdatedAt = n.UpdatedAt.Format(time.RFC3339)
-	}
-	return out
-}
-
-// toOutput converts the GitLab API response to the tool output format.
-func toOutput(d *gl.Discussion) Output {
-	out := Output{
-		ID:             d.ID,
-		IndividualNote: d.IndividualNote,
-		Notes:          make([]NoteOutput, 0, len(d.Notes)),
-	}
-	for _, n := range d.Notes {
-		out.Notes = append(out.Notes, noteToOutput(n))
-	}
-	return out
-}
-
 // toListOutput converts the GitLab API response to the tool output format.
 func toListOutput(discussions []*gl.Discussion, resp *gl.Response) ListOutput {
-	out := ListOutput{
-		Discussions: make([]Output, 0, len(discussions)),
+	return ListOutput{
+		Discussions: toolutil.DiscussionOutputsFromGitLab(discussions),
 		Pagination:  toolutil.PaginationFromResponse(resp),
 	}
-	for _, d := range discussions {
-		out.Discussions = append(out.Discussions, toOutput(d))
-	}
-	return out
 }
 
 // Formatters.

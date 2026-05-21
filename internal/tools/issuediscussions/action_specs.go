@@ -28,27 +28,19 @@ func deleteNoteOutput(ctx context.Context, client *gitlabclient.Client, input De
 }
 
 func issueDiscussionReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := issueDiscussionOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, issueDiscussionOptions(individualTool))
 }
 
 func issueDiscussionCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, issueDiscussionOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, issueDiscussionOptions(individualTool))
 }
 
 func issueDiscussionUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := issueDiscussionOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, issueDiscussionOptions(individualTool))
 }
 
 func issueDiscussionDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := issueDiscussionOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, issueDiscussionOptions(individualTool))
 }
 
 func issueDiscussionOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -28,27 +28,19 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func pipelineTriggerReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineTriggerOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, pipelineTriggerOptions(individualTool))
 }
 
 func pipelineTriggerCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, pipelineTriggerOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, pipelineTriggerOptions(individualTool))
 }
 
 func pipelineTriggerUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineTriggerOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, pipelineTriggerOptions(individualTool))
 }
 
 func pipelineTriggerDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineTriggerOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, pipelineTriggerOptions(individualTool))
 }
 
 func pipelineTriggerOptions(individualTool string) toolutil.ActionSpecOptions {

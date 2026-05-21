@@ -28,27 +28,19 @@ func DeleteNoteOutput(ctx context.Context, client *gitlabclient.Client, input De
 }
 
 func epicDiscussionReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := epicDiscussionOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, epicDiscussionOptions(individualTool))
 }
 
 func epicDiscussionCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, epicDiscussionOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, epicDiscussionOptions(individualTool))
 }
 
 func epicDiscussionUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := epicDiscussionOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, epicDiscussionOptions(individualTool))
 }
 
 func epicDiscussionDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := epicDiscussionOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, epicDiscussionOptions(individualTool))
 }
 
 func epicDiscussionOptions(individualTool string) toolutil.ActionSpecOptions {

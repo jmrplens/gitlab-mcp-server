@@ -19,22 +19,18 @@ func ActionSpecs(updater *autoupdate.Updater) []toolutil.ActionSpec {
 		return nil
 	}
 	return []toolutil.ActionSpec{
-		toolutil.NewActionSpec("check_update", toolutil.RouteFunc(func(ctx context.Context, input CheckInput) (CheckOutput, error) {
+		toolutil.NewReadActionSpec("check_update", toolutil.RouteFunc(func(ctx context.Context, input CheckInput) (CheckOutput, error) {
 			return Check(ctx, updater, input)
 		}), toolutil.ActionSpecOptions{
 			Usage:          "Check whether a newer MCP server release is available.",
-			ReadOnly:       true,
-			Idempotent:     true,
 			OpenWorld:      true,
 			OwnerPackage:   "serverupdate",
 			IndividualTool: toolutil.IndividualToolSpec{Name: checkUpdateToolName, Title: toolutil.TitleFromName(checkUpdateToolName), Description: checkUpdateDescription},
 		}),
-		toolutil.NewActionSpec("apply_update", toolutil.DestructiveFunc(func(ctx context.Context, input ApplyInput) (ApplyOutput, error) {
+		toolutil.NewDeleteActionSpec("apply_update", toolutil.DestructiveFunc(func(ctx context.Context, input ApplyInput) (ApplyOutput, error) {
 			return Apply(ctx, updater, input)
 		}), toolutil.ActionSpecOptions{
 			Usage:          "Download and apply the latest MCP server update.",
-			Destructive:    true,
-			Idempotent:     true,
 			OpenWorld:      true,
 			OwnerPackage:   "serverupdate",
 			IndividualTool: toolutil.IndividualToolSpec{Name: applyUpdateToolName, Title: toolutil.TitleFromName(applyUpdateToolName), Description: applyUpdateDescription},

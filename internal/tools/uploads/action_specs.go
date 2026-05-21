@@ -26,21 +26,15 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func uploadReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := uploadOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, uploadOptions(individualTool))
 }
 
 func uploadCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, uploadOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, uploadOptions(individualTool))
 }
 
 func uploadDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := uploadOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, uploadOptions(individualTool))
 }
 
 func uploadOptions(individualTool string) toolutil.ActionSpecOptions {

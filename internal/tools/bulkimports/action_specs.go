@@ -19,20 +19,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func bulkImportReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := bulkImportOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, bulkImportOptions(individualTool))
 }
 
 func bulkImportCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, bulkImportOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, bulkImportOptions(individualTool))
 }
 
 func bulkImportUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := bulkImportOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, bulkImportOptions(individualTool))
 }
 
 func bulkImportOptions(individualTool string) toolutil.ActionSpecOptions {

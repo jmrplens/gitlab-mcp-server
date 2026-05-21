@@ -41,13 +41,21 @@ func branchGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func branchSpec(name string, route toolutil.ActionRoute, individualTool string, readOnly, idempotent bool) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, toolutil.ActionSpecOptions{
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"branch"},
 		RelatedActions: []string{"branch.list", "branch.get", "repository.tree", "merge_request.create"},
-		ReadOnly:       readOnly,
-		Idempotent:     idempotent,
 		OpenWorld:      true,
 		OwnerPackage:   "branches",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
-	})
+	}
+	switch {
+	case readOnly:
+		return toolutil.NewReadActionSpec(name, route, options)
+	case route.Destructive && idempotent:
+		return toolutil.NewDeleteActionSpec(name, route, options)
+	case idempotent:
+		return toolutil.NewUpdateActionSpec(name, route, options)
+	default:
+		return toolutil.NewCreateActionSpec(name, route, options)
+	}
 }

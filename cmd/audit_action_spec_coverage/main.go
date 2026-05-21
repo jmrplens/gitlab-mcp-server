@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
@@ -138,21 +139,21 @@ func main() {
 	outputPath := flag.String("output", defaultOutputPath, "path to write action spec coverage JSON, or '-' for stdout")
 	flag.Parse()
 
-	root, err := repositoryRoot(".")
+	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
-		fatalf("find repository root: %v", err)
+		cmdutil.Fatalf("find repository root: %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
-		fatalf("build coverage report: %v", err)
+		cmdutil.Fatalf("build coverage report: %v", err)
 	}
 	content, err := marshalReport(report)
 	if err != nil {
-		fatalf("marshal coverage report: %v", err)
+		cmdutil.Fatalf("marshal coverage report: %v", err)
 	}
 	writeErr := writeReport(*outputPath, content)
 	if writeErr != nil {
-		fatalf("write coverage report: %v", writeErr)
+		cmdutil.Fatalf("write coverage report: %v", writeErr)
 	}
 }
 
@@ -1072,26 +1073,4 @@ func writeReport(outputPath string, content []byte) error {
 		return err
 	}
 	return os.WriteFile(outputPath, content, 0o600)
-}
-
-func repositoryRoot(start string) (string, error) {
-	current, err := filepath.Abs(start)
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, statErr := os.Stat(filepath.Join(current, "go.mod")); statErr == nil {
-			return current, nil
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", fmt.Errorf("go.mod not found from %s", start)
-		}
-		current = parent
-	}
-}
-
-func fatalf(message string, args ...any) {
-	fmt.Fprintf(os.Stderr, message+"\n", args...)
-	os.Exit(1)
 }

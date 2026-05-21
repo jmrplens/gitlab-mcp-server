@@ -15,10 +15,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func issueStatisticsReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := issueStatisticsOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, issueStatisticsOptions(individualTool))
 }
 
 func issueStatisticsOptions(individualTool string) toolutil.ActionSpecOptions {

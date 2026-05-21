@@ -17,21 +17,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func userTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userTokenOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, userTokenOptions(individualTool))
 }
 
 func userTokenCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, userTokenOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, userTokenOptions(individualTool))
 }
 
 func userTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userTokenOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, userTokenOptions(individualTool))
 }
 
 func userTokenOptions(individualTool string) toolutil.ActionSpecOptions {

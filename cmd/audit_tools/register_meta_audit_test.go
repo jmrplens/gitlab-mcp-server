@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
 // TestAuditRegisterMetaDefinitions_ClassifiesCentralReferences verifies AuditRegisterMetaDefinitions classifies central references.
@@ -114,7 +116,7 @@ func TestAuditRegisterMetaDefinitionViolations_ConvertsUnexpectedDefinitions(t *
 
 // TestCurrentRegisterMetaDefinitions_NoneRemain verifies CurrentRegisterMetaDefinitions when none remain.
 func TestCurrentRegisterMetaDefinitions_NoneRemain(t *testing.T) {
-	root, err := repositoryRoot(".")
+	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repositoryRoot() error = %v", err)
 	}
@@ -188,7 +190,7 @@ func TestRepositoryRoot_FindsNearestGoMod(t *testing.T) {
 		t.Fatalf("MkdirAll(%q) error = %v", nested, err)
 	}
 
-	foundRoot, err := repositoryRoot(nested)
+	foundRoot, err := cmdutil.RepositoryRoot(nested)
 	if err != nil {
 		t.Fatalf("repositoryRoot() error = %v", err)
 	}
@@ -199,7 +201,7 @@ func TestRepositoryRoot_FindsNearestGoMod(t *testing.T) {
 
 // TestRepositoryRoot_MissingGoModReturnsError verifies RepositoryRoot when missing go mod returns error.
 func TestRepositoryRoot_MissingGoModReturnsError(t *testing.T) {
-	_, err := repositoryRoot(t.TempDir())
+	_, err := cmdutil.RepositoryRoot(t.TempDir())
 	if err == nil {
 		t.Fatal("repositoryRoot() error = nil, want error")
 	}

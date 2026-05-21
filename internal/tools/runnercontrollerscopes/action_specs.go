@@ -35,21 +35,15 @@ func removeRunnerScopeOutput(ctx context.Context, client *gitlabclient.Client, i
 }
 
 func runnerControllerScopeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerControllerScopeOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, runnerControllerScopeOptions(individualTool))
 }
 
 func runnerControllerScopeCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, runnerControllerScopeOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, runnerControllerScopeOptions(individualTool))
 }
 
 func runnerControllerScopeDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := runnerControllerScopeOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, runnerControllerScopeOptions(individualTool))
 }
 
 func runnerControllerScopeOptions(individualTool string) toolutil.ActionSpecOptions {

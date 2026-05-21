@@ -8,12 +8,10 @@ import (
 // IssueActionSpecs returns canonical specs for group iteration actions exposed through gitlab_issue.
 func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		toolutil.NewActionSpec("iteration_list_group",
+		toolutil.NewReadActionSpec("iteration_list_group",
 			toolutil.RouteAction(client, List),
 			toolutil.ActionSpecOptions{
 				Tags:           []string{"issue", "iteration"},
-				ReadOnly:       true,
-				Idempotent:     true,
 				OpenWorld:      true,
 				Edition:        "premium",
 				OwnerPackage:   "groupiterations",

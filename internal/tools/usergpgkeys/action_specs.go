@@ -20,21 +20,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func userGPGReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userGPGOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, userGPGOptions(individualTool))
 }
 
 func userGPGCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, userGPGOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, userGPGOptions(individualTool))
 }
 
 func userGPGDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userGPGOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, userGPGOptions(individualTool))
 }
 
 func userGPGOptions(individualTool string) toolutil.ActionSpecOptions {

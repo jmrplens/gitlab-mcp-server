@@ -33,27 +33,19 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input IDInpu
 }
 
 func geoReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := geoOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, geoOptions(individualTool))
 }
 
 func geoCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, geoOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, geoOptions(individualTool))
 }
 
 func geoUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := geoOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, geoOptions(individualTool))
 }
 
 func geoDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := geoOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, geoOptions(individualTool))
 }
 
 func geoOptions(individualTool string) toolutil.ActionSpecOptions {

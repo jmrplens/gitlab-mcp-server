@@ -17,27 +17,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func groupProtectedBranchReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupProtectedBranchOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupProtectedBranchOptions(individualTool))
 }
 
 func groupProtectedBranchCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupProtectedBranchOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupProtectedBranchOptions(individualTool))
 }
 
 func groupProtectedBranchUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupProtectedBranchOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, groupProtectedBranchOptions(individualTool))
 }
 
 func groupProtectedBranchDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupProtectedBranchOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, groupProtectedBranchOptions(individualTool))
 }
 
 func groupProtectedBranchOptions(individualTool string) toolutil.ActionSpecOptions {

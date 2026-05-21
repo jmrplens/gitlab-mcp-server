@@ -17,27 +17,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func groupProtectedEnvReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupProtectedEnvOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupProtectedEnvOptions(individualTool))
 }
 
 func groupProtectedEnvCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupProtectedEnvOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupProtectedEnvOptions(individualTool))
 }
 
 func groupProtectedEnvUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupProtectedEnvOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, groupProtectedEnvOptions(individualTool))
 }
 
 func groupProtectedEnvDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupProtectedEnvOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, groupProtectedEnvOptions(individualTool))
 }
 
 func groupProtectedEnvOptions(individualTool string) toolutil.ActionSpecOptions {

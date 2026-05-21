@@ -14,10 +14,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func groupEpicBoardReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupEpicBoardOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupEpicBoardOptions(individualTool))
 }
 
 func groupEpicBoardOptions(individualTool string) toolutil.ActionSpecOptions {

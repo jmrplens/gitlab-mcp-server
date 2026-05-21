@@ -126,44 +126,33 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func adminReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := adminOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, adminOptions(individualTool))
 }
 
 func adminCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, adminOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, adminOptions(individualTool))
 }
 
 func adminUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := adminOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, adminOptions(individualTool))
 }
 
 func adminDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := adminOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, adminOptions(individualTool))
 }
 
 func adminUpdateCreateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	individualIdempotent := false
 	options := adminOptions(individualTool)
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 func adminDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	individualDestructive := false
 	options := adminOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
 func adminSystemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -172,49 +161,41 @@ func adminSystemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_test_system_hook")
 	options.IndividualTool.AnnotationOverrides.ReadOnly = &individualReadOnly
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
-	return toolutil.NewActionSpec("system_hook_test", toolutil.RouteAction(client, systemhooks.Test), options)
+	return toolutil.NewCreateActionSpec("system_hook_test", toolutil.RouteAction(client, systemhooks.Test), options)
 }
 
 func adminSystemHookEditSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_edit_system_hook")
-	options.Idempotent = true
 	options.IndividualTool.Description = "Edit an instance system hook, including event triggers, SSL verification, and URL settings. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook."
-	return toolutil.NewActionSpec("system_hook_edit", toolutil.RouteAction(client, systemhooks.Edit), options)
+	return toolutil.NewUpdateActionSpec("system_hook_edit", toolutil.RouteAction(client, systemhooks.Edit), options)
 }
 
 func adminSystemHookSetURLVariableSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_set_system_hook_url_variable")
-	options.Idempotent = true
 	options.IndividualTool.Description = "Create or update one URL variable for an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook."
-	return toolutil.NewActionSpec("system_hook_set_url_variable", toolutil.RouteVoidAction(client, systemhooks.SetURLVariable), options)
+	return toolutil.NewUpdateActionSpec("system_hook_set_url_variable", toolutil.RouteVoidAction(client, systemhooks.SetURLVariable), options)
 }
 
 func adminSystemHookDeleteURLVariableSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_delete_system_hook_url_variable")
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.Description = "Delete one URL variable from an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_set_system_hook_url_variable, gitlab_get_system_hook."
-	return toolutil.NewActionSpec("system_hook_delete_url_variable", toolutil.DestructiveVoidAction(client, systemhooks.DeleteURLVariable), options)
+	return toolutil.NewDeleteActionSpec("system_hook_delete_url_variable", toolutil.DestructiveVoidAction(client, systemhooks.DeleteURLVariable), options)
 }
 
 func adminSettingsGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_get_settings")
-	options.ReadOnly = true
-	options.Idempotent = true
 	options.Usage = "Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information."
 	options.Aliases = []string{"application settings", "instance settings", "current settings", "admin settings", "gitlab settings"}
 	options.Tags = append(options.Tags, "settings", "application_settings")
-	return toolutil.NewActionSpec("settings_get", toolutil.RouteAction(client, settings.Get), options)
+	return toolutil.NewReadActionSpec("settings_get", toolutil.RouteAction(client, settings.Get), options)
 }
 
 func adminMetadataGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_get_metadata")
-	options.ReadOnly = true
-	options.Idempotent = true
 	options.Usage = "Read GitLab instance metadata such as version and revision. Do not use this for application settings."
 	options.Aliases = []string{"instance metadata", "gitlab version", "server metadata", "gitlab revision"}
 	options.Tags = append(options.Tags, "metadata", "version")
-	return toolutil.NewActionSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), options)
+	return toolutil.NewReadActionSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), options)
 }
 
 func adminOptions(individualTool string) toolutil.ActionSpecOptions {

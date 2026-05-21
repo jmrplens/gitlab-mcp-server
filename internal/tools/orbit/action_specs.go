@@ -48,11 +48,9 @@ func orbitReadRoute[T any, R any](client *gitlabclient.Client, fn func(context.C
 // The returned spec is tagged as "orbit" and "knowledge_graph", marked as read-only,
 // and gated to GitLab.com Premium/Ultimate. Used for both meta-tool and individual tool projection.
 func orbitReadSpec(name string, route toolutil.ActionRoute, individualTool, usage string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, toolutil.ActionSpecOptions{
+	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
 		Tags:             []string{"orbit", "knowledge_graph"},
 		Usage:            usage,
-		ReadOnly:         true,
-		Idempotent:       true,
 		OpenWorld:        true,
 		Edition:          "premium",
 		GitLabDotComOnly: true,

@@ -18,14 +18,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func snippetStorageMoveReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := snippetStorageMoveOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, snippetStorageMoveOptions(individualTool))
 }
 
 func snippetStorageMoveCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, snippetStorageMoveOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, snippetStorageMoveOptions(individualTool))
 }
 
 func snippetStorageMoveOptions(individualTool string) toolutil.ActionSpecOptions {

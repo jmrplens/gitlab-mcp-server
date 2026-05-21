@@ -14,10 +14,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func attestationReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, toolutil.ActionSpecOptions{
+	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
 		Tags:           []string{"security", "attestation"},
-		ReadOnly:       true,
-		Idempotent:     true,
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "attestations",

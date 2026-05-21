@@ -35,27 +35,19 @@ func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func badgeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := badgeOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, badgeOptions(name, individualTool))
 }
 
 func badgeCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, badgeOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, badgeOptions(name, individualTool))
 }
 
 func badgeUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := badgeOptions(name, individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, badgeOptions(name, individualTool))
 }
 
 func badgeDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := badgeOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, badgeOptions(name, individualTool))
 }
 
 func badgeOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
@@ -70,27 +62,19 @@ func badgeOptions(actionName, individualTool string) toolutil.ActionSpecOptions 
 }
 
 func groupBadgeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBadgeOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupBadgeOptions(name, individualTool))
 }
 
 func groupBadgeCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupBadgeOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupBadgeOptions(name, individualTool))
 }
 
 func groupBadgeUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBadgeOptions(name, individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, groupBadgeOptions(name, individualTool))
 }
 
 func groupBadgeDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBadgeOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, groupBadgeOptions(name, individualTool))
 }
 
 func groupBadgeOptions(actionName, individualTool string) toolutil.ActionSpecOptions {

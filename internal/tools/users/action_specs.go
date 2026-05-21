@@ -71,50 +71,38 @@ func userGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func userReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, userOptions(individualTool))
 }
 
 func userCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, userOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, userOptions(individualTool))
 }
 
 func userUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, userOptions(individualTool))
 }
 
 func userDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, userOptions(individualTool))
 }
 
 func userDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	individualDestructive := false
 	options := userOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
 func userEnterpriseReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := userOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
 	options.Edition = "premium"
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 func userEnterpriseCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := userOptions(individualTool)
 	options.Edition = "premium"
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func userOptions(individualTool string) toolutil.ActionSpecOptions {

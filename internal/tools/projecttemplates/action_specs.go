@@ -14,11 +14,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func projectTemplateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, toolutil.ActionSpecOptions{
+	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
 		Tags:           []string{"template", "project"},
 		RelatedActions: []string{"project.create", "project.list"},
-		ReadOnly:       true,
-		Idempotent:     true,
 		OpenWorld:      true,
 		OwnerPackage:   "projecttemplates",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

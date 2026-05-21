@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
 const (
@@ -29,27 +31,27 @@ func main() {
 	check := flag.Bool("check", false, "verify generated manifest is up to date without writing")
 	flag.Parse()
 
-	root, err := repositoryRoot(".")
+	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
-		fatalf("find repository root: %v", err)
+		cmdutil.Fatalf("find repository root: %v", err)
 	}
 	builders, err := discoverActionSpecGroupBuilders(filepath.Join(root, *sourceDir))
 	if err != nil {
-		fatalf("discover action spec group builders: %v", err)
+		cmdutil.Fatalf("discover action spec group builders: %v", err)
 	}
 	content, err := generateManifest(builders)
 	if err != nil {
-		fatalf("generate manifest: %v", err)
+		cmdutil.Fatalf("generate manifest: %v", err)
 	}
 	targetPath := filepath.Join(root, *outputPath)
 	if *check {
 		if checkErr := checkManifest(targetPath, content); checkErr != nil {
-			fatalf("check manifest: %v", checkErr)
+			cmdutil.Fatalf("check manifest: %v", checkErr)
 		}
 		return
 	}
 	if writeErr := os.WriteFile(targetPath, content, 0o600); writeErr != nil {
-		fatalf("write %s: %v", targetPath, writeErr)
+		cmdutil.Fatalf("write %s: %v", targetPath, writeErr)
 	}
 }
 
@@ -131,26 +133,4 @@ func checkManifest(path string, want []byte) error {
 		return fmt.Errorf("%s is stale; run go run ./cmd/gen_action_catalog_manifest/", path)
 	}
 	return nil
-}
-
-func repositoryRoot(start string) (string, error) {
-	current, err := filepath.Abs(start)
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, statErr := os.Stat(filepath.Join(current, "go.mod")); statErr == nil {
-			return current, nil
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", fmt.Errorf("go.mod not found from %s", start)
-		}
-		current = parent
-	}
-}
-
-func fatalf(message string, args ...any) {
-	fmt.Fprintf(os.Stderr, message+"\n", args...)
-	os.Exit(1)
 }

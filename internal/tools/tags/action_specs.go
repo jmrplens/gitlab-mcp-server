@@ -40,13 +40,21 @@ func tagGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func tagSpec(name string, route toolutil.ActionRoute, individualTool string, readOnly, idempotent bool) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, toolutil.ActionSpecOptions{
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"tag"},
 		RelatedActions: []string{"tag.list", "tag.get", "release.get", "repository.commit_get"},
-		ReadOnly:       readOnly,
-		Idempotent:     idempotent,
 		OpenWorld:      true,
 		OwnerPackage:   "tags",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
-	})
+	}
+	switch {
+	case readOnly:
+		return toolutil.NewReadActionSpec(name, route, options)
+	case route.Destructive && idempotent:
+		return toolutil.NewDeleteActionSpec(name, route, options)
+	case idempotent:
+		return toolutil.NewUpdateActionSpec(name, route, options)
+	default:
+		return toolutil.NewCreateActionSpec(name, route, options)
+	}
 }

@@ -39,17 +39,11 @@ func deleteSSHKeyOutput(ctx context.Context, client *gitlabclient.Client, input 
 }
 
 func groupCredentialReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupCredentialOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupCredentialOptions(individualTool))
 }
 
 func groupCredentialDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupCredentialOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, groupCredentialOptions(individualTool))
 }
 
 func groupCredentialOptions(individualTool string) toolutil.ActionSpecOptions {

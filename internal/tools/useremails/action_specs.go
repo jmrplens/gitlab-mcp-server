@@ -18,21 +18,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func userEmailReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userEmailOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, userEmailOptions(individualTool))
 }
 
 func userEmailCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, userEmailOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, userEmailOptions(individualTool))
 }
 
 func userEmailDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userEmailOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, userEmailOptions(individualTool))
 }
 
 func userEmailOptions(individualTool string) toolutil.ActionSpecOptions {

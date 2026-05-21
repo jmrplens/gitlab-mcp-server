@@ -55,33 +55,23 @@ func jobTokenScopeRemoveProjectSpec(client *gitlabclient.Client) toolutil.Action
 			ExampleBinding:   "Remove project ID 51 from allowlist of project 1 => target_project_id=51.",
 		},
 	}
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec("token_scope_remove_project", toolutil.DestructiveAction(client, removeProjectAllowlistOutput), options)
+	return toolutil.NewDeleteActionSpec("token_scope_remove_project", toolutil.DestructiveAction(client, removeProjectAllowlistOutput), options)
 }
 
 func jobTokenScopeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := jobTokenScopeOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, jobTokenScopeOptions(individualTool))
 }
 
 func jobTokenScopeCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, jobTokenScopeOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, jobTokenScopeOptions(individualTool))
 }
 
 func jobTokenScopeUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := jobTokenScopeOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, jobTokenScopeOptions(individualTool))
 }
 
 func jobTokenScopeDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := jobTokenScopeOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, jobTokenScopeOptions(individualTool))
 }
 
 func jobTokenScopeOptions(individualTool string) toolutil.ActionSpecOptions {

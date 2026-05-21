@@ -30,30 +30,20 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func jobGetSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	options := jobOptions("gitlab_job_get")
-	options.ReadOnly = true
-	options.Idempotent = true
 	options.RelatedActions = []string{"job.trace", "job.cancel", "job.retry"}
-	return toolutil.NewActionSpec("get", route, options)
+	return toolutil.NewReadActionSpec("get", route, options)
 }
 
 func jobReadSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	options := jobOptions(individualTool, extraTags...)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, jobOptions(individualTool, extraTags...))
 }
 
 func jobMutationSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	options := jobOptions(individualTool, extraTags...)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, jobOptions(individualTool, extraTags...))
 }
 
 func jobDeleteSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	options := jobOptions(individualTool, extraTags...)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, jobOptions(individualTool, extraTags...))
 }
 
 func jobOptions(individualTool string, extraTags ...string) toolutil.ActionSpecOptions {

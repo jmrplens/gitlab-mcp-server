@@ -37,36 +37,26 @@ func deleteRuleOutput(ctx context.Context, client *gitlabclient.Client, input De
 }
 
 func approvalReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := approvalOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, approvalOptions(individualTool))
 }
 
 func approvalCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, approvalOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, approvalOptions(individualTool))
 }
 
 func approvalUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := approvalOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, approvalOptions(individualTool))
 }
 
 func approvalDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := approvalOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, approvalOptions(individualTool))
 }
 
 func approvalResetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	individualDestructive := false
 	options := approvalOptions("gitlab_mr_approval_reset")
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewActionSpec("approval_reset", toolutil.DestructiveAction(client, resetOutput), options)
+	return toolutil.NewDeleteActionSpec("approval_reset", toolutil.DestructiveAction(client, resetOutput), options)
 }
 
 func approvalOptions(individualTool string) toolutil.ActionSpecOptions {

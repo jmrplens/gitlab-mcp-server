@@ -28,7 +28,7 @@ func securityCategoryCreateSpec(name string, route toolutil.ActionRoute, individ
 		toolutil.SchemaPropertyOverride("multiple_selection", map[string]any{"type": "boolean"}),
 	}
 	options.Usage = "Create a security category before creating security attributes under it."
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func securityCategoryUpdateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
@@ -38,17 +38,14 @@ func securityCategoryUpdateSpec(name string, route toolutil.ActionRoute, individ
 		toolutil.SchemaPropertyOverride("name", map[string]any{"type": "string", "minLength": 1}),
 		toolutil.SchemaPropertyOverride("description", map[string]any{"type": "string"}),
 	}
-	options.Idempotent = true
 	options.Usage = "Update editable custom security category metadata."
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 func securityCategoryDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityCategoryOptions(individualTool, description)
-	options.Destructive = true
-	options.Idempotent = true
 	options.Usage = "Delete a custom security category and its associated attributes."
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
 func securityCategoryOptions(individualTool, description string) toolutil.ActionSpecOptions {

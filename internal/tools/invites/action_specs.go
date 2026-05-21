@@ -16,14 +16,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func inviteReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := inviteOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, inviteOptions(individualTool))
 }
 
 func inviteCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, inviteOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, inviteOptions(individualTool))
 }
 
 func inviteOptions(individualTool string) toolutil.ActionSpecOptions {

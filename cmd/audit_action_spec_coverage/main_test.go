@@ -6,14 +6,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 )
 
 // TestBuildCoverageReport_ClassifiesKeyDomains verifies BuildCoverageReport classifies key domains.
 func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
@@ -59,9 +60,9 @@ func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
 
 // TestAuditCatalogFirstSource_CurrentProductionCodePasses verifies AuditCatalogFirstSource when current production code passes.
 func TestAuditCatalogFirstSource_CurrentProductionCodePasses(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	if auditErr := auditCatalogFirstSource(root); auditErr != nil {
 		t.Fatalf("auditCatalogFirstSource() error = %v", auditErr)
@@ -167,9 +168,9 @@ func TestCatalogActionsMissingIndividualProjectionPolicy(t *testing.T) {
 
 // TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked verifies BuildCoverageReport when core source domains are spec backed.
 func TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
@@ -194,9 +195,9 @@ func TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked(t *testing.T) {
 
 // TestBuildCoverageReport_CICDDomainsAreSpecBacked verifies BuildCoverageReport when cicd domains are spec backed.
 func TestBuildCoverageReport_CICDDomainsAreSpecBacked(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
@@ -223,9 +224,9 @@ func TestBuildCoverageReport_CICDDomainsAreSpecBacked(t *testing.T) {
 
 // TestBuildCoverageReport_CollaborationDomainsAreSpecBacked verifies BuildCoverageReport when collaboration domains are spec backed.
 func TestBuildCoverageReport_CollaborationDomainsAreSpecBacked(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
@@ -251,9 +252,9 @@ func TestBuildCoverageReport_CollaborationDomainsAreSpecBacked(t *testing.T) {
 
 // TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked verifies BuildCoverageReport when note and discussion domains are spec backed.
 func TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
@@ -280,9 +281,9 @@ func TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked(t *testing.T)
 
 // TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked verifies BuildCoverageReport when access and security domains are spec backed.
 func TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
@@ -310,9 +311,9 @@ func TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked(t *testing.T)
 
 // TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked verifies BuildCoverageReport when admin platform domains are spec backed.
 func TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
@@ -344,9 +345,9 @@ func TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked(t *testing.T) {
 
 // TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked verifies BuildCoverageReport when package deployment storage domains are spec backed.
 func TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
@@ -379,9 +380,9 @@ func TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked(t *tes
 
 // TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked verifies BuildCoverageReport when group project enterprise domains are spec backed.
 func TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
@@ -411,9 +412,9 @@ func TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked(t *testi
 
 // TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked verifies BuildCoverageReport when utility template domains are spec backed.
 func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
-	root, err := repositoryRoot("../..")
+	root, err := cmdutil.RepositoryRoot("../..")
 	if err != nil {
-		t.Fatalf("repositoryRoot() error = %v", err)
+		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {

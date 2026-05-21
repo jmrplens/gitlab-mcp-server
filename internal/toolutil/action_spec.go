@@ -172,6 +172,31 @@ func NewActionSpec(name string, route ActionRoute, opts ActionSpecOptions) Actio
 	}
 }
 
+// NewReadActionSpec creates a read-only, idempotent action specification.
+func NewReadActionSpec(name string, route ActionRoute, opts ActionSpecOptions) ActionSpec {
+	opts.ReadOnly = true
+	opts.Idempotent = true
+	return NewActionSpec(name, route, opts)
+}
+
+// NewCreateActionSpec creates a mutating, non-idempotent action specification.
+func NewCreateActionSpec(name string, route ActionRoute, opts ActionSpecOptions) ActionSpec {
+	return NewActionSpec(name, route, opts)
+}
+
+// NewUpdateActionSpec creates a mutating, idempotent action specification.
+func NewUpdateActionSpec(name string, route ActionRoute, opts ActionSpecOptions) ActionSpec {
+	opts.Idempotent = true
+	return NewActionSpec(name, route, opts)
+}
+
+// NewDeleteActionSpec creates a destructive, idempotent action specification.
+func NewDeleteActionSpec(name string, route ActionRoute, opts ActionSpecOptions) ActionSpec {
+	opts.Destructive = true
+	opts.Idempotent = true
+	return NewActionSpec(name, route, opts)
+}
+
 // CloneActionSpec returns a defensive copy of spec and all mutable metadata it owns.
 func CloneActionSpec(spec ActionSpec) ActionSpec {
 	return NewActionSpec(spec.Name, spec.Route, actionSpecOptionsFromSpec(spec))

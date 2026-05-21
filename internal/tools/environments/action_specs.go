@@ -35,36 +35,26 @@ func environmentGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func environmentReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := environmentOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, environmentOptions(individualTool))
 }
 
 func environmentCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, environmentOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, environmentOptions(individualTool))
 }
 
 func environmentUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := environmentOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, environmentOptions(individualTool))
 }
 
 func environmentDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := environmentOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, environmentOptions(individualTool))
 }
 
 func environmentStopSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	individualDestructive := false
 	options := environmentOptions("gitlab_environment_stop")
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewActionSpec("stop", toolutil.DestructiveAction(client, Stop), options)
+	return toolutil.NewDeleteActionSpec("stop", toolutil.DestructiveAction(client, Stop), options)
 }
 
 func environmentOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -3,6 +3,7 @@ package grouplabels
 import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/labeldata"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -44,5 +45,5 @@ func init() {
 }
 
 func toLabelMarkdown(label Output) toolutil.LabelMarkdown {
-	return toolutil.LabelMarkdown{ID: label.ID, Name: label.Name, Color: label.Color, Description: label.Description, OpenIssuesCount: label.OpenIssuesCount, ClosedIssuesCount: label.ClosedIssuesCount, OpenMergeRequestsCount: label.OpenMergeRequestsCount, Priority: label.Priority, PrioritySpecified: label.PrioritySpecified, IsProjectLabel: label.IsProjectLabel, Subscribed: label.Subscribed}
+	return labeldata.ToMarkdown(label)
 }
