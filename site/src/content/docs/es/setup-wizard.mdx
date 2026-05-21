@@ -118,9 +118,9 @@ Las opciones avanzadas se corresponden con variables de entorno stdio escritas e
 | Ignorar scopes del PAT           | `GITLAB_IGNORE_SCOPES`   | Omite la detección de scopes del token y registra todas las herramientas. |
 | Herramientas excluidas           | `EXCLUDE_TOOLS`          | Omite nombres de herramientas separados por comas.                        |
 | Tamaño máximo de subida          | `UPLOAD_MAX_FILE_SIZE`   | Define el tamaño máximo aceptado para subidas y archivos.                 |
-| Modo de autoactualización        | `AUTO_UPDATE`            | Aplica, comprueba o desactiva actualizaciones antes del arranque.         |
+| Modo de autoactualización        | `AUTO_UPDATE`            | Aplica, comprueba o desactiva actualizaciones en segundo plano.           |
 | Repositorio de autoactualización | `AUTO_UPDATE_REPO`       | Elige el repositorio GitHub usado para comprobar releases.                |
-| Timeout de autoactualización     | `AUTO_UPDATE_TIMEOUT`    | Limita el tiempo dedicado a la comprobación pre-arranque.                 |
+| Timeout de autoactualización     | `AUTO_UPDATE_TIMEOUT`    | Limita el tiempo de las comprobaciones de arranque/en segundo plano.      |
 | Rate limit RPS                   | `RATE_LIMIT_RPS`         | Define el límite de llamadas stdio; `0` lo desactiva.                     |
 | Rate limit burst                 | `RATE_LIMIT_BURST`       | Define el tamaño del bucket cuando el rate limit está activo.             |
 | Modo YOLO                        | `YOLO_MODE`              | Omite algunas confirmaciones locales de seguridad. Úsalo con cuidado.     |

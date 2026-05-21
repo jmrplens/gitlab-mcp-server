@@ -320,11 +320,10 @@ Test categories (all required):
 ## Step 8: Verify
 
 ```bash
-go vet ./internal/tools/{domain}/
 go test ./internal/tools/{domain}/ -count=1 -v
 go run ./cmd/gen_testing_docs/ --check
 npx markdownlint-cli2 docs/testing/testing.md
-golangci-lint run ./internal/tools/{domain}/
+golangci-lint run --build-tags e2e ./internal/tools/{domain}/
 ```
 
 ## Validation Checklist
@@ -339,5 +338,5 @@ golangci-lint run ./internal/tools/{domain}/
 - [ ] Error handling uses correct WrapErr variant
 - [ ] Added to ActionSpec/catalog aggregation and covered by `make audit-action-spec-coverage`
 - [ ] Tests cover success, validation, API error, and markdown
-- [ ] `go vet` + `go test` + `golangci-lint` pass
+- [ ] `go test` + `golangci-lint` pass
 - [ ] Documentation updated

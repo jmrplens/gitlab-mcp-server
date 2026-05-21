@@ -531,7 +531,7 @@ func ExampleClient_GetProject() {
 
 ### Phase 5: Validate
 
-1. Run `go vet ./path/to/package/` to confirm no issues were introduced.
+1. Run `golangci-lint run --build-tags e2e ./path/to/package/...` to confirm no analysis issues were introduced.
 2. Run `go build ./path/to/package/` to verify compilation.
 3. Run `go test ./path/to/package/` to confirm no logic was changed.
 4. Run `go doc ./path/to/package` to verify all exported symbols render correctly.
@@ -557,7 +557,7 @@ Test Files:
   branches_test.go — 8/8 tests documented     ✅  (6 tests + 2 helpers)
 
 Validation:
-  go vet:    PASS ✅
+    lint:      PASS ✅
   go build:  PASS ✅
   go test:   PASS ✅
   go doc:    All 15 exported symbols visible ✅
@@ -747,7 +747,7 @@ Before declaring a file complete:
 - [ ] No block comments (`/* */`) used as doc comments
 - [ ] Headings use Go 1.19+ `// # Heading` syntax
 - [ ] Lists are properly indented (2-space indent + dash or number)
-- [ ] `go vet` passes
+- [ ] `golangci-lint` passes
 - [ ] `go build` passes
 - [ ] `go test` passes (no logic changes)
 - [ ] `go doc` renders all symbols correctly

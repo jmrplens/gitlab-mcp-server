@@ -153,7 +153,7 @@ func main() {
 	flag.StringVar(&hcfg.autoUpdate, "auto-update", "true", "Auto-update mode: true (auto-apply), check (log-only), false (disabled)")
 	flag.StringVar(&hcfg.autoUpdateRepo, "auto-update-repo", config.DefaultAutoUpdateRepo, "GitHub repository for update checks")
 	flag.DurationVar(&hcfg.autoUpdateInterval, "auto-update-interval", config.DefaultAutoUpdateInterval, "How often to check for updates")
-	flag.DurationVar(&hcfg.autoUpdateTimeout, "auto-update-timeout", config.DefaultAutoUpdateTimeout, "Timeout for pre-start update download (range 5s\u201310m)")
+	flag.DurationVar(&hcfg.autoUpdateTimeout, "auto-update-timeout", config.DefaultAutoUpdateTimeout, "Timeout for startup/background update checks (range 5s\u201310m)")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
@@ -271,9 +271,9 @@ FLAGS
   -max-http-clients int     Maximum concurrent client sessions (default %d)
   -session-timeout duration Idle session timeout (default %s)
   -auto-update string       Auto-update mode: true|check|false (default "true")
-  -auto-update-repo string  GitLab project path for updates (default "%s")
+  -auto-update-repo string  GitHub repository for update checks (default "%s")
   -auto-update-interval dur How often to check for updates (default %s)
-  -auto-update-timeout dur  Timeout for pre-start update download (default %s)
+  -auto-update-timeout dur  Timeout for startup/background update checks (default %s)
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
   -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
@@ -290,9 +290,9 @@ ENVIRONMENT VARIABLES (stdio mode)
   EXCLUDE_TOOLS             Comma-separated tool names to exclude (default empty)
   GITLAB_IGNORE_SCOPES      Skip PAT scope detection: true/false (default false)
   AUTO_UPDATE               Auto-update mode: true/check/false (default true)
-  AUTO_UPDATE_REPO          GitLab project for updates (default %s)
+  AUTO_UPDATE_REPO          GitHub repository for update checks (default %s)
   AUTO_UPDATE_INTERVAL      Periodic check interval (default 1h, HTTP mode)
-  AUTO_UPDATE_TIMEOUT       Pre-start download timeout (default 60s, range 5s–10m)
+  AUTO_UPDATE_TIMEOUT       Startup/background update timeout (default 60s, range 5s–10m)
   LOG_LEVEL                 Logging: debug/info/warn/error (default info)
 
 JSON CONFIGURATION EXAMPLES
@@ -545,8 +545,7 @@ func runStdio(ctx context.Context) error {
 	// Clean up leftover .old binary from previous updates.
 	autoupdate.CleanupOldBinary()
 
-	// Pre-start update: download, replace, and re-exec on Unix.
-	preStartAutoUpdate(cfg) //nolint:contextcheck // bootstrap: runs before request lifecycle, uses its own timeout (cfg.AutoUpdateTimeout)
+	startStdioAutoUpdate(ctx, cfg)
 
 	client, err := gitlabclient.NewClient(cfg)
 	if err != nil {
@@ -1333,13 +1332,27 @@ func serveStdio(ctx context.Context, server *mcp.Server) error {
 	return nil
 }
 
-// preStartAutoUpdate runs the pre-start update check for stdio mode.
-// Downloads, replaces the binary, and re-execs on Unix.
-// Non-fatal: errors are logged and do not prevent startup.
-func preStartAutoUpdate(cfg *config.Config) {
+type stdioAutoUpdateCheckFunc func(context.Context, autoupdate.Config) (newVersion string, updated bool, err error)
+
+func runStdioAutoUpdateCheck(ctx context.Context, cfg autoupdate.Config) (newVersion string, updated bool, err error) {
+	updater, err := autoupdate.NewUpdater(cfg)
+	if err != nil {
+		return "", false, err
+	}
+	return updater.CheckOnce(ctx)
+}
+
+// startStdioAutoUpdate launches the startup update check for stdio mode.
+// The check runs in the background so MCP startup and tool negotiation are not
+// delayed by release detection, download, or binary replacement.
+func startStdioAutoUpdate(ctx context.Context, cfg *config.Config) {
+	startStdioAutoUpdateWithCheck(ctx, cfg, runStdioAutoUpdateCheck)
+}
+
+func startStdioAutoUpdateWithCheck(ctx context.Context, cfg *config.Config, check stdioAutoUpdateCheckFunc) {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Error("autoupdate: pre-start auto-update panicked — continuing without update", "panic", r)
+			slog.Error("autoupdate: startup auto-update panicked — continuing without update", "panic", r)
 		}
 	}()
 
@@ -1351,22 +1364,50 @@ func preStartAutoUpdate(cfg *config.Config) {
 	if mode == autoupdate.ModeDisabled {
 		return
 	}
+	if autoupdate.JustUpdated() {
+		autoupdate.ClearJustUpdated()
+		slog.Info("autoupdate: skipping startup update check (just re-executed after update)")
+		return
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.AutoUpdateTimeout)
-	defer cancel()
-
-	result := autoupdate.PreStartUpdate(ctx, autoupdate.Config{
+	timeout := cfg.AutoUpdateTimeout
+	if timeout <= 0 {
+		timeout = config.DefaultAutoUpdateTimeout
+	}
+	updateCfg := autoupdate.Config{
 		Mode:           mode,
 		Repository:     cfg.AutoUpdateRepo,
+		Timeout:        timeout,
 		CurrentVersion: version,
-	})
-
-	if result.Updated && result.NewVersion != "" {
-		slog.Info("autoupdate: binary updated",
-			"new_version", result.NewVersion,
-			"exec_failed", result.ExecFailed,
-		)
 	}
+
+	slog.Info("autoupdate: starting startup check in background",
+		"mode", mode,
+		"repository", cfg.AutoUpdateRepo,
+		"current_version", version,
+	)
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("autoupdate: startup auto-update goroutine panicked — continuing without update", "panic", r)
+			}
+		}()
+
+		checkCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+
+		newVersion, updated, checkErr := check(checkCtx, updateCfg)
+		if checkErr != nil {
+			slog.Warn("autoupdate: startup background check failed", "error", checkErr)
+			return
+		}
+		if updated && newVersion != "" {
+			slog.Info("autoupdate: binary updated in background — restart the server to use the new version",
+				"new_version", newVersion,
+			)
+		}
+	}()
 }
 
 // newUpdaterForTools creates an [*autoupdate.Updater] for the MCP server-update

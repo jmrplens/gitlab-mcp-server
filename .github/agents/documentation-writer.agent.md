@@ -48,7 +48,7 @@ Research is REQUIRED when documentation mentions:
 - **Protocols and specifications**: MCP protocol, JSON-RPC, OAuth, REST API standards
 - **External APIs**: GitLab API v4, GitHub API, any third-party service API
 - **Standards and frameworks**: OWASP, Diátaxis, C4 Model, OpenAPI/Swagger
-- **Tools and utilities**: Mermaid, markdownlint, golangci-lint, staticcheck
+- **Tools and utilities**: Mermaid, markdownlint, golangci-lint
 
 #### How to Research
 

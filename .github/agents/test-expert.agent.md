@@ -161,7 +161,7 @@ After writing tests, perform a **mutation check**: mentally (or actually) change
 4. **Write** tests using table-driven patterns, with full documentation
 5. **Verify** no false passes using the checklist above
 6. **Run**: `go test -v -count=1 ./internal/tools/{domain}/`
-7. **Validate**: `go vet ./internal/tools/{domain}/`
+7. **Validate**: `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`
 
 ### Mode 2: Existing Test Analysis & Improvement
 
@@ -463,6 +463,6 @@ Before declaring any test work complete:
 - [ ] Every test function has a doc comment explaining what it tests
 - [ ] False-pass verification completed (checklist above)
 - [ ] Coverage target met for the package
-- [ ] `go vet` passes on changed packages
+- [ ] `golangci-lint` passes on changed packages
 - [ ] `docs/testing/testing.md` refreshed with `go run ./cmd/gen_testing_docs/` at the end of the test phase when tests or coverage changed
 - [ ] `go run ./cmd/gen_testing_docs/ --check` passes

@@ -298,8 +298,9 @@ This compiles the server to a temporary binary (`/tmp/gitlab-mcp-server-inspecto
 ## Linting & Formatting
 
 ```bash
-make lint    # go vet ./...
-make fmt     # gofmt -s -w .
+make lint         # golangci-lint config, format diff, and run
+make fmt          # apply configured Go formatters through golangci-lint
+make analyze-fix  # apply supported Go and Markdown fixes
 ```
 
 ## Error Handling in Tool Handlers

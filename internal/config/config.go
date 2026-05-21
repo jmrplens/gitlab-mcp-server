@@ -132,7 +132,7 @@ type Config struct {
 	AutoUpdate         string        // Auto-update mode: "true" (auto), "check" (log-only), "false" (disabled)
 	AutoUpdateRepo     string        // GitLab project path for update checks
 	AutoUpdateInterval time.Duration // How often to check for updates (HTTP mode)
-	AutoUpdateTimeout  time.Duration // Timeout for pre-start update check (stdio mode)
+	AutoUpdateTimeout  time.Duration // Timeout for startup/background update checks
 
 	AuthMode      string        // Auth mode for HTTP: "legacy" (default) or "oauth"
 	OAuthCacheTTL time.Duration // OAuth token cache TTL (HTTP mode, oauth auth mode)

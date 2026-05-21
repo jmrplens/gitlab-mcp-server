@@ -76,9 +76,9 @@ Follow idiomatic Go practices and community standards when writing Go code. Thes
 
 ### Formatting
 
-- Always use `gofmt` to format code — all Go code **must** pass `gofmt`
-- Use `goimports` to manage imports automatically (applies `gofmt` + organizes imports)
-- Before committing, run `make analyze-fix` to apply `goimports` + `gofmt` formatting
+- Always use the repository's configured Go formatters — `goimports`, `gofumpt`, and `gci` via `golangci-lint fmt`
+- Use `goimports` for import cleanup, `gofumpt` for stricter gofmt-compatible formatting, and `gci` for deterministic import sections
+- Before committing, run `make analyze-fix` to apply supported Go and Markdown fixes
 - Keep line length reasonable (no hard limit, but consider readability)
 - Add blank lines to separate logical groups of code
 
@@ -376,9 +376,7 @@ func TestCovListMetricImagesWithPagination(t *testing.T) { ... }
 
 ### Essential Tools
 
-- `go fmt`: Format code
-- `go vet`: Find suspicious constructs
-- `golangci-lint`: Additional linting (golint is deprecated)
+- `golangci-lint`: Consolidated Go linting and formatting (`goimports`, `gofumpt`, `gci`, `govet`, `staticcheck`, `gosec`, and related checks)
 - `go test`: Run tests
 - `go mod`: Manage dependencies
 - `go generate`: Code generation
@@ -391,9 +389,8 @@ func TestCovListMetricImagesWithPagination(t *testing.T) { ... }
 - Write meaningful commit messages
 - Review diffs before committing
 - After implementing changes, run targeted analysis on **changed packages only**:
-  - `go vet ./internal/tools/{domain}/`
   - `go test ./internal/tools/{domain}/ -count=1`
-  - `golangci-lint run ./internal/tools/{domain}/`
+  - `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`
 
 ## Common Pitfalls to Avoid
 

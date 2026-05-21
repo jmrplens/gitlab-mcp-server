@@ -73,7 +73,7 @@ gitlab-mcp-server/
 
 ### Go Standards
 
-- Follow idiomatic Go: `gofmt`, `goimports`, `go vet`, `staticcheck`
+- Follow idiomatic Go and the repository's consolidated `golangci-lint` configuration (`goimports`, `gofumpt`, `gci`, `govet`, `staticcheck`, `gosec`, and related checks)
 - Prefer standard library over third-party when equivalent
 - All exported types and functions must have doc comments
 - Error wrapping with `fmt.Errorf("context: %w", err)`
@@ -113,9 +113,8 @@ After implementing changes, run targeted analysis on the **changed files/package
 
 ```bash
 # Go files — run on affected packages (replace path with changed package)
-go vet ./internal/tools/{domain}/
 go test ./internal/tools/{domain}/ -count=1
-golangci-lint run ./internal/tools/{domain}/
+golangci-lint run --build-tags e2e ./internal/tools/{domain}/
 
 # Markdown files — run on specific changed .md files
 npx markdownlint-cli2 path/to/changed.md
@@ -125,11 +124,11 @@ go run ./cmd/format_md_tables/
 go run ./cmd/format_md_tables/ --check
 ```
 
-- 9 analysis tools available: `goimports`, `gofmt`, `go vet`, `modernize`, `golangci-lint` (v2), `gosec`, `staticcheck`, `govulncheck`, `markdownlint-cli2`
-- Configuration: `.golangci.yml` (Go linters), `.markdownlint-cli2.jsonc` (Markdown rules)
+- 3 analysis gates available: `golangci-lint` (v2; includes Go linters and formatters such as `goimports`, `gofumpt`, `gci`, `govet`, `modernize`, `gosec`, and `staticcheck`), `govulncheck`, and `markdownlint-cli2`
+- Configuration: `.golangci.yml` (Go linters/formatters), `.markdownlint-cli2.jsonc` (Markdown rules)
 - Markdown table formatting: when creating or editing pipe tables in `README.md` or `docs/`, use `go run ./cmd/format_md_tables/` to normalize column padding and alignment markers, then verify with `go run ./cmd/format_md_tables/ --check`
-- Formatting: always run `make analyze-fix` before committing to apply `goimports` + `gofmt` standard formatting
-- Full project: `make analyze` (all tools), `make analyze-fix` (auto-fix), `make analyze-report` (LLM report)
+- Formatting: always run `make analyze-fix` before committing to apply configured Go formatters (`goimports`, `gofumpt`, `gci`) and Markdown fixes
+- Full project: `make analyze` (all analysis gates), `make analyze-fix` (auto-fix), `make analyze-report` (LLM report)
 - See `docs/development/static-analysis.md` for full documentation
 
 ### End-to-End Tests
@@ -207,7 +206,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `AUTO_UPDATE`            | Enable auto-update: `true` (default), `check`, `false` | `true` (default)   |
 | `AUTO_UPDATE_REPO`       | GitHub repository slug for release assets (owner/repo) | `jmrplens/gitlab-mcp-server` |
 | `AUTO_UPDATE_INTERVAL`   | Periodic check interval, HTTP mode | `1h` (default)     |
-| `AUTO_UPDATE_TIMEOUT`    | Pre-start download timeout (range 5s–10m) | `60s` (default)    |
+| `AUTO_UPDATE_TIMEOUT`    | Startup/background update timeout (range 5s–10m) | `60s` (default)    |
 | `GITLAB_ENTERPRISE`      | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition | `false` (default) |
 | `MAX_HTTP_CLIENTS`       | Max client sessions, HTTP mode (also `--max-http-clients` flag) | `100` (default)    |
 | `SESSION_TIMEOUT`        | Idle session timeout, HTTP mode (also `--session-timeout` flag) | `30m` (default)  |

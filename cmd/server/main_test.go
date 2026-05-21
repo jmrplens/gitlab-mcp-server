@@ -26,6 +26,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
@@ -1475,33 +1476,102 @@ func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 	})
 }
 
-// TestPreStartAutoUpdate_InvalidMode verifies that preStartAutoUpdate
+// TestStartStdioAutoUpdate_InvalidMode verifies that startStdioAutoUpdate
 // returns immediately when the AUTO_UPDATE value is invalid.
-func TestPreStartAutoUpdate_InvalidMode(t *testing.T) {
+func TestStartStdioAutoUpdate_InvalidMode(t *testing.T) {
 	cfg := &config.Config{AutoUpdate: "invalid-value"}
 	// Should log warning and return without panic.
-	preStartAutoUpdate(cfg)
+	startStdioAutoUpdate(t.Context(), cfg)
 }
 
-// TestPreStartAutoUpdate_DisabledMode verifies that preStartAutoUpdate
+// TestStartStdioAutoUpdate_DisabledMode verifies that startStdioAutoUpdate
 // returns immediately when AUTO_UPDATE is "false" (disabled).
-func TestPreStartAutoUpdate_DisabledMode(t *testing.T) {
+func TestStartStdioAutoUpdate_DisabledMode(t *testing.T) {
 	cfg := &config.Config{AutoUpdate: "false"}
-	// Should return immediately without calling PreStartUpdate.
-	preStartAutoUpdate(cfg)
+	startStdioAutoUpdate(t.Context(), cfg)
 }
 
-// TestPreStartAutoUpdate_ValidMode verifies that preStartAutoUpdate
-// exercises the full path through PreStartUpdate when mode is valid.
-// With version="dev" (test default), PreStartUpdate is called but
-// NewUpdater fails internally — this still covers the code path.
-func TestPreStartAutoUpdate_ValidMode(t *testing.T) {
+// TestStartStdioAutoUpdate_ValidMode verifies that startStdioAutoUpdate
+// exercises the full path when mode is valid.
+func TestStartStdioAutoUpdate_ValidMode(t *testing.T) {
+	called := make(chan struct{})
+	check := func(context.Context, autoupdate.Config) (string, bool, error) {
+		close(called)
+		return "", false, nil
+	}
+
 	cfg := &config.Config{
 		AutoUpdate:     "true",
 		AutoUpdateRepo: "group/project",
 	}
-	// Will exercise PreStartUpdate which fails internally (version="dev").
-	preStartAutoUpdate(cfg)
+	startStdioAutoUpdateWithCheck(t.Context(), cfg, check)
+
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		t.Fatal("expected startup auto-update check to run")
+	}
+}
+
+// TestStartStdioAutoUpdate_ValidModeReturnsBeforeCheckCompletes verifies that
+// startup auto-update work runs in the background instead of delaying stdio MCP
+// startup while an update check or download is still in progress.
+func TestStartStdioAutoUpdate_ValidModeReturnsBeforeCheckCompletes(t *testing.T) {
+	oldVersion := version
+	version = "1.0.0"
+	t.Cleanup(func() { version = oldVersion })
+
+	started := make(chan autoupdate.Config, 1)
+	releaseCheck := make(chan struct{})
+	checkDone := make(chan struct{})
+	check := func(_ context.Context, cfg autoupdate.Config) (string, bool, error) {
+		started <- cfg
+		<-releaseCheck
+		close(checkDone)
+		return "1.1.0", true, nil
+	}
+
+	cfg := &config.Config{
+		AutoUpdate:        "true",
+		AutoUpdateRepo:    "group/project",
+		AutoUpdateTimeout: time.Minute,
+	}
+	returned := make(chan struct{})
+	go func() {
+		startStdioAutoUpdateWithCheck(t.Context(), cfg, check)
+		close(returned)
+	}()
+
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("startStdioAutoUpdate blocked waiting for the background check")
+	}
+
+	select {
+	case updateCfg := <-started:
+		if updateCfg.Repository != cfg.AutoUpdateRepo {
+			t.Fatalf("Repository = %q, want %q", updateCfg.Repository, cfg.AutoUpdateRepo)
+		}
+		if updateCfg.Timeout != cfg.AutoUpdateTimeout {
+			t.Fatalf("Timeout = %s, want %s", updateCfg.Timeout, cfg.AutoUpdateTimeout)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("background update check did not start")
+	}
+
+	select {
+	case <-checkDone:
+		t.Fatal("background update check completed before the test released it")
+	default:
+	}
+
+	close(releaseCheck)
+	select {
+	case <-checkDone:
+	case <-time.After(time.Second):
+		t.Fatal("background update check did not finish after release")
+	}
 }
 
 // TestNewUpdaterForTools_InvalidMode verifies that newUpdaterForTools

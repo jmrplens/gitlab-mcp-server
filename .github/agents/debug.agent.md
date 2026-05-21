@@ -102,7 +102,7 @@ You are in debug mode. Your primary objective is to systematically identify, ana
 ```bash
 go test ./internal/tools/{domain}/ -count=1 -v -run TestSpecific
 go test -race ./internal/tools/{domain}/ -count=1
-go vet ./internal/tools/{domain}/
+golangci-lint run --build-tags e2e ./internal/tools/{domain}/
 dlv test ./internal/tools/{domain}/ -- -test.run TestSpecific
 ```
 

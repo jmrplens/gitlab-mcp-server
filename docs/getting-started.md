@@ -197,7 +197,7 @@ The host passes these environment variables through to the container:
 | `AUTO_UPDATE`                    | No       | Auto-update mode in the container; default is `false` for Open Plugins installs         |
 | `AUTO_UPDATE_REPO`               | No       | GitHub repository slug for release assets (default `jmrplens/gitlab-mcp-server`)        |
 | `AUTO_UPDATE_INTERVAL`           | No       | Periodic update check interval in HTTP mode (default `1h`)                              |
-| `AUTO_UPDATE_TIMEOUT`            | No       | Pre-start download timeout (default `60s`)                                              |
+| `AUTO_UPDATE_TIMEOUT`            | No       | Startup/background update timeout (default `60s`)                                       |
 | `LOG_LEVEL`                      | No       | `debug`, `info`, `warn`, `error` (default `info`)                                       |
 
 Prefer `TOOL_SURFACE` for new configurations: `dynamic` is the default two-tool low-token find/execute surface, `meta` exposes consolidated domain dispatchers, and `individual` exposes every tool separately. The server still supports the deprecated `META_TOOLS` selector for compatibility, but the Open Plugins config forwards the explicit `TOOL_SURFACE` variable.

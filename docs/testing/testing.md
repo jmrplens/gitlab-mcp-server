@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,374 |
-| Unit test functions                                   | 10,123 |
+| Total test functions                                  | 10,376 |
+| Unit test functions                                   | 10,125 |
 | E2E test functions                                    |    251 |
-| cmd test functions                                    |    632 |
+| cmd test functions                                    |    633 |
 | Test files (internal/)                                |    435 |
 | Test files (cmd/)                                     |     39 |
 | Test files (test/e2e/suite/)                          |    109 |
@@ -35,8 +35,8 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,307 | 89.7% |
-| `TestFunc` (no underscore)             |   773 |  7.5% |
+| `TestFunc_Scenario` (2-part)           | 9,309 | 89.7% |
+| `TestFunc` (no underscore)             |   773 |  7.4% |
 | `TestFunc_Scenario_Expected` (3+ part) |   294 |  2.8% |
 
 ## Test Distribution
@@ -46,11 +46,11 @@
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,770 |         89 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
-| Tools orchestration     |            284 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
+| Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (174) |          7,437 |        334 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            632 |         39 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,374** |    **583** |                                                                                                 |
+| cmd packages            |            633 |         39 | server entry point and developer command utilities                                              |
+| **Total**               |     **10,376** |    **583** |                                                                                                 |
 
 ### Core Packages
 
@@ -316,7 +316,7 @@
 | cmd/gen_llms                    |    27.4% |
 | cmd/gen_readme                  |    34.9% |
 | cmd/gen_testing_docs            |    27.6% |
-| cmd/server                      |    78.2% |
+| cmd/server                      |    78.3% |
 
 ### Core Packages
 
@@ -346,7 +346,7 @@
 
 | Package                 | Coverage |
 | ----------------------- | -------: |
-| tools (orch.)           |    98.2% |
+| tools (orch.)           |    98.1% |
 | accessrequests          |   100.0% |
 | accesstokens            |    99.0% |
 | actioncatalog           |    98.5% |
@@ -538,7 +538,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/add_docs** (62.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces** (67.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_action_spec_coverage** (77.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/server** (78.2%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
+- **cmd/server** (78.3%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_test_names** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_docker_tools** (81.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_meta_schema** (82.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
@@ -806,7 +806,7 @@ make test-race     # Run with race detector
 make test-e2e      # Run E2E tests (self-hosted GitLab) — generates JUnit + JSON reports
 make test-e2e-docker # Run E2E tests with ephemeral GitLab CE — generates JUnit + JSON reports
 make coverage      # Generate coverage report
-make lint          # Run go vet + staticcheck
+make lint          # Run consolidated golangci-lint checks
 make inspector     # Compile + launch MCP Inspector UI via stdio
 make inspector-stop # Stop Inspector and clean up temp binary
 ```

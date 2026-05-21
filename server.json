@@ -195,7 +195,7 @@
         },
         {
           "name": "AUTO_UPDATE_TIMEOUT",
-          "description": "Pre-start download timeout, range 5s-10m (default: 60s)",
+          "description": "Startup/background update timeout, range 5s-10m (default: 60s)",
           "isRequired": false,
           "default": "60s"
         }
@@ -367,7 +367,7 @@
         },
         {
           "name": "AUTO_UPDATE_TIMEOUT",
-          "description": "Pre-start download timeout, range 5s-10m (default: 60s)",
+          "description": "Startup/background update timeout, range 5s-10m (default: 60s)",
           "isRequired": false,
           "default": "60s"
         }
@@ -539,7 +539,7 @@
         },
         {
           "name": "AUTO_UPDATE_TIMEOUT",
-          "description": "Pre-start download timeout, range 5s-10m (default: 60s)",
+          "description": "Startup/background update timeout, range 5s-10m (default: 60s)",
           "isRequired": false,
           "default": "60s"
         }
@@ -711,7 +711,7 @@
         },
         {
           "name": "AUTO_UPDATE_TIMEOUT",
-          "description": "Pre-start download timeout, range 5s-10m (default: 60s)",
+          "description": "Startup/background update timeout, range 5s-10m (default: 60s)",
           "isRequired": false,
           "default": "60s"
         }
@@ -883,7 +883,7 @@
         },
         {
           "name": "AUTO_UPDATE_TIMEOUT",
-          "description": "Pre-start download timeout, range 5s-10m (default: 60s)",
+          "description": "Startup/background update timeout, range 5s-10m (default: 60s)",
           "isRequired": false,
           "default": "60s"
         }
@@ -1055,7 +1055,7 @@
         },
         {
           "name": "AUTO_UPDATE_TIMEOUT",
-          "description": "Pre-start download timeout, range 5s-10m (default: 60s)",
+          "description": "Startup/background update timeout, range 5s-10m (default: 60s)",
           "isRequired": false,
           "default": "60s"
         }

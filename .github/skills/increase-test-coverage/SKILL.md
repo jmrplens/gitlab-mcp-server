@@ -32,7 +32,7 @@ flowchart TD
     research[Research\nMeasure coverage and analyze gaps]
     plan[Plan\nPrioritize gaps by package]
     implement[Implement\nWrite tests per phase]
-    build[Build\ngo vet and go build]
+    build[Build\ngolangci-lint and go build]
     test[Test\ngo test]
     fix[Fix\nRepair errors]
 
@@ -287,7 +287,7 @@ func TestFunction_ContextCancelled(t *testing.T) {
 After writing tests for a phase:
 
 1. **Compile**: `go build ./...`
-2. **Vet**: `go vet ./...`
+2. **Static analysis**: `make golangci-lint`
 3. **Run tests**: `go test -v ./internal/[package]/...`
 4. **Measure coverage**: `go test -coverprofile=coverage.out ./internal/[package]/...`
 5. **Check coverage**: `go tool cover -func=coverage.out | grep [package]`
@@ -318,7 +318,7 @@ After all phases complete:
 1. Run full test suite: `go test -race -coverprofile=coverage.out ./...`
 2. Generate final coverage report: `go tool cover -func=coverage.out`
 3. Verify every package meets 90%+ target
-4. Run quality checks: `go vet ./...` and `staticcheck ./...` (if available)
+4. Run quality checks: `make golangci-lint`
 5. Refresh `docs/testing/testing.md`: `go run ./cmd/gen_testing_docs/`
 6. Verify the generated testing reference: `go run ./cmd/gen_testing_docs/ --check`
 7. Lint the generated testing reference: `npx markdownlint-cli2 docs/testing/testing.md`
@@ -383,7 +383,7 @@ After all phases complete:
 - Check import paths match the module path in `go.mod`
 - Verify test file is in the correct package (same as source file)
 - Ensure mock response JSON matches expected struct field names
-- Run `go vet ./...` for quick diagnostics
+- Run `make golangci-lint` for quick diagnostics
 
 ### Tests fail unexpectedly
 

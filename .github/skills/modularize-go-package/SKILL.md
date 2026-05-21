@@ -172,7 +172,7 @@ Delete the original files from `${sourcePackage}/`:
 
 ```bash
 go build ./...
-go vet ./...
+golangci-lint run --build-tags e2e ./...
 go test ./${sourcePackage}/{domain}/ -count=1 -v
 go test ./${sourcePackage}/ -count=1
 ```
@@ -187,7 +187,7 @@ After ALL domains are migrated:
 
    ```bash
    go build ./...
-   go vet ./...
+   golangci-lint run --build-tags e2e ./...
    go test ./internal/... -count=1
    ```
 
@@ -206,9 +206,9 @@ import "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 After completing all migrations:
 
 - [ ] `go build ./...` — zero errors
-- [ ] `go vet ./...` — zero warnings
+- [ ] `golangci-lint run --build-tags e2e ./...` — zero warnings
 - [ ] `go test ./internal/... -count=1` — all pass
-- [ ] No import cycles: `go vet -vettool=$(which findcall) ./...` or manual review
+- [ ] No import cycles: `go list ./...` or manual review
 - [ ] `cmd/server/main.go` unchanged (still imports `internal/tools`)
 - [ ] Each sub-package has: handler file, `action_specs.go`, markdown formatter, and test file
 - [ ] `${utilPackage}` has no imports from domain sub-packages

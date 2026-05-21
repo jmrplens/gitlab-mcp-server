@@ -581,8 +581,6 @@ go test -race ./...
 go test -cover ./...
 
 # Static analysis
-go vet ./...
-staticcheck ./...
 golangci-lint run
 
 # Module management
@@ -590,8 +588,7 @@ go mod tidy
 go mod verify
 
 # Formatting
-gofmt -w .
-goimports -w .
+golangci-lint fmt
 ```
 
 ### Recommended Linter Configuration (.golangci.yml)
@@ -605,11 +602,16 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
     - goimports
     - misspell
     - unconvert
     - unparam
+
+formatters:
+    enable:
+        - goimports
+        - gofumpt
+        - gci
 
 linters-settings:
   errcheck:
@@ -631,7 +633,7 @@ issues:
 | Make the zero value useful | Types should work without explicit initialization |
 | A little copying is better than a little dependency | Avoid unnecessary external dependencies |
 | Clear is better than clever | Prioritize readability over cleverness |
-| gofmt is no one's favorite but everyone's friend | Always format with gofmt/goimports |
+| gofmt is no one's favorite but everyone's friend | Always format with the configured formatter stack |
 | Return early | Handle errors first, keep happy path unindented |
 
 ## Anti-Patterns to Avoid

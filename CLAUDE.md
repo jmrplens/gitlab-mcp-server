@@ -58,7 +58,7 @@ gitlab-mcp-server/
 │   ├── gen_readme/              # Generates README sections from source metadata
 │   └── gen_testing_docs/        # Generates docs/testing/testing.md
 ├── internal/
-│   ├── autoupdate/              # Self-update: pre-start check, rename trick, syscall.Exec (Unix)
+│   ├── autoupdate/              # Self-update: background startup checks, rename trick, restart activation
 │   ├── config/                  # Configuration loading (.env, flags, env vars)
 │   ├── gitlab/                  # GitLab API client wrapper (client.GL() accessor)
 │   ├── oauth/                   # OAuth HTTP mode: token cache, GitLab verifier, header middleware, RFC 9728 metadata
@@ -198,7 +198,7 @@ go build -o dist/gitlab-mcp-server ./cmd/server  # Build binary
 go test ./internal/... -count=1          # Run all unit tests
 go test ./internal/tools/branches/ -count=1 -v  # Run domain tests verbose
 go test ./internal/tools/ -run TestBranch -count=1  # Run specific tests
-go vet ./...                             # Static analysis
+make golangci-lint                       # Consolidated Go formatting and linting
 
 # End-to-end tests (requires .env with GITLAB_URL, GITLAB_TOKEN)
 go test -v -tags e2e -timeout 300s ./test/e2e/suite/   # Run all e2e tests
@@ -221,9 +221,8 @@ After making changes, run targeted verification on the **changed files/packages 
 
 ```bash
 # Go files — run on affected packages
-go vet ./internal/tools/branches/              # vet on changed package
 go test ./internal/tools/branches/ -count=1    # tests on changed package
-golangci-lint run ./internal/tools/branches/   # lint on changed package
+golangci-lint run --build-tags e2e ./internal/tools/branches/ # lint changed package
 
 # Markdown files — run on specific changed files
 npx markdownlint-cli2 docs/auto-update.md README.md  # lint specific .md files
@@ -238,16 +237,16 @@ make inspector                             # compile + launch Inspector via stdi
 make inspector-stop                        # stop Inspector and clean up
 
 # Full project analysis (use sparingly — for pre-commit or CI)
-make analyze                               # all 9 tools, full project
+make analyze                               # all analysis gates, full project
 make analyze-fix                           # auto-fix what can be fixed
 make analyze-report                        # generate LLM-consumable report
 ```
 
-**Static analysis tools** (9 total): `goimports`, `gofmt`, `go vet`, `modernize`, `golangci-lint` (v2, 25+ linters), `gosec`, `staticcheck`, `govulncheck`, `markdownlint-cli2`. Configuration: `.golangci.yml`, `.markdownlint-cli2.jsonc`. Full docs: `docs/development/static-analysis.md`.
+**Static analysis tools** (3 consolidated gates): `golangci-lint` (v2, 25+ linters plus `goimports`, `gofumpt`, and `gci` formatters), `govulncheck`, and `markdownlint-cli2`. Configuration: `.golangci.yml`, `.markdownlint-cli2.jsonc`. Full docs: `docs/development/static-analysis.md`.
 
 **Markdown table formatter**: When creating or editing pipe tables in `README.md` or `docs/`, run `go run ./cmd/format_md_tables/` to normalize source-readable padding and left/right/center alignment markers, then verify with `go run ./cmd/format_md_tables/ --check` before markdownlint.
 
-**Formatting tools**: Before committing, always run `make analyze-fix` to apply `goimports` (import grouping) and `gofmt` (standard formatting). These are the Go equivalents of `clang-format` — all Go code must pass both.
+**Formatting tools**: Before committing, always run `make analyze-fix` to apply configured Go formatters: `goimports` (import cleanup), `gofumpt` (stricter gofmt-compatible formatting), and `gci` (deterministic import section grouping).
 
 ### Environment variables
 
@@ -265,7 +264,7 @@ make analyze-report                        # generate LLM-consumable report
 | `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
-| `AUTO_UPDATE_TIMEOUT`    | No       | Pre-start download timeout (`60s` default, range 5s–10m) |
+| `AUTO_UPDATE_TIMEOUT`    | No       | Startup/background update timeout (`60s` default, range 5s–10m) |
 | `GITLAB_ENTERPRISE`      | No       | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition (`false` default) |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
@@ -297,7 +296,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--auto-update-interval` | `1h` | Periodic update check interval                           |
 | `--rate-limit-rps` | `0` | Per-server tools/call rate limit in req/s (0 = disabled) |
 | `--rate-limit-burst` | `40` | Token-bucket burst size when --rate-limit-rps > 0        |
-| `--auto-update-timeout` | `60s` | Pre-start download timeout (range 5s–10m)                |
+| `--auto-update-timeout` | `60s` | Startup/background update timeout (range 5s–10m)         |
 
 **General flags** (both stdio and HTTP modes):
 

@@ -308,7 +308,7 @@ For each symbol, decide the documentation level:
 
 After documenting each file:
 
-1. **Syntax check**: `go vet ./path/to/package/...`
+1. **Analysis check**: `golangci-lint run --build-tags e2e ./path/to/package/...`
 2. **Build check**: `go build ./path/to/package/...`
 3. **Test check**: `go test ./path/to/package/...`
 4. **Doc check**: `go doc ./path/to/package` — verify all exported symbols appear

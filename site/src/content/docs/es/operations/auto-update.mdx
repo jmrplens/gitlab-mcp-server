@@ -7,7 +7,7 @@ description: Actualizaciones automáticas del binario desde releases de GitHub
 Para la referencia técnica completa, consulta [`docs/auto-update.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/auto-update.md) en el repositorio.
 :::
 
-GitLab MCP Server puede detectar, descargar y aplicar automáticamente nuevas versiones desde GitHub. Las actualizaciones usan un **truco de renombrado** — el binario en ejecución se renombra a `.old`, el nuevo binario se coloca en la ruta original, y en Unix el proceso se re-ejecuta sin interrupciones.
+GitLab MCP Server puede detectar, descargar y aplicar automáticamente nuevas versiones desde GitHub. Las actualizaciones usan un **truco de renombrado** — el binario en ejecución se renombra a `.old` y el nuevo binario se coloca en la ruta original. El proceso MCP actual sigue sirviendo; reinícialo para usar el nuevo binario.
 
 ## Modos de actualización
 
@@ -26,38 +26,37 @@ Alias aceptados: `1`/`yes` para true, `0`/`no` para false. El valor no distingue
 ```mermaid
 sequenceDiagram
     participant Server as gitlab-mcp-server
+    participant Update as Goroutine de actualización
     participant GitHub as API de GitHub Releases
     participant FS as Sistema de Archivos
 
     Server->>Server: CleanupOldBinary()
-    Server->>GitHub: GET /repos/:owner/:repo/releases/latest
-    GitHub-->>Server: Metadatos del release + URLs de assets
+    Server->>Update: Iniciar verificación en segundo plano
+    Server->>Server: Continuar arranque MCP inmediatamente
+    Update->>GitHub: GET /repos/:owner/:repo/releases/latest
+    GitHub-->>Update: Metadatos del release + URLs de assets
     alt Actualización disponible
-        Server->>GitHub: Descargar asset del binario
-        Server->>FS: Escribir en archivo temporal .tmp
-        Server->>FS: Renombrar actual → .old
-        Server->>FS: Renombrar .tmp → ruta actual
-        alt Unix
-            Server->>Server: syscall.Exec(self) — re-ejecución sin interrupciones
-        else Windows
-            Server->>Server: La actualización toma efecto en el próximo reinicio
-        end
+        Update->>GitHub: Descargar asset del binario
+        Update->>FS: Escribir en archivo temporal .tmp
+        Update->>FS: Renombrar actual → .old
+        Update->>FS: Renombrar .tmp → ruta actual
+        Update->>Server: Registrar aviso de reinicio
     else Actualizado
-        Server->>Server: Registrar "el servidor está actualizado"
+        Update->>Server: Registrar "el servidor está actualizado"
     end
 ```
 
 ### Verificación al inicio (modo stdio)
 
-En modo stdio (el predeterminado), la actualización automática se ejecuta como una **verificación previa al inicio** con un timeout configurable (por defecto: 60 segundos) antes de que el servidor MCP comience a aceptar conexiones:
+En modo stdio (el predeterminado), la actualización automática se ejecuta como una **verificación de arranque en segundo plano** con un timeout configurable (por defecto: 60 segundos). El arranque MCP continúa inmediatamente mientras la detección de releases y las descargas se ejecutan en segundo plano:
 
 1. `CleanupOldBinary()` elimina cualquier archivo `.old` sobrante de una actualización anterior
-2. Verifica si hay una versión más nueva en GitHub
-3. Si el modo es `true` y existe una versión más nueva, descarga y reemplaza el binario
-4. En **Linux/macOS**: se re-ejecuta vía `syscall.Exec()` — mismo PID, mismos pipes stdin/stdout, sin interrupción para el cliente MCP
-5. En **Windows**: registra que la actualización tomará efecto en el próximo reinicio
+2. El servidor programa la verificación en una goroutine en segundo plano
+3. Verifica si hay una versión más nueva en GitHub sin bloquear la negociación de herramientas MCP
+4. Si el modo es `true` y existe una versión más nueva, descarga y reemplaza el binario
+5. Registra un aviso de reinicio para que el siguiente proceso del servidor use la nueva versión
 
-La verificación al inicio es **no fatal** — cualquier error (timeout de red, releases no encontrados) se registra como advertencia y no impide que el servidor arranque.
+La verificación al inicio es **no bloqueante y no fatal** — cualquier error (timeout de red, releases no encontrados) se registra como advertencia y no impide que el servidor arranque ni acepte peticiones MCP.
 
 ### Verificación periódica (modo http)
 
@@ -77,7 +76,7 @@ En modo HTTP, la actualización automática se ejecuta como una **verificación 
 | `AUTO_UPDATE`          | `true`                       | Modo de actualización: `true`, `check` o `false`                                  |
 | `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | Slug del repositorio de GitHub (`propietario/repo`) para assets del release       |
 | `AUTO_UPDATE_INTERVAL` | `1h`                         | Intervalo de verificación (usado por las verificaciones periódicas del modo HTTP) |
-| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout de descarga pre-inicio (rango: 5s–10m)                                    |
+| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout de actualización de arranque/en segundo plano (rango: 5s–10m)             |
 
 ### Flags de CLI (modo http)
 
@@ -86,7 +85,7 @@ En modo HTTP, la actualización automática se ejecuta como una **verificación 
 | `--auto-update`          | `true`                       | Modo de actualización: `true`, `check` o `false`                            |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Slug del repositorio de GitHub (`propietario/repo`) para assets del release |
 | `--auto-update-interval` | `1h`                         | Intervalo entre verificaciones periódicas de actualización                  |
-| `--auto-update-timeout`  | `60s`                        | Timeout de descarga pre-inicio (rango: 5s–10m)                              |
+| `--auto-update-timeout`  | `60s`                        | Timeout de actualización de arranque/en segundo plano (rango: 5s–10m)       |
 
 :::note
 La actualización automática usa la **API de GitHub Releases** — es completamente independiente de tu configuración de GitLab. Tus ajustes de `GITLAB_URL`, `GITLAB_TOKEN` y `GITLAB_SKIP_TLS_VERIFY` no afectan a la actualización automática.
