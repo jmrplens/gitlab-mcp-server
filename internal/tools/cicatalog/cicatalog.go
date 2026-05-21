@@ -304,7 +304,7 @@ type ListOutput struct {
 
 // List retrieves CI/CD Catalog resources via the GitLab GraphQL API.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	vars := input.GraphQLPaginationInput.Variables()
+	vars := input.Variables()
 	if input.Search != "" {
 		vars["search"] = input.Search
 	}

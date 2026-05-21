@@ -274,7 +274,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	vars := toolutil.MergeVariables(
-		input.GraphQLPaginationInput.Variables(),
+		input.Variables(),
 		map[string]any{
 			"projectPath": input.ProjectPath,
 			"pipelineIID": input.PipelineIID,

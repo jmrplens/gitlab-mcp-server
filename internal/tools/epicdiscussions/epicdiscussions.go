@@ -327,7 +327,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("epicDiscussionList", "epic_iid")
 	}
 
-	vars := input.GraphQLPaginationInput.Variables()
+	vars := input.Variables()
 	vars["fullPath"] = input.FullPath
 	vars["iid"] = strconv.FormatInt(input.IID, 10)
 

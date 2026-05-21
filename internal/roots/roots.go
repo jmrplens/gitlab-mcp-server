@@ -84,8 +84,7 @@ func ClientSupportsRoots(session *mcp.ServerSession) bool {
 	// Legacy: SDK populates the deprecated Roots struct when the client sent
 	// any "roots": {...} object in capabilities. Presence of either nested
 	// flag is the only signal available pre-RootsV2.
-	//lint:ignore SA1019 Roots field is deprecated in favor of RootsV2 but is still populated for legacy clients; reading it is required as a fallback.
-	return params.Capabilities.Roots.ListChanged //nolint:staticcheck // SA1019: see comment above
+	return params.Capabilities.Roots.ListChanged //nolint:staticcheck // Legacy clients populate Roots before RootsV2.
 }
 
 // GetRoots returns a copy of the cached root list.

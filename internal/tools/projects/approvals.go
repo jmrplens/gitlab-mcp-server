@@ -30,8 +30,7 @@ type ApprovalConfigOutput struct {
 
 func approvalConfigToOutput(a *gl.ProjectApprovals) ApprovalConfigOutput {
 	return ApprovalConfigOutput{
-		//lint:ignore SA1019 deprecated field still present in API response.
-		ApprovalsBeforeMerge:                      a.ApprovalsBeforeMerge, //nolint:staticcheck // deprecated field still present in API response
+		ApprovalsBeforeMerge:                      a.ApprovalsBeforeMerge, //nolint:staticcheck // Deprecated field still present in API response.
 		ResetApprovalsOnPush:                      a.ResetApprovalsOnPush,
 		DisableOverridingApproversPerMergeRequest: a.DisableOverridingApproversPerMergeRequest,
 		MergeRequestsAuthorApproval:               a.MergeRequestsAuthorApproval,

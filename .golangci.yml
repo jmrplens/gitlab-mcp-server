@@ -105,9 +105,6 @@ linters:
     staticcheck:
       checks:
         - "all"
-        - "-ST1000" # Package comments (handled by revive)
-        - "-ST1016" # Consistent receiver names (handled by revive)
-        - "-QF1008" # Omit embedded fields from selector (too noisy)
 
     errcheck:
       check-type-assertions: true

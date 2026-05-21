@@ -1595,7 +1595,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 	}
 	todo, resp, err := client.GL().MergeRequests.CreateTodo(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
-		if resp != nil && resp.Response != nil && resp.Response.StatusCode == http.StatusNotModified {
+		if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotModified {
 			err = &gl.ErrorResponse{Response: resp.Response, Message: "a pending todo for this MR already exists"}
 			return CreateTodoOutput{}, toolutil.WrapErrWithHint("mrCreateTodo", err,
 				"a pending todo for this MR already exists for the authenticated user \u2014 use gitlab_todo_list to inspect it")

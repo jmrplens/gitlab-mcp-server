@@ -3830,8 +3830,7 @@ func assertEditProjectMergeOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	if opts.ResolveOutdatedDiffDiscussions == nil {
 		t.Error("ResolveOutdatedDiffDiscussions not set")
 	}
-	//lint:ignore SA1019 no replacement field, needs Merge Request Approvals API
-	if opts.ApprovalsBeforeMerge == nil || *opts.ApprovalsBeforeMerge != 2 { //nolint:staticcheck // testing deprecated field intentionally
+	if opts.ApprovalsBeforeMerge == nil || *opts.ApprovalsBeforeMerge != 2 { //nolint:staticcheck // Test deprecated compatibility field.
 		t.Error("ApprovalsBeforeMerge not set")
 	}
 	if opts.LFSEnabled == nil {
@@ -3850,8 +3849,7 @@ func assertEditProjectAccessOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	if opts.PublicJobs == nil {
 		t.Error("PublicJobs not set")
 	}
-	//lint:ignore SA1019 backward compat with PackagesEnabled field
-	if opts.PackagesEnabled == nil { //nolint:staticcheck // SA1019
+	if opts.PackagesEnabled == nil { //nolint:staticcheck // Test deprecated compatibility field.
 		t.Error("PackagesEnabled not set")
 	}
 	if opts.PackageRegistryAccessLevel == nil {
