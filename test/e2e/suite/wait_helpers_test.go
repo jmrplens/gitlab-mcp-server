@@ -95,6 +95,7 @@ func stopTimer(timer *time.Timer) {
 // retryWithBackoff runs operation with a one-second base delay between
 // retryable failures.
 func retryWithBackoff[O any](ctx context.Context, t *testing.T, label string, maxRetries int, operation func(attempt int) (O, bool, string, error)) (O, error) {
+	t.Helper()
 	return retryWithBackoffInterval(ctx, t, label, maxRetries, time.Second, operation)
 }
 

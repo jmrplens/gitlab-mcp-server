@@ -109,7 +109,7 @@ func hasExternalNetworkCapability() bool {
 }
 
 // RunWithCapabilities centralizes capability checks, locks, and E2E context setup.
-func RunWithCapabilities(t *testing.T, caps []Capability, fn func(t *testing.T, e2e *E2EContext)) {
+func RunWithCapabilities(t *testing.T, caps []Capability, fn func(e2e *E2EContext)) {
 	t.Helper()
 
 	RequireCapabilities(t, caps...)
@@ -117,7 +117,7 @@ func RunWithCapabilities(t *testing.T, caps []Capability, fn func(t *testing.T, 
 	t.Cleanup(unlock)
 
 	e2e := NewE2EContext(t)
-	fn(t, e2e)
+	fn(e2e)
 }
 
 // hasAdminCapability reports whether the configured GitLab user is an

@@ -5,7 +5,6 @@
 package suite
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,13 +22,10 @@ type e2eOAuthConfig struct {
 	skipTLS   bool
 }
 
-// oauthHTTPClient is a shared HTTP client for OAuth E2E tests. It skips TLS
-// verification because some self-hosted GitLab instances use self-signed certs.
+// oauthHTTPClient is a shared HTTP client for raw MCP HTTP requests in OAuth
+// E2E tests. GitLab TLS verification is configured separately by the verifier.
 var oauthHTTPClient = &http.Client{
 	Timeout: 30 * time.Second,
-	Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // E2E test client for self-signed certs
-	},
 }
 
 // loadE2EConfig loads the OAuth E2E config from environment variables.

@@ -34,7 +34,7 @@ fast-pass:
 // Running them concurrently causes pipelines to queue, leading to spurious
 // timeouts on slower hosts.
 func TestPipelines(t *testing.T) {
-	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(t *testing.T, _ *E2EContext) {
+	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(_ *E2EContext) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
 		if deadline, ok := t.Deadline(); ok {
 			cancel()
@@ -140,7 +140,7 @@ func assertIndividualPipelineList(ctx context.Context, t *testing.T, proj Projec
 
 func waitAndListIndividualJobs(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) int64 {
 	t.Helper()
-	status := waitForPipeline(t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
+	status := waitForPipeline(ctx, t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
 	t.Logf("Pipeline %d finished with status: %s", pipelineID, status)
 	out, err := callToolOn[jobs.ListOutput](ctx, sess.individual, "gitlab_job_list", jobs.ListInput{ProjectID: proj.pidOf(), PipelineID: pipelineID})
 	if err != nil {
@@ -183,7 +183,7 @@ func retryIndividualPipeline(ctx context.Context, t *testing.T, proj ProjectFixt
 		t.Fatalf("pipeline retry: %v", err)
 	}
 	t.Logf("Retried pipeline: ID=%d status=%s", out.ID, out.Status)
-	waitForPipeline(t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
+	waitForPipeline(ctx, t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
 }
 
 func deleteIndividualPipeline(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) {
@@ -296,7 +296,7 @@ func assertMetaPipelineList(ctx context.Context, t *testing.T, proj ProjectFixtu
 
 func waitAndListMetaJobs(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) int64 {
 	t.Helper()
-	status := waitForPipeline(t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
+	status := waitForPipeline(ctx, t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
 	t.Logf("Meta pipeline %d finished: %s", pipelineID, status)
 	out, err := callToolOn[jobs.ListOutput](ctx, sess.meta, "gitlab_job", map[string]any{
 		"action": "list",
@@ -348,7 +348,7 @@ func retryMetaPipeline(ctx context.Context, t *testing.T, proj ProjectFixture, p
 	if err != nil {
 		t.Fatalf("meta pipeline retry: %v", err)
 	}
-	waitForPipeline(t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
+	waitForPipeline(ctx, t, sess.glClient, proj.ID, pipelineID, 900*time.Second)
 }
 
 func deleteMetaPipeline(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) {

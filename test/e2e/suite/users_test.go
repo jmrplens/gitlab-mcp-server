@@ -57,7 +57,7 @@ func TestIndividual_UserManagement(t *testing.T) {
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
-	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
+	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(_ *E2EContext) {
 		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 		defer cancel()
 

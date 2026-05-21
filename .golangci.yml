@@ -211,7 +211,8 @@ linters:
     # Keep focused package runs warning-free when exclusions for unrelated
     # packages are not exercised by the selected target.
     warn-unused: false
-    # Default exclusion presets
+    # Keep upstream presets that suppress generated comment noise, unchecked
+    # standard-library writes/closes, and common test fixture false positives.
     presets:
       - comments
       - std-error-handling
@@ -234,33 +235,11 @@ linters:
           - gosec
         text: "G101: Potential hardcoded credentials"
 
-      # The OAuth E2E helper talks to disposable TLS test servers.
-      - path: "test/e2e/suite/oauth_helpers_test\\.go"
-        linters:
-          - gosec
-        text: "G402: TLS InsecureSkipVerify set to true"
-
-      # Main entry point: allow os.Exit
-      - path: "cmd/server/main\\.go"
-        linters:
-          - gosec
-        text: "G114"
-
-      # Test utilities
-      - path: "internal/testutil/"
-        linters:
-          - errcheck
-          - gosec
-
       # E2E tests run sequentially by design (shared GitLab fixtures across subtests).
-      # Disable t.Parallel() requirement and context propagation strictness for the
-      # e2e suite — fixtures use fresh contexts in t.Cleanup, polling helpers carry
-      # their own deadlines, and mock auth probes intentionally decouple ctx.
+      # Disable only the t.Parallel() requirement for the e2e suite.
       - path: "test/e2e/"
         linters:
           - tparallel
-          - thelper
-          - contextcheck
 
 output:
   formats:

@@ -81,8 +81,8 @@ func (ledger *ResourceLedger) Records() []ResourceRecord {
 }
 
 // CleanupAll runs registered cleanup actions in reverse registration order.
-func (ledger *ResourceLedger) CleanupAll(ctx context.Context, t testing.TB) []error {
-	t.Helper()
+func (ledger *ResourceLedger) CleanupAll(ctx context.Context, tb testing.TB) []error {
+	tb.Helper()
 
 	ledger.mu.Lock()
 	if ledger.cleaned {
@@ -101,11 +101,11 @@ func (ledger *ResourceLedger) CleanupAll(ctx context.Context, t testing.TB) []er
 		if err := record.Cleanup(ctx); err != nil {
 			failure := fmt.Errorf("cleanup %s: %w", record.redactedLabel(), err)
 			failures = append(failures, failure)
-			t.Logf("e2e cleanup failed: %v", failure)
+			tb.Logf("e2e cleanup failed: %v", failure)
 		}
 		if ctx.Err() != nil {
 			failures = append(failures, ctx.Err())
-			t.Logf("e2e cleanup stopped: %v", ctx.Err())
+			tb.Logf("e2e cleanup stopped: %v", ctx.Err())
 			break
 		}
 	}

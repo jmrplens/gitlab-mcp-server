@@ -31,7 +31,7 @@ wait-job:
 // MCP wait tool (not the direct API helper), then waits for each job.
 func TestWaitTools(t *testing.T) {
 	t.Parallel()
-	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(t *testing.T, _ *E2EContext) {
+	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(_ *E2EContext) {
 		ctx, cancel := waitToolContext(t)
 		defer cancel()
 

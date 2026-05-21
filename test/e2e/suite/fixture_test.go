@@ -198,6 +198,7 @@ func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSess
 // createProject keeps legacy call sites working while they migrate to E2EContext.
 func createProject(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
 	t.Helper()
+	//nolint:contextcheck // Legacy wrapper owns per-test cleanup through NewE2EContext; operation calls still receive ctx.
 	return CreateProject(ctx, NewE2EContext(t), session)
 }
 
@@ -258,6 +259,7 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 // createProjectMeta keeps legacy call sites working while they migrate to E2EContext.
 func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession) ProjectFixture {
 	t.Helper()
+	//nolint:contextcheck // Legacy wrapper owns per-test cleanup through NewE2EContext; operation calls still receive ctx.
 	return CreateProjectMeta(ctx, NewE2EContext(t), session)
 }
 
