@@ -10,6 +10,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const groupProtectedEnvironmentTierHint = "use one of GitLab's valid group protected environment tiers: production, staging, testing, development, other; deploy_access_levels and approval_rules require valid user_id, group_id, or access_level values; requires Owner + Premium/Ultimate"
+
 // AccessLevelOutput represents a deploy access level on a group protected environment.
 type AccessLevelOutput struct {
 	ID                     int64  `json:"id"`
@@ -134,13 +136,13 @@ type ListInput struct {
 // GetInput defines parameters for the Get action which retrieves a single group-level protected environment.
 type GetInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id"    jsonschema:"Group ID or URL-encoded path,required"`
-	Environment string               `json:"environment" jsonschema:"Environment name,required"`
+	Environment string               `json:"environment" jsonschema:"Environment tier (production, staging, testing, development, other),required"`
 }
 
 // ProtectInput defines parameters for the Protect action which creates a group-level protected environment.
 type ProtectInput struct {
 	GroupID               toolutil.StringOrInt     `json:"group_id"                          jsonschema:"Group ID or URL-encoded path,required"`
-	Name                  string                   `json:"name"                              jsonschema:"Environment name to protect,required"`
+	Name                  string                   `json:"name"                              jsonschema:"Environment tier to protect (production, staging, testing, development, other),required"`
 	DeployAccessLevels    []DeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Deploy access levels"`
 	RequiredApprovalCount *int64                   `json:"required_approval_count,omitempty" jsonschema:"Required number of approvals"`
 	ApprovalRules         []ApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Approval rules"`
@@ -149,8 +151,8 @@ type ProtectInput struct {
 // UpdateInput defines parameters for the Update action which modifies a group-level protected environment.
 type UpdateInput struct {
 	GroupID               toolutil.StringOrInt           `json:"group_id"                          jsonschema:"Group ID or URL-encoded path,required"`
-	Environment           string                         `json:"environment"                       jsonschema:"Environment name,required"`
-	Name                  string                         `json:"name,omitempty"                    jsonschema:"New environment name"`
+	Environment           string                         `json:"environment"                       jsonschema:"Environment tier (production, staging, testing, development, other),required"`
+	Name                  string                         `json:"name,omitempty"                    jsonschema:"New environment tier (production, staging, testing, development, other)"`
 	DeployAccessLevels    []UpdateDeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Updated deploy access levels"`
 	RequiredApprovalCount *int64                         `json:"required_approval_count,omitempty" jsonschema:"Required number of approvals"`
 	ApprovalRules         []UpdateApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Updated approval rules"`
@@ -159,7 +161,7 @@ type UpdateInput struct {
 // UnprotectInput defines parameters for the Unprotect action which removes a group-level protected environment.
 type UnprotectInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id"    jsonschema:"Group ID or URL-encoded path,required"`
-	Environment string               `json:"environment" jsonschema:"Environment name to unprotect,required"`
+	Environment string               `json:"environment" jsonschema:"Environment tier to unprotect (production, staging, testing, development, other),required"`
 }
 
 func toDeployAccessOpts(input []DeployAccessLevelInput) *[]*gl.GroupEnvironmentAccessOptions {
@@ -312,8 +314,10 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 	}
 	e, _, err := client.GL().GroupProtectedEnvironments.ProtectGroupEnvironment(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("protectGroupEnvironment", err, http.StatusBadRequest,
-			"requires Owner + Premium/Ultimate; name must be a valid environment tier; deploy_access_levels and approval_rules require valid user_id/group_id; required_approval_count must be >= 1 for approval rules")
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return Output{}, toolutil.WrapErrWithHint("protectGroupEnvironment", err, groupProtectedEnvironmentTierHint)
+		}
+		return Output{}, toolutil.WrapErrWithMessage("protectGroupEnvironment", err)
 	}
 	return toOutput(e), nil
 }
@@ -339,8 +343,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	e, _, err := client.GL().GroupProtectedEnvironments.UpdateGroupProtectedEnvironment(string(input.GroupID), input.Environment, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("updateGroupProtectedEnvironment", err, http.StatusBadRequest,
-			"verify name with gitlab_group_protected_env_list; provide _destroy=true on individual rule entries to remove them; partial updates merge with existing rules")
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return Output{}, toolutil.WrapErrWithHint("updateGroupProtectedEnvironment", err,
+				"use protected_env_list on gitlab_group to verify the environment; valid tiers are production, staging, testing, development, other; provide _destroy=true on individual rule entries to remove them; partial updates merge with existing rules")
+		}
+		return Output{}, toolutil.WrapErrWithMessage("updateGroupProtectedEnvironment", err)
 	}
 	return toOutput(e), nil
 }
@@ -358,8 +365,11 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 	}
 	_, err := client.GL().GroupProtectedEnvironments.UnprotectGroupEnvironment(string(input.GroupID), input.Environment, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("unprotectGroupEnvironment", err, http.StatusForbidden,
-			"requires Owner + Premium/Ultimate; verify name with gitlab_group_protected_env_list; unprotection cascades and removes restrictions on subgroup projects \u2014 irreversible")
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) || toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return toolutil.WrapErrWithHint("unprotectGroupEnvironment", err,
+				"requires Owner + Premium/Ultimate; use protected_env_list on gitlab_group to verify the environment; valid tiers are production, staging, testing, development, other; unprotection cascades and removes restrictions on subgroup projects")
+		}
+		return toolutil.WrapErrWithMessage("unprotectGroupEnvironment", err)
 	}
 	return nil
 }

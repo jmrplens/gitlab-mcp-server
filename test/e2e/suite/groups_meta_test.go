@@ -2,12 +2,13 @@
 
 // groups_meta_test.go tests advanced gitlab_group meta-tool actions against a live GitLab
 // instance, covering hooks, badges, members, labels (deep CRUD), milestones (deep CRUD),
-// and group boards (Premium/Ultimate).
+// and group boards/wikis/protections (Premium/Ultimate).
 package suite
 
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,7 +17,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouplabels"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmembers"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmilestones"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupprotectedbranches"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupprotectedenvs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupwikis"
 )
 
 // TestMeta_GroupDeep exercises gitlab_group meta-tool actions not covered by
@@ -63,6 +67,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	runMetaGroupLabelOperations(t, ctx, groupID, groupIDStr)
 	runMetaGroupMilestoneOperations(t, ctx, groupID, groupIDStr)
 	runMetaGroupBoardOperations(t, ctx, groupID, groupIDStr)
+	runMetaGroupEnterpriseOperations(t, ctx, groupID, groupIDStr)
 }
 
 func runMetaGroupCoreOperations(t *testing.T, ctx context.Context, grpName string, groupID int64, groupIDStr string) {
@@ -484,6 +489,16 @@ func runMetaGroupBoardOperations(t *testing.T, ctx context.Context, groupID int6
 	runEnterpriseMetaGroupBoardOperations(t, ctx, groupID, groupIDStr)
 }
 
+func runMetaGroupEnterpriseOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	if !sess.enterprise {
+		return
+	}
+	runEnterpriseMetaGroupWikiOperations(t, ctx, groupID, groupIDStr)
+	runEnterpriseMetaGroupProtectedBranchOperations(t, ctx, groupID, groupIDStr)
+	runEnterpriseMetaGroupProtectedEnvOperations(t, ctx, groupID, groupIDStr)
+}
+
 func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	var boardID int64
@@ -567,5 +582,233 @@ func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, gr
 		})
 		requireNoError(t, err, "group_board_delete")
 		t.Logf("Deleted board %d", boardID)
+	})
+}
+
+func runEnterpriseMetaGroupWikiOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	var wikiSlug string
+
+	t.Run("WikiCreate", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groupwikis.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "wiki_create",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"title":    uniqueName("group-wiki"),
+				"content":  "# E2E group wiki\n\nInitial content.",
+				"format":   "markdown",
+			},
+		})
+		requireNoError(t, err, "wiki_create")
+		requireTruef(t, out.Slug != "", "expected wiki slug")
+		wikiSlug = out.Slug
+		t.Logf("Created group wiki page %s", wikiSlug)
+	})
+
+	t.Run("WikiList", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groupwikis.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "wiki_list",
+			"params": map[string]any{"group_id": groupIDStr, "with_content": true},
+		})
+		requireNoError(t, err, "wiki_list")
+		requireTruef(t, len(out.WikiPages) >= 1, "expected at least 1 group wiki page")
+		t.Logf("Listed %d group wiki pages", len(out.WikiPages))
+	})
+
+	t.Run("WikiGet", func(t *testing.T) {
+		requireTruef(t, wikiSlug != "", "wikiSlug not set")
+		out, err := callToolOn[groupwikis.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "wiki_get",
+			"params": map[string]any{"group_id": groupIDStr, "slug": wikiSlug},
+		})
+		requireNoError(t, err, "wiki_get")
+		requireTruef(t, out.Slug == wikiSlug, "wiki slug mismatch: got %q want %q", out.Slug, wikiSlug)
+		t.Logf("Got group wiki page %s", out.Slug)
+	})
+
+	t.Run("WikiEdit", func(t *testing.T) {
+		requireTruef(t, wikiSlug != "", "wikiSlug not set")
+		out, err := callToolOn[groupwikis.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "wiki_edit",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"slug":     wikiSlug,
+				"content":  "# E2E group wiki\n\nUpdated content.",
+			},
+		})
+		requireNoError(t, err, "wiki_edit")
+		t.Logf("Updated group wiki page %s", out.Slug)
+	})
+
+	t.Run("WikiDelete", func(t *testing.T) {
+		requireTruef(t, wikiSlug != "", "wikiSlug not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "wiki_delete",
+			"params": map[string]any{"group_id": groupIDStr, "slug": wikiSlug},
+		})
+		requireNoError(t, err, "wiki_delete")
+		t.Logf("Deleted group wiki page %s", wikiSlug)
+	})
+}
+
+func runEnterpriseMetaGroupProtectedBranchOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	branchName := uniqueName("release-") + "/*"
+
+	t.Run("ProtectedBranchProtect", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groupprotectedbranches.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_branch_protect",
+			"params": map[string]any{
+				"group_id":               groupIDStr,
+				"name":                   branchName,
+				"push_access_level":      40,
+				"merge_access_level":     40,
+				"unprotect_access_level": 40,
+				"allow_force_push":       false,
+			},
+		})
+		requireNoError(t, err, "protected_branch_protect")
+		requireTruef(t, out.Name == branchName, "protected branch name mismatch: got %q want %q", out.Name, branchName)
+		t.Logf("Protected group branch %s", out.Name)
+	})
+
+	t.Run("ProtectedBranchList", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groupprotectedbranches.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_branch_list",
+			"params": map[string]any{"group_id": groupIDStr, "search": branchName},
+		})
+		requireNoError(t, err, "protected_branch_list")
+		requireTruef(t, len(out.Branches) >= 1, "expected at least 1 group protected branch")
+		t.Logf("Listed %d group protected branches", len(out.Branches))
+	})
+
+	t.Run("ProtectedBranchGet", func(t *testing.T) {
+		out, err := callToolOn[groupprotectedbranches.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_branch_get",
+			"params": map[string]any{"group_id": groupIDStr, "branch": branchName},
+		})
+		requireNoError(t, err, "protected_branch_get")
+		requireTruef(t, out.Name == branchName, "protected branch name mismatch")
+		t.Logf("Got group protected branch %s", out.Name)
+	})
+
+	t.Run("ProtectedBranchUpdate", func(t *testing.T) {
+		out, err := callToolOn[groupprotectedbranches.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_branch_update",
+			"params": map[string]any{"group_id": groupIDStr, "branch": branchName, "allow_force_push": true},
+		})
+		requireNoError(t, err, "protected_branch_update")
+		requireTruef(t, out.AllowForcePush, "expected allow_force_push=true after update")
+		t.Logf("Updated group protected branch %s", out.Name)
+	})
+
+	t.Run("ProtectedBranchUnprotect", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_branch_unprotect",
+			"params": map[string]any{"group_id": groupIDStr, "branch": branchName},
+		})
+		requireNoError(t, err, "protected_branch_unprotect")
+		t.Logf("Unprotected group branch %s", branchName)
+	})
+}
+
+func runEnterpriseMetaGroupProtectedEnvOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	const envName = "production"
+	const developerAccessLevel = 30
+	var protectedEnvDeployLevelID int64
+
+	t.Run("ProtectedEnvInvalidTierHint", func(t *testing.T) {
+		_, err := callToolOn[groupprotectedenvs.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_env_protect",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"name":     uniqueName("production-"),
+				"deploy_access_levels": []map[string]any{
+					{"access_level": 40},
+				},
+			},
+		})
+		requireTruef(t, err != nil, "expected protected_env_protect invalid tier error")
+		requireTruef(t, strings.Contains(err.Error(), "valid group protected environment tiers"), "expected valid tier hint, got %v", err)
+		requireTruef(t, strings.Contains(err.Error(), "production"), "expected tier values in error, got %v", err)
+	})
+
+	t.Run("ProtectedEnvProtect", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groupprotectedenvs.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_env_protect",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"name":     envName,
+				"deploy_access_levels": []map[string]any{
+					{"access_level": 40},
+				},
+			},
+		})
+		requireNoError(t, err, "protected_env_protect")
+		requireTruef(t, out.Name == envName, "protected environment name mismatch: got %q want %q", out.Name, envName)
+		requireTruef(t, len(out.DeployAccessLevels) >= 1, "expected at least 1 deploy access level")
+		protectedEnvDeployLevelID = out.DeployAccessLevels[0].ID
+		requireTruef(t, protectedEnvDeployLevelID > 0, "expected deploy access level ID")
+		t.Logf("Protected group environment %s", out.Name)
+	})
+
+	t.Run("ProtectedEnvList", func(t *testing.T) {
+		out, err := callToolOn[groupprotectedenvs.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_env_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+		requireNoError(t, err, "protected_env_list")
+		requireTruef(t, len(out.Environments) >= 1, "expected at least 1 group protected environment")
+		t.Logf("Listed %d group protected environments", len(out.Environments))
+	})
+
+	t.Run("ProtectedEnvGet", func(t *testing.T) {
+		out, err := callToolOn[groupprotectedenvs.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_env_get",
+			"params": map[string]any{"group_id": groupIDStr, "environment": envName},
+		})
+		requireNoError(t, err, "protected_env_get")
+		requireTruef(t, out.Name == envName, "protected environment name mismatch")
+		t.Logf("Got group protected environment %s", out.Name)
+	})
+
+	t.Run("ProtectedEnvUpdate", func(t *testing.T) {
+		requireTruef(t, protectedEnvDeployLevelID > 0, "protectedEnvDeployLevelID not set")
+		out, err := callToolOn[groupprotectedenvs.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_env_update",
+			"params": map[string]any{
+				"group_id":    groupIDStr,
+				"environment": envName,
+				"deploy_access_levels": []map[string]any{
+					{"id": protectedEnvDeployLevelID, "access_level": developerAccessLevel},
+				},
+			},
+		})
+		requireNoError(t, err, "protected_env_update")
+		requireTruef(t, out.Name == envName, "protected environment name mismatch after update: got %q want %q", out.Name, envName)
+		foundDeveloperAccess := false
+		for _, deployAccessLevel := range out.DeployAccessLevels {
+			if deployAccessLevel.AccessLevel == developerAccessLevel {
+				foundDeveloperAccess = true
+				break
+			}
+		}
+		requireTruef(t, foundDeveloperAccess, "expected deploy access level %d after update", developerAccessLevel)
+		t.Logf("Updated group protected environment %s", out.Name)
+	})
+
+	t.Run("ProtectedEnvUnprotect", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_env_unprotect",
+			"params": map[string]any{"group_id": groupIDStr, "environment": envName},
+		})
+		requireNoError(t, err, "protected_env_unprotect")
+		t.Logf("Unprotected group environment %s", envName)
 	})
 }

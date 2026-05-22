@@ -322,6 +322,27 @@ func TestProtect(t *testing.T) {
 	}
 }
 
+// TestProtect_InvalidTierIncludesActionableHint verifies GitLab validation errors
+// guide the model toward the finite set of accepted group environment tiers.
+func TestProtect_InvalidTierIncludesActionableHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
+		testutil.AssertRequestPath(t, r, pathGroupProtEnvs)
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":["Name must be one of environment tiers: production, staging, testing, development, other."]}`)
+	}))
+
+	_, err := Protect(context.Background(), client, ProtectInput{GroupID: "mygroup", Name: "production-123"})
+	if err == nil {
+		t.Fatal("Protect() error = nil, want invalid tier error")
+	}
+	got := err.Error()
+	for _, want := range []string{"valid group protected environment tiers", "production", "staging", "testing", "development", "other"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Protect() error = %q, want substring %q", got, want)
+		}
+	}
+}
+
 // --- Update tests ---
 
 // TestUpdate covers success (with/without rename, access levels, rules),
