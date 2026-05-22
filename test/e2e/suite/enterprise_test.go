@@ -695,16 +695,91 @@ func TestMeta_ProjectAliases(t *testing.T) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	proj := createProjectMeta(ctx, t, sess.meta)
+	aliasName := uniqueName("e2e-project-alias")
+	var aliasCreated bool
+	t.Cleanup(func() {
+		if !aliasCreated {
+			return
+		}
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanCancel()
+		_ = callToolVoidOn(cleanCtx, sess.meta, "gitlab_project_alias", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"name": aliasName},
+		})
+	})
 
 	t.Run("Meta/ProjectAlias/List", func(t *testing.T) {
-		_, err := callToolOn[projectaliases.ListOutput](ctx, sess.meta, "gitlab_project_alias", map[string]any{
+		out, err := callToolOn[projectaliases.ListOutput](ctx, sess.meta, "gitlab_project_alias", map[string]any{
 			"action": "list",
 			"params": map[string]any{},
 		})
 		requirePremiumFeature(t, err, "project aliases")
-		t.Log("Project alias list OK")
+		t.Logf("Project aliases before create: %d", len(out.Aliases))
 	})
+
+	t.Run("Meta/ProjectAlias/Create", func(t *testing.T) {
+		out, err := callToolOn[projectaliases.Output](ctx, sess.meta, "gitlab_project_alias", map[string]any{
+			"action": "create",
+			"params": map[string]any{
+				"name":       aliasName,
+				"project_id": proj.ID,
+			},
+		})
+		requirePremiumFeature(t, err, "project alias create")
+		requireTruef(t, out.Name == aliasName, "project alias name = %q, want %q", out.Name, aliasName)
+		requireTruef(t, out.ProjectID == proj.ID, "project alias project_id = %d, want %d", out.ProjectID, proj.ID)
+		aliasCreated = true
+	})
+
+	t.Run("Meta/ProjectAlias/Get", func(t *testing.T) {
+		out, err := callToolOn[projectaliases.Output](ctx, sess.meta, "gitlab_project_alias", map[string]any{
+			"action": "get",
+			"params": map[string]any{"name": aliasName},
+		})
+		requireNoError(t, err, "project alias get")
+		requireTruef(t, out.Name == aliasName, "project alias name = %q, want %q", out.Name, aliasName)
+		requireTruef(t, out.ProjectID == proj.ID, "project alias project_id = %d, want %d", out.ProjectID, proj.ID)
+	})
+
+	t.Run("Meta/ProjectAlias/ListIncludesCreated", func(t *testing.T) {
+		out, err := callToolOn[projectaliases.ListOutput](ctx, sess.meta, "gitlab_project_alias", map[string]any{
+			"action": "list",
+			"params": map[string]any{},
+		})
+		requireNoError(t, err, "project alias list after create")
+		requireTruef(t, projectAliasListed(out.Aliases, aliasName, proj.ID), "created project alias %q not present in list", aliasName)
+	})
+
+	t.Run("Meta/ProjectAlias/Delete", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_project_alias", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"name": aliasName},
+		})
+		requireNoError(t, err, "project alias delete")
+		aliasCreated = false
+	})
+
+	t.Run("Meta/ProjectAlias/GetDeleted", func(t *testing.T) {
+		_, err := callToolOn[projectaliases.Output](ctx, sess.meta, "gitlab_project_alias", map[string]any{
+			"action": "get",
+			"params": map[string]any{"name": aliasName},
+		})
+		requireErrorContainsAll(t, err, "alias", "gitlab_list_project_aliases")
+	})
+}
+
+func projectAliasListed(aliases []projectaliases.Output, name string, projectID int64) bool {
+	for _, alias := range aliases {
+		if alias.Name == name && alias.ProjectID == projectID {
+			return true
+		}
+	}
+	return false
 }
 
 // TestMeta_Geo exercises Geo site tools via the gitlab_geo meta-tool.
