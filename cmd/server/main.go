@@ -785,23 +785,35 @@ func registerConfiguredCapabilities(server *mcp.Server, client *gitlabclient.Cli
 }
 
 func registerConfiguredToolSurface(server *mcp.Server, client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater, toolSurface string) (serverSurfaceRegistration, error) {
+	return registerConfiguredToolSurfaceWithCatalog(server, client, cfg, updater, toolSurface, nil)
+}
+
+func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater, toolSurface string, prebuiltCatalog *actioncatalog.Catalog) (serverSurfaceRegistration, error) {
 	switch toolSurface {
 	case config.ToolSurfaceDynamic:
-		actionCatalog, catalogErr := buildDynamicActionCatalog(client, cfg, updater)
-		if catalogErr != nil {
-			return serverSurfaceRegistration{}, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
+		actionCatalog := prebuiltCatalog
+		if actionCatalog == nil {
+			var catalogErr error
+			actionCatalog, catalogErr = buildDynamicActionCatalog(client, cfg, updater)
+			if catalogErr != nil {
+				return serverSurfaceRegistration{}, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
+			}
 		}
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
 		return serverSurfaceRegistration{metaSchemaRoutes: actionCatalog.ActionMaps(), surfaceCatalog: actionCatalog}, nil
 	case config.ToolSurfaceMeta:
-		actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Enterprise: cfg.Enterprise, IncludeMCP: true, Updater: updater})
-		if catalogErr != nil {
-			slog.Warn("failed to build meta action catalog", "error", catalogErr)
-			actionCatalog = actioncatalog.NewCatalog()
-		}
-		filteredCatalog, filterErr := filterActionCatalog(actionCatalog, cfg)
-		if filterErr != nil {
-			return serverSurfaceRegistration{}, fmt.Errorf("filter meta action catalog: %w", filterErr)
+		filteredCatalog := prebuiltCatalog
+		if filteredCatalog == nil {
+			actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Enterprise: cfg.Enterprise, IncludeMCP: true, Updater: updater})
+			if catalogErr != nil {
+				slog.Warn("failed to build meta action catalog", "error", catalogErr)
+				actionCatalog = actioncatalog.NewCatalog()
+			}
+			var filterErr error
+			filteredCatalog, filterErr = filterActionCatalog(actionCatalog, cfg)
+			if filterErr != nil {
+				return serverSurfaceRegistration{}, fmt.Errorf("filter meta action catalog: %w", filterErr)
+			}
 		}
 		gitlabtools.RegisterMetaCatalog(server, filteredCatalog)
 		gitlabtools.RegisterMetaStandaloneTools(server, client)

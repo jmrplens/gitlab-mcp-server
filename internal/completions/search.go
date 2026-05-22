@@ -256,6 +256,12 @@ func searchLabels(ctx context.Context, client *gitlabclient.Client, projectID, q
 // searchMilestones returns milestone entries for a project plus the total
 // match count from the GitLab pagination header.
 func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
+	return searchMilestonesWithFormatter(ctx, client, projectID, query, "search milestones", func(m *gl.Milestone) string {
+		return formatMilestoneEntry(m.ID, m.Title)
+	})
+}
+
+func searchMilestonesWithFormatter(ctx context.Context, client *gitlabclient.Client, projectID, query, operation string, format func(*gl.Milestone) string) (values []string, total int, err error) {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return nil, 0, ctxErr
 	}
@@ -268,11 +274,11 @@ func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectI
 	}
 	milestones, resp, err := client.GL().Milestones.ListMilestones(projectID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return nil, 0, fmt.Errorf("search milestones: %w", err)
+		return nil, 0, fmt.Errorf("%s: %w", operation, err)
 	}
 	values = make([]string, 0, len(milestones))
 	for _, m := range milestones {
-		values = append(values, formatMilestoneEntry(m.ID, m.Title))
+		values = append(values, format(m))
 	}
 	return values, totalFromResponse(resp), nil
 }
@@ -281,25 +287,9 @@ func searchMilestones(ctx context.Context, client *gitlabclient.Client, projectI
 // Unlike [searchMilestones], it returns plain titles (not "id: title") for use as
 // completion values for prompt arguments that accept a milestone title.
 func searchMilestoneTitles(ctx context.Context, client *gitlabclient.Client, projectID, query string) (values []string, total int, err error) {
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return nil, 0, ctxErr
-	}
-	opts := &gl.ListMilestonesOptions{
-		State: new("active"),
-	}
-	opts.PerPage = searchPerPage
-	if query != "" {
-		opts.Search = new(query)
-	}
-	milestones, resp, err := client.GL().Milestones.ListMilestones(projectID, opts, gl.WithContext(ctx))
-	if err != nil {
-		return nil, 0, fmt.Errorf("search milestone titles: %w", err)
-	}
-	values = make([]string, 0, len(milestones))
-	for _, m := range milestones {
-		values = append(values, m.Title)
-	}
-	return values, totalFromResponse(resp), nil
+	return searchMilestonesWithFormatter(ctx, client, projectID, query, "search milestone titles", func(m *gl.Milestone) string {
+		return m.Title
+	})
 }
 
 // searchGroupMilestoneTitles returns active group milestone titles, filtered by query.

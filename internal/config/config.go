@@ -67,6 +67,8 @@ const (
 // did not set RATE_LIMIT_BURST explicitly.
 const (
 	DefaultRateLimitBurst = 40
+	MaxRateLimitRPS       = 1000
+	MaxRateLimitBurst     = 10000
 )
 
 // Meta-tool param schema modes.
@@ -505,8 +507,14 @@ func (c *Config) validateDurationsAndRates() error {
 	if c.RateLimitRPS < 0 {
 		return fmt.Errorf("RATE_LIMIT_RPS must be >= 0 (got %g)", c.RateLimitRPS)
 	}
+	if c.RateLimitRPS > MaxRateLimitRPS {
+		return fmt.Errorf("RATE_LIMIT_RPS exceeds maximum of %g (got %g)", float64(MaxRateLimitRPS), c.RateLimitRPS)
+	}
 	if c.RateLimitRPS > 0 && c.RateLimitBurst < 1 {
 		return fmt.Errorf("RATE_LIMIT_BURST must be >= 1 when RATE_LIMIT_RPS > 0 (got %d)", c.RateLimitBurst)
+	}
+	if c.RateLimitBurst > MaxRateLimitBurst {
+		return fmt.Errorf("RATE_LIMIT_BURST exceeds maximum of %d (got %d)", MaxRateLimitBurst, c.RateLimitBurst)
 	}
 	return nil
 }

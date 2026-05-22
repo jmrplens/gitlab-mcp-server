@@ -83,15 +83,28 @@ type scopedSearchFunc[T any] func(any, string, *gl.SearchOptions, ...gl.RequestO
 
 type globalSearchFunc[T any] func(string, *gl.SearchOptions, ...gl.RequestOptionFunc) ([]T, *gl.Response, error)
 
-func runScopedSearch[T any](ctx context.Context, query string, projectID, groupID toolutil.StringOrInt, page, perPage int, searchType, op string, projectSearch, groupSearch scopedSearchFunc[T], globalSearch globalSearchFunc[T]) ([]T, *gl.Response, error) {
+type scopedSearchArgs[T any] struct {
+	query         string
+	projectID     toolutil.StringOrInt
+	groupID       toolutil.StringOrInt
+	page          int
+	perPage       int
+	searchType    string
+	operation     string
+	projectSearch scopedSearchFunc[T]
+	groupSearch   scopedSearchFunc[T]
+	globalSearch  globalSearchFunc[T]
+}
+
+func runScopedSearch[T any](ctx context.Context, args scopedSearchArgs[T]) ([]T, *gl.Response, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
-	if query == "" {
-		return nil, nil, fmt.Errorf("%s: query is required", op)
+	if args.query == "" {
+		return nil, nil, fmt.Errorf("%s: query is required", args.operation)
 	}
 
-	opts, err := searchOpts(page, perPage, "", searchType)
+	opts, err := searchOpts(args.page, args.perPage, "", args.searchType)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -101,15 +114,15 @@ func runScopedSearch[T any](ctx context.Context, query string, projectID, groupI
 		resp  *gl.Response
 	)
 	switch {
-	case projectID != "":
-		items, resp, err = projectSearch(string(projectID), query, opts, gl.WithContext(ctx))
-	case groupID != "":
-		items, resp, err = groupSearch(string(groupID), query, opts, gl.WithContext(ctx))
+	case args.projectID != "":
+		items, resp, err = args.projectSearch(string(args.projectID), args.query, opts, gl.WithContext(ctx))
+	case args.groupID != "":
+		items, resp, err = args.groupSearch(string(args.groupID), args.query, opts, gl.WithContext(ctx))
 	default:
-		items, resp, err = globalSearch(query, opts, gl.WithContext(ctx))
+		items, resp, err = args.globalSearch(args.query, opts, gl.WithContext(ctx))
 	}
 	if err != nil {
-		return nil, nil, wrapSearchErr(op, err)
+		return nil, nil, wrapSearchErr(args.operation, err)
 	}
 	return items, resp, nil
 }
@@ -237,8 +250,11 @@ type MergeRequestsOutput struct {
 // Scope priority: project_id > group_id > global.
 func MergeRequests(ctx context.Context, client *gitlabclient.Client, input MergeRequestsInput) (MergeRequestsOutput, error) {
 	searchClient := client.GL().Search
-	mrs, resp, err := runScopedSearch(ctx, input.Query, input.ProjectID, input.GroupID, input.Page, input.PerPage, input.SearchType,
-		"searchMergeRequests", searchClient.MergeRequestsByProject, searchClient.MergeRequestsByGroup, searchClient.MergeRequests)
+	mrs, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.MergeRequest]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchMergeRequests", projectSearch: searchClient.MergeRequestsByProject,
+		groupSearch: searchClient.MergeRequestsByGroup, globalSearch: searchClient.MergeRequests,
+	})
 	if err != nil {
 		return MergeRequestsOutput{}, err
 	}
@@ -271,8 +287,11 @@ type IssuesOutput struct {
 // Scope priority: project_id > group_id > global.
 func Issues(ctx context.Context, client *gitlabclient.Client, input IssuesInput) (IssuesOutput, error) {
 	searchClient := client.GL().Search
-	foundIssues, resp, err := runScopedSearch(ctx, input.Query, input.ProjectID, input.GroupID, input.Page, input.PerPage, input.SearchType,
-		"searchIssues", searchClient.IssuesByProject, searchClient.IssuesByGroup, searchClient.Issues)
+	foundIssues, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Issue]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchIssues", projectSearch: searchClient.IssuesByProject,
+		groupSearch: searchClient.IssuesByGroup, globalSearch: searchClient.Issues,
+	})
 	if err != nil {
 		return IssuesOutput{}, err
 	}
@@ -305,8 +324,11 @@ type CommitsOutput struct {
 // Scope priority: project_id > group_id > global.
 func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInput) (CommitsOutput, error) {
 	searchClient := client.GL().Search
-	commitResults, resp, err := runScopedSearch(ctx, input.Query, input.ProjectID, input.GroupID, input.Page, input.PerPage, input.SearchType,
-		"searchCommits", searchClient.CommitsByProject, searchClient.CommitsByGroup, searchClient.Commits)
+	commitResults, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Commit]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchCommits", projectSearch: searchClient.CommitsByProject,
+		groupSearch: searchClient.CommitsByGroup, globalSearch: searchClient.Commits,
+	})
 	if err != nil {
 		return CommitsOutput{}, err
 	}
@@ -339,8 +361,11 @@ type MilestonesOutput struct {
 // Scope priority: project_id > group_id > global.
 func Milestones(ctx context.Context, client *gitlabclient.Client, input MilestonesInput) (MilestonesOutput, error) {
 	searchClient := client.GL().Search
-	msList, resp, err := runScopedSearch(ctx, input.Query, input.ProjectID, input.GroupID, input.Page, input.PerPage, input.SearchType,
-		"searchMilestones", searchClient.MilestonesByProject, searchClient.MilestonesByGroup, searchClient.Milestones)
+	msList, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Milestone]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchMilestones", projectSearch: searchClient.MilestonesByProject,
+		groupSearch: searchClient.MilestonesByGroup, globalSearch: searchClient.Milestones,
+	})
 	if err != nil {
 		return MilestonesOutput{}, err
 	}

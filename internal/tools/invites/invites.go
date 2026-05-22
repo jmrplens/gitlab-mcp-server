@@ -77,24 +77,35 @@ type InviteResultOutput struct {
 
 // Handlers.
 
-func listPendingInvitations(ctx context.Context, scopeID toolutil.StringOrInt, operation, requiredField, notFoundHint string, page, perPage int64, query string, list func(any, *gl.ListPendingInvitationsOptions, ...gl.RequestOptionFunc) ([]*gl.PendingInvite, *gl.Response, error)) (ListPendingInvitationsOutput, error) {
-	if scopeID == "" {
-		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithMessage(operation, toolutil.ErrFieldRequired(requiredField))
+type pendingInvitationsListArgs struct {
+	scopeID       toolutil.StringOrInt
+	operation     string
+	requiredField string
+	notFoundHint  string
+	page          int64
+	perPage       int64
+	query         string
+	list          func(any, *gl.ListPendingInvitationsOptions, ...gl.RequestOptionFunc) ([]*gl.PendingInvite, *gl.Response, error)
+}
+
+func listPendingInvitations(ctx context.Context, args pendingInvitationsListArgs) (ListPendingInvitationsOutput, error) {
+	if args.scopeID == "" {
+		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithMessage(args.operation, toolutil.ErrFieldRequired(args.requiredField))
 	}
 
 	opts := &gl.ListPendingInvitationsOptions{
 		ListOptions: gl.ListOptions{
-			Page:    page,
-			PerPage: perPage,
+			Page:    args.page,
+			PerPage: args.perPage,
 		},
 	}
-	if query != "" {
-		opts.Query = new(query)
+	if args.query != "" {
+		opts.Query = new(args.query)
 	}
 
-	invites, resp, err := list(string(scopeID), opts, gl.WithContext(ctx))
+	invites, resp, err := args.list(string(args.scopeID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
+		return ListPendingInvitationsOutput{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.notFoundHint)
 	}
 
 	out := ListPendingInvitationsOutput{
@@ -109,16 +120,30 @@ func listPendingInvitations(ctx context.Context, scopeID toolutil.StringOrInt, o
 
 // ListPendingProjectInvitations returns pending invitations for a project.
 func ListPendingProjectInvitations(ctx context.Context, client *gitlabclient.Client, input ListPendingProjectInvitationsInput) (ListPendingInvitationsOutput, error) {
-	return listPendingInvitations(ctx, input.ProjectID, "project_invite_list_pending", "project_id",
-		"verify project_id; listing pending invitations requires Maintainer or Owner role",
-		input.Page, input.PerPage, input.Query, client.GL().Invites.ListPendingProjectInvitations)
+	return listPendingInvitations(ctx, pendingInvitationsListArgs{
+		scopeID:       input.ProjectID,
+		operation:     "project_invite_list_pending",
+		requiredField: "project_id",
+		notFoundHint:  "verify project_id; listing pending invitations requires Maintainer or Owner role",
+		page:          input.Page,
+		perPage:       input.PerPage,
+		query:         input.Query,
+		list:          client.GL().Invites.ListPendingProjectInvitations,
+	})
 }
 
 // ListPendingGroupInvitations returns pending invitations for a group.
 func ListPendingGroupInvitations(ctx context.Context, client *gitlabclient.Client, input ListPendingGroupInvitationsInput) (ListPendingInvitationsOutput, error) {
-	return listPendingInvitations(ctx, input.GroupID, "group_invite_list_pending", "group_id",
-		"verify group_id; listing pending invitations requires Owner role",
-		input.Page, input.PerPage, input.Query, client.GL().Invites.ListPendingGroupInvitations)
+	return listPendingInvitations(ctx, pendingInvitationsListArgs{
+		scopeID:       input.GroupID,
+		operation:     "group_invite_list_pending",
+		requiredField: "group_id",
+		notFoundHint:  "verify group_id; listing pending invitations requires Owner role",
+		page:          input.Page,
+		perPage:       input.PerPage,
+		query:         input.Query,
+		list:          client.GL().Invites.ListPendingGroupInvitations,
+	})
 }
 
 func buildInviteOptions(input inviteRequest) *gl.InvitesOptions {

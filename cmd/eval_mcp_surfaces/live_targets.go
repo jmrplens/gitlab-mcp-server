@@ -231,18 +231,9 @@ func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := exampleProjectIDValue(task.Prompt)
-	if !ok {
-		return task, fmt.Errorf("prepare MT-013 fixture: project path not found in prompt %q", task.Prompt)
-	}
-	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
-	issue, _, err := client.GL().Issues.CreateIssue(projectID, &gl.CreateIssueOptions{
-		Title:       new("Evaluation issue safe to delete " + liveUniqueSuffix()),
-		Description: new("Temporary issue for destructive evaluator coverage."),
-	}, gl.WithContext(setupCtx))
+	_, issue, err := createLiveEvaluationIssue(ctx, client, task, "MT-013", "Evaluation issue safe to delete "+liveUniqueSuffix(), "Temporary issue for destructive evaluator coverage.")
 	if err != nil {
-		return task, fmt.Errorf("prepare MT-013 fixture issue: %w", err)
+		return task, err
 	}
 	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerIssue, issue.IID)
 	if err != nil {
@@ -250,6 +241,23 @@ func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	}
 	task.Prompt = prompt
 	return task, nil
+}
+
+func createLiveEvaluationIssue(ctx context.Context, client *gitlabclient.Client, task evalTask, taskID, title, description string) (string, *gl.Issue, error) {
+	projectID, ok := exampleProjectIDValue(task.Prompt)
+	if !ok {
+		return "", nil, fmt.Errorf("prepare %s fixture: project path not found in prompt %q", taskID, task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	issue, _, err := client.GL().Issues.CreateIssue(projectID, &gl.CreateIssueOptions{
+		Title:       &title,
+		Description: &description,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return "", nil, fmt.Errorf("prepare %s fixture issue: %w", taskID, err)
+	}
+	return projectID, issue, nil
 }
 
 // ensureLiveMergeRequestMergeTarget creates a mergeable MR in a disposable project and rewrites MT-017 to use it.
@@ -1397,18 +1405,11 @@ func ensureLivePipelineDeleteTarget(ctx context.Context, client *gitlabclient.Cl
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
-	if !ok {
-		return task, fmt.Errorf("prepare MT-101 fixture: project path not found in prompt %q", task.Prompt)
-	}
-	setupCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
-	defer cancel()
-	ref := liveFixtureDefaultRef
-	pipeline, _, err := client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: &ref}, gl.WithContext(setupCtx))
+	_, pipelineID, err := createLiveEvaluationPipeline(ctx, client, task, "MT-101")
 	if err != nil {
-		return task, fmt.Errorf("prepare MT-101 fixture pipeline: %w", err)
+		return task, err
 	}
-	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "pipeline ", pipeline.ID)
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "pipeline ", pipelineID)
 	if err != nil {
 		return task, err
 	}
@@ -1563,19 +1564,12 @@ func ensureLiveIssueAwardDeleteTarget(ctx context.Context, client *gitlabclient.
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
-	if !ok {
-		return task, fmt.Errorf("prepare MT-110 fixture: project path not found in prompt %q", task.Prompt)
+	projectID, issue, err := createLiveEvaluationIssue(ctx, client, task, "MT-110", "Evaluation issue award delete target "+liveUniqueSuffix(), "Temporary issue for destructive award emoji evaluator coverage.")
+	if err != nil {
+		return task, err
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	issue, _, err := client.GL().Issues.CreateIssue(projectID, &gl.CreateIssueOptions{
-		Title:       new("Evaluation issue award delete target " + liveUniqueSuffix()),
-		Description: new("Temporary issue for destructive award emoji evaluator coverage."),
-	}, gl.WithContext(setupCtx))
-	if err != nil {
-		return task, fmt.Errorf("prepare MT-110 fixture issue: %w", err)
-	}
 	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerIssue, issue.IID)
 	if err != nil {
 		return task, err
@@ -1788,18 +1782,13 @@ func ensureLiveManualJob(ctx context.Context, client *gitlabclient.Client, task 
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
-	if !ok {
-		return task, fmt.Errorf("prepare MT-064 fixture: project path not found in prompt %q", task.Prompt)
+	projectID, pipelineID, err := createLiveEvaluationPipeline(ctx, client, task, "MT-064")
+	if err != nil {
+		return task, err
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
 	defer cancel()
-	ref := liveFixtureDefaultRef
-	pipeline, _, err := client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: &ref}, gl.WithContext(setupCtx))
-	if err != nil {
-		return task, fmt.Errorf("prepare MT-064 fixture pipeline: %w", err)
-	}
-	manualJobID, err := waitForManualJob(setupCtx, client, projectID, pipeline.ID)
+	manualJobID, err := waitForManualJob(setupCtx, client, projectID, pipelineID)
 	if err != nil {
 		return task, err
 	}
@@ -1809,6 +1798,21 @@ func ensureLiveManualJob(ctx context.Context, client *gitlabclient.Client, task 
 	}
 	task.Prompt = prompt
 	return task, nil
+}
+
+func createLiveEvaluationPipeline(ctx context.Context, client *gitlabclient.Client, task evalTask, taskID string) (projectID string, pipelineID int64, err error) {
+	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
+	if !ok {
+		return "", 0, fmt.Errorf("prepare %s fixture: project path not found in prompt %q", taskID, task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
+	defer cancel()
+	ref := liveFixtureDefaultRef
+	pipeline, _, err := client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: &ref}, gl.WithContext(setupCtx))
+	if err != nil {
+		return "", 0, fmt.Errorf("prepare %s fixture pipeline: %w", taskID, err)
+	}
+	return projectID, pipeline.ID, nil
 }
 
 // waitForManualJob handles wait for manual job and returns [int64].

@@ -111,11 +111,23 @@ func (state *paramNormalization) record(alias, target, reason string) {
 }
 
 func (state *paramNormalization) moveParam(alias, target, reason string) {
+	state.moveParamWithOptions(alias, target, reason, false)
+}
+
+func (state *paramNormalization) moveAcceptedAliasParam(alias, target, reason string) {
+	state.moveParamWithOptions(alias, target, reason, true)
+}
+
+func (state *paramNormalization) moveParamWithOptions(alias, target, reason string, allowAcceptedAlias bool) {
 	value, ok := state.out[alias]
-	if !ok || !state.accepts(target) || state.accepts(alias) {
+	if !ok || !state.accepts(target) || (!allowAcceptedAlias && state.accepts(alias)) {
 		return
 	}
 	if _, hasTarget := state.out[target]; hasTarget {
+		if allowAcceptedAlias && alias != target {
+			delete(state.clone(), alias)
+			state.record(alias, target, reason)
+		}
 		return
 	}
 	updated := state.clone()
@@ -253,16 +265,7 @@ func normalizeMergeRequestEmojiCreateParams(state *paramNormalization) {
 }
 
 func normalizePipelineScheduleParams(state *paramNormalization) {
-	value, ok := state.out["name"]
-	if !ok || !state.accepts("description") || state.accepts("name") {
-		return
-	}
-	updated := state.clone()
-	if _, hasDescription := state.out["description"]; !hasDescription {
-		updated["description"] = value
-	}
-	delete(updated, "name")
-	state.record("name", "description", reasonPipelineScheduleDescription)
+	state.moveAcceptedAliasParam("name", "description", reasonPipelineScheduleDescription)
 }
 
 func normalizeBranchProtectParams(state *paramNormalization) {

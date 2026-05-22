@@ -77,7 +77,9 @@ const (
 	// taskMergeRequestAwardID identifies the task merge request award ID constant used by this package.
 	taskMergeRequestAwardID = "MS-033"
 	// taskPackageReleaseID identifies the package publish plus release workflow task.
-	taskPackageReleaseID = "MS-038"
+	taskPackageReleaseID  = "MS-038"
+	resourceLabelRunnerID = "runner ID"
+	resourceLabelUserID   = "user ID"
 )
 
 var packageReleaseFixtureFiles = []struct {
@@ -1694,9 +1696,9 @@ var resourceIDReplacements = map[string]resourceIDReplacement{
 	"MT-042": {label: "project access token ID", oldID: 77, value: func(state *liveFixtureState) int64 { return state.ProjectTokenID }},
 	"MT-044": {label: "package ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.PackageID }},
 	"MS-007": {label: "package ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.PackageID }},
-	"MT-046": {label: "runner ID", oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
-	"MT-047": {label: "runner ID", oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
-	"MS-008": {label: "runner ID", oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
+	"MT-046": {label: resourceLabelRunnerID, oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
+	"MT-047": {label: resourceLabelRunnerID, oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
+	"MS-008": {label: resourceLabelRunnerID, oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
 	"MT-049": {label: "environment ID", oldID: 7, value: func(state *liveFixtureState) int64 { return state.EnvironmentID }},
 	"MT-050": {label: "personal snippet ID", oldID: 33, value: func(state *liveFixtureState) int64 { return state.SnippetID }},
 	"MT-051": {label: "personal snippet ID", oldID: 33, value: func(state *liveFixtureState) int64 { return state.SnippetID }},
@@ -1704,9 +1706,9 @@ var resourceIDReplacements = map[string]resourceIDReplacement{
 	"MT-057": {label: "webhook ID", oldID: 5, value: func(state *liveFixtureState) int64 { return state.HookDeleteID }},
 	"MT-059": {label: "badge ID", oldID: 8, value: func(state *liveFixtureState) int64 { return state.BadgeDeleteID }},
 	"MT-102": {label: "pipeline trigger token ID", oldID: 77, value: func(state *liveFixtureState) int64 { return state.PipelineTriggerID }},
-	"MT-104": {label: "user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
-	"MT-105": {label: "user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
-	"MS-034": {label: "user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
+	"MT-104": {label: resourceLabelUserID, oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
+	"MT-105": {label: resourceLabelUserID, oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
+	"MS-034": {label: resourceLabelUserID, oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
 	"MT-111": {label: "deploy key ID", oldID: 88, value: func(state *liveFixtureState) int64 { return state.DeployKeyID }},
 	"MT-112": {label: "project deploy token ID", oldID: 66, value: func(state *liveFixtureState) int64 { return state.DeployTokenID }},
 }

@@ -93,7 +93,13 @@ func run() (runErr error) {
 		return err
 	}
 	defer runtime.close()
-	results, err := runModelEvaluations(context.Background(), runtime.opts, tasks, modelSpecs, runtime.catalog, routes, runtime)
+	results, err := runModelEvaluations(context.Background(), modelEvaluationRun{
+		opts:    runtime.opts,
+		tasks:   tasks,
+		catalog: runtime.catalog,
+		routes:  routes,
+		runtime: runtime,
+	}, modelSpecs)
 	if err != nil {
 		return err
 	}
@@ -126,7 +132,7 @@ func prepareRunFailureReport(opts options, currentRunErr func() error, setRunErr
 
 func prepareRunOptions() (options, func() error, error) {
 	opts := parseFlags()
-	closeTerminalOutput := func() error { return nil }
+	closeTerminalOutput := noopCloseTerminalOutput
 	if shouldConfigureTerminalOutput(opts) {
 		var terminalErr error
 		opts, closeTerminalOutput, terminalErr = configureTerminalOutput(opts)
@@ -153,6 +159,10 @@ func prepareRunOptions() (options, func() error, error) {
 		}
 	}
 	return opts, closeTerminalOutput, nil
+}
+
+func noopCloseTerminalOutput() error {
+	return nil
 }
 
 func runImmediateMode(opts options) (bool, error) {
@@ -354,7 +364,7 @@ type evaluationRuntime struct {
 }
 
 func newEvaluationRuntime(opts options, catalog []modelTool) (evaluationRuntime, error) {
-	runtime := evaluationRuntime{opts: opts, catalog: catalog, close: func() {}}
+	runtime := evaluationRuntime{opts: opts, catalog: catalog, close: noopCloseRuntime}
 	var closers []func()
 	var mcpSession *mcp.ClientSession
 	if opts.Execute {
@@ -389,6 +399,10 @@ func newEvaluationRuntime(opts options, catalog []modelTool) (evaluationRuntime,
 	return runtime, nil
 }
 
+func noopCloseRuntime() {
+	// No runtime sessions were opened, so there is nothing to close.
+}
+
 func closeRuntimeSessions(closers []func()) func() {
 	return func() {
 		for _, closeSession := range closers {
@@ -397,11 +411,20 @@ func closeRuntimeSessions(closers []func()) func() {
 	}
 }
 
-func runModelEvaluations(ctx context.Context, opts options, tasks []evalTask, modelSpecs []modelSpec, catalog []modelTool, routes map[string]toolutil.ActionMap, runtime evaluationRuntime) ([]taskResult, error) {
-	results := make([]taskResult, 0, len(tasks)*opts.Repeat*len(modelSpecs))
-	liveAttemptRunSuffix := liveUniqueSuffix()
+type modelEvaluationRun struct {
+	opts                 options
+	tasks                []evalTask
+	catalog              []modelTool
+	routes               map[string]toolutil.ActionMap
+	runtime              evaluationRuntime
+	liveAttemptRunSuffix string
+}
+
+func runModelEvaluations(ctx context.Context, run modelEvaluationRun, modelSpecs []modelSpec) ([]taskResult, error) {
+	results := make([]taskResult, 0, len(run.tasks)*run.opts.Repeat*len(modelSpecs))
+	run.liveAttemptRunSuffix = liveUniqueSuffix()
 	for _, spec := range modelSpecs {
-		specResults, err := runModelSpecEvaluations(ctx, opts, spec, tasks, catalog, routes, runtime, liveAttemptRunSuffix)
+		specResults, err := runModelSpecEvaluations(ctx, run, spec)
 		if err != nil {
 			return nil, err
 		}
@@ -410,14 +433,14 @@ func runModelEvaluations(ctx context.Context, opts options, tasks []evalTask, mo
 	return results, nil
 }
 
-func runModelSpecEvaluations(ctx context.Context, opts options, spec modelSpec, tasks []evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap, runtime evaluationRuntime, liveAttemptRunSuffix string) ([]taskResult, error) {
-	runner, err := newModelRunner(opts, spec, runtime)
+func runModelSpecEvaluations(ctx context.Context, run modelEvaluationRun, spec modelSpec) ([]taskResult, error) {
+	runner, err := newModelRunner(run.opts, spec, run.runtime)
 	if err != nil {
 		return nil, err
 	}
-	results := make([]taskResult, 0, len(tasks)*opts.Repeat)
-	for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
-		runResults, runErr := runModelEvaluationRound(ctx, opts, spec, runIndex, tasks, catalog, routes, runtime, runner, liveAttemptRunSuffix)
+	results := make([]taskResult, 0, len(run.tasks)*run.opts.Repeat)
+	for runIndex := 1; runIndex <= run.opts.Repeat; runIndex++ {
+		runResults, runErr := runModelEvaluationRound(ctx, run, spec, runIndex, runner)
 		if runErr != nil {
 			return nil, runErr
 		}
@@ -447,15 +470,15 @@ func newModelRunner(opts options, spec modelSpec, runtime evaluationRuntime) (*m
 	}, nil
 }
 
-func runModelEvaluationRound(ctx context.Context, opts options, spec modelSpec, runIndex int, tasks []evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap, runtime evaluationRuntime, runner *modelRunner, liveAttemptRunSuffix string) ([]taskResult, error) {
-	if opts.Execute && opts.UseFixtures {
-		if err := ensureLiveProjectActive(ctx, runtime.executionClient); err != nil {
+func runModelEvaluationRound(ctx context.Context, run modelEvaluationRun, spec modelSpec, runIndex int, runner *modelRunner) ([]taskResult, error) {
+	if run.opts.Execute && run.opts.UseFixtures {
+		if err := ensureLiveProjectActive(ctx, run.runtime.executionClient); err != nil {
 			return nil, err
 		}
 	}
-	results := make([]taskResult, 0, len(tasks))
-	for _, task := range tasks {
-		result, err := evaluateModelTaskAttempt(ctx, opts, spec, runIndex, task, catalog, routes, runtime, runner, liveAttemptRunSuffix)
+	results := make([]taskResult, 0, len(run.tasks))
+	for _, task := range run.tasks {
+		result, err := evaluateModelTaskAttempt(ctx, run, spec, runIndex, task, runner)
 		if err != nil {
 			return nil, err
 		}
@@ -464,20 +487,20 @@ func runModelEvaluationRound(ctx context.Context, opts options, spec modelSpec, 
 	return results, nil
 }
 
-func evaluateModelTaskAttempt(ctx context.Context, opts options, spec modelSpec, runIndex int, task evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap, runtime evaluationRuntime, runner *modelRunner, liveAttemptRunSuffix string) (taskResult, error) {
-	taskForAttempt, err := prepareTaskAttempt(ctx, opts, spec, runIndex, task, runtime, liveAttemptRunSuffix)
+func evaluateModelTaskAttempt(ctx context.Context, run modelEvaluationRun, spec modelSpec, runIndex int, task evalTask, runner *modelRunner) (taskResult, error) {
+	taskForAttempt, err := prepareTaskAttempt(ctx, run.opts, spec, runIndex, task, run.runtime, run.liveAttemptRunSuffix)
 	if err != nil {
 		return taskResult{}, err
 	}
-	result := runner.evaluateTask(ctx, taskForAttempt, catalog, routes)
+	result := runner.evaluateTask(ctx, taskForAttempt, run.catalog, run.routes)
 	result.Run = runIndex
 	result.Model = spec.String()
 	result.Trace.Run = runIndex
 	result.Trace.Model = spec.String()
 	result.Trace.Summary = traceSummaryFromResult(result)
 	terminalPrintf("model=%s run=%d %s: final=%t first=%s/%s final_call=%s/%s calls=%d tools=%d\n", spec.String(), runIndex, taskForAttempt.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction, result.ModelCalls, result.ToolCalls)
-	if opts.Pause > 0 {
-		time.Sleep(opts.Pause)
+	if run.opts.Pause > 0 {
+		time.Sleep(run.opts.Pause)
 	}
 	return result, nil
 }

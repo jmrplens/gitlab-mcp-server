@@ -443,68 +443,53 @@ func generateTestHelperDoc(d *ast.FuncDecl, pkgName string) string {
 	return fmt.Sprintf("%s supports %s assertions in %s tests.", name, phrase, pkgName)
 }
 
+type prefixDocRule struct {
+	prefixes []string
+	template string
+	subject  func(name, prefix, phrase string) string
+}
+
+var testHelperPrefixRules = []prefixDocRule{
+	{[]string{"assert"}, "%s checks %s invariants for tests.", trimmedPrefixSubject},
+	{[]string{"require"}, "%s returns %s test data or fails the test.", trimmedPrefixSubject},
+	{[]string{"mustBuild"}, "%s builds %s test fixtures and fails the test on error.", trimmedPrefixSubject},
+	{[]string{"must"}, "%s prepares %s test fixtures and fails the test on error.", trimmedPrefixSubject},
+	{[]string{"write"}, "%s writes %s fixture data for tests.", trimmedPrefixSubject},
+	{[]string{"find"}, "%s locates %s fixture data for assertions.", trimmedPrefixSubject},
+	{[]string{"has", "contains", "is"}, helperReportsWhetherTemplate, phraseSubject},
+	{[]string{"load"}, "%s loads %s fixture data for tests.", trimmedPrefixSubject},
+	{[]string{"new"}, "%s constructs %s test fixtures.", trimmedPrefixSubject},
+	{[]string{"seed"}, "%s seeds %s test fixtures.", trimmedPrefixSubject},
+	{[]string{"schema"}, "%s extracts %s details for schema assertions.", phraseSubject},
+	{[]string{"normalize", "normalized"}, "%s normalizes %s for stable test assertions.", normalizedSubject},
+	{[]string{"compare"}, "%s compares %s snapshots and reports drift.", trimmedPrefixSubject},
+	{[]string{"append"}, "%s appends %s diagnostics to the test diff.", trimmedPrefixSubject},
+	{[]string{"sort"}, "%s sorts %s fixtures into deterministic order.", trimmedPrefixSubject},
+	{[]string{"missing"}, "%s returns missing %s values for assertion messages.", trimmedPrefixSubject},
+	{[]string{"text"}, "%s extracts %s from MCP result content for assertions.", phraseSubject},
+}
+
 func testHelperPrefixDoc(name, phrase string) string {
-	type prefixRule struct {
-		prefixes []string
-		doc      func(prefix string) string
-	}
-	rules := []prefixRule{
-		{[]string{"assert"}, func(prefix string) string {
-			return fmt.Sprintf("%s checks %s invariants for tests.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"require"}, func(prefix string) string {
-			return fmt.Sprintf("%s returns %s test data or fails the test.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"mustBuild"}, func(prefix string) string {
-			return fmt.Sprintf("%s builds %s test fixtures and fails the test on error.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"must"}, func(prefix string) string {
-			return fmt.Sprintf("%s prepares %s test fixtures and fails the test on error.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"write"}, func(prefix string) string {
-			return fmt.Sprintf("%s writes %s fixture data for tests.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"find"}, func(prefix string) string {
-			return fmt.Sprintf("%s locates %s fixture data for assertions.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"has", "contains", "is"}, func(string) string { return fmt.Sprintf(helperReportsWhetherTemplate, name, phrase) }},
-		{[]string{"load"}, func(prefix string) string {
-			return fmt.Sprintf("%s loads %s fixture data for tests.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"new"}, func(prefix string) string {
-			return fmt.Sprintf("%s constructs %s test fixtures.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"seed"}, func(prefix string) string {
-			return fmt.Sprintf("%s seeds %s test fixtures.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"schema"}, func(string) string { return fmt.Sprintf("%s extracts %s details for schema assertions.", name, phrase) }},
-		{[]string{"normalize", "normalized"}, func(string) string {
-			return fmt.Sprintf("%s normalizes %s for stable test assertions.", name, camelToWords(strings.TrimPrefix(strings.TrimPrefix(name, "normalized"), "normalize")))
-		}},
-		{[]string{"compare"}, func(prefix string) string {
-			return fmt.Sprintf("%s compares %s snapshots and reports drift.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"append"}, func(prefix string) string {
-			return fmt.Sprintf("%s appends %s diagnostics to the test diff.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"sort"}, func(prefix string) string {
-			return fmt.Sprintf("%s sorts %s fixtures into deterministic order.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"missing"}, func(prefix string) string {
-			return fmt.Sprintf("%s returns missing %s values for assertion messages.", name, camelToWords(strings.TrimPrefix(name, prefix)))
-		}},
-		{[]string{"text"}, func(string) string {
-			return fmt.Sprintf("%s extracts %s from MCP result content for assertions.", name, phrase)
-		}},
-	}
-	for _, rule := range rules {
+	for _, rule := range testHelperPrefixRules {
 		for _, prefix := range rule.prefixes {
 			if strings.HasPrefix(name, prefix) {
-				return rule.doc(prefix)
+				return fmt.Sprintf(rule.template, name, rule.subject(name, prefix, phrase))
 			}
 		}
 	}
 	return ""
+}
+
+func trimmedPrefixSubject(name, prefix, _ string) string {
+	return camelToWords(strings.TrimPrefix(name, prefix))
+}
+
+func phraseSubject(_, _, phrase string) string {
+	return phrase
+}
+
+func normalizedSubject(name, _, _ string) string {
+	return camelToWords(strings.TrimPrefix(strings.TrimPrefix(name, "normalized"), "normalize"))
 }
 
 // generateMethodDoc generates a doc comment for a method based on its
@@ -534,29 +519,23 @@ func generateMethodDoc(d *ast.FuncDecl) string {
 }
 
 func exactMethodDoc(name, subject string) (string, bool) {
-	switch name {
-	case "String":
-		return fmt.Sprintf("String returns the display label for %s.", subject), true
-	case "Error":
-		return fmt.Sprintf("Error returns the error message for %s.", subject), true
-	case "Read":
-		return fmt.Sprintf("Read streams data from %s into p.", subject), true
-	case "RoundTrip":
-		return fmt.Sprintf("RoundTrip executes an HTTP request through %s.", subject), true
-	case "MarshalJSON":
-		return fmt.Sprintf("MarshalJSON encodes %s into the JSON shape expected by the provider.", subject), true
-	case "UnmarshalJSON":
-		return fmt.Sprintf("UnmarshalJSON decodes %s from the provider JSON shape.", subject), true
-	case "callOnce":
-		return fmt.Sprintf("callOnce sends one model request through %s and reports whether failures are retryable.", subject), true
-	case "prepare":
-		return fmt.Sprintf("prepare creates or updates the live fixture resources tracked by %s.", subject), true
-	case "bestEffort":
-		return fmt.Sprintf("bestEffort runs cleanup work for %s without aborting fixture preparation.", subject), true
-	case "notef":
-		return fmt.Sprintf("notef records a fixture preparation note for %s.", subject), true
+	if template, ok := exactMethodTemplates[name]; ok {
+		return fmt.Sprintf(template, subject), true
 	}
 	return "", false
+}
+
+var exactMethodTemplates = map[string]string{
+	"String":        "String returns the display label for %s.",
+	"Error":         "Error returns the error message for %s.",
+	"Read":          "Read streams data from %s into p.",
+	"RoundTrip":     "RoundTrip executes an HTTP request through %s.",
+	"MarshalJSON":   "MarshalJSON encodes %s into the JSON shape expected by the provider.",
+	"UnmarshalJSON": "UnmarshalJSON decodes %s from the provider JSON shape.",
+	"callOnce":      "callOnce sends one model request through %s and reports whether failures are retryable.",
+	"prepare":       "prepare creates or updates the live fixture resources tracked by %s.",
+	"bestEffort":    "bestEffort runs cleanup work for %s without aborting fixture preparation.",
+	"notef":         "notef records a fixture preparation note for %s.",
 }
 
 func prefixMethodDoc(name, subject string) (string, bool) {
@@ -788,28 +767,31 @@ func generateTypeDoc(ts *ast.TypeSpec, pkgName string) string {
 	}
 	words := camelToWords(name)
 	lower := strings.ToLower(name)
-	switch {
-	case strings.Contains(lower, "openai"):
-		return fmt.Sprintf("%s models the OpenAI-compatible %s payload.", name, words)
-	case strings.Contains(lower, "google"):
-		return fmt.Sprintf("%s models the Google Gemini %s payload.", name, words)
-	case strings.Contains(lower, "anthropic"):
-		return fmt.Sprintf("%s models the Anthropic %s payload.", name, words)
-	case strings.Contains(lower, "provider"):
-		return fmt.Sprintf("%s captures model-provider %s data.", name, words)
-	case strings.Contains(lower, "publish"):
-		return fmt.Sprintf("%s captures %s data for published evaluation reports.", name, words)
-	case strings.Contains(lower, "fixture"):
-		return fmt.Sprintf("%s captures %s data for live evaluation fixtures.", name, words)
-	case strings.Contains(lower, "trace"):
-		return fmt.Sprintf("%s records %s data in evaluation traces.", name, words)
-	case strings.Contains(lower, "task"):
-		return fmt.Sprintf("%s captures %s data for one evaluation task.", name, words)
-	case strings.Contains(lower, "metric") || strings.Contains(lower, "summary") || strings.Contains(lower, "pricing"):
-		return fmt.Sprintf("%s captures %s data for evaluation summaries.", name, words)
-	default:
-		return fmt.Sprintf("%s holds %s data for the %s package.", name, words, pkgName)
+	for _, rule := range typeKeywordDocRules {
+		for _, keyword := range rule.keywords {
+			if strings.Contains(lower, keyword) {
+				return fmt.Sprintf(rule.template, name, words)
+			}
+		}
 	}
+	return fmt.Sprintf("%s holds %s data for the %s package.", name, words, pkgName)
+}
+
+type keywordDocRule struct {
+	keywords []string
+	template string
+}
+
+var typeKeywordDocRules = []keywordDocRule{
+	{[]string{"openai"}, "%s models the OpenAI-compatible %s payload."},
+	{[]string{"google"}, "%s models the Google Gemini %s payload."},
+	{[]string{"anthropic"}, "%s models the Anthropic %s payload."},
+	{[]string{"provider"}, "%s captures model-provider %s data."},
+	{[]string{"publish"}, "%s captures %s data for published evaluation reports."},
+	{[]string{"fixture"}, "%s captures %s data for live evaluation fixtures."},
+	{[]string{"trace"}, "%s records %s data in evaluation traces."},
+	{[]string{"task"}, "%s captures %s data for one evaluation task."},
+	{[]string{"metric", "summary", "pricing"}, "%s captures %s data for evaluation summaries."},
 }
 
 // generateValueDoc generates a doc comment for a package-level const or var.

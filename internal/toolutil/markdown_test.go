@@ -814,22 +814,24 @@ func TestToolResultAnnotated(t *testing.T) {
 	})
 }
 
+type toolResultWithImageTestCase struct {
+	name      string
+	md        string
+	ann       *mcp.Annotations
+	imageData []byte
+	mimeType  string
+	wantText  string
+	wantMIME  string
+	wantAnn   bool
+}
+
 // TestToolResultWithImage_Scenarios_CorrectContent verifies that ToolResultWithImage creates a
 // CallToolResult containing both a TextContent with metadata and an
 // ImageContent with raw image bytes and MIME type. Covers valid inputs,
 // nil annotations, and empty image data to ensure all branches produce
 // the expected two-element Content slice.
 func TestToolResultWithImage_Scenarios_CorrectContent(t *testing.T) {
-	tests := []struct {
-		name      string
-		md        string
-		ann       *mcp.Annotations
-		imageData []byte
-		mimeType  string
-		wantText  string
-		wantMIME  string
-		wantAnn   bool
-	}{
+	tests := []toolResultWithImageTestCase{
 		{
 			name:      "valid image with annotations",
 			md:        "## Avatar\n\n| Field | Value |\n",
@@ -873,22 +875,22 @@ func TestToolResultWithImage_Scenarios_CorrectContent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assertToolResultWithImage(t, tt.md, tt.ann, tt.imageData, tt.mimeType, tt.wantText, tt.wantMIME, tt.wantAnn)
+			assertToolResultWithImage(t, tt)
 		})
 	}
 }
 
-func assertToolResultWithImage(t *testing.T, md string, ann *mcp.Annotations, imageData []byte, mimeType, wantText, wantMIME string, wantAnn bool) {
+func assertToolResultWithImage(t *testing.T, tt toolResultWithImageTestCase) {
 	t.Helper()
-	result := ToolResultWithImage(md, ann, imageData, mimeType)
+	result := ToolResultWithImage(tt.md, tt.ann, tt.imageData, tt.mimeType)
 	if result == nil {
 		t.Fatal("expected non-nil result")
 	}
 	if len(result.Content) != 2 {
 		t.Fatalf("expected 2 content items, got %d", len(result.Content))
 	}
-	assertToolResultImageText(t, result.Content[0], wantText, wantAnn)
-	assertToolResultImageContent(t, result.Content[1], imageData, wantMIME)
+	assertToolResultImageText(t, result.Content[0], tt.wantText, tt.wantAnn)
+	assertToolResultImageContent(t, result.Content[1], tt.imageData, tt.wantMIME)
 }
 
 func assertToolResultImageText(t *testing.T, content mcp.Content, wantText string, wantAnn bool) {

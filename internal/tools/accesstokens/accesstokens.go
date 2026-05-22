@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -211,13 +212,17 @@ type ProjectCreateInput struct {
 
 // ProjectCreate creates a new project access token.
 func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input ProjectCreateInput) (Output, error) {
-	return createAccessToken(ctx, input.ProjectID, "project_id", "create project access token",
-		"validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (10|20|30|40|50), and expires_at format (YYYY-MM-DD, must be within instance-configured maximum lifetime)",
-		"creating project access tokens requires Maintainer or Owner role; the requested access_level cannot exceed the caller's role",
-		accessTokenCreateRequest{Name: input.Name, Description: input.Description, Scopes: input.Scopes, AccessLevel: input.AccessLevel, ExpiresAt: input.ExpiresAt},
-		func(scopeID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
+	return createAccessToken(ctx, accessTokenCreateArgs{
+		scopeID:        input.ProjectID,
+		requiredField:  "project_id",
+		operation:      "create project access token",
+		validationHint: "validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (10|20|30|40|50), and expires_at format (YYYY-MM-DD, must be within instance-configured maximum lifetime)",
+		forbiddenHint:  "creating project access tokens requires Maintainer or Owner role; the requested access_level cannot exceed the caller's role",
+		req:            accessTokenCreateRequest{Name: input.Name, Description: input.Description, Scopes: input.Scopes, AccessLevel: input.AccessLevel, ExpiresAt: input.ExpiresAt},
+		create: func(scopeID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
 			return createProjectAccessToken(ctx, client, scopeID, req, expiresAt)
-		})
+		},
+	})
 }
 
 func createProjectAccessToken(ctx context.Context, client *gitlabclient.Client, projectID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
@@ -238,20 +243,33 @@ type accessTokenCreateRequest struct {
 	ExpiresAt   string
 }
 
-func createAccessToken(ctx context.Context, scopeID toolutil.StringOrInt, requiredField, operation, validationHint, forbiddenHint string, req accessTokenCreateRequest, create func(string, accessTokenCreateRequest, *gl.ISOTime) (Output, error)) (Output, error) {
-	if scopeID == "" {
-		return Output{}, toolutil.ErrFieldRequired(requiredField)
+type accessTokenCreateArgs struct {
+	scopeID        toolutil.StringOrInt
+	requiredField  string
+	operation      string
+	validationHint string
+	forbiddenHint  string
+	req            accessTokenCreateRequest
+	create         func(string, accessTokenCreateRequest, *gl.ISOTime) (Output, error)
+}
+
+func createAccessToken(ctx context.Context, args accessTokenCreateArgs) (Output, error) {
+	if args.scopeID == "" {
+		return Output{}, toolutil.ErrFieldRequired(args.requiredField)
 	}
-	if req.Name == "" {
+	if args.req.Name == "" {
 		return Output{}, toolutil.ErrFieldRequired("name")
 	}
-	if len(req.Scopes) == 0 {
+	if len(args.req.Scopes) == 0 {
 		return Output{}, toolutil.ErrFieldRequired("scopes")
+	}
+	if err := validateAccessTokenScopes(args.req.Scopes); err != nil {
+		return Output{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
-	expiresAtValue, hasExpiresAt, err := parseAccessTokenExpiresAt(req.ExpiresAt)
+	expiresAtValue, hasExpiresAt, err := parseAccessTokenExpiresAt(args.req.ExpiresAt)
 	if err != nil {
 		return Output{}, err
 	}
@@ -259,12 +277,12 @@ func createAccessToken(ctx context.Context, scopeID toolutil.StringOrInt, requir
 	if hasExpiresAt {
 		expiresAt = &expiresAtValue
 	}
-	out, err := create(string(scopeID), req, expiresAt)
+	out, err := args.create(string(args.scopeID), args.req, expiresAt)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint(operation, err, validationHint)
+			return Output{}, toolutil.WrapErrWithHint(args.operation, err, args.validationHint)
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusForbidden, forbiddenHint)
+		return Output{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusForbidden, args.forbiddenHint)
 	}
 	return out, nil
 }
@@ -288,30 +306,47 @@ type ProjectRotateInput struct {
 
 // ProjectRotate rotates a project access token and returns the new token.
 func ProjectRotate(ctx context.Context, client *gitlabclient.Client, input ProjectRotateInput) (Output, error) {
-	return rotateAccessToken(ctx, input.ProjectID, input.TokenID, input.ExpiresAt, "project_id", "rotate project access token",
-		"token may already be revoked/expired; expires_at must be YYYY-MM-DD and within instance maximum lifetime",
-		"token_id not found - use gitlab_access_token_project_list to verify",
-		func(scopeID string, tokenID int64, expiresAt *gl.ISOTime) (Output, error) {
+	return rotateAccessToken(ctx, accessTokenRotateArgs{
+		scopeID:        input.ProjectID,
+		tokenID:        input.TokenID,
+		expiresAtValue: input.ExpiresAt,
+		requiredField:  "project_id",
+		operation:      "rotate project access token",
+		validationHint: "token may already be revoked/expired; expires_at must be YYYY-MM-DD and within instance maximum lifetime",
+		notFoundHint:   "token_id not found - use gitlab_access_token_project_list to verify",
+		rotate: func(scopeID string, tokenID int64, expiresAt *gl.ISOTime) (Output, error) {
 			opts := &gl.RotateProjectAccessTokenOptions{ExpiresAt: expiresAt}
 			token, _, err := client.GL().ProjectAccessTokens.RotateProjectAccessToken(scopeID, tokenID, opts, gl.WithContext(ctx))
 			if err != nil {
 				return Output{}, err
 			}
 			return fromProjectToken(token), nil
-		})
+		},
+	})
 }
 
-func rotateAccessToken(ctx context.Context, scopeID toolutil.StringOrInt, tokenID int64, expiresAtValue, requiredField, operation, validationHint, notFoundHint string, rotate func(string, int64, *gl.ISOTime) (Output, error)) (Output, error) {
-	if scopeID == "" {
-		return Output{}, toolutil.ErrFieldRequired(requiredField)
+type accessTokenRotateArgs struct {
+	scopeID        toolutil.StringOrInt
+	tokenID        int64
+	expiresAtValue string
+	requiredField  string
+	operation      string
+	validationHint string
+	notFoundHint   string
+	rotate         func(string, int64, *gl.ISOTime) (Output, error)
+}
+
+func rotateAccessToken(ctx context.Context, args accessTokenRotateArgs) (Output, error) {
+	if args.scopeID == "" {
+		return Output{}, toolutil.ErrFieldRequired(args.requiredField)
 	}
-	if tokenID == 0 {
+	if args.tokenID == 0 {
 		return Output{}, errors.New(errTokenIDInvalid)
 	}
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
-	expiresAtParsed, hasExpiresAt, err := parseAccessTokenExpiresAt(expiresAtValue)
+	expiresAtParsed, hasExpiresAt, err := parseAccessTokenExpiresAt(args.expiresAtValue)
 	if err != nil {
 		return Output{}, err
 	}
@@ -319,12 +354,12 @@ func rotateAccessToken(ctx context.Context, scopeID toolutil.StringOrInt, tokenI
 	if hasExpiresAt {
 		expiresAt = &expiresAtParsed
 	}
-	out, err := rotate(string(scopeID), tokenID, expiresAt)
+	out, err := args.rotate(string(args.scopeID), args.tokenID, expiresAt)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint(operation, err, validationHint)
+			return Output{}, toolutil.WrapErrWithHint(args.operation, err, args.validationHint)
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
+		return Output{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.notFoundHint)
 	}
 	return out, nil
 }
@@ -458,13 +493,17 @@ type GroupCreateInput struct {
 
 // GroupCreate creates a new group access token.
 func GroupCreate(ctx context.Context, client *gitlabclient.Client, input GroupCreateInput) (Output, error) {
-	return createAccessToken(ctx, input.GroupID, "group_id", "create group access token",
-		"validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (10|20|30|40|50), and expires_at format (YYYY-MM-DD)",
-		"creating group access tokens requires Owner role; the requested access_level cannot exceed the caller's role",
-		accessTokenCreateRequest{Name: input.Name, Description: input.Description, Scopes: input.Scopes, AccessLevel: input.AccessLevel, ExpiresAt: input.ExpiresAt},
-		func(scopeID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
+	return createAccessToken(ctx, accessTokenCreateArgs{
+		scopeID:        input.GroupID,
+		requiredField:  "group_id",
+		operation:      "create group access token",
+		validationHint: "validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (10|20|30|40|50), and expires_at format (YYYY-MM-DD)",
+		forbiddenHint:  "creating group access tokens requires Owner role; the requested access_level cannot exceed the caller's role",
+		req:            accessTokenCreateRequest{Name: input.Name, Description: input.Description, Scopes: input.Scopes, AccessLevel: input.AccessLevel, ExpiresAt: input.ExpiresAt},
+		create: func(scopeID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
 			return createGroupAccessToken(ctx, client, scopeID, req, expiresAt)
-		})
+		},
+	})
 }
 
 func createGroupAccessToken(ctx context.Context, client *gitlabclient.Client, groupID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
@@ -595,6 +634,57 @@ func parseAccessTokenExpiresAt(value string) (gl.ISOTime, bool, error) {
 		return gl.ISOTime{}, false, fmt.Errorf(errInvalidExpiresAtFmt, err)
 	}
 	return gl.ISOTime(t), true, nil
+}
+
+var validAccessTokenScopeNames = []string{
+	"admin_mode",
+	"ai_features",
+	"api",
+	"create_runner",
+	"k8s_proxy",
+	"manage_runner",
+	"read_api",
+	"read_observability",
+	"read_registry",
+	"read_repository",
+	"read_service_ping",
+	"read_user",
+	"read_virtual_registry",
+	"self_rotate",
+	"sudo",
+	"write_observability",
+	"write_registry",
+	"write_repository",
+	"write_virtual_registry",
+}
+
+var validAccessTokenScopes = func() map[string]struct{} {
+	out := make(map[string]struct{}, len(validAccessTokenScopeNames))
+	for _, scope := range validAccessTokenScopeNames {
+		out[scope] = struct{}{}
+	}
+	return out
+}()
+
+func validateAccessTokenScopes(scopes []string) error {
+	seen := make(map[string]struct{}, len(scopes))
+	for index, scope := range scopes {
+		trimmed := strings.TrimSpace(scope)
+		if trimmed == "" {
+			return fmt.Errorf("scopes[%d] must not be empty", index)
+		}
+		if trimmed != scope {
+			return fmt.Errorf("scopes[%d] %q must not contain surrounding whitespace", index, scope)
+		}
+		if _, ok := validAccessTokenScopes[scope]; !ok {
+			return fmt.Errorf("scopes[%d] %q is not supported; expected one of %s", index, scope, strings.Join(validAccessTokenScopeNames, ", "))
+		}
+		if _, duplicate := seen[scope]; duplicate {
+			return fmt.Errorf("scopes[%d] %q is duplicated", index, scope)
+		}
+		seen[scope] = struct{}{}
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------

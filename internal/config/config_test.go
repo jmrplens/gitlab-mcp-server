@@ -872,10 +872,32 @@ func TestValidate_AcceptableMaxValues(t *testing.T) {
 		GitLabToken:       "test-token",
 		UploadMaxFileSize: MaxFileSize,
 		MaxHTTPClients:    MaxHTTPClients,
+		RateLimitRPS:      MaxRateLimitRPS,
+		RateLimitBurst:    MaxRateLimitBurst,
 	}
 	err := cfg.validate()
 	if err != nil {
 		t.Errorf("validate() unexpected error for max values: %v", err)
+	}
+}
+
+// TestValidate_RateLimitBounds verifies that unreasonable rate limit values are rejected.
+func TestValidate_RateLimitBounds(t *testing.T) {
+	tests := []struct {
+		name  string
+		patch func(*Config)
+	}{
+		{name: "rps above maximum", patch: func(cfg *Config) { cfg.RateLimitRPS = MaxRateLimitRPS + 1 }},
+		{name: "burst above maximum", patch: func(cfg *Config) { cfg.RateLimitBurst = MaxRateLimitBurst + 1 }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &Config{GitLabURL: "https://gitlab.example.com", GitLabToken: "test-token", MaxHTTPClients: 1, RateLimitBurst: DefaultRateLimitBurst}
+			tt.patch(cfg)
+			if err := cfg.validate(); err == nil {
+				t.Fatal("validate() expected rate limit bound error, got nil")
+			}
+		})
 	}
 }
 

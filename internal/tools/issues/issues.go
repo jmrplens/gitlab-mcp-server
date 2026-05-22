@@ -1124,19 +1124,29 @@ func setPagination(opts *gl.ListOptions, page, perPage int) {
 	}
 }
 
-func listIssueMergeRequests(ctx context.Context, projectID toolutil.StringOrInt, issueIID int64, page, perPage int, operation, hint string, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error)) (RelatedMRsOutput, error) {
+type issueMergeRequestsListArgs struct {
+	projectID toolutil.StringOrInt
+	issueIID  int64
+	page      int
+	perPage   int
+	operation string
+	hint      string
+	list      func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error)
+}
+
+func listIssueMergeRequests(ctx context.Context, args issueMergeRequestsListArgs) (RelatedMRsOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return RelatedMRsOutput{}, err
 	}
-	if projectID == "" {
-		return RelatedMRsOutput{}, fmt.Errorf("%s: project_id is required", operation)
+	if args.projectID == "" {
+		return RelatedMRsOutput{}, fmt.Errorf("%s: project_id is required", args.operation)
 	}
-	if issueIID <= 0 {
-		return RelatedMRsOutput{}, toolutil.ErrRequiredInt64(operation, "issue_iid")
+	if args.issueIID <= 0 {
+		return RelatedMRsOutput{}, toolutil.ErrRequiredInt64(args.operation, "issue_iid")
 	}
-	mrs, resp, err := list(string(projectID), issueIID, page, perPage, gl.WithContext(ctx))
+	mrs, resp, err := args.list(string(args.projectID), args.issueIID, args.page, args.perPage, gl.WithContext(ctx))
 	if err != nil {
-		return RelatedMRsOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, hint)
+		return RelatedMRsOutput{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.hint)
 	}
 	return relatedMRsOutput(mrs, resp), nil
 }
@@ -1150,13 +1160,16 @@ type ListMRsClosingInput struct {
 
 // ListMRsClosing retrieves merge requests that will close this issue on merge.
 func ListMRsClosing(ctx context.Context, client *gitlabclient.Client, input ListMRsClosingInput) (RelatedMRsOutput, error) {
-	return listIssueMergeRequests(ctx, input.ProjectID, input.IssueIID, input.Page, input.PerPage, "issueListMRsClosing",
-		"verify project_id and issue_iid with gitlab_issue_get - only MRs that include 'Closes #N' are returned",
-		func(projectID string, issueIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
+	return listIssueMergeRequests(ctx, issueMergeRequestsListArgs{
+		projectID: input.ProjectID, issueIID: input.IssueIID, page: input.Page, perPage: input.PerPage,
+		operation: "issueListMRsClosing",
+		hint:      "verify project_id and issue_iid with gitlab_issue_get - only MRs that include 'Closes #N' are returned",
+		list: func(projectID string, issueIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
 			listOptions := &gl.ListMergeRequestsClosingIssueOptions{}
 			setPagination(&listOptions.ListOptions, page, perPage)
 			return client.GL().Issues.ListMergeRequestsClosingIssue(projectID, issueIID, listOptions, opts...)
-		})
+		},
+	})
 }
 
 // ListMRsRelatedInput defines parameters for listing MRs related to an issue.
@@ -1168,13 +1181,16 @@ type ListMRsRelatedInput struct {
 
 // ListMRsRelated retrieves merge requests related to this issue.
 func ListMRsRelated(ctx context.Context, client *gitlabclient.Client, input ListMRsRelatedInput) (RelatedMRsOutput, error) {
-	return listIssueMergeRequests(ctx, input.ProjectID, input.IssueIID, input.Page, input.PerPage, "issueListMRsRelated",
-		"verify project_id and issue_iid with gitlab_issue_get - returns MRs mentioning the issue in description/notes (broader than 'closing')",
-		func(projectID string, issueIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
+	return listIssueMergeRequests(ctx, issueMergeRequestsListArgs{
+		projectID: input.ProjectID, issueIID: input.IssueIID, page: input.Page, perPage: input.PerPage,
+		operation: "issueListMRsRelated",
+		hint:      "verify project_id and issue_iid with gitlab_issue_get - returns MRs mentioning the issue in description/notes (broader than 'closing')",
+		list: func(projectID string, issueIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error) {
 			listOptions := &gl.ListMergeRequestsRelatedToIssueOptions{}
 			setPagination(&listOptions.ListOptions, page, perPage)
 			return client.GL().Issues.ListMergeRequestsRelatedToIssue(projectID, issueIID, listOptions, opts...)
-		})
+		},
+	})
 }
 
 // Markdown formatting.

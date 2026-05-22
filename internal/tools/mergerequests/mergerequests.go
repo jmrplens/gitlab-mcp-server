@@ -805,20 +805,30 @@ func setMergeRequestPagination(page, perPage int, setPage, setPerPage func(int64
 	}
 }
 
-func listMergeRequestItems[T, O, R any](ctx context.Context, projectID toolutil.StringOrInt, mrIID int64, page, perPage int, operation, missingProjectMsg, notFoundHint string, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]T, *gl.Response, error), convert func(T) O, buildOutput func([]O, toolutil.PaginationOutput) R) (R, error) {
+type mergeRequestItemsListArgs struct {
+	projectID         toolutil.StringOrInt
+	mrIID             int64
+	page              int
+	perPage           int
+	operation         string
+	missingProjectMsg string
+	notFoundHint      string
+}
+
+func listMergeRequestItems[T, O, R any](ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]T, *gl.Response, error), convert func(T) O, buildOutput func([]O, toolutil.PaginationOutput) R) (R, error) {
 	var zero R
 	if err := ctx.Err(); err != nil {
 		return zero, err
 	}
-	if projectID == "" {
-		return zero, errors.New(missingProjectMsg)
+	if args.projectID == "" {
+		return zero, errors.New(args.missingProjectMsg)
 	}
-	if mrIID <= 0 {
-		return zero, toolutil.ErrRequiredInt64(operation, "merge_request_iid")
+	if args.mrIID <= 0 {
+		return zero, toolutil.ErrRequiredInt64(args.operation, "merge_request_iid")
 	}
-	items, resp, err := list(string(projectID), mrIID, page, perPage, gl.WithContext(ctx))
+	items, resp, err := list(string(args.projectID), args.mrIID, args.page, args.perPage, gl.WithContext(ctx))
 	if err != nil {
-		return zero, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
+		return zero, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.notFoundHint)
 	}
 	out := make([]O, len(items))
 	for i, item := range items {
@@ -829,9 +839,11 @@ func listMergeRequestItems[T, O, R any](ctx context.Context, projectID toolutil.
 
 // Commits retrieves the list of commits in a merge request.
 func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInput) (CommitsOutput, error) {
-	return listMergeRequestItems(ctx, input.ProjectID, input.MRIID, input.Page, input.PerPage, "mrCommits",
-		"mrCommits: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
-		"verify project_id and merge_request_iid (project-scoped IID, not global merge_request_id) with gitlab_mr_get",
+	return listMergeRequestItems(ctx, mergeRequestItemsListArgs{
+		projectID: input.ProjectID, mrIID: input.MRIID, page: input.Page, perPage: input.PerPage, operation: "mrCommits",
+		missingProjectMsg: "mrCommits: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
+		notFoundHint:      "verify project_id and merge_request_iid (project-scoped IID, not global merge_request_id) with gitlab_mr_get",
+	},
 		func(projectID string, mrIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.Commit, *gl.Response, error) {
 			listOptions := &gl.GetMergeRequestCommitsOptions{}
 			setMergeRequestPagination(page, perPage, func(value int64) { listOptions.Page = value }, func(value int64) { listOptions.PerPage = value })
@@ -1008,18 +1020,46 @@ func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
 }
 
 func globalMergeRequestListTarget(opts *gl.ListMergeRequestsOptions) mergeRequestListTarget {
-	return newMergeRequestListTarget(&opts.State, &opts.Labels, &opts.NotLabels, &opts.Milestone, &opts.Scope, &opts.Search, &opts.SourceBranch, &opts.TargetBranch, &opts.AuthorUsername, &opts.ReviewerUsername, &opts.Draft, &opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore, &opts.OrderBy, &opts.Sort, &opts.Page, &opts.PerPage)
+	return newMergeRequestListTarget(mergeRequestListTargetFields{
+		state: &opts.State, labels: &opts.Labels, notLabels: &opts.NotLabels, milestone: &opts.Milestone, scope: &opts.Scope,
+		search: &opts.Search, sourceBranch: &opts.SourceBranch, targetBranch: &opts.TargetBranch, authorUsername: &opts.AuthorUsername,
+		reviewerUsername: &opts.ReviewerUsername, draft: &opts.Draft, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort, page: &opts.Page,
+		perPage: &opts.PerPage,
+	})
 }
 
-func newMergeRequestListTarget(state **string, labels, notLabels **gl.LabelOptions, milestone, scope, search, sourceBranch, targetBranch, authorUsername, reviewerUsername **string, draft **bool, createdAfter, createdBefore, updatedAfter, updatedBefore **time.Time, orderBy, sort **string, page, perPage *int64) mergeRequestListTarget {
+type mergeRequestListTargetFields struct {
+	state            **string
+	labels           **gl.LabelOptions
+	notLabels        **gl.LabelOptions
+	milestone        **string
+	scope            **string
+	search           **string
+	sourceBranch     **string
+	targetBranch     **string
+	authorUsername   **string
+	reviewerUsername **string
+	draft            **bool
+	createdAfter     **time.Time
+	createdBefore    **time.Time
+	updatedAfter     **time.Time
+	updatedBefore    **time.Time
+	orderBy          **string
+	sort             **string
+	page             *int64
+	perPage          *int64
+}
+
+func newMergeRequestListTarget(fields mergeRequestListTargetFields) mergeRequestListTarget {
 	return mergeRequestListTarget{
-		state: setStringPtr(state), labels: setLabelOptionsPtr(labels), notLabels: setLabelOptionsPtr(notLabels),
-		milestone: setStringPtr(milestone), scope: setStringPtr(scope), search: setStringPtr(search),
-		sourceBranch: setStringPtr(sourceBranch), targetBranch: setStringPtr(targetBranch),
-		authorUsername: setStringPtr(authorUsername), reviewerUsername: setStringPtr(reviewerUsername),
-		draft: setBoolPtr(draft), createdAfter: setTimePtr(createdAfter), createdBefore: setTimePtr(createdBefore),
-		updatedAfter: setTimePtr(updatedAfter), updatedBefore: setTimePtr(updatedBefore), orderBy: setStringPtr(orderBy),
-		sort: setStringPtr(sort), page: setInt64Value(page), perPage: setInt64Value(perPage),
+		state: setStringPtr(fields.state), labels: setLabelOptionsPtr(fields.labels), notLabels: setLabelOptionsPtr(fields.notLabels),
+		milestone: setStringPtr(fields.milestone), scope: setStringPtr(fields.scope), search: setStringPtr(fields.search),
+		sourceBranch: setStringPtr(fields.sourceBranch), targetBranch: setStringPtr(fields.targetBranch),
+		authorUsername: setStringPtr(fields.authorUsername), reviewerUsername: setStringPtr(fields.reviewerUsername),
+		draft: setBoolPtr(fields.draft), createdAfter: setTimePtr(fields.createdAfter), createdBefore: setTimePtr(fields.createdBefore),
+		updatedAfter: setTimePtr(fields.updatedAfter), updatedBefore: setTimePtr(fields.updatedBefore), orderBy: setStringPtr(fields.orderBy),
+		sort: setStringPtr(fields.sort), page: setInt64Value(fields.page), perPage: setInt64Value(fields.perPage),
 	}
 }
 
@@ -1105,7 +1145,13 @@ func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
 }
 
 func groupMergeRequestListTarget(opts *gl.ListGroupMergeRequestsOptions) mergeRequestListTarget {
-	return newMergeRequestListTarget(&opts.State, &opts.Labels, &opts.NotLabels, &opts.Milestone, &opts.Scope, &opts.Search, &opts.SourceBranch, &opts.TargetBranch, &opts.AuthorUsername, &opts.ReviewerUsername, &opts.Draft, &opts.CreatedAfter, &opts.CreatedBefore, &opts.UpdatedAfter, &opts.UpdatedBefore, &opts.OrderBy, &opts.Sort, &opts.Page, &opts.PerPage)
+	return newMergeRequestListTarget(mergeRequestListTargetFields{
+		state: &opts.State, labels: &opts.Labels, notLabels: &opts.NotLabels, milestone: &opts.Milestone, scope: &opts.Scope,
+		search: &opts.Search, sourceBranch: &opts.SourceBranch, targetBranch: &opts.TargetBranch, authorUsername: &opts.AuthorUsername,
+		reviewerUsername: &opts.ReviewerUsername, draft: &opts.Draft, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort, page: &opts.Page,
+		perPage: &opts.PerPage,
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -1277,9 +1323,11 @@ type IssuesClosedOutput struct {
 // IssuesClosed retrieves the list of issues that would be closed when
 // the specified merge request is merged.
 func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input IssuesClosedInput) (IssuesClosedOutput, error) {
-	return listMergeRequestIssues(ctx, input.ProjectID, input.MRIID, input.Page, input.PerPage, "mrIssuesClosed",
-		"mrIssuesClosed: project_id is required",
-		"verify project_id and merge_request_iid with gitlab_mr_get - only issues referenced via 'Closes #N' in MR description/commits are returned",
+	return listMergeRequestIssues(ctx, mergeRequestItemsListArgs{
+		projectID: input.ProjectID, mrIID: input.MRIID, page: input.Page, perPage: input.PerPage, operation: "mrIssuesClosed",
+		missingProjectMsg: "mrIssuesClosed: project_id is required",
+		notFoundHint:      "verify project_id and merge_request_iid with gitlab_mr_get - only issues referenced via 'Closes #N' in MR description/commits are returned",
+	},
 		func(projectID string, mrIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
 			listOptions := &gl.GetIssuesClosedOnMergeOptions{}
 			setMergeRequestPagination(page, perPage, func(value int64) { listOptions.Page = value }, func(value int64) { listOptions.PerPage = value })
@@ -1287,8 +1335,8 @@ func IssuesClosed(ctx context.Context, client *gitlabclient.Client, input Issues
 		})
 }
 
-func listMergeRequestIssues(ctx context.Context, projectID toolutil.StringOrInt, mrIID int64, page, perPage int, operation, missingProjectMsg, notFoundHint string, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (IssuesClosedOutput, error) {
-	return listMergeRequestItems(ctx, projectID, mrIID, page, perPage, operation, missingProjectMsg, notFoundHint,
+func listMergeRequestIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (IssuesClosedOutput, error) {
+	return listMergeRequestItems(ctx, args,
 		list, issues.ToOutput, func(out []issues.Output, pagination toolutil.PaginationOutput) IssuesClosedOutput {
 			return IssuesClosedOutput{Issues: out, Pagination: pagination}
 		})
@@ -1541,9 +1589,11 @@ type RelatedIssuesOutput struct {
 
 // RelatedIssues retrieves the list of issues related to a merge request.
 func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input RelatedIssuesInput) (RelatedIssuesOutput, error) {
-	return listMergeRequestRelatedIssues(ctx, input.ProjectID, input.MRIID, input.Page, input.PerPage, "mrRelatedIssues",
-		"mrRelatedIssues: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
-		"verify project_id and merge_request_iid with gitlab_mr_get - only issues referenced in MR description/commits/notes are returned",
+	return listMergeRequestRelatedIssues(ctx, mergeRequestItemsListArgs{
+		projectID: input.ProjectID, mrIID: input.MRIID, page: input.Page, perPage: input.PerPage, operation: "mrRelatedIssues",
+		missingProjectMsg: "mrRelatedIssues: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id",
+		notFoundHint:      "verify project_id and merge_request_iid with gitlab_mr_get - only issues referenced in MR description/commits/notes are returned",
+	},
 		func(projectID string, mrIID int64, page, perPage int, opts ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error) {
 			listOptions := &gl.ListRelatedIssuesOptions{}
 			setMergeRequestPagination(page, perPage, func(value int64) { listOptions.Page = value }, func(value int64) { listOptions.PerPage = value })
@@ -1551,8 +1601,8 @@ func RelatedIssues(ctx context.Context, client *gitlabclient.Client, input Relat
 		})
 }
 
-func listMergeRequestRelatedIssues(ctx context.Context, projectID toolutil.StringOrInt, mrIID int64, page, perPage int, operation, missingProjectMsg, notFoundHint string, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (RelatedIssuesOutput, error) {
-	return listMergeRequestItems(ctx, projectID, mrIID, page, perPage, operation, missingProjectMsg, notFoundHint,
+func listMergeRequestRelatedIssues(ctx context.Context, args mergeRequestItemsListArgs, list func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.Issue, *gl.Response, error)) (RelatedIssuesOutput, error) {
+	return listMergeRequestItems(ctx, args,
 		list, issues.ToOutput, func(out []issues.Output, pagination toolutil.PaginationOutput) RelatedIssuesOutput {
 			return RelatedIssuesOutput{Issues: out, Pagination: pagination}
 		})
