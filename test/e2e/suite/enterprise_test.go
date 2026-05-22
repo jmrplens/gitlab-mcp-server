@@ -104,19 +104,128 @@ func TestMeta_AuditEvents(t *testing.T) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	grpName := uniqueName("audit-events")
+	grpOut, setupErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name":       grpName,
+			"path":       grpName,
+			"visibility": "private",
+		},
+	})
+	requireNoError(t, setupErr, "create group for audit events")
+	groupIDStr := strconv.FormatInt(grpOut.ID, 10)
+	defer func() {
+		_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+	}()
+
+	_, setupErr = callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "update",
+		"params": map[string]any{
+			"group_id":    groupIDStr,
+			"description": "E2E audit event fixture",
+		},
+	})
+	requireNoError(t, setupErr, "update group for audit event")
+
 	proj := createProjectMeta(ctx, t, sess.meta)
+	_, setupErr = callToolOn[projects.Output](ctx, sess.meta, "gitlab_project", map[string]any{
+		"action": "update",
+		"params": map[string]any{
+			"project_id":  proj.pidStr(),
+			"description": "E2E audit event fixture",
+		},
+	})
+	requireNoError(t, setupErr, "update project for audit event")
+
+	var instanceEventID int64
+	var groupEventID int64
+	var projectEventID int64
 
 	t.Run("Meta/AuditEvent/ListProject", func(t *testing.T) {
-		_, err := callToolOn[auditevents.ListOutput](ctx, sess.meta, "gitlab_audit_event", map[string]any{
-			"action": "list_project",
+		out := waitForAuditEvents(ctx, t, "list_project", map[string]any{
+			"project_id": proj.pidStr(),
+			"per_page":   20,
+		})
+		projectEventID = out.AuditEvents[0].ID
+		t.Logf("Project audit events: %d", len(out.AuditEvents))
+	})
+
+	t.Run("Meta/AuditEvent/GetProject", func(t *testing.T) {
+		requireTruef(t, projectEventID > 0, "projectEventID not set")
+		out, err := callToolOn[auditevents.Output](ctx, sess.meta, "gitlab_audit_event", map[string]any{
+			"action": "get_project",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
+				"event_id":   projectEventID,
 			},
 		})
-		requirePremiumFeature(t, err, "audit events")
-		t.Log("Audit event list OK")
+		requireNoError(t, err, "audit event get_project")
+		requireTruef(t, out.ID == projectEventID, "project audit event ID = %d, want %d", out.ID, projectEventID)
 	})
+
+	t.Run("Meta/AuditEvent/ListGroup", func(t *testing.T) {
+		out := waitForAuditEvents(ctx, t, "list_group", map[string]any{
+			"group_id": groupIDStr,
+			"per_page": 20,
+		})
+		groupEventID = out.AuditEvents[0].ID
+		t.Logf("Group audit events: %d", len(out.AuditEvents))
+	})
+
+	t.Run("Meta/AuditEvent/GetGroup", func(t *testing.T) {
+		requireTruef(t, groupEventID > 0, "groupEventID not set")
+		out, err := callToolOn[auditevents.Output](ctx, sess.meta, "gitlab_audit_event", map[string]any{
+			"action": "get_group",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"event_id": groupEventID,
+			},
+		})
+		requireNoError(t, err, "audit event get_group")
+		requireTruef(t, out.ID == groupEventID, "group audit event ID = %d, want %d", out.ID, groupEventID)
+	})
+
+	t.Run("Meta/AuditEvent/ListInstance", func(t *testing.T) {
+		out := waitForAuditEvents(ctx, t, "list_instance", map[string]any{"per_page": 20})
+		instanceEventID = out.AuditEvents[0].ID
+		t.Logf("Instance audit events: %d", len(out.AuditEvents))
+	})
+
+	t.Run("Meta/AuditEvent/GetInstance", func(t *testing.T) {
+		requireTruef(t, instanceEventID > 0, "instanceEventID not set")
+		out, err := callToolOn[auditevents.Output](ctx, sess.meta, "gitlab_audit_event", map[string]any{
+			"action": "get_instance",
+			"params": map[string]any{"event_id": instanceEventID},
+		})
+		requireNoError(t, err, "audit event get_instance")
+		requireTruef(t, out.ID == instanceEventID, "instance audit event ID = %d, want %d", out.ID, instanceEventID)
+	})
+}
+
+func waitForAuditEvents(ctx context.Context, t *testing.T, action string, params map[string]any) auditevents.ListOutput {
+	t.Helper()
+	out, err := retryWithBackoff(ctx, t, "audit event "+action, 8, func(int) (auditevents.ListOutput, bool, string, error) {
+		out, err := callToolOn[auditevents.ListOutput](ctx, sess.meta, "gitlab_audit_event", map[string]any{
+			"action": action,
+			"params": params,
+		})
+		if err != nil {
+			return out, isRetryableError(err), "transient audit event API error", err
+		}
+		if len(out.AuditEvents) == 0 {
+			return out, true, "audit events not indexed yet", fmt.Errorf("%s returned no audit events", action)
+		}
+		return out, false, "", nil
+	})
+	requirePremiumFeature(t, err, "audit events")
+	return out
 }
 
 // TestMeta_DORAMetrics exercises DORA metrics via the gitlab_dora_metrics meta-tool.
