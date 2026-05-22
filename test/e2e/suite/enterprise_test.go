@@ -21,13 +21,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/geo"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupscim"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/memberroles"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergetrains"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectaliases"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securityattributes"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitycategories"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securityfindings"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippets"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippetstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -732,15 +736,111 @@ func TestMeta_StorageMoves(t *testing.T) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	grpName := uniqueName("storage-move")
+	grpOut, setupErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name":       grpName,
+			"path":       grpName,
+			"visibility": "private",
+		},
+	})
+	requireNoError(t, setupErr, "create group for storage moves")
+	groupID := grpOut.ID
+	groupIDStr := strconv.FormatInt(groupID, 10)
+	defer func() {
+		_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+	}()
+
+	proj := createProjectMeta(ctx, t, sess.meta)
+	snippetOut, setupErr := callToolOn[snippets.Output](ctx, sess.meta, "gitlab_snippet", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"title":       uniqueName("storage-move-snippet"),
+			"file_name":   "storage-move.txt",
+			"content":     "storage move fixture",
+			"visibility":  "private",
+			"description": "E2E storage move fixture",
+		},
+	})
+	requireNoError(t, setupErr, "create snippet for storage moves")
+	snippetID := snippetOut.ID
+	defer func() {
+		_ = callToolVoidOn(ctx, sess.meta, "gitlab_snippet", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"snippet_id": snippetID},
+		})
+	}()
 
 	t.Run("Meta/StorageMove/RetrieveAllProject", func(t *testing.T) {
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_storage_move", map[string]any{
+		out, err := callToolOn[projectstoragemoves.ListOutput](ctx, sess.meta, "gitlab_storage_move", map[string]any{
 			"action": "retrieve_all_project",
 			"params": map[string]any{},
 		})
 		requirePremiumFeature(t, err, "storage moves")
-		t.Log("Storage move list OK")
+		t.Logf("Project storage moves: %d", len(out.Moves))
+	})
+
+	t.Run("Meta/StorageMove/RetrieveProject", func(t *testing.T) {
+		out, err := callToolOn[projectstoragemoves.ListOutput](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "retrieve_project",
+			"params": map[string]any{"project_id": proj.ID},
+		})
+		requireNoError(t, err, "retrieve project storage moves")
+		t.Logf("Project-specific storage moves: %d", len(out.Moves))
+	})
+
+	t.Run("Meta/StorageMove/RetrieveAllGroup", func(t *testing.T) {
+		out, err := callToolOn[groupstoragemoves.ListOutput](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "retrieve_all_group",
+			"params": map[string]any{},
+		})
+		requireNoError(t, err, "retrieve all group storage moves")
+		t.Logf("Group storage moves: %d", len(out.Moves))
+	})
+
+	t.Run("Meta/StorageMove/RetrieveGroup", func(t *testing.T) {
+		out, err := callToolOn[groupstoragemoves.ListOutput](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "retrieve_group",
+			"params": map[string]any{"group_id": groupID},
+		})
+		requireNoError(t, err, "retrieve group storage moves")
+		t.Logf("Group-specific storage moves: %d", len(out.Moves))
+	})
+
+	t.Run("Meta/StorageMove/RetrieveAllSnippet", func(t *testing.T) {
+		out, err := callToolOn[snippetstoragemoves.ListOutput](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "retrieve_all_snippet",
+			"params": map[string]any{},
+		})
+		requireNoError(t, err, "retrieve all snippet storage moves")
+		t.Logf("Snippet storage moves: %d", len(out.Moves))
+	})
+
+	t.Run("Meta/StorageMove/RetrieveSnippet", func(t *testing.T) {
+		out, err := callToolOn[snippetstoragemoves.ListOutput](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "retrieve_snippet",
+			"params": map[string]any{"snippet_id": snippetID},
+		})
+		requireNoError(t, err, "retrieve snippet storage moves")
+		t.Logf("Snippet-specific storage moves: %d", len(out.Moves))
+	})
+
+	t.Run("Meta/StorageMove/ScheduleProjectInvalidStorage", func(t *testing.T) {
+		_, err := callToolOn[projectstoragemoves.Output](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "schedule_project",
+			"params": map[string]any{
+				"project_id":               proj.ID,
+				"destination_storage_name": "e2e-missing-storage",
+			},
+		})
+		requireErrorContainsAll(t, err, "destination_storage_name", "Gitaly", "storage")
 	})
 }
 
