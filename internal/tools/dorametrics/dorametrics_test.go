@@ -241,6 +241,29 @@ func TestGetProjectMetrics_ContextCancelled(t *testing.T) {
 	}
 }
 
+// TestGetProjectMetrics_BadRequestHint verifies that invalid DORA filters return
+// model-facing guidance instead of only echoing GitLab's 400 response.
+func TestGetProjectMetrics_BadRequestHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"error":"environment_tiers is invalid"}`)
+	}))
+
+	_, err := GetProjectMetrics(context.Background(), client, ProjectInput{
+		ProjectID:        "42",
+		Metric:           "deployment_frequency",
+		EnvironmentTiers: []string{"production"},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid DORA filters")
+	}
+	errText := err.Error()
+	for _, want := range []string{"environment_tiers", "omit environment_tiers", "deployment environment tiers"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
+	}
+}
+
 // TestGetGroupMetrics validates the GetGroupMetrics handler across
 // success paths (with and without optional filters), input validation
 // (missing group_id, missing metric), API error responses (404, 500),
@@ -396,6 +419,29 @@ func TestGetGroupMetrics_ContextCancelled(t *testing.T) {
 	_, err := GetGroupMetrics(ctx, client, GroupInput{GroupID: "5", Metric: "deployment_frequency"})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
+	}
+}
+
+// TestGetGroupMetrics_BadRequestHint verifies that invalid group DORA filters
+// return actionable guidance for the model.
+func TestGetGroupMetrics_BadRequestHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"error":"environment_tiers is invalid"}`)
+	}))
+
+	_, err := GetGroupMetrics(context.Background(), client, GroupInput{
+		GroupID:          "5",
+		Metric:           "deployment_frequency",
+		EnvironmentTiers: []string{"production"},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid DORA filters")
+	}
+	errText := err.Error()
+	for _, want := range []string{"environment_tiers", "omit environment_tiers", "deployment environment tiers"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
 	}
 }
 

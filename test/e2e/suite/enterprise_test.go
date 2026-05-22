@@ -16,6 +16,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/auditevents"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/compliancepolicy"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dependencies"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dorametrics"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/enterpriseusers"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/externalstatuschecks"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/geo"
@@ -240,19 +241,75 @@ func TestMeta_DORAMetrics(t *testing.T) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	startDate := time.Now().UTC().AddDate(0, -1, 0).Format("2006-01-02")
+	endDate := time.Now().UTC().Format("2006-01-02")
+
+	grpName := uniqueName("dora-metrics")
+	grpOut, setupErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name":       grpName,
+			"path":       grpName,
+			"visibility": "private",
+		},
+	})
+	requireNoError(t, setupErr, "create group for DORA metrics")
+	groupIDStr := strconv.FormatInt(grpOut.ID, 10)
+	defer func() {
+		_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+	}()
+
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("Meta/DORA/Project", func(t *testing.T) {
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_dora_metrics", map[string]any{
+		out, err := callToolOn[dorametrics.Output](ctx, sess.meta, "gitlab_dora_metrics", map[string]any{
 			"action": "project",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 				"metric":     "deployment_frequency",
+				"start_date": startDate,
+				"end_date":   endDate,
+				"interval":   "daily",
 			},
 		})
 		requirePremiumFeature(t, err, "DORA metrics")
-		t.Log("DORA metrics OK")
+		t.Logf("Project DORA metrics: %d", len(out.Metrics))
+	})
+
+	t.Run("Meta/DORA/ProjectInvalidEnvironmentTiers", func(t *testing.T) {
+		_, err := callToolOn[dorametrics.Output](ctx, sess.meta, "gitlab_dora_metrics", map[string]any{
+			"action": "project",
+			"params": map[string]any{
+				"project_id":        proj.pidStr(),
+				"metric":            "deployment_frequency",
+				"start_date":        startDate,
+				"end_date":          endDate,
+				"interval":          "daily",
+				"environment_tiers": []string{"production"},
+			},
+		})
+		requireErrorContainsAll(t, err, "environment_tiers", "omit environment_tiers", "deployment environment tiers")
+	})
+
+	t.Run("Meta/DORA/Group", func(t *testing.T) {
+		out, err := callToolOn[dorametrics.Output](ctx, sess.meta, "gitlab_dora_metrics", map[string]any{
+			"action": "group",
+			"params": map[string]any{
+				"group_id":   groupIDStr,
+				"metric":     "lead_time_for_changes",
+				"start_date": startDate,
+				"end_date":   endDate,
+				"interval":   "all",
+			},
+		})
+		requirePremiumFeature(t, err, "DORA group metrics")
+		t.Logf("Group DORA metrics: %d", len(out.Metrics))
 	})
 }
 
