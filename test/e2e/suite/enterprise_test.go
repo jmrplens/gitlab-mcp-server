@@ -790,16 +790,134 @@ func TestMeta_Geo(t *testing.T) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	name := uniqueName("e2e-geo-site")
+	updatedName := uniqueName("e2e-geo-site-updated")
+	url := "https://geo-secondary.example.com/"
+	var siteID int64
+	t.Cleanup(func() {
+		if siteID == 0 {
+			return
+		}
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanCancel()
+		_ = callToolVoidOn(cleanCtx, sess.meta, "gitlab_geo", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"id": siteID},
+		})
+	})
 
 	t.Run("Meta/Geo/List", func(t *testing.T) {
-		_, err := callToolOn[geo.ListOutput](ctx, sess.meta, "gitlab_geo", map[string]any{
+		out, err := callToolOn[geo.ListOutput](ctx, sess.meta, "gitlab_geo", map[string]any{
 			"action": "list",
 			"params": map[string]any{},
 		})
 		requirePremiumFeature(t, err, "Geo sites")
-		t.Log("Geo list OK")
+		t.Logf("Geo sites before create: %d", len(out.Sites))
 	})
+
+	t.Run("Meta/Geo/Create", func(t *testing.T) {
+		out, err := callToolOn[geo.Output](ctx, sess.meta, "gitlab_geo", map[string]any{
+			"action": "create",
+			"params": map[string]any{
+				"name":         name,
+				"url":          url,
+				"internal_url": url,
+				"enabled":      false,
+			},
+		})
+		requirePremiumFeature(t, err, "Geo site create")
+		requireTruef(t, out.ID > 0, "Geo site ID should be positive")
+		requireTruef(t, out.Name == name, "Geo site name = %q, want %q", out.Name, name)
+		requireTruef(t, !out.Enabled, "Geo site should be disabled")
+		siteID = out.ID
+	})
+
+	t.Run("Meta/Geo/Get", func(t *testing.T) {
+		requireTruef(t, siteID > 0, "siteID not set")
+		out, err := callToolOn[geo.Output](ctx, sess.meta, "gitlab_geo", map[string]any{
+			"action": "get",
+			"params": map[string]any{"id": siteID},
+		})
+		requireNoError(t, err, "Geo site get")
+		requireTruef(t, out.ID == siteID, "Geo site ID = %d, want %d", out.ID, siteID)
+		requireTruef(t, out.Name == name, "Geo site name = %q, want %q", out.Name, name)
+	})
+
+	t.Run("Meta/Geo/ListIncludesCreated", func(t *testing.T) {
+		requireTruef(t, siteID > 0, "siteID not set")
+		out, err := callToolOn[geo.ListOutput](ctx, sess.meta, "gitlab_geo", map[string]any{
+			"action": "list",
+			"params": map[string]any{},
+		})
+		requireNoError(t, err, "Geo site list after create")
+		requireTruef(t, geoSiteListed(out.Sites, siteID), "created Geo site %d not present in list", siteID)
+	})
+
+	t.Run("Meta/Geo/Edit", func(t *testing.T) {
+		requireTruef(t, siteID > 0, "siteID not set")
+		out, err := callToolOn[geo.Output](ctx, sess.meta, "gitlab_geo", map[string]any{
+			"action": "edit",
+			"params": map[string]any{
+				"id":                 siteID,
+				"name":               updatedName,
+				"repos_max_capacity": int64(11),
+			},
+		})
+		requireNoError(t, err, "Geo site edit")
+		requireTruef(t, out.ID == siteID, "Geo site ID = %d, want %d", out.ID, siteID)
+		requireTruef(t, out.Name == updatedName, "Geo site name = %q, want %q", out.Name, updatedName)
+		requireTruef(t, out.ReposMaxCapacity == 11, "Geo site repos_max_capacity = %d, want 11", out.ReposMaxCapacity)
+	})
+
+	t.Run("Meta/Geo/ListStatus", func(t *testing.T) {
+		out, err := callToolOn[geo.ListStatusOutput](ctx, sess.meta, "gitlab_geo", map[string]any{
+			"action": "list_status",
+			"params": map[string]any{},
+		})
+		requireNoError(t, err, "Geo site list_status")
+		t.Logf("Geo statuses: %d", len(out.Statuses))
+	})
+
+	t.Run("Meta/Geo/GetStatusNotReported", func(t *testing.T) {
+		requireTruef(t, siteID > 0, "siteID not set")
+		_, err := callToolOn[geo.StatusOutput](ctx, sess.meta, "gitlab_geo", map[string]any{
+			"action": "get_status",
+			"params": map[string]any{"id": siteID},
+		})
+		requireErrorContainsAll(t, err, "reported status", "gitlab_list_geo_sites")
+	})
+
+	t.Run("Meta/Geo/Repair", func(t *testing.T) {
+		requireTruef(t, siteID > 0, "siteID not set")
+		out, err := callToolOn[geo.Output](ctx, sess.meta, "gitlab_geo", map[string]any{
+			"action": "repair",
+			"params": map[string]any{"id": siteID},
+		})
+		requireNoError(t, err, "Geo site repair")
+		requireTruef(t, out.ID == siteID, "Geo site repair ID = %d, want %d", out.ID, siteID)
+	})
+
+	t.Run("Meta/Geo/Delete", func(t *testing.T) {
+		requireTruef(t, siteID > 0, "siteID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_geo", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"id": siteID},
+		})
+		requireNoError(t, err, "Geo site delete")
+		siteID = 0
+	})
+}
+
+func geoSiteListed(sites []geo.Output, siteID int64) bool {
+	for _, site := range sites {
+		if site.ID == siteID {
+			return true
+		}
+	}
+	return false
 }
 
 // TestMeta_StorageMoves exercises storage move tools via the

@@ -302,6 +302,29 @@ func TestRepair_Success(t *testing.T) {
 	}
 }
 
+// TestRepair_NullResponse verifies that Repair handles GitLab returning HTTP
+// 200 with a null body, which can happen after accepting the repair request.
+func TestRepair_NullResponse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/geo_sites/1/repair" {
+			testutil.RespondJSON(w, http.StatusOK, `null`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Repair(context.Background(), client, IDInput{ID: 1})
+	if err != nil {
+		t.Fatalf("Repair() error: %v", err)
+	}
+	if out.ID != 1 {
+		t.Errorf("expected ID 1, got %d", out.ID)
+	}
+	if len(out.NextSteps) == 0 {
+		t.Fatal("expected next steps for null repair response")
+	}
+}
+
 // TestRepair_MissingID verifies that Repair returns a validation error
 // when ID is zero.
 func TestRepair_MissingID(t *testing.T) {
