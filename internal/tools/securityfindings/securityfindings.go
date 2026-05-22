@@ -194,7 +194,7 @@ type gqlPipelineFindings struct {
 
 // gqlProjectPipeline wraps the pipeline inside a project.
 type gqlProjectPipeline struct {
-	Pipeline gqlPipelineFindings `json:"pipeline"`
+	Pipeline *gqlPipelineFindings `json:"pipeline"`
 }
 
 // nodeToItem converts a raw GraphQL security finding node into a [FindingItem]
@@ -312,6 +312,13 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 			return ListOutput{Findings: []FindingItem{}}, nil
 		}
 		return ListOutput{}, fmt.Errorf("list_security_findings: project %q not found", input.ProjectPath)
+	}
+	if resp.Data.Project.Pipeline == nil {
+		return ListOutput{}, fmt.Errorf(
+			"list_security_findings: pipeline_iid %q not found in project %q. Suggestion: verify pipeline_iid with gitlab_pipeline action 'list' or 'latest'; security findings require a pipeline with security scan report artifacts",
+			input.PipelineIID,
+			input.ProjectPath,
+		)
 	}
 
 	nodes := resp.Data.Project.Pipeline.SecurityReportFindings.Nodes

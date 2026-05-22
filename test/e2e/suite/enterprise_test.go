@@ -1176,7 +1176,7 @@ func TestMeta_SecurityFindings(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("Meta/SecurityFinding/List", func(t *testing.T) {
-		_, err := callToolOn[securityfindings.ListOutput](ctx, sess.meta, "gitlab_security_finding", map[string]any{
+		out, err := callToolOn[securityfindings.ListOutput](ctx, sess.meta, "gitlab_security_finding", map[string]any{
 			"action": "list",
 			"params": map[string]any{
 				"project_path": proj.Path,
@@ -1184,7 +1184,22 @@ func TestMeta_SecurityFindings(t *testing.T) {
 			},
 		})
 		requirePremiumFeature(t, err, "security findings")
-		t.Log("Security finding list OK")
+		t.Logf("Security findings: %d", len(out.Findings))
+	})
+
+	t.Run("Meta/SecurityFinding/ListFiltered", func(t *testing.T) {
+		out, err := callToolOn[securityfindings.ListOutput](ctx, sess.meta, "gitlab_security_finding", map[string]any{
+			"action": "list",
+			"params": map[string]any{
+				"project_path": proj.Path,
+				"pipeline_iid": "1",
+				"severity":     []string{"HIGH", "CRITICAL"},
+				"report_type":  []string{"SAST"},
+				"first":        10,
+			},
+		})
+		requireNoError(t, err, "security findings list with filters")
+		t.Logf("Filtered security findings: %d", len(out.Findings))
 	})
 }
 

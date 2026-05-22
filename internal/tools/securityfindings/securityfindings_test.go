@@ -229,6 +229,35 @@ func TestList_EmptyResults(t *testing.T) {
 	}
 }
 
+// TestList_PipelineNotFound verifies that a null GraphQL pipeline is reported
+// as an actionable pipeline_iid error instead of a false empty findings list.
+func TestList_PipelineNotFound(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"pipeline": null
+				}
+			}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	_, err := List(context.Background(), client, ListInput{
+		ProjectPath: "my-group/my-project",
+		PipelineIID: "999",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing pipeline_iid")
+	}
+	errText := err.Error()
+	for _, want := range []string{"pipeline_iid", "gitlab_pipeline", "security scan report artifacts"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
+	}
+}
+
 // TestList_ServerError verifies that listing security findings propagates
 // errors when the GraphQL API returns a server error.
 func TestList_ServerError(t *testing.T) {
