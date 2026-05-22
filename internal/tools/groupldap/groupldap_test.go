@@ -47,6 +47,18 @@ func TestList(t *testing.T) {
 			wantCount: 0,
 		},
 		{
+			name:  "returns empty list when GitLab reports no linked groups",
+			input: ListInput{GroupID: "mygroup"},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v4/groups/mygroup" {
+					testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"mygroup"}`)
+					return
+				}
+				testutil.RespondJSON(w, http.StatusNotFound, `{"message":"No linked LDAP groups found"}`)
+			}),
+			wantCount: 0,
+		},
+		{
 			name:    "returns error when group_id is empty",
 			input:   ListInput{},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) }),
@@ -120,6 +132,29 @@ func TestList_FieldMapping(t *testing.T) {
 	}
 }
 
+// TestAPIErrorIncludesActionableHint verifies LDAP API failures include the
+// provider and cn/filter guidance needed to repair model-generated requests.
+func TestAPIErrorIncludesActionableHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":"provider is invalid"}`)
+	}))
+
+	_, err := Add(context.Background(), client, AddInput{
+		GroupID:     "mygroup",
+		CN:          "cn1",
+		GroupAccess: 30,
+		Provider:    "missing-provider",
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	for _, want := range []string{"LDAP provider name", "cn or filter", "Premium/Ultimate", "Owner access"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not contain %q", err.Error(), want)
+		}
+	}
+}
+
 // TestAdd validates the Add handler covering success with CN, Filter,
 // MemberRoleID, validation errors, and API failure responses.
 func TestAdd(t *testing.T) {
@@ -183,6 +218,12 @@ func TestAdd(t *testing.T) {
 		{
 			name:    "returns error when provider is empty",
 			input:   AddInput{GroupID: "mygroup", GroupAccess: 30},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) }),
+			wantErr: true,
+		},
+		{
+			name:    "returns error when cn and filter are empty",
+			input:   AddInput{GroupID: "mygroup", Provider: "main", GroupAccess: 30},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) }),
 			wantErr: true,
 		},
@@ -263,6 +304,12 @@ func TestDeleteWithCNOrFilter(t *testing.T) {
 		{
 			name:    "returns error when group_id is empty",
 			input:   DeleteWithCNOrFilterInput{},
+			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) }),
+			wantErr: true,
+		},
+		{
+			name:    "returns error when cn and filter are empty",
+			input:   DeleteWithCNOrFilterInput{GroupID: "mygroup"},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) }),
 			wantErr: true,
 		},

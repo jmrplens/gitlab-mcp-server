@@ -2,13 +2,14 @@ package groupsaml
 
 import (
 	"context"
-	"fmt"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+const groupSAMLLinkHint = "verify group_id with gitlab_group_get; group SAML links require Premium/Ultimate, Owner access, and group SAML SSO configured for the group; self-managed instances without SAML SSO can return 401 or 404"
 
 // Output represents a single group SAML link.
 type Output struct {
@@ -46,7 +47,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	links, _, err := client.GL().Groups.ListGroupSAMLLinks(input.GroupID, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, fmt.Errorf("list group SAML links: %w", err)
+		return ListOutput{}, toolutil.WrapErrWithHint("list group SAML links", err, groupSAMLLinkHint)
 	}
 	out := make([]Output, len(links))
 	for i, l := range links {
@@ -71,7 +72,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	link, _, err := client.GL().Groups.GetGroupSAMLLink(input.GroupID, input.SAMLGroupName, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, fmt.Errorf("get group SAML link: %w", err)
+		return Output{}, toolutil.WrapErrWithHint("get group SAML link", err, groupSAMLLinkHint)
 	}
 	return toOutput(link), nil
 }
@@ -104,7 +105,7 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	}
 	link, _, err := client.GL().Groups.AddGroupSAMLLink(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, fmt.Errorf("add group SAML link: %w", err)
+		return Output{}, toolutil.WrapErrWithHint("add group SAML link", err, groupSAMLLinkHint)
 	}
 	return toOutput(link), nil
 }
@@ -125,7 +126,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().Groups.DeleteGroupSAMLLink(input.GroupID, input.SAMLGroupName, gl.WithContext(ctx))
 	if err != nil {
-		return fmt.Errorf("delete group SAML link: %w", err)
+		return toolutil.WrapErrWithHint("delete group SAML link", err, groupSAMLLinkHint)
 	}
 	return nil
 }

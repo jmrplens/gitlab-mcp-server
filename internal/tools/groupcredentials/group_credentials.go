@@ -10,6 +10,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	groupCredentialInventoryHint = "verify group_id with gitlab_group_get; group credential inventory can return 404 when this GitLab instance does not expose the /groups/:id/manage endpoints; requires Ultimate and Owner or admin access"
+	groupCredentialTokenHint     = "verify token_id with credential_list_pats; if credential_list_pats returns 404, group credential inventory may be unavailable on this GitLab instance; requires Ultimate and Owner or admin access"
+	//nolint:gosec // Error hint text only; no secret material.
+	groupCredentialSSHKeyHint = "verify key_id with credential_list_ssh_keys; if credential_list_ssh_keys returns 404, group credential inventory may be unavailable on this GitLab instance; requires Ultimate and Owner or admin access"
+)
+
 // ListPATsInput holds parameters for listing group personal access tokens.
 type ListPATsInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id"           jsonschema:"Group ID or URL-encoded path,required"`
@@ -159,7 +166,7 @@ func ListPATs(ctx context.Context, client *gitlabclient.Client, in ListPATsInput
 	}
 	tokens, resp, err := client.GL().GroupCredentials.ListGroupPersonalAccessTokens(in.GroupID.String(), opts)
 	if err != nil {
-		return PATListOutput{}, toolutil.WrapErrWithStatusHint("list group PATs", err, http.StatusNotFound, "verify group_id \u2014 requires Owner role or admin access")
+		return PATListOutput{}, toolutil.WrapErrWithStatusHint("list group PATs", err, http.StatusNotFound, groupCredentialInventoryHint)
 	}
 	out := PATListOutput{Tokens: make([]PATOutput, 0, len(tokens))}
 	for _, t := range tokens {
@@ -186,7 +193,7 @@ func ListSSHKeys(ctx context.Context, client *gitlabclient.Client, in ListSSHKey
 	}
 	keys, resp, err := client.GL().GroupCredentials.ListGroupSSHKeys(in.GroupID.String(), opts)
 	if err != nil {
-		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH keys", err, http.StatusNotFound, "verify group_id \u2014 requires Owner role or admin access")
+		return SSHKeyListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH keys", err, http.StatusNotFound, groupCredentialInventoryHint)
 	}
 	out := SSHKeyListOutput{Keys: make([]SSHKeyOutput, 0, len(keys))}
 	for _, k := range keys {
@@ -209,7 +216,7 @@ func RevokePAT(ctx context.Context, client *gitlabclient.Client, in RevokePATInp
 	}
 	_, err := client.GL().GroupCredentials.RevokeGroupPersonalAccessToken(in.GroupID.String(), in.TokenID)
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("revoke group PAT", err, http.StatusNotFound, "verify token_id with gitlab_list_group_pats")
+		return toolutil.WrapErrWithStatusHint("revoke group PAT", err, http.StatusNotFound, groupCredentialTokenHint)
 	}
 	return nil
 }
@@ -227,7 +234,7 @@ func DeleteSSHKey(ctx context.Context, client *gitlabclient.Client, in DeleteSSH
 	}
 	_, err := client.GL().GroupCredentials.DeleteGroupSSHKey(in.GroupID.String(), in.KeyID)
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("delete group SSH key", err, http.StatusNotFound, "verify key_id with gitlab_list_group_ssh_keys")
+		return toolutil.WrapErrWithStatusHint("delete group SSH key", err, http.StatusNotFound, groupCredentialSSHKeyHint)
 	}
 	return nil
 }

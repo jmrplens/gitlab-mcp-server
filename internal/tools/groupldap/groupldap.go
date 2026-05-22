@@ -2,13 +2,15 @@ package groupldap
 
 import (
 	"context"
-	"fmt"
+	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+const groupLDAPLinkHint = "verify group_id with gitlab_group_get; provide either cn or filter, and use the LDAP provider name configured on the GitLab instance; requires Premium/Ultimate and Owner access"
 
 // Output represents a single group LDAP link.
 type Output struct {
@@ -51,7 +53,12 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	links, _, err := client.GL().Groups.ListGroupLDAPLinks(input.GroupID, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, fmt.Errorf("list group LDAP links: %w", err)
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			if _, _, groupErr := client.GL().Groups.GetGroup(input.GroupID, &gl.GetGroupOptions{}, gl.WithContext(ctx)); groupErr == nil {
+				return ListOutput{Links: []Output{}}, nil
+			}
+		}
+		return ListOutput{}, toolutil.WrapErrWithHint("list group LDAP links", err, groupLDAPLinkHint)
 	}
 	out := make([]Output, len(links))
 	for i, l := range links {
@@ -78,6 +85,9 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	if input.Provider == "" {
 		return Output{}, toolutil.ErrFieldRequired("provider")
 	}
+	if input.CN == "" && input.Filter == "" {
+		return Output{}, toolutil.ErrFieldRequired("cn or filter")
+	}
 	access := gl.AccessLevelValue(input.GroupAccess)
 	opts := &gl.AddGroupLDAPLinkOptions{
 		GroupAccess:  &access,
@@ -92,7 +102,7 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	}
 	link, _, err := client.GL().Groups.AddGroupLDAPLink(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, fmt.Errorf("add group LDAP link: %w", err)
+		return Output{}, toolutil.WrapErrWithHint("add group LDAP link", err, groupLDAPLinkHint)
 	}
 	return toOutput(link), nil
 }
@@ -110,6 +120,9 @@ func DeleteWithCNOrFilter(ctx context.Context, client *gitlabclient.Client, inpu
 	if input.GroupID == "" {
 		return toolutil.ErrFieldRequired("group_id")
 	}
+	if input.CN == "" && input.Filter == "" {
+		return toolutil.ErrFieldRequired("cn or filter")
+	}
 	opts := &gl.DeleteGroupLDAPLinkWithCNOrFilterOptions{}
 	if input.CN != "" {
 		opts.CN = &input.CN
@@ -122,7 +135,7 @@ func DeleteWithCNOrFilter(ctx context.Context, client *gitlabclient.Client, inpu
 	}
 	_, err := client.GL().Groups.DeleteGroupLDAPLinkWithCNOrFilter(input.GroupID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return fmt.Errorf("delete group LDAP link: %w", err)
+		return toolutil.WrapErrWithHint("delete group LDAP link", err, groupLDAPLinkHint)
 	}
 	return nil
 }
@@ -147,7 +160,7 @@ func DeleteForProvider(ctx context.Context, client *gitlabclient.Client, input D
 	}
 	_, err := client.GL().Groups.DeleteGroupLDAPLinkForProvider(input.GroupID, input.Provider, input.CN, gl.WithContext(ctx))
 	if err != nil {
-		return fmt.Errorf("delete group LDAP link for provider: %w", err)
+		return toolutil.WrapErrWithHint("delete group LDAP link for provider", err, groupLDAPLinkHint)
 	}
 	return nil
 }

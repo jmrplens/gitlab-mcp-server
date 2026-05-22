@@ -18,9 +18,9 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,390 |
-| Unit test functions                                   | 10,139 |
-| E2E test functions                                    |    251 |
+| Total test functions                                  | 10,397 |
+| Unit test functions                                   | 10,144 |
+| E2E test functions                                    |    253 |
 | cmd test functions                                    |    636 |
 | Test files (internal/)                                |    436 |
 | Test files (cmd/)                                     |     39 |
@@ -29,14 +29,14 @@
 | Core packages tested                                  |     19 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  89.5% |
 | Overall coverage (`go test ./internal/...`)           |  98.7% |
-| Average package coverage                              |  95.5% |
+| Average package coverage                              |  95.4% |
 
 ### Naming Convention Stats
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,314 | 89.6% |
-| `TestFunc` (no underscore)             |   782 |  7.5% |
+| `TestFunc_Scenario` (2-part)           | 9,317 | 89.6% |
+| `TestFunc` (no underscore)             |   786 |  7.6% |
 | `TestFunc_Scenario_Expected` (3+ part) |   294 |  2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,771 |         89 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          7,447 |        335 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
+| Tool sub-packages (175) |          7,452 |        335 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            253 |        109 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            636 |         39 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,390** |    **584** |                                                                                                 |
+| **Total**               |     **10,397** |    **584** |                                                                                                 |
 
 ### Core Packages
 
@@ -174,21 +174,21 @@
 | gitignoretemplates      |        14 |          1 |   100.0% |         2 |
 | groupanalytics          |         6 |          2 |   100.0% |         3 |
 | groupboards             |        57 |          2 |   100.0% |        10 |
-| groupcredentials        |        36 |          3 |   100.0% |         4 |
+| groupcredentials        |        37 |          3 |   100.0% |         4 |
 | groupepicboards         |         8 |          2 |   100.0% |         2 |
 | groupimportexport       |        27 |          1 |   100.0% |         3 |
 | groupiterations         |        19 |          1 |   100.0% |         1 |
 | grouplabels             |        48 |          2 |   100.0% |         7 |
-| groupldap               |        10 |          2 |   100.0% |         4 |
+| groupldap               |        11 |          2 |   100.0% |         4 |
 | groupmarkdownuploads    |        31 |          2 |   100.0% |         3 |
 | groupmembers            |        59 |          2 |   100.0% |         7 |
 | groupmilestones         |        87 |          2 |   100.0% |         8 |
 | groupprotectedbranches  |        16 |          2 |   100.0% |         5 |
-| groupprotectedenvs      |        12 |          2 |   100.0% |         5 |
+| groupprotectedenvs      |        13 |          2 |    98.6% |         5 |
 | grouprelationsexport    |        25 |          2 |   100.0% |         2 |
 | groupreleases           |        14 |          3 |   100.0% |         1 |
 | groups                  |       127 |          3 |   100.0% |        18 |
-| groupsaml               |        23 |          3 |   100.0% |         4 |
+| groupsaml               |        24 |          3 |   100.0% |         4 |
 | groupscim               |        27 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        19 |          2 |   100.0% |         7 |
 | groupsshcerts           |        24 |          3 |   100.0% |         3 |
@@ -222,7 +222,7 @@
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        69 |          1 |   100.0% |         7 |
 | modelregistry           |         5 |          3 |   100.0% |         1 |
-| mrapprovals             |        60 |          2 |   100.0% |         7 |
+| mrapprovals             |        60 |          2 |    99.5% |         7 |
 | mrapprovalsettings      |         9 |          2 |   100.0% |         4 |
 | mrchanges               |        32 |          1 |   100.0% |         4 |
 | mrcontextcommits        |        22 |          1 |   100.0% |         3 |
@@ -244,7 +244,7 @@
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        62 |          2 |   100.0% |         7 |
 | projects                |       341 |          4 |   100.0% |        54 |
-| projectserviceaccounts  |         9 |          1 |   100.0% |         8 |
+| projectserviceaccounts  |        10 |          1 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        17 |          2 |   100.0% |         6 |
 | projecttemplates        |        18 |          1 |   100.0% |         2 |
@@ -289,7 +289,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,447** |    **335** |          | **1,127** |
+| **Total**               | **7,452** |    **335** |          | **1,127** |
 
 </details>
 
@@ -418,7 +418,7 @@
 | groupmembers            |   100.0% |
 | groupmilestones         |   100.0% |
 | groupprotectedbranches  |   100.0% |
-| groupprotectedenvs      |   100.0% |
+| groupprotectedenvs      |    98.6% |
 | grouprelationsexport    |   100.0% |
 | groupreleases           |   100.0% |
 | groups                  |   100.0% |
@@ -456,7 +456,7 @@
 | metadata                |   100.0% |
 | milestones              |   100.0% |
 | modelregistry           |   100.0% |
-| mrapprovals             |   100.0% |
+| mrapprovals             |    99.5% |
 | mrapprovalsettings      |   100.0% |
 | mrchanges               |   100.0% |
 | mrcontextcommits        |   100.0% |

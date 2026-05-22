@@ -37630,7 +37630,7 @@
       "additionalProperties": false,
       "properties": {
         "environment": {
-          "description": "Environment name",
+          "description": "Environment tier (production, staging, testing, development, other)",
           "type": "string"
         },
         "group_id": {
@@ -38045,7 +38045,7 @@
           "type": "string"
         },
         "name": {
-          "description": "Environment name to protect",
+          "description": "Environment tier to protect (production, staging, testing, development, other)",
           "type": "string"
         },
         "required_approval_count": {
@@ -38179,7 +38179,7 @@
           "type": "boolean"
         },
         "environment": {
-          "description": "Environment name to unprotect",
+          "description": "Environment tier to unprotect (production, staging, testing, development, other)",
           "type": "string"
         },
         "group_id": {
@@ -38349,7 +38349,7 @@
           ]
         },
         "environment": {
-          "description": "Environment name",
+          "description": "Environment tier (production, staging, testing, development, other)",
           "type": "string"
         },
         "group_id": {
@@ -38357,7 +38357,7 @@
           "type": "string"
         },
         "name": {
-          "description": "New environment name",
+          "description": "New environment tier (production, staging, testing, development, other)",
           "type": "string"
         },
         "required_approval_count": {

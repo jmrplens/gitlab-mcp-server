@@ -7,20 +7,30 @@ package suite
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/binary"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/badges"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupanalytics"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupboards"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupcredentials"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouplabels"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupldap"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmembers"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmilestones"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupprotectedbranches"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupprotectedenvs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupsaml"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupsshcerts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupwikis"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securitysettings"
 )
 
 // TestMeta_GroupDeep exercises gitlab_group meta-tool actions not covered by
@@ -67,7 +77,7 @@ func TestMeta_GroupDeep(t *testing.T) {
 	runMetaGroupLabelOperations(t, ctx, groupID, groupIDStr)
 	runMetaGroupMilestoneOperations(t, ctx, groupID, groupIDStr)
 	runMetaGroupBoardOperations(t, ctx, groupID, groupIDStr)
-	runMetaGroupEnterpriseOperations(t, ctx, groupID, groupIDStr)
+	runMetaGroupEnterpriseOperations(t, ctx, grpName, groupID, groupIDStr)
 }
 
 func runMetaGroupCoreOperations(t *testing.T, ctx context.Context, grpName string, groupID int64, groupIDStr string) {
@@ -489,14 +499,301 @@ func runMetaGroupBoardOperations(t *testing.T, ctx context.Context, groupID int6
 	runEnterpriseMetaGroupBoardOperations(t, ctx, groupID, groupIDStr)
 }
 
-func runMetaGroupEnterpriseOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+func runMetaGroupEnterpriseOperations(t *testing.T, ctx context.Context, groupPath string, groupID int64, groupIDStr string) {
 	t.Helper()
 	if !sess.enterprise {
 		return
 	}
+	runEnterpriseMetaGroupAnalyticsOperations(t, ctx, groupPath)
+	runEnterpriseMetaGroupSecuritySettingsOperations(t, ctx, groupID, groupIDStr)
+	runEnterpriseMetaGroupSSHCertOperations(t, ctx, groupID, groupIDStr)
+	runEnterpriseMetaGroupCredentialOperations(t, ctx, groupID, groupIDStr)
+	runEnterpriseMetaGroupLDAPOperations(t, ctx, groupID, groupIDStr)
+	runEnterpriseMetaGroupSAMLOperations(t, ctx, groupID, groupIDStr)
 	runEnterpriseMetaGroupWikiOperations(t, ctx, groupID, groupIDStr)
 	runEnterpriseMetaGroupProtectedBranchOperations(t, ctx, groupID, groupIDStr)
 	runEnterpriseMetaGroupProtectedEnvOperations(t, ctx, groupID, groupIDStr)
+}
+
+func runEnterpriseMetaGroupAnalyticsOperations(t *testing.T, ctx context.Context, groupPath string) {
+	t.Helper()
+
+	t.Run("AnalyticsIssuesCount", func(t *testing.T) {
+		out, err := callToolOn[groupanalytics.IssuesCountOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "analytics_issues_count",
+			"params": map[string]any{"group_path": groupPath},
+		})
+		requireNoError(t, err, "analytics_issues_count")
+		requireTruef(t, out.GroupPath == groupPath, "group path mismatch: got %q want %q", out.GroupPath, groupPath)
+	})
+
+	t.Run("AnalyticsMRCount", func(t *testing.T) {
+		out, err := callToolOn[groupanalytics.MRCountOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "analytics_mr_count",
+			"params": map[string]any{"group_path": groupPath},
+		})
+		requireNoError(t, err, "analytics_mr_count")
+		requireTruef(t, out.GroupPath == groupPath, "group path mismatch: got %q want %q", out.GroupPath, groupPath)
+	})
+
+	t.Run("AnalyticsMembersCount", func(t *testing.T) {
+		out, err := callToolOn[groupanalytics.MembersCountOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "analytics_members_count",
+			"params": map[string]any{"group_path": groupPath},
+		})
+		requireNoError(t, err, "analytics_members_count")
+		requireTruef(t, out.GroupPath == groupPath, "group path mismatch: got %q want %q", out.GroupPath, groupPath)
+	})
+}
+
+func runEnterpriseMetaGroupSecuritySettingsOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	t.Run("SecuritySettingsUpdate", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[securitysettings.GroupOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "security_settings_update",
+			"params": map[string]any{
+				"group_id":                       groupIDStr,
+				"secret_push_protection_enabled": true,
+			},
+		})
+		requireNoError(t, err, "security_settings_update")
+		requireTruef(t, out.SecretPushProtectionEnabled, "expected group secret push protection enabled")
+	})
+}
+
+func runEnterpriseMetaGroupSSHCertOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	var certificateID int64
+
+	t.Run("SSHCertListEmpty", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groupsshcerts.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ssh_cert_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+		requireNoError(t, err, "ssh_cert_list empty")
+		requireTruef(t, len(out.Certificates) == 0, "expected 0 SSH certificates, got %d", len(out.Certificates))
+	})
+
+	t.Run("SSHCertCreate", func(t *testing.T) {
+		requireTruef(t, groupID > 0, "groupID not set")
+		out, err := callToolOn[groupsshcerts.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ssh_cert_create",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"key":      generateED25519AuthorizedKey(t, "e2e-group-ssh-cert"),
+				"title":    uniqueName("group-ssh-cert"),
+			},
+		})
+		requireNoError(t, err, "ssh_cert_create")
+		requireTruef(t, out.ID > 0, "expected SSH certificate ID > 0")
+		certificateID = out.ID
+	})
+
+	t.Run("SSHCertListOne", func(t *testing.T) {
+		requireTruef(t, certificateID > 0, "certificateID not set")
+		out, err := callToolOn[groupsshcerts.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ssh_cert_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+		requireNoError(t, err, "ssh_cert_list one")
+		requireTruef(t, len(out.Certificates) >= 1, "expected at least 1 SSH certificate, got %d", len(out.Certificates))
+	})
+
+	t.Run("SSHCertDelete", func(t *testing.T) {
+		requireTruef(t, certificateID > 0, "certificateID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ssh_cert_delete",
+			"params": map[string]any{
+				"group_id":       groupIDStr,
+				"certificate_id": certificateID,
+			},
+		})
+		requireNoError(t, err, "ssh_cert_delete")
+		certificateID = 0
+	})
+}
+
+func runEnterpriseMetaGroupCredentialOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	requireTruef(t, groupID > 0, "groupID not set")
+
+	t.Run("CredentialListPATsUnavailableHint", func(t *testing.T) {
+		_, err := callToolOn[groupcredentials.PATListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "credential_list_pats",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+		requireErrorContainsAll(t, err, "group credential inventory", "/groups/:id/manage", "Ultimate", "Owner or admin")
+	})
+
+	t.Run("CredentialListSSHKeysUnavailableHint", func(t *testing.T) {
+		_, err := callToolOn[groupcredentials.SSHKeyListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "credential_list_ssh_keys",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+		requireErrorContainsAll(t, err, "group credential inventory", "/groups/:id/manage", "Ultimate", "Owner or admin")
+	})
+
+	t.Run("CredentialRevokePATUnavailableHint", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "credential_revoke_pat",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"token_id": int64(999999),
+			},
+		})
+		requireErrorContainsAll(t, err, "credential_list_pats", "group credential inventory", "Ultimate", "Owner or admin")
+	})
+
+	t.Run("CredentialDeleteSSHKeyUnavailableHint", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "credential_delete_ssh_key",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"key_id":   int64(999999),
+			},
+		})
+		requireErrorContainsAll(t, err, "credential_list_ssh_keys", "group credential inventory", "Ultimate", "Owner or admin")
+	})
+}
+
+func requireErrorContainsAll(t *testing.T, err error, fragments ...string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	errText := err.Error()
+	for _, fragment := range fragments {
+		if !strings.Contains(errText, fragment) {
+			t.Fatalf("error %q does not contain %q", errText, fragment)
+		}
+	}
+}
+
+func runEnterpriseMetaGroupLDAPOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	requireTruef(t, groupID > 0, "groupID not set")
+
+	provider := "ldapmain"
+	cn := uniqueName("ldap-cn")
+	providerCN := uniqueName("ldap-provider-cn")
+
+	t.Run("LDAPLinkListEmpty", func(t *testing.T) {
+		out, err := callToolOn[groupldap.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ldap_link_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+		requireNoError(t, err, "ldap_link_list empty")
+		requireTruef(t, len(out.Links) == 0, "expected no LDAP links, got %d", len(out.Links))
+	})
+
+	t.Run("LDAPLinkAdd", func(t *testing.T) {
+		out, err := callToolOn[groupldap.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ldap_link_add",
+			"params": map[string]any{
+				"group_id":     groupIDStr,
+				"cn":           cn,
+				"group_access": 30,
+				"provider":     provider,
+			},
+		})
+		requireNoError(t, err, "ldap_link_add")
+		requireTruef(t, out.CN == cn, "LDAP link CN mismatch: got %q want %q", out.CN, cn)
+	})
+
+	t.Run("LDAPLinkListOne", func(t *testing.T) {
+		out, err := callToolOn[groupldap.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ldap_link_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+		requireNoError(t, err, "ldap_link_list one")
+		requireTruef(t, len(out.Links) >= 1, "expected at least 1 LDAP link, got %d", len(out.Links))
+	})
+
+	t.Run("LDAPLinkDelete", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ldap_link_delete",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"cn":       cn,
+				"provider": provider,
+			},
+		})
+		requireNoError(t, err, "ldap_link_delete")
+	})
+
+	t.Run("LDAPLinkDeleteForProvider", func(t *testing.T) {
+		_, err := callToolOn[groupldap.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ldap_link_add",
+			"params": map[string]any{
+				"group_id":     groupIDStr,
+				"cn":           providerCN,
+				"group_access": 30,
+				"provider":     provider,
+			},
+		})
+		requireNoError(t, err, "ldap_link_add for provider delete")
+
+		err = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ldap_link_delete_for_provider",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+				"provider": provider,
+				"cn":       providerCN,
+			},
+		})
+		requireNoError(t, err, "ldap_link_delete_for_provider")
+	})
+}
+
+func runEnterpriseMetaGroupSAMLOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	requireTruef(t, groupID > 0, "groupID not set")
+
+	samlGroup := uniqueName("saml-group")
+
+	t.Run("SAMLLinkListRequiresConfiguredSSO", func(t *testing.T) {
+		_, err := callToolOn[groupsaml.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "saml_link_list",
+			"params": map[string]any{"group_id": groupIDStr},
+		})
+		requireErrorContainsAll(t, err, "group SAML SSO", "Premium/Ultimate", "Owner access", "401 or 404")
+	})
+
+	t.Run("SAMLLinkAddRequiresConfiguredSSO", func(t *testing.T) {
+		_, err := callToolOn[groupsaml.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "saml_link_add",
+			"params": map[string]any{
+				"group_id":        groupIDStr,
+				"saml_group_name": samlGroup,
+				"access_level":    30,
+			},
+		})
+		requireErrorContainsAll(t, err, "group SAML SSO", "Premium/Ultimate", "Owner access", "401 or 404")
+	})
+
+	t.Run("SAMLLinkGetRequiresConfiguredSSO", func(t *testing.T) {
+		_, err := callToolOn[groupsaml.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "saml_link_get",
+			"params": map[string]any{
+				"group_id":        groupIDStr,
+				"saml_group_name": samlGroup,
+			},
+		})
+		requireErrorContainsAll(t, err, "group SAML SSO", "Premium/Ultimate", "Owner access", "401 or 404")
+	})
+
+	t.Run("SAMLLinkDeleteRequiresConfiguredSSO", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "saml_link_delete",
+			"params": map[string]any{
+				"group_id":        groupIDStr,
+				"saml_group_name": samlGroup,
+			},
+		})
+		requireErrorContainsAll(t, err, "group SAML SSO", "Premium/Ultimate", "Owner access", "401 or 404")
+	})
 }
 
 func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
@@ -583,6 +880,34 @@ func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, gr
 		requireNoError(t, err, "group_board_delete")
 		t.Logf("Deleted board %d", boardID)
 	})
+}
+
+func generateED25519AuthorizedKey(t *testing.T, comment string) string {
+	t.Helper()
+	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	requireNoError(t, err, "generate ed25519 public key")
+
+	const keyType = "ssh-ed25519"
+	payload := make([]byte, 0, 4+len(keyType)+4+len(publicKey))
+	payload = appendLengthPrefixed(payload, []byte(keyType))
+	payload = appendLengthPrefixed(payload, publicKey)
+
+	return keyType + " " + base64.StdEncoding.EncodeToString(payload) + " " + comment
+}
+
+const maxSSHWireFieldLength = 1<<32 - 1
+
+func appendLengthPrefixed(dst, value []byte) []byte {
+	lengthValue := uint64(len(value))
+	if lengthValue > maxSSHWireFieldLength {
+		panic("ssh key field is too large")
+	}
+
+	var length [4]byte
+	binary.BigEndian.PutUint32(length[:], uint32(lengthValue))
+	dst = append(dst, length[:]...)
+	dst = append(dst, value...)
+	return dst
 }
 
 func runEnterpriseMetaGroupWikiOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
