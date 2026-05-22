@@ -1396,14 +1396,50 @@ func TestMeta_GroupSCIM(t *testing.T) {
 	})
 
 	t.Run("Meta/GroupSCIM/List", func(t *testing.T) {
-		_, err := callToolOn[groupscim.ListOutput](ctx, sess.meta, "gitlab_group_scim", map[string]any{
+		out, err := callToolOn[groupscim.ListOutput](ctx, sess.meta, "gitlab_group_scim", map[string]any{
 			"action": "list",
 			"params": map[string]any{
 				"group_id": groupID,
 			},
 		})
 		requirePremiumFeature(t, err, "Group SCIM")
-		t.Log("Group SCIM list OK")
+		t.Logf("Group SCIM identities: %d", len(out.Identities))
+	})
+
+	missingUID := uniqueName("e2e-missing-scim-")
+
+	t.Run("Meta/GroupSCIM/GetMissingUID", func(t *testing.T) {
+		_, err := callToolOn[groupscim.Output](ctx, sess.meta, "gitlab_group_scim", map[string]any{
+			"action": "get",
+			"params": map[string]any{
+				"group_id": groupID,
+				"uid":      missingUID,
+			},
+		})
+		requireErrorContainsAll(t, err, "uid", "gitlab_group_scim", "SCIM provisioning")
+	})
+
+	t.Run("Meta/GroupSCIM/UpdateMissingUID", func(t *testing.T) {
+		_, err := callToolOn[groupscim.UpdateOutput](ctx, sess.meta, "gitlab_group_scim", map[string]any{
+			"action": "update",
+			"params": map[string]any{
+				"group_id":   groupID,
+				"uid":        missingUID,
+				"extern_uid": uniqueName("e2e-new-scim-"),
+			},
+		})
+		requireErrorContainsAll(t, err, "uid", "gitlab_group_scim", "SCIM provisioning")
+	})
+
+	t.Run("Meta/GroupSCIM/DeleteMissingUID", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group_scim", map[string]any{
+			"action": "delete",
+			"params": map[string]any{
+				"group_id": groupID,
+				"uid":      missingUID,
+			},
+		})
+		requireErrorContainsAll(t, err, "uid", "gitlab_group_scim", "SCIM provisioning")
 	})
 }
 
