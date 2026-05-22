@@ -8,7 +8,9 @@ package suite
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1441,6 +1443,37 @@ func TestMeta_GroupSCIM(t *testing.T) {
 		})
 		requireErrorContainsAll(t, err, "uid", "gitlab_group_scim", "SCIM provisioning")
 	})
+}
+
+// TestEnterpriseOrbit_NotRegisteredOnSelfManaged verifies that GitLab.com-only
+// Orbit tools are omitted from self-managed Enterprise surfaces.
+func TestEnterpriseOrbit_NotRegisteredOnSelfManaged(t *testing.T) {
+	t.Parallel()
+	if !sess.enterprise {
+		return
+	}
+	if strings.Contains(strings.ToLower(os.Getenv("GITLAB_URL")), "gitlab.com") {
+		t.Skip("Orbit availability depends on GitLab.com Knowledge Graph feature flags")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	metaTools, err := sess.meta.ListTools(ctx, nil)
+	requireNoError(t, err, "list meta tools")
+	for _, tool := range metaTools.Tools {
+		if tool.Name == "gitlab_orbit" {
+			t.Fatalf("gitlab_orbit should not be registered on self-managed Enterprise")
+		}
+	}
+
+	individualTools, err := sess.individual.ListTools(ctx, nil)
+	requireNoError(t, err, "list individual tools")
+	for _, tool := range individualTools.Tools {
+		if strings.HasPrefix(tool.Name, "gitlab_orbit_") {
+			t.Fatalf("%s should not be registered on self-managed Enterprise", tool.Name)
+		}
+	}
 }
 
 // TestMeta_EnterpriseUsers exercises enterprise user tools via the
