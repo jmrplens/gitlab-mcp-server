@@ -5,11 +5,25 @@ package enterpriseusers
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+func assertEnterpriseUserHint(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected enterprise user error, got nil")
+	}
+	errText := err.Error()
+	for _, want := range []string{"user_id", "gitlab_enterprise_user", "gitlab_list_enterprise_users", "enterprise namespace"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
+	}
+}
 
 // --- List ---.
 
@@ -332,9 +346,7 @@ func TestGet_APIError(t *testing.T) {
 		GroupID: toolutil.StringOrInt("42"),
 		UserID:  10,
 	})
-	if err == nil {
-		t.Fatal("expected error for 404 response, got nil")
-	}
+	assertEnterpriseUserHint(t, err)
 }
 
 // --- Disable2FA ---.
@@ -419,9 +431,7 @@ func TestDisable2FA_APIError(t *testing.T) {
 		GroupID: toolutil.StringOrInt("42"),
 		UserID:  10,
 	})
-	if err == nil {
-		t.Fatal("expected error for 403 response, got nil")
-	}
+	assertEnterpriseUserHint(t, err)
 }
 
 // --- Delete ---.
@@ -529,7 +539,5 @@ func TestDelete_APIError(t *testing.T) {
 		GroupID: toolutil.StringOrInt("42"),
 		UserID:  10,
 	})
-	if err == nil {
-		t.Fatal("expected error for 403 response, got nil")
-	}
+	assertEnterpriseUserHint(t, err)
 }

@@ -12,6 +12,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const hintVerifyEnterpriseUser = "verify user_id with gitlab_enterprise_user action 'list' or gitlab_list_enterprise_users; enterprise user actions only apply to users managed by the group's enterprise namespace"
+
 // ListInput holds parameters for listing enterprise users.
 type ListInput struct {
 	GroupID       toolutil.StringOrInt `json:"group_id"        jsonschema:"Group ID or URL-encoded path,required"`
@@ -133,7 +135,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 	users, resp, err := client.GL().EnterpriseUsers.ListEnterpriseUsers(in.GroupID.String(), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list enterprise users", err, http.StatusNotFound, "verify group_id \u2014 enterprise users require Ultimate license")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list enterprise users", err, http.StatusNotFound, "verify group_id; enterprise users require Ultimate license")
 	}
 	out := ListOutput{
 		Users:      make([]Output, 0, len(users)),
@@ -158,7 +160,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, in GetInput) (Output,
 	}
 	u, _, err := client.GL().EnterpriseUsers.GetEnterpriseUser(in.GroupID.String(), in.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("get enterprise user", err, http.StatusNotFound, "verify user_id with gitlab_list_enterprise_users")
+		return Output{}, toolutil.WrapErrWithHint("get enterprise user", err, hintVerifyEnterpriseUser)
 	}
 	return toOutput(u), nil
 }
@@ -176,7 +178,7 @@ func Disable2FA(ctx context.Context, client *gitlabclient.Client, in Disable2FAI
 	}
 	_, err := client.GL().EnterpriseUsers.Disable2FAForEnterpriseUser(in.GroupID.String(), in.UserID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("disable 2FA for enterprise user", err, http.StatusNotFound, "verify user_id with gitlab_list_enterprise_users")
+		return toolutil.WrapErrWithHint("disable 2FA for enterprise user", err, hintVerifyEnterpriseUser)
 	}
 	return nil
 }
@@ -198,7 +200,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in DeleteInput) er
 	}
 	_, err := client.GL().EnterpriseUsers.DeleteEnterpriseUser(in.GroupID.String(), in.UserID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("delete enterprise user", err, http.StatusNotFound, "verify user_id with gitlab_list_enterprise_users \u2014 this action is irreversible")
+		return toolutil.WrapErrWithHint("delete enterprise user", err, hintVerifyEnterpriseUser+"; this action is irreversible")
 	}
 	return nil
 }

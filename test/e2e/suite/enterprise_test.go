@@ -1478,13 +1478,64 @@ func TestMeta_EnterpriseUsers(t *testing.T) {
 	})
 
 	t.Run("Meta/EnterpriseUser/List", func(t *testing.T) {
-		_, err := callToolOn[enterpriseusers.ListOutput](ctx, sess.meta, "gitlab_enterprise_user", map[string]any{
+		out, err := callToolOn[enterpriseusers.ListOutput](ctx, sess.meta, "gitlab_enterprise_user", map[string]any{
 			"action": "list",
 			"params": map[string]any{
 				"group_id": groupID,
 			},
 		})
 		requirePremiumFeature(t, err, "enterprise users")
-		t.Log("Enterprise user list OK")
+		t.Logf("Enterprise users: %d", len(out.Users))
+	})
+
+	t.Run("Meta/EnterpriseUser/ListFiltered", func(t *testing.T) {
+		out, err := callToolOn[enterpriseusers.ListOutput](ctx, sess.meta, "gitlab_enterprise_user", map[string]any{
+			"action": "list",
+			"params": map[string]any{
+				"group_id":   groupID,
+				"search":     "e2e-nonexistent-enterprise-user",
+				"active":     true,
+				"two_factor": "disabled",
+				"per_page":   10,
+			},
+		})
+		requireNoError(t, err, "enterprise users filtered list")
+		t.Logf("Filtered enterprise users: %d", len(out.Users))
+	})
+
+	missingUserID := int64(999999999)
+
+	t.Run("Meta/EnterpriseUser/GetMissingUser", func(t *testing.T) {
+		_, err := callToolOn[enterpriseusers.Output](ctx, sess.meta, "gitlab_enterprise_user", map[string]any{
+			"action": "get",
+			"params": map[string]any{
+				"group_id": groupID,
+				"user_id":  missingUserID,
+			},
+		})
+		requireErrorContainsAll(t, err, "user_id", "gitlab_enterprise_user", "enterprise namespace")
+	})
+
+	t.Run("Meta/EnterpriseUser/Disable2FAMissingUser", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_enterprise_user", map[string]any{
+			"action": "disable_2fa",
+			"params": map[string]any{
+				"group_id": groupID,
+				"user_id":  missingUserID,
+			},
+		})
+		requireErrorContainsAll(t, err, "user_id", "gitlab_enterprise_user", "enterprise namespace")
+	})
+
+	t.Run("Meta/EnterpriseUser/DeleteMissingUser", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_enterprise_user", map[string]any{
+			"action": "delete",
+			"params": map[string]any{
+				"group_id":    groupID,
+				"user_id":     missingUserID,
+				"hard_delete": false,
+			},
+		})
+		requireErrorContainsAll(t, err, "user_id", "gitlab_enterprise_user", "irreversible")
 	})
 }
