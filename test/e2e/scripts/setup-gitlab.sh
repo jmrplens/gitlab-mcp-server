@@ -11,6 +11,8 @@ TEST_USER="e2e-tester"
 TEST_EMAIL="e2e-tester@example.com"
 TEST_PASSWORD="E2e_T3st!vQ7nW#2026"
 ENV_FILE="test/e2e/.env.docker"
+ROOT_AUTH_ATTEMPTS="${E2E_ROOT_AUTH_ATTEMPTS:-30}"
+ROOT_AUTH_INTERVAL="${E2E_ROOT_AUTH_INTERVAL:-10}"
 
 echo "=== Setting up GitLab E2E test environment ==="
 echo "GitLab URL: ${GITLAB_URL}"
@@ -54,11 +56,14 @@ except Exception:
 ' 2>/dev/null || true
 }
 
-# 1. Get root OAuth token (with retry — GitLab may still be warming up)
+# 1. Get root OAuth token. The readiness endpoint can go green before the
+# password grant is usable, especially on fresh GitLab containers.
 echo "  [1/4] Authenticating as root..."
 ROOT_TOKEN=""
-for attempt in 1 2 3 4 5; do
-    OAUTH_RESPONSE=$(curl -sS "${GITLAB_URL}/oauth/token" \
+LAST_AUTH_STATUS=""
+LAST_AUTH_ERROR=""
+for attempt in $(seq 1 "${ROOT_AUTH_ATTEMPTS}"); do
+    OAUTH_RESPONSE=$(curl -sS -w '\n%{http_code}' "${GITLAB_URL}/oauth/token" \
         --data-urlencode "grant_type=password" \
         --data-urlencode "username=root" \
         --data-urlencode "password=${ROOT_PASSWORD}" \
@@ -66,18 +71,27 @@ for attempt in 1 2 3 4 5; do
         --connect-timeout 5 --max-time 30 2>/dev/null || true)
 
     if [ -n "$OAUTH_RESPONSE" ]; then
-        ROOT_TOKEN=$(json_field "$OAUTH_RESPONSE" "access_token")
+        LAST_AUTH_STATUS=$(printf '%s' "$OAUTH_RESPONSE" | tail -n 1)
+        OAUTH_BODY=$(printf '%s' "$OAUTH_RESPONSE" | sed '$d')
+        ROOT_TOKEN=$(json_field "$OAUTH_BODY" "access_token")
+        OAUTH_ERROR=$(json_field "$OAUTH_BODY" "error")
+        OAUTH_ERROR_DESCRIPTION=$(json_field "$OAUTH_BODY" "error_description")
+        if [ -n "$OAUTH_ERROR" ] || [ -n "$OAUTH_ERROR_DESCRIPTION" ]; then
+            LAST_AUTH_ERROR="${OAUTH_ERROR}${OAUTH_ERROR_DESCRIPTION:+: ${OAUTH_ERROR_DESCRIPTION}}"
+        else
+            LAST_AUTH_ERROR=""
+        fi
     fi
 
     if [ -n "$ROOT_TOKEN" ]; then
         break
     fi
-    echo "    Attempt ${attempt}/5 failed, retrying in 3s..."
-    sleep 3
+    echo "    Attempt ${attempt}/${ROOT_AUTH_ATTEMPTS} failed (HTTP ${LAST_AUTH_STATUS:-000}${LAST_AUTH_ERROR:+, ${LAST_AUTH_ERROR}}), retrying in ${ROOT_AUTH_INTERVAL}s..."
+    sleep "${ROOT_AUTH_INTERVAL}"
 done
 
 if [ -z "$ROOT_TOKEN" ]; then
-    echo "ERROR: Failed to authenticate as root after 5 attempts"
+    echo "ERROR: Failed to authenticate as root after ${ROOT_AUTH_ATTEMPTS} attempts"
     exit 1
 fi
 echo "    Root OAuth token obtained"
