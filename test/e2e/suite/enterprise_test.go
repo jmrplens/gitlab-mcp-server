@@ -17,6 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/compliancepolicy"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dependencies"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/enterpriseusers"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/externalstatuschecks"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/geo"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupscim"
@@ -174,19 +175,178 @@ func TestMeta_ExternalStatusChecks(t *testing.T) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
 	proj := createProjectMeta(ctx, t, sess.meta)
+	branch := uniqueName("external-status")
+	createBranchMeta(ctx, t, sess.meta, proj, branch)
+	commit := commitFileMeta(ctx, t, sess.meta, proj, branch, "external-status.txt", "external status check", "external status check fixture")
+	mr := createMRMeta(ctx, t, sess.meta, proj, branch, defaultBranch, "external status check fixture")
+	waitForMRReady(ctx, t, sess.glClient, proj.ID, mr.IID)
+
+	var checkID int64
+	var setStatusAccepted bool
 
 	t.Run("Meta/ExternalStatusCheck/List", func(t *testing.T) {
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_external_status_check", map[string]any{
+		out, err := callToolOn[externalstatuschecks.ListProjectStatusCheckOutput](ctx, sess.meta, "gitlab_external_status_check", map[string]any{
 			"action": "list_project_checks",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 			},
 		})
 		requirePremiumFeature(t, err, "external status checks")
-		t.Log("External status check list OK")
+		t.Logf("Deprecated project status check list returned %d item(s)", len(out.Items))
 	})
+
+	t.Run("Meta/ExternalStatusCheck/Create", func(t *testing.T) {
+		out, err := callToolOn[externalstatuschecks.ProjectStatusCheckOutput](ctx, sess.meta, "gitlab_external_status_check", map[string]any{
+			"action": "create_project",
+			"params": map[string]any{
+				"project_id":   proj.pidStr(),
+				"name":         uniqueName("e2e-external-status"),
+				"external_url": "https://example.com/e2e/external-status",
+			},
+		})
+		requirePremiumFeature(t, err, "external status check create")
+		requireTruef(t, out.ID > 0, "external status check ID should be > 0")
+		checkID = out.ID
+		t.Logf("Created external status check %d", checkID)
+	})
+
+	t.Run("Meta/ExternalStatusCheck/ListProject", func(t *testing.T) {
+		requireTruef(t, checkID > 0, "checkID not set")
+		out, err := callToolOn[externalstatuschecks.ListProjectStatusCheckOutput](ctx, sess.meta, "gitlab_external_status_check", map[string]any{
+			"action": "list_project",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+			},
+		})
+		requireNoError(t, err, "external status check list_project")
+		requireTruef(t, len(out.Items) > 0, "expected at least 1 project external status check")
+		requireTruef(t, projectStatusCheckListed(out.Items, checkID), "created external status check %d not present in project list", checkID)
+		t.Logf("Listed %d project external status check(s)", len(out.Items))
+	})
+
+	t.Run("Meta/ExternalStatusCheck/Update", func(t *testing.T) {
+		requireTruef(t, checkID > 0, "checkID not set")
+		out, err := callToolOn[externalstatuschecks.ProjectStatusCheckOutput](ctx, sess.meta, "gitlab_external_status_check", map[string]any{
+			"action": "update_project",
+			"params": map[string]any{
+				"project_id":   proj.pidStr(),
+				"check_id":     checkID,
+				"name":         uniqueName("e2e-external-status-updated"),
+				"external_url": "https://example.com/e2e/external-status-updated",
+			},
+		})
+		requireNoError(t, err, "external status check update_project")
+		requireTruef(t, out.ID == checkID, "external status check ID mismatch: want %d, got %d", checkID, out.ID)
+	})
+
+	t.Run("Meta/ExternalStatusCheck/ListMR", func(t *testing.T) {
+		requireTruef(t, checkID > 0, "checkID not set")
+		out, err := callToolOn[externalstatuschecks.ListMergeStatusCheckOutput](ctx, sess.meta, "gitlab_external_status_check", map[string]any{
+			"action": "list_project_mr_checks",
+			"params": map[string]any{
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"page":              1,
+				"per_page":          10,
+			},
+		})
+		requireNoError(t, err, "external status check list_project_mr_checks")
+		requireTruef(t, mergeStatusCheckListed(out.Items, checkID), "created external status check %d not present in MR list", checkID)
+		t.Logf("Listed %d MR external status check(s)", len(out.Items))
+	})
+
+	t.Run("Meta/ExternalStatusCheck/SetMRStatusPassed", func(t *testing.T) {
+		requireTruef(t, checkID > 0, "checkID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_external_status_check", map[string]any{
+			"action": "set_project_mr_status",
+			"params": map[string]any{
+				"project_id":               proj.pidStr(),
+				"merge_request_iid":        mr.IID,
+				"sha":                      commit.SHA,
+				"external_status_check_id": checkID,
+				"status":                   "passed",
+			},
+		})
+		if err != nil {
+			requireErrorContainsAll(t, err, "sha", "passed", "failed")
+			return
+		}
+		t.Log("Set MR external status check status accepted")
+		setStatusAccepted = true
+	})
+
+	t.Run("Meta/ExternalStatusCheck/ListMRPassedStatus", func(t *testing.T) {
+		if !setStatusAccepted {
+			t.Skip("set_project_mr_status was not accepted by GitLab")
+		}
+		out, err := callToolOn[externalstatuschecks.ListMergeStatusCheckOutput](ctx, sess.meta, "gitlab_external_status_check", map[string]any{
+			"action": "list_project_mr_checks",
+			"params": map[string]any{
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+			},
+		})
+		requireNoError(t, err, "external status check list_project_mr_checks after set status")
+		status, ok := mergeStatusCheckStatus(out.Items, checkID)
+		requireTruef(t, ok, "created external status check %d not present after status update", checkID)
+		requireTruef(t, status == "passed", "external status check status = %q, want passed", status)
+	})
+
+	t.Run("Meta/ExternalStatusCheck/RetryRequiresFailedState", func(t *testing.T) {
+		requireTruef(t, checkID > 0, "checkID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_external_status_check", map[string]any{
+			"action": "retry_project",
+			"params": map[string]any{
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mr.IID,
+				"check_id":          checkID,
+			},
+		})
+		if err != nil {
+			requireErrorContainsAll(t, err, "failed", "gitlab_list_project_mr_external_status_checks")
+			return
+		}
+		t.Log("Retry external status check accepted")
+	})
+
+	t.Run("Meta/ExternalStatusCheck/Delete", func(t *testing.T) {
+		requireTruef(t, checkID > 0, "checkID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_external_status_check", map[string]any{
+			"action": "delete_project",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"check_id":   checkID,
+			},
+		})
+		requireNoError(t, err, "external status check delete_project")
+	})
+}
+
+func projectStatusCheckListed(items []externalstatuschecks.ProjectStatusCheckOutput, checkID int64) bool {
+	for _, item := range items {
+		if item.ID == checkID {
+			return true
+		}
+	}
+	return false
+}
+
+func mergeStatusCheckListed(items []externalstatuschecks.MergeStatusCheckOutput, checkID int64) bool {
+	_, ok := mergeStatusCheckStatus(items, checkID)
+	return ok
+}
+
+func mergeStatusCheckStatus(items []externalstatuschecks.MergeStatusCheckOutput, checkID int64) (string, bool) {
+	for _, item := range items {
+		if item.ID == checkID {
+			return item.Status, true
+		}
+	}
+	return "", false
 }
 
 // TestMeta_MemberRoles exercises member role tools via the gitlab_member_role meta-tool.
