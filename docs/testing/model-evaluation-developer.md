@@ -37,8 +37,10 @@ The evaluator reads model provider keys from environment variables:
 | Qwen      | `QWEN_API_KEY`                       |
 
 Docker mode also needs `test/e2e/.env.docker`, created by the E2E provisioning
-scripts. Never print or commit `.env`, `.env.docker`, provider keys, raw traces,
-or generated fixture state.
+scripts. Enterprise Docker mode additionally needs `GITLAB_ENTERPRISE=true`, the
+EE image, and `ENTERPRISE_LICENSE` supplied through the shell or the repository
+`.env` file. Never print or commit `.env`, `.env.docker`, provider keys,
+licenses, raw traces, or generated fixture state.
 
 The documented Qwen configuration uses `QWEN_API_KEY` directly. Keep provider
 fallbacks out of `.env.example` unless the evaluator command examples also need
@@ -111,6 +113,16 @@ timeout 1800s ./test/e2e/scripts/setup-gitlab.sh
 timeout 1800s ./test/e2e/scripts/register-runner.sh
 ```
 
+For Enterprise Ultimate validation, use the EE image and let
+`setup-gitlab.sh` install `ENTERPRISE_LICENSE` without echoing the license:
+
+```bash
+timeout 3600s env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
+timeout 1800s ./test/e2e/scripts/wait-for-gitlab.sh
+timeout 1800s GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
+timeout 1800s ./test/e2e/scripts/register-runner.sh
+```
+
 The evaluator can refresh its own model-evaluation fixtures with
 `--prepare-fixtures`. Some destructive tasks also create just-in-time resources
 per attempt so repeated runs do not fail because a previous run deleted the
@@ -173,6 +185,21 @@ done
 '
 ```
 
+For Enterprise Ultimate model runs, prefer the wrapper so the EE image, license
+installation, fixture refreshes, and Enterprise presets stay together:
+
+```bash
+make eval-surfaces-docker-enterprise SURFACE=dynamic
+```
+
+The underlying presets are `docker-enterprise-read`,
+`docker-enterprise-mutating-safe`, and `docker-enterprise-destructive-safe`. A
+focused run can pass one preset:
+
+```bash
+make eval-surfaces-docker-enterprise SURFACE=dynamic PRESET=docker-enterprise-read
+```
+
 ## Run Targeted Tasks
 
 Use targeted runs after fixing a schema description, provider adapter, fixture,
@@ -199,28 +226,31 @@ timeout 1800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
 
 ## Important Flags
 
-| Flag                               | Meaning                                                                                                                                                   |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--preset schema-enterprise`       | Schema-only Enterprise/Premium route coverage; dry-run by default.                                                                                        |
-| `--preset docker-read`             | Docker read-only partition.                                                                                                                               |
-| `--preset docker-mutating-safe`    | Docker safe mutation partition.                                                                                                                           |
-| `--preset docker-destructive-safe` | Docker safe destructive partition.                                                                                                                        |
-| `--model`                          | One provider/model pair. Overrides `--models`.                                                                                                            |
-| `--models`                         | Comma-separated provider/model list.                                                                                                                      |
-| `--backend=gitlab`                 | Build the catalog against the real GitLab backend.                                                                                                        |
-| `--gitlab-env-file`                | Load Docker GitLab credentials from `test/e2e/.env.docker`.                                                                                               |
-| `--prepare-fixtures`               | Create or refresh Docker GitLab resources used by evaluation tasks.                                                                                       |
-| `--use-fixtures`                   | Replace placeholder IDs in prompts with fixture state.                                                                                                    |
-| `--execute-tools`                  | Execute validated model tool calls through MCP.                                                                                                           |
-| `--skip-unavailable`               | Skip routes not available in the current catalog or GitLab edition.                                                                                       |
-| `--task`                           | Comma-separated task IDs for targeted runs.                                                                                                               |
-| `--out`                            | Markdown report path. Trace directory defaults to `<report>.traces/`.                                                                                     |
-| `--terminal-log`                   | File receiving progress and terminal output. Defaults beside `--out`, or under `dist/evaluation/mcp-surfaces/terminal/` when no report path is known yet. |
-| `--print-output`                   | Also echo progress/output to the terminal. Without this flag, the command writes terminal output only to `--terminal-log`.                                |
-| `--publish-docs`                   | Publish reviewed evaluation reports into the managed docs blocks.                                                                                         |
-| `--publish-from`                   | Reviewed Markdown report path to publish; repeat once per report.                                                                                         |
-| `--publish-label`                  | Human-readable label for the published snapshot.                                                                                                          |
-| `--check-docs`                     | Verify committed docs match the selected `--publish-from` reports without writing files.                                                                  |
+| Flag                                          | Meaning                                                                                                                                                   |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--preset schema-enterprise`                  | Schema-only Enterprise/Premium route coverage; dry-run by default.                                                                                        |
+| `--preset docker-read`                        | Docker read-only partition.                                                                                                                               |
+| `--preset docker-mutating-safe`               | Docker safe mutation partition.                                                                                                                           |
+| `--preset docker-destructive-safe`            | Docker safe destructive partition.                                                                                                                        |
+| `--preset docker-enterprise-read`             | Docker Enterprise/Premium read-only partition.                                                                                                            |
+| `--preset docker-enterprise-mutating-safe`    | Docker Enterprise/Premium safe mutation partition.                                                                                                        |
+| `--preset docker-enterprise-destructive-safe` | Docker Enterprise/Premium safe destructive partition.                                                                                                     |
+| `--model`                                     | One provider/model pair. Overrides `--models`.                                                                                                            |
+| `--models`                                    | Comma-separated provider/model list.                                                                                                                      |
+| `--backend=gitlab`                            | Build the catalog against the real GitLab backend.                                                                                                        |
+| `--gitlab-env-file`                           | Load Docker GitLab credentials from `test/e2e/.env.docker`.                                                                                               |
+| `--prepare-fixtures`                          | Create or refresh Docker GitLab resources used by evaluation tasks.                                                                                       |
+| `--use-fixtures`                              | Replace placeholder IDs in prompts with fixture state.                                                                                                    |
+| `--execute-tools`                             | Execute validated model tool calls through MCP.                                                                                                           |
+| `--skip-unavailable`                          | Skip routes not available in the current catalog or GitLab edition.                                                                                       |
+| `--task`                                      | Comma-separated task IDs for targeted runs.                                                                                                               |
+| `--out`                                       | Markdown report path. Trace directory defaults to `<report>.traces/`.                                                                                     |
+| `--terminal-log`                              | File receiving progress and terminal output. Defaults beside `--out`, or under `dist/evaluation/mcp-surfaces/terminal/` when no report path is known yet. |
+| `--print-output`                              | Also echo progress/output to the terminal. Without this flag, the command writes terminal output only to `--terminal-log`.                                |
+| `--publish-docs`                              | Publish reviewed evaluation reports into the managed docs blocks.                                                                                         |
+| `--publish-from`                              | Reviewed Markdown report path to publish; repeat once per report.                                                                                         |
+| `--publish-label`                             | Human-readable label for the published snapshot.                                                                                                          |
+| `--check-docs`                                | Verify committed docs match the selected `--publish-from` reports without writing files.                                                                  |
 
 ### Tool Surface Flags
 

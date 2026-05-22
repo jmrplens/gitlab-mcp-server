@@ -16,7 +16,7 @@ func TestOptionNormalizationHelpers_DefaultsAndValidation(t *testing.T) {
 	if got := normalizedBackend(" "); got != backendMock {
 		t.Fatalf("normalizedBackend(blank) = %q, want mock", got)
 	}
-	if !validPreset(presetDockerCapabilityDiscovery) || validPreset("unknown") {
+	if !validPreset(presetDockerEnterpriseRead) || !validPreset(presetDockerCapabilityDiscovery) || validPreset("unknown") {
 		t.Fatalf("validPreset() did not recognize only supported presets")
 	}
 	if got, err := normalizeEvalToolSurface(" DYNAMIC "); err != nil || got != config.ToolSurfaceDynamic {
@@ -24,6 +24,37 @@ func TestOptionNormalizationHelpers_DefaultsAndValidation(t *testing.T) {
 	}
 	if _, err := normalizeEvalToolSurface("individual"); err == nil {
 		t.Fatal("normalizeEvalToolSurface(individual) error = nil, want unsupported surface")
+	}
+}
+
+// TestApplyDockerEnterprisePresetDefaults_ConfiguresLiveEnterprisePartitions verifies
+// Enterprise Docker presets select live GitLab execution defaults.
+func TestApplyDockerEnterprisePresetDefaults_ConfiguresLiveEnterprisePartitions(t *testing.T) {
+	cases := []struct {
+		preset       string
+		partition    string
+		onlyMutating bool
+		onlyDestruct bool
+		skipMutating bool
+		skipDestruct bool
+	}{
+		{preset: presetDockerEnterpriseRead, partition: partitionEnterpriseRead, skipMutating: true, skipDestruct: true},
+		{preset: presetDockerEnterpriseMutatingSafe, partition: partitionEnterpriseMutating, onlyMutating: true, skipDestruct: true},
+		{preset: presetDockerEnterpriseDestructiveSafe, partition: partitionEnterpriseDestructive, onlyDestruct: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.preset, func(t *testing.T) {
+			opts, err := applyPresetDefaults(options{Preset: tc.preset})
+			if err != nil {
+				t.Fatalf("applyPresetDefaults() error = %v", err)
+			}
+			if opts.Backend != backendGitLab || opts.GitLabEnv != "test/e2e/.env.docker" || opts.Partition != tc.partition || !opts.Execute || !opts.UseFixtures || !opts.SkipUnavailable {
+				t.Fatalf("opts = %+v, want live GitLab Docker defaults for %s", opts, tc.preset)
+			}
+			if opts.OnlyMutating != tc.onlyMutating || opts.OnlyDestructive != tc.onlyDestruct || opts.SkipMutating != tc.skipMutating || opts.SkipDestructive != tc.skipDestruct {
+				t.Fatalf("opts = %+v, want mutating/destructive flags for %s", opts, tc.preset)
+			}
+		})
 	}
 }
 

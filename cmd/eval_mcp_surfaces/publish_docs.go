@@ -547,7 +547,7 @@ func (a *publishTraceAccumulator) usage() map[string]string {
 
 // publishPresetForTask publishes preset for task for the main package.
 func publishPresetForTask(task evalTask) string {
-	for _, preset := range []string{presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe, presetSchemaEnterprise} {
+	for _, preset := range []string{presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe, presetDockerEnterpriseRead, presetDockerEnterpriseMutatingSafe, presetDockerEnterpriseDestructiveSafe, presetSchemaEnterprise} {
 		if taskMatchesPreset(task, preset) {
 			return preset
 		}
@@ -989,12 +989,18 @@ func presetRank(preset string) int {
 		return 2
 	case presetDockerDestructiveSafe:
 		return 3
-	case partitionErrorRecovery:
+	case presetDockerEnterpriseRead:
 		return 4
-	case partitionCapabilityFallback:
+	case presetDockerEnterpriseMutatingSafe:
 		return 5
-	case presetSchemaEnterprise:
+	case presetDockerEnterpriseDestructiveSafe:
 		return 6
+	case partitionErrorRecovery:
+		return 7
+	case partitionCapabilityFallback:
+		return 8
+	case presetSchemaEnterprise:
+		return 9
 	default:
 		return 99
 	}

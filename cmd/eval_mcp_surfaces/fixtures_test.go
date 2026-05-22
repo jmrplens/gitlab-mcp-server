@@ -16,32 +16,34 @@ import (
 // TestApplyLiveFixtureState_ReplacesPromptPlaceholders verifies ApplyLiveFixtureState when replaces prompt placeholders.
 func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 	state := &liveFixtureState{
-		ProjectPath:            liveFixtureProjectPath,
-		ProjectID:              101,
-		RemoteURL:              "http://localhost:8929/my-org/tools/gitlab-mcp-server.git",
-		IssueIID:               12,
-		IssueDeleteIID:         13,
-		MergeRequestIID:        14,
-		MergeRequestMergeIID:   15,
-		MergeRequestAwardIID:   25,
-		PipelineID:             16,
-		PipelineIID:            17,
-		FailedJobID:            18,
-		ManualJobID:            19,
-		RunnerID:               20,
-		IssueAwardID:           21,
-		MergeRequestAwardID:    22,
-		MergeRequestThreadID:   "thread-123",
-		PipelineScheduleID:     23,
-		PipelineSchedulePlayID: 24,
-		SnippetID:              26,
-		CleanupReleaseTag:      "v0.0.0-eval-delete",
-		ReleaseSummaryTag:      "v0.0.0-eval-summary",
-		PackageReleaseName:     liveFixturePackageReleaseName,
-		PackageReleaseVersion:  liveFixturePackageReleaseVersion,
-		PackageReleaseTag:      liveFixturePackageReleaseTag,
-		PackageReleaseDir:      "/tmp/package-release-files",
-		PackageReleaseFiles:    []string{"app-linux.txt", "checksums.txt"},
+		ProjectPath:                  liveFixtureProjectPath,
+		ProjectID:                    101,
+		RemoteURL:                    "http://localhost:8929/my-org/tools/gitlab-mcp-server.git",
+		IssueIID:                     12,
+		IssueDeleteIID:               13,
+		MergeRequestIID:              14,
+		MergeRequestMergeIID:         15,
+		MergeRequestAwardIID:         25,
+		PipelineID:                   16,
+		PipelineIID:                  17,
+		FailedJobID:                  18,
+		ManualJobID:                  19,
+		RunnerID:                     20,
+		IssueAwardID:                 21,
+		MergeRequestAwardID:          22,
+		MergeRequestThreadID:         "thread-123",
+		PipelineScheduleID:           23,
+		PipelineSchedulePlayID:       24,
+		SnippetID:                    26,
+		CleanupReleaseTag:            "v0.0.0-eval-delete",
+		ReleaseSummaryTag:            "v0.0.0-eval-summary",
+		PackageReleaseName:           liveFixturePackageReleaseName,
+		PackageReleaseVersion:        liveFixturePackageReleaseVersion,
+		PackageReleaseTag:            liveFixturePackageReleaseTag,
+		PackageReleaseDir:            "/tmp/package-release-files",
+		PackageReleaseFiles:          []string{"app-linux.txt", "checksums.txt"},
+		ProjectServiceAccountID:      27,
+		ProjectServiceAccountTokenID: 28,
 	}
 	tasks := []evalTask{
 		{ID: "MT-013", Prompt: "Delete issue `42` from project `my-org/tools/gitlab-mcp-server`."},
@@ -61,6 +63,7 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 		{ID: "MS-033", Prompt: "Set estimate `1h` on MR `1`, add spent time `15m`, add award emoji `eyes`."},
 		{ID: "MT-174", Prompt: "Schedule a storage move for numeric snippet ID `44` to shard `default`."},
 		{ID: taskPackageReleaseID, Prompt: "Publish files `__PACKAGE_RELEASE_FILES__` from `__PACKAGE_RELEASE_DIR__` as package `__PACKAGE_RELEASE_PACKAGE__` version `__PACKAGE_RELEASE_VERSION__`, then create release `__PACKAGE_RELEASE_TAG__`."},
+		{ID: "MT-186", Prompt: "Rotate project service account PAT ID `66` for project service account user ID `55`."},
 	}
 
 	got := applyLiveFixtureState(tasks, state)
@@ -90,6 +93,8 @@ func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
 	assertContains(t, got[16].Prompt, "`eval-release-package`")
 	assertContains(t, got[16].Prompt, "`0.1.0`")
 	assertContains(t, got[16].Prompt, "`v0.0.0-eval-packages`")
+	assertContains(t, got[17].Prompt, "project service account user ID `27`")
+	assertContains(t, got[17].Prompt, "project service account PAT ID `28`")
 }
 
 // TestEnsurePackageReleaseFixtureFiles_WritesLocalFiles verifies package release fixture file creation.
@@ -127,6 +132,7 @@ func TestFilterTasksByLiveFixtureState_SkipsMissingJobResources(t *testing.T) {
 		{ID: "MT-022"},
 		{ID: "MT-064"},
 		{ID: "MT-065"},
+		{ID: "MT-186"},
 		{ID: "MS-008"},
 		{ID: "MT-003"},
 	}
@@ -145,14 +151,15 @@ func TestFilterTasksByLiveFixtureState_KeepsSeededJobResources(t *testing.T) {
 		{ID: "MT-022"},
 		{ID: "MT-064"},
 		{ID: "MT-065"},
+		{ID: "MT-186"},
 		{ID: "MS-008"},
 	}
-	state := &liveFixtureState{FailedJobID: 18, ManualJobID: 19, RunnerID: 20}
+	state := &liveFixtureState{FailedJobID: 18, ManualJobID: 19, RunnerID: 20, ProjectServiceAccountID: 21, ProjectServiceAccountTokenID: 22}
 
 	filtered := filterTasksByLiveFixtureState(tasks, state)
 
-	if got := taskIDs(filtered); got != "MT-022,MT-064,MT-065,MS-008" {
-		t.Fatalf("filtered IDs = %q, want MT-022,MT-064,MT-065,MS-008", got)
+	if got := taskIDs(filtered); got != "MT-022,MT-064,MT-065,MT-186,MS-008" {
+		t.Fatalf("filtered IDs = %q, want MT-022,MT-064,MT-065,MT-186,MS-008", got)
 	}
 }
 
@@ -180,30 +187,32 @@ func TestFixtureRemoteURL(t *testing.T) {
 // fixture helpers rewrite prompts and derive deterministic path/content values.
 func TestFixturePlaceholderHelpers_CoverIDPathAndContentBranches(t *testing.T) {
 	state := &liveFixtureState{
-		ProjectID:              101,
-		PipelineID:             202,
-		GroupID:                303,
-		MilestoneDeleteIID:     404,
-		PipelineScheduleID:     505,
-		PipelineSchedulePlayID: 506,
-		PipelineTriggerRunID:   507,
-		CommitDiscussionNoteID: 608,
-		CommitDiscussionID:     "discussion-1",
-		CommitSHA:              "deadbeef",
-		FeatureFlagName:        "eval_flag_202",
-		ReleaseSummaryTag:      "v1.2.3-summary",
-		CleanupReleaseTag:      "v1.2.3-cleanup",
-		ProjectTokenID:         707,
-		DeployKeyID:            808,
-		DeployTokenID:          909,
-		PackageID:              1001,
-		RunnerID:               1002,
-		EnvironmentID:          1003,
-		SnippetID:              1004,
-		HookDeleteID:           1005,
-		BadgeDeleteID:          1006,
-		PipelineTriggerID:      1007,
-		UserID:                 1008,
+		ProjectID:                    101,
+		PipelineID:                   202,
+		GroupID:                      303,
+		MilestoneDeleteIID:           404,
+		PipelineScheduleID:           505,
+		PipelineSchedulePlayID:       506,
+		PipelineTriggerRunID:         507,
+		CommitDiscussionNoteID:       608,
+		CommitDiscussionID:           "discussion-1",
+		CommitSHA:                    "deadbeef",
+		FeatureFlagName:              "eval_flag_202",
+		ReleaseSummaryTag:            "v1.2.3-summary",
+		CleanupReleaseTag:            "v1.2.3-cleanup",
+		ProjectTokenID:               707,
+		DeployKeyID:                  808,
+		DeployTokenID:                909,
+		PackageID:                    1001,
+		RunnerID:                     1002,
+		EnvironmentID:                1003,
+		SnippetID:                    1004,
+		HookDeleteID:                 1005,
+		BadgeDeleteID:                1006,
+		PipelineTriggerID:            1007,
+		UserID:                       1008,
+		ProjectServiceAccountID:      1009,
+		ProjectServiceAccountTokenID: 1010,
 	}
 	cases := map[string]string{
 		"MT-007":               "group ID `303`",
@@ -217,13 +226,15 @@ func TestFixturePlaceholderHelpers_CoverIDPathAndContentBranches(t *testing.T) {
 		"MT-104":               "user ID `1008`",
 		"MT-111":               "deploy key ID `808`",
 		"MT-112":               "project deploy token ID `909`",
+		"MT-182":               "project service account user ID `1009`",
+		"MT-186":               "project service account PAT ID `1010`",
 		"MT-113":               "commit discussion note `608`",
 		"MT-095":               "`v1.2.3-summary`",
 		"MS-013":               "`eval_flag_202`",
 		"MS-006":               "deployment ID `77`",
 		taskFileCreateID:       "`tmp/eval-202.txt`",
 	}
-	prompt := "group ID `123` milestone IID `7` project access token ID `77` package ID `55` runner ID `99` environment ID `7` personal snippet ID `33` numeric snippet ID `44` webhook ID `5` badge ID `8` pipeline trigger token ID `77` pipeline schedule ID `12` user ID `55` deploy key ID `88` project deploy token ID `66` commit discussion note `999` discussion `abc123` commit `abc1234` `v0.0.0-eval-ms` `eval_flag` deployment ID `77` `tmp/eval.txt`"
+	prompt := "group ID `123` milestone IID `7` project access token ID `77` package ID `55` runner ID `99` environment ID `7` personal snippet ID `33` numeric snippet ID `44` webhook ID `5` badge ID `8` pipeline trigger token ID `77` pipeline schedule ID `12` user ID `55` deploy key ID `88` project deploy token ID `66` project service account user ID `55` project service account PAT ID `66` commit discussion note `999` discussion `abc123` commit `abc1234` `v0.0.0-eval-ms` `eval_flag` deployment ID `77` `tmp/eval.txt`"
 	for taskID, want := range cases {
 		got := replaceResourcePlaceholders(taskID, prompt, state)
 		if !strings.Contains(got, want) {

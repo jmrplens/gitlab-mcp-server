@@ -60,6 +60,12 @@ const (
 	liveFixturePackageReleaseVersion = "0.1.0"
 	// liveFixturePackageReleaseTag identifies the release tag for the package-to-release workflow fixture.
 	liveFixturePackageReleaseTag = "v0.0.0-eval-packages"
+	// liveFixtureProjectServiceAccountName identifies the Enterprise project service-account fixture name.
+	liveFixtureProjectServiceAccountName = "eval-project-service-account"
+	// liveFixtureProjectServiceAccountUsername identifies the Enterprise project service-account username prefix.
+	liveFixtureProjectServiceAccountUsername = "eval-project-svc"
+	// liveFixtureProjectServiceAccountPATName identifies the Enterprise project service-account PAT fixture.
+	liveFixtureProjectServiceAccountPATName = "eval-project-service-token"
 	// liveFixtureWikiSlug identifies the live fixture wiki slug constant used by this package.
 	liveFixtureWikiSlug = "obsolete-eval"
 	// liveFixtureReviewBranch identifies the live fixture review branch constant used by this package.
@@ -93,59 +99,61 @@ var packageReleaseFixtureFiles = []struct {
 
 // liveFixtureState captures live fixture state data for live evaluation fixtures.
 type liveFixtureState struct {
-	GeneratedAt            string   `json:"generated_at"`
-	GitLabURL              string   `json:"gitlab_url"`
-	GroupPath              string   `json:"group_path"`
-	GroupID                int64    `json:"group_id"`
-	ToolsGroupPath         string   `json:"tools_group_path"`
-	ToolsGroupID           int64    `json:"tools_group_id"`
-	ProjectPath            string   `json:"project_path"`
-	ProjectID              int64    `json:"project_id"`
-	DefaultBranch          string   `json:"default_branch"`
-	RemoteURL              string   `json:"remote_url"`
-	IssueIID               int64    `json:"issue_iid"`
-	IssueDeleteIID         int64    `json:"issue_delete_iid"`
-	MergeRequestIID        int64    `json:"merge_request_iid"`
-	MergeRequestMergeIID   int64    `json:"merge_request_merge_iid"`
-	MergeRequestAwardIID   int64    `json:"merge_request_award_iid,omitempty"`
-	MergeRequestThreadID   string   `json:"merge_request_thread_id,omitempty"`
-	PipelineID             int64    `json:"pipeline_id"`
-	PipelineIID            int64    `json:"pipeline_iid"`
-	FailedJobID            int64    `json:"failed_job_id"`
-	ManualJobID            int64    `json:"manual_job_id"`
-	RunnerID               int64    `json:"runner_id"`
-	MilestoneDeleteIID     int64    `json:"milestone_delete_iid"`
-	HookDeleteID           int64    `json:"hook_delete_id"`
-	BadgeDeleteID          int64    `json:"badge_delete_id"`
-	SnippetID              int64    `json:"snippet_id"`
-	EnvironmentID          int64    `json:"environment_id"`
-	ProjectTokenID         int64    `json:"project_token_id"`
-	PackageID              int64    `json:"package_id"`
-	PackageReleaseName     string   `json:"package_release_name,omitempty"`
-	PackageReleaseVersion  string   `json:"package_release_version,omitempty"`
-	PackageReleaseTag      string   `json:"package_release_tag,omitempty"`
-	PackageReleaseDir      string   `json:"package_release_dir,omitempty"`
-	PackageReleaseFiles    []string `json:"package_release_files,omitempty"`
-	PackageReleasePaths    []string `json:"package_release_paths,omitempty"`
-	DeployKeyID            int64    `json:"deploy_key_id"`
-	DeployKeyCreateKey     string   `json:"deploy_key_create_key,omitempty"`
-	DeployTokenID          int64    `json:"deploy_token_id"`
-	PipelineTriggerID      int64    `json:"pipeline_trigger_id"`
-	PipelineTriggerRunID   int64    `json:"pipeline_trigger_run_id"`
-	PipelineScheduleID     int64    `json:"pipeline_schedule_id"`
-	PipelineSchedulePlayID int64    `json:"pipeline_schedule_play_id"`
-	UserID                 int64    `json:"user_id"`
-	IssueAwardID           int64    `json:"issue_award_id"`
-	MergeRequestAwardID    int64    `json:"merge_request_award_id"`
-	CommitSHA              string   `json:"commit_sha,omitempty"`
-	CommitDiscussionID     string   `json:"commit_discussion_id,omitempty"`
-	CommitDiscussionNoteID int64    `json:"commit_discussion_note_id,omitempty"`
-	FeatureFlagName        string   `json:"feature_flag_name"`
-	WikiSlug               string   `json:"wiki_slug"`
-	CleanupReleaseTag      string   `json:"cleanup_release_tag"`
-	ReleaseSummaryTag      string   `json:"release_summary_tag,omitempty"`
-	ElicitationReleaseTag  string   `json:"elicitation_release_tag,omitempty"`
-	Notes                  []string `json:"notes,omitempty"`
+	GeneratedAt                  string   `json:"generated_at"`
+	GitLabURL                    string   `json:"gitlab_url"`
+	GroupPath                    string   `json:"group_path"`
+	GroupID                      int64    `json:"group_id"`
+	ToolsGroupPath               string   `json:"tools_group_path"`
+	ToolsGroupID                 int64    `json:"tools_group_id"`
+	ProjectPath                  string   `json:"project_path"`
+	ProjectID                    int64    `json:"project_id"`
+	DefaultBranch                string   `json:"default_branch"`
+	RemoteURL                    string   `json:"remote_url"`
+	IssueIID                     int64    `json:"issue_iid"`
+	IssueDeleteIID               int64    `json:"issue_delete_iid"`
+	MergeRequestIID              int64    `json:"merge_request_iid"`
+	MergeRequestMergeIID         int64    `json:"merge_request_merge_iid"`
+	MergeRequestAwardIID         int64    `json:"merge_request_award_iid,omitempty"`
+	MergeRequestThreadID         string   `json:"merge_request_thread_id,omitempty"`
+	PipelineID                   int64    `json:"pipeline_id"`
+	PipelineIID                  int64    `json:"pipeline_iid"`
+	FailedJobID                  int64    `json:"failed_job_id"`
+	ManualJobID                  int64    `json:"manual_job_id"`
+	RunnerID                     int64    `json:"runner_id"`
+	MilestoneDeleteIID           int64    `json:"milestone_delete_iid"`
+	HookDeleteID                 int64    `json:"hook_delete_id"`
+	BadgeDeleteID                int64    `json:"badge_delete_id"`
+	SnippetID                    int64    `json:"snippet_id"`
+	EnvironmentID                int64    `json:"environment_id"`
+	ProjectTokenID               int64    `json:"project_token_id"`
+	PackageID                    int64    `json:"package_id"`
+	PackageReleaseName           string   `json:"package_release_name,omitempty"`
+	PackageReleaseVersion        string   `json:"package_release_version,omitempty"`
+	PackageReleaseTag            string   `json:"package_release_tag,omitempty"`
+	PackageReleaseDir            string   `json:"package_release_dir,omitempty"`
+	PackageReleaseFiles          []string `json:"package_release_files,omitempty"`
+	PackageReleasePaths          []string `json:"package_release_paths,omitempty"`
+	ProjectServiceAccountID      int64    `json:"project_service_account_id,omitempty"`
+	ProjectServiceAccountTokenID int64    `json:"project_service_account_token_id,omitempty"`
+	DeployKeyID                  int64    `json:"deploy_key_id"`
+	DeployKeyCreateKey           string   `json:"deploy_key_create_key,omitempty"`
+	DeployTokenID                int64    `json:"deploy_token_id"`
+	PipelineTriggerID            int64    `json:"pipeline_trigger_id"`
+	PipelineTriggerRunID         int64    `json:"pipeline_trigger_run_id"`
+	PipelineScheduleID           int64    `json:"pipeline_schedule_id"`
+	PipelineSchedulePlayID       int64    `json:"pipeline_schedule_play_id"`
+	UserID                       int64    `json:"user_id"`
+	IssueAwardID                 int64    `json:"issue_award_id"`
+	MergeRequestAwardID          int64    `json:"merge_request_award_id"`
+	CommitSHA                    string   `json:"commit_sha,omitempty"`
+	CommitDiscussionID           string   `json:"commit_discussion_id,omitempty"`
+	CommitDiscussionNoteID       int64    `json:"commit_discussion_note_id,omitempty"`
+	FeatureFlagName              string   `json:"feature_flag_name"`
+	WikiSlug                     string   `json:"wiki_slug"`
+	CleanupReleaseTag            string   `json:"cleanup_release_tag"`
+	ReleaseSummaryTag            string   `json:"release_summary_tag,omitempty"`
+	ElicitationReleaseTag        string   `json:"elicitation_release_tag,omitempty"`
+	Notes                        []string `json:"notes,omitempty"`
 }
 
 // liveFixturePreparer captures live fixture preparer data for live evaluation fixtures.
@@ -355,6 +363,7 @@ func (p *liveFixturePreparer) prepare(ctx context.Context) error {
 	p.bestEffort(ctx, "snippet", p.ensureSnippet)
 	p.bestEffort(ctx, "environment", p.ensureEnvironment)
 	p.bestEffort(ctx, "project access token", p.ensureProjectAccessToken)
+	p.bestEffort(ctx, "project service account", p.ensureProjectServiceAccount)
 	p.bestEffort(ctx, "package", p.ensurePackage)
 	p.bestEffort(ctx, "deploy key", p.ensureDeployKey)
 	p.bestEffort(ctx, "deploy token", p.ensureDeployToken)
@@ -444,6 +453,75 @@ func (p *liveFixturePreparer) ensureProject(ctx context.Context, namespaceID int
 		return nil, fmt.Errorf("create project %s: %w", liveFixtureProjectPath, err)
 	}
 	return project, nil
+}
+
+// ensureProjectServiceAccount seeds a Premium/Ultimate project service account
+// and PAT used by Enterprise live evaluator tasks.
+func (p *liveFixturePreparer) ensureProjectServiceAccount(ctx context.Context) error {
+	account, err := p.findProjectServiceAccount(ctx)
+	if err != nil {
+		return err
+	}
+	if account == nil {
+		username := fmt.Sprintf("%s-%d", liveFixtureProjectServiceAccountUsername, p.state.ProjectID)
+		email := fmt.Sprintf("%s@example.com", username)
+		account, _, err = p.client.GL().Projects.CreateProjectServiceAccount(p.state.ProjectID, &gl.CreateProjectServiceAccountOptions{
+			Name:     new(liveFixtureProjectServiceAccountName),
+			Username: &username,
+			Email:    &email,
+		}, gl.WithContext(ctx))
+		if err != nil {
+			return fmt.Errorf("create project service account: %w", err)
+		}
+	}
+	p.state.ProjectServiceAccountID = account.ID
+	token, err := p.findProjectServiceAccountPAT(ctx, account.ID)
+	if err != nil {
+		return err
+	}
+	if token == nil {
+		scopes := []string{"api"}
+		description := "Evaluation fixture token for project service-account scenarios"
+		expiresAt := gl.ISOTime(time.Now().AddDate(0, 1, 0))
+		token, _, err = p.client.GL().Projects.CreateProjectServiceAccountPersonalAccessToken(p.state.ProjectID, account.ID, &gl.CreateProjectServiceAccountPersonalAccessTokenOptions{
+			Name:        new(liveFixtureProjectServiceAccountPATName),
+			Scopes:      &scopes,
+			Description: &description,
+			ExpiresAt:   &expiresAt,
+		}, gl.WithContext(ctx))
+		if err != nil {
+			return fmt.Errorf("create project service account PAT: %w", err)
+		}
+	}
+	p.state.ProjectServiceAccountTokenID = token.ID
+	return nil
+}
+
+func (p *liveFixturePreparer) findProjectServiceAccount(ctx context.Context) (*gl.ProjectServiceAccount, error) {
+	accounts, _, err := p.client.GL().Projects.ListProjectServiceAccounts(p.state.ProjectID, &gl.ListProjectServiceAccountsOptions{}, gl.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("list project service accounts: %w", err)
+	}
+	usernamePrefix := fmt.Sprintf("%s-%d", liveFixtureProjectServiceAccountUsername, p.state.ProjectID)
+	for _, account := range accounts {
+		if account.Name == liveFixtureProjectServiceAccountName || strings.HasPrefix(account.Username, usernamePrefix) {
+			return account, nil
+		}
+	}
+	return nil, nil
+}
+
+func (p *liveFixturePreparer) findProjectServiceAccountPAT(ctx context.Context, serviceAccountID int64) (*gl.PersonalAccessToken, error) {
+	tokens, _, err := p.client.GL().Projects.ListProjectServiceAccountPersonalAccessTokens(p.state.ProjectID, serviceAccountID, &gl.ListProjectServiceAccountPersonalAccessTokensOptions{}, gl.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("list project service account PATs: %w", err)
+	}
+	for _, token := range tokens {
+		if token.Name == liveFixtureProjectServiceAccountPATName && token.Active && !token.Revoked {
+			return token, nil
+		}
+	}
+	return nil, nil
 }
 
 // ensureRepository ensures repository exists for liveFixturePreparer.
@@ -1375,6 +1453,10 @@ func taskLiveFixtureStateAvailable(task evalTask, state *liveFixtureState) bool 
 		return state.ManualJobID > 0
 	case "MT-046", "MT-047":
 		return state.RunnerID > 0
+	case "MT-182", "MT-183", "MT-184", "MT-185":
+		return state.ProjectServiceAccountID > 0
+	case "MT-186", "MT-187":
+		return state.ProjectServiceAccountID > 0 && state.ProjectServiceAccountTokenID > 0
 	case "MS-008":
 		return state.RunnerID > 0 && state.FailedJobID > 0
 	default:
@@ -1435,7 +1517,7 @@ func suffixEvaluationBacktickValuesMatching(prompt, suffix string, shouldSuffix 
 func taskNeedsAttemptResourceSuffix(taskID string) bool {
 	switch taskID {
 	case "MT-007", "MT-015", "MT-026", taskFileCreateID, "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068",
-		"MT-069", "MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", taskMergeRequestAwardID, "MS-035", "MS-036", taskPackageReleaseID:
+		"MT-069", "MT-181", "MT-182", "MT-185", "MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", taskMergeRequestAwardID, "MS-035", "MS-036", taskPackageReleaseID, "MS-043":
 		return true
 	default:
 		return false
@@ -1711,6 +1793,12 @@ var resourceIDReplacements = map[string]resourceIDReplacement{
 	"MS-034": {label: resourceLabelUserID, oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
 	"MT-111": {label: "deploy key ID", oldID: 88, value: func(state *liveFixtureState) int64 { return state.DeployKeyID }},
 	"MT-112": {label: "project deploy token ID", oldID: 66, value: func(state *liveFixtureState) int64 { return state.DeployTokenID }},
+	"MT-182": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
+	"MT-183": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
+	"MT-184": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
+	"MT-185": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
+	"MT-186": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
+	"MT-187": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
 }
 
 func replaceSimpleResourceIDPlaceholder(taskID, prompt string, state *liveFixtureState) string {
@@ -1769,6 +1857,8 @@ func replaceTaskSpecificResourcePlaceholders(taskID, prompt string, state *liveF
 		if state.FeatureFlagName != "" {
 			prompt = strings.ReplaceAll(prompt, "`eval_flag`", fmt.Sprintf("`%s`", state.FeatureFlagName))
 		}
+	case "MT-186", "MT-187":
+		prompt = replaceID(prompt, "project service account PAT ID", 66, state.ProjectServiceAccountTokenID)
 	}
 	return prompt
 }

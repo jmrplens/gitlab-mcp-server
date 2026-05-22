@@ -1,19 +1,19 @@
 ---
 title: Pruebas E2E con Docker
-description: Ejecuta la suite end-to-end contra una instancia efímera de GitLab CE
+description: Ejecuta la suite end-to-end contra una instancia efímera de GitLab CE o EE
 ---
 
 :::note[Documentación para desarrolladores]
 Para la referencia técnica completa, consulta [`test/e2e/README.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/test/e2e/README.md) en el repositorio.
 :::
 
-El modo E2E con Docker arranca un entorno desechable de GitLab CE, provisiona fixtures, registra un runner de CI y ejecuta la suite end-to-end de MCP contra esa instancia local. Úsalo cuando necesites validación de alta confianza sin depender de una instancia real configurada en `.env`.
+El modo E2E con Docker arranca un entorno desechable de GitLab, provisiona fixtures, registra un runner de CI y ejecuta la suite end-to-end de MCP contra esa instancia local. La ruta por defecto usa GitLab CE; el modo Enterprise usa la imagen EE más una licencia Ultimate local. Úsalo cuando necesites validación de alta confianza sin depender de una instancia real configurada en `.env`.
 
 ## Qué incluye
 
 | Componente           | Propósito                                                                                                                  |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| GitLab CE            | Instancia efímera de GitLab para llamadas reales a REST y GraphQL                                                          |
+| GitLab CE o EE       | Instancia efímera de GitLab para llamadas reales a REST y GraphQL                                                          |
 | GitLab Runner        | Habilita flujos de pipelines y jobs que los tests unitarios no pueden ejercitar                                            |
 | Servicio de fixtures | Proporciona endpoints deterministas para webhooks, emoji personalizados y mirrors                                          |
 | Suite E2E            | Ejecuta flujos de herramientas individuales, meta-herramientas y herramientas dinámicas mediante transporte MCP en memoria |
@@ -27,6 +27,12 @@ make test-e2e-docker
 ```
 
 Ese objetivo orquesta el stack Docker, espera a GitLab, configura el usuario y el runner de pruebas, ejecuta la suite E2E de Go con el build tag `e2e`, y escribe reportes JUnit y JSON.
+
+Para ejecutar la misma suite contra GitLab EE con herramientas Enterprise/Premium activadas, define `ENTERPRISE_LICENSE` en `.env` o en la shell y usa:
+
+```bash
+make test-e2e-docker-enterprise
+```
 
 ## Flujo manual
 
@@ -42,6 +48,14 @@ set -a && source test/e2e/.env.docker && set +a
 go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 
 docker compose -f test/e2e/docker-compose.yml down -v
+```
+
+Para preparar Enterprise manualmente, usa la imagen EE en los comandos de compose y activa el flag durante el provisionamiento:
+
+```bash
+env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
+GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
+env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml down -v
 ```
 
 Para ejecutar solo el flujo de herramientas dinámicas después de preparar el entorno:
@@ -75,7 +89,8 @@ docker compose -f test/e2e/docker-compose.yml down -v
 
 | Síntoma                                     | Qué comprobar                                                                      |
 | ------------------------------------------- | ---------------------------------------------------------------------------------- |
-| GitLab nunca queda listo                    | Límites de memoria y CPU de Docker; GitLab CE necesita varios GB de RAM            |
+| GitLab nunca queda listo                    | Límites de memoria y CPU de Docker; GitLab necesita varios GB de RAM               |
+| Los tests Enterprise siguen saltándose      | `GITLAB_ENTERPRISE=true`, la imagen EE y `ENTERPRISE_LICENSE` en `.env`            |
 | Tests de pipelines o jobs saltados/fallando | Salida de registro del runner y valores de `test/e2e/.env.docker`                  |
 | Fallos en webhooks o mirrors                | Salud del contenedor de fixtures y URLs internas de la red Docker                  |
 | Una repetición ve datos antiguos            | Ejecuta `docker compose -f test/e2e/docker-compose.yml down -v` y empieza de nuevo |

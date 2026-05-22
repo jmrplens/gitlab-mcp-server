@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker eval-surfaces-docker coverage \
+	run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker test-e2e-docker-enterprise eval-surfaces-docker eval-surfaces-docker-enterprise coverage \
 	lint fmt clean version release release-check checksum \
 	golangci-lint govulncheck \
 	mdlint mdlint-fix audit-docs check-doc-links \
@@ -155,6 +155,47 @@ test-e2e-docker:
 	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
 	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
 
+## test-e2e-docker-enterprise: start ephemeral GitLab EE with ENTERPRISE_LICENSE, run E2E tests, tear down
+test-e2e-docker-enterprise:
+	@echo "=== Cleaning up previous containers (if any) ==="
+	GITLAB_IMAGE=$${GITLAB_IMAGE:-gitlab/gitlab-ee:latest} docker compose -f test/e2e/docker-compose.yml down -v 2>/dev/null || true
+	@echo "=== Starting ephemeral GitLab EE ==="
+	GITLAB_IMAGE=$${GITLAB_IMAGE:-gitlab/gitlab-ee:latest} docker compose -f test/e2e/docker-compose.yml up -d
+	@echo "=== Waiting for GitLab readiness ==="
+	./test/e2e/scripts/wait-for-gitlab.sh http://localhost:8929 600
+	@echo "=== Setting up test user, token, and Enterprise license ==="
+	@set -e; \
+	for attempt in 1 2 3; do \
+		if GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh http://localhost:8929; then \
+			break; \
+		fi; \
+		if [ "$$attempt" -eq 3 ]; then \
+			echo "ERROR: setup-gitlab.sh failed after 3 attempts"; \
+			exit 1; \
+		fi; \
+		echo "WARN: setup-gitlab.sh failed (attempt $$attempt/3), retrying in 5s..."; \
+		sleep 5; \
+	done
+	@echo "=== Registering GitLab Runner ==="
+	./test/e2e/scripts/register-runner.sh http://localhost:8929
+	@echo "=== Running Enterprise E2E tests ==="
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	@set +e; \
+	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker gotestsum \
+	  --format testdox \
+	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-enterprise-junit.xml \
+	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-enterprise-log.json \
+	  -- -tags e2e -timeout 1800s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-enterprise-output.txt'; \
+	  echo $$? > $(E2E_REPORT_DIR)/e2e-docker-enterprise-status
+	@echo "=== Tearing down ==="
+	@status=$$(cat $(E2E_REPORT_DIR)/e2e-docker-enterprise-status); \
+	  teardown_status=0; \
+	  GITLAB_IMAGE=$${GITLAB_IMAGE:-gitlab/gitlab-ee:latest} docker compose -f test/e2e/docker-compose.yml down -v || teardown_status=$$?; \
+	  echo "=== E2E reports saved to $(E2E_REPORT_DIR)/ ==="; \
+	  rm -f $(E2E_REPORT_DIR)/e2e-docker-enterprise-status; \
+	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
+	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
+
 ## eval-surfaces-docker: run Docker CE model evaluation for one surface (usage: make eval-surfaces-docker SURFACE=dynamic [PRESET=docker-read])
 eval-surfaces-docker:
 	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker SURFACE=dynamic|meta" >&2; exit 1; fi
@@ -162,6 +203,15 @@ eval-surfaces-docker:
 		./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
 	else \
 		./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
+	fi
+
+## eval-surfaces-docker-enterprise: run Docker Enterprise model evaluation for one surface (usage: make eval-surfaces-docker-enterprise SURFACE=dynamic)
+eval-surfaces-docker-enterprise:
+	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker-enterprise SURFACE=dynamic|meta" >&2; exit 1; fi
+	@if [ -n "$(PRESET)" ]; then \
+		EVAL_SURFACE_ENTERPRISE=true ./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
+	else \
+		EVAL_SURFACE_ENTERPRISE=true ./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
 	fi
 
 ## coverage: run tests and generate HTML coverage report

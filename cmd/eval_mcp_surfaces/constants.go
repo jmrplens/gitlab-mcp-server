@@ -50,6 +50,12 @@ const (
 	presetDockerMutatingSafe = "docker-mutating-safe"
 	// presetDockerDestructiveSafe identifies the preset docker destructive safe constant used by this package.
 	presetDockerDestructiveSafe = "docker-destructive-safe"
+	// presetDockerEnterpriseRead identifies the Docker-backed Enterprise read-only preset.
+	presetDockerEnterpriseRead = "docker-enterprise-read"
+	// presetDockerEnterpriseMutatingSafe identifies the Docker-backed Enterprise safe mutation preset.
+	presetDockerEnterpriseMutatingSafe = "docker-enterprise-mutating-safe"
+	// presetDockerEnterpriseDestructiveSafe identifies the Docker-backed Enterprise destructive preset.
+	presetDockerEnterpriseDestructiveSafe = "docker-enterprise-destructive-safe"
 	// presetDockerCapabilityDiscovery identifies the Docker-backed MCP capability discovery preset.
 	presetDockerCapabilityDiscovery = "docker-capability-discovery"
 

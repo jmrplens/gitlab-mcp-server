@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,383 |
-| Unit test functions                                   | 10,132 |
+| Total test functions                                  | 10,384 |
+| Unit test functions                                   | 10,133 |
 | E2E test functions                                    |    251 |
-| cmd test functions                                    |    635 |
+| cmd test functions                                    |    636 |
 | Test files (internal/)                                |    436 |
 | Test files (cmd/)                                     |     39 |
 | Test files (test/e2e/suite/)                          |    109 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,311 | 89.7% |
+| `TestFunc_Scenario` (2-part)           | 9,312 | 89.7% |
 | `TestFunc` (no underscore)             |   778 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   294 |  2.8% |
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          7,442 |        335 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            635 |         39 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,383** |    **584** |                                                                                                 |
+| cmd packages            |            636 |         39 | server entry point and developer command utilities                                              |
+| **Total**               |     **10,384** |    **584** |                                                                                                 |
 
 ### Core Packages
 
@@ -309,7 +309,7 @@
 | cmd/audit_test_names            |    81.6% |
 | cmd/audit_tokens                |    19.5% |
 | cmd/audit_tools                 |    34.9% |
-| cmd/eval_mcp_surfaces           |    67.7% |
+| cmd/eval_mcp_surfaces           |    67.4% |
 | cmd/find_dupes                  |    90.1% |
 | cmd/format_md_tables            |    87.2% |
 | cmd/gen_action_catalog_manifest |    58.3% |
@@ -538,7 +538,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/add_docs** (62.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_mcp_surfaces** (67.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_mcp_surfaces** (67.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **projectserviceaccounts** (75.6%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/audit_action_spec_coverage** (77.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.3%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
@@ -598,12 +598,12 @@ make test-e2e
 
 #### Docker Mode
 
-Uses an ephemeral GitLab CE container provisioned by Docker Compose. Requires Docker and ~4 GB RAM.
+Uses an ephemeral GitLab CE container provisioned by Docker Compose. Requires Docker and ~4 GB RAM. Enterprise mode uses the same topology with a GitLab EE image plus a locally supplied Ultimate license.
 
 All E2E Docker infrastructure is version-controlled under `test/e2e/`:
 
-- `test/e2e/docker-compose.yml` — GitLab CE + Runner + fixture service compose definition
-- `test/e2e/scripts/setup-gitlab.sh` — Creates test user, PAT, writes `.env.docker`
+- `test/e2e/docker-compose.yml` — GitLab CE/EE + Runner + fixture service compose definition
+- `test/e2e/scripts/setup-gitlab.sh` — Creates test user, PAT, installs `ENTERPRISE_LICENSE` when requested, writes `.env.docker`
 - `test/e2e/scripts/register-runner.sh` — Registers CI runner in GitLab
 - `test/e2e/scripts/wait-for-gitlab.sh` — Polls GitLab readiness endpoint
 
@@ -628,11 +628,17 @@ Or use the Makefile target that automates the full lifecycle:
 make test-e2e-docker
 ```
 
+For Enterprise/Premium E2E coverage, set `ENTERPRISE_LICENSE` in `.env` or the shell and use:
+
+```bash
+make test-e2e-docker-enterprise
+```
+
 Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 
 #### Test Reports
 
-Both `make test-e2e` and `make test-e2e-docker` use [gotestsum](https://github.com/gotestyourself/gotestsum) to produce structured test reports in `dist/e2e-reports/`:
+`make test-e2e`, `make test-e2e-docker`, and `make test-e2e-docker-enterprise` use [gotestsum](https://github.com/gotestyourself/gotestsum) to produce structured test reports in `dist/e2e-reports/`:
 
 | File             | Format    | Purpose                                       |
 | ---------------- | --------- | --------------------------------------------- |
@@ -640,9 +646,9 @@ Both `make test-e2e` and `make test-e2e-docker` use [gotestsum](https://github.c
 | `e2e-log.json`   | JSON      | Programmatic analysis, filtering              |
 | `e2e-output.txt` | Plain     | Human-readable console output (`testdox`)     |
 
-Docker mode files use the `e2e-docker-` prefix. Reports are written to `dist/e2e-reports/` (gitignored via `dist/`).
+Docker mode files use the `e2e-docker-` prefix, and Enterprise Docker files use the `e2e-docker-enterprise-` prefix. Reports are written to `dist/e2e-reports/` (gitignored via `dist/`).
 
-The Makefile targets run `gotestsum` through `tee` with `pipefail` so test failures propagate to the target exit code. `make test-e2e-docker` still tears down Docker containers and volumes before returning a non-zero status on failure.
+The Makefile targets run `gotestsum` through `tee` with `pipefail` so test failures propagate to the target exit code. Docker targets still tear down containers and volumes before returning a non-zero status on failure.
 
 Install gotestsum via `make install-tools` or `go install gotest.tools/gotestsum@latest`.
 
@@ -667,7 +673,7 @@ The suite uses five MCP server/client pairs via `mcp.NewInMemoryTransports()`:
 | MCP capabilities   | Verifies logging, progress, roots, completions, sampling, elicitation, and safe mode |
 | Docker-only runner | Exercises CI pipeline and job behavior with a registered runner                      |
 
-Docker validation snapshots are written under `dist/e2e-reports/` after `make test-e2e-docker`. The generated metrics above count E2E `Test*` entry points statically; they do not replace the runtime report produced by gotestsum.
+Docker validation snapshots are written under `dist/e2e-reports/` after `make test-e2e-docker` or `make test-e2e-docker-enterprise`. The generated metrics above count E2E `Test*` entry points statically; they do not replace the runtime report produced by gotestsum.
 
 **Lifecycle covered:** user → project CRUD → commits → branches → tags → releases → issues → labels → milestones → members → upload → MR lifecycle → notes → discussions → search → groups → pipelines → packages → wikis → CI variables → environments → issue links → deploy keys → snippets → pipeline schedules → badges → access tokens → award emoji → sampling → elicitation → cleanup
 
@@ -808,6 +814,7 @@ make test          # Run all unit tests
 make test-race     # Run with race detector
 make test-e2e      # Run E2E tests (self-hosted GitLab) — generates JUnit + JSON reports
 make test-e2e-docker # Run E2E tests with ephemeral GitLab CE — generates JUnit + JSON reports
+make test-e2e-docker-enterprise # Run E2E tests with ephemeral GitLab EE + license
 make coverage      # Generate coverage report
 make lint          # Run consolidated golangci-lint checks
 make inspector     # Compile + launch MCP Inspector UI via stdio

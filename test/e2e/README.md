@@ -56,6 +56,31 @@ Or use the Makefile target:
 make test-e2e-docker
 ```
 
+### Docker Enterprise Mode
+
+Enterprise mode uses the same Docker topology with the EE image and a local
+Ultimate license. Store the license in `.env` as `ENTERPRISE_LICENSE` or export
+it in the shell; the setup script installs it without writing the license into
+`test/e2e/.env.docker`.
+
+```bash
+make test-e2e-docker-enterprise
+```
+
+Equivalent manual setup:
+
+```bash
+env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
+./test/e2e/scripts/wait-for-gitlab.sh
+GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
+./test/e2e/scripts/register-runner.sh
+
+set -a && source test/e2e/.env.docker && set +a
+go test -v -tags e2e -timeout 600s ./test/e2e/suite/
+
+env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml down -v
+```
+
 Docker mode enables pipeline and job tests that require a CI runner, and starts an internal fixture service used by webhook and custom emoji tests. The setup script also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` into `.env.docker` so CI runs all non-EE tests without public Internet dependencies.
 
 ## Architecture

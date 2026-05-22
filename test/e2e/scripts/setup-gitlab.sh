@@ -7,16 +7,16 @@ set -euo pipefail
 
 GITLAB_URL="${1:-http://localhost:8929}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-E2E_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 ROOT_PASSWORD="E2e_R0ot!xK9mZ#2026"
 TEST_USER="e2e-tester"
 TEST_EMAIL="e2e-tester@example.com"
 TEST_PASSWORD="E2e_T3st!vQ7nW#2026"
-ENV_FILE="${E2E_DIR}/.env.docker"
+ENV_FILE="${REPO_ROOT}/test/e2e/.env.docker"
 ENV_FILE_DISPLAY="test/e2e/.env.docker"
 ROOT_AUTH_ATTEMPTS="${E2E_ROOT_AUTH_ATTEMPTS:-30}"
 ROOT_AUTH_INTERVAL="${E2E_ROOT_AUTH_INTERVAL:-10}"
-COMPOSE_FILE="${E2E_DOCKER_COMPOSE_FILE:-${E2E_DIR}/docker-compose.yml}"
+COMPOSE_FILE="${E2E_DOCKER_COMPOSE_FILE:-${REPO_ROOT}/test/e2e/docker-compose.yml}"
 
 echo "=== Setting up GitLab E2E test environment ==="
 echo "GitLab URL: ${GITLAB_URL}"
@@ -58,6 +58,53 @@ try:
 except Exception:
     print("")
 ' 2>/dev/null || true
+}
+
+# Read one key from the repository .env file without shell-evaluating secrets.
+dotenv_value() {
+    local key="$1"
+    local file="${REPO_ROOT}/.env"
+    if [ ! -f "$file" ]; then
+        return 0
+    fi
+    KEY="$key" ENV_PATH="$file" python3 -c 'import os
+key = os.environ.get("KEY", "")
+path = os.environ.get("ENV_PATH", "")
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        for raw in handle:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, value = line.split("=", 1)
+            name = name.strip()
+            if name.startswith("export "):
+                name = name.split(None, 1)[1].strip()
+            if name != key:
+                continue
+            value = value.strip().strip("\"").strip(chr(39))
+            print(value)
+            break
+except OSError:
+    pass
+' 2>/dev/null || true
+}
+
+env_or_dotenv() {
+    local key="$1"
+    local value="${!key:-}"
+    if [ -n "$value" ]; then
+        printf '%s' "$value"
+        return 0
+    fi
+    dotenv_value "$key"
+}
+
+normalize_bool() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|y|on) printf 'true' ;;
+        *) printf 'false' ;;
+    esac
 }
 
 bootstrap_root_pat_with_rails() {
@@ -138,6 +185,36 @@ if [ -z "$ROOT_TOKEN" ]; then
     exit 1
 fi
 echo "    Root API token obtained"
+
+ENTERPRISE_MODE="$(normalize_bool "$(env_or_dotenv GITLAB_ENTERPRISE)")"
+ENTERPRISE_LICENSE="$(env_or_dotenv ENTERPRISE_LICENSE)"
+if [ "$ENTERPRISE_MODE" = "true" ]; then
+    if [ -z "$ENTERPRISE_LICENSE" ]; then
+        echo "ERROR: GITLAB_ENTERPRISE=true requires ENTERPRISE_LICENSE in the environment or repository .env" >&2
+        exit 1
+    fi
+    echo "    Installing Enterprise license"
+    LICENSE_RESPONSE=$(curl -sS -w '\n%{http_code}' "${GITLAB_URL}/api/v4/license" \
+        -X POST \
+        -H "Authorization: Bearer ${ROOT_TOKEN}" \
+        --data-urlencode "license=${ENTERPRISE_LICENSE}" \
+        --retry 3 --retry-delay 2 --retry-all-errors \
+        --connect-timeout 5 --max-time 60 2>/dev/null || true)
+    LICENSE_STATUS=$(printf '%s' "$LICENSE_RESPONSE" | tail -n 1)
+    LICENSE_BODY=$(printf '%s' "$LICENSE_RESPONSE" | sed '$d')
+    case "$LICENSE_STATUS" in
+        200|201)
+            echo "    Enterprise license installed"
+            ;;
+        *)
+            echo "ERROR: Failed to install Enterprise license (HTTP ${LICENSE_STATUS})" >&2
+            if [ -n "$LICENSE_BODY" ]; then
+                printf '%.300s\n' "$LICENSE_BODY" >&2
+            fi
+            exit 1
+            ;;
+    esac
+fi
 
 # 1b. Disable default branch protection so E2E tests can push to main,
 # reduce deletion_adjourned_period to 1 day (minimum) so permanent deletes work immediately,
@@ -243,6 +320,7 @@ cat > "${ENV_FILE}" <<EOF
 GITLAB_URL=${GITLAB_URL}
 GITLAB_TOKEN=${PAT}
 GITLAB_SKIP_TLS_VERIFY=true
+GITLAB_ENTERPRISE=${ENTERPRISE_MODE}
 E2E_MODE=docker
 E2E_FIXTURE_URL=http://e2e-fixture:8080
 E2E_GITLAB_INTERNAL_URL=http://gitlab-e2e
@@ -252,6 +330,7 @@ echo ""
 echo "=== Setup complete ==="
 echo "  User: ${TEST_USER} (admin)"
 echo "  Token: ${PAT:0:10}..."
+echo "  Enterprise: ${ENTERPRISE_MODE}"
 echo "  Config: ${ENV_FILE_DISPLAY}"
 echo ""
 echo "To run E2E tests:"

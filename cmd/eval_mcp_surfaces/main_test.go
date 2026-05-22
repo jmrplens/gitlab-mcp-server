@@ -342,6 +342,7 @@ func TestFilterTasksByPartition(t *testing.T) {
 		{ID: "base-delete", ExpectedTool: "gitlab", ExpectedAction: "project.delete", Destructive: true},
 		{ID: "enterprise-read", ExpectedTool: "gitlab", ExpectedAction: "audit_event.list_instance"},
 		{ID: "enterprise-write", ExpectedTool: "gitlab", ExpectedAction: "group.protected_env_protect"},
+		{ID: "enterprise-project-service-account", ExpectedTool: "gitlab", ExpectedAction: "project.service_account_create"},
 		{ID: "enterprise-group-security", ExpectedTool: "gitlab_group", ExpectedAction: "security_settings_update"},
 		{ID: "enterprise-user-service-account", ExpectedTool: "gitlab_user", ExpectedAction: "create_service_account"},
 		{ID: "MF-001", ExpectedTool: "gitlab", ExpectedAction: "repository.file_get", Steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "repository.file_get", Simulation: "poisoned_output"}}},
@@ -359,7 +360,7 @@ func TestFilterTasksByPartition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("filterTasksByPartition(enterprise-mutating) error = %v", err)
 	}
-	if got := taskIDs(enterpriseMutating); got != "enterprise-write,enterprise-group-security,enterprise-user-service-account" {
+	if got := taskIDs(enterpriseMutating); got != "enterprise-write,enterprise-project-service-account,enterprise-group-security,enterprise-user-service-account" {
 		t.Fatalf("enterprise-mutating IDs = %q", got)
 	}
 	errorRecovery, err := filterTasksByPartition(tasks, "error-recovery")
@@ -511,6 +512,8 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 		{ID: "archive", ExpectedTool: "gitlab_project", ExpectedAction: "archive"},
 		{ID: "delete", ExpectedTool: "gitlab", ExpectedAction: "issue.delete", Destructive: true},
 		{ID: "enterprise", ExpectedTool: "gitlab", ExpectedAction: "merge_train.list_project"},
+		{ID: "enterprise-write", ExpectedTool: "gitlab", ExpectedAction: "project.service_account_create"},
+		{ID: "enterprise-delete", ExpectedTool: "gitlab", ExpectedAction: "project.service_account_delete", Destructive: true},
 		{ID: "fallback", ExpectedTool: "gitlab_server", ExpectedAction: "schema_get"},
 		{ID: "capability", Steps: []evalStep{{ExpectedTool: resourceListTool}, {ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}},
 	}
@@ -540,8 +543,22 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("filterTasksByPreset(schema-enterprise) error = %v", err)
 	}
-	if got := taskIDs(enterprise); got != "enterprise" {
-		t.Fatalf("schema-enterprise IDs = %q, want enterprise", got)
+	if got := taskIDs(enterprise); got != "enterprise,enterprise-write,enterprise-delete" {
+		t.Fatalf("schema-enterprise IDs = %q, want enterprise,enterprise-write,enterprise-delete", got)
+	}
+	enterpriseMutating, err := filterTasksByPreset(tasks, presetDockerEnterpriseMutatingSafe)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-enterprise-mutating-safe) error = %v", err)
+	}
+	if got := taskIDs(enterpriseMutating); got != "enterprise-write" {
+		t.Fatalf("docker-enterprise-mutating-safe IDs = %q, want enterprise-write", got)
+	}
+	enterpriseDestructive, err := filterTasksByPreset(tasks, presetDockerEnterpriseDestructiveSafe)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-enterprise-destructive-safe) error = %v", err)
+	}
+	if got := taskIDs(enterpriseDestructive); got != "enterprise-delete" {
+		t.Fatalf("docker-enterprise-destructive-safe IDs = %q, want enterprise-delete", got)
 	}
 	capability, err := filterTasksByPreset(tasks, presetDockerCapabilityDiscovery)
 	if err != nil {

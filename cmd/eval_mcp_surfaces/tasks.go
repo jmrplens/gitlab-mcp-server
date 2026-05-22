@@ -126,6 +126,7 @@ func routeSignalsEnterpriseCatalog(tool, action string) bool {
 	route := canonicalRouteID(tool, action)
 	for _, prefix := range []string{
 		"attestation.", "audit_event.", "compliance_policy.", "dependency.", "dora_metrics.", "enterprise_user.", "external_status_check.", "geo.", "member_role.", "merge_train.", "project_alias.", "security_finding.", "security_setting.", "storage_move.", "vulnerability.",
+		"project.service_account_",
 	} {
 		if strings.HasPrefix(route, prefix) {
 			return true
@@ -240,7 +241,7 @@ func filterTasksByPreset(tasks []evalTask, preset string) ([]evalTask, error) {
 
 // orderTasksForPreset orders tasks for preset deterministically.
 func orderTasksForPreset(tasks []evalTask, preset string) []evalTask {
-	if preset != presetDockerDestructiveSafe {
+	if preset != presetDockerDestructiveSafe && preset != presetDockerEnterpriseDestructiveSafe {
 		return tasks
 	}
 	return orderSharedFixtureDestructiveLast(tasks)
@@ -251,10 +252,15 @@ func orderTasksForPreset(tasks []evalTask, preset string) []evalTask {
 func orderSharedFixtureDestructiveLast(tasks []evalTask) []evalTask {
 	regular := make([]evalTask, 0, len(tasks))
 	artifactDeletes := make([]evalTask, 0, 1)
+	projectServiceAccountDeletes := make([]evalTask, 0, 1)
 	projectArchive := make([]evalTask, 0, 1)
 	for _, task := range tasks {
 		if taskArchivesSharedProject(task) {
 			projectArchive = append(projectArchive, task)
+			continue
+		}
+		if taskDeletesProjectServiceAccount(task) {
+			projectServiceAccountDeletes = append(projectServiceAccountDeletes, task)
 			continue
 		}
 		if taskDeletesSharedJobArtifacts(task) {
@@ -263,6 +269,7 @@ func orderSharedFixtureDestructiveLast(tasks []evalTask) []evalTask {
 		}
 		regular = append(regular, task)
 	}
+	regular = append(regular, projectServiceAccountDeletes...)
 	regular = append(regular, artifactDeletes...)
 	return append(regular, projectArchive...)
 }
@@ -294,6 +301,23 @@ func taskDeletesSharedJobArtifacts(task evalTask) bool {
 	return false
 }
 
+// taskDeletesProjectServiceAccount reports whether a task removes the shared
+// project service-account fixture used by Enterprise PAT scenarios.
+func taskDeletesProjectServiceAccount(task evalTask) bool {
+	for _, step := range taskSteps(task) {
+		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "service_account_delete" {
+			return true
+		}
+		if step.ExpectedTool == dynamicExecuteTool && step.ExpectedAction == "project.service_account_delete" {
+			return true
+		}
+		if step.ExpectedTool == "gitlab" && step.ExpectedAction == "project.service_account_delete" {
+			return true
+		}
+	}
+	return false
+}
+
 // taskMatchesPreset reports whether task matches preset.
 func taskMatchesPreset(task evalTask, preset string) bool {
 	enterprise := taskHasEnterpriseStep(task)
@@ -309,6 +333,12 @@ func taskMatchesPreset(task evalTask, preset string) bool {
 		return !enterprise && mutating && !destructive && !special
 	case presetDockerDestructiveSafe:
 		return !enterprise && destructive && !special
+	case presetDockerEnterpriseRead:
+		return enterprise && !mutating && !destructive && !special
+	case presetDockerEnterpriseMutatingSafe:
+		return enterprise && mutating && !destructive && !special
+	case presetDockerEnterpriseDestructiveSafe:
+		return enterprise && destructive && !special
 	case presetDockerCapabilityDiscovery:
 		return taskUsesCapabilityFallback(task)
 	default:
@@ -335,7 +365,7 @@ func routeLooksEnterprise(tool, action string) bool {
 	for _, prefix := range []string{
 		"attestation.", "audit_event.", "compliance_policy.", "dependency.", "dora_metrics.", "enterprise_user.", "external_status_check.", "geo.", "group_analytics.", "group_credential.", "group_epic_board.", "group_iteration.", "group_ldap.", "group_protected_branch.", "group_protected_env.", "group_release.", "group_saml.", "group_scim.", "group_service_account.", "group_ssh_cert.", "group_wiki.", "member_role.", "merge_train.", "project_alias.", "project_iteration.", "security_finding.", "security_setting.", "storage_move.", "vulnerability.",
 		"epic.", "epic_discussion.", "epic_issue.", "epic_note.",
-		"project.mirror_", "project.push_rule_", "project.security_settings_",
+		"project.mirror_", "project.push_rule_", "project.security_settings_", "project.service_account_",
 		"group.analytics_", "group.credential_", "group.epic_", "group.iteration_", "group.ldap_", "group.protected_branch_", "group.protected_env_", "group.release_", "group.saml_", "group.security_settings_", "group.service_account_", "group.ssh_cert_", "group.wiki_",
 		"issue.iteration_",
 		"user.create_service_account", "user.list_service_accounts",

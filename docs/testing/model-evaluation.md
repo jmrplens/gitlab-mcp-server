@@ -28,16 +28,16 @@ and the success condition.
 | Multi-step workflow | `MS-`  | The model must sequence multiple MCP calls in the requested order.               |
 | Failure simulation  | `MF-`  | The model must recover from injected failures or unsafe output.                  |
 
-The current automated corpus contains 159 cases and 300 expected tool
+The current automated corpus contains 235 cases and 391 expected tool
 operations:
 
 | Area                          | Count |
 | ----------------------------- | ----: |
-| Single-operation cases        |   117 |
-| Multi-step workflow scenarios |    37 |
+| Single-operation cases        |   187 |
+| Multi-step workflow scenarios |    43 |
 | Failure simulation scenarios  |     5 |
-| Total cases                   |   159 |
-| Expected tool operations      |   300 |
+| Total cases                   |   235 |
+| Expected tool operations      |   391 |
 
 ## Evaluation Modes
 
@@ -78,9 +78,10 @@ the evaluator/provider adapter rather than by changing the global MCP schema.
 ### Docker Evaluation
 
 Docker evaluation runs the model against the real MCP server and an ephemeral,
-populated GitLab CE instance. The model's validated tool calls are executed
-through MCP, so failures can come from model choice, argument shape, GitLab API
-state, permissions, or fixture gaps.
+populated GitLab instance. The default suite uses GitLab CE. Enterprise suites
+use the EE image plus a locally supplied Ultimate license. The model's validated
+tool calls are executed through MCP, so failures can come from model choice,
+argument shape, GitLab API state, permissions, license coverage, or fixture gaps.
 
 Docker evaluation is split into safe presets:
 
@@ -90,6 +91,14 @@ Docker evaluation is split into safe presets:
 | `docker-mutating-safe`    | Safe create/update tasks  | Mutates disposable Docker fixtures.                                          |
 | `docker-destructive-safe` | Safe delete/archive tasks | Uses disposable or just-in-time fixtures and requires confirmation metadata. |
 
+Enterprise Docker mode adds matching Premium/Ultimate presets:
+
+| Preset                               | Scope                                      | Mutation policy                                                      |
+| ------------------------------------ | ------------------------------------------ | -------------------------------------------------------------------- |
+| `docker-enterprise-read`             | Enterprise read-only tasks                 | No mutating or destructive operations.                               |
+| `docker-enterprise-mutating-safe`    | Enterprise safe create/update/rotate tasks | Mutates licensed disposable Docker fixtures.                         |
+| `docker-enterprise-destructive-safe` | Enterprise safe delete/revoke tasks        | Requires confirmation metadata and uses refreshed licensed fixtures. |
+
 ### One-Command Docker Suite
 
 Use the wrapper when you want a full CE model run for one surface without
@@ -97,6 +106,14 @@ assembling the Docker, fixture, preset, and publication commands by hand:
 
 ```bash
 make eval-surfaces-docker SURFACE=dynamic
+```
+
+For a full Enterprise Ultimate run, set `ENTERPRISE_LICENSE` in `.env` or the
+shell, then run the Enterprise wrapper target. It uses `gitlab/gitlab-ee:latest`
+by default and writes Enterprise artifacts under the same run directory layout:
+
+```bash
+make eval-surfaces-docker-enterprise SURFACE=dynamic
 ```
 
 To rerun a single preset for focused regression checks, pass `PRESET`:
@@ -108,12 +125,12 @@ make eval-surfaces-docker SURFACE=dynamic PRESET=docker-destructive-safe
 The same workflow is available directly as
 `scripts/eval-surfaces-docker.sh dynamic`, with an optional second preset
 argument. The only required input is the tool surface (`dynamic` or `meta`). The
-wrapper cleans and starts the Docker GitLab CE stack, waits for readiness,
+wrapper cleans and starts the Docker GitLab stack, waits for readiness,
 provisions the E2E token and runner, prepares live fixtures, runs the selected
-Docker preset set with `GITLAB_ENTERPRISE=false`, and then publishes the reviewed
-reports into [AI Model Evaluation Results](model-results.md) and the managed
-README summary after full runs. Single-preset runs skip documentation publishing
-so partial results do not replace the current full-run summary.
+Docker preset set with the requested edition flag, and then publishes the
+reviewed reports into [AI Model Evaluation Results](model-results.md) and the
+managed README summary after full runs. Single-preset runs skip documentation
+publishing so partial results do not replace the current full-run summary.
 
 Artifacts are written under `dist/evaluation/surfaces/<timestamp>-<surface>-docker/`.
 The timestamp is captured once at startup and reused for every report, trace,

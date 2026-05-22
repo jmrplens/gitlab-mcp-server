@@ -39,7 +39,7 @@ The harness does not start an external MCP process. It always uses in-memory MCP
 
 Use the existing Docker E2E GitLab environment when validating real execution. The setup scripts write `test/e2e/.env.docker`, including `E2E_MODE=docker`; `--execute-tools` requires this guard unless `--allow-live-mutations` is set explicitly.
 
-The live catalog follows the MCP server configuration loaded from the environment. Keep `GITLAB_ENTERPRISE=false` for Docker CE runs so Enterprise/Premium-only routes are not advertised against an instance that cannot execute them.
+The live catalog follows the MCP server configuration loaded from the environment. Keep `GITLAB_ENTERPRISE=false` for Docker CE runs so Enterprise/Premium-only routes are not advertised against an instance that cannot execute them. Use `GITLAB_ENTERPRISE=true`, the EE image, and `ENTERPRISE_LICENSE` for Docker Enterprise runs.
 
 ```bash
 docker compose -f test/e2e/docker-compose.yml up -d
@@ -367,6 +367,14 @@ Choose the next MCP tool call needed to perform this task. You may look up schem
 | MT-177 | Dismiss vulnerability GID `gid://gitlab/Vulnerability/42` as false positive with a comment. | `gitlab` / `vulnerability.dismiss` | `id` | `dismissal_reason`, `comment` | No | Vulnerability dismissal uses GID and dismissal_reason. |
 | MT-178 | Get the pipeline security summary for pipeline IID `12345` in project path `my-org/tools/gitlab-mcp-server`. | `gitlab` / `vulnerability.pipeline_security_summary` | `project_path`, `pipeline_iid` | none | No | Security summary uses project_path and pipeline_iid, not numeric IDs. |
 | MT-179 | Inspect merge request `7` changes in project `my-org/tools/gitlab-mcp-server` without running an LLM analyzer. | `gitlab_mr_review` / `changes_get` | `project_id`, `merge_request_iid` | none | No | MR changes are returned or a truncation hint is included. |
+| MT-180 | List project service accounts in project `my-org/tools/gitlab-mcp-server`. | `gitlab` / `project.service_account_list` | `project_id` | `order_by`, `sort`, `per_page` | No | Project service account list route is selected. |
+| MT-181 | Create project service account `eval-project-bot` in project `my-org/tools/gitlab-mcp-server`. | `gitlab` / `project.service_account_create` | `project_id` | `name`, `username`, `email` | No | Project service account creation uses the project-scoped Enterprise route. |
+| MT-182 | Update project service account user ID `55` in project `my-org/tools/gitlab-mcp-server` to name `eval-project-bot-v2`. | `gitlab` / `project.service_account_update` | `project_id`, `service_account_id` | `name`, `username`, `email` | No | Project service account update keeps service_account_id separate from project_id. |
+| MT-183 | Delete project service account user ID `55` in project `my-org/tools/gitlab-mcp-server`. | `gitlab` / `project.service_account_delete` | `project_id`, `service_account_id` | `hard_delete`, `confirm` | Yes | Destructive project service-account deletion is confirmed. |
+| MT-184 | List personal access tokens for project service account user ID `55` in project `my-org/tools/gitlab-mcp-server`. | `gitlab` / `project.service_account_pat_list` | `project_id`, `service_account_id` | `state`, `search`, `per_page` | No | Project service-account PAT list uses the service account user ID. |
+| MT-185 | Create personal access token `eval-project-bot-token` with scope `api` for project service account user ID `55` in project `my-org/tools/gitlab-mcp-server`. | `gitlab` / `project.service_account_pat_create` | `project_id`, `service_account_id`, `name`, `scopes` | `description`, `expires_at` | No | Project service-account PAT create includes token name and scopes. |
+| MT-186 | Rotate project service account PAT ID `66` for project service account user ID `55` in project `my-org/tools/gitlab-mcp-server`. | `gitlab` / `project.service_account_pat_rotate` | `project_id`, `service_account_id`, `token_id` | `expires_at` | No | Project service-account PAT rotate keeps token_id distinct from service_account_id. |
+| MT-187 | Revoke project service account PAT ID `66` for project service account user ID `55` in project `my-org/tools/gitlab-mcp-server`. | `gitlab` / `project.service_account_pat_revoke` | `project_id`, `service_account_id`, `token_id` | `confirm` | Yes | Destructive project service-account PAT revoke is confirmed. |
 
 ## Multi-Step Scenario Fixture
 
@@ -429,6 +437,14 @@ These rows are selected by the `capability-fallback` partition and the `docker-c
 | MS-041 | List MCP prompt templates, then render prompt `my_open_mrs`. | `gitlab_list_prompts` -> `gitlab_get_prompt` | none; `name` | none; none | none | Prompt discovery and prompt rendering are requested through prompt bridge tools. |
 | MS-042 | Request MCP completion for prompt `summarize_open_mrs` argument `project_id` with partial value `my-org`, then render `summarize_open_mrs` for project `my-org/tools/gitlab-mcp-server`. | `gitlab_complete` -> `gitlab_get_prompt` | `ref_type`, `name`, `argument_name`, `argument_value`; `name`, `arguments` | none; none | none | Completion and prompt rendering are both exercised through MCP bridge tools. |
 
+## Enterprise Docker Scenario Fixture
+
+These rows are selected by the `enterprise-*` partitions and the Docker Enterprise presets. They require an EE image plus an Ultimate license in the ephemeral Docker instance.
+
+| ID | Prompt | Expected sequence | Required params by step | Optional params by step | Destructive steps | Success verifier |
+| --- | --- | --- | --- | --- | --- | --- |
+| MS-043 | Exercise project service account lifecycle in project `my-org/tools/gitlab-mcp-server`: create service account `eval-project-service-account`, list project service accounts, update the created service account name to `eval-project-service-account-v2`, create personal access token `eval-project-service-token` with scope `api`, list that service account's tokens, rotate the token, revoke the rotated token, then delete the service account. | `gitlab_project` / `service_account_create` -> `gitlab_project` / `service_account_list` -> `gitlab_project` / `service_account_update` -> `gitlab_project` / `service_account_pat_create` -> `gitlab_project` / `service_account_pat_list` -> `gitlab_project` / `service_account_pat_rotate` -> `gitlab_project` / `service_account_pat_revoke` -> `gitlab_project` / `service_account_delete` | `project_id`; `project_id`; `project_id`, `service_account_id`; `project_id`, `service_account_id`, `name`, `scopes`; `project_id`, `service_account_id`; `project_id`, `service_account_id`, `token_id`; `project_id`, `service_account_id`, `token_id`; `project_id`, `service_account_id` | `name`, `username`, `email`; `per_page`; `name`; `description`, `expires_at`; `state`; `expires_at`; `confirm`; `hard_delete`, `confirm` | 7, 8 | The model carries the created service account user ID and PAT token ID through project-scoped Enterprise reads, mutations, rotation, confirmed revoke, and confirmed delete. |
+
 ## Failure Simulation Scenario Fixture
 
 These rows use an extra `Simulation by step` column. The harness validates the model's tool call first, then returns the simulated tool result without executing GitLab.
@@ -445,11 +461,11 @@ These rows use an extra `Simulation by step` column. The harness validates the m
 
 | Area | Cases |
 | --- | ---: |
-| Single-operation meta-tool cases | 179 |
-| Multi-step workflow scenarios | 42 |
+| Single-operation meta-tool cases | 187 |
+| Multi-step workflow scenarios | 43 |
 | Failure simulation scenarios | 5 |
-| Total automated cases | 226 |
-| Expected tool operations across all cases | 375 |
+| Total automated cases | 235 |
+| Expected tool operations across all cases | 391 |
 | Catalog tools covered | 48 / 48 |
 
 ## Maintenance Rules

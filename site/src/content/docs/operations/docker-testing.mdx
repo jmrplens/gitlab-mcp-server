@@ -1,19 +1,19 @@
 ---
 title: Docker E2E Testing
-description: Run the end-to-end suite against an ephemeral GitLab CE instance
+description: Run the end-to-end suite against an ephemeral GitLab CE or EE instance
 ---
 
 :::note[Developer Documentation]
 For the complete technical reference, see [`test/e2e/README.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/test/e2e/README.md) in the repository.
 :::
 
-Docker E2E mode starts a disposable GitLab CE environment, provisions fixtures, registers a CI runner, and runs the MCP end-to-end suite against that local instance. Use it when you need high-confidence validation without relying on a real `.env` GitLab instance.
+Docker E2E mode starts a disposable GitLab environment, provisions fixtures, registers a CI runner, and runs the MCP end-to-end suite against that local instance. The default path uses GitLab CE; Enterprise mode uses the EE image plus a local Ultimate license. Use it when you need high-confidence validation without relying on a real `.env` GitLab instance.
 
 ## What it includes
 
 | Component       | Purpose                                                                                |
 | --------------- | -------------------------------------------------------------------------------------- |
-| GitLab CE       | Ephemeral GitLab instance for real REST and GraphQL API calls                          |
+| GitLab CE or EE | Ephemeral GitLab instance for real REST and GraphQL API calls                          |
 | GitLab Runner   | Enables pipeline and job workflows that unit tests cannot exercise                     |
 | Fixture service | Provides deterministic webhook, custom emoji, and mirror endpoints                     |
 | E2E suite       | Runs individual, meta-tool, and dynamic tool workflows through in-memory MCP transport |
@@ -27,6 +27,12 @@ make test-e2e-docker
 ```
 
 That target orchestrates the Docker stack, waits for GitLab, configures the test user and runner, runs the Go E2E suite with the `e2e` build tag, and writes JUnit plus JSON reports.
+
+To run the same suite against GitLab EE with Enterprise/Premium tools enabled, set `ENTERPRISE_LICENSE` in `.env` or your shell and use:
+
+```bash
+make test-e2e-docker-enterprise
+```
 
 ## Manual workflow
 
@@ -42,6 +48,14 @@ set -a && source test/e2e/.env.docker && set +a
 go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 
 docker compose -f test/e2e/docker-compose.yml down -v
+```
+
+For manual Enterprise setup, replace the compose commands with the EE image and set the edition flag during provisioning:
+
+```bash
+env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
+GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
+env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml down -v
 ```
 
 To run only the dynamic tool surface workflow after setup:
@@ -75,7 +89,8 @@ docker compose -f test/e2e/docker-compose.yml down -v
 
 | Symptom                                   | What to check                                                               |
 | ----------------------------------------- | --------------------------------------------------------------------------- |
-| GitLab never becomes ready                | Docker memory and CPU limits; GitLab CE needs several GB of RAM             |
+| GitLab never becomes ready                | Docker memory and CPU limits; GitLab needs several GB of RAM                |
+| Enterprise tests stay skipped             | `GITLAB_ENTERPRISE=true`, the EE image, and `ENTERPRISE_LICENSE` in `.env`  |
 | Pipeline or job tests are skipped/failing | Runner registration output and `test/e2e/.env.docker` values                |
 | Webhook or mirror tests fail              | Fixture service container health and internal Docker network URLs           |
 | A rerun sees stale data                   | Run `docker compose -f test/e2e/docker-compose.yml down -v` and start again |
