@@ -1567,17 +1567,26 @@ func ensureLiveIssueAwardDeleteTarget(ctx context.Context, client *gitlabclient.
 	if !ok {
 		return task, fmt.Errorf("prepare MT-110 fixture: project path not found in prompt %q", task.Prompt)
 	}
-	issueIID, err := promptInt64After(task.Prompt, promptMarkerIssue)
-	if err != nil {
-		return task, fmt.Errorf("prepare MT-110 fixture: %w", err)
-	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
+	issue, _, err := client.GL().Issues.CreateIssue(projectID, &gl.CreateIssueOptions{
+		Title:       new("Evaluation issue award delete target " + liveUniqueSuffix()),
+		Description: new("Temporary issue for destructive award emoji evaluator coverage."),
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return task, fmt.Errorf("prepare MT-110 fixture issue: %w", err)
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerIssue, issue.IID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	issueIID := issue.IID
 	awardID, err := createLiveIssueAwardEmoji(setupCtx, client, projectID, issueIID)
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-110 fixture award emoji: %w", err)
 	}
-	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerAwardEmojiID, awardID)
+	prompt, err = replacePromptBacktickValueAfter(task.Prompt, promptMarkerAwardEmojiID, awardID)
 	if err != nil {
 		return task, err
 	}

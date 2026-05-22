@@ -451,8 +451,11 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	if params == nil {
 		params = map[string]any{}
 	}
-	params, commonParamExplanations := toolutil.NormalizeParamAliasesForSchemaWithExplanation(params, entry.Route.InputSchema)
 	params, actionParamExplanations := NormalizeActionScopedParamsWithExplanation(entry.ID, params, entry.Route.InputSchema)
+	params, commonParamExplanations := toolutil.NormalizeParamAliasesForSchemaWithExplanation(params, entry.Route.InputSchema)
+	var postCommonActionParamExplanations []toolutil.ParamAliasExplanation
+	params, postCommonActionParamExplanations = NormalizeActionScopedParamsWithExplanation(entry.ID, params, entry.Route.InputSchema)
+	actionParamExplanations = append(actionParamExplanations, postCommonActionParamExplanations...)
 	if stateEvent, lifecycleAlias := issueLifecycleAliasStateEvent(requestedActionID); lifecycleAlias && entry.ID == "issue.update" {
 		if existing, hasStateEvent := params["state_event"]; hasStateEvent {
 			if existingStateEvent, converted := actioncompat.IssueStateEventValue(existing); converted && existingStateEvent != stateEvent {

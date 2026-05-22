@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-       run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker coverage \
+	run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker eval-surfaces-docker coverage \
 	lint fmt clean version release release-check checksum \
 	golangci-lint govulncheck \
 	mdlint mdlint-fix audit-docs check-doc-links \
@@ -154,6 +154,15 @@ test-e2e-docker:
 	  rm -f $(E2E_REPORT_DIR)/e2e-docker-status; \
 	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
 	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
+
+## eval-surfaces-docker: run Docker CE model evaluation for one surface (usage: make eval-surfaces-docker SURFACE=dynamic [PRESET=docker-read])
+eval-surfaces-docker:
+	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker SURFACE=dynamic|meta" >&2; exit 1; fi
+	@if [ -n "$(PRESET)" ]; then \
+		./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
+	else \
+		./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
+	fi
 
 ## coverage: run tests and generate HTML coverage report
 coverage: test

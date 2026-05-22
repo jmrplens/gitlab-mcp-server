@@ -27,6 +27,7 @@ const (
 	reasonSnippetProjectCreateFilePath   = "snippet file entries use file_path"
 	reasonSnippetProjectCreateNoAction   = "project snippet creation file entries do not include an action field"
 	reasonFeatureFlagUserListNameRemoved = "feature flag user-list listing is project-scoped and does not accept a feature flag name"
+	reasonTerraformStateName             = "Terraform state actions use name for the state identifier"
 )
 
 // ParameterAlias describes one historical action-scoped parameter alias or
@@ -74,17 +75,18 @@ var actionParamNormalizers = map[string]paramNormalizer{
 	actionFeatureFlagUserListList: func(state *paramNormalization) {
 		state.removeRejectedParam("name", "removed", reasonFeatureFlagUserListNameRemoved)
 	},
-	actionGroupLabelUpdate:       normalizeGroupLabelUpdateParams,
-	actionProjectMemberAdd:       normalizeProjectMemberAccessLevelParams,
-	actionProjectMemberEdit:      normalizeProjectMemberAccessLevelParams,
-	actionReleaseLinkCreate:      normalizeReleaseLinkTagNameParams,
-	actionReleaseLinkDelete:      normalizeReleaseLinkTagNameParams,
-	actionReleaseLinkGet:         normalizeReleaseLinkTagNameParams,
-	actionReleaseLinkList:        normalizeReleaseLinkTagNameParams,
-	actionReleaseLinkUpdate:      normalizeReleaseLinkTagNameParams,
-	actionReleaseLinkCreateBatch: normalizeReleaseLinkCreateBatchParams,
-	actionRunnerUpdate:           normalizeRunnerUpdateParams,
-	actionSnippetProjectCreate:   normalizeSnippetProjectCreateParams,
+	actionGroupLabelUpdate:          normalizeGroupLabelUpdateParams,
+	actionProjectMemberAdd:          normalizeProjectMemberAccessLevelParams,
+	actionProjectMemberEdit:         normalizeProjectMemberAccessLevelParams,
+	actionReleaseLinkCreate:         normalizeReleaseLinkTagNameParams,
+	actionReleaseLinkDelete:         normalizeReleaseLinkTagNameParams,
+	actionReleaseLinkGet:            normalizeReleaseLinkTagNameParams,
+	actionReleaseLinkList:           normalizeReleaseLinkTagNameParams,
+	actionReleaseLinkUpdate:         normalizeReleaseLinkTagNameParams,
+	actionReleaseLinkCreateBatch:    normalizeReleaseLinkCreateBatchParams,
+	actionRunnerUpdate:              normalizeRunnerUpdateParams,
+	actionSnippetProjectCreate:      normalizeSnippetProjectCreateParams,
+	actionAdminTerraformStateUnlock: normalizeTerraformStateNameParams,
 }
 
 func newParamNormalization(params, schema map[string]any) *paramNormalization {
@@ -184,6 +186,9 @@ func defaultParameterAliases() []ParameterAlias {
 		parameterAlias(actionSnippetProjectCreate, "file_name/content", "files", reasonSnippetProjectCreateFiles),
 		parameterAlias(actionSnippetProjectCreate, "files.file_name", "files.file_path", reasonSnippetProjectCreateFilePath),
 		parameterAlias(actionSnippetProjectCreate, "files.action", "files", reasonSnippetProjectCreateNoAction),
+		parameterAlias(actionAdminTerraformStateUnlock, "id", "name", reasonTerraformStateName),
+		parameterAlias(actionAdminTerraformStateUnlock, "state", "name", reasonTerraformStateName),
+		parameterAlias(actionAdminTerraformStateUnlock, "state_name", "name", reasonTerraformStateName),
 	}
 }
 
@@ -262,7 +267,7 @@ func normalizePipelineScheduleParams(state *paramNormalization) {
 
 func normalizeBranchProtectParams(state *paramNormalization) {
 	for _, name := range []string{"push_access_level", "merge_access_level"} {
-		normalizeAccessLevelParam(state, name)
+		normalizeAccessLevelParamWith(state, name, gitLabBranchProtectionAccessLevelValue)
 	}
 }
 
@@ -271,16 +276,26 @@ func normalizeProjectMemberAccessLevelParams(state *paramNormalization) {
 }
 
 func normalizeAccessLevelParam(state *paramNormalization, name string) {
+	normalizeAccessLevelParamWith(state, name, gitlabAccessLevelValue)
+}
+
+func normalizeAccessLevelParamWith(state *paramNormalization, name string, convert func(any) (int, bool)) {
 	value, ok := state.out[name]
 	if !ok || !state.accepts(name) {
 		return
 	}
-	accessLevel, converted := gitlabAccessLevelValue(value)
+	accessLevel, converted := convert(value)
 	if !converted {
 		return
 	}
 	state.clone()[name] = accessLevel
 	state.record(name, name, reasonNormalizeAccessLevel)
+}
+
+func normalizeTerraformStateNameParams(state *paramNormalization) {
+	state.moveParam("state_name", "name", reasonTerraformStateName)
+	state.moveParam("state", "name", reasonTerraformStateName)
+	state.moveParam("id", "name", reasonTerraformStateName)
 }
 
 func normalizeGroupLabelUpdateParams(state *paramNormalization) {
@@ -540,16 +555,50 @@ func gitlabAccessLevelValue(value any) (int, bool) {
 		}
 	}
 	switch normalized {
-	case "guest":
+	case "guest", "guests":
 		return 10, true
-	case "reporter":
+	case "reporter", "reporters":
 		return 20, true
-	case "developer":
+	case "developer", "developers":
 		return 30, true
-	case "maintainer":
+	case "maintainer", "maintainers":
 		return 40, true
-	case "owner":
+	case "owner", "owners":
 		return 50, true
+	default:
+		return 0, false
+	}
+}
+
+func gitLabBranchProtectionAccessLevelValue(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return validGitLabBranchProtectionAccessLevel(typed)
+	case int64:
+		return validGitLabBranchProtectionAccessLevel(int(typed))
+	case float64:
+		accessLevel := int(typed)
+		if typed == float64(accessLevel) {
+			return validGitLabBranchProtectionAccessLevel(accessLevel)
+		}
+		return 0, false
+	}
+	text, ok := value.(string)
+	if !ok {
+		return 0, false
+	}
+	normalized := strings.ToLower(strings.TrimSpace(text))
+	if accessLevel, err := strconv.Atoi(normalized); err == nil {
+		return validGitLabBranchProtectionAccessLevel(accessLevel)
+	}
+	normalized = strings.NewReplacer("_", " ", "-", " ").Replace(normalized)
+	switch normalized {
+	case "developer", "developers":
+		return 30, true
+	case "maintainer", "maintainers":
+		return 40, true
+	case "no access", "no one", "nobody", "none":
+		return 0, true
 	default:
 		return 0, false
 	}
@@ -563,6 +612,15 @@ func GitLabAccessLevelValue(value any) (int, bool) {
 func validGitLabAccessLevel(accessLevel int) (int, bool) {
 	switch accessLevel {
 	case 10, 20, 30, 40, 50:
+		return accessLevel, true
+	default:
+		return 0, false
+	}
+}
+
+func validGitLabBranchProtectionAccessLevel(accessLevel int) (int, bool) {
+	switch accessLevel {
+	case 0, 30, 40:
 		return accessLevel, true
 	default:
 		return 0, false

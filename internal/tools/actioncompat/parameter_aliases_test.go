@@ -116,10 +116,18 @@ func TestNormalizeParamsWithExplanation_CompatibilityBranches(t *testing.T) {
 		{
 			name:             "branch protection access levels normalize",
 			actionID:         "branch.protect",
-			params:           map[string]any{"push_access_level": "maintainer", "merge_access_level": float64(30)},
+			params:           map[string]any{"push_access_level": "maintainers", "merge_access_level": float64(30)},
 			schemaProperties: []string{"push_access_level", "merge_access_level"},
 			wantParams:       map[string]any{"push_access_level": 40, "merge_access_level": 30},
 			wantAliases:      []string{"push_access_level->push_access_level", "merge_access_level->merge_access_level"},
+		},
+		{
+			name:             "terraform state unlock id maps to name",
+			actionID:         "admin.terraform_state_unlock",
+			params:           map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "id": "eval-state"},
+			schemaProperties: []string{"project_id", "name"},
+			wantParams:       map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "name": "eval-state"},
+			wantAliases:      []string{"id->name"},
 		},
 		{
 			name:             "feature flag version alias maps",

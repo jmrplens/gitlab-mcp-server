@@ -266,6 +266,7 @@ func TestFilterTasksByAvailableRoutes(t *testing.T) {
 			"environment.deployment_approve_or_reject": {},
 			"issue.list":                               {},
 			"job.retry":                                {},
+			"merge_train.list_project":                 {},
 			"merge_request.merge":                      {},
 			"model_registry.download":                  {},
 			"mr_review.draft_note_create":              {},
@@ -276,6 +277,9 @@ func TestFilterTasksByAvailableRoutes(t *testing.T) {
 		"gitlab_model_registry": {
 			"download": {},
 		},
+	}
+	if !catalogHasEnterpriseRoutes(routes) {
+		t.Fatal("catalogHasEnterpriseRoutes() = false, want true for mixed CE/Enterprise catalog")
 	}
 	tasks := []evalTask{
 		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "issue.list"},
@@ -299,7 +303,7 @@ func TestFilterTasksByAvailableRoutes(t *testing.T) {
 		{ID: "workflow", Steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "project.get"}, {ExpectedTool: "gitlab", ExpectedAction: "dependency.list"}}},
 	}
 
-	filtered := filterTasksByAvailableRoutes(tasks, routes)
+	filtered := filterTasksByAvailableRoutes(tasks, routes, false)
 	if got := taskIDs(filtered); got != "read,MT-017,MT-023,MT-069,MT-063,draft-notes-ce,MT-107,MT-114,MT-116,standalone,interactive" {
 		t.Fatalf("filtered IDs = %q, want reactivated CE/docker-safe tasks plus standalone interactive tools", got)
 	}
@@ -323,7 +327,7 @@ func TestFilterTasksByAvailableRoutes_KeepsDynamicInteractiveCapabilities(t *tes
 		}},
 	}
 
-	filtered := filterTasksByAvailableRoutes(tasks, routes)
+	filtered := filterTasksByAvailableRoutes(tasks, routes, false)
 	if got := taskIDs(filtered); got != "create,interactive,workflow" {
 		t.Fatalf("filtered IDs = %q, want create,interactive,workflow", got)
 	}
@@ -1911,6 +1915,29 @@ func TestValidateStepCallWithRoutes_DynamicCompatibilityAndNormalization(t *test
 					"file_name":  "snippet.md",
 					"content":    "body",
 				},
+			},
+		},
+		{
+			name:       "accepts terraform state unlock compatibility envelope",
+			step:       evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "admin.terraform_state_unlock", RequiredParams: []string{"project_id", "name"}, Destructive: true},
+			wantAction: "admin.terraform_state_unlock",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteTool: {
+					"admin.terraform_state_unlock": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type":     "object",
+						"required": []any{"project_id", "name"},
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+							"name":       map[string]any{"type": "string"},
+						},
+					}},
+				},
+			},
+			input: map[string]any{
+				"action":  "terraform_state.unlock",
+				"confirm": true,
+				"params":  map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "id": "eval-unlock"},
 			},
 		},
 	}
@@ -4179,12 +4206,12 @@ func TestDefaultFixture_ValidatesAgainstLiveCatalog(t *testing.T) {
 	if problems := validateTaskFixture(tasks); len(problems) > 0 {
 		t.Fatalf("fixture validation problems = %+v", problems)
 	}
-	_, routes, err := loadCatalog(options{})
+	_, routes, catalogEnterprise, err := loadCatalog(options{})
 	if err != nil {
 		t.Fatalf("loadCatalog() error = %v", err)
 	}
 	tasks = normalizeTasksForRoutes(tasks, routes)
-	tasks = filterTasksByAvailableRoutes(tasks, routes)
+	tasks = filterTasksByAvailableRoutes(tasks, routes, catalogEnterprise)
 	if problems := validateTaskFixtureAgainstRoutes(tasks, routes); len(problems) > 0 {
 		t.Fatalf("route validation problems = %+v", problems)
 	}
@@ -4192,7 +4219,7 @@ func TestDefaultFixture_ValidatesAgainstLiveCatalog(t *testing.T) {
 
 // TestLoadCatalog_RejectsUnknownBackend verifies LoadCatalog rejects unknown backend.
 func TestLoadCatalog_RejectsUnknownBackend(t *testing.T) {
-	_, _, err := loadCatalog(options{Backend: "missing"})
+	_, _, _, err := loadCatalog(options{Backend: "missing"})
 	if err == nil || !strings.Contains(err.Error(), "unknown backend") {
 		t.Fatalf("error = %v, want unknown backend", err)
 	}

@@ -4384,7 +4384,12 @@
           ]
         },
         "merge_access_level": {
-          "description": "Access level for merge (0=No access 30=Developer 40=Maintainer)",
+          "description": "Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer.",
+          "enum": [
+            0,
+            30,
+            40
+          ],
           "type": "integer"
         },
         "project_id": {
@@ -4392,7 +4397,12 @@
           "type": "string"
         },
         "push_access_level": {
-          "description": "Access level for push (0=No access 30=Developer 40=Maintainer)",
+          "description": "Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer.",
+          "enum": [
+            0,
+            30,
+            40
+          ],
           "type": "integer"
         }
       },
@@ -111699,7 +111709,7 @@
           "type": "boolean"
         },
         "name": {
-          "description": "Terraform state name",
+          "description": "Terraform state name. Use params.name for values such as production or eval-unlock-123; do not use id.",
           "type": "string"
         },
         "project_id": {

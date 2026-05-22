@@ -106,7 +106,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("terraform_state_get", toolutil.RouteAction(client, terraformstates.Get), "gitlab_get_terraform_state"),
 		adminDeleteSpec("terraform_state_delete", toolutil.DestructiveVoidAction(client, terraformstates.Delete), "gitlab_delete_terraform_state"),
 		adminUpdateSpec("terraform_state_lock", toolutil.RouteAction(client, terraformstates.Lock), "gitlab_lock_terraform_state"),
-		adminDestructiveUpdateIndividualSpec("terraform_state_unlock", toolutil.DestructiveAction(client, terraformstates.Unlock), "gitlab_unlock_terraform_state"),
+		adminTerraformStateUnlockSpec(client),
 		adminDeleteSpec("terraform_version_delete", toolutil.DestructiveVoidAction(client, terraformstates.DeleteVersion), "gitlab_delete_terraform_state_version"),
 		adminReadSpec("cluster_agent_list", toolutil.RouteAction(client, clusteragents.ListAgents), "gitlab_list_cluster_agents"),
 		adminReadSpec("cluster_agent_get", toolutil.RouteAction(client, clusteragents.GetAgent), "gitlab_get_cluster_agent"),
@@ -196,6 +196,29 @@ func adminMetadataGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Aliases = []string{"instance metadata", "gitlab version", "server metadata", "gitlab revision"}
 	options.Tags = append(options.Tags, "metadata", "version")
 	return toolutil.NewReadActionSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), options)
+}
+
+func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	individualDestructive := false
+	options := adminOptions("gitlab_unlock_terraform_state")
+	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
+	options.Tags = append(options.Tags, "terraform", "terraform_state", "state", "lock", "unlock")
+	options.Usage = "Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name; do not send the state name as id."
+	options.Aliases = []string{"terraform_state.unlock", "unlock terraform state", "unlock terraform state lock", "terraform state unlock"}
+	options.RelatedActions = []string{"admin.terraform_state_get", "admin.terraform_state_lock", "admin.terraform_state_list"}
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"name": {
+			SemanticRole: "terraform_state_name",
+			ValueSource:  "Terraform state name from the prompt or admin.terraform_state_list output.",
+			CommonConfusions: []string{
+				"Do not send the state name as id; use params.name.",
+			},
+		},
+	}
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("name", map[string]any{"description": "Terraform state name. Use params.name for values such as production or eval-unlock-123; do not use id."}),
+	}
+	return toolutil.NewDeleteActionSpec("terraform_state_unlock", toolutil.DestructiveAction(client, terraformstates.Unlock), options)
 }
 
 func adminOptions(individualTool string) toolutil.ActionSpecOptions {

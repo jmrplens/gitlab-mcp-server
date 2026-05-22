@@ -90,11 +90,15 @@ func normalizeRouteParamsInput(step evalStep, toolName string, input map[string]
 	if !paramsOK {
 		return input, input
 	}
+	rawParams := params
+	if step.ExpectedTool == dynamicExecuteTool {
+		params = dynamictools.NormalizeActionScopedParams(step.ExpectedAction, params, route.InputSchema)
+	}
 	normalizedParams := toolutil.NormalizeParamAliasesForSchema(params, route.InputSchema)
 	if step.ExpectedTool == dynamicExecuteTool {
 		normalizedParams = dynamictools.NormalizeActionScopedParams(step.ExpectedAction, normalizedParams, route.InputSchema)
 	}
-	validationInput = cloneToolInputWithParams(input, mergeOriginalAndNormalizedParams(params, normalizedParams))
+	validationInput = cloneToolInputWithParams(input, mergeOriginalAndNormalizedParams(rawParams, normalizedParams))
 	return validationInput, cloneToolInputWithParams(input, normalizedParams)
 }
 

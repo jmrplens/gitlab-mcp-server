@@ -101,9 +101,8 @@ func filterTasksByMutation(tasks []evalTask, skipMutating, onlyMutating bool) ([
 }
 
 // filterTasksByAvailableRoutes filters tasks by available routes using evaluator options.
-func filterTasksByAvailableRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap) []evalTask {
+func filterTasksByAvailableRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap, enterprise bool) []evalTask {
 	filtered := make([]evalTask, 0, len(tasks))
-	enterprise := catalogHasEnterpriseRoutes(routes)
 	for _, task := range tasks {
 		if taskRoutesAvailable(task, routes, enterprise) {
 			filtered = append(filtered, task)

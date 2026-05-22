@@ -165,6 +165,7 @@ func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
 		"merge_request.time_spent_set":          "merge_request.spent_time_add",
 		"release_link.create_batch":             "release.link_create_batch",
 		"release_link.link_create_batch":        "release.link_create_batch",
+		"terraform_state.unlock":                "admin.terraform_state_unlock",
 	} {
 		canonical, ok = NormalizeActionAlias(alias)
 		if !ok || canonical != want {

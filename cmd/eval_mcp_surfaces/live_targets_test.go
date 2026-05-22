@@ -1,13 +1,18 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strings"
 	"testing"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
 // TestOptionalEnvironmentScopeFromPrompt_ExtractsExplicitAndProductionScopes
@@ -38,6 +43,58 @@ func TestPromptInt64After_ParsesBacktickInteger(t *testing.T) {
 	_, missingErr := promptInt64After("delete missing value", promptMarkerAwardEmojiID)
 	if missingErr == nil {
 		t.Fatal("promptInt64After(missing) error = nil, want error")
+	}
+}
+
+// TestEnsureLiveIssueAwardDeleteTarget_CreatesDisposableIssue verifies MT-110
+// live preparation does not depend on a shared issue that previous tasks may mutate.
+func TestEnsureLiveIssueAwardDeleteTarget_CreatesDisposableIssue(t *testing.T) {
+	calls := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Method+" "+r.URL.EscapedPath())
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/issues":
+			var request map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decode issue request: %v", err)
+				http.Error(w, "decode issue request", http.StatusBadRequest)
+				return
+			}
+			if title, _ := request["title"].(string); !strings.HasPrefix(title, "Evaluation issue award delete target ") {
+				t.Errorf("issue title = %q, want live award delete target", title)
+				http.Error(w, "unexpected issue title", http.StatusBadRequest)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 501, "iid": 77, "project_id": 101, "title": request["title"]})
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/issues/77/award_emoji":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 901, "name": "thumbsup"})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := gitlabclient.NewClient(&config.Config{
+		GitLabURL:       server.URL,
+		GitLabToken:     "eval-token",
+		MetaTools:       true,
+		MetaParamSchema: config.DefaultMetaParamSchema,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	task := evalTask{ID: "MT-110", Prompt: "Remove award emoji ID `12` from issue `42` in project `my-org/tools/gitlab-mcp-server`."}
+
+	prepared, err := ensureLiveIssueAwardDeleteTarget(t.Context(), client, task)
+	if err != nil {
+		t.Fatalf("ensureLiveIssueAwardDeleteTarget() error = %v", err)
+	}
+
+	if !strings.Contains(prepared.Prompt, "issue `77`") || !strings.Contains(prepared.Prompt, "award emoji ID `901`") {
+		t.Fatalf("prepared prompt = %q, want disposable issue and award IDs", prepared.Prompt)
+	}
+	if got := strings.Join(calls, ","); got != "POST /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/issues,POST /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/issues/77/award_emoji" {
+		t.Fatalf("calls = %q", got)
 	}
 }
 

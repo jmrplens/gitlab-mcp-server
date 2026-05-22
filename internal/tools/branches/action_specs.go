@@ -48,6 +48,9 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 		OwnerPackage:   "branches",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if name == "protect" {
+		options = branchProtectOptions(options)
+	}
 	switch {
 	case readOnly:
 		return toolutil.NewReadActionSpec(name, route, options)
@@ -58,4 +61,35 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 	default:
 		return toolutil.NewCreateActionSpec(name, route, options)
 	}
+}
+
+func branchProtectOptions(options toolutil.ActionSpecOptions) toolutil.ActionSpecOptions {
+	options.Tags = append(options.Tags, "protected_branch", "access_level")
+	options.Usage = "Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer."
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"push_access_level":  branchProtectionAccessLevelGuidance("push"),
+		"merge_access_level": branchProtectionAccessLevelGuidance("merge"),
+	}
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		branchProtectionAccessLevelSchema("push_access_level", "Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer."),
+		branchProtectionAccessLevelSchema("merge_access_level", "Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer."),
+	}
+	return options
+}
+
+func branchProtectionAccessLevelGuidance(operation string) toolutil.ParameterGuidance {
+	return toolutil.ParameterGuidance{
+		SemanticRole: "branch_protection_" + operation + "_access_level",
+		ValueSource:  "Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.",
+		CommonConfusions: []string{
+			"Do not send labels such as maintainer or developers when an integer is possible.",
+		},
+	}
+}
+
+func branchProtectionAccessLevelSchema(name, description string) toolutil.InputSchemaOverride {
+	return toolutil.SchemaPropertyOverride(name, map[string]any{
+		"description": description,
+		"enum":        []any{0, 30, 40},
+	})
 }

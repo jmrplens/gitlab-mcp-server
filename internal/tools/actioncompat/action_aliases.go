@@ -47,6 +47,12 @@ const (
 	actionRepositoryFileGet              = "repository.file_get"
 	actionRunnerUpdate                   = "runner.update"
 	actionSnippetProjectCreate           = "snippet.project_create"
+	actionAdminTerraformStateDelete      = "admin.terraform_state_delete"
+	actionAdminTerraformStateGet         = "admin.terraform_state_get"
+	actionAdminTerraformStateList        = "admin.terraform_state_list"
+	actionAdminTerraformStateLock        = "admin.terraform_state_lock"
+	actionAdminTerraformStateUnlock      = "admin.terraform_state_unlock"
+	actionAdminTerraformVersionDelete    = "admin.terraform_version_delete"
 )
 
 // ActionAlias describes one historical action ID alias and its canonical action.
@@ -156,6 +162,13 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("project_member.update", actionProjectMemberEdit),
 		compatActionAlias("project_access_token.create", "access.token_project_create"),
 		compatActionAlias("project_access_token.revoke", "access.token_project_revoke"),
+		compatActionAlias("terraform_state.delete", actionAdminTerraformStateDelete),
+		compatActionAlias("terraform_state.delete_version", actionAdminTerraformVersionDelete),
+		compatActionAlias("terraform_state.get", actionAdminTerraformStateGet),
+		compatActionAlias("terraform_state.list", actionAdminTerraformStateList),
+		compatActionAlias("terraform_state.lock", actionAdminTerraformStateLock),
+		compatActionAlias("terraform_state.unlock", actionAdminTerraformStateUnlock),
+		compatActionAlias("terraform_state.version_delete", actionAdminTerraformVersionDelete),
 		unsearchableActionAlias("repository_tree", "repository.tree", "Canonicalization compatibility alias; omitted from search to avoid over-ranking repository.tree."),
 		unsearchableActionAlias("repository_tree.list", "repository.tree", "Canonicalization compatibility alias; omitted from search to avoid over-ranking repository.tree."),
 		compatActionAlias("repository_file.create", "repository.file_create"),

@@ -248,7 +248,7 @@ func prepareRunTasks(opts options) ([]evalTask, *liveFixtureState, error) {
 }
 
 func prepareRunCatalog(opts options, tasks []evalTask, fixtures *liveFixtureState) ([]modelTool, map[string]toolutil.ActionMap, []evalTask, error) {
-	catalog, routes, catalogErr := loadCatalog(opts)
+	catalog, routes, catalogEnterprise, catalogErr := loadCatalog(opts)
 	if catalogErr != nil {
 		return nil, nil, nil, catalogErr
 	}
@@ -262,7 +262,7 @@ func prepareRunCatalog(opts options, tasks []evalTask, fixtures *liveFixtureStat
 	if tasks, err = applyPartitionFilter(tasks, opts.Partition); err != nil {
 		return nil, nil, nil, err
 	}
-	if tasks, err = applyAvailabilityFilter(tasks, routes, fixtures, opts.SkipUnavailable); err != nil {
+	if tasks, err = applyAvailabilityFilter(tasks, routes, catalogEnterprise, fixtures, opts.SkipUnavailable); err != nil {
 		return nil, nil, nil, err
 	}
 	if opts.Execute && opts.UseFixtures {
@@ -296,11 +296,11 @@ func applyPartitionFilter(tasks []evalTask, partition string) ([]evalTask, error
 	return filtered, nil
 }
 
-func applyAvailabilityFilter(tasks []evalTask, routes map[string]toolutil.ActionMap, fixtures *liveFixtureState, skipUnavailable bool) ([]evalTask, error) {
+func applyAvailabilityFilter(tasks []evalTask, routes map[string]toolutil.ActionMap, catalogEnterprise bool, fixtures *liveFixtureState, skipUnavailable bool) ([]evalTask, error) {
 	if !skipUnavailable {
 		return tasks, nil
 	}
-	filtered := filterTasksByAvailableRoutes(tasks, routes)
+	filtered := filterTasksByAvailableRoutes(tasks, routes, catalogEnterprise)
 	if fixtures != nil {
 		filtered = filterTasksByLiveFixtureState(filtered, fixtures)
 	}
