@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.0.3 | up to 1023 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
+> Version 2.0.3 | up to 1031 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -543,6 +543,9 @@ Action params schema: gitlab://tools/gitlab_admin.<action>.
 Action guidance:
 - metadata_get: Read GitLab instance metadata such as version and revision. Do not use this for application settings.
 - settings_get: Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information.
+- terraform_state_unlock: Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name; do not send the state name as id.
+Parameter guidance:
+- terraform_state_unlock.name: terraform_state_name; source: Terraform state name from the prompt or admin.terraform_state_list output.; avoid: Do not send the state name as id; use params.name.
 
 GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab→GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.
 When to use: instance-level admin tasks on a self-managed GitLab (settings, license, features, system hooks, Sidekiq monitoring, bulk imports between GitLab instances, external imports from GitHub/Bitbucket).
@@ -1554,7 +1557,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_branch.<action>.
 Action guidance:
+- protect: Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer.
 - rule_list: Use to audit aggregated branch rules, including protections and approval-related state, for a project path.
+Parameter guidance:
+- protect.merge_access_level: branch_protection_merge_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
+- protect.push_access_level: branch_protection_push_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
 
 Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). Delete and unprotect are destructive and irreversible.
 When to use: create/list/delete branches, protect or update protection on branches, audit aggregated branch rules (push/merge access, approval rules, status checks).
@@ -7008,6 +7015,70 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 </details>
 
+<details><summary>service_account_create</summary>
+
+```json
+{"additionalProperties":false,"properties":{"email":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"unconfirmed_email":{"type":"string"},"username":{"type":"string"}},"required":["id","name","username","email"],"type":"object"}
+```
+
+</details>
+
+<details><summary>service_account_delete</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"}},"required":["status","message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>service_account_list</summary>
+
+```json
+{"additionalProperties":false,"properties":{"accounts":{"items":{"additionalProperties":false,"properties":{"email":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"unconfirmed_email":{"type":"string"},"username":{"type":"string"}},"required":["id","name","username","email"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["accounts","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>service_account_pat_create</summary>
+
+```json
+{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"created_at":{"type":"string"},"description":{"type":"string"},"expires_at":{"type":"string"},"id":{"type":"integer"},"last_used_at":{"type":"string"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"revoked":{"type":"boolean"},"scopes":{"items":{"type":"string"},"type":["null","array"]},"token":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","name","revoked","scopes","user_id","active"],"type":"object"}
+```
+
+</details>
+
+<details><summary>service_account_pat_list</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"},"tokens":{"items":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"created_at":{"type":"string"},"description":{"type":"string"},"expires_at":{"type":"string"},"id":{"type":"integer"},"last_used_at":{"type":"string"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"revoked":{"type":"boolean"},"scopes":{"items":{"type":"string"},"type":["null","array"]},"token":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","name","revoked","scopes","user_id","active"],"type":"object"},"type":["null","array"]}},"required":["tokens","pagination"],"type":"object"}
+```
+
+</details>
+
+<details><summary>service_account_pat_revoke</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"}},"required":["status","message"],"type":"object"}
+```
+
+</details>
+
+<details><summary>service_account_pat_rotate</summary>
+
+```json
+{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"created_at":{"type":"string"},"description":{"type":"string"},"expires_at":{"type":"string"},"id":{"type":"integer"},"last_used_at":{"type":"string"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"revoked":{"type":"boolean"},"scopes":{"items":{"type":"string"},"type":["null","array"]},"token":{"type":"string"},"user_id":{"type":"integer"}},"required":["id","name","revoked","scopes","user_id","active"],"type":"object"}
+```
+
+</details>
+
+<details><summary>service_account_update</summary>
+
+```json
+{"additionalProperties":false,"properties":{"email":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"unconfirmed_email":{"type":"string"},"username":{"type":"string"}},"required":["id","name","username","email"],"type":"object"}
+```
+
+</details>
+
 <details><summary>share_with_group</summary>
 
 ```json
@@ -10682,7 +10753,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When `TOOL_SURFACE=individual`, up to 1023 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1017.
+When `TOOL_SURFACE=individual`, up to 1031 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1025.
 Grouped by domain:
 
 ### access (8 tools)
@@ -11323,9 +11394,9 @@ Protect a GitLab repository branch by setting push and merge access levels (0=no
 - `allow_force_push` (boolean): Allow force push to this branch
 - `branch_name` (string) (required): Branch name or wildcard (e.g. 'main' or 'release/*')
 - `code_owner_approval_required` (boolean): Require CODEOWNERS approval for changes to matching files
-- `merge_access_level` (integer): Access level for merge (0=No access 30=Developer 40=Maintainer)
+- `merge_access_level` (integer): Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer.
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `push_access_level` (integer): Access level for push (0=No access 30=Developer 40=Maintainer)
+- `push_access_level` (integer): Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -20279,7 +20350,7 @@ Preview how a project badge renders after placeholder interpolation, without cre
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### project (78 tools)
+### project (86 tools)
 
 #### gitlab_project_access_token_create
 
@@ -21193,6 +21264,125 @@ Restore a GitLab project that has been marked/scheduled for deletion. Use gitlab
 **Parameters:**
 
 - `project_id` (string) (required): Project ID or URL-encoded path of the project marked for deletion
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_project_service_account_create
+
+Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+
+**Parameters:**
+
+- `email` (string): Service account email
+- `name` (string): Service account name
+- `project_id` (string) (required): Project ID or URL-encoded path
+- `username` (string): Service account username
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
+#### gitlab_project_service_account_delete
+
+Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+
+**Parameters:**
+
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+- `hard_delete` (boolean): Hard delete the service account
+- `project_id` (string) (required): Project ID or URL-encoded path
+- `service_account_id` (integer) (required): Service account user ID
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
+#### gitlab_project_service_account_list
+
+Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+
+**Parameters:**
+
+- `order_by` (string): Order by id or username
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
+- `project_id` (string) (required): Project ID or URL-encoded path
+- `sort` (string): Sort direction: asc or desc
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_project_service_account_pat_create
+
+Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+
+**Parameters:**
+
+- `description` (string): Token description
+- `expires_at` (string): Expiration date in YYYY-MM-DD format
+- `name` (string) (required): Token name
+- `project_id` (string) (required): Project ID or URL-encoded path
+- `scopes` (array of strings) (required): Token scopes (e.g. api, read_api, read_user)
+- `service_account_id` (integer) (required): Service account user ID
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
+#### gitlab_project_service_account_pat_list
+
+Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+
+**Parameters:**
+
+- `created_after` (string): Filter tokens created after RFC3339 datetime or YYYY-MM-DD date
+- `created_before` (string): Filter tokens created before RFC3339 datetime or YYYY-MM-DD date
+- `expires_after` (string): Filter tokens expiring after YYYY-MM-DD date
+- `expires_before` (string): Filter tokens expiring before YYYY-MM-DD date
+- `last_used_after` (string): Filter tokens last used after RFC3339 datetime or YYYY-MM-DD date
+- `last_used_before` (string): Filter tokens last used before RFC3339 datetime or YYYY-MM-DD date
+- `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
+- `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
+- `project_id` (string) (required): Project ID or URL-encoded path
+- `revoked` (boolean): Filter by revoked state
+- `search` (string): Search token names
+- `service_account_id` (integer) (required): Service account user ID
+- `sort` (string): Sort expression
+- `state` (string): Token state filter: active or inactive
+- `user_id` (integer): Filter by user ID
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_project_service_account_pat_revoke
+
+Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+
+**Parameters:**
+
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+- `project_id` (string) (required): Project ID or URL-encoded path
+- `service_account_id` (integer) (required): Service account user ID
+- `token_id` (integer) (required): Personal access token ID to revoke
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
+#### gitlab_project_service_account_pat_rotate
+
+Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+
+**Parameters:**
+
+- `expires_at` (string): New expiration date in YYYY-MM-DD format
+- `project_id` (string) (required): Project ID or URL-encoded path
+- `service_account_id` (integer) (required): Service account user ID
+- `token_id` (integer) (required): Personal access token ID to rotate
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
+#### gitlab_project_service_account_update
+
+Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+
+**Parameters:**
+
+- `email` (string): New email
+- `name` (string): New name
+- `project_id` (string) (required): Project ID or URL-encoded path
+- `service_account_id` (integer) (required): Service account user ID
+- `username` (string): New username
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -23593,7 +23783,7 @@ Unlock a Terraform state
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `name` (string) (required): Terraform state name
+- `name` (string) (required): Terraform state name. Use params.name for values such as production or eval-unlock-123; do not use id.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true

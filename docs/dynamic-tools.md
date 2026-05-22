@@ -16,7 +16,7 @@ Use the dynamic toolset when the initial MCP `tools/list` payload is the limitin
 | ------------------------ | -----------------------------------------------------------------: | ---------------------------------------------------------------------- |
 | Dynamic toolset, default |                                                                  2 | Low-token clients that can find an action with schema, then execute it |
 | Meta-tools               |    33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise | Broad compatibility and predictable domain-level action selection      |
-| Individual tools         | 866 CE / 1017 self-managed enterprise / 1023 GitLab.com Enterprise | Clients that benefit from one tool per GitLab operation                |
+| Individual tools         | 866 CE / 1025 self-managed enterprise / 1031 GitLab.com Enterprise | Clients that benefit from one tool per GitLab operation                |
 
 Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes discovery, not business behavior.
 

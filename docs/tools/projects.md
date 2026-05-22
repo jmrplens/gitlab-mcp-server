@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Projects
-> **Individual tools**: 42
+> **Individual tools**: 50
 > **Meta-tool**: `gitlab_project` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Projects API](https://docs.gitlab.com/ee/api/projects.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -11,9 +11,9 @@
 
 ## Overview
 
-The projects domain covers the full lifecycle of GitLab projects (repositories): creation, retrieval, listing, updating, deletion, forking, starring, archiving, transferring, webhook management, user/group listings, and push rule configuration.
+The projects domain covers the full lifecycle of GitLab projects (repositories): creation, retrieval, listing, updating, deletion, forking, starring, archiving, transferring, webhook management, user/group listings, project service accounts, and push rule configuration.
 
-With `TOOL_SURFACE=meta`, all 33 individual tools below are consolidated into a single `gitlab_project` meta-tool that dispatches by `action` parameter.
+With `TOOL_SURFACE=meta`, project actions are consolidated into a single `gitlab_project` meta-tool that dispatches by `action` parameter.
 
 ### Common Questions
 
@@ -21,6 +21,7 @@ With `TOOL_SURFACE=meta`, all 33 individual tools below are consolidated into a 
 > "Create a new project called my-app"
 > "Archive the project my-old-app"
 > "Who has access to project 42?"
+> "Create a service account token for project 42"
 
 ### Annotation Legend
 
@@ -270,6 +271,72 @@ List projects that a specific user has starred. Supports filtering by search, vi
 
 ---
 
+## Project Service Accounts
+
+Project service account tools require GitLab Premium/Ultimate and sufficient project permissions. They manage service account users scoped to a project and personal access tokens owned by those service accounts.
+
+### `gitlab_project_service_account_list`
+
+List service accounts for a project. Supports ordering by ID or username, sorting direction, and pagination.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_project_service_account_create`
+
+Create a project service account. Optionally provide name, username, and email.
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
+### `gitlab_project_service_account_update`
+
+Update a project service account's name, username, or email.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+### `gitlab_project_service_account_delete`
+
+Delete a project service account. Set `hard_delete=true` only when permanent deletion is intended.
+
+| Annotation | **Delete** |
+| ---------- | ---------- |
+
+> **Destructive**: Protected by confirmation prompt.
+
+### `gitlab_project_service_account_pat_list`
+
+List personal access tokens for a project service account. Supports pagination and filters such as state, revoked, search, user ID, created/last-used dates, and expiration dates.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_project_service_account_pat_create`
+
+Create a personal access token for a project service account. Requires token name and scopes; optionally set description and `expires_at` (`YYYY-MM-DD`). The token value is returned only at creation time.
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
+### `gitlab_project_service_account_pat_rotate`
+
+Rotate a project service account personal access token and return the new token value. Optionally set the new `expires_at` (`YYYY-MM-DD`).
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
+### `gitlab_project_service_account_pat_revoke`
+
+Revoke a project service account personal access token by token ID.
+
+| Annotation | **Delete** |
+| ---------- | ---------- |
+
+> **Destructive**: Protected by confirmation prompt.
+
+---
+
 ## Push Rules
 
 ### `gitlab_project_get_push_rules`
@@ -414,19 +481,27 @@ List iterations for a project. Iterations provide time-boxed planning periods. S
 | 27 | `gitlab_project_list_invited_groups` | User & Group | Read |
 | 28 | `gitlab_project_list_user_contributed` | User & Group | Read |
 | 29 | `gitlab_project_list_user_starred` | User & Group | Read |
-| 30 | `gitlab_project_get_push_rules` | Push Rules | Read |
-| 31 | `gitlab_project_add_push_rule` | Push Rules | Create |
-| 32 | `gitlab_project_edit_push_rule` | Push Rules | Update |
-| 33 | `gitlab_project_delete_push_rule` | Push Rules | Delete |
-| 34 | `gitlab_project_upload` | Uploads | Create |
-| 35 | `gitlab_project_upload_list` | Uploads | Read |
-| 36 | `gitlab_project_upload_delete` | Uploads | Delete |
-| 37 | `gitlab_schedule_project_export` | Import / Export | Create |
-| 38 | `gitlab_get_project_export_status` | Import / Export | Read |
-| 39 | `gitlab_download_project_export` | Import / Export | Read |
-| 40 | `gitlab_import_project_from_file` | Import / Export | Create |
-| 41 | `gitlab_get_project_import_status` | Import / Export | Read |
-| 42 | `gitlab_list_project_iterations` | Iterations | Read |
+| 30 | `gitlab_project_service_account_list` | Project Service Accounts | Read |
+| 31 | `gitlab_project_service_account_create` | Project Service Accounts | Create |
+| 32 | `gitlab_project_service_account_update` | Project Service Accounts | Update |
+| 33 | `gitlab_project_service_account_delete` | Project Service Accounts | Delete |
+| 34 | `gitlab_project_service_account_pat_list` | Project Service Accounts | Read |
+| 35 | `gitlab_project_service_account_pat_create` | Project Service Accounts | Create |
+| 36 | `gitlab_project_service_account_pat_rotate` | Project Service Accounts | Create |
+| 37 | `gitlab_project_service_account_pat_revoke` | Project Service Accounts | Delete |
+| 38 | `gitlab_project_get_push_rules` | Push Rules | Read |
+| 39 | `gitlab_project_add_push_rule` | Push Rules | Create |
+| 40 | `gitlab_project_edit_push_rule` | Push Rules | Update |
+| 41 | `gitlab_project_delete_push_rule` | Push Rules | Delete |
+| 42 | `gitlab_project_upload` | Uploads | Create |
+| 43 | `gitlab_project_upload_list` | Uploads | Read |
+| 44 | `gitlab_project_upload_delete` | Uploads | Delete |
+| 45 | `gitlab_schedule_project_export` | Import / Export | Create |
+| 46 | `gitlab_get_project_export_status` | Import / Export | Read |
+| 47 | `gitlab_download_project_export` | Import / Export | Read |
+| 48 | `gitlab_import_project_from_file` | Import / Export | Create |
+| 49 | `gitlab_get_project_import_status` | Import / Export | Read |
+| 50 | `gitlab_list_project_iterations` | Iterations | Read |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -436,6 +511,8 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - `gitlab_project_transfer` — transfers a project to a different namespace
 - `gitlab_project_hook_delete` — removes a webhook
 - `gitlab_project_delete_shared_group` — revokes group access
+- `gitlab_project_service_account_delete` — deletes a project service account
+- `gitlab_project_service_account_pat_revoke` — revokes a project service account PAT
 - `gitlab_project_delete_push_rule` — removes all push restrictions
 - `gitlab_project_upload_delete` — deletes a file upload from a project
 
@@ -445,6 +522,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 
 - [GitLab Projects API](https://docs.gitlab.com/ee/api/projects.html)
 - [GitLab Project Webhooks API](https://docs.gitlab.com/ee/api/project_hooks.html)
+- [GitLab Service Accounts API](https://docs.gitlab.com/api/service_accounts/)
 - [GitLab Push Rules API](https://docs.gitlab.com/ee/api/project_push_rules.html)
 - [GitLab Uploads API](https://docs.gitlab.com/ee/api/project_uploads.html)
 - [GitLab Project Import/Export API](https://docs.gitlab.com/ee/api/project_import_export.html)

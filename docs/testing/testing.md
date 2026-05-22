@@ -18,25 +18,25 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,376 |
-| Unit test functions                                   | 10,125 |
+| Total test functions                                  | 10,383 |
+| Unit test functions                                   | 10,132 |
 | E2E test functions                                    |    251 |
-| cmd test functions                                    |    633 |
-| Test files (internal/)                                |    435 |
+| cmd test functions                                    |    635 |
+| Test files (internal/)                                |    436 |
 | Test files (cmd/)                                     |     39 |
 | Test files (test/e2e/suite/)                          |    109 |
-| Tool sub-packages tested                              |    174 |
+| Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     19 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  89.5% |
-| Overall coverage (`go test ./internal/...`)           |  98.8% |
-| Average package coverage                              |  95.5% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  89.4% |
+| Overall coverage (`go test ./internal/...`)           |  98.6% |
+| Average package coverage                              |  95.4% |
 
 ### Naming Convention Stats
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,309 | 89.7% |
-| `TestFunc` (no underscore)             |   773 |  7.4% |
+| `TestFunc_Scenario` (2-part)           | 9,311 | 89.7% |
+| `TestFunc` (no underscore)             |   778 |  7.5% |
 | `TestFunc_Scenario_Expected` (3+ part) |   294 |  2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,770 |         89 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (174) |          7,437 |        334 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          7,442 |        335 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            251 |        109 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            633 |         39 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,376** |    **583** |                                                                                                 |
+| cmd packages            |            635 |         39 | server entry point and developer command utilities                                              |
+| **Total**               |     **10,383** |    **584** |                                                                                                 |
 
 ### Core Packages
 
@@ -110,14 +110,14 @@
 ### Complete Tool Sub-Package Test Counts
 
 <details>
-<summary>All 174 tested sub-packages (click to expand)</summary>
+<summary>All 175 tested sub-packages (click to expand)</summary>
 
 | Sub-package             |     Tests | Test Files | Coverage |     Tools |
 | ----------------------- | --------: | ---------: | -------: | --------: |
 | accessrequests          |        41 |          2 |   100.0% |         8 |
 | accesstokens            |        87 |          2 |    99.0% |        18 |
 | actioncatalog           |        26 |          4 |    98.5% |         0 |
-| actioncompat            |        15 |          2 |    96.3% |         0 |
+| actioncompat            |        15 |          2 |    93.6% |         0 |
 | adminspecs              |         4 |          1 |   100.0% |        91 |
 | alertmanagement         |        28 |          2 |    98.9% |         4 |
 | appearance              |        10 |          1 |   100.0% |         2 |
@@ -244,6 +244,7 @@
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        62 |          2 |   100.0% |         7 |
 | projects                |       341 |          4 |   100.0% |        54 |
+| projectserviceaccounts  |         5 |          1 |    75.6% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        17 |          2 |   100.0% |         6 |
 | projecttemplates        |        18 |          1 |   100.0% |         2 |
@@ -288,7 +289,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,437** |    **334** |          | **1,119** |
+| **Total**               | **7,442** |    **335** |          | **1,127** |
 
 </details>
 
@@ -308,7 +309,7 @@
 | cmd/audit_test_names            |    81.6% |
 | cmd/audit_tokens                |    19.5% |
 | cmd/audit_tools                 |    34.9% |
-| cmd/eval_mcp_surfaces           |    67.5% |
+| cmd/eval_mcp_surfaces           |    67.7% |
 | cmd/find_dupes                  |    90.1% |
 | cmd/format_md_tables            |    87.2% |
 | cmd/gen_action_catalog_manifest |    58.3% |
@@ -350,7 +351,7 @@
 | accessrequests          |   100.0% |
 | accesstokens            |    99.0% |
 | actioncatalog           |    98.5% |
-| actioncompat            |    96.3% |
+| actioncompat            |    93.6% |
 | adminspecs              |   100.0% |
 | alertmanagement         |    98.9% |
 | appearance              |   100.0% |
@@ -477,6 +478,7 @@
 | projectiterations       |   100.0% |
 | projectmirrors          |   100.0% |
 | projects                |   100.0% |
+| projectserviceaccounts  |    75.6% |
 | projectstatistics       |   100.0% |
 | projectstoragemoves     |   100.0% |
 | projecttemplates        |   100.0% |
@@ -536,7 +538,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/add_docs** (62.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_mcp_surfaces** (67.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_mcp_surfaces** (67.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **projectserviceaccounts** (75.6%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/audit_action_spec_coverage** (77.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.3%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_test_names** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

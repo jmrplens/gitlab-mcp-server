@@ -42,7 +42,7 @@ gitlab-mcp-server/
 │   ├── serverpool/         # HTTP mode: per-token+URL server pool & LRU cache
 │   ├── toolutil/           # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/           # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/              # Tool orchestration layer + 172 internal/tools packages
+│   ├── tools/              # Tool orchestration layer + 176 internal/tools packages
 │   │   ├── register.go     # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/        # Low-token dynamic find/execute surface
@@ -51,7 +51,7 @@ gitlab-mcp-server/
 │   │   ├── issues/         # Issue CRUD tools
 │   │   ├── mergerequests/  # Merge request CRUD tools
 │   │   ├── projects/       # Project CRUD tools
-│   │   └── ...             # 172 internal/tools packages total
+│   │   └── ...             # 176 internal/tools packages total
 │   ├── resources/          # MCP resource implementations
 │   └── prompts/            # MCP prompt implementations
 ├── docs/                   # Documentation, ADRs, specs
