@@ -121,7 +121,8 @@ func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput
 	}
 	data, _, err := client.GL().Attestations.DownloadAttestation(in.ProjectID.String(), in.AttestationIID, gl.WithContext(ctx))
 	if err != nil {
-		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("download attestation", err, http.StatusNotFound, "verify attestation_iid and project_id are valid — use gitlab_list_project_attestations to find valid IIDs")
+		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("download attestation", err, http.StatusNotFound,
+			"verify attestation_iid and project_id are valid; use gitlab_attestation action 'list' or gitlab_list_attestations to find valid IIDs")
 	}
 	return DownloadOutput{
 		AttestationIID: in.AttestationIID,

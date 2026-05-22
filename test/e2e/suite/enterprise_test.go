@@ -745,17 +745,29 @@ func TestMeta_Attestations(t *testing.T) {
 
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
+	subjectDigest := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
 	t.Run("Meta/Attestation/List", func(t *testing.T) {
-		_, err := callToolOn[attestations.ListOutput](ctx, sess.meta, "gitlab_attestation", map[string]any{
+		out, err := callToolOn[attestations.ListOutput](ctx, sess.meta, "gitlab_attestation", map[string]any{
 			"action": "list",
 			"params": map[string]any{
 				"project_id":     proj.pidStr(),
-				"subject_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+				"subject_digest": subjectDigest,
 			},
 		})
 		requirePremiumFeature(t, err, "attestations")
-		t.Log("Attestation list OK")
+		t.Logf("Attestations: %d", len(out.Attestations))
+	})
+
+	t.Run("Meta/Attestation/DownloadInvalidIID", func(t *testing.T) {
+		_, err := callToolOn[attestations.DownloadOutput](ctx, sess.meta, "gitlab_attestation", map[string]any{
+			"action": "download",
+			"params": map[string]any{
+				"project_id":      proj.pidStr(),
+				"attestation_iid": int64(999999999),
+			},
+		})
+		requireErrorContainsAll(t, err, "attestation_iid", "gitlab_attestation", "gitlab_list_attestations")
 	})
 }
 

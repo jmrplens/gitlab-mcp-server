@@ -543,4 +543,10 @@ func TestDownload_APIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 404 response, got nil")
 	}
+	errText := err.Error()
+	for _, want := range []string{"attestation_iid", "gitlab_attestation", "gitlab_list_attestations"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
+	}
 }
