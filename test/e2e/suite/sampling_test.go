@@ -167,7 +167,7 @@ func setupSamplingFixture(ctx context.Context, t *testing.T) samplingFixture {
 	t.Helper()
 	proj := createProject(ctx, t, sess.sampling)
 	commitFile(ctx, t, sess.sampling, proj, "main", "sampling-init.txt", "# Sampling E2E\nproject init", "init commit")
-	commitFile(ctx, t, sess.sampling, proj, "main", ".gitlab-ci.yml", "stages:\n  - test\nunit_test:\n  stage: test\n  script:\n    - echo \"running tests\"", "add CI config for AnalyzeCIConfig test")
+	commitFileCreateOrUpdate(ctx, t, sess.sampling, proj, "main", ".gitlab-ci.yml", "stages:\n  - test\nunit_test:\n  stage: test\n  script:\n    - echo \"running tests\"", "add CI config for AnalyzeCIConfig test")
 	issue := createIssue(ctx, t, sess.sampling, proj, "Sampling test issue")
 	milestone := createSamplingMilestone(ctx, t, proj)
 	branch := createBranch(ctx, t, sess.sampling, proj, "sampling-feature")

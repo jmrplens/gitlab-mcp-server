@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 )
@@ -91,15 +90,7 @@ func setupIndividualPipelineProject(ctx context.Context, t *testing.T) ProjectFi
 	t.Helper()
 	proj := createProject(ctx, t, sess.individual)
 	commitFile(ctx, t, sess.individual, proj, "main", "init.txt", "bootstrap", "init commit")
-	_, err := callToolOn[commits.Output](ctx, sess.individual, "gitlab_commit_create", commits.CreateInput{
-		ProjectID:     proj.pidOf(),
-		Branch:        "main",
-		CommitMessage: "ci: add .gitlab-ci.yml for pipeline tests",
-		Actions:       []commits.Action{{Action: "create", FilePath: ".gitlab-ci.yml", Content: pipelineCIYAML}},
-	})
-	if err != nil {
-		t.Fatalf("commit CI config: %v", err)
-	}
+	commitFileCreateOrUpdate(ctx, t, sess.individual, proj, "main", ".gitlab-ci.yml", pipelineCIYAML, "ci: add .gitlab-ci.yml for pipeline tests")
 	return proj
 }
 
@@ -238,18 +229,7 @@ func setupMetaPipelineProject(ctx context.Context, t *testing.T) ProjectFixture 
 	t.Helper()
 	proj := createProjectMeta(ctx, t, sess.meta)
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "init.txt", "bootstrap", "init commit")
-	_, err := callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
-		"action": "commit_create",
-		"params": map[string]any{
-			"project_id":     proj.pidStr(),
-			"branch":         "main",
-			"commit_message": "ci: add .gitlab-ci.yml",
-			"actions":        []map[string]any{{"action": "create", "file_path": ".gitlab-ci.yml", "content": pipelineCIYAML}},
-		},
-	})
-	if err != nil {
-		t.Fatalf("meta commit CI config: %v", err)
-	}
+	commitFileCreateOrUpdateMeta(ctx, t, sess.meta, proj, "main", ".gitlab-ci.yml", pipelineCIYAML, "ci: add .gitlab-ci.yml")
 	return proj
 }
 

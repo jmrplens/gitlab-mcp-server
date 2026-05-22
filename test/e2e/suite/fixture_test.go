@@ -8,6 +8,7 @@ package suite
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -315,14 +316,45 @@ func unprotectMain(ctx context.Context, t *testing.T, proj ProjectFixture) {
 // commitFile creates a file via the gitlab_commit_create tool.
 func commitFile(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message string) CommitFixture {
 	t.Helper()
+	fixture, err := commitFileAction(ctx, t, session, proj, branch, path, content, message, "create")
+	requireNoError(t, err, "commit file "+path)
+	return fixture
+}
+
+func commitFileCreateOrUpdate(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message string) CommitFixture {
+	t.Helper()
+	fixture, err := commitFileAction(ctx, t, session, proj, branch, path, content, message, "create")
+	if err == nil {
+		return fixture
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "already exists") {
+		requireNoError(t, err, "commit file "+path)
+	}
+
+	existingFixture, existingContent, getErr := getRepositoryFile(ctx, t, proj, branch, path)
+	requireNoError(t, getErr, "get existing file "+path)
+	if existingContent == content {
+		return existingFixture
+	}
+
+	fixture, err = commitFileAction(ctx, t, session, proj, branch, path, content, message, "update")
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "not been changed") {
+		return existingFixture
+	}
+	requireNoError(t, err, "update file "+path)
+	return fixture
+}
+
+func commitFileAction(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message, action string) (CommitFixture, error) {
+	t.Helper()
 	const maxRetries = 5
-	fixture, err := retryWithBackoff(ctx, t, "commit file "+path, maxRetries, func(int) (CommitFixture, bool, string, error) {
+	return retryWithBackoff(ctx, t, "commit file "+path, maxRetries, func(int) (CommitFixture, bool, string, error) {
 		out, err := callToolOn[commits.Output](ctx, session, "gitlab_commit_create", commits.CreateInput{
 			ProjectID:     proj.pidOf(),
 			Branch:        branch,
 			CommitMessage: message,
 			Actions: []commits.Action{
-				{Action: "create", FilePath: path, Content: content},
+				{Action: action, FilePath: path, Content: content},
 			},
 		})
 		if err == nil {
@@ -331,23 +363,52 @@ func commitFile(ctx context.Context, t *testing.T, session *mcp.ClientSession, p
 		retryable := strings.Contains(err.Error(), "only create or edit files when you are on a branch")
 		return CommitFixture{}, retryable, "branch not ready", err
 	})
-	requireNoError(t, err, "commit file "+path)
-	return fixture
 }
 
 // commitFileMeta creates a file via the gitlab_repository meta-tool.
 // Retries on transient "not on a branch" errors caused by GitLab CE race conditions.
 func commitFileMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message string) CommitFixture {
 	t.Helper()
+	fixture, err := commitFileActionMeta(ctx, t, session, proj, branch, path, content, message, "create")
+	requireNoError(t, err, "commit file meta "+path)
+	return fixture
+}
+
+func commitFileCreateOrUpdateMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message string) CommitFixture {
+	t.Helper()
+	fixture, err := commitFileActionMeta(ctx, t, session, proj, branch, path, content, message, "create")
+	if err == nil {
+		return fixture
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "already exists") {
+		requireNoError(t, err, "commit file meta "+path)
+	}
+
+	existingFixture, existingContent, getErr := getRepositoryFile(ctx, t, proj, branch, path)
+	requireNoError(t, getErr, "get existing file "+path)
+	if existingContent == content {
+		return existingFixture
+	}
+
+	fixture, err = commitFileActionMeta(ctx, t, session, proj, branch, path, content, message, "update")
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "not been changed") {
+		return existingFixture
+	}
+	requireNoError(t, err, "update file meta "+path)
+	return fixture
+}
+
+func commitFileActionMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession, proj ProjectFixture, branch, path, content, message, action string) (CommitFixture, error) {
+	t.Helper()
 	const maxRetries = 8
 	needStartBranch := false
-	fixture, err := retryWithBackoff(ctx, t, "commit file meta "+path, maxRetries, func(int) (CommitFixture, bool, string, error) {
+	return retryWithBackoff(ctx, t, "commit file meta "+path, maxRetries, func(int) (CommitFixture, bool, string, error) {
 		params := map[string]any{
 			"project_id":     proj.pidStr(),
 			"branch":         branch,
 			"commit_message": message,
 			"actions": []map[string]any{
-				{"action": "create", "file_path": path, "content": content},
+				{"action": action, "file_path": path, "content": content},
 			},
 		}
 		if needStartBranch && branch != defaultBranch {
@@ -371,8 +432,26 @@ func commitFileMeta(ctx context.Context, t *testing.T, session *mcp.ClientSessio
 		}
 		return CommitFixture{}, false, "", err
 	})
-	requireNoError(t, err, "commit file meta "+path)
-	return fixture
+}
+
+func getRepositoryFile(ctx context.Context, t *testing.T, proj ProjectFixture, branch, path string) (CommitFixture, string, error) {
+	t.Helper()
+	file, _, err := sess.glClient.GL().RepositoryFiles.GetFile(int(proj.ID), path, &gl.GetFileOptions{Ref: &branch}, gl.WithContext(ctx))
+	if err != nil {
+		return CommitFixture{}, "", err
+	}
+	content, err := base64.StdEncoding.DecodeString(file.Content)
+	if err != nil {
+		return CommitFixture{}, "", err
+	}
+	return CommitFixture{SHA: file.LastCommitID, ShortID: shortCommitID(file.LastCommitID)}, string(content), nil
+}
+
+func shortCommitID(sha string) string {
+	if len(sha) <= 8 {
+		return sha
+	}
+	return sha[:8]
 }
 
 // createBranch creates a branch from the default branch via individual tools.

@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/samplingtools"
@@ -49,17 +48,7 @@ func TestIndividual_CIRunner(t *testing.T) {
 		var jobID int64
 
 		t.Run("CommitCIConfig", func(t *testing.T) {
-			_, err := callToolOn[commits.Output](ctx, sess.individual, "gitlab_commit_create", commits.CreateInput{
-				ProjectID:     proj.pidOf(),
-				Branch:        defaultBranch,
-				CommitMessage: "ci: add .gitlab-ci.yml for E2E pipeline tests",
-				Actions: []commits.Action{{
-					Action:   "create",
-					FilePath: ".gitlab-ci.yml",
-					Content:  ciYAML,
-				}},
-			})
-			requireNoError(t, err, "commit CI config")
+			commitFileCreateOrUpdate(ctx, t, sess.individual, proj, defaultBranch, ".gitlab-ci.yml", ciYAML, "ci: add .gitlab-ci.yml for E2E pipeline tests")
 			t.Logf("Committed .gitlab-ci.yml to %s", defaultBranch)
 		})
 

@@ -373,7 +373,7 @@ func TestResources_ReadAll(t *testing.T) {
 	// prior fixtures. We then poll /pipelines/latest until a pipeline ID
 	// appears, and /pipeline/{id}/jobs until a job ID appears.
 	const ciYAML = "stages:\n  - test\ntest:\n  stage: test\n  script:\n    - echo ok\n"
-	commitFile(ctx, t, sess.individual, proj, defaultBranch, ".gitlab-ci.yml", ciYAML, "ci: add minimal pipeline")
+	commitFileCreateOrUpdate(ctx, t, sess.individual, proj, defaultBranch, ".gitlab-ci.yml", ciYAML, "ci: add minimal pipeline")
 
 	pipelineID := waitForResourceID(ctx, t, projURI("/pipelines/latest"), 180*time.Second)
 	if pipelineID == 0 {

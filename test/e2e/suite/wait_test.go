@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/jobs"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 )
@@ -63,15 +62,7 @@ func runIndividualWaitToolFlow(ctx context.Context, t *testing.T) {
 
 func commitIndividualWaitCI(ctx context.Context, t *testing.T, proj ProjectFixture) {
 	t.Helper()
-	_, ciErr := callToolOn[commits.Output](ctx, sess.individual, "gitlab_commit_create", commits.CreateInput{
-		ProjectID:     proj.pidOf(),
-		Branch:        "main",
-		CommitMessage: "ci: add .gitlab-ci.yml for wait tool tests",
-		Actions:       []commits.Action{{Action: "create", FilePath: ".gitlab-ci.yml", Content: waitCIYAML}},
-	})
-	if ciErr != nil {
-		t.Fatalf("commit CI config: %v", ciErr)
-	}
+	commitFileCreateOrUpdate(ctx, t, sess.individual, proj, "main", ".gitlab-ci.yml", waitCIYAML, "ci: add .gitlab-ci.yml for wait tool tests")
 }
 
 func createIndividualWaitPipeline(ctx context.Context, t *testing.T, proj ProjectFixture) int64 {
@@ -158,18 +149,7 @@ func runMetaWaitToolFlow(ctx context.Context, t *testing.T) {
 
 func commitMetaWaitCI(ctx context.Context, t *testing.T, projM ProjectFixture) {
 	t.Helper()
-	_, ciErr := callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
-		"action": "commit_create",
-		"params": map[string]any{
-			"project_id":     projM.pidStr(),
-			"branch":         "main",
-			"commit_message": "ci: add .gitlab-ci.yml for wait tool tests",
-			"actions":        []map[string]any{{"action": "create", "file_path": ".gitlab-ci.yml", "content": waitCIYAML}},
-		},
-	})
-	if ciErr != nil {
-		t.Fatalf("meta commit CI config: %v", ciErr)
-	}
+	commitFileCreateOrUpdateMeta(ctx, t, sess.meta, projM, "main", ".gitlab-ci.yml", waitCIYAML, "ci: add .gitlab-ci.yml for wait tool tests")
 }
 
 func createMetaWaitPipeline(ctx context.Context, t *testing.T, projM ProjectFixture) int64 {
