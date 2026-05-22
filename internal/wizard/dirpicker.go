@@ -4,11 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 )
+
+var linuxDialogToolDirs = []string{"/usr/bin", "/bin"}
+
+var findLinuxDialogToolPath = fixedLinuxDialogToolPath
 
 // pickDirectoryFn is the function used internally to pick a directory.
 // Tests can swap this to prevent real OS dialogs.
@@ -56,22 +62,8 @@ func pickDirectory(startDir string) (string, error) {
 		cmd = exec.CommandContext(ctx, "osascript", "-e", script) // #nosec G204 -- trusted internal command with escaped directory path
 
 	default: // Linux / FreeBSD
-		// Try zenity first, fall back to kdialog
-		if _, err = exec.LookPath("zenity"); err == nil {
-			args := []string{"--file-selection", "--directory", "--title=Select installation directory"}
-			if startDir != "" {
-				args = append(args, "--filename="+startDir+"/")
-			}
-			cmd = exec.CommandContext(ctx, "zenity", args...) // #nosec G204 -- trusted internal command
-		} else if _, err = exec.LookPath("kdialog"); err == nil {
-			args := []string{"--getexistingdirectory"}
-			if startDir != "" {
-				args = append(args, startDir)
-			} else {
-				args = append(args, ".")
-			}
-			cmd = exec.CommandContext(ctx, "kdialog", args...) // #nosec G204 -- trusted internal command
-		} else {
+		cmd, err = linuxDirectoryPickerCommand(ctx, startDir)
+		if err != nil {
 			return "", errors.New("no dialog tool available (install zenity or kdialog)")
 		}
 	}
@@ -87,4 +79,54 @@ func pickDirectory(startDir string) (string, error) {
 		return "", errors.New("no directory selected")
 	}
 	return selected, nil
+}
+
+func linuxDirectoryPickerCommand(ctx context.Context, startDir string) (*exec.Cmd, error) {
+	if zenityPath, ok := findLinuxDialogToolPath("zenity"); ok {
+		args := []string{"--file-selection", "--directory", "--title=Select installation directory"}
+		if startDir != "" {
+			args = append(args, "--filename="+startDir+"/")
+		}
+		return exec.CommandContext(ctx, zenityPath, args...), nil // #nosec G204 -- executable resolved from fixed system directories
+	}
+	kdialogPath, ok := findLinuxDialogToolPath("kdialog")
+	if !ok {
+		return nil, errors.New("no fixed dialog tool found")
+	}
+	args := []string{"--getexistingdirectory"}
+	if startDir != "" {
+		args = append(args, startDir)
+	} else {
+		args = append(args, ".")
+	}
+	return exec.CommandContext(ctx, kdialogPath, args...), nil // #nosec G204 -- executable resolved from fixed system directories
+}
+
+func fixedLinuxDialogToolPath(name string) (string, bool) {
+	for _, dir := range linuxDialogToolDirs {
+		if !isFixedSystemDir(dir) {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		if isExecutableFile(path) {
+			return path, true
+		}
+	}
+	return "", false
+}
+
+func isFixedSystemDir(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	return info.Mode().Perm()&0o022 == 0
+}
+
+func isExecutableFile(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	return info.Mode().Perm()&0o111 != 0
 }

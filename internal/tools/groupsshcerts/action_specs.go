@@ -28,21 +28,15 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func groupSSHCertReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupSSHCertOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupSSHCertOptions(individualTool))
 }
 
 func groupSSHCertCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupSSHCertOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupSSHCertOptions(individualTool))
 }
 
 func groupSSHCertDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupSSHCertOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, groupSSHCertOptions(individualTool))
 }
 
 func groupSSHCertOptions(individualTool string) toolutil.ActionSpecOptions {

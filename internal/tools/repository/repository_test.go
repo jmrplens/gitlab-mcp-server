@@ -1139,34 +1139,44 @@ func TestMarkdownForResult_BlobContentCategories(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			callResult := toolutil.MarkdownForResult(tt.result)
-			if callResult == nil {
-				t.Fatal("MarkdownForResult returned nil")
-			}
-			content, ok := callResult.Content[0].(*mcp.TextContent)
-			if !ok {
-				t.Fatalf("content[0] = %T, want *mcp.TextContent", callResult.Content[0])
-			}
-			if !strings.Contains(content.Text, tt.wantText) {
-				t.Fatalf("markdown missing %q:\n%s", tt.wantText, content.Text)
-			}
-			if tt.wantImageMIME == "" {
-				if len(callResult.Content) != 1 {
-					t.Fatalf("content items = %d, want 1", len(callResult.Content))
-				}
-				return
-			}
-			if len(callResult.Content) != 2 {
-				t.Fatalf("content items = %d, want 2", len(callResult.Content))
-			}
-			image, ok := callResult.Content[1].(*mcp.ImageContent)
-			if !ok {
-				t.Fatalf("content[1] = %T, want *mcp.ImageContent", callResult.Content[1])
-			}
-			if image.MIMEType != tt.wantImageMIME {
-				t.Fatalf("image MIMEType = %q, want %q", image.MIMEType, tt.wantImageMIME)
-			}
+			assertBlobMarkdownResult(t, tt.result, tt.wantText, tt.wantImageMIME)
 		})
+	}
+}
+
+func assertBlobMarkdownResult(t *testing.T, result any, wantText, wantImageMIME string) {
+	t.Helper()
+	callResult := toolutil.MarkdownForResult(result)
+	if callResult == nil {
+		t.Fatal("MarkdownForResult returned nil")
+	}
+	content, ok := callResult.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] = %T, want *mcp.TextContent", callResult.Content[0])
+	}
+	if !strings.Contains(content.Text, wantText) {
+		t.Fatalf("markdown missing %q:\n%s", wantText, content.Text)
+	}
+	assertBlobImageContent(t, callResult, wantImageMIME)
+}
+
+func assertBlobImageContent(t *testing.T, callResult *mcp.CallToolResult, wantImageMIME string) {
+	t.Helper()
+	if wantImageMIME == "" {
+		if len(callResult.Content) != 1 {
+			t.Fatalf("content items = %d, want 1", len(callResult.Content))
+		}
+		return
+	}
+	if len(callResult.Content) != 2 {
+		t.Fatalf("content items = %d, want 2", len(callResult.Content))
+	}
+	image, ok := callResult.Content[1].(*mcp.ImageContent)
+	if !ok {
+		t.Fatalf("content[1] = %T, want *mcp.ImageContent", callResult.Content[1])
+	}
+	if image.MIMEType != wantImageMIME {
+		t.Fatalf("image MIMEType = %q, want %q", image.MIMEType, wantImageMIME)
 	}
 }
 

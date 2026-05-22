@@ -3,7 +3,7 @@ package toolutil
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"strings"
 	"testing"
 
@@ -378,7 +378,7 @@ func TestWithHints_ErrorSkipsHints(t *testing.T) {
 	}
 	out := hintTestOutput{Name: "test"}
 
-	_, gotOut, gotErr := WithHints(result, out, fmt.Errorf("fail"))
+	_, gotOut, gotErr := WithHints(result, out, errors.New("fail"))
 	if gotErr == nil {
 		t.Fatal("expected error")
 	}

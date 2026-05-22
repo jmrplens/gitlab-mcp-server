@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 // TestListProjectMergeTrains validates the ListProjectMergeTrains handler.
@@ -42,46 +42,7 @@ func TestListProjectMergeTrains(t *testing.T) {
 				if len(out.Trains) != 1 {
 					t.Fatalf("got %d trains, want 1", len(out.Trains))
 				}
-				tr := out.Trains[0]
-				if tr.ID != 1 {
-					t.Errorf("got ID %d, want 1", tr.ID)
-				}
-				if tr.TargetBranch != "main" {
-					t.Errorf("got target_branch %q, want %q", tr.TargetBranch, "main")
-				}
-				if tr.Status != "merged" {
-					t.Errorf("got status %q, want %q", tr.Status, "merged")
-				}
-				if tr.User != "admin" {
-					t.Errorf("got user %q, want %q", tr.User, "admin")
-				}
-				if tr.PipelineID != 200 {
-					t.Errorf("got pipeline_id %d, want 200", tr.PipelineID)
-				}
-				if tr.Duration != 120 {
-					t.Errorf("got duration %d, want 120", tr.Duration)
-				}
-				if tr.MergeRequest.IID != 5 {
-					t.Errorf("got MR IID %d, want 5", tr.MergeRequest.IID)
-				}
-				if tr.MergeRequest.WebURL != "https://gitlab.example.com/-/merge_requests/5" {
-					t.Errorf("got web_url %q, want non-empty", tr.MergeRequest.WebURL)
-				}
-				if tr.MergeRequest.CreatedAt == "" {
-					t.Error("expected MR created_at to be set")
-				}
-				if tr.MergeRequest.UpdatedAt == "" {
-					t.Error("expected MR updated_at to be set")
-				}
-				if tr.CreatedAt == "" {
-					t.Error("expected created_at to be set")
-				}
-				if tr.UpdatedAt == "" {
-					t.Error("expected updated_at to be set")
-				}
-				if tr.MergedAt == "" {
-					t.Error("expected merged_at to be set")
-				}
+				assertPopulatedMergeTrain(t, out.Trains[0])
 			},
 		},
 		{
@@ -146,6 +107,19 @@ func TestListProjectMergeTrains(t *testing.T) {
 				tt.validate(t, out)
 			}
 		})
+	}
+}
+
+func assertPopulatedMergeTrain(t *testing.T, tr Output) {
+	t.Helper()
+	if tr.ID != 1 || tr.TargetBranch != "main" || tr.Status != "merged" || tr.User != "admin" || tr.PipelineID != 200 || tr.Duration != 120 {
+		t.Fatalf("train = %+v, want populated merged train", tr)
+	}
+	if tr.MergeRequest.IID != 5 || tr.MergeRequest.WebURL != "https://gitlab.example.com/-/merge_requests/5" {
+		t.Fatalf("merge request = %+v, want IID 5 and web URL", tr.MergeRequest)
+	}
+	if tr.MergeRequest.CreatedAt == "" || tr.MergeRequest.UpdatedAt == "" || tr.CreatedAt == "" || tr.UpdatedAt == "" || tr.MergedAt == "" {
+		t.Fatalf("timestamps missing in train = %+v", tr)
 	}
 }
 
@@ -333,14 +307,9 @@ func TestAddMergeRequestToMergeTrain(t *testing.T) {
 		{
 			name:  "adds MR to merge train",
 			input: AddInput{ProjectID: "42", MergeRequestID: 5},
-			handler: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
-				t.Helper()
-				testutil.AssertRequestMethod(t, r, http.MethodPost)
-				testutil.AssertRequestPath(t, r, "/api/v4/projects/42/merge_trains/merge_requests/5")
-				testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+			handler: addMergeTrainSuccessHandler(`[
 					{"id":2,"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug","state":"opened"},"target_branch":"main","status":"idle","duration":0}
-				]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-			},
+				]`),
 			validate: func(t *testing.T, out ListOutput) {
 				t.Helper()
 				if len(out.Trains) != 1 {
@@ -354,30 +323,9 @@ func TestAddMergeRequestToMergeTrain(t *testing.T) {
 		{
 			name:  "sends optional fields in request body",
 			input: AddInput{ProjectID: "42", MergeRequestID: 5, AutoMerge: true, SHA: "abc123", Squash: true},
-			handler: func(t *testing.T, w http.ResponseWriter, r *http.Request) {
-				t.Helper()
-				testutil.AssertRequestMethod(t, r, http.MethodPost)
-				body, err := io.ReadAll(r.Body)
-				if err != nil {
-					t.Fatalf("failed to read body: %v", err)
-				}
-				var opts map[string]any
-				if unmarshalErr := json.Unmarshal(body, &opts); unmarshalErr != nil {
-					t.Fatalf("failed to parse body: %v", unmarshalErr)
-				}
-				if opts["auto_merge"] != true {
-					t.Errorf("auto_merge = %v, want true", opts["auto_merge"])
-				}
-				if opts["sha"] != "abc123" {
-					t.Errorf("sha = %v, want %q", opts["sha"], "abc123")
-				}
-				if opts["squash"] != true {
-					t.Errorf("squash = %v, want true", opts["squash"])
-				}
-				testutil.RespondJSONWithPagination(w, http.StatusOK, `[
+			handler: addMergeTrainOptionalFieldsHandler(`[
 					{"id":3,"merge_request":{"id":100,"iid":5,"project_id":42,"title":"Fix bug","state":"opened"},"target_branch":"main","status":"idle","duration":0}
-				]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
-			},
+				]`),
 			validate: func(t *testing.T, out ListOutput) {
 				t.Helper()
 				if len(out.Trains) != 1 {
@@ -427,6 +375,49 @@ func TestAddMergeRequestToMergeTrain(t *testing.T) {
 			}
 		})
 	}
+}
+
+func addMergeTrainSuccessHandler(body string) func(*testing.T, http.ResponseWriter, *http.Request) {
+	return func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+		t.Helper()
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
+		testutil.AssertRequestPath(t, r, "/api/v4/projects/42/merge_trains/merge_requests/5")
+		respondMergeTrainList(w, body)
+	}
+}
+
+func addMergeTrainOptionalFieldsHandler(body string) func(*testing.T, http.ResponseWriter, *http.Request) {
+	return func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+		t.Helper()
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
+		assertAddMergeTrainBody(t, r)
+		respondMergeTrainList(w, body)
+	}
+}
+
+func assertAddMergeTrainBody(t *testing.T, r *http.Request) {
+	t.Helper()
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+	var opts map[string]any
+	if unmarshalErr := json.Unmarshal(body, &opts); unmarshalErr != nil {
+		t.Fatalf("failed to parse body: %v", unmarshalErr)
+	}
+	if opts["auto_merge"] != true {
+		t.Errorf("auto_merge = %v, want true", opts["auto_merge"])
+	}
+	if opts["sha"] != "abc123" {
+		t.Errorf("sha = %v, want %q", opts["sha"], "abc123")
+	}
+	if opts["squash"] != true {
+		t.Errorf("squash = %v, want true", opts["squash"])
+	}
+}
+
+func respondMergeTrainList(w http.ResponseWriter, body string) {
+	testutil.RespondJSONWithPagination(w, http.StatusOK, body, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 }
 
 // TestToOutput_NilInput verifies toOutput handles a nil MergeTrain gracefully.

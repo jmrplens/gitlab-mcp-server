@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // FormatCheckMarkdownString renders the check result as Markdown.
@@ -48,7 +48,8 @@ func FormatCheckMarkdown(o CheckOutput) *mcp.CallToolResult {
 // FormatApplyMarkdownString renders the apply result as Markdown.
 func FormatApplyMarkdownString(o ApplyOutput) string {
 	var b strings.Builder
-	if o.Deferred {
+	switch {
+	case o.Deferred:
 		fmt.Fprintf(&b, "## "+toolutil.EmojiDownArrow+" Update Downloaded (Deferred)\n\n")
 		fmt.Fprintf(&b, "- **Previous Version**: %s\n", o.PreviousVersion)
 		fmt.Fprintf(&b, "- **New Version**: %s\n", o.NewVersion)
@@ -58,12 +59,12 @@ func FormatApplyMarkdownString(o ApplyOutput) string {
 		}
 		fmt.Fprintf(&b, "\n> **Note**: The running binary cannot be replaced on Windows. "+
 			"Stop the MCP server, then run the update script to apply.\n")
-	} else if o.Applied {
+	case o.Applied:
 		fmt.Fprintf(&b, "## "+toolutil.EmojiSuccess+" Update Applied\n\n")
 		fmt.Fprintf(&b, "- **Previous Version**: %s\n", o.PreviousVersion)
 		fmt.Fprintf(&b, "- **New Version**: %s\n", o.NewVersion)
 		fmt.Fprintf(&b, "\n> **Note**: Restart the server to use the new version.\n")
-	} else {
+	default:
 		fmt.Fprintf(&b, "## "+toolutil.EmojiInfo+" No Update Applied\n\n")
 		fmt.Fprintf(&b, "- **Message**: %s\n", o.Message)
 	}

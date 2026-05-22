@@ -18,32 +18,22 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func terraformStateReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := terraformStateOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, terraformStateOptions(individualTool))
 }
 
 func terraformStateUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := terraformStateOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, terraformStateOptions(individualTool))
 }
 
 func terraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	individualDestructive := false
 	options := terraformStateOptions("gitlab_unlock_terraform_state")
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewActionSpec("terraform_state_unlock", toolutil.DestructiveAction(client, Unlock), options)
+	return toolutil.NewDeleteActionSpec("terraform_state_unlock", toolutil.DestructiveAction(client, Unlock), options)
 }
 
 func terraformStateDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := terraformStateOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, terraformStateOptions(individualTool))
 }
 
 func terraformStateOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -11,8 +11,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const registerDepListJSON = `[{"name":"rails","version":"7.0.0","package_manager":"bundler","dependency_file_path":"Gemfile.lock"}]`
-const registerExportJSON = `{"id":1,"has_finished":false,"self":"https://gitlab.example.com/api/v4/dependency_list_exports/1","download":""}`
+const (
+	registerDepListJSON = `[{"name":"rails","version":"7.0.0","package_manager":"bundler","dependency_file_path":"Gemfile.lock"}]`
+	registerExportJSON  = `{"id":1,"has_finished":false,"self":"https://gitlab.example.com/api/v4/dependency_list_exports/1","download":""}`
+)
 
 // TestActionSpecs_Metadata verifies dependency action spec metadata.
 func TestActionSpecs_Metadata(t *testing.T) {

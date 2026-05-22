@@ -18,27 +18,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func releaseLinkReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := releaseLinkOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, releaseLinkOptions(name, individualTool))
 }
 
 func releaseLinkCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, releaseLinkOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, releaseLinkOptions(name, individualTool))
 }
 
 func releaseLinkUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := releaseLinkOptions(name, individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, releaseLinkOptions(name, individualTool))
 }
 
 func releaseLinkDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := releaseLinkOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, releaseLinkOptions(name, individualTool))
 }
 
 func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOptions {

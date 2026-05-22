@@ -12,10 +12,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const actionSpecRunnerJSON = `{"id":10,"description":"runner-1","name":"r1","paused":false,"is_shared":true,"runner_type":"instance_type","online":true,"status":"online"}`
-const actionSpecRunnerDetailsJSON = `{"id":10,"description":"runner-1","name":"r1","paused":false,"is_shared":true,"runner_type":"instance_type","online":true,"status":"online","tag_list":["docker"],"run_untagged":true,"locked":false,"access_level":"not_protected","maximum_timeout":3600}`
-const actionSpecRunnerTokenJSON = `{"token":"new-tok","token_expires_at":"2026-12-01T00:00:00Z"}`
-const actionSpecRunnerRegTokenJSON = `{"token":"reg-tok-new","token_expires_at":"2026-12-01T00:00:00Z"}`
+const (
+	actionSpecRunnerJSON         = `{"id":10,"description":"runner-1","name":"r1","paused":false,"is_shared":true,"runner_type":"instance_type","online":true,"status":"online"}`
+	actionSpecRunnerDetailsJSON  = `{"id":10,"description":"runner-1","name":"r1","paused":false,"is_shared":true,"runner_type":"instance_type","online":true,"status":"online","tag_list":["docker"],"run_untagged":true,"locked":false,"access_level":"not_protected","maximum_timeout":3600}`
+	actionSpecRunnerTokenJSON    = `{"token":"new-tok","token_expires_at":"2026-12-01T00:00:00Z"}`
+	actionSpecRunnerRegTokenJSON = `{"token":"reg-tok-new","token_expires_at":"2026-12-01T00:00:00Z"}`
+)
 
 // TestActionSpecs_CallRunnerRoutes exercises runner tools through their canonical routes.
 func TestActionSpecs_CallRunnerRoutes(t *testing.T) {

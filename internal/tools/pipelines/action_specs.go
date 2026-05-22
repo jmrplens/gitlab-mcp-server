@@ -49,27 +49,19 @@ func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func pipelineReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, pipelineOptions(name, individualTool))
 }
 
 func pipelineMutationSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, pipelineOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, pipelineOptions(name, individualTool))
 }
 
 func pipelineUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineOptions(name, individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, pipelineOptions(name, individualTool))
 }
 
 func pipelineDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, pipelineOptions(name, individualTool))
 }
 
 func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptions {

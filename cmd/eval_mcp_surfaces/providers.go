@@ -601,16 +601,8 @@ func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 		return input, nil
 	}
 	candidate := strings.TrimSpace(arguments)
-	if start := strings.Index(candidate, "{"); start >= 0 {
-		prefix := strings.TrimSpace(candidate[:start])
-		if prefix != "" && !strings.ContainsAny(prefix, "\":,") {
-			if end := strings.LastIndex(candidate, "}"); end > start {
-				objectCandidate := candidate[start : end+1]
-				if err := json.Unmarshal([]byte(objectCandidate), &input); err == nil {
-					return input, nil
-				}
-			}
-		}
+	if parsedInput, ok := parsePrefixedOpenAIJSONObject(candidate); ok {
+		return parsedInput, nil
 	}
 	candidate = strings.Trim(candidate, " \t\r\n,")
 	if candidate == "" {
@@ -633,6 +625,26 @@ func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 		return nil, err
 	}
 	return input, nil
+}
+
+func parsePrefixedOpenAIJSONObject(candidate string) (map[string]any, bool) {
+	start := strings.Index(candidate, "{")
+	if start < 0 {
+		return nil, false
+	}
+	prefix := strings.TrimSpace(candidate[:start])
+	if prefix == "" || strings.ContainsAny(prefix, "\":,") {
+		return nil, false
+	}
+	end := strings.LastIndex(candidate, "}")
+	if end <= start {
+		return nil, false
+	}
+	input := map[string]any{}
+	if err := json.Unmarshal([]byte(candidate[start:end+1]), &input); err != nil {
+		return nil, false
+	}
+	return input, true
 }
 
 // googleProvider models the Google Gemini Google provider payload.

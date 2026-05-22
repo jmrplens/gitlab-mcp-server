@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"time"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/notifications"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
-
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // CurrentUserStateSnapshot captures mutable current-user settings touched by E2E tests.
@@ -80,7 +80,7 @@ func RestoreCurrentUserState(ctx context.Context, e2e *E2EContext, snapshot Curr
 // raw GitLab client because the status update operation is user-scoped state.
 func restoreCurrentUserStatus(ctx context.Context, e2e *E2EContext, status users.StatusOutput) error {
 	if e2e.GitLab == nil {
-		return fmt.Errorf("restore current-user status: gitlab client not configured; set GITLAB_URL and GITLAB_TOKEN for E2E setup")
+		return errors.New("restore current-user status: gitlab client not configured; set GITLAB_URL and GITLAB_TOKEN for E2E setup")
 	}
 	opts := &gl.UserStatusOptions{
 		Emoji:   &status.Emoji,

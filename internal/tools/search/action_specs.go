@@ -27,7 +27,7 @@ func searchCodeSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Aliases = []string{"code search", "file content search", "find code", "search repository files"}
 	options.Tags = append(options.Tags, "code", "blob", "file_content")
 	options.RelatedActions = []string{"search.projects", "repository.file_get", "repository.tree"}
-	return toolutil.NewActionSpec("code", searchRoute(client, Code), options)
+	return toolutil.NewReadActionSpec("code", searchRoute(client, Code), options)
 }
 
 func searchProjectsSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -36,18 +36,16 @@ func searchProjectsSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Aliases = []string{"project search", "repository search", "find projects", "find repositories"}
 	options.Tags = append(options.Tags, "project", "repository", "namespace")
 	options.RelatedActions = []string{"project.get", "project.list", "search.code"}
-	return toolutil.NewActionSpec("projects", searchRoute(client, Projects), options)
+	return toolutil.NewReadActionSpec("projects", searchRoute(client, Projects), options)
 }
 
 func searchReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, searchReadOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, searchReadOptions(individualTool))
 }
 
 func searchReadOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Tags:           []string{"search"},
-		ReadOnly:       true,
-		Idempotent:     true,
 		OpenWorld:      true,
 		OwnerPackage:   "search",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

@@ -143,6 +143,9 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 			t.Errorf("missing %q in markdown output", want)
 		}
 	}
+	if strings.Contains(md, "- **Permissions**") {
+		t.Error("license details should use unbulleted field labels")
+	}
 }
 
 // ---------------------------------------------------------------------------

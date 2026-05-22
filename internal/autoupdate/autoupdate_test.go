@@ -1537,7 +1537,7 @@ func TestNewUpdaterWithSource_Defaults(t *testing.T) {
 // the reader fails mid-stream.
 func TestWriteToFile_CopyError(t *testing.T) {
 	dir := t.TempDir()
-	path := fmt.Sprintf("%s/test-binary", dir)
+	path := dir + "/test-binary"
 	errReader := &failingReader{err: errors.New("read explosion")}
 
 	err := writeToFile(path, errReader)
@@ -1639,7 +1639,7 @@ func stubExecutablePath(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	fakeBin := filepath.Join(dir, "gitlab-mcp-server")
-	if err := os.WriteFile(fakeBin, []byte("fake-binary"), 0o755); err != nil {
+	if err := os.WriteFile(fakeBin, []byte("fake-binary"), 0o600); err != nil {
 		t.Fatalf("cannot create fake binary: %v", err)
 	}
 

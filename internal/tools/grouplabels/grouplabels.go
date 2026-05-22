@@ -8,6 +8,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/labeldata"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -60,21 +61,7 @@ type SubscribeInput struct {
 }
 
 // Output represents a single group label.
-type Output struct {
-	toolutil.HintableOutput
-	ID                     int64  `json:"id"`
-	Name                   string `json:"name"`
-	Color                  string `json:"color"`
-	TextColor              string `json:"text_color"`
-	Description            string `json:"description"`
-	OpenIssuesCount        int64  `json:"open_issues_count"`
-	ClosedIssuesCount      int64  `json:"closed_issues_count"`
-	OpenMergeRequestsCount int64  `json:"open_merge_requests_count"`
-	Priority               int64  `json:"priority"`
-	PrioritySpecified      bool   `json:"-"`
-	IsProjectLabel         bool   `json:"is_project_label"`
-	Subscribed             bool   `json:"subscribed"`
-}
+type Output = labeldata.Output
 
 // ListOutput holds a paginated list of group labels.
 type ListOutput struct {
@@ -92,28 +79,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("groupLabelList: group_id is required")
 	}
 
-	opts := &gl.ListGroupLabelsOptions{}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if input.WithCounts {
-		opts.WithCounts = new(true)
-	}
-	if input.IncludeAncestorGroups {
-		opts.IncludeAncestorGroups = new(true)
-	}
-	if input.IncludeDescendantGroups {
-		opts.IncludeDescendantGroups = new(true)
-	}
-	if input.OnlyGroupLabels {
-		opts.OnlyGroupLabels = new(true)
-	}
-	if input.Page > 0 {
-		opts.Page = int64(input.Page)
-	}
-	if input.PerPage > 0 {
-		opts.PerPage = int64(input.PerPage)
-	}
+	opts := labeldata.NewGroupListOptions(input.Page, input.PerPage, input.Search, input.WithCounts, input.IncludeAncestorGroups, input.IncludeDescendantGroups, input.OnlyGroupLabels)
 
 	labels, resp, err := client.GL().GroupLabels.ListGroupLabels(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -248,28 +214,6 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Subscri
 }
 
 // toOutput converts a GitLab API [gl.GroupLabel] to MCP output format.
-func toOutput(l *gl.GroupLabel) Output {
-	priority, prioritySpecified := priorityFromNullable(l.Priority)
-	return Output{
-		ID:                     l.ID,
-		Name:                   l.Name,
-		Color:                  l.Color,
-		TextColor:              l.TextColor,
-		Description:            l.Description,
-		OpenIssuesCount:        l.OpenIssuesCount,
-		ClosedIssuesCount:      l.ClosedIssuesCount,
-		OpenMergeRequestsCount: l.OpenMergeRequestsCount,
-		Priority:               priority,
-		PrioritySpecified:      prioritySpecified,
-		IsProjectLabel:         l.IsProjectLabel,
-		Subscribed:             l.Subscribed,
-	}
-}
-
-// priorityFromNullable extracts the int64 value and whether GitLab returned priority.
-func priorityFromNullable(n gl.Nullable[int64]) (int64, bool) {
-	if !n.IsSpecified() || n.IsNull() {
-		return 0, false
-	}
-	return n.MustGet(), true
+func toOutput(label *gl.GroupLabel) Output {
+	return labeldata.GroupOutput(label)
 }

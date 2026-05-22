@@ -49,27 +49,19 @@ func snippetGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func snippetReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := snippetOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, snippetOptions(individualTool))
 }
 
 func snippetCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, snippetOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, snippetOptions(individualTool))
 }
 
 func snippetUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := snippetOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, snippetOptions(individualTool))
 }
 
 func snippetDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := snippetOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, snippetOptions(individualTool))
 }
 
 func snippetOptions(individualTool string) toolutil.ActionSpecOptions {

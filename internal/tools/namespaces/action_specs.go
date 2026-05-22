@@ -18,11 +18,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 func namespaceReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"user", "namespace"},
-		ReadOnly:       true,
-		Idempotent:     true,
 		OpenWorld:      true,
 		OwnerPackage:   "namespaces",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, options)
 }

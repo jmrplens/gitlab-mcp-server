@@ -93,25 +93,31 @@ func (h *Handler) completePromptArg(ctx context.Context, req *mcp.CompleteReques
 	case "milestone_id":
 		return h.completeWithProjectID(ctx, resolvedArgs, argValue, h.completeMilestoneID)
 	case "milestone":
-		// Prefer project scope; fall back to group scope when no project_id
-		// is resolved (e.g. group_milestone_progress prompt).
-		if pid, ok := resolvedArgs["project_id"]; ok && pid != "" {
-			return h.completeMilestoneTitle(ctx, pid, argValue)
-		}
-		if gid, ok := resolvedArgs["group_id"]; ok && gid != "" {
-			return h.completeGroupMilestoneTitle(ctx, gid, argValue)
-		}
-		return emptyResult(), nil
+		return h.completeMilestoneArgument(ctx, resolvedArgs, argValue)
 	case "job_id":
-		pid, hasPID := resolvedArgs["project_id"]
-		plID, hasPLID := resolvedArgs["pipeline_id"]
-		if hasPID && pid != "" && hasPLID && plID != "" {
-			return h.completeJobID(ctx, pid, plID, argValue)
-		}
-		return emptyResult(), nil
+		return h.completeJobArgument(ctx, resolvedArgs, argValue)
 	default:
 		return emptyResult(), nil
 	}
+}
+
+func (h *Handler) completeMilestoneArgument(ctx context.Context, resolvedArgs map[string]string, argValue string) (*mcp.CompleteResult, error) {
+	if pid, ok := resolvedArgs["project_id"]; ok && pid != "" {
+		return h.completeMilestoneTitle(ctx, pid, argValue)
+	}
+	if gid, ok := resolvedArgs["group_id"]; ok && gid != "" {
+		return h.completeGroupMilestoneTitle(ctx, gid, argValue)
+	}
+	return emptyResult(), nil
+}
+
+func (h *Handler) completeJobArgument(ctx context.Context, resolvedArgs map[string]string, argValue string) (*mcp.CompleteResult, error) {
+	pid, hasPID := resolvedArgs["project_id"]
+	plID, hasPLID := resolvedArgs["pipeline_id"]
+	if hasPID && pid != "" && hasPLID && plID != "" {
+		return h.completeJobID(ctx, pid, plID, argValue)
+	}
+	return emptyResult(), nil
 }
 
 // completeResourceArg completes parameters in resource URI templates.

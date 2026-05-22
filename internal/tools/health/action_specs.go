@@ -14,10 +14,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func healthSpec(name string, client *gitlabclient.Client, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, toolutil.RouteAction(client, Check), toolutil.ActionSpecOptions{
+	return toolutil.NewReadActionSpec(name, toolutil.RouteAction(client, Check), toolutil.ActionSpecOptions{
 		Tags:           []string{"server", "health", "diagnostics"},
-		ReadOnly:       true,
-		Idempotent:     true,
 		OpenWorld:      true,
 		OwnerPackage:   "health",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

@@ -118,9 +118,9 @@ Advanced options map to stdio environment variables written to `~/.gitlab-mcp-se
 | Ignore PAT scopes          | `GITLAB_IGNORE_SCOPES`   | Skips token scope detection and registers all tools.           |
 | Excluded tools             | `EXCLUDE_TOOLS`          | Omits comma-separated tool names from registration.            |
 | Upload max file size       | `UPLOAD_MAX_FILE_SIZE`   | Sets the maximum accepted upload/file size.                    |
-| Auto-update mode           | `AUTO_UPDATE`            | Applies, checks, or disables pre-start updates.                |
+| Auto-update mode           | `AUTO_UPDATE`            | Applies, checks, or disables background updates.               |
 | Auto-update repository     | `AUTO_UPDATE_REPO`       | Selects the GitHub release repository used for update checks.  |
-| Auto-update timeout        | `AUTO_UPDATE_TIMEOUT`    | Limits time spent on the pre-start update check.               |
+| Auto-update timeout        | `AUTO_UPDATE_TIMEOUT`    | Limits time spent on startup/background update checks.         |
 | Rate limit RPS             | `RATE_LIMIT_RPS`         | Sets the stdio tool-call rate limit; `0` disables it.          |
 | Rate limit burst           | `RATE_LIMIT_BURST`       | Sets token-bucket burst size when rate limiting is enabled.    |
 | YOLO mode                  | `YOLO_MODE`              | Skips selected local safety confirmations. Use carefully.      |

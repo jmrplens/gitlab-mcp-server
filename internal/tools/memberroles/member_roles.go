@@ -130,6 +130,12 @@ func buildCreateOpts(name string, baseLevel int, desc string, p Permissions) *gl
 	if desc != "" {
 		opts.Description = new(desc)
 	}
+	applyAdminPermissionOpts(opts, p)
+	applyManageReadRemovePermissionOpts(opts, p)
+	return opts
+}
+
+func applyAdminPermissionOpts(opts *gl.CreateMemberRoleOptions, p Permissions) {
 	if p.AdminCICDVariables != nil {
 		opts.AdminCICDVariables = p.AdminCICDVariables
 	}
@@ -157,6 +163,9 @@ func buildCreateOpts(name string, baseLevel int, desc string, p Permissions) *gl
 	if p.ArchiveProject != nil {
 		opts.ArchiveProject = p.ArchiveProject
 	}
+}
+
+func applyManageReadRemovePermissionOpts(opts *gl.CreateMemberRoleOptions, p Permissions) {
 	if p.ManageDeployTokens != nil {
 		opts.ManageDeployTokens = p.ManageDeployTokens
 	}
@@ -190,7 +199,6 @@ func buildCreateOpts(name string, baseLevel int, desc string, p Permissions) *gl
 	if p.RemoveProject != nil {
 		opts.RemoveProject = p.RemoveProject
 	}
-	return opts
 }
 
 // ListInstance returns all instance-level member roles.

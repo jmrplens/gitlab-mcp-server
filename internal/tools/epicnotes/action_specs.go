@@ -31,27 +31,19 @@ func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func epicNoteReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := epicNoteOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, epicNoteOptions(individualTool))
 }
 
 func epicNoteCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, epicNoteOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, epicNoteOptions(individualTool))
 }
 
 func epicNoteUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := epicNoteOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, epicNoteOptions(individualTool))
 }
 
 func epicNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := epicNoteOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, epicNoteOptions(individualTool))
 }
 
 func epicNoteOptions(individualTool string) toolutil.ActionSpecOptions {

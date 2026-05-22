@@ -7,7 +7,7 @@ package suite
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/boards"
@@ -54,7 +54,7 @@ func TestMeta_Boards(t *testing.T) {
 			"action": "board_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"board_id":   fmt.Sprintf("%d", boardID),
+				"board_id":   strconv.FormatInt(boardID, 10),
 			},
 		})
 		requireNoError(t, err, "board get")
@@ -68,7 +68,7 @@ func TestMeta_Boards(t *testing.T) {
 			"action": "board_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"board_id":   fmt.Sprintf("%d", boardID),
+				"board_id":   strconv.FormatInt(boardID, 10),
 			},
 		})
 		requireNoError(t, err, "board delete")

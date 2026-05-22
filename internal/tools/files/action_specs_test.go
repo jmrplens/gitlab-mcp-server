@@ -257,6 +257,16 @@ func fileMockHandler(w http.ResponseWriter, r *http.Request) {
 	content := base64.StdEncoding.EncodeToString([]byte("package main\n"))
 	path := r.URL.Path
 
+	if handleRepositoryFileContent(w, r, path, content) {
+		return
+	}
+	if handleRepositoryFileMetadata(w, r, path) {
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func handleRepositoryFileContent(w http.ResponseWriter, r *http.Request, path, content string) bool {
 	switch {
 	case r.Method == http.MethodGet && strings.HasSuffix(path, "/repository/files/main.go") && !strings.Contains(path, "/raw") && !strings.Contains(path, "/blame"):
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -276,13 +286,22 @@ func fileMockHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("raw content"))
+	default:
+		return false
+	}
+	return true
+}
+
+func handleRepositoryFileMetadata(w http.ResponseWriter, r *http.Request, path string) bool {
+	switch {
 	case r.Method == http.MethodHead && strings.Contains(path, "/repository/files/") && !strings.HasSuffix(path, "/raw"):
 		writeFileMetadataHeaders(w, fileMetadataHeaders{name: "main.go", path: "main.go", size: "13", blobID: "b1", commitID: "c1", sha: "sha", encoding: "base64", executable: "false"})
 	case r.Method == http.MethodHead && strings.HasSuffix(path, "/raw"):
 		writeFileMetadataHeaders(w, fileMetadataHeaders{name: "raw.go", path: "raw.go", size: "42", blobID: "b2", commitID: "c2", sha: "sha-raw", encoding: "text", executable: "true"})
 	default:
-		http.NotFound(w, r)
+		return false
 	}
+	return true
 }
 
 type fileMetadataHeaders struct {

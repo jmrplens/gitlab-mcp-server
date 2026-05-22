@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -80,8 +81,8 @@ func (ledger *ResourceLedger) Records() []ResourceRecord {
 }
 
 // CleanupAll runs registered cleanup actions in reverse registration order.
-func (ledger *ResourceLedger) CleanupAll(ctx context.Context, t testing.TB) []error {
-	t.Helper()
+func (ledger *ResourceLedger) CleanupAll(ctx context.Context, tb testing.TB) []error {
+	tb.Helper()
 
 	ledger.mu.Lock()
 	if ledger.cleaned {
@@ -100,11 +101,11 @@ func (ledger *ResourceLedger) CleanupAll(ctx context.Context, t testing.TB) []er
 		if err := record.Cleanup(ctx); err != nil {
 			failure := fmt.Errorf("cleanup %s: %w", record.redactedLabel(), err)
 			failures = append(failures, failure)
-			t.Logf("e2e cleanup failed: %v", failure)
+			tb.Logf("e2e cleanup failed: %v", failure)
 		}
 		if ctx.Err() != nil {
 			failures = append(failures, ctx.Err())
-			t.Logf("e2e cleanup stopped: %v", ctx.Err())
+			tb.Logf("e2e cleanup stopped: %v", ctx.Err())
 			break
 		}
 	}
@@ -181,7 +182,7 @@ func TestResourceLedger_RegisterIsConcurrentSafe(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for i := range 50 {
-		id := fmt.Sprintf("%d", i)
+		id := strconv.Itoa(i)
 		wg.Go(func() {
 			if err := ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: id}); err != nil {
 				t.Errorf("Register() error = %v, want nil", err)
@@ -203,7 +204,7 @@ func TestResourceLedger_RegisterIsConcurrentSafe(t *testing.T) {
 func TestResourceLedger_CleanupAllReportsFailures(t *testing.T) {
 	var ledger ResourceLedger
 	if err := ledger.Register(ResourceRecord{Kind: ResourceKindProject, ID: "1", Cleanup: func(context.Context) error {
-		return fmt.Errorf("delete failed")
+		return errors.New("delete failed")
 	}}); err != nil {
 		t.Fatalf("Register() error = %v, want nil", err)
 	}

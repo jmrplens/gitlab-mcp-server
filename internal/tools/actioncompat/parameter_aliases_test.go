@@ -116,10 +116,18 @@ func TestNormalizeParamsWithExplanation_CompatibilityBranches(t *testing.T) {
 		{
 			name:             "branch protection access levels normalize",
 			actionID:         "branch.protect",
-			params:           map[string]any{"push_access_level": "maintainer", "merge_access_level": float64(30)},
+			params:           map[string]any{"push_access_level": "maintainers", "merge_access_level": float64(30)},
 			schemaProperties: []string{"push_access_level", "merge_access_level"},
 			wantParams:       map[string]any{"push_access_level": 40, "merge_access_level": 30},
 			wantAliases:      []string{"push_access_level->push_access_level", "merge_access_level->merge_access_level"},
+		},
+		{
+			name:             "terraform state unlock id maps to name",
+			actionID:         "admin.terraform_state_unlock",
+			params:           map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "id": "eval-state"},
+			schemaProperties: []string{"project_id", "name"},
+			wantParams:       map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "name": "eval-state"},
+			wantAliases:      []string{"id->name"},
 		},
 		{
 			name:             "feature flag version alias maps",
@@ -244,6 +252,43 @@ func TestNormalizeParamsWithExplanation_NoChangeScenarios(t *testing.T) {
 			}
 			if len(explanations) != 0 {
 				t.Fatalf("explanations = %#v, want none", explanations)
+			}
+		})
+	}
+}
+
+// TestNormalizeParamsWithExplanation_AcceptedAliasCanonicalization verifies aliases can be normalized even when the schema still accepts the legacy field.
+func TestNormalizeParamsWithExplanation_AcceptedAliasCanonicalization(t *testing.T) {
+	tests := []struct {
+		name        string
+		actionID    string
+		params      map[string]any
+		wantParams  map[string]any
+		wantAliases []string
+	}{
+		{
+			name:        "pipeline schedule accepted name still canonicalizes",
+			actionID:    "pipeline.schedule_create",
+			params:      map[string]any{"name": "nightly"},
+			wantParams:  map[string]any{"description": "nightly"},
+			wantAliases: []string{"name->description"},
+		},
+		{
+			name:        "pipeline schedule description wins over accepted name",
+			actionID:    "pipeline.schedule_update",
+			params:      map[string]any{"name": "old", "description": "canonical"},
+			wantParams:  map[string]any{"description": "canonical"},
+			wantAliases: []string{"name->description"},
+		},
+	}
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			normalized, explanations := NormalizeParamsWithExplanation(testCase.actionID, testCase.params, schemaWithProperties("name", "description"))
+			if !reflect.DeepEqual(normalized, testCase.wantParams) {
+				t.Fatalf("normalized params = %#v, want %#v", normalized, testCase.wantParams)
+			}
+			if gotAliases := explanationAliases(explanations); !reflect.DeepEqual(gotAliases, testCase.wantAliases) {
+				t.Fatalf("explanations = %#v, want %#v", gotAliases, testCase.wantAliases)
 			}
 		})
 	}

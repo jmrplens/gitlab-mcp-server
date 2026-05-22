@@ -86,6 +86,29 @@ type gqlMutationPayload struct {
 	Errors        []string             `json:"errors"`
 }
 
+type vulnerabilityMutationResponse struct {
+	Data struct {
+		VulnerabilityDismiss          gqlMutationPayload `json:"vulnerabilityDismiss"`
+		VulnerabilityConfirm          gqlMutationPayload `json:"vulnerabilityConfirm"`
+		VulnerabilityResolve          gqlMutationPayload `json:"vulnerabilityResolve"`
+		VulnerabilityRevertToDetected gqlMutationPayload `json:"vulnerabilityRevertToDetected"`
+	} `json:"data"`
+}
+
+func runVulnerabilityMutation(ctx context.Context, client *gitlabclient.Client, operation, query, hint string, vars map[string]any, payload func(*vulnerabilityMutationResponse) gqlMutationPayload) (MutationOutput, error) {
+	var resp vulnerabilityMutationResponse
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{Query: query, Variables: vars}, &resp, gl.WithContext(ctx))
+	if err != nil {
+		return MutationOutput{}, toolutil.WrapErrWithHint(operation, err, hint)
+	}
+
+	result := payload(&resp)
+	if len(result.Errors) > 0 {
+		return MutationOutput{}, fmt.Errorf("%s: %s", operation, result.Errors[0])
+	}
+	return MutationOutput{Vulnerability: nodeToItem(result.Vulnerability)}, nil
+}
+
 // Dismiss.
 
 // DismissInput is the input for dismissing a vulnerability.
@@ -109,25 +132,9 @@ func Dismiss(ctx context.Context, client *gitlabclient.Client, input DismissInpu
 		vars["dismissalReason"] = input.DismissalReason
 	}
 
-	var resp struct {
-		Data struct {
-			VulnerabilityDismiss gqlMutationPayload `json:"vulnerabilityDismiss"`
-		} `json:"data"`
-	}
-
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     mutationDismiss,
-		Variables: vars,
-	}, &resp, gl.WithContext(ctx))
-	if err != nil {
-		return MutationOutput{}, toolutil.WrapErrWithHint("dismiss_vulnerability", err, "verify the vulnerability GID is valid and the vulnerability is in a dismissable state")
-	}
-
-	if len(resp.Data.VulnerabilityDismiss.Errors) > 0 {
-		return MutationOutput{}, fmt.Errorf("dismiss_vulnerability: %s", resp.Data.VulnerabilityDismiss.Errors[0])
-	}
-
-	return MutationOutput{Vulnerability: nodeToItem(resp.Data.VulnerabilityDismiss.Vulnerability)}, nil
+	return runVulnerabilityMutation(ctx, client, "dismiss_vulnerability", mutationDismiss,
+		"verify the vulnerability GID is valid and the vulnerability is in a dismissable state", vars,
+		func(resp *vulnerabilityMutationResponse) gqlMutationPayload { return resp.Data.VulnerabilityDismiss })
 }
 
 // Confirm.
@@ -143,25 +150,9 @@ func Confirm(ctx context.Context, client *gitlabclient.Client, input ConfirmInpu
 		return MutationOutput{}, toolutil.ErrRequiredString("confirm_vulnerability", "id")
 	}
 
-	var resp struct {
-		Data struct {
-			VulnerabilityConfirm gqlMutationPayload `json:"vulnerabilityConfirm"`
-		} `json:"data"`
-	}
-
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     mutationConfirm,
-		Variables: map[string]any{"id": input.ID},
-	}, &resp, gl.WithContext(ctx))
-	if err != nil {
-		return MutationOutput{}, toolutil.WrapErrWithHint("confirm_vulnerability", err, "verify the vulnerability GID is valid and the vulnerability is in a confirmable state")
-	}
-
-	if len(resp.Data.VulnerabilityConfirm.Errors) > 0 {
-		return MutationOutput{}, fmt.Errorf("confirm_vulnerability: %s", resp.Data.VulnerabilityConfirm.Errors[0])
-	}
-
-	return MutationOutput{Vulnerability: nodeToItem(resp.Data.VulnerabilityConfirm.Vulnerability)}, nil
+	return runVulnerabilityMutation(ctx, client, "confirm_vulnerability", mutationConfirm,
+		"verify the vulnerability GID is valid and the vulnerability is in a confirmable state", map[string]any{"id": input.ID},
+		func(resp *vulnerabilityMutationResponse) gqlMutationPayload { return resp.Data.VulnerabilityConfirm })
 }
 
 // Resolve.
@@ -177,25 +168,9 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 		return MutationOutput{}, toolutil.ErrRequiredString("resolve_vulnerability", "id")
 	}
 
-	var resp struct {
-		Data struct {
-			VulnerabilityResolve gqlMutationPayload `json:"vulnerabilityResolve"`
-		} `json:"data"`
-	}
-
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     mutationResolve,
-		Variables: map[string]any{"id": input.ID},
-	}, &resp, gl.WithContext(ctx))
-	if err != nil {
-		return MutationOutput{}, toolutil.WrapErrWithHint("resolve_vulnerability", err, "verify the vulnerability GID is valid and the vulnerability is in a resolvable state")
-	}
-
-	if len(resp.Data.VulnerabilityResolve.Errors) > 0 {
-		return MutationOutput{}, fmt.Errorf("resolve_vulnerability: %s", resp.Data.VulnerabilityResolve.Errors[0])
-	}
-
-	return MutationOutput{Vulnerability: nodeToItem(resp.Data.VulnerabilityResolve.Vulnerability)}, nil
+	return runVulnerabilityMutation(ctx, client, "resolve_vulnerability", mutationResolve,
+		"verify the vulnerability GID is valid and the vulnerability is in a resolvable state", map[string]any{"id": input.ID},
+		func(resp *vulnerabilityMutationResponse) gqlMutationPayload { return resp.Data.VulnerabilityResolve })
 }
 
 // Revert.
@@ -211,23 +186,9 @@ func Revert(ctx context.Context, client *gitlabclient.Client, input RevertInput)
 		return MutationOutput{}, toolutil.ErrRequiredString("revert_vulnerability", "id")
 	}
 
-	var resp struct {
-		Data struct {
-			VulnerabilityRevertToDetected gqlMutationPayload `json:"vulnerabilityRevertToDetected"`
-		} `json:"data"`
-	}
-
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query:     mutationRevert,
-		Variables: map[string]any{"id": input.ID},
-	}, &resp, gl.WithContext(ctx))
-	if err != nil {
-		return MutationOutput{}, toolutil.WrapErrWithHint("revert_vulnerability", err, "verify the vulnerability GID is valid and the vulnerability is in resolved or dismissed state")
-	}
-
-	if len(resp.Data.VulnerabilityRevertToDetected.Errors) > 0 {
-		return MutationOutput{}, fmt.Errorf("revert_vulnerability: %s", resp.Data.VulnerabilityRevertToDetected.Errors[0])
-	}
-
-	return MutationOutput{Vulnerability: nodeToItem(resp.Data.VulnerabilityRevertToDetected.Vulnerability)}, nil
+	return runVulnerabilityMutation(ctx, client, "revert_vulnerability", mutationRevert,
+		"verify the vulnerability GID is valid and the vulnerability is in resolved or dismissed state", map[string]any{"id": input.ID},
+		func(resp *vulnerabilityMutationResponse) gqlMutationPayload {
+			return resp.Data.VulnerabilityRevertToDetected
+		})
 }

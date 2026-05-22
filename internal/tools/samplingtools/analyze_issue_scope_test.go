@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/sampling"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuenotes"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestFormatIssueScopeForAnalysis verifies the Markdown output from issue scope data.

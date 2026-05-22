@@ -116,13 +116,16 @@ func ExtractHints(md string) []string {
 	}
 	section := after
 	var hints []string
+
+lines:
 	for line := range strings.SplitSeq(section, "\n") {
-		if strings.HasPrefix(line, "- ") {
+		switch {
+		case strings.HasPrefix(line, "- "):
 			hints = append(hints, line[2:])
-		} else if line == "" {
+		case line == "":
 			continue
-		} else {
-			break
+		default:
+			break lines
 		}
 	}
 	if len(hints) == 0 {

@@ -4,92 +4,69 @@ package groupanalytics
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
-// --- GetIssuesCount ---
+// --- Count handlers ---
 
-// TestGetIssuesCount validates the GetIssuesCount handler with table-driven
-// cases covering: successful retrieval, zero count, nested group paths,
-// missing group_path validation, context cancellation, and various API errors.
-func TestGetIssuesCount(t *testing.T) {
-	tests := []struct {
-		name       string
-		input      IssuesCountInput
-		cancelCtx  bool
-		mockStatus int
-		mockBody   string
-		wantErr    bool
-		wantCount  int64
-		wantGroup  string
-	}{
-		{
-			name:       "returns issues count for valid group",
-			input:      IssuesCountInput{GroupPath: "my-group"},
-			mockStatus: http.StatusOK,
-			mockBody:   `{"issues_count":42}`,
-			wantCount:  42,
-			wantGroup:  "my-group",
-		},
-		{
-			name:       "returns zero count",
-			input:      IssuesCountInput{GroupPath: "empty-group"},
-			mockStatus: http.StatusOK,
-			mockBody:   `{"issues_count":0}`,
-			wantCount:  0,
-			wantGroup:  "empty-group",
-		},
-		{
-			name:       "handles nested group path",
-			input:      IssuesCountInput{GroupPath: "parent/child/grandchild"},
-			mockStatus: http.StatusOK,
-			mockBody:   `{"issues_count":7}`,
-			wantCount:  7,
-			wantGroup:  "parent/child/grandchild",
-		},
-		{
-			name:    "returns error when group_path is empty",
-			input:   IssuesCountInput{},
-			wantErr: true,
-		},
-		{
-			name:      "returns error when context is cancelled",
-			input:     IssuesCountInput{GroupPath: "my-group"},
-			cancelCtx: true,
-			wantErr:   true,
-		},
-		{
-			name:       "returns error on 403 forbidden",
-			input:      IssuesCountInput{GroupPath: "forbidden-group"},
-			mockStatus: http.StatusForbidden,
-			mockBody:   `{"message":"403 Forbidden"}`,
-			wantErr:    true,
-		},
-		{
-			name:       "returns error on 404 not found",
-			input:      IssuesCountInput{GroupPath: "nonexistent"},
-			mockStatus: http.StatusNotFound,
-			mockBody:   `{"message":"404 Group Not Found"}`,
-			wantErr:    true,
-		},
-		{
-			name:       "returns error on 500 server error",
-			input:      IssuesCountInput{GroupPath: "error-group"},
-			mockStatus: http.StatusForbidden,
-			mockBody:   `{"message":"server error"}`,
-			wantErr:    true,
-		},
+type countHandlerCase struct {
+	name       string
+	groupPath  string
+	cancelCtx  bool
+	mockStatus int
+	mockBody   string
+	wantErr    bool
+	wantCount  int64
+}
+
+type countHandler struct {
+	name    string
+	path    string
+	jsonKey string
+	call    func(context.Context, *gitlabclient.Client, string) (int64, string, error)
+}
+
+// TestCountHandlers validates the GitLab group analytics count handlers.
+// It covers success, zero counts, nested group paths, missing input, context
+// cancellation, and API errors for issues, merge requests, and new members.
+func TestCountHandlers(t *testing.T) {
+	handlers := []countHandler{
+		{name: "issues", path: "/api/v4/analytics/group_activity/issues_count", jsonKey: "issues_count", call: callIssuesCount},
+		{name: "merge requests", path: "/api/v4/analytics/group_activity/merge_requests_count", jsonKey: "merge_requests_count", call: callMRCount},
+		{name: "members", path: "/api/v4/analytics/group_activity/new_members_count", jsonKey: "new_members_count", call: callMembersCount},
+	}
+
+	for _, handler := range handlers {
+		t.Run(handler.name, func(t *testing.T) {
+			runCountHandlerCases(t, handler)
+		})
+	}
+}
+
+func runCountHandlerCases(t *testing.T, handler countHandler) {
+	t.Helper()
+	tests := []countHandlerCase{
+		{name: "returns count for valid group", groupPath: "my-group", mockStatus: http.StatusOK, mockBody: countBody(handler.jsonKey, 42), wantCount: 42},
+		{name: "returns zero count", groupPath: "empty-group", mockStatus: http.StatusOK, mockBody: countBody(handler.jsonKey, 0), wantCount: 0},
+		{name: "handles nested group path", groupPath: "parent/child/grandchild", mockStatus: http.StatusOK, mockBody: countBody(handler.jsonKey, 7), wantCount: 7},
+		{name: "returns error when group_path is empty", wantErr: true},
+		{name: "returns error when context is cancelled", groupPath: "my-group", cancelCtx: true, wantErr: true},
+		{name: "returns error on 403 forbidden", groupPath: "forbidden-group", mockStatus: http.StatusForbidden, mockBody: `{"message":"403 Forbidden"}`, wantErr: true},
+		{name: "returns error on 404 not found", groupPath: "nonexistent", mockStatus: http.StatusNotFound, mockBody: `{"message":"404 Group Not Found"}`, wantErr: true},
+		{name: "returns error on 500 server error", groupPath: "error-group", mockStatus: http.StatusForbidden, mockBody: `{"message":"server error"}`, wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				testutil.AssertRequestMethod(t, r, http.MethodGet)
-				testutil.AssertRequestPath(t, r, "/api/v4/analytics/group_activity/issues_count")
+				testutil.AssertRequestPath(t, r, handler.path)
 				testutil.RespondJSON(w, tt.mockStatus, tt.mockBody)
 			}))
 
@@ -100,233 +77,40 @@ func TestGetIssuesCount(t *testing.T) {
 				cancel()
 			}
 
-			out, err := GetIssuesCount(ctx, client, tt.input)
+			count, groupPath, err := handler.call(ctx, client, tt.groupPath)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("GetIssuesCount() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("handler error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if tt.wantErr {
 				return
 			}
-			if out.IssuesCount != tt.wantCount {
-				t.Errorf("IssuesCount = %d, want %d", out.IssuesCount, tt.wantCount)
+			if count != tt.wantCount {
+				t.Errorf("count = %d, want %d", count, tt.wantCount)
 			}
-			if out.GroupPath != tt.wantGroup {
-				t.Errorf("GroupPath = %q, want %q", out.GroupPath, tt.wantGroup)
+			if groupPath != tt.groupPath {
+				t.Errorf("GroupPath = %q, want %q", groupPath, tt.groupPath)
 			}
 		})
 	}
 }
 
-// --- GetMRCount ---
-
-// TestGetMRCount validates the GetMRCount handler with table-driven cases
-// covering: successful retrieval, zero count, nested paths, missing input,
-// context cancellation, and API errors (403, 404, 500).
-func TestGetMRCount(t *testing.T) {
-	tests := []struct {
-		name       string
-		input      MRCountInput
-		cancelCtx  bool
-		mockStatus int
-		mockBody   string
-		wantErr    bool
-		wantCount  int64
-		wantGroup  string
-	}{
-		{
-			name:       "returns MR count for valid group",
-			input:      MRCountInput{GroupPath: "parent/child"},
-			mockStatus: http.StatusOK,
-			mockBody:   `{"merge_requests_count":17}`,
-			wantCount:  17,
-			wantGroup:  "parent/child",
-		},
-		{
-			name:       "returns zero MR count",
-			input:      MRCountInput{GroupPath: "quiet-group"},
-			mockStatus: http.StatusOK,
-			mockBody:   `{"merge_requests_count":0}`,
-			wantCount:  0,
-			wantGroup:  "quiet-group",
-		},
-		{
-			name:       "handles large count value",
-			input:      MRCountInput{GroupPath: "busy-group"},
-			mockStatus: http.StatusOK,
-			mockBody:   `{"merge_requests_count":99999}`,
-			wantCount:  99999,
-			wantGroup:  "busy-group",
-		},
-		{
-			name:    "returns error when group_path is empty",
-			input:   MRCountInput{},
-			wantErr: true,
-		},
-		{
-			name:      "returns error when context is cancelled",
-			input:     MRCountInput{GroupPath: "my-group"},
-			cancelCtx: true,
-			wantErr:   true,
-		},
-		{
-			name:       "returns error on 403 forbidden",
-			input:      MRCountInput{GroupPath: "forbidden"},
-			mockStatus: http.StatusForbidden,
-			mockBody:   `{"message":"403 Forbidden"}`,
-			wantErr:    true,
-		},
-		{
-			name:       "returns error on 404 not found",
-			input:      MRCountInput{GroupPath: "missing"},
-			mockStatus: http.StatusNotFound,
-			mockBody:   `{"message":"404 Not Found"}`,
-			wantErr:    true,
-		},
-		{
-			name:       "returns error on 500 server error",
-			input:      MRCountInput{GroupPath: "broken"},
-			mockStatus: http.StatusForbidden,
-			mockBody:   `{"message":"Internal Server Error"}`,
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodGet)
-				testutil.AssertRequestPath(t, r, "/api/v4/analytics/group_activity/merge_requests_count")
-				testutil.RespondJSON(w, tt.mockStatus, tt.mockBody)
-			}))
-
-			ctx := context.Background()
-			if tt.cancelCtx {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(ctx)
-				cancel()
-			}
-
-			out, err := GetMRCount(ctx, client, tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("GetMRCount() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr {
-				return
-			}
-			if out.MergeRequestsCount != tt.wantCount {
-				t.Errorf("MergeRequestsCount = %d, want %d", out.MergeRequestsCount, tt.wantCount)
-			}
-			if out.GroupPath != tt.wantGroup {
-				t.Errorf("GroupPath = %q, want %q", out.GroupPath, tt.wantGroup)
-			}
-		})
-	}
+func countBody(key string, count int64) string {
+	return fmt.Sprintf(`{"%s":%d}`, key, count)
 }
 
-// --- GetMembersCount ---
+func callIssuesCount(ctx context.Context, client *gitlabclient.Client, groupPath string) (int64, string, error) {
+	out, err := GetIssuesCount(ctx, client, IssuesCountInput{GroupPath: groupPath})
+	return out.IssuesCount, out.GroupPath, err
+}
 
-// TestGetMembersCount validates the GetMembersCount handler with table-driven
-// cases covering: successful retrieval, zero count, nested paths, missing input,
-// context cancellation, and API errors (403, 404, 500).
-func TestGetMembersCount(t *testing.T) {
-	tests := []struct {
-		name       string
-		input      MembersCountInput
-		cancelCtx  bool
-		mockStatus int
-		mockBody   string
-		wantErr    bool
-		wantCount  int64
-		wantGroup  string
-	}{
-		{
-			name:       "returns members count for valid group",
-			input:      MembersCountInput{GroupPath: "my-org"},
-			mockStatus: http.StatusOK,
-			mockBody:   `{"new_members_count":5}`,
-			wantCount:  5,
-			wantGroup:  "my-org",
-		},
-		{
-			name:       "returns zero members count",
-			input:      MembersCountInput{GroupPath: "stable-group"},
-			mockStatus: http.StatusOK,
-			mockBody:   `{"new_members_count":0}`,
-			wantCount:  0,
-			wantGroup:  "stable-group",
-		},
-		{
-			name:       "handles deeply nested group path",
-			input:      MembersCountInput{GroupPath: "a/b/c/d"},
-			mockStatus: http.StatusOK,
-			mockBody:   `{"new_members_count":3}`,
-			wantCount:  3,
-			wantGroup:  "a/b/c/d",
-		},
-		{
-			name:    "returns error when group_path is empty",
-			input:   MembersCountInput{},
-			wantErr: true,
-		},
-		{
-			name:      "returns error when context is cancelled",
-			input:     MembersCountInput{GroupPath: "my-org"},
-			cancelCtx: true,
-			wantErr:   true,
-		},
-		{
-			name:       "returns error on 403 forbidden",
-			input:      MembersCountInput{GroupPath: "private"},
-			mockStatus: http.StatusForbidden,
-			mockBody:   `{"message":"403 Forbidden"}`,
-			wantErr:    true,
-		},
-		{
-			name:       "returns error on 404 not found",
-			input:      MembersCountInput{GroupPath: "gone"},
-			mockStatus: http.StatusNotFound,
-			mockBody:   `{"message":"Not Found"}`,
-			wantErr:    true,
-		},
-		{
-			name:       "returns error on 500 server error",
-			input:      MembersCountInput{GroupPath: "broken"},
-			mockStatus: http.StatusForbidden,
-			mockBody:   `{"message":"Internal Server Error"}`,
-			wantErr:    true,
-		},
-	}
+func callMRCount(ctx context.Context, client *gitlabclient.Client, groupPath string) (int64, string, error) {
+	out, err := GetMRCount(ctx, client, MRCountInput{GroupPath: groupPath})
+	return out.MergeRequestsCount, out.GroupPath, err
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodGet)
-				testutil.AssertRequestPath(t, r, "/api/v4/analytics/group_activity/new_members_count")
-				testutil.RespondJSON(w, tt.mockStatus, tt.mockBody)
-			}))
-
-			ctx := context.Background()
-			if tt.cancelCtx {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithCancel(ctx)
-				cancel()
-			}
-
-			out, err := GetMembersCount(ctx, client, tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("GetMembersCount() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr {
-				return
-			}
-			if out.NewMembersCount != tt.wantCount {
-				t.Errorf("NewMembersCount = %d, want %d", out.NewMembersCount, tt.wantCount)
-			}
-			if out.GroupPath != tt.wantGroup {
-				t.Errorf("GroupPath = %q, want %q", out.GroupPath, tt.wantGroup)
-			}
-		})
-	}
+func callMembersCount(ctx context.Context, client *gitlabclient.Client, groupPath string) (int64, string, error) {
+	out, err := GetMembersCount(ctx, client, MembersCountInput{GroupPath: groupPath})
+	return out.NewMembersCount, out.GroupPath, err
 }
 
 // --- Markdown Formatters ---

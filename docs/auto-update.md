@@ -1,6 +1,6 @@
 # Auto-Update
 
-gitlab-mcp-server can automatically detect, download, and apply new releases from a GitHub repository. Updates are fetched from the GitHub Releases API, validated with a `checksums.txt` file, and applied using a **rename trick** — the running binary is renamed to `.old`, the new binary is placed at the original path, and on Unix the process re-executes itself seamlessly via `syscall.Exec`. On Windows, the new binary is ready at the original path and takes effect on the next restart. Old `.old` files are cleaned up automatically at startup.
+gitlab-mcp-server can automatically detect, download, and apply new releases from a GitHub repository. Updates are fetched from the GitHub Releases API, validated with a `checksums.txt` file, and applied using a **rename trick** — the running binary is renamed to `.old` and the new binary is placed at the original path. The running MCP process keeps serving; restart it to use the new binary. Old `.old` files are cleaned up automatically at startup.
 
 > **Diátaxis type**: Explanation
 > **Audience**: 👤🔧 All users
@@ -14,28 +14,25 @@ gitlab-mcp-server can automatically detect, download, and apply new releases fro
 ```mermaid
 sequenceDiagram
     participant Server as gitlab-mcp-server
+    participant Update as Background update goroutine
     participant GitHub as GitHub Releases API
     participant FS as File System
 
     Server->>Server: CleanupOldBinary() — remove .old from previous update
-    Server->>Server: JustUpdated()? Skip check (re-exec guard)
-    Server->>GitHub: GET /repos/:owner/:repo/releases/latest
-    GitHub-->>Server: Release metadata + asset URLs
+    Server->>Update: Start startup check in background
+    Server->>Server: Continue MCP startup immediately
+    Update->>Update: JustUpdated()? Skip check (re-exec guard)
+    Update->>GitHub: GET /repos/:owner/:repo/releases/latest
+    GitHub-->>Update: Release metadata + asset URLs
     alt Update available
-        Server->>GitHub: Download binary asset
-        GitHub-->>Server: Binary data
-        Server->>FS: Write to .tmp staging file
-        Server->>FS: Rename current → .old (rename trick)
-        Server->>FS: Rename .tmp → current path
-        alt Unix (Linux/macOS)
-            Server->>Server: Set PE_MCP_JUST_UPDATED=1
-            Server->>Server: syscall.Exec(self) — same PID, same pipes
-            Note right of Server: Process image replaced,<br/>new code running instantly
-        else Windows
-            Server->>Server: Log "update will take effect on next restart"
-        end
+        Update->>GitHub: Download binary asset
+        GitHub-->>Update: Binary data
+        Update->>FS: Write to .tmp staging file
+        Update->>FS: Rename current → .old (rename trick)
+        Update->>FS: Rename .tmp → current path
+        Update->>Server: Log restart advisory
     else Up to date
-        Server->>Server: Log "server is up to date"
+        Update->>Server: Log "server is up to date"
     end
 ```
 
@@ -43,10 +40,10 @@ The update mechanism uses [creativeprojects/go-selfupdate](https://github.com/cr
 
 - **GitHub Releases**: Auto-update fetches releases from the GitHub repository configured via `AUTO_UPDATE_REPO` (default: `jmrplens/gitlab-mcp-server`).
 - **Rename trick**: The running binary is renamed to `.old` (allowed even on Windows where executables are locked), and the new binary is placed at the original path. This eliminates the need for deferred scripts or manual intervention.
-- **Unix seamless re-exec**: On Linux/macOS, after replacing the binary, the process calls `syscall.Exec()` which replaces the process image in-place — the PID stays the same, stdin/stdout file descriptors are preserved, and the MCP client sees no interruption.
-- **Windows next-restart**: On Windows, `syscall.Exec` is not available (it creates a new process, losing stdio pipes). The new binary is ready at the original path and activates on the next server restart.
+- **Non-blocking stdio startup**: In stdio mode, release detection and downloads run in a background goroutine so MCP tool negotiation is not delayed by update I/O.
+- **Next-restart activation**: The new binary is ready at the original path after a successful background update. The current MCP process keeps running the old code until it is restarted.
 - **External updater integration (`--shutdown`)**: An external store app (pe-agnostic-store) can invoke `gitlab-mcp-server --shutdown` to terminate all running instances before replacing the binary on disk. This flag finds matching processes by name, sends a graceful termination signal, waits up to 5 seconds, and force-kills any remaining. Uses [gopsutil](https://github.com/shirou/gopsutil) for cross-platform process listing (Linux, macOS, Windows). No admin/root permissions required.
-- **Re-exec loop prevention**: An environment variable `PE_MCP_JUST_UPDATED=1` is set before re-exec and cleared on the new process startup, preventing infinite update loops.
+- **Re-exec loop prevention**: The legacy pre-start flow uses the `MCP_JUST_UPDATED=1` environment variable before re-exec and clears it on the new process startup, preventing infinite update loops.
 - **Old binary cleanup**: At startup, `CleanupOldBinary()` removes any leftover `.old` file from a previous update.
 - **Checksum validation**: Each release must include a `checksums.txt` asset (goreleaser format) containing SHA-256 hashes for all platform binaries.
 - **Platform detection**: The library automatically selects the correct binary for the running OS and architecture (`{name}-{goos}-{goarch}`).
@@ -67,42 +64,32 @@ Accepted aliases: `1`/`yes` for true, `0`/`no` for false. The value is case-inse
 
 ### Stdio Mode
 
-When running as a stdio server (the default), auto-update runs as a **pre-start update** with a configurable timeout (default: 60 seconds), **before** the MCP server logic begins:
+When running as a stdio server (the default), auto-update runs as a **background startup check** with a configurable timeout (default: 60 seconds). The check is scheduled during startup, but MCP server construction and stdio transport startup continue immediately:
 
 1. `CleanupOldBinary()` — remove leftover `.old` file from a previous update.
 2. Parse `AUTO_UPDATE` mode from environment variables.
-3. Check `PE_MCP_JUST_UPDATED` — if set, skip the update check (re-exec guard) and clear the variable.
-4. Create an `Updater` with the GitHub source and `AUTO_UPDATE_REPO`.
-5. Call `PreStartUpdate()`:
-   - If mode is `true` and a newer release exists → download to `.tmp`, rename current to `.old`, move `.tmp` to original path.
-   - **Unix**: Set `PE_MCP_JUST_UPDATED=1` → call `syscall.Exec(self)` → the process image is replaced with the new binary, same PID, same stdin/stdout pipes. The new binary starts, sees the guard, skips the update check, and proceeds to serve.
-   - **Windows**: Log "update will take effect on next restart". The new binary is already at the original path.
-   - If mode is `check` → log the available version without applying.
-6. Continue with normal server startup regardless of update outcome.
+3. Check `MCP_JUST_UPDATED` — if set, skip the update check (re-exec guard) and clear the variable.
+4. Launch the startup update check in a goroutine using `AUTO_UPDATE_TIMEOUT`.
+5. Continue with normal MCP server startup without waiting for release detection or downloads.
+6. In the background goroutine:
+    - If mode is `true` and a newer release exists → download and apply it, then log a restart advisory.
+    - If mode is `check` → log the available version without applying.
+    - If no update is available → log that the server is up to date.
 
-The startup check is **non-fatal**: any error (network timeout, invalid token, missing releases) is logged as a warning and does not prevent the server from starting.
+The startup check is **non-blocking and non-fatal**: any error (network timeout, invalid token, missing releases) is logged as a warning and does not prevent the server from starting or accepting MCP requests.
 
 ```text
 INFO autoupdate: server is up to date  version=1.1.7
 ```
 
-or (Unix — seamless re-exec):
+or (background update applied):
 
 ```text
-INFO autoupdate: new version available  current_version=1.1.7 latest_version=1.2.0
-INFO autoupdate: binary updated on disk  new_version=1.2.0
-INFO autoupdate: re-executing with new binary  new_version=1.2.0
-INFO autoupdate: skipping update check (just re-executed after update)
-INFO starting MCP server  transport=stdio version=1.2.0
-```
-
-or (Windows — next restart):
-
-```text
-INFO autoupdate: new version available  current_version=1.1.7 latest_version=1.2.0
-INFO autoupdate: binary updated on disk  new_version=1.2.0
-INFO autoupdate: update will take effect on next restart  new_version=1.2.0
+INFO autoupdate: starting startup check in background  mode=true repository=jmrplens/gitlab-mcp-server current_version=1.1.7
 INFO starting MCP server  transport=stdio version=1.1.7
+INFO autoupdate: new version available  current_version=1.1.7 latest_version=1.2.0
+INFO autoupdate: update applied  new_version=1.2.0
+INFO autoupdate: binary updated in background — restart the server to use the new version  new_version=1.2.0
 ```
 
 ### HTTP Mode
@@ -124,23 +111,23 @@ When running as an HTTP server (`--http`), auto-update runs as a **background pe
 
 ### Environment Variables (Stdio Mode)
 
-| Variable               | Default                      | Description                                            |
-| ---------------------- | ---------------------------- | ------------------------------------------------------ |
-| `AUTO_UPDATE`          | `true`                       | Update mode: `true`, `check`, or `false`               |
-| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets |
-| `AUTO_UPDATE_INTERVAL` | `1h`                         | Check interval (used by HTTP mode periodic checks)     |
-| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout for pre-start update download (range: 5s–10m)  |
+| Variable               | Default                      | Description                                                  |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------ |
+| `AUTO_UPDATE`          | `true`                       | Update mode: `true`, `check`, or `false`                     |
+| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets       |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Check interval (used by HTTP mode periodic checks)           |
+| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout for startup/background update checks (range: 5s–10m) |
 
 Auto-update uses the GitHub Releases API via `AUTO_UPDATE_REPO`. It does **not** use the user's `GITLAB_URL`, `GITLAB_TOKEN`, or `GITLAB_SKIP_TLS_VERIFY`.
 
 ### CLI Flags (HTTP Mode)
 
-| Flag                     | Default                      | Description                                            |
-| ------------------------ | ---------------------------- | ------------------------------------------------------ |
-| `--auto-update`          | `true`                       | Update mode: `true`, `check`, or `false`               |
-| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets |
-| `--auto-update-interval` | `1h`                         | Interval between periodic update checks                |
-| `--auto-update-timeout`  | `60s`                        | Timeout for pre-start update download (range: 5s–10m)  |
+| Flag                     | Default                      | Description                                                  |
+| ------------------------ | ---------------------------- | ------------------------------------------------------------ |
+| `--auto-update`          | `true`                       | Update mode: `true`, `check`, or `false`                     |
+| `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets       |
+| `--auto-update-interval` | `1h`                         | Interval between periodic update checks                      |
+| `--auto-update-timeout`  | `60s`                        | Timeout for startup/background update checks (range: 5s–10m) |
 
 Auto-update uses the GitHub Releases API, so `--gitlab-url` and `--skip-tls-verify` do **not** affect auto-update behaviour.
 
@@ -255,18 +242,16 @@ Download and apply the latest MCP server update. The binary is replaced using th
 graph TD
     subgraph "cmd/server/main.go"
         A0[CleanupOldBinary] --> A
-        A[runStdio] -->|pre-start| B[preStartAutoUpdate]
+        A[runStdio] -->|background startup| B[startStdioAutoUpdate]
         A -->|creates| C[newUpdaterForTools]
         D0[CleanupOldBinary] --> D
         D[runHTTP] -->|background| E[startAutoUpdate]
     end
 
     subgraph "internal/autoupdate"
-        B --> F[PreStartUpdate]
+        B --> F[Updater.CheckOnce]
         F --> H[CheckForUpdate]
-        F --> P[downloadToStaging]
-        F --> Q[replaceExecutable]
-        F -->|Unix| R[ExecSelf — syscall.Exec]
+        F --> I[ApplyUpdate]
         E --> G[Updater.StartPeriodicCheck]
         G --> H
         G --> I[ApplyUpdate]
@@ -292,14 +277,14 @@ graph TD
 
 ### Package Responsibilities
 
-| Package                               | Role                                                                                                                             |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `internal/autoupdate`                 | Core update logic: detect releases, download, rename trick replacement, re-exec (Unix), old binary cleanup. Transport-agnostic.  |
-| `internal/autoupdate/exec_unix.go`    | `ExecSelf()` — `syscall.Exec` to re-exec the process (same PID, same FDs). Build tag: `!windows`.                                |
-| `internal/autoupdate/exec_windows.go` | `ExecSelf()` — stub returning an error (exec not supported). Build tag: `windows`.                                               |
-| `internal/autoupdate/prestart.go`     | `PreStartUpdate()` — pre-start flow: check → download → rename → exec/log.                                                       |
-| `internal/tools/serverupdate`         | MCP tool wrappers exposing `Check` and `Apply` as MCP tools with Markdown formatting.                                            |
-| `cmd/server/main.go`                  | Wiring: calls `CleanupOldBinary()` and `preStartAutoUpdate` (stdio), `startAutoUpdate` (HTTP), `newUpdaterForTools` (MCP tools). |
+| Package                               | Role                                                                                                                                      |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `internal/autoupdate`                 | Core update logic: detect releases, download, rename trick replacement, optional re-exec helpers, old binary cleanup. Transport-agnostic. |
+| `internal/autoupdate/exec_unix.go`    | `ExecSelf()` — `syscall.Exec` to re-exec the process (same PID, same FDs). Build tag: `!windows`.                                         |
+| `internal/autoupdate/exec_windows.go` | `ExecSelf()` — stub returning an error (exec not supported). Build tag: `windows`.                                                        |
+| `internal/autoupdate/prestart.go`     | `PreStartUpdate()` — lower-level pre-start flow: check → download → rename → exec/log.                                                    |
+| `internal/tools/serverupdate`         | MCP tool wrappers exposing `Check` and `Apply` as MCP tools with Markdown formatting.                                                     |
+| `cmd/server/main.go`                  | Wiring: calls `CleanupOldBinary()`, `startStdioAutoUpdate` (stdio), `startAutoUpdate` (HTTP), and `newUpdaterForTools` (MCP tools).       |
 
 ## Release Requirements
 
@@ -332,18 +317,18 @@ The Makefile `release` target generates the binaries and checksum file automatic
 
 ## Troubleshooting
 
-| Symptom                                                                    | Cause                                                 | Solution                                                                               |
-| -------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `autoupdate: current version is required (binary built without -ldflags?)` | Binary built without version injection                | Build with `make build` or add `-ldflags "-X main.version=1.2.0"`                      |
-| `autoupdate: repository is required`                                       | `AUTO_UPDATE_REPO` is empty                           | Set `AUTO_UPDATE_REPO` or use the default                                              |
-| `autoupdate: creating GitHub source`                                       | Network error reaching GitHub API                     | Verify network connectivity to `github.com`                                            |
-| `autoupdate: detecting latest release`                                     | No releases in repository, or token lacks permissions | Create a release or check token permissions                                            |
-| `autoupdate: startup check failed`                                         | Network timeout (`AUTO_UPDATE_TIMEOUT`, default 60s)  | Check network connectivity or increase `AUTO_UPDATE_TIMEOUT`; the server starts anyway |
-| `autoupdate: could not initialize periodic updater`                        | Missing required config in HTTP mode                  | Verify `--auto-update-repo` flag and network connectivity                              |
-| Update detected but not applied                                            | Mode is `check`                                       | Set `AUTO_UPDATE=true` to enable automatic application                                 |
-| Server still runs old version after update (Windows)                       | Binary replaced but process not restarted             | Restart the server process (Windows only — Unix re-execs automatically)                |
-| `autoupdate: exec-self failed`                                             | `syscall.Exec` failed on Unix                         | Server continues with old code; restart manually                                       |
-| `autoupdate: skipping update check (just re-executed after update)`        | Normal: re-exec guard preventing loop                 | No action needed — this is expected after a successful update                          |
+| Symptom                                                                     | Cause                                                 | Solution                                                                               |
+| --------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `autoupdate: current version is required (binary built without -ldflags?)`  | Binary built without version injection                | Build with `make build` or add `-ldflags "-X main.version=1.2.0"`                      |
+| `autoupdate: repository is required`                                        | `AUTO_UPDATE_REPO` is empty                           | Set `AUTO_UPDATE_REPO` or use the default                                              |
+| `autoupdate: creating GitHub source`                                        | Network error reaching GitHub API                     | Verify network connectivity to `github.com`                                            |
+| `autoupdate: detecting latest release`                                      | No releases in repository, or token lacks permissions | Create a release or check token permissions                                            |
+| `autoupdate: startup background check failed`                               | Network timeout (`AUTO_UPDATE_TIMEOUT`, default 60s)  | Check network connectivity or increase `AUTO_UPDATE_TIMEOUT`; the server keeps running |
+| `autoupdate: could not initialize periodic updater`                         | Missing required config in HTTP mode                  | Verify `--auto-update-repo` flag and network connectivity                              |
+| Update detected but not applied                                             | Mode is `check`                                       | Set `AUTO_UPDATE=true` to enable automatic application                                 |
+| Server still runs old version after background update                       | Binary replaced but current process keeps running     | Restart the server process to use the new binary                                       |
+| `autoupdate: exec-self failed`                                              | `syscall.Exec` failed on Unix                         | Server continues with old code; restart manually                                       |
+| `autoupdate: skipping startup update check (just re-executed after update)` | Normal: re-exec guard preventing loop                 | No action needed                                                                       |
 
 ## Disabling Auto-Update
 

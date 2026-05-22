@@ -47,7 +47,7 @@ func TestCleanupOldBinary_RemovesOldFile(t *testing.T) {
 	exe := stubExecutablePath(t)
 	oldPath := exe + ".old"
 
-	if err := os.WriteFile(oldPath, []byte("old"), 0o644); err != nil {
+	if err := os.WriteFile(oldPath, []byte("old"), 0o600); err != nil {
 		t.Fatalf("cannot create .old file: %v", err)
 	}
 
@@ -70,10 +70,10 @@ func TestCleanupOldBinary_NoOldFile(t *testing.T) {
 func TestCleanupOldBinary_RemoveError(t *testing.T) {
 	exe := stubExecutablePath(t)
 	oldPath := exe + ".old"
-	if err := os.Mkdir(oldPath, 0o755); err != nil {
+	if err := os.Mkdir(oldPath, 0o750); err != nil {
 		t.Fatalf("cannot create .old directory: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(oldPath, "nested"), []byte("stale"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(oldPath, "nested"), []byte("stale"), 0o600); err != nil {
 		t.Fatalf("cannot create nested stale file: %v", err)
 	}
 
@@ -91,10 +91,10 @@ func TestReplaceExecutable_Success(t *testing.T) {
 	fakeCurrent := filepath.Join(dir, "current")
 	fakeTmp := filepath.Join(dir, "current.tmp")
 
-	if err := os.WriteFile(fakeCurrent, []byte("v1"), 0o755); err != nil {
+	if err := os.WriteFile(fakeCurrent, []byte("v1"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(fakeTmp, []byte("v2"), 0o755); err != nil {
+	if err := os.WriteFile(fakeTmp, []byte("v2"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -237,7 +237,7 @@ func TestReplaceExecutable_FileContentSwap(t *testing.T) {
 	tmpPath := exe + ".tmp"
 	newContent := fakeBinary()
 
-	if err := os.WriteFile(tmpPath, newContent, 0o755); err != nil {
+	if err := os.WriteFile(tmpPath, newContent, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -300,10 +300,10 @@ func TestReplaceExecutable_LeftoverOldRemoved(t *testing.T) {
 	oldPath := exe + ".old"
 	tmpPath := exe + ".tmp"
 
-	if err := os.WriteFile(oldPath, []byte("stale-leftover"), 0o755); err != nil {
+	if err := os.WriteFile(oldPath, []byte("stale-leftover"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(tmpPath, fakeBinary(), 0o755); err != nil {
+	if err := os.WriteFile(tmpPath, fakeBinary(), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -549,7 +549,7 @@ func TestPreStartUpdate_ReplaceError(t *testing.T) {
 	// (replaceExecutable) fails, preventing the rename.
 	dir := t.TempDir()
 	fakeBin := filepath.Join(dir, "gitlab-mcp-server")
-	if err := os.WriteFile(fakeBin, []byte("fake-binary"), 0o755); err != nil {
+	if err := os.WriteFile(fakeBin, []byte("fake-binary"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -727,7 +727,7 @@ func TestReplaceExecutable_FirstRenameFails(t *testing.T) {
 	t.Cleanup(func() { resolveExecutable = orig })
 
 	tmpPath := filepath.Join(dir, "staged.tmp")
-	if err := os.WriteFile(tmpPath, fakeBinary(), 0o755); err != nil {
+	if err := os.WriteFile(tmpPath, fakeBinary(), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

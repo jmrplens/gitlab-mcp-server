@@ -11,11 +11,11 @@ Meta-tools are an explicit operating mode of GitLab MCP Server, enabled with `TO
 
 ## Why meta-tools?
 
-LLMs have limited context windows. When an MCP server registers hundreds of individual tools (up to 1022 on GitLab.com Enterprise/Premium), the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
+LLMs have limited context windows. When an MCP server registers hundreds of individual tools (up to 1031 on GitLab.com Enterprise/Premium), the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
 
 | Mode              | Tool Count        | Token Overhead | Functionality           |
 | ----------------- | ----------------- | -------------- | ----------------------- |
-| Individual        | 866 / 1017 / 1022 | Very high      | Full                    |
+| Individual        | 866 / 1025 / 1031 | Very high      | Full                    |
 | Meta (base)       | 33                | Low            | Full                    |
 | Meta (enterprise) | 49 / 50           | Low            | Full + Premium/Ultimate |
 

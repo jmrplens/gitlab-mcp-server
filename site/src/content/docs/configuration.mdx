@@ -60,7 +60,7 @@ For deployments using the dynamic tool surface where resources and prompts domin
 | `AUTO_UPDATE`          | `true`                       | Auto-update behavior: `true` (apply on start), `check` (notify only), `false` (disabled) |
 | `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                     |
 | `AUTO_UPDATE_INTERVAL` | `1h`                         | Periodic check interval (HTTP mode only)                                                 |
-| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Pre-start download timeout (range: 5s–10m)                                               |
+| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Startup/background update timeout (range: 5s–10m)                                        |
 
 ## Admin options
 
@@ -279,7 +279,7 @@ When running in HTTP mode (`--http`), configuration uses CLI flags instead of en
 | `--auto-update`          | `true`                       | Auto-update mode                                                                                                                                                                     |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub release repository                                                                                                                                                            |
 | `--auto-update-interval` | `1h`                         | Periodic update check interval                                                                                                                                                       |
-| `--auto-update-timeout`  | `60s`                        | Pre-start download timeout (5s–10m)                                                                                                                                                  |
+| `--auto-update-timeout`  | `60s`                        | Startup/background update timeout (5s–10m)                                                                                                                                           |
 | `--auth-mode`            | `legacy`                     | Authentication mode: `legacy` or `oauth`                                                                                                                                             |
 | `--oauth-cache-ttl`      | `15m`                        | OAuth token identity cache TTL (1m–2h)                                                                                                                                               |
 | `--revalidate-interval`  | `15m`                        | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                      |

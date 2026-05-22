@@ -22,102 +22,154 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client, session *mcp.ClientSession, task evalTask, toolSurface string) (evalTask, error) {
-	switch task.ID {
-	case "MT-008":
+type liveAttemptResourceHandler func(context.Context, *gitlabclient.Client, *mcp.ClientSession, evalTask, string) (evalTask, error)
+
+var liveAttemptResourceHandlers = map[string]liveAttemptResourceHandler{
+	"MT-008": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveSubgroupDeleteTarget(ctx, client, task)
-	case "MT-013":
+	},
+	"MT-013": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveIssueDeleteTarget(ctx, client, task)
-	case "MT-017":
+	},
+	"MT-017": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveMergeRequestMergeTarget(ctx, client, task)
-	case "MT-027":
+	},
+	"MT-027": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveProjectVariableUpdateTarget(ctx, client, task.Prompt)
-	case "MT-028":
+	},
+	"MT-028": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveProjectVariableDeleteTarget(ctx, client, task.Prompt)
-	case "MT-015":
+	},
+	"MT-015": func(ctx context.Context, _ *gitlabclient.Client, session *mcp.ClientSession, task evalTask, toolSurface string) (evalTask, error) {
 		if session == nil {
 			return task, errors.New("prepare MT-015 fixture requires an MCP session")
 		}
 		return task, ensureLiveMergeRequestSource(ctx, session, task.Prompt, toolSurface)
-	case "MT-081":
+	},
+	"MT-081": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveInteractiveMergeRequestTarget(ctx, client, task.Prompt)
-	case "MT-083":
+	},
+	"MT-083": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveInteractiveReleaseTarget(ctx, client, task.Prompt)
-	case "MT-031":
+	},
+	"MT-031": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveRepositoryFileDeleteTarget(ctx, client, task.Prompt)
-	case "MT-035":
+	},
+	"MT-035": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveMilestoneDeleteTarget(ctx, client, task)
-	case "MT-037":
+	},
+	"MT-037": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
-	case "MT-044":
+	},
+	"MT-044": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLivePackageDeleteTarget(ctx, client, task)
-	case "MT-049":
+	},
+	"MT-049": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveEnvironmentStopTarget(ctx, client, task)
-	case "MT-054":
+	},
+	"MT-054": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveBroadcastMessageDeleteTarget(ctx, client, task)
-	case "MT-063":
+	},
+	"MT-063": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveDraftNotePublishAllTarget(ctx, client, task)
-	case "MT-066":
+	},
+	"MT-066": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveJobTokenScopeRemoveProjectTarget(ctx, client, task)
-	case "MT-107":
+	},
+	"MT-107": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveCustomEmojiDeleteTarget(ctx, client, task)
-	case "MT-114":
+	},
+	"MT-114": func(ctx context.Context, _ *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveTerraformStateUnlockTarget(ctx, task)
-	case "MT-116":
+	},
+	"MT-116": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveMirrorForcePushTarget(ctx, client, task)
-	case "MS-004":
+	},
+	"MS-004": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
-	case "MS-007":
+	},
+	"MS-007": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLivePackageDeleteTarget(ctx, client, task)
-	case "MS-013":
+	},
+	"MS-013": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveFeatureFlagDeleteTarget(ctx, client, task.Prompt)
-	case "MT-047":
+	},
+	"MT-047": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveRunnerRemoveTarget(ctx, client, task)
-	case "MT-051":
+	},
+	"MT-051": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveSnippetDeleteTarget(ctx, client, task)
-	case "MT-057":
+	},
+	"MT-057": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveHookDeleteTarget(ctx, client, task)
-	case "MT-023", "MT-024", "MT-065":
+	},
+	"MT-023": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveFailedJobTarget(ctx, client, task)
-	}
-	switch task.ID {
-	case "MT-059":
+	},
+	"MT-024": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
+		return ensureLiveFailedJobTarget(ctx, client, task)
+	},
+	"MT-065": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
+		return ensureLiveFailedJobTarget(ctx, client, task)
+	},
+	"MT-059": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveBadgeDeleteTarget(ctx, client, task)
-	case "MT-099":
+	},
+	"MT-099": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveBranchDeleteTarget(ctx, client, task.Prompt)
-	case "MT-100":
+	},
+	"MT-100": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveTagDeleteTarget(ctx, client, task.Prompt)
-	case "MT-101":
+	},
+	"MT-101": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLivePipelineDeleteTarget(ctx, client, task)
-	case "MT-102":
+	},
+	"MT-102": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLivePipelineTriggerDeleteTarget(ctx, client, task)
-	case "MT-103":
+	},
+	"MT-103": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLivePipelineScheduleDeleteTarget(ctx, client, task)
-	case "MT-106":
+	},
+	"MT-106": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveFeatureFlagDeleteTarget(ctx, client, task.Prompt)
-	case "MT-108":
+	},
+	"MT-108": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveWikiDeleteTarget(ctx, client, task.Prompt)
-	case "MT-109":
+	},
+	"MT-109": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveMRAwardDeleteTarget(ctx, client, task)
-	case "MT-110":
+	},
+	"MT-110": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveIssueAwardDeleteTarget(ctx, client, task)
-	case "MT-111":
+	},
+	"MT-111": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveDeployKeyDeleteTarget(ctx, client, task)
-	case "MT-112":
+	},
+	"MT-112": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveDeployTokenDeleteTarget(ctx, client, task)
-	case "MT-113":
+	},
+	"MT-113": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveCommitDiscussionNoteDeleteTarget(ctx, client, task)
-	case "MS-034":
+	},
+	"MS-034": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveProjectMemberAbsent(ctx, client, task.Prompt)
-	case "MT-068":
+	},
+	"MT-068": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, cleanupLiveInstanceVariables(ctx, client, "INSTANCE_EVAL_TOKEN")
-	case "MT-069":
+	},
+	"MT-069": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveInstanceVariableDeleteTarget(ctx, client, task.Prompt)
-	case "MT-064":
+	},
+	"MT-064": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveManualJob(ctx, client, task)
-	default:
-		return task, nil
+	},
+}
+
+func ensureLiveAttemptResources(ctx context.Context, client *gitlabclient.Client, session *mcp.ClientSession, task evalTask, toolSurface string) (evalTask, error) {
+	if handler, ok := liveAttemptResourceHandlers[task.ID]; ok {
+		return handler(ctx, client, session, task, toolSurface)
 	}
+	return task, nil
 }
 
 // ensureLiveProjectActive ensures live project active exists for live evaluation.
@@ -151,7 +203,7 @@ func ensureLiveSubgroupDeleteTarget(ctx context.Context, client *gitlabclient.Cl
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-008 fixture parent group: %w", err)
 	}
-	path := fmt.Sprintf("eval-temp-%s", liveUniqueSuffix())
+	path := "eval-temp-" + liveUniqueSuffix()
 	visibility := gl.PrivateVisibility
 	group, _, err := client.GL().Groups.CreateGroup(&gl.CreateGroupOptions{
 		Name:       new(path),
@@ -179,18 +231,9 @@ func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := exampleProjectIDValue(task.Prompt)
-	if !ok {
-		return task, fmt.Errorf("prepare MT-013 fixture: project path not found in prompt %q", task.Prompt)
-	}
-	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
-	issue, _, err := client.GL().Issues.CreateIssue(projectID, &gl.CreateIssueOptions{
-		Title:       new(fmt.Sprintf("Evaluation issue safe to delete %s", liveUniqueSuffix())),
-		Description: new("Temporary issue for destructive evaluator coverage."),
-	}, gl.WithContext(setupCtx))
+	_, issue, err := createLiveEvaluationIssue(ctx, client, task, "MT-013", "Evaluation issue safe to delete "+liveUniqueSuffix(), "Temporary issue for destructive evaluator coverage.")
 	if err != nil {
-		return task, fmt.Errorf("prepare MT-013 fixture issue: %w", err)
+		return task, err
 	}
 	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerIssue, issue.IID)
 	if err != nil {
@@ -198,6 +241,23 @@ func ensureLiveIssueDeleteTarget(ctx context.Context, client *gitlabclient.Clien
 	}
 	task.Prompt = prompt
 	return task, nil
+}
+
+func createLiveEvaluationIssue(ctx context.Context, client *gitlabclient.Client, task evalTask, taskID, title, description string) (string, *gl.Issue, error) {
+	projectID, ok := exampleProjectIDValue(task.Prompt)
+	if !ok {
+		return "", nil, fmt.Errorf("prepare %s fixture: project path not found in prompt %q", taskID, task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	issue, _, err := client.GL().Issues.CreateIssue(projectID, &gl.CreateIssueOptions{
+		Title:       &title,
+		Description: &description,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return "", nil, fmt.Errorf("prepare %s fixture issue: %w", taskID, err)
+	}
+	return projectID, issue, nil
 }
 
 // ensureLiveMergeRequestMergeTarget creates a mergeable MR in a disposable project and rewrites MT-017 to use it.
@@ -216,7 +276,7 @@ func ensureLiveMergeRequestMergeTarget(ctx context.Context, client *gitlabclient
 	if targetBranch == "" {
 		targetBranch = liveFixtureDefaultRef
 	}
-	sourceBranch := fmt.Sprintf("eval-merge-%s", liveUniqueSuffix())
+	sourceBranch := "eval-merge-" + liveUniqueSuffix()
 	if branchErr := ensureLiveBranchExists(setupCtx, client, projectID, sourceBranch, targetBranch); branchErr != nil {
 		return task, fmt.Errorf("prepare MT-017 fixture branch: %w", branchErr)
 	}
@@ -311,7 +371,7 @@ func createLiveDraftNoteMergeRequest(ctx context.Context, client *gitlabclient.C
 	if targetBranch == "" {
 		targetBranch = liveFixtureDefaultRef
 	}
-	sourceBranch := fmt.Sprintf("eval-draft-note-%s", liveUniqueSuffix())
+	sourceBranch := "eval-draft-note-" + liveUniqueSuffix()
 	if branchErr := ensureLiveBranchExists(ctx, client, projectID, sourceBranch, targetBranch); branchErr != nil {
 		return "", 0, branchErr
 	}
@@ -361,7 +421,7 @@ func ensureLiveCustomEmojiDeleteTarget(ctx context.Context, client *gitlabclient
 	}
 	created, err := customemoji.Create(setupCtx, client, customemoji.CreateInput{
 		GroupPath: groupPath,
-		Name:      fmt.Sprintf("eval_delete_%s", liveUniqueSuffix()),
+		Name:      "eval_delete_" + liveUniqueSuffix(),
 		URL:       emojiURL,
 	})
 	if err != nil {
@@ -381,7 +441,7 @@ func ensureLiveTerraformStateUnlockTarget(ctx context.Context, task evalTask) (e
 	if !ok {
 		return task, fmt.Errorf("prepare MT-114 fixture: project path not found in prompt %q", task.Prompt)
 	}
-	stateName := fmt.Sprintf("eval-unlock-%s", liveUniqueSuffix())
+	stateName := "eval-unlock-" + liveUniqueSuffix()
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	if err := createLiveTerraformStateLock(setupCtx, projectID, stateName); err != nil {
@@ -592,7 +652,7 @@ func ensureLiveMilestoneDeleteTarget(ctx context.Context, client *gitlabclient.C
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	milestone, _, err := client.GL().Milestones.CreateMilestone(projectID, &gl.CreateMilestoneOptions{
-		Title:       new(fmt.Sprintf("Evaluation Sprint Delete %s", liveUniqueSuffix())),
+		Title:       new("Evaluation Sprint Delete " + liveUniqueSuffix()),
 		Description: new("Temporary milestone for destructive evaluator coverage."),
 	}, gl.WithContext(setupCtx))
 	if err != nil {
@@ -767,7 +827,7 @@ func ensureLiveEnvironmentStopTarget(ctx context.Context, client *gitlabclient.C
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	name := fmt.Sprintf("eval-stop-%s", liveUniqueSuffix())
+	name := "eval-stop-" + liveUniqueSuffix()
 	env, _, err := client.GL().Environments.CreateEnvironment(projectID, &gl.CreateEnvironmentOptions{
 		Name:        new(name),
 		Description: new("Temporary environment for destructive evaluator coverage"),
@@ -793,7 +853,7 @@ func ensureLiveBroadcastMessageDeleteTarget(ctx context.Context, client *gitlabc
 	defer cancel()
 	startsAt := time.Now().UTC().Add(24 * time.Hour)
 	endsAt := startsAt.Add(time.Hour)
-	message := fmt.Sprintf("Evaluation broadcast safe to delete %s", liveUniqueSuffix())
+	message := "Evaluation broadcast safe to delete " + liveUniqueSuffix()
 	broadcastType := "banner"
 	dismissable := true
 	msg, _, err := client.GL().BroadcastMessage.CreateBroadcastMessage(&gl.CreateBroadcastMessageOptions{
@@ -965,7 +1025,7 @@ func createLiveTerraformStateLock(ctx context.Context, projectID, stateName stri
 		return errors.New("prepare MT-114 fixture requires GITLAB_TOKEN")
 	}
 	lockBody, err := json.Marshal(map[string]string{
-		"ID":        fmt.Sprintf("eval-lock-%s", liveUniqueSuffix()),
+		"ID":        "eval-lock-" + liveUniqueSuffix(),
 		"Operation": "OperationTypeApply",
 		"Info":      "eval_mcp_surfaces terraform unlock fixture",
 		"Who":       "eval_mcp_surfaces",
@@ -1112,7 +1172,7 @@ func ensureLiveRunnerRemoveTarget(ctx context.Context, client *gitlabclient.Clie
 	runner, _, err := client.GL().Users.CreateUserRunner(&gl.CreateUserRunnerOptions{
 		RunnerType:  new("project_type"),
 		ProjectID:   new(project.ID),
-		Description: new(fmt.Sprintf("eval-remove-runner-%s", liveUniqueSuffix())),
+		Description: new("eval-remove-runner-" + liveUniqueSuffix()),
 		Paused:      new(false),
 		Locked:      new(false),
 		RunUntagged: new(true),
@@ -1137,7 +1197,7 @@ func ensureLiveSnippetDeleteTarget(ctx context.Context, client *gitlabclient.Cli
 	defer cancel()
 	visibility := gl.PrivateVisibility
 	snippet, _, err := client.GL().Snippets.CreateSnippet(&gl.CreateSnippetOptions{
-		Title:      new(fmt.Sprintf("Evaluation snippet safe to delete %s", liveUniqueSuffix())),
+		Title:      new("Evaluation snippet safe to delete " + liveUniqueSuffix()),
 		FileName:   new("eval.txt"),
 		Content:    new("evaluation snippet content\n"),
 		Visibility: &visibility,
@@ -1345,18 +1405,11 @@ func ensureLivePipelineDeleteTarget(ctx context.Context, client *gitlabclient.Cl
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
-	if !ok {
-		return task, fmt.Errorf("prepare MT-101 fixture: project path not found in prompt %q", task.Prompt)
-	}
-	setupCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
-	defer cancel()
-	ref := liveFixtureDefaultRef
-	pipeline, _, err := client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: &ref}, gl.WithContext(setupCtx))
+	_, pipelineID, err := createLiveEvaluationPipeline(ctx, client, task, "MT-101")
 	if err != nil {
-		return task, fmt.Errorf("prepare MT-101 fixture pipeline: %w", err)
+		return task, err
 	}
-	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "pipeline ", pipeline.ID)
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "pipeline ", pipelineID)
 	if err != nil {
 		return task, err
 	}
@@ -1511,21 +1564,23 @@ func ensureLiveIssueAwardDeleteTarget(ctx context.Context, client *gitlabclient.
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
-	if !ok {
-		return task, fmt.Errorf("prepare MT-110 fixture: project path not found in prompt %q", task.Prompt)
-	}
-	issueIID, err := promptInt64After(task.Prompt, promptMarkerIssue)
+	projectID, issue, err := createLiveEvaluationIssue(ctx, client, task, "MT-110", "Evaluation issue award delete target "+liveUniqueSuffix(), "Temporary issue for destructive award emoji evaluator coverage.")
 	if err != nil {
-		return task, fmt.Errorf("prepare MT-110 fixture: %w", err)
+		return task, err
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerIssue, issue.IID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	issueIID := issue.IID
 	awardID, err := createLiveIssueAwardEmoji(setupCtx, client, projectID, issueIID)
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-110 fixture award emoji: %w", err)
 	}
-	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerAwardEmojiID, awardID)
+	prompt, err = replacePromptBacktickValueAfter(task.Prompt, promptMarkerAwardEmojiID, awardID)
 	if err != nil {
 		return task, err
 	}
@@ -1595,7 +1650,7 @@ func ensureLiveDeployKeyDeleteTarget(ctx context.Context, client *gitlabclient.C
 		return task, fmt.Errorf("prepare MT-111 fixture public key: %w", err)
 	}
 	deployKey, _, err := client.GL().DeployKeys.AddDeployKey(projectID, &gl.AddDeployKeyOptions{
-		Title:   new(fmt.Sprintf("eval-delete-key-%s", liveUniqueSuffix())),
+		Title:   new("eval-delete-key-" + liveUniqueSuffix()),
 		Key:     &key,
 		CanPush: new(false),
 	}, gl.WithContext(setupCtx))
@@ -1623,7 +1678,7 @@ func ensureLiveDeployTokenDeleteTarget(ctx context.Context, client *gitlabclient
 	defer cancel()
 	expiresAt := time.Now().UTC().AddDate(0, 1, 0)
 	deployToken, _, err := client.GL().DeployTokens.CreateProjectDeployToken(projectID, &gl.CreateProjectDeployTokenOptions{
-		Name:      new(fmt.Sprintf("eval-delete-deploy-token-%s", liveUniqueSuffix())),
+		Name:      new("eval-delete-deploy-token-" + liveUniqueSuffix()),
 		ExpiresAt: &expiresAt,
 		Scopes:    &[]string{"read_repository"},
 	}, gl.WithContext(setupCtx))
@@ -1653,7 +1708,7 @@ func ensureLiveCommitDiscussionNoteDeleteTarget(ctx context.Context, client *git
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	body := fmt.Sprintf("delete fixture %s", liveUniqueSuffix())
+	body := "delete fixture " + liveUniqueSuffix()
 	discussion, _, err := client.GL().Discussions.CreateCommitDiscussion(projectID, commitSHA, &gl.CreateCommitDiscussionOptions{Body: &body}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-113 fixture commit discussion: %w", err)
@@ -1697,17 +1752,21 @@ func cleanupLiveInstanceVariables(ctx context.Context, client *gitlabclient.Clie
 
 // waitForFailedJob waits for a failed job in the pipeline and returns its ID.
 func waitForFailedJob(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64) (int64, error) {
+	return waitForPipelineJobStatus(ctx, client, projectID, pipelineID, "failed", "prepare failed-job fixture jobs", "prepare failed-job fixture failed job")
+}
+
+func waitForPipelineJobStatus(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64, targetStatus, listContext, notFoundContext string) (int64, error) {
 	deadline := time.Now().Add(4 * time.Minute)
 	var lastStatuses []string
 	for time.Now().Before(deadline) {
 		jobs, _, err := client.GL().Jobs.ListPipelineJobs(projectID, pipelineID, &gl.ListJobsOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
 		if err != nil {
-			return 0, fmt.Errorf("prepare failed-job fixture jobs: %w", err)
+			return 0, fmt.Errorf("%s: %w", listContext, err)
 		}
 		lastStatuses = lastStatuses[:0]
 		for _, job := range jobs {
 			lastStatuses = append(lastStatuses, fmt.Sprintf("%s:%s", job.Name, job.Status))
-			if job.Status == "failed" {
+			if job.Status == targetStatus {
 				return job.ID, nil
 			}
 		}
@@ -1715,7 +1774,7 @@ func waitForFailedJob(ctx context.Context, client *gitlabclient.Client, projectI
 			return 0, waitErr
 		}
 	}
-	return 0, fmt.Errorf("prepare failed-job fixture failed job not found for pipeline %d; last statuses: %s", pipelineID, strings.Join(lastStatuses, ", "))
+	return 0, fmt.Errorf("%s not found for pipeline %d; last statuses: %s", notFoundContext, pipelineID, strings.Join(lastStatuses, ", "))
 }
 
 // ensureLiveManualJob handles ensure live manual job and returns [evalTask].
@@ -1723,18 +1782,13 @@ func ensureLiveManualJob(ctx context.Context, client *gitlabclient.Client, task 
 	if client == nil {
 		return task, nil
 	}
-	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
-	if !ok {
-		return task, fmt.Errorf("prepare MT-064 fixture: project path not found in prompt %q", task.Prompt)
+	projectID, pipelineID, err := createLiveEvaluationPipeline(ctx, client, task, "MT-064")
+	if err != nil {
+		return task, err
 	}
 	setupCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
 	defer cancel()
-	ref := liveFixtureDefaultRef
-	pipeline, _, err := client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: &ref}, gl.WithContext(setupCtx))
-	if err != nil {
-		return task, fmt.Errorf("prepare MT-064 fixture pipeline: %w", err)
-	}
-	manualJobID, err := waitForManualJob(setupCtx, client, projectID, pipeline.ID)
+	manualJobID, err := waitForManualJob(setupCtx, client, projectID, pipelineID)
 	if err != nil {
 		return task, err
 	}
@@ -1746,27 +1800,24 @@ func ensureLiveManualJob(ctx context.Context, client *gitlabclient.Client, task 
 	return task, nil
 }
 
+func createLiveEvaluationPipeline(ctx context.Context, client *gitlabclient.Client, task evalTask, taskID string) (projectID string, pipelineID int64, err error) {
+	projectID, ok := backtickValueAfter(task.Prompt, promptMarkerProject)
+	if !ok {
+		return "", 0, fmt.Errorf("prepare %s fixture: project path not found in prompt %q", taskID, task.Prompt)
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 4*time.Minute)
+	defer cancel()
+	ref := liveFixtureDefaultRef
+	pipeline, _, err := client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: &ref}, gl.WithContext(setupCtx))
+	if err != nil {
+		return "", 0, fmt.Errorf("prepare %s fixture pipeline: %w", taskID, err)
+	}
+	return projectID, pipeline.ID, nil
+}
+
 // waitForManualJob handles wait for manual job and returns [int64].
 func waitForManualJob(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64) (int64, error) {
-	deadline := time.Now().Add(4 * time.Minute)
-	var lastStatuses []string
-	for time.Now().Before(deadline) {
-		jobs, _, err := client.GL().Jobs.ListPipelineJobs(projectID, pipelineID, &gl.ListJobsOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
-		if err != nil {
-			return 0, fmt.Errorf("prepare MT-064 fixture jobs: %w", err)
-		}
-		lastStatuses = lastStatuses[:0]
-		for _, job := range jobs {
-			lastStatuses = append(lastStatuses, fmt.Sprintf("%s:%s", job.Name, job.Status))
-			if job.Status == "manual" {
-				return job.ID, nil
-			}
-		}
-		if waitErr := waitForContext(ctx, 5*time.Second); waitErr != nil {
-			return 0, waitErr
-		}
-	}
-	return 0, fmt.Errorf("prepare MT-064 fixture manual job not found for pipeline %d; last statuses: %s", pipelineID, strings.Join(lastStatuses, ", "))
+	return waitForPipelineJobStatus(ctx, client, projectID, pipelineID, "manual", "prepare MT-064 fixture jobs", "prepare MT-064 fixture manual job")
 }
 
 // replacePromptJobID handles replace prompt job ID and returns [string].

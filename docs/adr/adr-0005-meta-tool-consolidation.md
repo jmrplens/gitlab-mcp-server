@@ -67,7 +67,7 @@ Analysis of production MCP servers reveals common patterns for managing large to
 - Requires client support for `tools/list_changed`
 - VS Code Copilot and Cursor do not reliably re-fetch tool lists
 
-**Conclusion**: Domain-scoped mega-tools (Pattern 1) is the most compatible and token-efficient approach. The original consolidation target was **25 domain meta-tools**. The current base catalog is **33 tools**: 29 consolidated, delegated, sampling, and discovery meta-tools plus 4 standalone interactive elicitation tools (`gitlab_interactive_*`) that must remain separate because each one drives a multi-round MCP elicitation flow. Enterprise/Premium adds 16 meta-tools for **49 self-managed Enterprise/Premium meta-tools**, and GitLab.com Enterprise/Premium adds `gitlab_orbit` for **50 meta-tools** when Orbit is available. The current catalog keeps the tool list small enough for any LLM context window while covering 1017 self-managed Enterprise/Premium individual tools, or 1023 on GitLab.com Enterprise/Premium with Orbit.
+**Conclusion**: Domain-scoped mega-tools (Pattern 1) is the most compatible and token-efficient approach. The original consolidation target was **25 domain meta-tools**. The current base catalog is **33 tools**: 29 consolidated, delegated, sampling, and discovery meta-tools plus 4 standalone interactive elicitation tools (`gitlab_interactive_*`) that must remain separate because each one drives a multi-round MCP elicitation flow. Enterprise/Premium adds 16 meta-tools for **49 self-managed Enterprise/Premium meta-tools**, and GitLab.com Enterprise/Premium adds `gitlab_orbit` for **50 meta-tools** when Orbit is available. The current catalog keeps the tool list small enough for any LLM context window while covering 1025 self-managed Enterprise/Premium individual tools, or 1031 on GitLab.com Enterprise/Premium with Orbit.
 
 ## Decision
 
@@ -206,5 +206,5 @@ After consolidation:
 - `go build ./...` — clean
 - `go test ./internal/... -count=1` — all packages pass
 - `TOOL_SURFACE=meta` exposes the compact base meta catalog and Enterprise/GitLab.com gated catalog groups when enabled
-- `TOOL_SURFACE=individual` exposes the individual catalog projection: 1017 tools on self-managed Enterprise/Premium, or 1023 on GitLab.com Enterprise/Premium with Orbit
+- `TOOL_SURFACE=individual` exposes the individual catalog projection: 1025 tools on self-managed Enterprise/Premium, or 1031 on GitLab.com Enterprise/Premium with Orbit
 - E2E meta-tool workflow covers all consolidated routes

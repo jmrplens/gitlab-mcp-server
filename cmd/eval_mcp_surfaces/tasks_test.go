@@ -78,6 +78,31 @@ func TestCatalogHasEnterpriseRoutes_DetectsRouteMapShapes(t *testing.T) {
 	}
 }
 
+// TestFilterTasksByAvailableRoutes_RespectsExplicitEdition verifies CE-only
+// Docker runs do not inherit Enterprise availability from a mixed route map.
+func TestFilterTasksByAvailableRoutes_RespectsExplicitEdition(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteTool: {
+			"issue.list":                               toolutil.ActionRoute{},
+			"merge_train.list_project":                 toolutil.ActionRoute{},
+			"model_registry.download":                  toolutil.ActionRoute{},
+			"environment.deployment_approve_or_reject": toolutil.ActionRoute{},
+		},
+	}
+	tasks := []evalTask{
+		{ID: "base", ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.list"},
+		{ID: "model-registry", ExpectedTool: dynamicExecuteTool, ExpectedAction: "model_registry.download"},
+		{ID: "protected-deploy", ExpectedTool: dynamicExecuteTool, ExpectedAction: "environment.deployment_approve_or_reject"},
+	}
+
+	if got := taskIDs(filterTasksByAvailableRoutes(tasks, routes, false)); got != "base" {
+		t.Fatalf("CE filtered IDs = %q, want base", got)
+	}
+	if got := taskIDs(filterTasksByAvailableRoutes(tasks, routes, true)); got != "base,model-registry,protected-deploy" {
+		t.Fatalf("Enterprise filtered IDs = %q, want all tasks", got)
+	}
+}
+
 // TestNormalizeExpectedRoutes_RewritesMetaAndDynamicRoutes verifies task route
 // normalization maps unified and dynamic catalogs to the executable route shape.
 func TestNormalizeExpectedRoutes_RewritesMetaAndDynamicRoutes(t *testing.T) {

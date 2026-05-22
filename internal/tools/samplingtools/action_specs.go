@@ -26,15 +26,13 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	}
 }
 
-func samplingSpec[T any, R any](name string, client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), individualTool, description string) toolutil.ActionSpec {
+func samplingSpec[T, R any](name string, client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), individualTool, description string) toolutil.ActionSpec {
 	return analyzeSpec(name, samplingRoute[T, R](client, fn, individualTool), individualTool, description)
 }
 
 func analyzeSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, toolutil.ActionSpecOptions{
+	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
 		Tags:           []string{"analyze", "sampling"},
-		ReadOnly:       true,
-		Idempotent:     true,
 		OpenWorld:      true,
 		OwnerPackage:   "samplingtools",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},

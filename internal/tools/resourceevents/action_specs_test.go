@@ -9,16 +9,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const regIterationEventJSON = `{"id":1,"action":"add","user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"iteration":{"id":5,"title":"Sprint 1","iid":1},"created_at":"2026-01-01T00:00:00Z"}`
-const regIterationEventsJSON = `[` + regIterationEventJSON + `]`
-const regWeightEventJSON = `{"id":2,"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"weight":5,"previous_weight":3,"created_at":"2026-01-01T00:00:00Z"}`
-const regWeightEventsJSON = `[` + regWeightEventJSON + `]`
-const regLabelEventJSON = `{"id":1,"action":"add","label":{"id":1,"name":"bug"},"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
-const regLabelEventsJSON = `[` + regLabelEventJSON + `]`
-const regMilestoneEventJSON = `{"id":1,"action":"add","milestone":{"id":1,"title":"v1.0","iid":1},"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
-const regMilestoneEventsJSON = `[` + regMilestoneEventJSON + `]`
-const regStateEventJSON = `{"id":1,"state":"closed","user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
-const regStateEventsJSON = `[` + regStateEventJSON + `]`
+const (
+	regIterationEventJSON  = `{"id":1,"action":"add","user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"iteration":{"id":5,"title":"Sprint 1","iid":1},"created_at":"2026-01-01T00:00:00Z"}`
+	regIterationEventsJSON = `[` + regIterationEventJSON + `]`
+	regWeightEventJSON     = `{"id":2,"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"weight":5,"previous_weight":3,"created_at":"2026-01-01T00:00:00Z"}`
+	regWeightEventsJSON    = `[` + regWeightEventJSON + `]`
+	regLabelEventJSON      = `{"id":1,"action":"add","label":{"id":1,"name":"bug"},"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
+	regLabelEventsJSON     = `[` + regLabelEventJSON + `]`
+	regMilestoneEventJSON  = `{"id":1,"action":"add","milestone":{"id":1,"title":"v1.0","iid":1},"user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
+	regMilestoneEventsJSON = `[` + regMilestoneEventJSON + `]`
+	regStateEventJSON      = `{"id":1,"state":"closed","user":{"id":1,"username":"user"},"resource_type":"Issue","resource_id":10,"created_at":"2026-01-01T00:00:00Z"}`
+	regStateEventsJSON     = `[` + regStateEventJSON + `]`
+)
 
 // TestActionSpecs_Metadata verifies canonical metadata for resource event actions.
 func TestActionSpecs_Metadata(t *testing.T) {
@@ -46,31 +48,7 @@ func TestActionSpecs_CallThroughRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
-		switch {
-		// Iteration events
-		case r.Method == http.MethodGet && strings.Contains(path, "/resource_iteration_events/"):
-			testutil.RespondJSON(w, http.StatusOK, regIterationEventJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/resource_iteration_events"):
-			testutil.RespondJSON(w, http.StatusOK, regIterationEventsJSON)
-		// Weight events
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/resource_weight_events"):
-			testutil.RespondJSON(w, http.StatusOK, regWeightEventsJSON)
-		// Label events
-		case r.Method == http.MethodGet && strings.Contains(path, "/resource_label_events/"):
-			testutil.RespondJSON(w, http.StatusOK, regLabelEventJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/resource_label_events"):
-			testutil.RespondJSON(w, http.StatusOK, regLabelEventsJSON)
-		// Milestone events
-		case r.Method == http.MethodGet && strings.Contains(path, "/resource_milestone_events/"):
-			testutil.RespondJSON(w, http.StatusOK, regMilestoneEventJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/resource_milestone_events"):
-			testutil.RespondJSON(w, http.StatusOK, regMilestoneEventsJSON)
-		// State events
-		case r.Method == http.MethodGet && strings.Contains(path, "/resource_state_events/"):
-			testutil.RespondJSON(w, http.StatusOK, regStateEventJSON)
-		case r.Method == http.MethodGet && strings.HasSuffix(path, "/resource_state_events"):
-			testutil.RespondJSON(w, http.StatusOK, regStateEventsJSON)
-		default:
+		if !respondResourceEventRoute(w, r, path) {
 			http.NotFound(w, r)
 		}
 	})
@@ -108,6 +86,35 @@ func TestActionSpecs_CallThroughRoutes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func respondResourceEventRoute(w http.ResponseWriter, r *http.Request, path string) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	switch {
+	case strings.Contains(path, "/resource_iteration_events/"):
+		testutil.RespondJSON(w, http.StatusOK, regIterationEventJSON)
+	case strings.HasSuffix(path, "/resource_iteration_events"):
+		testutil.RespondJSON(w, http.StatusOK, regIterationEventsJSON)
+	case strings.HasSuffix(path, "/resource_weight_events"):
+		testutil.RespondJSON(w, http.StatusOK, regWeightEventsJSON)
+	case strings.Contains(path, "/resource_label_events/"):
+		testutil.RespondJSON(w, http.StatusOK, regLabelEventJSON)
+	case strings.HasSuffix(path, "/resource_label_events"):
+		testutil.RespondJSON(w, http.StatusOK, regLabelEventsJSON)
+	case strings.Contains(path, "/resource_milestone_events/"):
+		testutil.RespondJSON(w, http.StatusOK, regMilestoneEventJSON)
+	case strings.HasSuffix(path, "/resource_milestone_events"):
+		testutil.RespondJSON(w, http.StatusOK, regMilestoneEventsJSON)
+	case strings.Contains(path, "/resource_state_events/"):
+		testutil.RespondJSON(w, http.StatusOK, regStateEventJSON)
+	case strings.HasSuffix(path, "/resource_state_events"):
+		testutil.RespondJSON(w, http.StatusOK, regStateEventsJSON)
+	default:
+		return false
+	}
+	return true
 }
 
 func resourceEventSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.ActionSpec {

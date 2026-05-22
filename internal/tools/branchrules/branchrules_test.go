@@ -82,8 +82,12 @@ func TestList_Success(t *testing.T) {
 		t.Fatalf("expected 2 rules, got %d", len(out.Rules))
 	}
 
-	// Verify protected rule.
-	r := out.Rules[0]
+	assertProtectedBranchRule(t, out.Rules[0])
+	assertUnprotectedBranchRule(t, out.Rules[1])
+}
+
+func assertProtectedBranchRule(t *testing.T, r BranchRuleItem) {
+	t.Helper()
 	if r.Name != "main" {
 		t.Errorf("rule[0].Name = %q, want %q", r.Name, "main")
 	}
@@ -120,9 +124,10 @@ func TestList_Success(t *testing.T) {
 	if r.ExternalStatusChecks[0].Name != "SonarQube" {
 		t.Errorf("rule[0].ExternalStatusChecks[0].Name = %q, want %q", r.ExternalStatusChecks[0].Name, "SonarQube")
 	}
+}
 
-	// Verify unprotected rule.
-	r2 := out.Rules[1]
+func assertUnprotectedBranchRule(t *testing.T, r2 BranchRuleItem) {
+	t.Helper()
 	if r2.Name != "feature/*" {
 		t.Errorf("rule[1].Name = %q, want %q", r2.Name, "feature/*")
 	}

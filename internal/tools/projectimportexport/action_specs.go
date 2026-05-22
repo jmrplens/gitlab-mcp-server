@@ -17,14 +17,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func projectImportExportReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := projectImportExportOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, projectImportExportOptions(individualTool))
 }
 
 func projectImportExportCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, projectImportExportOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, projectImportExportOptions(individualTool))
 }
 
 func projectImportExportOptions(individualTool string) toolutil.ActionSpecOptions {

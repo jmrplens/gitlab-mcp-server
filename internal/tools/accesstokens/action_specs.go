@@ -66,25 +66,19 @@ func PersonalRevokeSelfOutput(ctx context.Context, client *gitlabclient.Client, 
 }
 
 func accessTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := accessTokenOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
 func accessTokenCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, accessTokenOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
 func accessTokenRotateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, accessTokenOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
 func accessTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := accessTokenOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, accessTokenOptions(name, individualTool))
 }
 
 func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
@@ -103,8 +97,8 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	options.Aliases = []string{fmt.Sprintf("%s %s access token", operationText, scope)}
 	if operation == "list" {
 		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action lists %s-scoped API tokens.", scope, scope)
-		options.Tags = append(options.Tags, fmt.Sprintf("%s_access_tokens", scope))
-		options.Aliases = append(options.Aliases, fmt.Sprintf("%s access tokens", scope), fmt.Sprintf("list %s access tokens", scope))
+		options.Tags = append(options.Tags, scope+"_access_tokens")
+		options.Aliases = append(options.Aliases, scope+" access tokens", fmt.Sprintf("list %s access tokens", scope))
 	}
 	options.RelatedActions = accessTokenRelatedActions(scope)
 	if accessTokenNeedsTokenID(operation) {

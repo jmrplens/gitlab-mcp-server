@@ -79,6 +79,68 @@ func wrapSearchErr(op string, err error) error {
 	return toolutil.WrapErrWithMessage(op, err)
 }
 
+type scopedSearchFunc[T any] func(any, string, *gl.SearchOptions, ...gl.RequestOptionFunc) ([]T, *gl.Response, error)
+
+type globalSearchFunc[T any] func(string, *gl.SearchOptions, ...gl.RequestOptionFunc) ([]T, *gl.Response, error)
+
+type scopedSearchArgs[T any] struct {
+	query         string
+	projectID     toolutil.StringOrInt
+	groupID       toolutil.StringOrInt
+	page          int
+	perPage       int
+	searchType    string
+	operation     string
+	projectSearch scopedSearchFunc[T]
+	groupSearch   scopedSearchFunc[T]
+	globalSearch  globalSearchFunc[T]
+}
+
+func runScopedSearch[T any](ctx context.Context, args scopedSearchArgs[T]) ([]T, *gl.Response, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	if args.query == "" {
+		return nil, nil, fmt.Errorf("%s: query is required", args.operation)
+	}
+
+	opts, err := searchOpts(args.page, args.perPage, "", args.searchType)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var (
+		items []T
+		resp  *gl.Response
+	)
+	switch {
+	case args.projectID != "":
+		items, resp, err = args.projectSearch(string(args.projectID), args.query, opts, gl.WithContext(ctx))
+	case args.groupID != "":
+		items, resp, err = args.groupSearch(string(args.groupID), args.query, opts, gl.WithContext(ctx))
+	default:
+		items, resp, err = args.globalSearch(args.query, opts, gl.WithContext(ctx))
+	}
+	if err != nil {
+		return nil, nil, wrapSearchErr(args.operation, err)
+	}
+	return items, resp, nil
+}
+
+func convertSearchResults[T, O any](items []T, convert func(T) O) []O {
+	out := make([]O, len(items))
+	for i, item := range items {
+		out[i] = convert(item)
+	}
+	return out
+}
+
+func searchPagination(resp *gl.Response, itemCount int) toolutil.PaginationOutput {
+	pag := toolutil.PaginationFromResponse(resp)
+	toolutil.AdjustPagination(&pag, itemCount)
+	return pag
+}
+
 // ---------------------------------------------------------------------------
 // Code (blobs)
 // ---------------------------------------------------------------------------.
@@ -187,42 +249,17 @@ type MergeRequestsOutput struct {
 // MergeRequests searches for merge requests in GitLab.
 // Scope priority: project_id > group_id > global.
 func MergeRequests(ctx context.Context, client *gitlabclient.Client, input MergeRequestsInput) (MergeRequestsOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return MergeRequestsOutput{}, err
-	}
-	if input.Query == "" {
-		return MergeRequestsOutput{}, errors.New("searchMergeRequests: query is required")
-	}
-
-	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	searchClient := client.GL().Search
+	mrs, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.MergeRequest]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchMergeRequests", projectSearch: searchClient.MergeRequestsByProject,
+		groupSearch: searchClient.MergeRequestsByGroup, globalSearch: searchClient.MergeRequests,
+	})
 	if err != nil {
 		return MergeRequestsOutput{}, err
 	}
-
-	var (
-		mrs  []*gl.MergeRequest
-		resp *gl.Response
-	)
-
-	switch {
-	case input.ProjectID != "":
-		mrs, resp, err = client.GL().Search.MergeRequestsByProject(string(input.ProjectID), input.Query, opts, gl.WithContext(ctx))
-	case input.GroupID != "":
-		mrs, resp, err = client.GL().Search.MergeRequestsByGroup(string(input.GroupID), input.Query, opts, gl.WithContext(ctx))
-	default:
-		mrs, resp, err = client.GL().Search.MergeRequests(input.Query, opts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		return MergeRequestsOutput{}, wrapSearchErr("searchMergeRequests", err)
-	}
-
-	out := make([]mergerequests.Output, len(mrs))
-	for i, mr := range mrs {
-		out[i] = mergerequests.ToOutput(mr)
-	}
-	pag := toolutil.PaginationFromResponse(resp)
-	toolutil.AdjustPagination(&pag, len(out))
-	return MergeRequestsOutput{MergeRequests: out, Pagination: pag}, nil
+	out := convertSearchResults(mrs, mergerequests.ToOutput)
+	return MergeRequestsOutput{MergeRequests: out, Pagination: searchPagination(resp, len(out))}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -249,42 +286,17 @@ type IssuesOutput struct {
 // Issues searches for issues in GitLab.
 // Scope priority: project_id > group_id > global.
 func Issues(ctx context.Context, client *gitlabclient.Client, input IssuesInput) (IssuesOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return IssuesOutput{}, err
-	}
-	if input.Query == "" {
-		return IssuesOutput{}, errors.New("searchIssues: query is required")
-	}
-
-	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	searchClient := client.GL().Search
+	foundIssues, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Issue]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchIssues", projectSearch: searchClient.IssuesByProject,
+		groupSearch: searchClient.IssuesByGroup, globalSearch: searchClient.Issues,
+	})
 	if err != nil {
 		return IssuesOutput{}, err
 	}
-
-	var (
-		foundIssues []*gl.Issue
-		resp        *gl.Response
-	)
-
-	switch {
-	case input.ProjectID != "":
-		foundIssues, resp, err = client.GL().Search.IssuesByProject(string(input.ProjectID), input.Query, opts, gl.WithContext(ctx))
-	case input.GroupID != "":
-		foundIssues, resp, err = client.GL().Search.IssuesByGroup(string(input.GroupID), input.Query, opts, gl.WithContext(ctx))
-	default:
-		foundIssues, resp, err = client.GL().Search.Issues(input.Query, opts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		return IssuesOutput{}, wrapSearchErr("searchIssues", err)
-	}
-
-	out := make([]issues.Output, len(foundIssues))
-	for i, issue := range foundIssues {
-		out[i] = issues.ToOutput(issue)
-	}
-	pag := toolutil.PaginationFromResponse(resp)
-	toolutil.AdjustPagination(&pag, len(out))
-	return IssuesOutput{Issues: out, Pagination: pag}, nil
+	out := convertSearchResults(foundIssues, issues.ToOutput)
+	return IssuesOutput{Issues: out, Pagination: searchPagination(resp, len(out))}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -311,42 +323,17 @@ type CommitsOutput struct {
 // Commits searches for commits in GitLab.
 // Scope priority: project_id > group_id > global.
 func Commits(ctx context.Context, client *gitlabclient.Client, input CommitsInput) (CommitsOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return CommitsOutput{}, err
-	}
-	if input.Query == "" {
-		return CommitsOutput{}, errors.New("searchCommits: query is required")
-	}
-
-	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	searchClient := client.GL().Search
+	commitResults, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Commit]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchCommits", projectSearch: searchClient.CommitsByProject,
+		groupSearch: searchClient.CommitsByGroup, globalSearch: searchClient.Commits,
+	})
 	if err != nil {
 		return CommitsOutput{}, err
 	}
-
-	var (
-		commitResults []*gl.Commit
-		resp          *gl.Response
-	)
-
-	switch {
-	case input.ProjectID != "":
-		commitResults, resp, err = client.GL().Search.CommitsByProject(string(input.ProjectID), input.Query, opts, gl.WithContext(ctx))
-	case input.GroupID != "":
-		commitResults, resp, err = client.GL().Search.CommitsByGroup(string(input.GroupID), input.Query, opts, gl.WithContext(ctx))
-	default:
-		commitResults, resp, err = client.GL().Search.Commits(input.Query, opts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		return CommitsOutput{}, wrapSearchErr("searchCommits", err)
-	}
-
-	out := make([]commits.Output, len(commitResults))
-	for i, c := range commitResults {
-		out[i] = commits.ToOutput(c)
-	}
-	pag := toolutil.PaginationFromResponse(resp)
-	toolutil.AdjustPagination(&pag, len(out))
-	return CommitsOutput{Commits: out, Pagination: pag}, nil
+	out := convertSearchResults(commitResults, commits.ToOutput)
+	return CommitsOutput{Commits: out, Pagination: searchPagination(resp, len(out))}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -373,42 +360,17 @@ type MilestonesOutput struct {
 // Milestones searches for milestones in GitLab.
 // Scope priority: project_id > group_id > global.
 func Milestones(ctx context.Context, client *gitlabclient.Client, input MilestonesInput) (MilestonesOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return MilestonesOutput{}, err
-	}
-	if input.Query == "" {
-		return MilestonesOutput{}, errors.New("searchMilestones: query is required")
-	}
-
-	opts, err := searchOpts(input.Page, input.PerPage, "", input.SearchType)
+	searchClient := client.GL().Search
+	msList, resp, err := runScopedSearch(ctx, scopedSearchArgs[*gl.Milestone]{
+		query: input.Query, projectID: input.ProjectID, groupID: input.GroupID, page: input.Page, perPage: input.PerPage,
+		searchType: input.SearchType, operation: "searchMilestones", projectSearch: searchClient.MilestonesByProject,
+		groupSearch: searchClient.MilestonesByGroup, globalSearch: searchClient.Milestones,
+	})
 	if err != nil {
 		return MilestonesOutput{}, err
 	}
-
-	var (
-		msList []*gl.Milestone
-		resp   *gl.Response
-	)
-
-	switch {
-	case input.ProjectID != "":
-		msList, resp, err = client.GL().Search.MilestonesByProject(string(input.ProjectID), input.Query, opts, gl.WithContext(ctx))
-	case input.GroupID != "":
-		msList, resp, err = client.GL().Search.MilestonesByGroup(string(input.GroupID), input.Query, opts, gl.WithContext(ctx))
-	default:
-		msList, resp, err = client.GL().Search.Milestones(input.Query, opts, gl.WithContext(ctx))
-	}
-	if err != nil {
-		return MilestonesOutput{}, wrapSearchErr("searchMilestones", err)
-	}
-
-	out := make([]milestones.Output, len(msList))
-	for i, m := range msList {
-		out[i] = milestones.ToOutput(m)
-	}
-	pag := toolutil.PaginationFromResponse(resp)
-	toolutil.AdjustPagination(&pag, len(out))
-	return MilestonesOutput{Milestones: out, Pagination: pag}, nil
+	out := convertSearchResults(msList, milestones.ToOutput)
+	return MilestonesOutput{Milestones: out, Pagination: searchPagination(resp, len(out))}, nil
 }
 
 // ---------------------------------------------------------------------------

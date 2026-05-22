@@ -1,6 +1,7 @@
 package autoupdate
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -63,21 +64,26 @@ func validateBinaryMagic(path string) error {
 	if _, err = io.ReadFull(f, header); err != nil {
 		return fmt.Errorf("%w: cannot read header", errNotBinary)
 	}
-
-	switch {
-	case header[0] == 0x7f && header[1] == 'E' && header[2] == 'L' && header[3] == 'F': // ELF
+	if hasExecutableMagic(header) {
 		return nil
-	case header[0] == 0xCF && header[1] == 0xFA && header[2] == 0xED && header[3] == 0xFE: // Mach-O 64-bit
-		return nil
-	case header[0] == 0xFE && header[1] == 0xED && header[2] == 0xFA && header[3] == 0xCF: // Mach-O 64-bit (big-endian)
-		return nil
-	case header[0] == 0xCA && header[1] == 0xFE && header[2] == 0xBA && header[3] == 0xBE: // Mach-O universal
-		return nil
-	case header[0] == 'M' && header[1] == 'Z': // PE (Windows)
-		return nil
-	default:
-		return fmt.Errorf("%w: unrecognized magic bytes %x", errNotBinary, header)
 	}
+	return fmt.Errorf("%w: unrecognized magic bytes %x", errNotBinary, header)
+}
+
+func hasExecutableMagic(header []byte) bool {
+	signatures := [][]byte{
+		{0x7f, 'E', 'L', 'F'},    // ELF
+		{0xCF, 0xFA, 0xED, 0xFE}, // Mach-O 64-bit
+		{0xFE, 0xED, 0xFA, 0xCF}, // Mach-O 64-bit (big-endian)
+		{0xCA, 0xFE, 0xBA, 0xBE}, // Mach-O universal
+		{'M', 'Z'},               // PE (Windows)
+	}
+	for _, signature := range signatures {
+		if bytes.HasPrefix(header, signature) {
+			return true
+		}
+	}
+	return false
 }
 
 // HasPendingUpdate reports whether a previous update left a staged

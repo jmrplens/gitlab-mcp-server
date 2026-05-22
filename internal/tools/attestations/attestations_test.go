@@ -30,17 +30,9 @@ func TestToOutput(t *testing.T) {
 		validate func(t *testing.T, got Output)
 	}{
 		{
-			name:  "nil attestation returns zero output",
-			input: nil,
-			validate: func(t *testing.T, got Output) {
-				t.Helper()
-				if got.ID != 0 {
-					t.Errorf("ID = %d, want 0", got.ID)
-				}
-				if got.Status != "" {
-					t.Errorf("Status = %q, want empty", got.Status)
-				}
-			},
+			name:     "nil attestation returns zero output",
+			input:    nil,
+			validate: assertZeroAttestationOutput,
 		},
 		{
 			name: "all fields populated including all timestamps",
@@ -58,33 +50,7 @@ func TestToOutput(t *testing.T) {
 				UpdatedAt:     &now,
 				ExpireAt:      &now,
 			},
-			validate: func(t *testing.T, got Output) {
-				t.Helper()
-				if got.ID != 42 {
-					t.Errorf("ID = %d, want 42", got.ID)
-				}
-				if got.IID != 7 {
-					t.Errorf("IID = %d, want 7", got.IID)
-				}
-				if got.ProjectID != 10 {
-					t.Errorf("ProjectID = %d, want 10", got.ProjectID)
-				}
-				if got.BuildID != 200 {
-					t.Errorf("BuildID = %d, want 200", got.BuildID)
-				}
-				if got.CreatedAt == "" {
-					t.Error("CreatedAt should not be empty")
-				}
-				if got.UpdatedAt == "" {
-					t.Error("UpdatedAt should not be empty")
-				}
-				if got.ExpireAt == "" {
-					t.Error("ExpireAt should not be empty")
-				}
-				if got.DownloadURL != "https://gitlab.example.com/download/42" {
-					t.Errorf("DownloadURL = %q, want download URL", got.DownloadURL)
-				}
-			},
+			validate: assertFullAttestationOutput,
 		},
 		{
 			name: "nil timestamps remain empty strings",
@@ -92,18 +58,7 @@ func TestToOutput(t *testing.T) {
 				ID:     1,
 				Status: "pending",
 			},
-			validate: func(t *testing.T, got Output) {
-				t.Helper()
-				if got.CreatedAt != "" {
-					t.Errorf("CreatedAt = %q, want empty", got.CreatedAt)
-				}
-				if got.UpdatedAt != "" {
-					t.Errorf("UpdatedAt = %q, want empty", got.UpdatedAt)
-				}
-				if got.ExpireAt != "" {
-					t.Errorf("ExpireAt = %q, want empty", got.ExpireAt)
-				}
-			},
+			validate: assertAttestationOutputWithoutTimestamps,
 		},
 	}
 
@@ -112,6 +67,67 @@ func TestToOutput(t *testing.T) {
 			got := toOutput(tt.input)
 			tt.validate(t, got)
 		})
+	}
+}
+
+func assertZeroAttestationOutput(t *testing.T, got Output) {
+	t.Helper()
+	if got.ID != 0 {
+		t.Errorf("ID = %d, want 0", got.ID)
+	}
+	if got.Status != "" {
+		t.Errorf("Status = %q, want empty", got.Status)
+	}
+}
+
+func assertFullAttestationOutput(t *testing.T, got Output) {
+	t.Helper()
+	assertAttestationIDs(t, got)
+	assertAttestationTimestampsPresent(t, got)
+	if got.DownloadURL != "https://gitlab.example.com/download/42" {
+		t.Errorf("DownloadURL = %q, want download URL", got.DownloadURL)
+	}
+}
+
+func assertAttestationIDs(t *testing.T, got Output) {
+	t.Helper()
+	if got.ID != 42 {
+		t.Errorf("ID = %d, want 42", got.ID)
+	}
+	if got.IID != 7 {
+		t.Errorf("IID = %d, want 7", got.IID)
+	}
+	if got.ProjectID != 10 {
+		t.Errorf("ProjectID = %d, want 10", got.ProjectID)
+	}
+	if got.BuildID != 200 {
+		t.Errorf("BuildID = %d, want 200", got.BuildID)
+	}
+}
+
+func assertAttestationTimestampsPresent(t *testing.T, got Output) {
+	t.Helper()
+	if got.CreatedAt == "" {
+		t.Error("CreatedAt should not be empty")
+	}
+	if got.UpdatedAt == "" {
+		t.Error("UpdatedAt should not be empty")
+	}
+	if got.ExpireAt == "" {
+		t.Error("ExpireAt should not be empty")
+	}
+}
+
+func assertAttestationOutputWithoutTimestamps(t *testing.T, got Output) {
+	t.Helper()
+	if got.CreatedAt != "" {
+		t.Errorf("CreatedAt = %q, want empty", got.CreatedAt)
+	}
+	if got.UpdatedAt != "" {
+		t.Errorf("UpdatedAt = %q, want empty", got.UpdatedAt)
+	}
+	if got.ExpireAt != "" {
+		t.Errorf("ExpireAt = %q, want empty", got.ExpireAt)
 	}
 }
 

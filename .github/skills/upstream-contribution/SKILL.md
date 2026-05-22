@@ -58,7 +58,6 @@ Follow existing patterns in the codebase:
 
 ```bash
 go test ./...
-go vet ./...
 golangci-lint run
 ```
 

@@ -9,6 +9,17 @@ import (
 	"testing"
 )
 
+type runTableDrivenCase struct {
+	name         string
+	args         []string
+	files        map[string]string
+	dirs         []string
+	wantErr      string
+	wantStdout   []string
+	wantContains map[string]string
+	wantExact    map[string]string
+}
+
 // TestRun_TableDriven verifies the Markdown table formatter CLI handles default
 // discovery, check mode, explicit paths, and invalid arguments.
 //
@@ -17,16 +28,7 @@ import (
 // errors. This protects both the developer workflow and the non-mutating
 // --check mode used by CI.
 func TestRun_TableDriven(t *testing.T) {
-	tests := []struct {
-		name         string
-		args         []string
-		files        map[string]string
-		dirs         []string
-		wantErr      string
-		wantStdout   []string
-		wantContains map[string]string
-		wantExact    map[string]string
-	}{
+	tests := []runTableDrivenCase{
 		{
 			name: "formats default markdown files",
 			files: map[string]string{
@@ -85,48 +87,82 @@ func TestRun_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			root := t.TempDir()
-			for path, content := range tt.files {
-				writeTestFile(t, filepath.Join(root, filepath.FromSlash(path)), content)
-			}
-			for _, dir := range tt.dirs {
-				if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(dir)), 0o755); err != nil {
-					t.Fatalf("mkdir %s: %v", dir, err)
-				}
-			}
-
-			var stdout bytes.Buffer
-			args := append([]string{"--root", root}, tt.args...)
-			err := run(args, &stdout)
-			if tt.wantErr != "" {
-				if err == nil {
-					t.Fatal("run() error = nil, want error")
-				}
-				if !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("run() error = %v, want %q", err, tt.wantErr)
-				}
-			} else if err != nil {
-				t.Fatalf("run() error: %v", err)
-			}
-
-			for _, want := range tt.wantStdout {
-				if !strings.Contains(stdout.String(), want) {
-					t.Fatalf("stdout = %q, want %q", stdout.String(), want)
-				}
-			}
-			for path, want := range tt.wantContains {
-				got := readTestFile(t, filepath.Join(root, filepath.FromSlash(path)))
-				if !strings.Contains(got, want) {
-					t.Fatalf("%s =\n%s\nwant substring %q", path, got, want)
-				}
-			}
-			for path, want := range tt.wantExact {
-				got := readTestFile(t, filepath.Join(root, filepath.FromSlash(path)))
-				if got != want {
-					t.Fatalf("%s =\n%s\nwant\n%s", path, got, want)
-				}
-			}
+			runFormatterCase(t, tt)
 		})
+	}
+}
+
+func runFormatterCase(t *testing.T, tt runTableDrivenCase) {
+	t.Helper()
+	root := t.TempDir()
+	writeFormatterCaseFiles(t, root, tt)
+	var stdout bytes.Buffer
+	err := run(append([]string{"--root", root}, tt.args...), &stdout)
+	assertFormatterCaseResult(t, root, stdout.String(), err, tt)
+}
+
+func writeFormatterCaseFiles(t *testing.T, root string, tt runTableDrivenCase) {
+	t.Helper()
+	for path, content := range tt.files {
+		writeTestFile(t, filepath.Join(root, filepath.FromSlash(path)), content)
+	}
+	for _, dir := range tt.dirs {
+		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(dir)), 0o750); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+}
+
+func assertFormatterCaseResult(t *testing.T, root, stdout string, err error, tt runTableDrivenCase) {
+	t.Helper()
+	if tt.wantErr != "" {
+		assertRunError(t, err, tt.wantErr)
+		return
+	}
+	if err != nil {
+		t.Fatalf("run() error: %v", err)
+	}
+	assertStdoutContains(t, stdout, tt.wantStdout)
+	assertFilesContain(t, root, tt.wantContains)
+	assertFilesEqual(t, root, tt.wantExact)
+}
+
+func assertRunError(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("run() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("run() error = %v, want %q", err, want)
+	}
+}
+
+func assertStdoutContains(t *testing.T, stdout string, wants []string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("stdout = %q, want %q", stdout, want)
+		}
+	}
+}
+
+func assertFilesContain(t *testing.T, root string, wants map[string]string) {
+	t.Helper()
+	for path, want := range wants {
+		got := readTestFile(t, filepath.Join(root, filepath.FromSlash(path)))
+		if !strings.Contains(got, want) {
+			t.Fatalf("%s =\n%s\nwant substring %q", path, got, want)
+		}
+	}
+}
+
+func assertFilesEqual(t *testing.T, root string, wants map[string]string) {
+	t.Helper()
+	for path, want := range wants {
+		got := readTestFile(t, filepath.Join(root, filepath.FromSlash(path)))
+		if got != want {
+			t.Fatalf("%s =\n%s\nwant\n%s", path, got, want)
+		}
 	}
 }
 
@@ -171,7 +207,7 @@ func TestRun_RejectsSymlinkEscapingRoot(t *testing.T) {
 	outside := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "README.md"), "# Title\n")
 	writeTestFile(t, filepath.Join(outside, "target.md"), "| A | B |\n| --- | --- |\n")
-	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o750); err != nil {
 		t.Fatalf("mkdir docs: %v", err)
 	}
 	if err := os.Symlink(filepath.Join(outside, "target.md"), filepath.Join(root, "docs", "link.md")); err != nil {
@@ -197,7 +233,7 @@ func TestRun_RejectsSymlinkEscapingRoot(t *testing.T) {
 func TestRun_ReturnsStdoutWriteErrors(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "README.md"), "# Title\n")
-	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o750); err != nil {
 		t.Fatalf("mkdir docs: %v", err)
 	}
 
@@ -218,10 +254,10 @@ func (errWriter) Write([]byte) (int, error) {
 
 func writeTestFile(t *testing.T, path, content string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 }

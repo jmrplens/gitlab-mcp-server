@@ -73,11 +73,11 @@ func dynamicWorkflowPlanPreamble(task evalTask) string {
 			required = strings.Join(step.RequiredParams, ", ")
 		}
 		parts := []string{
-			fmt.Sprintf("action=%s", step.ExpectedAction),
-			fmt.Sprintf("required_params=%s", required),
+			"action=" + step.ExpectedAction,
+			"required_params=" + required,
 		}
 		if optional := dynamicWorkflowOptionalParams(step.OptionalParams); len(optional) > 0 {
-			parts = append(parts, fmt.Sprintf("optional_params=%s", strings.Join(optional, ", ")))
+			parts = append(parts, "optional_params="+strings.Join(optional, ", "))
 		}
 		if step.Destructive {
 			parts = append(parts, "destructive_confirm=true")
@@ -152,99 +152,166 @@ func dynamicFirstStepGuidance(task evalTask) string {
 
 // dynamicExampleParamValue derives dynamic example param value from task and schema inputs.
 func dynamicExampleParamValue(action, param, prompt string) any {
-	if verb, hasFileActionPrefix := strings.CutPrefix(action, "repository.file_"); hasFileActionPrefix {
-		switch param {
-		case "file_path":
-			if value, ok := repositoryFilePathExample(prompt); ok {
-				return value
-			}
-		case "content":
-			if value, ok := examplePromptMarkerValue(param, prompt); ok {
-				return value
-			}
-			if strings.Contains(action, "update") {
-				return "Updated content for repository file CRUD"
-			}
-			return "Initial content for repository file CRUD"
-		case "commit_message":
-			if value, ok := examplePromptMarkerValue(param, prompt); ok {
-				return value
-			}
-			if filePath, ok := repositoryFilePathExample(prompt); ok {
-				return fmt.Sprintf("Evaluation %s %s", verb, filePath)
-			}
-			return fmt.Sprintf("Evaluation %s repository file", verb)
-		}
+	if value, ok := repositoryFileDynamicExample(action, param, prompt); ok {
+		return value
 	}
+	if value, ok := mergeRequestIIDDynamicExample(action, param, prompt); ok {
+		return value
+	}
+	if value, ok := actionSpecificDynamicExample(action, param, prompt); ok {
+		return value
+	}
+	return exampleParamValue(param, prompt)
+}
+
+func repositoryFileDynamicExample(action, param, prompt string) (any, bool) {
+	verb, hasFileActionPrefix := strings.CutPrefix(action, "repository.file_")
+	if !hasFileActionPrefix {
+		return nil, false
+	}
+	switch param {
+	case "file_path":
+		if value, ok := repositoryFilePathExample(prompt); ok {
+			return value, true
+		}
+	case "content":
+		if value, ok := examplePromptMarkerValue(param, prompt); ok {
+			return value, true
+		}
+		if strings.Contains(action, "update") {
+			return "Updated content for repository file CRUD", true
+		}
+		return "Initial content for repository file CRUD", true
+	case "commit_message":
+		if value, ok := examplePromptMarkerValue(param, prompt); ok {
+			return value, true
+		}
+		if filePath, ok := repositoryFilePathExample(prompt); ok {
+			return fmt.Sprintf("Evaluation %s %s", verb, filePath), true
+		}
+		return fmt.Sprintf("Evaluation %s repository file", verb), true
+	}
+	return nil, false
+}
+
+func mergeRequestIIDDynamicExample(action, param, prompt string) (any, bool) {
 	if strings.HasPrefix(action, "merge_request.") && param == "merge_request_iid" {
 		if value, ok := backtickValueAfter(prompt, "MR "); ok {
-			return numericExampleValue(value)
+			return numericExampleValue(value), true
 		}
 		if value, ok := backtickValueAfter(prompt, promptMarkerMergeRequest); ok {
-			return numericExampleValue(value)
+			return numericExampleValue(value), true
 		}
 	}
-	switch action {
-	case "release.create":
-		switch param {
-		case "tag_name":
-			if value, ok := backtickValueAfter(prompt, "release "); ok {
-				return value
-			}
-		case "name":
-			if value, ok := backtickValueAfter(prompt, "named "); ok {
-				return value
-			}
+	return nil, false
+}
+
+func actionSpecificDynamicExample(action, param, prompt string) (any, bool) {
+	for _, resolver := range []func(string, string, string) (any, bool){
+		releaseDynamicExample,
+		mergeRequestDynamicExample,
+		snippetDynamicExample,
+		featureFlagDynamicExample,
+		issueDynamicExample,
+		pipelineDynamicExample,
+	} {
+		if value, ok := resolver(action, param, prompt); ok {
+			return value, true
 		}
+	}
+	return nil, false
+}
+
+func releaseDynamicExample(action, param, prompt string) (any, bool) {
+	if action != "release.create" {
+		return nil, false
+	}
+	switch param {
+	case "tag_name":
+		if value, ok := backtickValueAfter(prompt, "release "); ok {
+			return value, true
+		}
+	case "name":
+		if value, ok := backtickValueAfter(prompt, "named "); ok {
+			return value, true
+		}
+	}
+	return nil, false
+}
+
+func mergeRequestDynamicExample(action, param, prompt string) (any, bool) {
+	switch action {
 	case "merge_request.time_estimate_set":
 		if param == "duration" {
 			if value, ok := backtickValueAfter(prompt, "estimate "); ok {
-				return value
+				return value, true
 			}
 		}
 	case "merge_request.spent_time_add":
 		if param == "duration" {
 			if value, ok := backtickValueAfter(prompt, "spent time "); ok {
-				return value
+				return value, true
 			}
 		}
 	case "merge_request.emoji_mr_create":
 		if param == "name" {
 			if value, ok := backtickValueAfter(prompt, "award emoji "); ok {
-				return value
+				return value, true
 			}
 		}
+	}
+	return nil, false
+}
+
+func snippetDynamicExample(action, param, prompt string) (any, bool) {
+	switch action {
 	case "snippet.project_create":
 		if param == "file_name" {
 			if value, ok := backtickValueAfter(prompt, "project snippet "); ok {
-				return value + ".md"
+				return value + ".md", true
 			}
 		}
 	case "snippet.project_update":
 		if param == "files" {
-			return []map[string]any{{"action": "update", "file_path": "<returned_file_path>", "content": "Updated snippet content"}}
+			return []map[string]any{{"action": "update", "file_path": "<returned_file_path>", "content": "Updated snippet content"}}, true
 		}
-	case "feature_flags.ff_user_list_create":
-		switch param {
-		case "name":
-			if value, ok := backtickValueAfter(prompt, "user list "); ok {
-				return value
-			}
-		case "user_xids":
-			if value, ok := backtickValueAfter(prompt, "user IDs "); ok {
-				return value
-			}
+	}
+	return nil, false
+}
+
+func featureFlagDynamicExample(action, param, prompt string) (any, bool) {
+	if action != "feature_flags.ff_user_list_create" {
+		return nil, false
+	}
+	switch param {
+	case "name":
+		if value, ok := backtickValueAfter(prompt, "user list "); ok {
+			return value, true
 		}
-	case actionIssueCreate:
-		if param == "title" {
-			if value, ok := backtickValueAfter(prompt, "create issue "); ok {
-				return value
-			}
+	case "user_xids":
+		if value, ok := backtickValueAfter(prompt, "user IDs "); ok {
+			return value, true
 		}
+	}
+	return nil, false
+}
+
+func issueDynamicExample(action, param, prompt string) (any, bool) {
+	if action != actionIssueCreate || param != "title" {
+		return nil, false
+	}
+	if value, ok := backtickValueAfter(prompt, "create issue "); ok {
+		return value, true
+	}
+	return nil, false
+}
+
+func pipelineDynamicExample(action, param, prompt string) (any, bool) {
+	switch action {
 	case "pipeline.trigger_create":
 		if param == "description" {
 			if value, ok := backtickValueAfter(prompt, "create trigger "); ok {
-				return value
+				return value, true
 			}
 		}
 	case "pipeline.schedule_create":
@@ -252,16 +319,16 @@ func dynamicExampleParamValue(action, param, prompt string) any {
 		case "description":
 			for _, marker := range []string{"inactive schedule ", "active schedule ", "create schedule ", "schedule named "} {
 				if value, ok := backtickValueAfter(prompt, marker); ok {
-					return value
+					return value, true
 				}
 			}
 		case "active":
 			if strings.Contains(strings.ToLower(prompt), "inactive") {
-				return false
+				return false, true
 			}
 		}
 	}
-	return exampleParamValue(param, prompt)
+	return nil, false
 }
 
 // repositoryFilePathExample handles repository file path example and returns [string].
@@ -1031,29 +1098,11 @@ func exampleParamValue(param, prompt string) any {
 			return "failed"
 		}
 	case "scopes":
-		if strings.Contains(lowerPrompt, "read_api") {
-			return []string{"read_api"}
-		}
-		if strings.Contains(lowerPrompt, "read_repository") {
-			return []string{"read_repository"}
-		}
+		return exampleScopesValue(lowerPrompt)
 	case "access_level":
-		if strings.Contains(lowerPrompt, "reporter") {
-			return 20
-		}
-		if strings.Contains(lowerPrompt, "developer") {
-			return 30
-		}
-		if strings.Contains(lowerPrompt, "maintainer") {
-			return 40
-		}
+		return exampleAccessLevelValue(lowerPrompt)
 	case "paused":
-		if strings.Contains(lowerPrompt, "paused=true") {
-			return true
-		}
-		if strings.Contains(lowerPrompt, "paused=false") {
-			return false
-		}
+		return examplePausedValue(lowerPrompt)
 	case "project_id":
 		if value, ok := exampleProjectIDValue(prompt); ok {
 			return value
@@ -1062,6 +1111,42 @@ func exampleParamValue(param, prompt string) any {
 		return false
 	}
 	return fallbackExampleParamValue(param)
+}
+
+func exampleScopesValue(lowerPrompt string) any {
+	if strings.Contains(lowerPrompt, "read_api") {
+		return []string{"read_api"}
+	}
+	if strings.Contains(lowerPrompt, "read_repository") {
+		return []string{"read_repository"}
+	}
+	return fallbackExampleParamValue("scopes")
+}
+
+func exampleAccessLevelValue(lowerPrompt string) any {
+	for _, accessLevel := range []struct {
+		marker string
+		value  int
+	}{
+		{marker: "reporter", value: 20},
+		{marker: "developer", value: 30},
+		{marker: "maintainer", value: 40},
+	} {
+		if strings.Contains(lowerPrompt, accessLevel.marker) {
+			return accessLevel.value
+		}
+	}
+	return fallbackExampleParamValue("access_level")
+}
+
+func examplePausedValue(lowerPrompt string) any {
+	if strings.Contains(lowerPrompt, "paused=true") {
+		return true
+	}
+	if strings.Contains(lowerPrompt, "paused=false") {
+		return false
+	}
+	return fallbackExampleParamValue("paused")
 }
 
 // examplePromptMarkerValue handles example prompt marker value and returns [any].
@@ -1112,6 +1197,27 @@ func fallbackExampleParamValue(param string) any {
 // exampleOptionalParamValue handles example optional param value and returns [any].
 func exampleOptionalParamValue(param, prompt string) (any, bool) {
 	start, end, hasMonth := monthRangeFromPrompt(prompt)
+	if value, ok := optionalDateParamValue(param, prompt, start, end, hasMonth); ok {
+		return value, true
+	}
+	if param == "environment_scope" {
+		return optionalEnvironmentScopeFromPrompt(prompt)
+	}
+	lowerPrompt := strings.ToLower(prompt)
+	for _, resolver := range []func(string, string) (any, bool){
+		optionalStateParamValue,
+		optionalAccessParamValue,
+		optionalBooleanParamValue,
+		optionalSortParamValue,
+	} {
+		if value, ok := resolver(param, lowerPrompt); ok {
+			return value, true
+		}
+	}
+	return nil, false
+}
+
+func optionalDateParamValue(param, prompt, start, end string, hasMonth bool) (any, bool) {
 	switch param {
 	case "created_after":
 		return start, hasMonth
@@ -1125,63 +1231,83 @@ func exampleOptionalParamValue(param, prompt string) (any, bool) {
 		if value, ok := backtickValueAfter(prompt, " to "); ok {
 			return value, true
 		}
+	}
+	return nil, false
+}
+
+func optionalStateParamValue(param, lowerPrompt string) (any, bool) {
+	switch param {
 	case "state":
-		if strings.Contains(strings.ToLower(prompt), "active") {
+		if strings.Contains(lowerPrompt, "active") {
 			return "active", true
 		}
 	case "state_event":
-		if strings.Contains(strings.ToLower(prompt), "close") {
+		if strings.Contains(lowerPrompt, "close") {
 			return "close", true
 		}
-		if strings.Contains(strings.ToLower(prompt), "reopen") {
+		if strings.Contains(lowerPrompt, "reopen") {
 			return "reopen", true
 		}
-	case "environment_scope":
-		return optionalEnvironmentScopeFromPrompt(prompt)
+	}
+	return nil, false
+}
+
+func optionalAccessParamValue(param, lowerPrompt string) (any, bool) {
+	switch param {
 	case "push_access_level":
-		if strings.Contains(strings.ToLower(prompt), "maintainer push") || strings.Contains(strings.ToLower(prompt), "maintainer push and merge") {
+		if strings.Contains(lowerPrompt, "maintainer push") || strings.Contains(lowerPrompt, "maintainer push and merge") {
 			return 40, true
 		}
-		if strings.Contains(strings.ToLower(prompt), "developer push") || strings.Contains(strings.ToLower(prompt), "developer push and merge") {
+		if strings.Contains(lowerPrompt, "developer push") || strings.Contains(lowerPrompt, "developer push and merge") {
 			return 30, true
 		}
 	case "merge_access_level":
-		if strings.Contains(strings.ToLower(prompt), "maintainer merge") || strings.Contains(strings.ToLower(prompt), "maintainer push and merge") {
+		if strings.Contains(lowerPrompt, "maintainer merge") || strings.Contains(lowerPrompt, "maintainer push and merge") {
 			return 40, true
 		}
-		if strings.Contains(strings.ToLower(prompt), "developer merge") || strings.Contains(strings.ToLower(prompt), "developer push and merge") {
+		if strings.Contains(lowerPrompt, "developer merge") || strings.Contains(lowerPrompt, "developer push and merge") {
 			return 30, true
 		}
+	}
+	return nil, false
+}
+
+func optionalBooleanParamValue(param, lowerPrompt string) (any, bool) {
+	switch param {
 	case "include_descendants":
-		if strings.Contains(strings.ToLower(prompt), "descendant") {
+		if strings.Contains(lowerPrompt, "descendant") {
 			return true, true
 		}
 	case "enabled":
-		if strings.Contains(strings.ToLower(prompt), "disabled") {
+		if strings.Contains(lowerPrompt, "disabled") {
 			return false, true
 		}
 	case "active":
-		if strings.Contains(strings.ToLower(prompt), "inactive") {
+		if strings.Contains(lowerPrompt, "inactive") {
 			return false, true
 		}
+	case "primary":
+		if strings.Contains(lowerPrompt, "secondary") {
+			return false, true
+		}
+	}
+	return nil, false
+}
+
+func optionalSortParamValue(param, lowerPrompt string) (any, bool) {
+	switch param {
 	case "order_by":
-		if strings.Contains(strings.ToLower(prompt), "recently updated") || strings.Contains(strings.ToLower(prompt), "updated") {
+		if strings.Contains(lowerPrompt, "recently updated") || strings.Contains(lowerPrompt, "updated") {
 			return "updated_at", true
 		}
 	case "sort":
-		if strings.Contains(strings.ToLower(prompt), "most recently") || strings.Contains(strings.ToLower(prompt), "latest") || strings.Contains(strings.ToLower(prompt), "recently updated") {
+		if strings.Contains(lowerPrompt, "most recently") || strings.Contains(lowerPrompt, "latest") || strings.Contains(lowerPrompt, "recently updated") {
 			return "desc", true
 		}
 	case "per_page":
-		if strings.Contains(strings.ToLower(prompt), "10 most") || strings.Contains(strings.ToLower(prompt), "most recently updated projects") {
+		if strings.Contains(lowerPrompt, "10 most") || strings.Contains(lowerPrompt, "most recently updated projects") {
 			return 10, true
 		}
-	case "primary":
-		if strings.Contains(strings.ToLower(prompt), "secondary") {
-			return false, true
-		}
-	default:
-		return nil, false
 	}
 	return nil, false
 }

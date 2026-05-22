@@ -35,9 +35,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // Client wraps the official GitLab API client with project-specific configuration.

@@ -10,6 +10,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epicworkitems"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -45,16 +46,6 @@ query($fullPath: ID!, $iid: String!, $first: Int, $after: String) {
           }
         }
       }
-    }
-  }
-}
-`
-
-const queryResolveWorkItemGID = `
-query($fullPath: ID!, $iid: String!) {
-  namespace(fullPath: $fullPath) {
-    workItem(iid: $iid) {
-      id
     }
   }
 }
@@ -200,16 +191,6 @@ type gqlDestroyNotePayload struct {
 	Errors []string `json:"errors"`
 }
 
-// gqlResolveWorkItemID holds a resolved work item GID.
-type gqlResolveWorkItemID struct {
-	ID string `json:"id"`
-}
-
-// gqlResolveNamespace wraps a work item ID inside a namespace.
-type gqlResolveNamespace struct {
-	WorkItem *gqlResolveWorkItemID `json:"workItem"`
-}
-
 // extractDiscussionHex extracts the hex ID from a Discussion GID.
 func extractDiscussionHex(gid string) string {
 	if idx := strings.LastIndex(gid, "/"); idx >= 0 {
@@ -256,28 +237,7 @@ func nodeToDiscussionOutput(disc gqlDiscussionNode) Output {
 
 // resolveWorkItemGID resolves the GraphQL GID for a work item by namespace path and IID.
 func resolveWorkItemGID(ctx context.Context, client *gitlabclient.Client, fullPath string, iid int64) (string, error) {
-	var resp struct {
-		Data struct {
-			Namespace *gqlResolveNamespace `json:"namespace"`
-		} `json:"data"`
-	}
-
-	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
-		Query: queryResolveWorkItemGID,
-		Variables: map[string]any{
-			"fullPath": fullPath,
-			"iid":      strconv.FormatInt(iid, 10),
-		},
-	}, &resp, gl.WithContext(ctx))
-	if err != nil {
-		return "", err
-	}
-
-	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
-		return "", fmt.Errorf("epic not found in group %q with IID %d", fullPath, iid)
-	}
-
-	return resp.Data.Namespace.WorkItem.ID, nil
+	return epicworkitems.ResolveEpicGID(ctx, client, fullPath, iid)
 }
 
 // Input types.
@@ -367,7 +327,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("epicDiscussionList", "epic_iid")
 	}
 
-	vars := input.GraphQLPaginationInput.Variables()
+	vars := input.Variables()
 	vars["fullPath"] = input.FullPath
 	vars["iid"] = strconv.FormatInt(input.IID, 10)
 

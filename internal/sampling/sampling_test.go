@@ -10,7 +10,6 @@ package sampling
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1201,7 +1200,7 @@ func TestAnalyzeWithTools_ToolExecutionError(t *testing.T) {
 
 	samplingClient := Client{session: ss}
 	executor := &mockToolExecutor{
-		err: fmt.Errorf("network timeout"),
+		err: errors.New("network timeout"),
 	}
 
 	_, err = samplingClient.AnalyzeWithTools(ctx, "prompt", "data", executor)

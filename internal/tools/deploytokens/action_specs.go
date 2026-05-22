@@ -39,21 +39,15 @@ func DeleteGroupOutput(ctx context.Context, client *gitlabclient.Client, input D
 }
 
 func deployTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := deployTokenOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, deployTokenOptions(individualTool))
 }
 
 func deployTokenCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, deployTokenOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, deployTokenOptions(individualTool))
 }
 
 func deployTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := deployTokenOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, deployTokenOptions(individualTool))
 }
 
 func deployTokenDeleteProjectSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -71,9 +65,7 @@ func deployTokenDeleteProjectSpec(client *gitlabclient.Client) toolutil.ActionSp
 			CommonConfusions: []string{"Do not use deploy_key_id or token_id for project deploy token deletion."},
 		},
 	}
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec("deploy_token_delete_project", toolutil.DestructiveAction(client, DeleteProjectOutput), options)
+	return toolutil.NewDeleteActionSpec("deploy_token_delete_project", toolutil.DestructiveAction(client, DeleteProjectOutput), options)
 }
 
 func deployTokenOptions(individualTool string) toolutil.ActionSpecOptions {

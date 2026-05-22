@@ -22,21 +22,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func clusterAgentReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := clusterAgentOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, clusterAgentOptions(individualTool))
 }
 
 func clusterAgentCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, clusterAgentOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, clusterAgentOptions(individualTool))
 }
 
 func clusterAgentDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := clusterAgentOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, clusterAgentOptions(individualTool))
 }
 
 func clusterAgentOptions(individualTool string) toolutil.ActionSpecOptions {

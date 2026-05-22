@@ -20,6 +20,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -79,7 +80,7 @@ func main() {
 	violations = append(violations, auditDuplicates(individualTools, "individual")...)
 	violations = append(violations, auditDuplicates(metaTools, "meta")...)
 
-	root, err := repositoryRoot(".")
+	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "register meta audit skipped: %v\n", err)
 	}
@@ -164,7 +165,7 @@ func auditAnnotations(tls []*mcp.Tool, kind string) []violation {
 	var vs []violation
 	for _, t := range tls {
 		if t.Annotations == nil {
-			vs = append(vs, violation{t.Name, "annotations", fmt.Sprintf("%s tool has nil Annotations", kind)})
+			vs = append(vs, violation{t.Name, "annotations", kind + " tool has nil Annotations"})
 			continue
 		}
 		if t.Annotations.ReadOnlyHint && t.Annotations.DestructiveHint != nil && *t.Annotations.DestructiveHint {
@@ -234,13 +235,17 @@ func auditAdditionalProperties(tls []*mcp.Tool, kind string) []violation {
 		}
 		raw, present := schema["additionalProperties"]
 		if !present {
-			vs = append(vs, violation{t.Name, "additional-properties",
-				fmt.Sprintf("%s tool inputSchema missing additionalProperties:false", kind)})
+			vs = append(vs, violation{
+				t.Name, "additional-properties",
+				kind + " tool inputSchema missing additionalProperties:false",
+			})
 			continue
 		}
 		if v, isBool := raw.(bool); !isBool || v {
-			vs = append(vs, violation{t.Name, "additional-properties",
-				fmt.Sprintf("%s tool inputSchema additionalProperties=%v, want false", kind, raw)})
+			vs = append(vs, violation{
+				t.Name, "additional-properties",
+				fmt.Sprintf("%s tool inputSchema additionalProperties=%v, want false", kind, raw),
+			})
 		}
 	}
 	return vs

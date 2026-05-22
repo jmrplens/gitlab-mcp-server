@@ -68,6 +68,8 @@ func extractFirstID(text string) int64 {
 // every registered MCP resource URI template via ReadResource and asserts
 // non-empty content with the documented MIME type. CI-runner resources are
 // skipped unless the suite runs in Docker ephemeral mode.
+//
+//nolint:maintidx // Comprehensive resource fixture workflow intentionally keeps URI coverage in one E2E scenario.
 func TestResources_ReadAll(t *testing.T) {
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
@@ -248,52 +250,10 @@ func TestResources_ReadAll(t *testing.T) {
 	requireNoError(t, err, "create group milestone")
 
 	// -----------------------------------------------------------------
-	// ReadResource helpers
-	// -----------------------------------------------------------------
-	readJSON := func(t *testing.T, uri string) {
-		t.Helper()
-		result, rerr := sess.individual.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
-		if rerr != nil {
-			t.Fatalf("ReadResource %s: %v", uri, rerr)
-		}
-		if len(result.Contents) == 0 {
-			t.Fatalf("ReadResource %s: empty Contents", uri)
-		}
-		c := result.Contents[0]
-		if c.URI != uri {
-			t.Errorf("ReadResource %s: returned URI %q", uri, c.URI)
-		}
-		if c.Text == "" {
-			t.Errorf("ReadResource %s: empty Text", uri)
-		}
-		if c.MIMEType != "application/json" {
-			t.Errorf("ReadResource %s: expected MIMEType application/json, got %q", uri, c.MIMEType)
-		}
-	}
-
-	readMarkdown := func(t *testing.T, uri string) {
-		t.Helper()
-		result, rerr := sess.individual.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
-		if rerr != nil {
-			t.Fatalf("ReadResource %s: %v", uri, rerr)
-		}
-		if len(result.Contents) == 0 {
-			t.Fatalf("ReadResource %s: empty Contents", uri)
-		}
-		c := result.Contents[0]
-		if c.Text == "" {
-			t.Errorf("ReadResource %s: empty Text", uri)
-		}
-		if !strings.HasPrefix(c.MIMEType, "text/markdown") {
-			t.Errorf("ReadResource %s: expected text/markdown MIME, got %q", uri, c.MIMEType)
-		}
-	}
-
-	// -----------------------------------------------------------------
 	// Static resources (3)
 	// -----------------------------------------------------------------
-	t.Run("Static/UserCurrent", func(t *testing.T) { readJSON(t, "gitlab://user/current") })
-	t.Run("Static/Groups", func(t *testing.T) { readJSON(t, "gitlab://groups") })
+	t.Run("Static/UserCurrent", func(t *testing.T) { readResourceJSON(ctx, t, "gitlab://user/current") })
+	t.Run("Static/Groups", func(t *testing.T) { readResourceJSON(ctx, t, "gitlab://groups") })
 	// gitlab://workspace/roots is exercised by TestCapability_RootsAdvertised
 	// (capabilities_test.go) which uses a dedicated server with the roots
 	// manager wired up. It is intentionally not registered on the shared
@@ -302,87 +262,87 @@ func TestResources_ReadAll(t *testing.T) {
 	// -----------------------------------------------------------------
 	// Project-scoped resources
 	// -----------------------------------------------------------------
-	t.Run("Project/Self", func(t *testing.T) { readJSON(t, projURI("")) })
-	t.Run("Project/Members", func(t *testing.T) { readJSON(t, projURI("/members")) })
-	t.Run("Project/Labels", func(t *testing.T) { readJSON(t, projURI("/labels")) })
+	t.Run("Project/Self", func(t *testing.T) { readResourceJSON(ctx, t, projURI("")) })
+	t.Run("Project/Members", func(t *testing.T) { readResourceJSON(ctx, t, projURI("/members")) })
+	t.Run("Project/Labels", func(t *testing.T) { readResourceJSON(ctx, t, projURI("/labels")) })
 	t.Run("Project/Label", func(t *testing.T) {
-		readJSON(t, projURI("/label/"+strconv.FormatInt(label.ID, 10)))
+		readResourceJSON(ctx, t, projURI("/label/"+strconv.FormatInt(label.ID, 10)))
 	})
-	t.Run("Project/Milestones", func(t *testing.T) { readJSON(t, projURI("/milestones")) })
+	t.Run("Project/Milestones", func(t *testing.T) { readResourceJSON(ctx, t, projURI("/milestones")) })
 	t.Run("Project/Milestone", func(t *testing.T) {
-		readJSON(t, projURI("/milestone/"+strconv.FormatInt(milestone.IID, 10)))
+		readResourceJSON(ctx, t, projURI("/milestone/"+strconv.FormatInt(milestone.IID, 10)))
 	})
-	t.Run("Project/Branches", func(t *testing.T) { readJSON(t, projURI("/branches")) })
+	t.Run("Project/Branches", func(t *testing.T) { readResourceJSON(ctx, t, projURI("/branches")) })
 	t.Run("Project/Branch", func(t *testing.T) {
-		readJSON(t, projURI("/branch/"+defaultBranch))
+		readResourceJSON(ctx, t, projURI("/branch/"+defaultBranch))
 	})
-	t.Run("Project/Issues", func(t *testing.T) { readJSON(t, projURI("/issues")) })
+	t.Run("Project/Issues", func(t *testing.T) { readResourceJSON(ctx, t, projURI("/issues")) })
 	t.Run("Project/Issue", func(t *testing.T) {
-		readJSON(t, projURI("/issue/"+strconv.FormatInt(issue.IID, 10)))
+		readResourceJSON(ctx, t, projURI("/issue/"+strconv.FormatInt(issue.IID, 10)))
 	})
-	t.Run("Project/Releases", func(t *testing.T) { readJSON(t, projURI("/releases")) })
+	t.Run("Project/Releases", func(t *testing.T) { readResourceJSON(ctx, t, projURI("/releases")) })
 	t.Run("Project/Release", func(t *testing.T) {
-		readJSON(t, projURI("/release/"+tagName))
+		readResourceJSON(ctx, t, projURI("/release/"+tagName))
 	})
-	t.Run("Project/Tags", func(t *testing.T) { readJSON(t, projURI("/tags")) })
+	t.Run("Project/Tags", func(t *testing.T) { readResourceJSON(ctx, t, projURI("/tags")) })
 	t.Run("Project/Tag", func(t *testing.T) {
-		readJSON(t, projURI("/tag/"+tagName))
+		readResourceJSON(ctx, t, projURI("/tag/"+tagName))
 	})
 	t.Run("Project/Commit", func(t *testing.T) {
-		readJSON(t, projURI("/commit/"+commit.SHA))
+		readResourceJSON(ctx, t, projURI("/commit/"+commit.SHA))
 	})
 	t.Run("Project/File", func(t *testing.T) {
-		readJSON(t, projURI("/file/"+defaultBranch+"/hello.txt"))
+		readResourceJSON(ctx, t, projURI("/file/"+defaultBranch+"/hello.txt"))
 	})
 	t.Run("Project/Wiki", func(t *testing.T) {
-		readJSON(t, projURI("/wiki/"+wiki.Slug))
+		readResourceJSON(ctx, t, projURI("/wiki/"+wiki.Slug))
 	})
 	t.Run("Project/Board", func(t *testing.T) {
-		readJSON(t, projURI("/board/"+strconv.FormatInt(board.ID, 10)))
+		readResourceJSON(ctx, t, projURI("/board/"+strconv.FormatInt(board.ID, 10)))
 	})
 	t.Run("Project/Deployment", func(t *testing.T) {
-		readJSON(t, projURI("/deployment/"+strconv.Itoa(dep.ID)))
+		readResourceJSON(ctx, t, projURI("/deployment/"+strconv.Itoa(dep.ID)))
 	})
 	t.Run("Project/Environment", func(t *testing.T) {
-		readJSON(t, projURI("/environment/"+strconv.FormatInt(env.ID, 10)))
+		readResourceJSON(ctx, t, projURI("/environment/"+strconv.FormatInt(env.ID, 10)))
 	})
 	t.Run("Project/FeatureFlag", func(t *testing.T) {
-		readJSON(t, projURI("/feature_flag/"+ffName))
+		readResourceJSON(ctx, t, projURI("/feature_flag/"+ffName))
 	})
 	t.Run("Project/DeployKey", func(t *testing.T) {
-		readJSON(t, projURI("/deploy_key/"+strconv.FormatInt(dk.ID, 10)))
+		readResourceJSON(ctx, t, projURI("/deploy_key/"+strconv.FormatInt(dk.ID, 10)))
 	})
 	t.Run("Project/Snippet", func(t *testing.T) {
-		readJSON(t, projURI("/snippet/"+strconv.FormatInt(projSnip.ID, 10)))
+		readResourceJSON(ctx, t, projURI("/snippet/"+strconv.FormatInt(projSnip.ID, 10)))
 	})
 
 	// -----------------------------------------------------------------
 	// Merge request resources
 	// -----------------------------------------------------------------
 	mrPath := projURI("/mr/" + strconv.FormatInt(mr.IID, 10))
-	t.Run("MR/Self", func(t *testing.T) { readJSON(t, mrPath) })
-	t.Run("MR/Notes", func(t *testing.T) { readJSON(t, mrPath+"/notes") })
-	t.Run("MR/Discussions", func(t *testing.T) { readJSON(t, mrPath+"/discussions") })
+	t.Run("MR/Self", func(t *testing.T) { readResourceJSON(ctx, t, mrPath) })
+	t.Run("MR/Notes", func(t *testing.T) { readResourceJSON(ctx, t, mrPath+"/notes") })
+	t.Run("MR/Discussions", func(t *testing.T) { readResourceJSON(ctx, t, mrPath+"/discussions") })
 
 	// -----------------------------------------------------------------
 	// Group resources
 	// -----------------------------------------------------------------
 	groupURI := func(suffix string) string { return "gitlab://group/" + gidStr + suffix }
-	t.Run("Group/Self", func(t *testing.T) { readJSON(t, groupURI("")) })
-	t.Run("Group/Members", func(t *testing.T) { readJSON(t, groupURI("/members")) })
-	t.Run("Group/Projects", func(t *testing.T) { readJSON(t, groupURI("/projects")) })
+	t.Run("Group/Self", func(t *testing.T) { readResourceJSON(ctx, t, groupURI("")) })
+	t.Run("Group/Members", func(t *testing.T) { readResourceJSON(ctx, t, groupURI("/members")) })
+	t.Run("Group/Projects", func(t *testing.T) { readResourceJSON(ctx, t, groupURI("/projects")) })
 	t.Run("Group/Label", func(t *testing.T) {
-		readJSON(t, groupURI("/label/"+strconv.FormatInt(grpLabel.ID, 10)))
+		readResourceJSON(ctx, t, groupURI("/label/"+strconv.FormatInt(grpLabel.ID, 10)))
 	})
 	t.Run("Group/Milestone", func(t *testing.T) {
-		readJSON(t, groupURI("/milestone/"+strconv.FormatInt(grpMs.IID, 10)))
+		readResourceJSON(ctx, t, groupURI("/milestone/"+strconv.FormatInt(grpMs.IID, 10)))
 	})
 
 	// -----------------------------------------------------------------
 	// Personal snippet
 	// -----------------------------------------------------------------
 	t.Run("Snippet/Personal", func(t *testing.T) {
-		readJSON(t, "gitlab://snippet/"+strconv.FormatInt(personalSnip.ID, 10))
+		readResourceJSON(ctx, t, "gitlab://snippet/"+strconv.FormatInt(personalSnip.ID, 10))
 	})
 
 	// -----------------------------------------------------------------
@@ -397,7 +357,7 @@ func TestResources_ReadAll(t *testing.T) {
 	} {
 		uri := "gitlab://guides/" + slug
 		t.Run("Guide/"+slug, func(t *testing.T) {
-			readMarkdown(t, uri)
+			readResourceMarkdown(ctx, t, uri)
 		})
 	}
 
@@ -415,49 +375,77 @@ func TestResources_ReadAll(t *testing.T) {
 	const ciYAML = "stages:\n  - test\ntest:\n  stage: test\n  script:\n    - echo ok\n"
 	commitFile(ctx, t, sess.individual, proj, defaultBranch, ".gitlab-ci.yml", ciYAML, "ci: add minimal pipeline")
 
-	var pipelineID int64
-	pipelineDeadline := time.Now().Add(180 * time.Second)
-	for time.Now().Before(pipelineDeadline) {
-		result, rerr := sess.individual.ReadResource(ctx, &mcp.ReadResourceParams{URI: projURI("/pipelines/latest")})
-		if rerr == nil && len(result.Contents) > 0 {
-			if id := extractFirstID(result.Contents[0].Text); id > 0 {
-				pipelineID = id
-				break
-			}
-		}
-		time.Sleep(2 * time.Second)
-	}
+	pipelineID := waitForResourceID(ctx, t, projURI("/pipelines/latest"), 180*time.Second)
 	if pipelineID == 0 {
 		t.Fatal("no pipeline produced within 180s")
 	}
 	pipelineIDStr := strconv.FormatInt(pipelineID, 10)
 
 	t.Run("CI/PipelinesLatest", func(t *testing.T) {
-		readJSON(t, projURI("/pipelines/latest"))
+		readResourceJSON(ctx, t, projURI("/pipelines/latest"))
 	})
 	t.Run("CI/Pipeline", func(t *testing.T) {
-		readJSON(t, projURI("/pipeline/"+pipelineIDStr))
+		readResourceJSON(ctx, t, projURI("/pipeline/"+pipelineIDStr))
 	})
 	t.Run("CI/PipelineJobs", func(t *testing.T) {
-		readJSON(t, projURI("/pipeline/"+pipelineIDStr+"/jobs"))
+		readResourceJSON(ctx, t, projURI("/pipeline/"+pipelineIDStr+"/jobs"))
 	})
 
-	var jobID int64
-	jobDeadline := time.Now().Add(180 * time.Second)
-	for time.Now().Before(jobDeadline) {
-		result, rerr := sess.individual.ReadResource(ctx, &mcp.ReadResourceParams{URI: projURI("/pipeline/" + pipelineIDStr + "/jobs")})
-		if rerr == nil && len(result.Contents) > 0 {
-			if id := extractFirstID(result.Contents[0].Text); id > 0 {
-				jobID = id
-				break
-			}
-		}
-		time.Sleep(2 * time.Second)
-	}
+	jobID := waitForResourceID(ctx, t, projURI("/pipeline/"+pipelineIDStr+"/jobs"), 180*time.Second)
 	if jobID == 0 {
 		t.Fatal("no job produced within 180s")
 	}
 	t.Run("CI/Job", func(t *testing.T) {
-		readJSON(t, projURI("/job/"+strconv.FormatInt(jobID, 10)))
+		readResourceJSON(ctx, t, projURI("/job/"+strconv.FormatInt(jobID, 10)))
 	})
+}
+
+func readResourceJSON(ctx context.Context, t *testing.T, uri string) {
+	t.Helper()
+	content := readResourceContent(ctx, t, uri)
+	if content.URI != uri {
+		t.Errorf("ReadResource %s: returned URI %q", uri, content.URI)
+	}
+	if content.MIMEType != "application/json" {
+		t.Errorf("ReadResource %s: expected MIMEType application/json, got %q", uri, content.MIMEType)
+	}
+}
+
+func readResourceMarkdown(ctx context.Context, t *testing.T, uri string) {
+	t.Helper()
+	content := readResourceContent(ctx, t, uri)
+	if !strings.HasPrefix(content.MIMEType, "text/markdown") {
+		t.Errorf("ReadResource %s: expected text/markdown MIME, got %q", uri, content.MIMEType)
+	}
+}
+
+func readResourceContent(ctx context.Context, t *testing.T, uri string) *mcp.ResourceContents {
+	t.Helper()
+	result, err := sess.individual.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
+	if err != nil {
+		t.Fatalf("ReadResource %s: %v", uri, err)
+	}
+	if len(result.Contents) == 0 {
+		t.Fatalf("ReadResource %s: empty Contents", uri)
+	}
+	content := result.Contents[0]
+	if content.Text == "" {
+		t.Errorf("ReadResource %s: empty Text", uri)
+	}
+	return content
+}
+
+func waitForResourceID(ctx context.Context, t *testing.T, uri string, timeout time.Duration) int64 {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		result, err := sess.individual.ReadResource(ctx, &mcp.ReadResourceParams{URI: uri})
+		if err == nil && len(result.Contents) > 0 {
+			if id := extractFirstID(result.Contents[0].Text); id > 0 {
+				return id
+			}
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return 0
 }

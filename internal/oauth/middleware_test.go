@@ -3,6 +3,7 @@
 package oauth
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,7 +18,7 @@ func TestNormalizeAuthHeader_ConvertsPrivateToken(t *testing.T) {
 		captured = r.Header.Clone()
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("PRIVATE-TOKEN", "glpat-abc123")
 
 	rec := httptest.NewRecorder()
@@ -37,7 +38,7 @@ func TestNormalizeAuthHeader_PreservesExistingBearer(t *testing.T) {
 		captured = r.Header.Clone()
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer oauth-token")
 	req.Header.Set("PRIVATE-TOKEN", "glpat-should-be-ignored")
 
@@ -57,7 +58,7 @@ func TestNormalizeAuthHeader_NoAuthHeaders(t *testing.T) {
 		captured = r.Header.Clone()
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 
 	rec := httptest.NewRecorder()
 	NormalizeAuthHeader(inner).ServeHTTP(rec, req)
@@ -76,7 +77,7 @@ func TestNormalizeAuthHeader_NonBearerAuth(t *testing.T) {
 		captured = r.Header.Clone()
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
 	req.Header.Set("PRIVATE-TOKEN", "glpat-should-be-ignored")
 

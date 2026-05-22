@@ -6,7 +6,7 @@ package suite
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deploytokens"
@@ -54,7 +54,7 @@ func TestMeta_DeployTokens(t *testing.T) {
 			"action": "deploy_token_get_project",
 			"params": map[string]any{
 				"project_id":      proj.pidStr(),
-				"deploy_token_id": fmt.Sprintf("%d", tokenID),
+				"deploy_token_id": strconv.FormatInt(tokenID, 10),
 			},
 		})
 		requireNoError(t, err, "deploy token get")
@@ -68,7 +68,7 @@ func TestMeta_DeployTokens(t *testing.T) {
 			"action": "deploy_token_delete_project",
 			"params": map[string]any{
 				"project_id":      proj.pidStr(),
-				"deploy_token_id": fmt.Sprintf("%d", tokenID),
+				"deploy_token_id": strconv.FormatInt(tokenID, 10),
 			},
 		})
 		requireNoError(t, err, "deploy token delete")

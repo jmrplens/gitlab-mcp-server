@@ -498,38 +498,52 @@ func isActionSpecBuilderName(name string) bool {
 func countActionSpecStatements(statements []ast.Stmt, vars map[string]int) int {
 	count := 0
 	for _, statement := range statements {
-		switch stmt := statement.(type) {
-		case *ast.AssignStmt:
-			for index, rhs := range stmt.Rhs {
-				if index >= len(stmt.Lhs) {
-					continue
-				}
-				ident, isIdent := stmt.Lhs[index].(*ast.Ident)
-				if !isIdent {
-					continue
-				}
-				if literalCount, hasLiteral := actionSpecLiteralCount(rhs); hasLiteral {
-					vars[ident.Name] = literalCount
-					continue
-				}
-				if appendCount, hasAppend := actionSpecAppendCount(rhs); hasAppend {
-					vars[ident.Name] += appendCount
-				}
-			}
-		case *ast.ReturnStmt:
-			for _, result := range stmt.Results {
-				count += actionSpecReturnCount(result, vars)
-			}
-		case *ast.IfStmt:
-			count += countActionSpecStatements(stmt.Body.List, vars)
-			count += countActionSpecElse(stmt.Else, vars)
-		case *ast.ForStmt:
-			count += countActionSpecStatements(stmt.Body.List, vars)
-		case *ast.RangeStmt:
-			count += countActionSpecStatements(stmt.Body.List, vars)
-		case *ast.BlockStmt:
-			count += countActionSpecStatements(stmt.List, vars)
+		count += countActionSpecStatement(statement, vars)
+	}
+	return count
+}
+
+func countActionSpecStatement(statement ast.Stmt, vars map[string]int) int {
+	switch stmt := statement.(type) {
+	case *ast.AssignStmt:
+		recordActionSpecAssignments(stmt, vars)
+	case *ast.ReturnStmt:
+		return countActionSpecReturns(stmt, vars)
+	case *ast.IfStmt:
+		return countActionSpecStatements(stmt.Body.List, vars) + countActionSpecElse(stmt.Else, vars)
+	case *ast.ForStmt:
+		return countActionSpecStatements(stmt.Body.List, vars)
+	case *ast.RangeStmt:
+		return countActionSpecStatements(stmt.Body.List, vars)
+	case *ast.BlockStmt:
+		return countActionSpecStatements(stmt.List, vars)
+	}
+	return 0
+}
+
+func recordActionSpecAssignments(stmt *ast.AssignStmt, vars map[string]int) {
+	for index, rhs := range stmt.Rhs {
+		if index >= len(stmt.Lhs) {
+			continue
 		}
+		ident, isIdent := stmt.Lhs[index].(*ast.Ident)
+		if !isIdent {
+			continue
+		}
+		if literalCount, hasLiteral := actionSpecLiteralCount(rhs); hasLiteral {
+			vars[ident.Name] = literalCount
+			continue
+		}
+		if appendCount, hasAppend := actionSpecAppendCount(rhs); hasAppend {
+			vars[ident.Name] += appendCount
+		}
+	}
+}
+
+func countActionSpecReturns(stmt *ast.ReturnStmt, vars map[string]int) int {
+	count := 0
+	for _, result := range stmt.Results {
+		count += actionSpecReturnCount(result, vars)
 	}
 	return count
 }
@@ -1100,7 +1114,6 @@ func goExecutable() string {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	//lint:ignore SA1019 testing docs generation must avoid PATH lookup for Sonar go:S4036.
 	return filepath.Join(runtime.GOROOT(), "bin", name) //nolint:staticcheck // Avoid PATH lookup for Sonar go:S4036.
 }
 

@@ -41,7 +41,7 @@ func TestOpenBrowser_LinuxUsesXDGOpen(t *testing.T) {
 
 	binDir := t.TempDir()
 	xdgOpen := filepath.Join(binDir, "xdg-open")
-	if err := os.WriteFile(xdgOpen, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+	if err := os.WriteFile(xdgOpen, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil { //nolint:gosec // Executable fixture is required for PATH lookup.
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", binDir)

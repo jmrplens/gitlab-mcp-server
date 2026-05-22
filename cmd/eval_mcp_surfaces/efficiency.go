@@ -348,7 +348,7 @@ func efficiencyGateViolations(metrics traceMetricSet, allowedTasks map[string]bo
 		violations = append(violations, efficiencyGateViolation{
 			Gate:     "total_overhead",
 			Observed: formatMetric(traceOverheadPercent(metrics.Overall)),
-			Limit:    fmt.Sprintf("<= %s", formatMetric(efficiencyMaxTotalOverheadPercent)),
+			Limit:    "<= " + formatMetric(efficiencyMaxTotalOverheadPercent),
 			Detail:   "total calls should stay close to the expected-operation baseline",
 		})
 	}
@@ -434,7 +434,7 @@ func writeEfficiencyGateRows(builder *strings.Builder, metrics traceMetricSet, v
 	}{
 		{"final_success", "100.0%", fmt.Sprintf("%s (%d/%d)", formatMetric(percent(metrics.Overall.FinalSuccesses, metrics.Overall.Attempts)), metrics.Overall.FinalSuccesses, metrics.Overall.Attempts), "all attempts pass"},
 		{"single_step_average_calls", fmt.Sprintf("<= %.2f", efficiencyMaxSingleStepAvgCalls), fmt.Sprintf("%.2f", traceAverageCalls(metrics.SingleStep)), "single-step directness"},
-		{"total_overhead", fmt.Sprintf("<= %s", formatMetric(efficiencyMaxTotalOverheadPercent)), formatMetric(traceOverheadPercent(metrics.Overall)), "actual calls versus expected operations"},
+		{"total_overhead", "<= " + formatMetric(efficiencyMaxTotalOverheadPercent), formatMetric(traceOverheadPercent(metrics.Overall)), "actual calls versus expected operations"},
 		{"per_attempt_call_budget", fmt.Sprintf("expected steps + %d", efficiencyMaxExtraCallsPerAttempt), "per attempt", "no unallowlisted attempts above budget"},
 	}
 	for _, row := range rows {

@@ -35,27 +35,19 @@ func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func badgeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := badgeOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, badgeOptions(name, individualTool))
 }
 
 func badgeCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, badgeOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, badgeOptions(name, individualTool))
 }
 
 func badgeUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := badgeOptions(name, individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, badgeOptions(name, individualTool))
 }
 
 func badgeDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := badgeOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, badgeOptions(name, individualTool))
 }
 
 func badgeOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
@@ -70,27 +62,19 @@ func badgeOptions(actionName, individualTool string) toolutil.ActionSpecOptions 
 }
 
 func groupBadgeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBadgeOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupBadgeOptions(name, individualTool))
 }
 
 func groupBadgeCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupBadgeOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupBadgeOptions(name, individualTool))
 }
 
 func groupBadgeUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBadgeOptions(name, individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, groupBadgeOptions(name, individualTool))
 }
 
 func groupBadgeDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupBadgeOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, groupBadgeOptions(name, individualTool))
 }
 
 func groupBadgeOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
@@ -116,14 +100,14 @@ func badgeGuidance(actionName string, options toolutil.ActionSpecOptions) toolut
 	verb := strings.TrimPrefix(actionName, "badge_")
 	options.Usage = fmt.Sprintf("%s Use %s for %s badge operations; do not use %s. %s", badgeActionDescription(verb, scope), idParam, scope, otherParam, badgeScopeBoundary(scope))
 	if scope == "group" {
-		options.Aliases = []string{fmt.Sprintf("%s group badge", verb), fmt.Sprintf("%s badge in group", verb)}
+		options.Aliases = []string{verb + " group badge", verb + " badge in group"}
 	} else {
-		options.Aliases = []string{fmt.Sprintf("%s project badge", verb), fmt.Sprintf("%s badge in project", verb)}
+		options.Aliases = []string{verb + " project badge", verb + " badge in project"}
 	}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		idParam: {
-			SemanticRole: fmt.Sprintf("scope_%s", scope),
-			ValueSource:  fmt.Sprintf("%s that owns the badge.", badgeTitle(scope)),
+			SemanticRole: "scope_" + scope,
+			ValueSource:  badgeTitle(scope) + " that owns the badge.",
 			CommonConfusions: []string{
 				fmt.Sprintf("Do not use %s for %s badge actions.", otherParam, scope),
 			},

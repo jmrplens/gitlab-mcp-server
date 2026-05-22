@@ -8,10 +8,8 @@ import (
 // ActionSpecs returns canonical specs for security finding actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		toolutil.NewActionSpec("list", toolutil.RouteAction(client, List), toolutil.ActionSpecOptions{
+		toolutil.NewReadActionSpec("list", toolutil.RouteAction(client, List), toolutil.ActionSpecOptions{
 			Tags:           []string{"security", "finding"},
-			ReadOnly:       true,
-			Idempotent:     true,
 			OpenWorld:      true,
 			Edition:        "premium",
 			OwnerPackage:   "securityfindings",

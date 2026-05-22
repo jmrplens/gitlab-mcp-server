@@ -72,12 +72,7 @@ func TestSearch_ExplainIsOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search(default) error = %v", err)
 	}
-	if defaultResult == nil || defaultResult.IsError {
-		t.Fatalf("Search(default) result = %+v, want non-error", defaultResult)
-	}
-	if defaultOutput.Count == 0 {
-		t.Fatal("Search(default) returned no matches")
-	}
+	assertSearchNonError(t, "default", defaultResult, defaultOutput)
 	if defaultOutput.Results[0].Explanation != nil {
 		t.Fatalf("Search(default) explanation = %+v, want nil", defaultOutput.Results[0].Explanation)
 	}
@@ -89,12 +84,25 @@ func TestSearch_ExplainIsOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search(explain) error = %v", err)
 	}
-	if explainResult == nil || explainResult.IsError {
-		t.Fatalf("Search(explain) result = %+v, want non-error", explainResult)
+	assertSearchNonError(t, "explain", explainResult, explainOutput)
+	assertSearchExplanation(t, explainOutput)
+	if !strings.Contains(textContent(explainResult), "| Why |") || !strings.Contains(textContent(explainResult), "matched") {
+		t.Fatalf("Search(explain) markdown missing Why explanation: %s", textContent(explainResult))
 	}
-	if explainOutput.Count == 0 {
-		t.Fatal("Search(explain) returned no matches")
+}
+
+func assertSearchNonError(t *testing.T, label string, result *mcp.CallToolResult, output SearchOutput) {
+	t.Helper()
+	if result == nil || result.IsError {
+		t.Fatalf("Search(%s) result = %+v, want non-error", label, result)
 	}
+	if output.Count == 0 {
+		t.Fatalf("Search(%s) returned no matches", label)
+	}
+}
+
+func assertSearchExplanation(t *testing.T, explainOutput SearchOutput) {
+	t.Helper()
 	explanation := explainOutput.Results[0].Explanation
 	if explanation == nil {
 		t.Fatal("Search(explain) explanation is nil")
@@ -107,9 +115,6 @@ func TestSearch_ExplainIsOptIn(t *testing.T) {
 	}
 	if explanation.Reasons[0].Field == "" || explanation.Reasons[0].QueryTerm == "" || explanation.Reasons[0].MatchedValue == "" {
 		t.Fatalf("Search(explain) first reason = %+v, want field, query term, and matched value", explanation.Reasons[0])
-	}
-	if !strings.Contains(textContent(explainResult), "| Why |") || !strings.Contains(textContent(explainResult), "matched") {
-		t.Fatalf("Search(explain) markdown missing Why explanation: %s", textContent(explainResult))
 	}
 }
 
@@ -386,51 +391,68 @@ func TestDynamicSearchCorpus(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.Category, func(t *testing.T) {
-			registry := baseRegistry
-			if len(tc.CustomAliases) > 0 {
-				aliases := append([]actionAlias(nil), actionAliases()...)
-				for _, customAlias := range tc.CustomAliases {
-					aliases = append(aliases, actionAlias{Alias: customAlias.Alias, Canonical: customAlias.Canonical, Source: aliasSourceCompatibility, Searchable: true})
-				}
-				registry = newRegistryFromCatalog(baseCatalog, aliases)
-			}
+			registry := registryForCorpusCase(baseRegistry, baseCatalog, tc)
 
 			_, output, searchErr := registry.Search(t.Context(), nil, SearchInput{Query: tc.Query, Limit: tc.Limit})
 			if searchErr != nil {
 				t.Fatalf("Search() error = %v", searchErr)
 			}
-			if tc.ExpectZero {
-				if len(output.Results) != 0 {
-					t.Fatalf("Search(%q) results = %+v, want zero results", tc.Query, output.Results)
-				}
-				return
-			}
-			if len(output.Results) == 0 {
-				t.Fatalf("Search(%q) returned no results; notes: %s", tc.Query, tc.Notes)
-			}
-			if tc.Limit > 0 && len(output.Results) > tc.Limit {
-				t.Fatalf("Search(%q) returned %d results, want at most limit=%d", tc.Query, len(output.Results), tc.Limit)
-			}
-			if tc.WantTop != "" && output.Results[0].ID != tc.WantTop {
-				t.Fatalf("Search(%q) top = %s, want %s; results = %+v", tc.Query, output.Results[0].ID, tc.WantTop, output.Results)
-			}
-			for _, want := range tc.WantTopN {
-				if !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return result.ID == want }) {
-					t.Fatalf("Search(%q) results = %+v, want top-N action %s", tc.Query, output.Results, want)
-				}
-			}
-			if tc.ExpectAmbiguous {
-				if !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return len(result.AmbiguousWith) > 0 }) {
-					t.Fatalf("Search(%q) results = %+v, want ambiguity annotation", tc.Query, output.Results)
-				}
-			}
-			if tc.ExpectDestructiveTop && !output.Results[0].Destructive {
-				t.Fatalf("Search(%q) top = %+v, want destructive top result", tc.Query, output.Results[0])
-			}
-			if tc.ForbidDestructiveTop && output.Results[0].Destructive {
-				t.Fatalf("Search(%q) top = %+v, want non-destructive top result", tc.Query, output.Results[0])
-			}
+			assertDynamicSearchCorpusCase(t, tc, output)
 		})
+	}
+}
+
+func registryForCorpusCase(baseRegistry *Registry, baseCatalog *actioncatalog.Catalog, tc dynamicSearchCorpusCase) *Registry {
+	if len(tc.CustomAliases) == 0 {
+		return baseRegistry
+	}
+	aliases := append([]actionAlias(nil), actionAliases()...)
+	for _, customAlias := range tc.CustomAliases {
+		aliases = append(aliases, actionAlias{Alias: customAlias.Alias, Canonical: customAlias.Canonical, Source: aliasSourceCompatibility, Searchable: true})
+	}
+	return newRegistryFromCatalog(baseCatalog, aliases)
+}
+
+func assertDynamicSearchCorpusCase(t *testing.T, tc dynamicSearchCorpusCase, output SearchOutput) {
+	t.Helper()
+	if tc.ExpectZero {
+		if len(output.Results) != 0 {
+			t.Fatalf("Search(%q) results = %+v, want zero results", tc.Query, output.Results)
+		}
+		return
+	}
+	assertDynamicSearchCorpusResults(t, tc, output)
+}
+
+func assertDynamicSearchCorpusResults(t *testing.T, tc dynamicSearchCorpusCase, output SearchOutput) {
+	t.Helper()
+	if len(output.Results) == 0 {
+		t.Fatalf("Search(%q) returned no results; notes: %s", tc.Query, tc.Notes)
+	}
+	if tc.Limit > 0 && len(output.Results) > tc.Limit {
+		t.Fatalf("Search(%q) returned %d results, want at most limit=%d", tc.Query, len(output.Results), tc.Limit)
+	}
+	if tc.WantTop != "" && output.Results[0].ID != tc.WantTop {
+		t.Fatalf("Search(%q) top = %s, want %s; results = %+v", tc.Query, output.Results[0].ID, tc.WantTop, output.Results)
+	}
+	assertDynamicSearchCorpusExpectations(t, tc, output)
+}
+
+func assertDynamicSearchCorpusExpectations(t *testing.T, tc dynamicSearchCorpusCase, output SearchOutput) {
+	t.Helper()
+	for _, want := range tc.WantTopN {
+		if !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return result.ID == want }) {
+			t.Fatalf("Search(%q) results = %+v, want top-N action %s", tc.Query, output.Results, want)
+		}
+	}
+	if tc.ExpectAmbiguous && !slices.ContainsFunc(output.Results, func(result SearchResult) bool { return len(result.AmbiguousWith) > 0 }) {
+		t.Fatalf("Search(%q) results = %+v, want ambiguity annotation", tc.Query, output.Results)
+	}
+	if tc.ExpectDestructiveTop && !output.Results[0].Destructive {
+		t.Fatalf("Search(%q) top = %+v, want destructive top result", tc.Query, output.Results[0])
+	}
+	if tc.ForbidDestructiveTop && output.Results[0].Destructive {
+		t.Fatalf("Search(%q) top = %+v, want non-destructive top result", tc.Query, output.Results[0])
 	}
 }
 
@@ -611,36 +633,37 @@ func TestAddStandaloneCatalog_NilCatalogWithExcludedInteractiveActions(t *testin
 // mode can consume registry-native action metadata without rebuilding it from
 // legacy route maps.
 func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
+	registry := NewRegistryFromCatalog(customCatalogForDynamicTest(t))
+	assertCustomCatalogSearch(t, registry)
+	assertCustomCatalogDescribe(t, registry)
+	assertCustomCatalogFind(t, registry)
+}
+
+func customCatalogForDynamicTest(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_custom"})
-	route := toolutil.ActionRoute{
-		Handler: func(_ context.Context, params map[string]any) (any, error) {
-			return map[string]any{"target": params["target"]}, nil
-		},
-		InputSchema: map[string]any{
-			"type":     "object",
-			"required": []any{"target"},
-			"properties": map[string]any{
-				"target": map[string]any{"type": "string"},
-			},
-		},
-	}.
-		WithUsage("Use for custom catalog metadata.").
-		WithRelatedActions("custom.audit").
-		WithParameterGuidance(map[string]toolutil.ParameterGuidance{
-			"target": {SemanticRole: "custom_target", CommonConfusions: []string{"Do not use source."}},
-		})
-	group.SetAction(actioncatalog.Action{
-		Name:    "inspect",
-		Aliases: []string{"custom.lookup"},
-		Tags:    []string{"bespoke"},
-		Route:   route,
-	})
+	group.SetAction(actioncatalog.Action{Name: "inspect", Aliases: []string{"custom.lookup"}, Tags: []string{"bespoke"}, Route: customCatalogRouteForDynamicTest()})
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)
 	}
+	return catalog
+}
 
-	registry := NewRegistryFromCatalog(catalog)
+func customCatalogRouteForDynamicTest() toolutil.ActionRoute {
+	return toolutil.ActionRoute{
+		Handler: func(_ context.Context, params map[string]any) (any, error) {
+			return map[string]any{"target": params["target"]}, nil
+		},
+		InputSchema: map[string]any{"type": "object", "required": []any{"target"}, "properties": map[string]any{"target": map[string]any{"type": "string"}}},
+	}.
+		WithUsage("Use for custom catalog metadata.").
+		WithRelatedActions("custom.audit").
+		WithParameterGuidance(map[string]toolutil.ParameterGuidance{"target": {SemanticRole: "custom_target", CommonConfusions: []string{"Do not use source."}}})
+}
+
+func assertCustomCatalogSearch(t *testing.T, registry *Registry) {
+	t.Helper()
 	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "bespoke", Limit: 1})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
@@ -651,7 +674,10 @@ func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
 	if output.Count != 1 || output.Results[0].ID != "custom.inspect" {
 		t.Fatalf("Search() output = %+v, want custom.inspect", output)
 	}
+}
 
+func assertCustomCatalogDescribe(t *testing.T, registry *Registry) {
+	t.Helper()
 	result, described, err := registry.Describe(t.Context(), nil, DescribeInput{Action: "custom.lookup"})
 	if err != nil {
 		t.Fatalf("Describe() error = %v", err)
@@ -674,7 +700,10 @@ func TestNewRegistryFromCatalog_UsesCatalogAliasesAndTags(t *testing.T) {
 	if got := describedAgain.Actions[0].ParamGuidance["target"].SemanticRole; got != "custom_target" {
 		t.Fatalf("second describe ParamGuidance target role = %q, want cloned custom_target", got)
 	}
+}
 
+func assertCustomCatalogFind(t *testing.T, registry *Registry) {
+	t.Helper()
 	findResult, found, err := registry.Find(t.Context(), nil, FindInput{Query: "bespoke", Limit: 1})
 	if err != nil {
 		t.Fatalf("Find() error = %v", err)
@@ -1268,6 +1297,13 @@ func TestBuildSearchDocument_CapturesTypedFields(t *testing.T) {
 	if document.CanonicalID != "repository.tree" {
 		t.Fatalf("CanonicalID = %q, want repository.tree", document.CanonicalID)
 	}
+	assertSearchDocumentIdentity(t, document)
+	assertSearchDocumentText(t, document)
+	assertSearchDocumentSchemaFields(t, document)
+}
+
+func assertSearchDocumentIdentity(t *testing.T, document searchDocument) {
+	t.Helper()
 	for _, want := range []string{"repository", "tree"} {
 		if !slices.Contains(document.IDWords, want) {
 			t.Fatalf("IDWords = %v, want %q", document.IDWords, want)
@@ -1279,6 +1315,10 @@ func TestBuildSearchDocument_CapturesTypedFields(t *testing.T) {
 	if document.Backend != "gitlab" || document.Capability != "source_control" || document.Resource != "repository" || document.Operation != "tree" || document.Scope != "project" {
 		t.Fatalf("document cross-backend fields = %+v", document)
 	}
+}
+
+func assertSearchDocumentText(t *testing.T, document searchDocument) {
+	t.Helper()
 	if !slices.Contains(document.Aliases, "repository_tree") || !slices.Contains(document.Aliases, "repo.files") {
 		t.Fatalf("Aliases = %v, want hidden and visible aliases", document.Aliases)
 	}
@@ -1293,6 +1333,10 @@ func TestBuildSearchDocument_CapturesTypedFields(t *testing.T) {
 	if !slices.Contains(document.Tags, "read") || !slices.Contains(document.RequiredParams, "project_id") {
 		t.Fatalf("document tags/required params = %+v", document)
 	}
+}
+
+func assertSearchDocumentSchemaFields(t *testing.T, document searchDocument) {
+	t.Helper()
 	if strings.Join(document.OptionalParams, ",") != "author_username,state" {
 		t.Fatalf("OptionalParams = %v, want sorted author_username,state", document.OptionalParams)
 	}
@@ -1641,16 +1685,31 @@ func TestExecute_CanonicalizesAlias(t *testing.T) {
 	}
 }
 
+type executeNormalizationCase struct {
+	name   string
+	input  ExecuteInput
+	assert func(t *testing.T, output any)
+}
+
 // TestExecute_NormalizesActionScopedParameterAliases verifies dynamic execute
 // accepts ambiguous model aliases only for actions where the schema is clear.
 func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
+	runExecuteNormalizationCases(t, registry, coreActionScopedParameterAliasCases())
+	runExecuteNormalizationCases(t, registry, resourceActionScopedParameterAliasCases())
+}
 
-	tests := []struct {
-		name   string
-		input  ExecuteInput
-		assert func(t *testing.T, output any)
-	}{
+func coreActionScopedParameterAliasCases() []executeNormalizationCase {
+	cases := append([]executeNormalizationCase{}, coreJobAndRepositoryAliasCases()...)
+	cases = append(cases, coreProjectMemberAliasCases()...)
+	cases = append(cases, coreIssueAliasCases()...)
+	cases = append(cases, coreMergeRequestAndPipelineAliasCases()...)
+	cases = append(cases, coreBranchAliasCases()...)
+	return cases
+}
+
+func coreJobAndRepositoryAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name:  "job status to scope",
 			input: ExecuteInput{Action: "job.list", Params: map[string]any{"project_id": 123, "pipeline_id": 456, "status": "failed"}},
@@ -1673,6 +1732,11 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 				}
 			},
 		},
+	}
+}
+
+func coreProjectMemberAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name:  "project member role to numeric access level",
 			input: ExecuteInput{Action: "project.member_add", Params: map[string]any{"project_id": 123, "user_id": 5, "access_level": "Reporter"}},
@@ -1695,6 +1759,11 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 				}
 			},
 		},
+	}
+}
+
+func coreIssueAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name:  "issue link aliases same project target",
 			input: ExecuteInput{Action: "issue.link_create", Params: map[string]any{"project_id": 123, "issue_iid": 1, "linked_issue_iid": 2, "type": "relates_to"}},
@@ -1753,6 +1822,11 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 				}
 			},
 		},
+	}
+}
+
+func coreMergeRequestAndPipelineAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name:  "merge request emoji drops stale duration",
 			input: ExecuteInput{Action: "merge_request.emoji_mr_create", Params: map[string]any{"project_id": 123, "merge_request_iid": 3, "name": "eyes", "duration": "15m"}},
@@ -1781,6 +1855,11 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 				}
 			},
 		},
+	}
+}
+
+func coreBranchAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
 			name: "branch protect role access levels",
 			input: ExecuteInput{Action: "branch.protect", Params: map[string]any{
@@ -1798,55 +1877,30 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 				}
 			},
 		},
+	}
+}
+
+func resourceActionScopedParameterAliasCases() []executeNormalizationCase {
+	return []executeNormalizationCase{
 		{
-			name:  "group label update name alias",
-			input: ExecuteInput{Action: "group.group_label_update", Params: map[string]any{"group_id": "my-org", "label_id": 31, "name": "next-label"}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				if data["new_name"] != "next-label" {
-					t.Fatalf("output = %#v, want new_name next-label", output)
-				}
-				if _, ok := data["name"]; ok {
-					t.Fatalf("output = %#v, want name alias removed", output)
-				}
-			},
+			name:   "group label update name alias",
+			input:  ExecuteInput{Action: "group.group_label_update", Params: map[string]any{"group_id": "my-org", "label_id": 31, "name": "next-label"}},
+			assert: assertOutputAll(assertOutputField("new_name", "next-label"), assertOutputMissing("name")),
 		},
 		{
-			name:  "feature flag version alias",
-			input: ExecuteInput{Action: "feature_flags.feature_flag_create", Params: map[string]any{"project_id": 123, "name": "eval", "new_version_flag": "new_version_flag"}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				if data["version"] != "new_version_flag" {
-					t.Fatalf("output = %#v, want version new_version_flag", output)
-				}
-			},
+			name:   "feature flag version alias",
+			input:  ExecuteInput{Action: "feature_flags.feature_flag_create", Params: map[string]any{"project_id": 123, "name": "eval", "new_version_flag": "new_version_flag"}},
+			assert: assertOutputField("version", "new_version_flag"),
 		},
 		{
-			name:  "feature flag user list drops feature flag name",
-			input: ExecuteInput{Action: "feature_flags.ff_user_list_list", Params: map[string]any{"project_id": 123, "name": "eval_flag", "per_page": 20}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				if _, ok := data["name"]; ok {
-					t.Fatalf("output = %#v, want name removed", output)
-				}
-				if data["per_page"] != 20 {
-					t.Fatalf("output = %#v, want per_page 20", output)
-				}
-			},
+			name:   "feature flag user list drops feature flag name",
+			input:  ExecuteInput{Action: "feature_flags.ff_user_list_list", Params: map[string]any{"project_id": 123, "name": "eval_flag", "per_page": 20}},
+			assert: assertOutputAll(assertOutputMissing("name"), assertOutputField("per_page", 20)),
 		},
 		{
-			name:  "release link tag alias",
-			input: ExecuteInput{Action: "release.link_create", Params: map[string]any{"project_id": 123, "release_tag_name": "v1.0.0", "name": "asset", "url": "https://example.com/asset"}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				if data["tag_name"] != "v1.0.0" {
-					t.Fatalf("output = %#v, want tag_name v1.0.0", output)
-				}
-			},
+			name:   "release link tag alias",
+			input:  ExecuteInput{Action: "release.link_create", Params: map[string]any{"project_id": 123, "release_tag_name": "v1.0.0", "name": "asset", "url": "https://example.com/asset"}},
+			assert: assertOutputField("tag_name", "v1.0.0"),
 		},
 		{
 			name: "snippet create drops file action",
@@ -1859,15 +1913,7 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 					"content":   "body",
 				}},
 			}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				files := data["files"].([]any)
-				file := files[0].(map[string]any)
-				if _, ok := file["action"]; ok {
-					t.Fatalf("output = %#v, want files[0].action removed", output)
-				}
-			},
+			assert: assertOutputNestedFileMissing("action"),
 		},
 		{
 			name: "snippet create builds files from single file params",
@@ -1877,21 +1923,7 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 				"file_name":  "snippet.md",
 				"content":    "body",
 			}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				files := data["files"].([]any)
-				file := files[0].(map[string]any)
-				if file["file_path"] != "snippet.md" || file["content"] != "body" {
-					t.Fatalf("output = %#v, want files[0] with file_path and content", output)
-				}
-				if _, ok := data["file_name"]; ok {
-					t.Fatalf("output = %#v, want top-level file_name removed", output)
-				}
-				if _, ok := data["content"]; ok {
-					t.Fatalf("output = %#v, want top-level content removed", output)
-				}
-			},
+			assert: assertOutputAll(assertOutputNestedFileField("file_path", "snippet.md"), assertOutputNestedFileField("content", "body"), assertOutputMissing("file_name"), assertOutputMissing("content")),
 		},
 		{
 			name: "snippet create normalizes nested file name",
@@ -1903,32 +1935,73 @@ func TestExecute_NormalizesActionScopedParameterAliases(t *testing.T) {
 					"content":   "body",
 				}},
 			}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				files := data["files"].([]any)
-				file := files[0].(map[string]any)
-				if file["file_path"] != "snippet.md" {
-					t.Fatalf("output = %#v, want files[0].file_path snippet.md", output)
-				}
-				if _, ok := file["file_name"]; ok {
-					t.Fatalf("output = %#v, want files[0].file_name removed", output)
-				}
-			},
+			assert: assertOutputAll(assertOutputNestedFileField("file_path", "snippet.md"), assertOutputNestedFileMissing("file_name")),
 		},
 		{
-			name:  "runner paused string to bool",
-			input: ExecuteInput{Action: "runner.update", Params: map[string]any{"runner_id": 99, "paused": "true"}},
-			assert: func(t *testing.T, output any) {
-				t.Helper()
-				data := output.(map[string]any)
-				if data["paused"] != true {
-					t.Fatalf("output = %#v, want paused true", output)
-				}
-			},
+			name:   "runner paused string to bool",
+			input:  ExecuteInput{Action: "runner.update", Params: map[string]any{"runner_id": 99, "paused": "true"}},
+			assert: assertOutputField("paused", true),
 		},
 	}
+}
 
+func assertOutputAll(assertions ...func(*testing.T, any)) func(*testing.T, any) {
+	return func(t *testing.T, output any) {
+		t.Helper()
+		for _, assertion := range assertions {
+			assertion(t, output)
+		}
+	}
+}
+
+func assertOutputField(key string, want any) func(*testing.T, any) {
+	return func(t *testing.T, output any) {
+		t.Helper()
+		data := output.(map[string]any)
+		if data[key] != want {
+			t.Fatalf("output = %#v, want %s %v", output, key, want)
+		}
+	}
+}
+
+func assertOutputMissing(key string) func(*testing.T, any) {
+	return func(t *testing.T, output any) {
+		t.Helper()
+		data := output.(map[string]any)
+		if _, ok := data[key]; ok {
+			t.Fatalf("output = %#v, want %s removed", output, key)
+		}
+	}
+}
+
+func assertOutputNestedFileField(key string, want any) func(*testing.T, any) {
+	return func(t *testing.T, output any) {
+		t.Helper()
+		file := firstOutputFile(output)
+		if file[key] != want {
+			t.Fatalf("output = %#v, want files[0].%s %v", output, key, want)
+		}
+	}
+}
+
+func assertOutputNestedFileMissing(key string) func(*testing.T, any) {
+	return func(t *testing.T, output any) {
+		t.Helper()
+		file := firstOutputFile(output)
+		if _, ok := file[key]; ok {
+			t.Fatalf("output = %#v, want files[0].%s removed", output, key)
+		}
+	}
+}
+
+func firstOutputFile(output any) map[string]any {
+	data := output.(map[string]any)
+	files := data["files"].([]any)
+	return files[0].(map[string]any)
+}
+
+func runExecuteNormalizationCases(t *testing.T, registry *Registry, tests []executeNormalizationCase) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, output, err := registry.Execute(t.Context(), nil, tt.input)
@@ -3148,577 +3221,587 @@ func sortedPropertyNames(properties map[string]any) []string {
 // testRoutes supports test routes assertions in dynamic tests.
 func testRoutes(t *testing.T) map[string]toolutil.ActionMap {
 	t.Helper()
-	return map[string]toolutil.ActionMap{
-		"gitlab_project": {
-			"get": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"project_id": params["project_id"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-					},
-				},
-				OutputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-					},
+	return cloneTestRoutes(testRouteFixtures)
+}
+
+func cloneTestRoutes(routes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
+	cloned := make(map[string]toolutil.ActionMap, len(routes))
+	for toolName, actions := range routes {
+		cloned[toolName] = maps.Clone(actions)
+	}
+	return cloned
+}
+
+var testRouteFixtures = map[string]toolutil.ActionMap{
+	"gitlab_project": {
+		"get": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"project_id": params["project_id"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
 				},
 			},
-			"hook_list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"hooks": true}, nil
-				},
-			},
-			"hook_add": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"url": params["url"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "url"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"url":        map[string]any{"type": "string"},
-					},
-				},
-			},
-			"member_edit": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"member": "edited", "access_level": params["access_level"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "user_id", "access_level"},
-					"properties": map[string]any{
-						"project_id":   map[string]any{"type": "integer"},
-						"user_id":      map[string]any{"type": "integer"},
-						"access_level": map[string]any{"type": "integer"},
-					},
-				},
-			},
-			"member_add": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"member": "added", "access_level": params["access_level"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "user_id", "access_level"},
-					"properties": map[string]any{
-						"project_id":   map[string]any{"type": "integer"},
-						"user_id":      map[string]any{"type": "integer"},
-						"access_level": map[string]any{"type": "integer"},
-					},
-				},
-			},
-			"member_delete": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"member": "deleted"}, nil
-				},
-			},
-			"delete": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"deleted": true, "confirm": params["confirm"]}, nil
-				},
-				Destructive: true,
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-					},
-				},
-			},
-			"list": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"owned": params["owned"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"owned": map[string]any{"type": "boolean"},
-					},
+			OutputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
 				},
 			},
 		},
-		"gitlab_merge_request": {
-			"list": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"state": params["state"], "author_username": params["author_username"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"project_id":      map[string]any{"type": "integer"},
-						"state":           map[string]any{"type": "string"},
-						"author_username": map[string]any{"type": "string"},
-					},
-				},
-			},
-			"approve": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"approved": true}, nil
-				},
-			},
-			"merge": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"merged": true}, nil
-				},
-			},
-			"time_estimate_set": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"time": "set"}, nil
-				},
-			},
-			"spent_time_add": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"spent": "added", "summary": params["summary"], "note": params["note"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "merge_request_iid", "duration"},
-					"properties": map[string]any{
-						"project_id":        map[string]any{"type": "integer"},
-						"merge_request_iid": map[string]any{"type": "integer"},
-						"duration":          map[string]any{"type": "string"},
-						"summary":           map[string]any{"type": "string"},
-					},
-				},
-			},
-			"emoji_mr_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return maps.Clone(params), nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "merge_request_iid", "name"},
-					"properties": map[string]any{
-						"project_id":        map[string]any{"type": "integer"},
-						"merge_request_iid": map[string]any{"type": "integer"},
-						"name":              map[string]any{"type": "string"},
-					},
-				},
-			},
-			"emoji_mr_delete": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"award_id": params["award_id"]}, nil
-				},
-				Destructive: true,
+		"hook_list": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"hooks": true}, nil
 			},
 		},
-		"gitlab_issue": {
-			"note_list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"notes": true}, nil
-				},
+		"hook_add": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"url": params["url"]}, nil
 			},
-			"spent_time_add": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return maps.Clone(params), nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "issue_iid", "duration"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"issue_iid":  map[string]any{"type": "integer"},
-						"duration":   map[string]any{"type": "string"},
-						"summary":    map[string]any{"type": "string"},
-					},
-				},
-			},
-			"link_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"target_issue_iid": params["target_issue_iid"], "target_project_id": params["target_project_id"], "link_type": params["link_type"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "issue_iid", "target_project_id", "target_issue_iid"},
-					"properties": map[string]any{
-						"project_id":        map[string]any{"type": "integer"},
-						"issue_iid":         map[string]any{"type": "integer"},
-						"target_project_id": map[string]any{"type": "integer"},
-						"target_issue_iid":  map[string]any{"type": "integer"},
-						"link_type":         map[string]any{"type": "string"},
-					},
-				},
-			},
-			"update": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"state_event": params["state_event"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "issue_iid", "state_event"},
-					"properties": map[string]any{
-						"project_id":  map[string]any{"type": "integer"},
-						"issue_iid":   map[string]any{"type": "integer"},
-						"state_event": map[string]any{"type": "string"},
-					},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "url"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"url":        map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_ci_variable": {
-			"create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"key": params["key"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "key", "value"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"key":        map[string]any{"type": "string"},
-						"value":      map[string]any{"type": "string"},
-					},
-				},
+		"member_edit": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"member": "edited", "access_level": params["access_level"]}, nil
 			},
-			"group_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"key": params["key"]}, nil
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "user_id", "access_level"},
+				"properties": map[string]any{
+					"project_id":   map[string]any{"type": "integer"},
+					"user_id":      map[string]any{"type": "integer"},
+					"access_level": map[string]any{"type": "integer"},
 				},
 			},
 		},
-		"gitlab_branch": {
-			"get_protected": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"branch_name": params["branch_name"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "branch_name"},
-					"properties": map[string]any{
-						"project_id":  map[string]any{"type": "integer"},
-						"branch_name": map[string]any{"type": "string"},
-					},
-				},
+		"member_add": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"member": "added", "access_level": params["access_level"]}, nil
 			},
-			"protect": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{
-						"push_access_level":  params["push_access_level"],
-						"merge_access_level": params["merge_access_level"],
-					}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "branch_name"},
-					"properties": map[string]any{
-						"project_id":         map[string]any{"type": "integer"},
-						"branch_name":        map[string]any{"type": "string"},
-						"push_access_level":  map[string]any{"type": "integer"},
-						"merge_access_level": map[string]any{"type": "integer"},
-						"allow_force_push":   map[string]any{"type": "boolean"},
-					},
-				},
-			},
-			"update_protected": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"allow_force_push": params["allow_force_push"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "branch_name"},
-					"properties": map[string]any{
-						"project_id":       map[string]any{"type": "integer"},
-						"branch_name":      map[string]any{"type": "string"},
-						"allow_force_push": map[string]any{"type": "boolean"},
-					},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "user_id", "access_level"},
+				"properties": map[string]any{
+					"project_id":   map[string]any{"type": "integer"},
+					"user_id":      map[string]any{"type": "integer"},
+					"access_level": map[string]any{"type": "integer"},
 				},
 			},
 		},
-		"gitlab_pipeline": {
-			"schedule_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return params, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "description", "ref", "cron"},
-					"properties": map[string]any{
-						"project_id":  map[string]any{"type": "integer"},
-						"description": map[string]any{"type": "string"},
-						"ref":         map[string]any{"type": "string"},
-						"cron":        map[string]any{"type": "string"},
-						"active":      map[string]any{"type": "boolean"},
-					},
-				},
+		"member_delete": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"member": "deleted"}, nil
 			},
-			"schedule_create_variable": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return params, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "schedule_id", "key", "value"},
-					"properties": map[string]any{
-						"project_id":    map[string]any{"type": "integer"},
-						"schedule_id":   map[string]any{"type": "integer"},
-						"key":           map[string]any{"type": "string"},
-						"value":         map[string]any{"type": "string"},
-						"variable_type": map[string]any{"type": "string"},
-					},
-				},
+		},
+		"delete": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"deleted": true, "confirm": params["confirm"]}, nil
 			},
-			"schedule_edit_variable": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return params, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "schedule_id", "key", "value"},
-					"properties": map[string]any{
-						"project_id":    map[string]any{"type": "integer"},
-						"schedule_id":   map[string]any{"type": "integer"},
-						"key":           map[string]any{"type": "string"},
-						"value":         map[string]any{"type": "string"},
-						"variable_type": map[string]any{"type": "string"},
-					},
+			Destructive: true,
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
 				},
 			},
 		},
-		"gitlab_repository": {
-			"file_get": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"action": "repository.file_get", "file_path": params["file_path"], "ref": params["ref"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "file_path", "ref"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"file_path":  map[string]any{"type": "string"},
-						"ref":        map[string]any{"type": "string"},
-					},
+		"list": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"owned": params["owned"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"owned": map[string]any{"type": "boolean"},
 				},
 			},
 		},
-		"gitlab_access": {
-			"deploy_key_add": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"deploy_key": "added"}, nil
-				},
+	},
+	"gitlab_merge_request": {
+		"list": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"state": params["state"], "author_username": params["author_username"]}, nil
 			},
-			"deploy_key_delete": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"deploy_key_id": params["deploy_key_id"], "deleted": true}, nil
-				},
-				Destructive: true,
-			},
-			"deploy_key_get": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"deploy_key_id": params["deploy_key_id"]}, nil
-				},
-			},
-			"deploy_key_update": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"deploy_key_id": params["deploy_key_id"], "updated": true}, nil
-				},
-			},
-			"token_project_create": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"token": "created"}, nil
-				},
-			},
-			"deploy_token_create_project": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"deploy_token": "created"}, nil
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id":      map[string]any{"type": "integer"},
+					"state":           map[string]any{"type": "string"},
+					"author_username": map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_runner": {
-			"update": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"paused": params["paused"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"runner_id", "paused"},
-					"properties": map[string]any{
-						"runner_id": map[string]any{"type": "integer"},
-						"paused":    map[string]any{"type": "boolean"},
-					},
+		"approve": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"approved": true}, nil
+			},
+		},
+		"merge": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"merged": true}, nil
+			},
+		},
+		"time_estimate_set": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"time": "set"}, nil
+			},
+		},
+		"spent_time_add": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"spent": "added", "summary": params["summary"], "note": params["note"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "merge_request_iid", "duration"},
+				"properties": map[string]any{
+					"project_id":        map[string]any{"type": "integer"},
+					"merge_request_iid": map[string]any{"type": "integer"},
+					"duration":          map[string]any{"type": "string"},
+					"summary":           map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_group": {
-			"group_label_update": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return params, nil
-				},
+		"emoji_mr_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return maps.Clone(params), nil
 			},
-			"ldap_link_delete_for_provider": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"deleted": true}, nil
-				},
-			},
-		},
-		"gitlab_storage_move": {
-			"schedule_project": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"destination_storage_name": params["destination_storage_name"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id"},
-					"properties": map[string]any{
-						"project_id":               map[string]any{"type": "integer"},
-						"destination_storage_name": map[string]any{"type": "string"},
-					},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "merge_request_iid", "name"},
+				"properties": map[string]any{
+					"project_id":        map[string]any{"type": "integer"},
+					"merge_request_iid": map[string]any{"type": "integer"},
+					"name":              map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_mr_review": {
-			"changes_get": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"changes": true}, nil
-				},
+		"emoji_mr_delete": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"award_id": params["award_id"]}, nil
 			},
-			"draft_note_publish_all": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"published": true}, nil
+			Destructive: true,
+		},
+	},
+	"gitlab_issue": {
+		"note_list": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"notes": true}, nil
+			},
+		},
+		"spent_time_add": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return maps.Clone(params), nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "issue_iid", "duration"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"issue_iid":  map[string]any{"type": "integer"},
+					"duration":   map[string]any{"type": "string"},
+					"summary":    map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_external_status_check": {
-			"list_project": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"checks": true}, nil
+		"link_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"target_issue_iid": params["target_issue_iid"], "target_project_id": params["target_project_id"], "link_type": params["link_type"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "issue_iid", "target_project_id", "target_issue_iid"},
+				"properties": map[string]any{
+					"project_id":        map[string]any{"type": "integer"},
+					"issue_iid":         map[string]any{"type": "integer"},
+					"target_project_id": map[string]any{"type": "integer"},
+					"target_issue_iid":  map[string]any{"type": "integer"},
+					"link_type":         map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_package": {
-			"list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"packages": true}, nil
-				},
+		"update": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"state_event": params["state_event"]}, nil
 			},
-			"file_list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"files": true}, nil
-				},
-			},
-			"delete": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"deleted": true}, nil
-				},
-				Destructive: true,
-			},
-		},
-		"gitlab_audit_event": {
-			"list_group": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"events": true}, nil
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "issue_iid", "state_event"},
+				"properties": map[string]any{
+					"project_id":  map[string]any{"type": "integer"},
+					"issue_iid":   map[string]any{"type": "integer"},
+					"state_event": map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_job": {
-			"list": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"jobs": true, "scope": params["scope"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"project_id":  map[string]any{"type": "integer"},
-						"pipeline_id": map[string]any{"type": "integer"},
-						"scope":       map[string]any{"type": "string"},
-					},
-				},
+	},
+	"gitlab_ci_variable": {
+		"create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"key": params["key"]}, nil
 			},
-			"token_scope_list_inbound": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"allowlist": true}, nil
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "key", "value"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"key":        map[string]any{"type": "string"},
+					"value":      map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_release": {
-			"list": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"releases": true}, nil
-				},
+		"group_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"key": params["key"]}, nil
 			},
-			"link_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"link": "created", "tag_name": params["tag_name"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "tag_name", "name", "url"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"tag_name":   map[string]any{"type": "string"},
-						"name":       map[string]any{"type": "string"},
-						"url":        map[string]any{"type": "string"},
-					},
+		},
+	},
+	"gitlab_branch": {
+		"get_protected": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"branch_name": params["branch_name"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "branch_name"},
+				"properties": map[string]any{
+					"project_id":  map[string]any{"type": "integer"},
+					"branch_name": map[string]any{"type": "string"},
 				},
 			},
 		},
-		"gitlab_feature_flags": {
-			"feature_flag_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"version": params["version"]}, nil
-				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "name", "version"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"name":       map[string]any{"type": "string"},
-						"version":    map[string]any{"type": "string"},
-					},
-				},
+		"protect": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{
+					"push_access_level":  params["push_access_level"],
+					"merge_access_level": params["merge_access_level"],
+				}, nil
 			},
-			"ff_user_list_list": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return params, nil
-				},
-				InputSchema: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"page":       map[string]any{"type": "integer"},
-						"per_page":   map[string]any{"type": "integer"},
-					},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "branch_name"},
+				"properties": map[string]any{
+					"project_id":         map[string]any{"type": "integer"},
+					"branch_name":        map[string]any{"type": "string"},
+					"push_access_level":  map[string]any{"type": "integer"},
+					"merge_access_level": map[string]any{"type": "integer"},
+					"allow_force_push":   map[string]any{"type": "boolean"},
 				},
 			},
 		},
-		"gitlab_snippet": {
-			"project_create": {
-				Handler: func(_ context.Context, params map[string]any) (any, error) {
-					return map[string]any{"files": params["files"]}, nil
+		"update_protected": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"allow_force_push": params["allow_force_push"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "branch_name"},
+				"properties": map[string]any{
+					"project_id":       map[string]any{"type": "integer"},
+					"branch_name":      map[string]any{"type": "string"},
+					"allow_force_push": map[string]any{"type": "boolean"},
 				},
-				InputSchema: map[string]any{
-					"type":     "object",
-					"required": []any{"project_id", "title"},
-					"properties": map[string]any{
-						"project_id": map[string]any{"type": "integer"},
-						"title":      map[string]any{"type": "string"},
-						"files": map[string]any{
-							"type": "array",
-							"items": map[string]any{
-								"type": "object",
-								"properties": map[string]any{
-									"file_path": map[string]any{"type": "string"},
-									"content":   map[string]any{"type": "string"},
-								},
+			},
+		},
+	},
+	"gitlab_pipeline": {
+		"schedule_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return params, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "description", "ref", "cron"},
+				"properties": map[string]any{
+					"project_id":  map[string]any{"type": "integer"},
+					"description": map[string]any{"type": "string"},
+					"ref":         map[string]any{"type": "string"},
+					"cron":        map[string]any{"type": "string"},
+					"active":      map[string]any{"type": "boolean"},
+				},
+			},
+		},
+		"schedule_create_variable": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return params, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "schedule_id", "key", "value"},
+				"properties": map[string]any{
+					"project_id":    map[string]any{"type": "integer"},
+					"schedule_id":   map[string]any{"type": "integer"},
+					"key":           map[string]any{"type": "string"},
+					"value":         map[string]any{"type": "string"},
+					"variable_type": map[string]any{"type": "string"},
+				},
+			},
+		},
+		"schedule_edit_variable": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return params, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "schedule_id", "key", "value"},
+				"properties": map[string]any{
+					"project_id":    map[string]any{"type": "integer"},
+					"schedule_id":   map[string]any{"type": "integer"},
+					"key":           map[string]any{"type": "string"},
+					"value":         map[string]any{"type": "string"},
+					"variable_type": map[string]any{"type": "string"},
+				},
+			},
+		},
+	},
+	"gitlab_repository": {
+		"file_get": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"action": "repository.file_get", "file_path": params["file_path"], "ref": params["ref"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "file_path", "ref"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"file_path":  map[string]any{"type": "string"},
+					"ref":        map[string]any{"type": "string"},
+				},
+			},
+		},
+	},
+	"gitlab_access": {
+		"deploy_key_add": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"deploy_key": "added"}, nil
+			},
+		},
+		"deploy_key_delete": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"deploy_key_id": params["deploy_key_id"], "deleted": true}, nil
+			},
+			Destructive: true,
+		},
+		"deploy_key_get": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"deploy_key_id": params["deploy_key_id"]}, nil
+			},
+		},
+		"deploy_key_update": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"deploy_key_id": params["deploy_key_id"], "updated": true}, nil
+			},
+		},
+		"token_project_create": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"token": "created"}, nil
+			},
+		},
+		"deploy_token_create_project": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"deploy_token": "created"}, nil
+			},
+		},
+	},
+	"gitlab_runner": {
+		"update": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"paused": params["paused"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"runner_id", "paused"},
+				"properties": map[string]any{
+					"runner_id": map[string]any{"type": "integer"},
+					"paused":    map[string]any{"type": "boolean"},
+				},
+			},
+		},
+	},
+	"gitlab_group": {
+		"group_label_update": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return params, nil
+			},
+		},
+		"ldap_link_delete_for_provider": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"deleted": true}, nil
+			},
+		},
+	},
+	"gitlab_storage_move": {
+		"schedule_project": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"destination_storage_name": params["destination_storage_name"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id"},
+				"properties": map[string]any{
+					"project_id":               map[string]any{"type": "integer"},
+					"destination_storage_name": map[string]any{"type": "string"},
+				},
+			},
+		},
+	},
+	"gitlab_mr_review": {
+		"changes_get": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"changes": true}, nil
+			},
+		},
+		"draft_note_publish_all": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"published": true}, nil
+			},
+		},
+	},
+	"gitlab_external_status_check": {
+		"list_project": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"checks": true}, nil
+			},
+		},
+	},
+	"gitlab_package": {
+		"list": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"packages": true}, nil
+			},
+		},
+		"file_list": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"files": true}, nil
+			},
+		},
+		"delete": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"deleted": true}, nil
+			},
+			Destructive: true,
+		},
+	},
+	"gitlab_audit_event": {
+		"list_group": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"events": true}, nil
+			},
+		},
+	},
+	"gitlab_job": {
+		"list": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"jobs": true, "scope": params["scope"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id":  map[string]any{"type": "integer"},
+					"pipeline_id": map[string]any{"type": "integer"},
+					"scope":       map[string]any{"type": "string"},
+				},
+			},
+		},
+		"token_scope_list_inbound": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"allowlist": true}, nil
+			},
+		},
+	},
+	"gitlab_release": {
+		"list": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"releases": true}, nil
+			},
+		},
+		"link_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"link": "created", "tag_name": params["tag_name"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "tag_name", "name", "url"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"tag_name":   map[string]any{"type": "string"},
+					"name":       map[string]any{"type": "string"},
+					"url":        map[string]any{"type": "string"},
+				},
+			},
+		},
+	},
+	"gitlab_feature_flags": {
+		"feature_flag_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"version": params["version"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "name", "version"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"name":       map[string]any{"type": "string"},
+					"version":    map[string]any{"type": "string"},
+				},
+			},
+		},
+		"ff_user_list_list": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return params, nil
+			},
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"page":       map[string]any{"type": "integer"},
+					"per_page":   map[string]any{"type": "integer"},
+				},
+			},
+		},
+	},
+	"gitlab_snippet": {
+		"project_create": {
+			Handler: func(_ context.Context, params map[string]any) (any, error) {
+				return map[string]any{"files": params["files"]}, nil
+			},
+			InputSchema: map[string]any{
+				"type":     "object",
+				"required": []any{"project_id", "title"},
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "integer"},
+					"title":      map[string]any{"type": "string"},
+					"files": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"file_path": map[string]any{"type": "string"},
+								"content":   map[string]any{"type": "string"},
 							},
 						},
 					},
 				},
 			},
 		},
-		"gitlab_analyze": {
-			"release_notes": {
-				Handler: func(_ context.Context, _ map[string]any) (any, error) {
-					return map[string]any{"release_notes": true}, nil
-				},
+	},
+	"gitlab_analyze": {
+		"release_notes": {
+			Handler: func(_ context.Context, _ map[string]any) (any, error) {
+				return map[string]any{"release_notes": true}, nil
 			},
 		},
-	}
+	},
 }
 
 // textContent extracts text content from MCP result content for assertions.
@@ -3742,63 +3825,69 @@ func TestRegistry_DefensiveBranches(t *testing.T) {
 	registry := NewRegistry(testRoutes(t))
 
 	t.Run("describe requires action", func(t *testing.T) {
-		result, output, err := registry.Describe(t.Context(), nil, DescribeInput{})
-		if err != nil {
-			t.Fatalf("Describe() error = %v", err)
-		}
-		if result == nil || !result.IsError {
-			t.Fatalf("Describe() result = %+v, want tool error", result)
-		}
-		if output.Count != 0 || len(output.Actions) != 0 {
-			t.Fatalf("Describe() output = %+v, want empty output", output)
-		}
+		assertDescribeRequiresAction(t, registry)
 	})
 
 	t.Run("execute requires action", func(t *testing.T) {
-		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{})
-		if err != nil {
-			t.Fatalf("Execute() error = %v", err)
-		}
-		if result == nil || !result.IsError {
-			t.Fatalf("Execute() result = %+v, want tool error", result)
-		}
-		if output != nil {
-			t.Fatalf("Execute() output = %+v, want nil", output)
-		}
+		assertExecuteToolError(t, registry, ExecuteInput{}, false)
 	})
 
 	t.Run("execute unknown action without suggestions", func(t *testing.T) {
-		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "zzzz"})
-		if err != nil {
-			t.Fatalf("Execute() error = %v", err)
-		}
-		if result == nil || !result.IsError {
-			t.Fatalf("Execute() result = %+v, want tool error", result)
-		}
-		if output != nil {
-			t.Fatalf("Execute() output = %+v, want nil", output)
-		}
-		if strings.Contains(textContent(result), "Did you mean") {
-			t.Fatalf("Execute() error text = %q, want no suggestions", textContent(result))
-		}
+		assertExecuteToolError(t, registry, ExecuteInput{Action: "zzzz"}, true)
 	})
 
 	t.Run("execute initializes nil params", func(t *testing.T) {
-		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.hook_list"})
-		if err != nil {
-			t.Fatalf("Execute() error = %v", err)
-		}
-		if result == nil || result.IsError {
-			t.Fatalf("Execute() result = %+v, want non-error", result)
-		}
-		data, ok := output.(map[string]any)
-		if !ok {
-			t.Fatalf("Execute() output type = %T, want map[string]any", output)
-		}
-		if data["hooks"] != true {
-			t.Fatalf("Execute() output = %+v, want hooks=true", data)
-		}
+		assertExecuteInitializesNilParams(t, registry)
 	})
+}
+
+func assertDescribeRequiresAction(t *testing.T, registry *Registry) {
+	t.Helper()
+	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{})
+	if err != nil {
+		t.Fatalf("Describe() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Describe() result = %+v, want tool error", result)
+	}
+	if output.Count != 0 || len(output.Actions) != 0 {
+		t.Fatalf("Describe() output = %+v, want empty output", output)
+	}
+}
+
+func assertExecuteToolError(t *testing.T, registry *Registry, input ExecuteInput, rejectSuggestions bool) {
+	t.Helper()
+	result, output, err := registry.Execute(t.Context(), nil, input)
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	if rejectSuggestions && strings.Contains(textContent(result), "Did you mean") {
+		t.Fatalf("Execute() error text = %q, want no suggestions", textContent(result))
+	}
+}
+
+func assertExecuteInitializesNilParams(t *testing.T, registry *Registry) {
+	t.Helper()
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: "project.hook_list"})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Execute() result = %+v, want non-error", result)
+	}
+	data, ok := output.(map[string]any)
+	if !ok {
+		t.Fatalf("Execute() output type = %T, want map[string]any", output)
+	}
+	if data["hooks"] != true {
+		t.Fatalf("Execute() output = %+v, want hooks=true", data)
+	}
 }
 
 // TestRegistry_HelperCoverage validates deterministic helper behavior used by
@@ -4640,5 +4729,5 @@ func benchmarkName(query string) string {
 	if len(parts) == 0 {
 		return "empty"
 	}
-	return fmt.Sprintf("q_%s", strings.Join(parts, "_"))
+	return "q_" + strings.Join(parts, "_")
 }

@@ -10,17 +10,17 @@ import (
 // FormatFeatureFlagMarkdown formats a single feature flag as markdown.
 func FormatFeatureFlagMarkdown(out Output) string {
 	var b strings.Builder
-	b.WriteString("## Feature Flag: " + toolutil.EscapeMdTableCell(out.Name) + "\n\n")
+	fmt.Fprintf(&b, "## Feature Flag: %s\n\n", toolutil.EscapeMdTableCell(out.Name))
 	b.WriteString("| Field | Value |\n|---|---|\n")
-	b.WriteString("| Name | " + toolutil.EscapeMdTableCell(out.Name) + " |\n")
-	b.WriteString("| Description | " + toolutil.EscapeMdTableCell(out.Description) + " |\n")
+	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))
+	fmt.Fprintf(&b, "| Description | %s |\n", toolutil.EscapeMdTableCell(out.Description))
 	fmt.Fprintf(&b, "| Active | %t |\n", out.Active)
-	b.WriteString("| Version | " + toolutil.EscapeMdTableCell(out.Version) + " |\n")
+	fmt.Fprintf(&b, "| Version | %s |\n", toolutil.EscapeMdTableCell(out.Version))
 	if out.CreatedAt != "" {
-		b.WriteString("| Created | " + toolutil.FormatTime(out.CreatedAt) + " |\n")
+		fmt.Fprintf(&b, "| Created | %s |\n", toolutil.FormatTime(out.CreatedAt))
 	}
 	if out.UpdatedAt != "" {
-		b.WriteString("| Updated | " + toolutil.FormatTime(out.UpdatedAt) + " |\n")
+		fmt.Fprintf(&b, "| Updated | %s |\n", toolutil.FormatTime(out.UpdatedAt))
 	}
 	if len(out.Strategies) > 0 {
 		b.WriteString("\n### Strategies\n\n")

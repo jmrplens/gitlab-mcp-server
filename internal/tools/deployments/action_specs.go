@@ -35,27 +35,19 @@ func deploymentGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func deploymentReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := deploymentOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, deploymentOptions(individualTool))
 }
 
 func deploymentCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, deploymentOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, deploymentOptions(individualTool))
 }
 
 func deploymentUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := deploymentOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, deploymentOptions(individualTool))
 }
 
 func deploymentDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := deploymentOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, deploymentOptions(individualTool))
 }
 
 func deploymentOptions(individualTool string) toolutil.ActionSpecOptions {

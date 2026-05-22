@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // Test endpoint paths and JSON response fixtures for issue note operation tests.

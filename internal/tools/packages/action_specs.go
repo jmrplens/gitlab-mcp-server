@@ -41,21 +41,15 @@ func fileDeleteOutput(ctx context.Context, req *mcp.CallToolRequest, client *git
 }
 
 func packageReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := packageOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, packageOptions(name, individualTool))
 }
 
 func packageCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, packageOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, packageOptions(name, individualTool))
 }
 
 func packageDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := packageOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, packageOptions(name, individualTool))
 }
 
 func packageOptions(actionName, individualTool string) toolutil.ActionSpecOptions {

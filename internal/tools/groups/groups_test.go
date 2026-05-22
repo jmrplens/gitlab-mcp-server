@@ -508,30 +508,12 @@ func TestGroupMembers_ListSAMLAndRoleFields(t *testing.T) {
 // filter query params: AllAvailable, Owned, MinAccessLevel, OrderBy, Sort, Statistics.
 func TestSubgroupsList_EnrichedFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == pathGroupSubgroups {
-			q := r.URL.Query()
-			if got := q.Get("all_available"); got != "true" {
-				t.Errorf("query param all_available = %q, want %q", got, "true")
-			}
-			if got := q.Get("owned"); got != "true" {
-				t.Errorf("query param owned = %q, want %q", got, "true")
-			}
-			if got := q.Get("min_access_level"); got != "30" {
-				t.Errorf("query param min_access_level = %q, want %q", got, "30")
-			}
-			if got := q.Get("order_by"); got != "name" {
-				t.Errorf("query param order_by = %q, want %q", got, "name")
-			}
-			if got := q.Get("sort"); got != "desc" {
-				t.Errorf("query param sort = %q, want %q", got, "desc")
-			}
-			if got := q.Get("statistics"); got != "true" {
-				t.Errorf("query param statistics = %q, want %q", got, "true")
-			}
-			testutil.RespondJSON(w, http.StatusOK, subgroupsJSON)
+		if r.URL.Path != pathGroupSubgroups {
+			http.NotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
+		assertEnrichedSubgroupQuery(t, r)
+		testutil.RespondJSON(w, http.StatusOK, subgroupsJSON)
 	}))
 
 	out, err := SubgroupsList(context.Background(), client, SubgroupsListInput{
@@ -548,6 +530,29 @@ func TestSubgroupsList_EnrichedFilters(t *testing.T) {
 	}
 	if len(out.Groups) != 1 {
 		t.Fatalf(fmtOutGroupsWant1, len(out.Groups))
+	}
+}
+
+func assertEnrichedSubgroupQuery(t *testing.T, r *http.Request) {
+	t.Helper()
+	q := r.URL.Query()
+	if got := q.Get("all_available"); got != "true" {
+		t.Errorf("query param all_available = %q, want %q", got, "true")
+	}
+	if got := q.Get("owned"); got != "true" {
+		t.Errorf("query param owned = %q, want %q", got, "true")
+	}
+	if got := q.Get("min_access_level"); got != "30" {
+		t.Errorf("query param min_access_level = %q, want %q", got, "30")
+	}
+	if got := q.Get("order_by"); got != "name" {
+		t.Errorf("query param order_by = %q, want %q", got, "name")
+	}
+	if got := q.Get("sort"); got != "desc" {
+		t.Errorf("query param sort = %q, want %q", got, "desc")
+	}
+	if got := q.Get("statistics"); got != "true" {
+		t.Errorf("query param statistics = %q, want %q", got, "true")
 	}
 }
 
@@ -1391,31 +1396,7 @@ func TestListProjects_CancelledContext(t *testing.T) {
 func TestListProjects_AllOptionalFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/99/projects" {
-			q := r.URL.Query()
-			if got := q.Get("search"); got != "myapp" {
-				t.Errorf("search = %q, want %q", got, "myapp")
-			}
-			if got := q.Get("visibility"); got != "private" {
-				t.Errorf("visibility = %q, want %q", got, "private")
-			}
-			if got := q.Get("order_by"); got != "name" {
-				t.Errorf("order_by = %q, want %q", got, "name")
-			}
-			if got := q.Get("sort"); got != "asc" {
-				t.Errorf("sort = %q, want %q", got, "asc")
-			}
-			if got := q.Get("simple"); got != "true" {
-				t.Errorf("simple = %q, want %q", got, "true")
-			}
-			if got := q.Get("owned"); got != "true" {
-				t.Errorf("owned = %q, want %q", got, "true")
-			}
-			if got := q.Get("starred"); got != "true" {
-				t.Errorf("starred = %q, want %q", got, "true")
-			}
-			if got := q.Get("include_subgroups"); got != "true" {
-				t.Errorf("include_subgroups = %q, want %q", got, "true")
-			}
+			assertListProjectsOptionalQuery(t, r)
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
 		}
@@ -1440,6 +1421,26 @@ func TestListProjects_AllOptionalFilters(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+func assertListProjectsOptionalQuery(t *testing.T, r *http.Request) {
+	t.Helper()
+	q := r.URL.Query()
+	expected := map[string]string{
+		"search":            "myapp",
+		"visibility":        "private",
+		"order_by":          "name",
+		"sort":              "asc",
+		"simple":            "true",
+		"owned":             "true",
+		"starred":           "true",
+		"include_subgroups": "true",
+	}
+	for key, want := range expected {
+		if got := q.Get(key); got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
 	}
 }
 

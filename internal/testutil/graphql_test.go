@@ -3,6 +3,7 @@
 package testutil
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -58,8 +59,9 @@ func TestGraphQLHandler_Routing(t *testing.T) {
 
 	t.Run("routes to vulnerabilities handler", func(t *testing.T) {
 		called = ""
-		req := httptest.NewRequest(http.MethodPost, "/api/graphql",
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql",
 			strings.NewReader(`{"query":"query { project(fullPath: \"test\") { vulnerabilities { nodes { id } } } }"}`))
+
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
@@ -74,8 +76,9 @@ func TestGraphQLHandler_Routing(t *testing.T) {
 
 	t.Run("routes to dismiss handler", func(t *testing.T) {
 		called = ""
-		req := httptest.NewRequest(http.MethodPost, "/api/graphql",
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql",
 			strings.NewReader(`{"query":"mutation { vulnerabilityDismiss(input: {id: \"1\"}) { vulnerability { id } } }"}`))
+
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
@@ -86,8 +89,9 @@ func TestGraphQLHandler_Routing(t *testing.T) {
 	})
 
 	t.Run("returns 400 for non-matching query", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/graphql",
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql",
 			strings.NewReader(`{"query":"query { unknownField { id } }"}`))
+
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
@@ -98,7 +102,7 @@ func TestGraphQLHandler_Routing(t *testing.T) {
 	})
 
 	t.Run("rejects non-POST methods", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/graphql", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/graphql", nil)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
 
@@ -131,7 +135,7 @@ func TestGraphQLHandler_LongestKeyWinsAndRestoresBody(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/graphql", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
@@ -152,7 +156,7 @@ func TestGraphQLHandler_ReadError(t *testing.T) {
 	handler := GraphQLHandler(map[string]http.HandlerFunc{
 		"query": func(w http.ResponseWriter, _ *http.Request) { RespondGraphQL(w, http.StatusOK, `{}`) },
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/graphql", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql", nil)
 	req.Body = graphqlFailReader{}
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -164,7 +168,7 @@ func TestGraphQLHandler_ReadError(t *testing.T) {
 // TestParseGraphQLVariables verifies variable extraction from request body.
 func TestParseGraphQLVariables(t *testing.T) {
 	body := `{"query":"query($id: ID!) { vulnerability(id: $id) { title } }","variables":{"id":"gid://gitlab/Vulnerability/42","severity":"HIGH"}}`
-	req := httptest.NewRequest(http.MethodPost, "/api/graphql", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	vars, err := ParseGraphQLVariables(req)
@@ -190,7 +194,7 @@ func TestParseGraphQLVariables(t *testing.T) {
 // TestParseGraphQLVariables_NoVariables verifies handling of requests without variables.
 func TestParseGraphQLVariables_NoVariables(t *testing.T) {
 	body := `{"query":"query { currentUser { username } }"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/graphql", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	vars, err := ParseGraphQLVariables(req)
@@ -212,8 +216,9 @@ func TestGraphQLHandler_InvalidJSON(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/graphql",
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql",
 		strings.NewReader(`not valid json`))
+
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -226,8 +231,9 @@ func TestGraphQLHandler_InvalidJSON(t *testing.T) {
 // TestParseGraphQLVariables_InvalidJSON verifies that ParseGraphQLVariables
 // returns an error when the request body is not valid JSON.
 func TestParseGraphQLVariables_InvalidJSON(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/graphql",
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql",
 		strings.NewReader(`not json at all`))
+
 	req.Header.Set("Content-Type", "application/json")
 
 	_, err := ParseGraphQLVariables(req)
@@ -238,7 +244,7 @@ func TestParseGraphQLVariables_InvalidJSON(t *testing.T) {
 
 // TestParseGraphQLVariables_ReadError verifies request body read failures are returned.
 func TestParseGraphQLVariables_ReadError(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/graphql", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/graphql", nil)
 	req.Body = graphqlFailReader{}
 
 	_, err := ParseGraphQLVariables(req)
@@ -256,7 +262,7 @@ func TestGraphQLHandler_NonPostMethod(t *testing.T) {
 		},
 	})
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/graphql", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/graphql", nil)
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("expected 405, got %d", rec.Code)

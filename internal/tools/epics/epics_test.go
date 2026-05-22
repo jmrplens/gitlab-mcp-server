@@ -588,7 +588,13 @@ func TestFormatLinksMarkdown(t *testing.T) {
 // assignees, labels, closed) to the Output struct.
 func TestToOutput_FullFields(t *testing.T) {
 	out := toOutput(&testFullWorkItem)
+	assertEpicOutputCoreFields(t, out)
+	assertEpicOutputRelationshipFields(t, out)
+	assertEpicOutputTimelineFields(t, out)
+}
 
+func assertEpicOutputCoreFields(t *testing.T, out Output) {
+	t.Helper()
 	if out.ID != 101 {
 		t.Errorf("ID = %d, want 101", out.ID)
 	}
@@ -604,20 +610,34 @@ func TestToOutput_FullFields(t *testing.T) {
 	if len(out.Labels) != 2 || out.Labels[0] != "planning" {
 		t.Errorf("Labels = %v, want [planning priority]", out.Labels)
 	}
+	if !out.Confidential {
+		t.Error("Confidential should be true")
+	}
+	if out.Weight == nil || *out.Weight != 5 {
+		t.Errorf("Weight = %v, want 5", out.Weight)
+	}
+}
+
+func assertEpicOutputRelationshipFields(t *testing.T, out Output) {
+	t.Helper()
 	if len(out.LinkedItems) != 1 || out.LinkedItems[0].IID != 5 || out.LinkedItems[0].LinkType != "blocks" {
 		t.Errorf("LinkedItems = %v, unexpected", out.LinkedItems)
-	}
-	if out.Color != "#FF0000" {
-		t.Errorf("Color = %q, want #FF0000", out.Color)
-	}
-	if out.HealthStatus != "onTrack" {
-		t.Errorf("HealthStatus = %q, want onTrack", out.HealthStatus)
 	}
 	if out.ParentIID != 10 {
 		t.Errorf("ParentIID = %d, want 10", out.ParentIID)
 	}
 	if out.ParentPath != "g" {
 		t.Errorf("ParentPath = %q, want g", out.ParentPath)
+	}
+}
+
+func assertEpicOutputTimelineFields(t *testing.T, out Output) {
+	t.Helper()
+	if out.Color != "#FF0000" {
+		t.Errorf("Color = %q, want #FF0000", out.Color)
+	}
+	if out.HealthStatus != "onTrack" {
+		t.Errorf("HealthStatus = %q, want onTrack", out.HealthStatus)
 	}
 	if out.StartDate != "2026-01-01" {
 		t.Errorf("StartDate = %q, want 2026-01-01", out.StartDate)
@@ -633,12 +653,6 @@ func TestToOutput_FullFields(t *testing.T) {
 	}
 	if out.ClosedAt != "2026-03-01T00:00:00Z" {
 		t.Errorf("ClosedAt = %q, want 2026-03-01T00:00:00Z", out.ClosedAt)
-	}
-	if !out.Confidential {
-		t.Error("Confidential should be true")
-	}
-	if out.Weight == nil || *out.Weight != 5 {
-		t.Errorf("Weight = %v, want 5", out.Weight)
 	}
 }
 

@@ -25,8 +25,8 @@ type ListContributionEventsInput struct {
 	PerPage    int64  `json:"per_page,omitempty" jsonschema:"Number of items per page (default 20, max 100)"`
 }
 
-// ContributionEventOutput represents a single contribution event.
-type ContributionEventOutput struct {
+// EventOutput represents a single GitLab event shared by event list tools.
+type EventOutput struct {
 	ID             int64  `json:"id"`
 	Title          string `json:"title,omitempty"`
 	ProjectID      int64  `json:"project_id"`
@@ -40,6 +40,9 @@ type ContributionEventOutput struct {
 	CreatedAt      string `json:"created_at,omitempty"`
 	AuthorUsername string `json:"author_username,omitempty"`
 }
+
+// ContributionEventOutput represents a single contribution event.
+type ContributionEventOutput = EventOutput
 
 // ListContributionEventsOutput holds a paginated list of contribution events.
 type ListContributionEventsOutput struct {
@@ -56,31 +59,14 @@ func ListCurrentUserContributionEvents(ctx context.Context, client *gitlabclient
 			PerPage: input.PerPage,
 		},
 	}
-	if input.Action != "" {
-		action := gl.EventTypeValue(input.Action)
-		opts.Action = &action
-	}
-	if input.TargetType != "" {
-		tt := gl.EventTargetTypeValue(input.TargetType)
-		opts.TargetType = &tt
-	}
-	if input.Before != "" {
-		if t, err := time.Parse(toolutil.DateFormatISO, input.Before); err == nil {
-			d := gl.ISOTime(t)
-			opts.Before = &d
-		}
-	}
-	if input.After != "" {
-		if t, err := time.Parse(toolutil.DateFormatISO, input.After); err == nil {
-			d := gl.ISOTime(t)
-			opts.After = &d
-		}
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
+	filters := newEventFilters(input.Action, input.TargetType, input.Before, input.After, input.Sort)
+	opts.Action = filters.Action
+	opts.TargetType = filters.TargetType
+	opts.Before = filters.Before
+	opts.After = filters.After
+	opts.Sort = filters.Sort
 	if input.Scope != "" {
-		opts.Scope = new(input.Scope)
+		opts.Scope = &input.Scope
 	}
 
 	events, resp, err := client.GL().Events.ListCurrentUserContributionEvents(opts, gl.WithContext(ctx))
@@ -136,20 +122,7 @@ type ListProjectEventsInput struct {
 // Output types.
 
 // ProjectEventOutput represents a single project event.
-type ProjectEventOutput struct {
-	ID             int64  `json:"id"`
-	Title          string `json:"title,omitempty"`
-	ProjectID      int64  `json:"project_id"`
-	ActionName     string `json:"action_name"`
-	TargetID       int64  `json:"target_id,omitempty"`
-	TargetIID      int64  `json:"target_iid,omitempty"`
-	TargetType     string `json:"target_type,omitempty"`
-	TargetURL      string `json:"target_url,omitempty"`
-	AuthorID       int64  `json:"author_id"`
-	TargetTitle    string `json:"target_title,omitempty"`
-	CreatedAt      string `json:"created_at,omitempty"`
-	AuthorUsername string `json:"author_username,omitempty"`
-}
+type ProjectEventOutput = EventOutput
 
 // ListProjectEventsOutput holds a paginated list of project events.
 type ListProjectEventsOutput struct {
@@ -172,29 +145,12 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 			PerPage: input.PerPage,
 		},
 	}
-	if input.Action != "" {
-		action := gl.EventTypeValue(input.Action)
-		opts.Action = &action
-	}
-	if input.TargetType != "" {
-		tt := gl.EventTargetTypeValue(input.TargetType)
-		opts.TargetType = &tt
-	}
-	if input.Before != "" {
-		if t, err := time.Parse(toolutil.DateFormatISO, input.Before); err == nil {
-			d := gl.ISOTime(t)
-			opts.Before = &d
-		}
-	}
-	if input.After != "" {
-		if t, err := time.Parse(toolutil.DateFormatISO, input.After); err == nil {
-			d := gl.ISOTime(t)
-			opts.After = &d
-		}
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
+	filters := newEventFilters(input.Action, input.TargetType, input.Before, input.After, input.Sort)
+	opts.Action = filters.Action
+	opts.TargetType = filters.TargetType
+	opts.Before = filters.Before
+	opts.After = filters.After
+	opts.Sort = filters.Sort
 
 	events, resp, err := client.GL().Events.ListProjectVisibleEvents(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
@@ -218,7 +174,7 @@ func ListProjectEvents(ctx context.Context, client *gitlabclient.Client, input L
 
 // toProjectEventOutput converts the GitLab API response to the tool output format.
 func toProjectEventOutput(e *gl.ProjectEvent) ProjectEventOutput {
-	return ProjectEventOutput{
+	return EventOutput{
 		ID:             e.ID,
 		Title:          e.Title,
 		ProjectID:      e.ProjectID,
@@ -231,6 +187,45 @@ func toProjectEventOutput(e *gl.ProjectEvent) ProjectEventOutput {
 		CreatedAt:      e.CreatedAt,
 		AuthorUsername: e.AuthorUsername,
 	}
+}
+
+type eventFilters struct {
+	Action     *gl.EventTypeValue
+	TargetType *gl.EventTargetTypeValue
+	Before     *gl.ISOTime
+	After      *gl.ISOTime
+	Sort       *string
+}
+
+func newEventFilters(action, targetType, before, after, sort string) eventFilters {
+	filters := eventFilters{
+		Before: parseEventDate(before),
+		After:  parseEventDate(after),
+	}
+	if action != "" {
+		value := gl.EventTypeValue(action)
+		filters.Action = &value
+	}
+	if targetType != "" {
+		value := gl.EventTargetTypeValue(targetType)
+		filters.TargetType = &value
+	}
+	if sort != "" {
+		filters.Sort = &sort
+	}
+	return filters
+}
+
+func parseEventDate(value string) *gl.ISOTime {
+	if value == "" {
+		return nil
+	}
+	parsed, err := time.Parse(toolutil.DateFormatISO, value)
+	if err != nil {
+		return nil
+	}
+	date := gl.ISOTime(parsed)
+	return &date
 }
 
 // formatAuthor returns the author username prefixed with @ for Markdown display.
@@ -261,18 +256,15 @@ func resolveProjectWebURLs(ctx context.Context, client *gitlabclient.Client, pro
 
 // enrichContributionEventURLs resolves project web URLs and sets TargetURL on each event.
 func enrichContributionEventURLs(ctx context.Context, client *gitlabclient.Client, events []ContributionEventOutput) {
-	ids := make([]int64, 0, len(events))
-	for i := range events {
-		ids = append(ids, events[i].ProjectID)
-	}
-	urls := resolveProjectWebURLs(ctx, client, ids)
-	for i := range events {
-		events[i].TargetURL = toolutil.BuildTargetURL(urls[events[i].ProjectID], events[i].TargetType, events[i].TargetIID)
-	}
+	enrichEventURLs(ctx, client, events)
 }
 
 // enrichProjectEventURLs resolves project web URLs and sets TargetURL on each event.
 func enrichProjectEventURLs(ctx context.Context, client *gitlabclient.Client, events []ProjectEventOutput) {
+	enrichEventURLs(ctx, client, events)
+}
+
+func enrichEventURLs(ctx context.Context, client *gitlabclient.Client, events []EventOutput) {
 	ids := make([]int64, 0, len(events))
 	for i := range events {
 		ids = append(ids, events[i].ProjectID)

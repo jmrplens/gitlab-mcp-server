@@ -55,12 +55,12 @@ Para despliegues dinámicos donde los recursos y prompts dominan el contexto ini
 
 ## Autoactualización
 
-| Variable               | Predeterminado               | Descripción                                                                                                         |
-| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `AUTO_UPDATE`          | `true`                       | Comportamiento de autoactualización: `true` (aplicar al iniciar), `check` (solo notificar), `false` (deshabilitado) |
-| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para los assets de release                                                                    |
-| `AUTO_UPDATE_INTERVAL` | `1h`                         | Intervalo de comprobación periódica (solo modo HTTP)                                                                |
-| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout de descarga pre-inicio (rango: 5s–10m)                                                                      |
+| Variable               | Predeterminado               | Descripción                                                                                                               |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `AUTO_UPDATE`          | `true`                       | Comportamiento de autoactualización: `true` (aplicar en segundo plano), `check` (solo notificar), `false` (deshabilitado) |
+| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para los assets de release                                                                          |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Intervalo de comprobación periódica (solo modo HTTP)                                                                      |
+| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout de actualización de arranque/en segundo plano (rango: 5s–10m)                                                     |
 
 ## Opciones de administración
 
@@ -279,7 +279,7 @@ Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar
 | `--auto-update`          | `true`                       | Modo de autoactualización                                                                                                                                                     |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para releases                                                                                                                                           |
 | `--auto-update-interval` | `1h`                         | Intervalo de comprobación periódica de actualizaciones                                                                                                                        |
-| `--auto-update-timeout`  | `60s`                        | Tiempo de espera de descarga pre-inicio (5s–10m)                                                                                                                              |
+| `--auto-update-timeout`  | `60s`                        | Tiempo de espera de actualización de arranque/en segundo plano (5s–10m)                                                                                                       |
 | `--auth-mode`            | `legacy`                     | Modo de autenticación: `legacy` u `oauth`                                                                                                                                     |
 | `--oauth-cache-ttl`      | `15m`                        | TTL de caché de identidad OAuth (1m–2h)                                                                                                                                       |
 | `--revalidate-interval`  | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                                                                         |

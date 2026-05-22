@@ -27,27 +27,19 @@ func unprotectOutput(ctx context.Context, client *gitlabclient.Client, input Unp
 }
 
 func protectedEnvironmentReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := protectedEnvironmentOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, protectedEnvironmentOptions(individualTool))
 }
 
 func protectedEnvironmentCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, protectedEnvironmentOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, protectedEnvironmentOptions(individualTool))
 }
 
 func protectedEnvironmentUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := protectedEnvironmentOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, protectedEnvironmentOptions(individualTool))
 }
 
 func protectedEnvironmentDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := protectedEnvironmentOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, protectedEnvironmentOptions(individualTool))
 }
 
 func protectedEnvironmentOptions(individualTool string) toolutil.ActionSpecOptions {

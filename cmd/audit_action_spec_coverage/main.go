@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
@@ -138,21 +139,21 @@ func main() {
 	outputPath := flag.String("output", defaultOutputPath, "path to write action spec coverage JSON, or '-' for stdout")
 	flag.Parse()
 
-	root, err := repositoryRoot(".")
+	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
-		fatalf("find repository root: %v", err)
+		cmdutil.Fatalf("find repository root: %v", err)
 	}
 	report, err := buildCoverageReport(root)
 	if err != nil {
-		fatalf("build coverage report: %v", err)
+		cmdutil.Fatalf("build coverage report: %v", err)
 	}
 	content, err := marshalReport(report)
 	if err != nil {
-		fatalf("marshal coverage report: %v", err)
+		cmdutil.Fatalf("marshal coverage report: %v", err)
 	}
 	writeErr := writeReport(*outputPath, content)
 	if writeErr != nil {
-		fatalf("write coverage report: %v", writeErr)
+		cmdutil.Fatalf("write coverage report: %v", writeErr)
 	}
 }
 
@@ -243,16 +244,16 @@ func assertCoverageInvariants(domains []domainCoverage) error {
 	var gaps []string
 	for _, domain := range domains {
 		if domain.HasRegisterTools {
-			gaps = append(gaps, fmt.Sprintf("%s still defines package-local RegisterTools; use ActionSpecs and catalog-backed surface specs", domain.Package))
+			gaps = append(gaps, domain.Package+" still defines package-local RegisterTools; use ActionSpecs and catalog-backed surface specs")
 		}
 		if domain.HasRegisterMeta {
-			gaps = append(gaps, fmt.Sprintf("%s still defines package-level RegisterMeta", domain.Package))
+			gaps = append(gaps, domain.Package+" still defines package-level RegisterMeta")
 		}
 		if !domain.HasRegisterTools && domain.HasIndividualTools && !domain.HasMetaSpecs {
-			gaps = append(gaps, fmt.Sprintf("%s has GitLab-client RegisterTools without canonical ActionSpecs", domain.Package))
+			gaps = append(gaps, domain.Package+" has GitLab-client RegisterTools without canonical ActionSpecs")
 		}
 		if domain.SurfaceClassification == "individual-only" {
-			gaps = append(gaps, fmt.Sprintf("%s is individual-only; ordinary GitLab actions must be catalog-backed", domain.Package))
+			gaps = append(gaps, domain.Package+" is individual-only; ordinary GitLab actions must be catalog-backed")
 		}
 	}
 	if len(gaps) > 0 {
@@ -506,45 +507,73 @@ func assertDynamicCompatibilityPolicyOwnedByActionCompat(root string) error {
 func assertNoProductionSelectorCall(root, qualifier, selectorName string) error {
 	fileSet := token.NewFileSet()
 	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+		skip, skipErr := skipSelectorAuditEntry(entry, err)
+		if skipErr != nil {
+			return skipErr
 		}
-		if entry.IsDir() {
-			name := entry.Name()
-			if name == ".git" || name == "dist" || name == "site" {
-				return filepath.SkipDir
-			}
+		if skip {
 			return nil
 		}
-		if !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), testGoSuffix) {
-			return nil
-		}
-		file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
+		found, parseErr := productionFileCallsSelector(fileSet, path, qualifier, selectorName)
 		if parseErr != nil {
-			return fmt.Errorf(parsePathError, path, parseErr)
+			return parseErr
 		}
-		var found bool
-		ast.Inspect(file, func(node ast.Node) bool {
-			call, ok := node.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			selector, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok || selector.Sel.Name != selectorName {
-				return true
-			}
-			identifier, ok := selector.X.(*ast.Ident)
-			if ok && identifier.Name == qualifier {
-				found = true
-				return false
-			}
-			return true
-		})
 		if found {
 			return fmt.Errorf("production source %s calls %s.%s; catalog construction must use specs directly", path, qualifier, selectorName)
 		}
 		return nil
 	})
+}
+
+func skipSelectorAuditEntry(entry fs.DirEntry, err error) (bool, error) {
+	if err != nil {
+		return false, err
+	}
+	if entry.IsDir() {
+		if isSelectorAuditSkippedDir(entry.Name()) {
+			return true, filepath.SkipDir
+		}
+		return true, nil
+	}
+	return !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), testGoSuffix), nil
+}
+
+func isSelectorAuditSkippedDir(name string) bool {
+	switch name {
+	case ".git", "dist", "site":
+		return true
+	default:
+		return false
+	}
+}
+
+func productionFileCallsSelector(fileSet *token.FileSet, path, qualifier, selectorName string) (bool, error) {
+	file, parseErr := parser.ParseFile(fileSet, path, nil, 0)
+	if parseErr != nil {
+		return false, fmt.Errorf(parsePathError, path, parseErr)
+	}
+	var found bool
+	ast.Inspect(file, func(node ast.Node) bool {
+		if selectorCallsQualifier(node, qualifier, selectorName) {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found, nil
+}
+
+func selectorCallsQualifier(node ast.Node, qualifier, selectorName string) bool {
+	call, ok := node.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || selector.Sel.Name != selectorName {
+		return false
+	}
+	identifier, ok := selector.X.(*ast.Ident)
+	return ok && identifier.Name == qualifier
 }
 
 func assertActionCatalogHasNoLegacyReferences(path string) error {
@@ -1072,26 +1101,4 @@ func writeReport(outputPath string, content []byte) error {
 		return err
 	}
 	return os.WriteFile(outputPath, content, 0o600)
-}
-
-func repositoryRoot(start string) (string, error) {
-	current, err := filepath.Abs(start)
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, statErr := os.Stat(filepath.Join(current, "go.mod")); statErr == nil {
-			return current, nil
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", fmt.Errorf("go.mod not found from %s", start)
-		}
-		current = parent
-	}
-}
-
-func fatalf(message string, args ...any) {
-	fmt.Fprintf(os.Stderr, message+"\n", args...)
-	os.Exit(1)
 }

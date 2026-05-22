@@ -230,7 +230,6 @@ func goExecutable() string {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	//lint:ignore SA1019 command audit must avoid PATH lookup for Sonar go:S4036.
 	return filepath.Join(runtime.GOROOT(), "bin", name) //nolint:staticcheck // Avoid PATH lookup for Sonar go:S4036.
 }
 

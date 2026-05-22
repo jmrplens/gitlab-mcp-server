@@ -451,8 +451,11 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	if params == nil {
 		params = map[string]any{}
 	}
-	params, commonParamExplanations := toolutil.NormalizeParamAliasesForSchemaWithExplanation(params, entry.Route.InputSchema)
 	params, actionParamExplanations := NormalizeActionScopedParamsWithExplanation(entry.ID, params, entry.Route.InputSchema)
+	params, commonParamExplanations := toolutil.NormalizeParamAliasesForSchemaWithExplanation(params, entry.Route.InputSchema)
+	var postCommonActionParamExplanations []toolutil.ParamAliasExplanation
+	params, postCommonActionParamExplanations = NormalizeActionScopedParamsWithExplanation(entry.ID, params, entry.Route.InputSchema)
+	actionParamExplanations = append(actionParamExplanations, postCommonActionParamExplanations...)
 	if stateEvent, lifecycleAlias := issueLifecycleAliasStateEvent(requestedActionID); lifecycleAlias && entry.ID == "issue.update" {
 		if existing, hasStateEvent := params["state_event"]; hasStateEvent {
 			if existingStateEvent, converted := actioncompat.IssueStateEventValue(existing); converted && existingStateEvent != stateEvent {
@@ -1081,17 +1084,44 @@ func verbSynonyms() map[string][]string {
 	return verbSynonymsMap
 }
 
+type (
+	tagCollector func(values ...string)
+	actionTagger func(tagCollector, string, string, string) bool
+)
+
+var actionTaggers = []actionTagger{
+	addIDPatternTags,
+	addCoreDomainTags,
+	addEnvironmentAndCITags,
+	addAdminReleaseTags,
+	addPackageRunnerIssueTags,
+	addProtectionTags,
+}
+
 func actionTags(id, domain, action string, schema map[string]any) []string {
 	var tags []string
-	add := func(values ...string) {
+	add := tagAppender(&tags)
+	for _, tagger := range actionTaggers {
+		if tagger(add, id, domain, action) {
+			break
+		}
+	}
+	addSchemaPropertyTags(add, schema)
+	return dedupeStrings(tags)
+}
+
+func tagAppender(tags *[]string) tagCollector {
+	return func(values ...string) {
 		for _, value := range values {
 			value = strings.TrimSpace(strings.ToLower(value))
 			if value != "" {
-				tags = append(tags, value)
+				*tags = append(*tags, value)
 			}
 		}
 	}
+}
 
+func addIDPatternTags(add tagCollector, id, domain, action string) bool {
 	switch {
 	case strings.Contains(id, "hook_"):
 		add("webhook", "web hook", "project webhook", "webhook create", "webhook add", "project hook add", "hook add")
@@ -1107,14 +1137,26 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 		add("discover", "project", "remote", "url", "lookup", "resolve", "project discovery", "git remote", "remote url", "resolve project")
 	case domain == "interactive":
 		add("guided", "elicitation", "wizard", strings.ReplaceAll(action, "_", " "))
-		switch action {
-		case "project_create":
-			add("project", "create", "creation", "flow", "start", "guided project creation", "guided project creation flow", "project creation flow", "project wizard", "start guided project creation")
-		case "issue_create":
-			add("issue", "create", "creation", "flow", "start", "guided issue creation", "guided issue creation flow", "issue creation flow", "issue wizard", "start guided issue creation")
-		}
+		addInteractiveActionTags(add, action)
 	case strings.Contains(id, "token_project") || strings.Contains(id, "token_group") || strings.Contains(id, "token_personal"):
 		add("access token", "project access token", "personal access token")
+	default:
+		return false
+	}
+	return true
+}
+
+func addInteractiveActionTags(add tagCollector, action string) {
+	switch action {
+	case "project_create":
+		add("project", "create", "creation", "flow", "start", "guided project creation", "guided project creation flow", "project creation flow", "project wizard", "start guided project creation")
+	case "issue_create":
+		add("issue", "create", "creation", "flow", "start", "guided issue creation", "guided issue creation flow", "issue creation flow", "issue wizard", "start guided issue creation")
+	}
+}
+
+func addCoreDomainTags(add tagCollector, _, domain, action string) bool {
+	switch {
 	case domain == "user" && action == "current":
 		add("current", "authenticated", "me", "whoami", "profile", "current user", "authenticated user", "current authenticated user", "show current user", "my profile")
 	case domain == "repository" && strings.HasPrefix(action, "file_"):
@@ -1125,132 +1167,201 @@ func actionTags(id, domain, action string, schema map[string]any) []string {
 		add("mr", "merge request")
 	case domain == "ci_variable":
 		add("ci variable", "ci secret", "secret", "environment variable")
+	default:
+		return false
+	}
+	return true
+}
+
+func addEnvironmentAndCITags(add tagCollector, _, domain, action string) bool {
+	switch {
 	case domain == "environment":
 		add("env", "deployment")
-		switch {
-		case strings.HasPrefix(action, "protected_"):
-			add("protected environment", "environment protection", "protected environment get", "protected environment list")
-		case strings.HasPrefix(action, "deployment_"):
-			add("environment deployment", "deployment list", "deployment approval", "deployment approve", "deployment reject")
-		}
+		addEnvironmentActionTags(add, action)
 	case domain == "feature_flags" && strings.HasPrefix(action, "ff_user_list_"):
 		add("feature flag user list", "user list", "user_list_iid", "feature flag users")
 	case domain == "job":
 		add("ci job", "pipeline job")
-		switch action {
-		case "download_single_artifact":
-			add("single artifact", "single file artifact", "artifact path", "artifact_path", "numeric job id", "job_id", "coverage report", "coverage/report.xml")
-		case "artifacts":
-			add("whole artifact archive", "archive by job id", "job_id")
-		case "download_artifacts":
-			add("whole artifact archive", "archive by ref", "ref_name", "job name")
-		case "download_single_artifact_by_ref":
-			add("single artifact", "single file artifact", "artifact_path", "ref_name", "job name")
-		}
+		addJobActionTags(add, action)
 	case domain == "pipeline":
 		add("ci pipeline")
-		if strings.HasPrefix(action, "trigger_") {
-			add("pipeline trigger")
-		}
-		if action == "trigger_create" {
-			add("pipeline trigger create", "create trigger", "run trigger")
-		}
-		if strings.Contains(action, "schedule") && strings.Contains(action, "variable") {
-			add("pipeline schedule variable", "schedule variable")
-		}
+		addPipelineActionTags(add, action)
+	default:
+		return false
+	}
+	return true
+}
+
+func addEnvironmentActionTags(add tagCollector, action string) {
+	switch {
+	case strings.HasPrefix(action, "protected_"):
+		add("protected environment", "environment protection", "protected environment get", "protected environment list")
+	case strings.HasPrefix(action, "deployment_"):
+		add("environment deployment", "deployment list", "deployment approval", "deployment approve", "deployment reject")
+	}
+}
+
+func addJobActionTags(add tagCollector, action string) {
+	switch action {
+	case "download_single_artifact":
+		add("single artifact", "single file artifact", "artifact path", "artifact_path", "numeric job id", "job_id", "coverage report", "coverage/report.xml")
+	case "artifacts":
+		add("whole artifact archive", "archive by job id", "job_id")
+	case "download_artifacts":
+		add("whole artifact archive", "archive by ref", "ref_name", "job name")
+	case "download_single_artifact_by_ref":
+		add("single artifact", "single file artifact", "artifact_path", "ref_name", "job name")
+	}
+}
+
+func addPipelineActionTags(add tagCollector, action string) {
+	if strings.HasPrefix(action, "trigger_") {
+		add("pipeline trigger")
+	}
+	if action == "trigger_create" {
+		add("pipeline trigger create", "create trigger", "run trigger")
+	}
+	if strings.Contains(action, "schedule") && strings.Contains(action, "variable") {
+		add("pipeline schedule variable", "schedule variable")
+	}
+}
+
+func addAdminReleaseTags(add tagCollector, _, domain, action string) bool {
+	switch {
 	case domain == "admin":
-		switch action {
-		case "settings_get":
-			add("instance settings", "application settings", "current instance settings", "read settings", "settings get")
-		case "broadcast_message_list":
-			add("broadcast messages", "existing broadcast messages", "message list")
-		case "broadcast_message_create":
-			add("create broadcast message", "maintenance banner", "broadcast banner")
-		case "broadcast_message_delete":
-			add("delete broadcast message", "remove maintenance banner")
-		}
+		addAdminActionTags(add, action)
 	case domain == "tag":
 		if action == "get" {
 			add("verify tag", "tag exists", "tag lookup", "release cleanup first step")
 		}
 	case domain == "release":
-		switch action {
-		case "get":
-			add("verify release", "release exists", "release by tag", "tag_name")
-		case "link_list":
-			add("release link", "release asset link", "release asset links", "list release links", "asset link list", "tag_name")
-		case "link_create", "link_update", "link_delete":
-			add("release link", "release asset link", "release asset", "tag_name")
-		case "delete":
-			add("delete release", "remove release", "preserve tag")
-		case "list":
-			add("releases", "list releases", "release inventory", tagReleaseNotes)
-		}
+		addReleaseActionTags(add, action)
 	case domain == "repository" && action == "compare":
 		add("compare refs", "compare branches", "compare tags", "diff between refs", "from ref", "to ref", "from", "to", tagReleaseNotes, "release compare")
 	case domain == "analyze" && action == "release_notes":
 		add(tagReleaseNotes, "generate release notes", "from ref", "to ref", "from", "to")
-	case domain == "package":
-		switch action {
-		case "list":
-			add("generic packages", "package registry packages", "list packages", "package registry")
-		case "delete":
-			add("package delete", "package remove", "remove package", "delete package")
-		case "registry_list_project":
-			add("container registry", "container images", "image repositories")
-		}
-	case domain == "runner":
-		switch action {
-		case "remove":
-			add("remove runner", "delete runner by id", "runner_id")
-		case "delete_registered":
-			add("delete runner by token", "runner authentication token")
-		}
-	case domain == "issue":
-		switch action {
-		case "note_create":
-			add(tagIssueNote, tagIssueComment, "create note", "create comment")
-		case "note_get":
-			add(tagIssueNote, tagIssueComment, "get note", "note_id", "read one note")
-		case "note_list":
-			add("issue notes", "issue comments", "list notes", "list comments")
-		case "note_update":
-			add(tagIssueNote, tagIssueComment, "update note", "edit comment", "note_id")
-		case "note_delete":
-			add(tagIssueNote, tagIssueComment, "delete note", "remove comment", "note_id")
-		case "time_estimate_set":
-			add(tagIssueTimeTracking, "set estimate", "time estimate", "estimate", "2h")
-		case "spent_time_add":
-			add(tagIssueTimeTracking, "add spent time", "spent time", "30m", "summary")
-		case "spent_time_reset":
-			add(tagIssueTimeTracking, "reset spent time", "clear spent time")
-		case "time_estimate_reset":
-			add(tagIssueTimeTracking, "reset estimate", "clear estimate")
-		}
+	default:
+		return false
+	}
+	return true
+}
+
+func addAdminActionTags(add tagCollector, action string) {
+	switch action {
+	case "settings_get":
+		add("instance settings", "application settings", "current instance settings", "read settings", "settings get")
+	case "broadcast_message_list":
+		add("broadcast messages", "existing broadcast messages", "message list")
+	case "broadcast_message_create":
+		add("create broadcast message", "maintenance banner", "broadcast banner")
+	case "broadcast_message_delete":
+		add("delete broadcast message", "remove maintenance banner")
+	}
+}
+
+func addReleaseActionTags(add tagCollector, action string) {
+	switch action {
+	case "get":
+		add("verify release", "release exists", "release by tag", "tag_name")
+	case "link_list":
+		add("release link", "release asset link", "release asset links", "list release links", "asset link list", "tag_name")
+	case "link_create", "link_update", "link_delete":
+		add("release link", "release asset link", "release asset", "tag_name")
+	case "delete":
+		add("delete release", "remove release", "preserve tag")
+	case "list":
+		add("releases", "list releases", "release inventory", tagReleaseNotes)
+	}
+}
+
+func addPackageRunnerIssueTags(add tagCollector, _, domain, action string) bool {
+	switch domain {
+	case "package":
+		addPackageActionTags(add, action)
+	case "runner":
+		addRunnerActionTags(add, action)
+	case "issue":
+		addIssueActionTags(add, action)
+	default:
+		return false
+	}
+	return true
+}
+
+func addPackageActionTags(add tagCollector, action string) {
+	switch action {
+	case "list":
+		add("generic packages", "package registry packages", "list packages", "package registry")
+	case "delete":
+		add("package delete", "package remove", "remove package", "delete package")
+	case "registry_list_project":
+		add("container registry", "container images", "image repositories")
+	}
+}
+
+func addRunnerActionTags(add tagCollector, action string) {
+	switch action {
+	case "remove":
+		add("remove runner", "delete runner by id", "runner_id")
+	case "delete_registered":
+		add("delete runner by token", "runner authentication token")
+	}
+}
+
+func addIssueActionTags(add tagCollector, action string) {
+	switch action {
+	case "note_create":
+		add(tagIssueNote, tagIssueComment, "create note", "create comment")
+	case "note_get":
+		add(tagIssueNote, tagIssueComment, "get note", "note_id", "read one note")
+	case "note_list":
+		add("issue notes", "issue comments", "list notes", "list comments")
+	case "note_update":
+		add(tagIssueNote, tagIssueComment, "update note", "edit comment", "note_id")
+	case "note_delete":
+		add(tagIssueNote, tagIssueComment, "delete note", "remove comment", "note_id")
+	case "time_estimate_set":
+		add(tagIssueTimeTracking, "set estimate", "time estimate", "estimate", "2h")
+	case "spent_time_add":
+		add(tagIssueTimeTracking, "add spent time", "spent time", "30m", "summary")
+	case "spent_time_reset":
+		add(tagIssueTimeTracking, "reset spent time", "clear spent time")
+	case "time_estimate_reset":
+		add(tagIssueTimeTracking, "reset estimate", "clear estimate")
+	}
+}
+
+func addProtectionTags(add tagCollector, id, domain, action string) bool {
+	switch {
 	case domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect"):
 		add("protected branch", "branch protection")
 	case strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment"):
 		add("protected environment", "environment protection")
 	case strings.Contains(id, "member_role"):
 		add("custom role", "member role")
+	default:
+		return false
 	}
+	return true
+}
 
-	if properties, ok := schema["properties"].(map[string]any); ok {
-		for name := range properties {
-			switch name {
-			case "state_event":
-				add("close", "reopen", "state")
-			case "ref":
-				add("branch", "tag", "commit")
-			case "file_path":
-				add("repository file", "path")
-			case "url":
-				add("url")
-			}
+func addSchemaPropertyTags(add tagCollector, schema map[string]any) {
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	for name := range properties {
+		switch name {
+		case "state_event":
+			add("close", "reopen", "state")
+		case "ref":
+			add("branch", "tag", "commit")
+		case "file_path":
+			add("repository file", "path")
+		case "url":
+			add("url")
 		}
 	}
-
-	return dedupeStrings(tags)
 }
 
 func (r *Registry) searchMatches(query string, limit int, explain bool) []scoredActionEntry {
@@ -2413,21 +2524,10 @@ func scoreSearchAlternativeWithReason(entry actionEntry, raw, alternative string
 		return score, match
 	}
 
+	if score, match, ok := scoreExactSearchAlternativeWithReason(document, alternative, reason); ok {
+		return score, match
+	}
 	switch {
-	case document.CanonicalID == alternative:
-		return reason(searchFieldCanonicalID, document.CanonicalID, scoreCanonicalExact)
-	case stringInSlice(document.Aliases, alternative):
-		return reason(searchFieldAlias, alternative, scoreAliasExact)
-	case stringInSlice(document.Tags, alternative):
-		return reason(searchFieldTag, alternative, scoreTagExact)
-	case document.Action == alternative:
-		return reason(searchFieldAction, document.Action, scoreDomainActionExact)
-	case document.Domain == alternative:
-		return reason(searchFieldDomain, document.Domain, scoreDomainActionExact)
-	case slices.Contains(document.ActionWords, alternative):
-		return reason(searchFieldAction, alternative, scoreDomainActionWord)
-	case slices.Contains(document.DomainWords, alternative):
-		return reason(searchFieldDomain, alternative, scoreDomainActionWord)
 	case strings.Contains(document.CanonicalID, alternative):
 		return reason(searchFieldIDContains, document.CanonicalID, scoreIDContains)
 	case containsAnySearchValue(document.DomainWords, alternative):
@@ -2453,6 +2553,34 @@ func scoreSearchAlternativeWithReason(entry actionEntry, raw, alternative string
 		return reason(searchFieldFlatText, alternative, scoreSynonymContains)
 	default:
 		return 0, MatchReason{}
+	}
+}
+
+func scoreExactSearchAlternativeWithReason(document searchDocument, alternative string, reason func(string, string, int) (int, MatchReason)) (int, MatchReason, bool) {
+	switch {
+	case document.CanonicalID == alternative:
+		score, match := reason(searchFieldCanonicalID, document.CanonicalID, scoreCanonicalExact)
+		return score, match, true
+	case stringInSlice(document.Aliases, alternative):
+		score, match := reason(searchFieldAlias, alternative, scoreAliasExact)
+		return score, match, true
+	case stringInSlice(document.Tags, alternative):
+		score, match := reason(searchFieldTag, alternative, scoreTagExact)
+		return score, match, true
+	case document.Action == alternative:
+		score, match := reason(searchFieldAction, document.Action, scoreDomainActionExact)
+		return score, match, true
+	case document.Domain == alternative:
+		score, match := reason(searchFieldDomain, document.Domain, scoreDomainActionExact)
+		return score, match, true
+	case slices.Contains(document.ActionWords, alternative):
+		score, match := reason(searchFieldAction, alternative, scoreDomainActionWord)
+		return score, match, true
+	case slices.Contains(document.DomainWords, alternative):
+		score, match := reason(searchFieldDomain, alternative, scoreDomainActionWord)
+		return score, match, true
+	default:
+		return 0, MatchReason{}, false
 	}
 }
 
@@ -2754,16 +2882,17 @@ func formatFindOutput(output FindOutput) string {
 	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
 	withExplanations := hasFindExplanations(output.Results)
 	withGuidance := hasFindGuidance(output.Results)
-	if withExplanations && withGuidance {
+	switch {
+	case withExplanations && withGuidance:
 		b.WriteString("| Action ID | Score | Destructive | Required Params | Guidance | Why |\n")
 		b.WriteString("| --- | ---: | --- | --- | --- | --- |\n")
-	} else if withExplanations {
+	case withExplanations:
 		b.WriteString("| Action ID | Score | Destructive | Required Params | Why |\n")
 		b.WriteString("| --- | ---: | --- | --- | --- |\n")
-	} else if withGuidance {
+	case withGuidance:
 		b.WriteString("| Action ID | Score | Destructive | Required Params | Guidance |\n")
 		b.WriteString("| --- | ---: | --- | --- | --- |\n")
-	} else {
+	default:
 		b.WriteString("| Action ID | Score | Destructive | Required Params |\n")
 		b.WriteString("| --- | ---: | --- | --- |\n")
 	}
@@ -2772,13 +2901,14 @@ func formatFindOutput(output FindOutput) string {
 		if len(result.RequiredParams) > 0 {
 			required = strings.Join(result.RequiredParams, ", ")
 		}
-		if withExplanations && withGuidance {
+		switch {
+		case withExplanations && withGuidance:
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s | %s |\n", result.ID, result.Score, result.Destructive, required, compactFindGuidance(result), explanationSummary(result.Explanation))
-		} else if withExplanations {
+		case withExplanations:
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s |\n", result.ID, result.Score, result.Destructive, required, explanationSummary(result.Explanation))
-		} else if withGuidance {
+		case withGuidance:
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s | %s |\n", result.ID, result.Score, result.Destructive, required, compactFindGuidance(result))
-		} else {
+		default:
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s |\n", result.ID, result.Score, result.Destructive, required)
 		}
 	}

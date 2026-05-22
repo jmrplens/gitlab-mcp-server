@@ -101,9 +101,8 @@ func filterTasksByMutation(tasks []evalTask, skipMutating, onlyMutating bool) ([
 }
 
 // filterTasksByAvailableRoutes filters tasks by available routes using evaluator options.
-func filterTasksByAvailableRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap) []evalTask {
+func filterTasksByAvailableRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap, enterprise bool) []evalTask {
 	filtered := make([]evalTask, 0, len(tasks))
-	enterprise := catalogHasEnterpriseRoutes(routes)
 	for _, task := range tasks {
 		if taskRoutesAvailable(task, routes, enterprise) {
 			filtered = append(filtered, task)
@@ -212,26 +211,17 @@ func taskMatchesPartition(task evalTask, partition string) bool {
 	mutating := taskHasMutatingStep(task)
 	readOnly := !mutating && !destructive
 	special := strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) || taskUsesCapabilityFallback(task)
-	switch partition {
-	case partitionBaseRead:
-		return !enterprise && readOnly && !special
-	case partitionBaseMutating:
-		return !enterprise && mutating && !destructive && !special
-	case partitionBaseDestructive:
-		return !enterprise && destructive && !special
-	case partitionEnterpriseRead:
-		return enterprise && readOnly && !special
-	case partitionEnterpriseMutating:
-		return enterprise && mutating && !destructive && !special
-	case partitionEnterpriseDestructive:
-		return enterprise && destructive && !special
-	case partitionErrorRecovery:
-		return strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task)
-	case partitionCapabilityFallback:
-		return taskUsesCapabilityFallback(task)
-	default:
-		return false
+	checks := map[string]bool{
+		partitionBaseRead:              !enterprise && readOnly && !special,
+		partitionBaseMutating:          !enterprise && mutating && !destructive && !special,
+		partitionBaseDestructive:       !enterprise && destructive && !special,
+		partitionEnterpriseRead:        enterprise && readOnly && !special,
+		partitionEnterpriseMutating:    enterprise && mutating && !destructive && !special,
+		partitionEnterpriseDestructive: enterprise && destructive && !special,
+		partitionErrorRecovery:         strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task),
+		partitionCapabilityFallback:    taskUsesCapabilityFallback(task),
 	}
+	return checks[partition]
 }
 
 // filterTasksByPreset handles filter tasks by preset and returns [[]evalTask].
@@ -555,13 +545,13 @@ func validateTaskFixture(tasks []evalTask) []string {
 				stepLabel = fmt.Sprintf("%s step %d", task.ID, stepIndex+1)
 			}
 			if hasParam(step.RequiredParams, "project_id") && !promptNamesEntity(task.Prompt, "project") {
-				problems = append(problems, fmt.Sprintf("%s requires project_id but prompt does not name a project", stepLabel))
+				problems = append(problems, stepLabel+" requires project_id but prompt does not name a project")
 			}
 			if hasParam(step.RequiredParams, "group_id") && !promptNamesEntity(task.Prompt, "group") {
-				problems = append(problems, fmt.Sprintf("%s requires group_id but prompt does not name a group", stepLabel))
+				problems = append(problems, stepLabel+" requires group_id but prompt does not name a group")
 			}
 			if step.Destructive && !hasParam(step.OptionalParams, "confirm") && !hasParam(step.RequiredParams, "confirm") {
-				problems = append(problems, fmt.Sprintf("%s is destructive but does not list confirm as a parameter", stepLabel))
+				problems = append(problems, stepLabel+" is destructive but does not list confirm as a parameter")
 			}
 		}
 	}

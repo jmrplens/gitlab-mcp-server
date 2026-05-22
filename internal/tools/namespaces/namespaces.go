@@ -120,7 +120,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 				"verify id (numeric) or path (URL-encoded full path) with gitlab_namespace_list or gitlab_namespace_search")
 		}
 		// Fallback: GitLab returned an array instead of a single object.
-		req, reqErr := client.GL().NewRequest("GET", fmt.Sprintf("namespaces/%s", gl.PathEscape(input.ID)), nil, nil)
+		req, reqErr := client.GL().NewRequest("GET", "namespaces/"+gl.PathEscape(input.ID), nil, nil)
 		if reqErr != nil {
 			return Output{}, toolutil.WrapErrWithMessage("namespace_get", reqErr)
 		}

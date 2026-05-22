@@ -110,8 +110,8 @@ func ParseGraphQLVariables(r *http.Request) (map[string]any, error) {
 	r.Body = io.NopCloser(strings.NewReader(string(body)))
 
 	var req graphqlRequest
-	if err = json.Unmarshal(body, &req); err != nil {
-		return nil, err
+	if unmarshalErr := json.Unmarshal(body, &req); unmarshalErr != nil {
+		return nil, unmarshalErr
 	}
 	return req.Variables, nil
 }

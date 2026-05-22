@@ -114,6 +114,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectiterations"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectmirrors"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectserviceaccounts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectstatistics"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projecttemplates"
@@ -411,7 +412,7 @@ func buildProjectAliasActionSpecs(client *gitlabclient.Client, enterprise bool) 
 }
 
 func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
-	specs := make([]toolutil.ActionSpec, 0, 122)
+	specs := make([]toolutil.ActionSpec, 0, 130)
 	specs = append(specs, uploads.ActionSpecs(client)...)
 	specs = append(specs, projectstatistics.ActionSpecs(client)...)
 	specs = append(specs, projectimportexport.ActionSpecs(client)...)
@@ -425,6 +426,7 @@ func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []Act
 	specs = append(specs, projectmirrors.ActionSpecs(client)...)
 	if enterprise {
 		specs = append(specs, securitysettings.ProjectActionSpecs(client)...)
+		specs = append(specs, projectserviceaccounts.ActionSpecs(client)...)
 	}
 	specs = append(specs, projects.ActionSpecs(client, enterprise)...)
 	return actionSpecGroup("gitlab_project", specs)

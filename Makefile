@@ -1,7 +1,7 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-       run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker coverage \
-       lint fmt goimports goimports-check gofmt-check clean version release release-check checksum \
-       vet modernize modernize-fix golangci-lint gosec staticcheck govulncheck \
+	run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker eval-surfaces-docker coverage \
+	lint fmt clean version release release-check checksum \
+	golangci-lint govulncheck \
 	mdlint mdlint-fix audit-docs check-doc-links \
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check \
@@ -15,12 +15,8 @@ BINARY_NAME=gitlab-mcp-server
 CMD_PATH=./cmd/server
 PKGS=./cmd/... ./internal/...
 MCP_PUBLISHER_VERSION=v1.7.9
-GO_SOURCE_DIRS=.
-GO_VET_PKGS=./...
-GO_E2E_VET_PKGS=./...
-GO_E2E_VET_TAGS=e2e
 GO_ANALYSIS_PKGS=./...
-GO_ANALYSIS_GOFLAGS=GOFLAGS=-tags=$(GO_E2E_VET_TAGS)
+GO_ANALYSIS_TAGS=e2e
 PROJECT_GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 GO_TOOLCHAIN ?= go$(PROJECT_GO_VERSION)
 export GOTOOLCHAIN := $(GO_TOOLCHAIN)
@@ -159,88 +155,43 @@ test-e2e-docker:
 	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
 	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
 
+## eval-surfaces-docker: run Docker CE model evaluation for one surface (usage: make eval-surfaces-docker SURFACE=dynamic [PRESET=docker-read])
+eval-surfaces-docker:
+	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker SURFACE=dynamic|meta" >&2; exit 1; fi
+	@if [ -n "$(PRESET)" ]; then \
+		./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
+	else \
+		./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
+	fi
+
 ## coverage: run tests and generate HTML coverage report
 coverage: test
 	go tool cover -html=coverage.out -o coverage.html
 
 # ─── Static Analysis (individual) ────────────────────────────────────────────
 # Documentation URLs for each tool:
-#   goimports      https://pkg.go.dev/golang.org/x/tools/cmd/goimports
-#   gofmt          https://pkg.go.dev/cmd/gofmt
-#   go vet         https://pkg.go.dev/cmd/vet
-#   modernize      https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize
 #   golangci-lint  https://golangci-lint.run/
-#   gosec          https://github.com/securego/gosec
-#   staticcheck    https://staticcheck.dev/
 #   govulncheck    https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck
 #   markdownlint   https://github.com/DavidAnson/markdownlint-cli2
 # See docs/development/static-analysis.md for full documentation.
 
-## go vet: official Go static analyzer — detects bugs, format string mismatches,
-## unreachable code, shadowed variables, incorrect struct tags, etc.
-## Docs: https://pkg.go.dev/cmd/vet
-vet:
-	@echo === go vet ===
-	go vet $(GO_VET_PKGS)
-	go vet -tags $(GO_E2E_VET_TAGS) $(GO_E2E_VET_PKGS)
-
-## modernize: suggest and apply modern Go idioms (Go 1.18-1.26 features).
-## Replaces deprecated patterns with slices, maps, strings, errors packages.
-## Docs: https://pkg.go.dev/golang.org/x/tools/go/analysis/passes/modernize
-modernize:
-	@echo === modernize ===
-	env $(GO_ANALYSIS_GOFLAGS) modernize $(GO_ANALYSIS_PKGS)
-
-## modernize-fix: apply all modernization fixes automatically (writes files)
-## Safe to run en masse — fixes should not change program behavior.
-modernize-fix:
-	@echo === modernize -fix ===
-	env $(GO_ANALYSIS_GOFLAGS) modernize -fix $(GO_ANALYSIS_PKGS)
-
-## golangci-lint: meta-linter orchestrating 25+ linters via .golangci.yml.
-## Includes security (gosec), style (revive), bugs (errcheck, bodyclose), etc.
+## golangci-lint: run configured Go formatters and linters via .golangci.yml.
+## Includes govet, modernize, gosec, staticcheck, goimports, gofumpt, and gci.
 ## Docs: https://golangci-lint.run/
 golangci-lint:
-	@echo === golangci-lint ===
-	golangci-lint run --build-tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS)
-
-## gosec: OWASP-oriented security scanner with taint analysis (G1xx-G7xx).
-## Detects credentials, SQL injection, path traversal, SSRF, command injection.
-## Docs: https://github.com/securego/gosec
-gosec:
-	@echo === gosec ===
-	gosec -tags $(GO_E2E_VET_TAGS) -severity medium -confidence medium -exclude-generated $(GO_ANALYSIS_PKGS)
-
-## staticcheck: advanced static analysis covering SA/S/ST/QF check categories.
-## Finds bugs, simplifications, deprecations, and style issues.
-## Docs: https://staticcheck.dev/
-staticcheck:
-	@echo === staticcheck ===
-	staticcheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS)
+	@echo === golangci-lint config verify ===
+	golangci-lint config verify
+	@echo === golangci-lint fmt ===
+	golangci-lint fmt --diff
+	@echo === golangci-lint run ===
+	golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
 
 ## govulncheck: scan Go dependencies for known CVEs using call-graph analysis.
 ## Only reports vulnerabilities where the vulnerable function is actually called.
 ## Docs: https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck
 govulncheck:
 	@echo === govulncheck ===
-	govulncheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS)
-
-## goimports: apply goimports formatting — gofmt + import grouping/ordering.
-## Groups: stdlib, external, local module. Removes unused, adds missing imports.
-## Docs: https://pkg.go.dev/golang.org/x/tools/cmd/goimports
-goimports:
-	@echo === goimports ===
-	goimports -w $(GO_SOURCE_DIRS)
-
-## goimports-check: verify all files pass goimports (CI-friendly, no writes)
-goimports-check:
-	@echo === goimports (check) ===
-	@goimports -l $(GO_SOURCE_DIRS) && echo All files pass goimports.
-
-## gofmt-check: verify all files pass gofmt with -s simplification (CI-friendly, no writes)
-gofmt-check:
-	@echo === gofmt (check) ===
-	@gofmt -l -s $(GO_SOURCE_DIRS) && echo All files pass gofmt.
+	govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
 
 ## mdlint: lint Markdown files for style, consistency, and correctness.
 ## Excludes plan/ directory (working drafts). Uses .markdownlint-cli2.jsonc.
@@ -277,12 +228,11 @@ audit-docs:
 # ─── Static Analysis (combined) ─────────────────────────────────────────────
 # These targets orchestrate multiple tools for convenience.
 
-## lint: quick lint (vet only, backward compatible alias)
+## lint: quick lint alias for the configured Go lint/format gate.
 lint:
-	go vet $(GO_VET_PKGS)
-	go vet -tags $(GO_E2E_VET_TAGS) $(GO_E2E_VET_PKGS)
+	$(MAKE) golangci-lint
 
-## analyze: run ALL 9 static analysis tools sequentially.
+## analyze: run the complete static analysis suite sequentially.
 ## Use this for full project health check before committing.
 ## Runs every tool and exits non-zero if any tool fails.
 analyze:
@@ -304,40 +254,18 @@ analyze:
 		fi; \
 		echo ""; \
 	}; \
-	run_output_check() { \
-		step="$$1"; \
-		shift; \
-		echo "$$step"; \
-		output="$$( "$$@" 2>&1 )"; \
-		status="$$?"; \
-		if [ "$$status" -ne 0 ] || [ -n "$$output" ]; then \
-			if [ -n "$$output" ]; then \
-				echo "$$output"; \
-			fi; \
-			echo "FAIL"; \
-			analysis_status=1; \
-		else \
-			echo "OK"; \
-		fi; \
-		echo ""; \
-	}; \
 	echo "============================================================"; \
 	echo " Static Analysis Suite - gitlab-mcp-server"; \
 	echo "============================================================"; \
 	echo "Go toolchain: $$GOTOOLCHAIN (go.mod: $(PROJECT_GO_VERSION))"; \
-	echo "Go vet packages: $(GO_VET_PKGS)"; \
-	echo "Go E2E vet packages: $(GO_E2E_VET_PKGS) -tags $(GO_E2E_VET_TAGS)"; \
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
+	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_output_check "[1/9] goimports (check)" goimports -l $(GO_SOURCE_DIRS); \
-	run_output_check "[2/9] gofmt (check)" gofmt -l -s $(GO_SOURCE_DIRS); \
-	run_check "[3/9] go vet" sh -c 'go vet $(GO_VET_PKGS) && go vet -tags $(GO_E2E_VET_TAGS) $(GO_E2E_VET_PKGS)'; \
-	run_check "[4/9] modernize" env $(GO_ANALYSIS_GOFLAGS) modernize $(GO_ANALYSIS_PKGS); \
-	run_check "[5/9] golangci-lint" golangci-lint run --build-tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[6/9] gosec" gosec -tags $(GO_E2E_VET_TAGS) -severity medium -confidence medium -exclude-generated $(GO_ANALYSIS_PKGS); \
-	run_check "[7/9] staticcheck" staticcheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[8/9] govulncheck" govulncheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[9/9] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[1/5] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/5] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/5] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/5] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/5] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -348,17 +276,15 @@ analyze:
 	echo "============================================================"
 
 ## analyze-fix: apply automatic fixes from format + lint tools.
-## Order: goimports (formatting) → gofmt (formatting) → modernize (code) → markdownlint (docs).
+## Order: golangci-lint formatters → golangci-lint fixes → markdownlint.
 ## Always run 'make analyze' after to verify remaining findings.
 analyze-fix:
 	@echo === Applying automatic fixes ===
-	@echo [1/4] goimports -w
-	-goimports -w $(GO_SOURCE_DIRS)
-	@echo [2/4] gofmt -s -w
-	gofmt -s -w $(GO_SOURCE_DIRS)
-	@echo [3/4] modernize -fix
-	-env $(GO_ANALYSIS_GOFLAGS) modernize -fix $(GO_ANALYSIS_PKGS)
-	@echo [4/4] markdownlint --fix
+	@echo [1/3] golangci-lint fmt
+	golangci-lint fmt
+	@echo [2/3] golangci-lint run --fix
+	-golangci-lint run --fix --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
+	@echo [3/3] markdownlint --fix
 	-npx markdownlint-cli2 --fix "**/*.md" "#plan"
 	@echo === Fixes applied. Run 'make analyze' to verify. ===
 
@@ -368,53 +294,31 @@ analyze-report:
 	$(call MKDIR_P,$(ANALYSIS_DIR))
 	@echo "Generating analysis report to $(ANALYSIS_DIR)/report.txt ..."
 	@echo "# Static Analysis Report - gitlab-mcp-server" > $(ANALYSIS_DIR)/report.txt
-	@echo "# Tools: goimports, gofmt, go vet, modernize, golangci-lint, gosec, staticcheck, govulncheck, markdownlint" >> $(ANALYSIS_DIR)/report.txt
-	@echo "# Go vet packages: $(GO_VET_PKGS)" >> $(ANALYSIS_DIR)/report.txt
-	@echo "# Go E2E vet packages: $(GO_E2E_VET_PKGS) -tags $(GO_E2E_VET_TAGS)" >> $(ANALYSIS_DIR)/report.txt
+	@echo "# Tools: golangci-lint, govulncheck, markdownlint" >> $(ANALYSIS_DIR)/report.txt
 	@echo "# Go analysis packages: $(GO_ANALYSIS_PKGS)" >> $(ANALYSIS_DIR)/report.txt
+	@echo "# Go analysis build tags: $(GO_ANALYSIS_TAGS)" >> $(ANALYSIS_DIR)/report.txt
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 1. goimports (check)" >> $(ANALYSIS_DIR)/report.txt
+	@echo "## 1. golangci-lint config verify" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-goimports -l $(GO_SOURCE_DIRS) >> $(ANALYSIS_DIR)/report.txt 2>&1
+	-golangci-lint config verify >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 2. gofmt (check)" >> $(ANALYSIS_DIR)/report.txt
+	@echo "## 2. golangci-lint fmt" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-gofmt -l -s $(GO_SOURCE_DIRS) >> $(ANALYSIS_DIR)/report.txt 2>&1
+	-golangci-lint fmt --diff >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 3. go vet" >> $(ANALYSIS_DIR)/report.txt
+	@echo "## 3. golangci-lint run" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-go vet $(GO_VET_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
-	-go vet -tags $(GO_E2E_VET_TAGS) $(GO_E2E_VET_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
+	-golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 4. modernize" >> $(ANALYSIS_DIR)/report.txt
+	@echo "## 4. govulncheck" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-env $(GO_ANALYSIS_GOFLAGS) modernize $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
+	-govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
 	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 5. golangci-lint" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-golangci-lint run --build-tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 6. gosec" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-gosec -tags $(GO_E2E_VET_TAGS) -severity medium -confidence medium -exclude-generated $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 7. staticcheck" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-staticcheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 8. govulncheck" >> $(ANALYSIS_DIR)/report.txt
-	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
-	-govulncheck -tags $(GO_E2E_VET_TAGS) $(GO_ANALYSIS_PKGS) >> $(ANALYSIS_DIR)/report.txt 2>&1
-	@echo '```' >> $(ANALYSIS_DIR)/report.txt
-	@echo "" >> $(ANALYSIS_DIR)/report.txt
-	@echo "## 9. markdownlint" >> $(ANALYSIS_DIR)/report.txt
+	@echo "## 5. markdownlint" >> $(ANALYSIS_DIR)/report.txt
 	@echo '```text' >> $(ANALYSIS_DIR)/report.txt
 	-npx markdownlint-cli2 "**/*.md" "#plan" >> $(ANALYSIS_DIR)/report.txt 2>&1
 	@echo '```' >> $(ANALYSIS_DIR)/report.txt
@@ -427,12 +331,8 @@ analyze-report:
 ## install-tools: install all Go static analysis tools to $GOBIN
 install-tools:
 	@echo Installing static analysis tools...
-	go install golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-	go install github.com/securego/gosec/v2/cmd/gosec@latest
-	go install honnef.co/go/tools/cmd/staticcheck@latest
 	go install golang.org/x/vuln/cmd/govulncheck@latest
-	go install golang.org/x/tools/cmd/goimports@latest
 	go install gotest.tools/gotestsum@latest
 	@echo All tools installed.
 
@@ -614,11 +514,11 @@ docs-local-go:
 	$(PKGSITE) -http=127.0.0.1:6060
 
 # ─── Formatting ──────────────────────────────────────────────────────────────
-# Prefer 'make goimports' over 'make fmt' — goimports is a superset of gofmt.
+# Formatting is delegated to golangci-lint formatters configured in .golangci.yml.
 
-## fmt: apply gofmt formatting with -s simplification (legacy target)
+## fmt: apply configured Go formatters.
 fmt:
-	gofmt -s -w $(GO_SOURCE_DIRS)
+	golangci-lint fmt
 
 ## release: build release binaries using GoReleaser (local snapshot, no publish).
 ## Produces flat binaries in dist/ matching GitHub Release asset names.

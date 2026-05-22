@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
 )
 
@@ -55,7 +57,7 @@ func TestIndividual_UserManagement(t *testing.T) {
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
-	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(t *testing.T, _ *E2EContext) {
+	RunWithCapabilities(t, []Capability{CapabilityAdmin, CapabilityInstanceGlobal}, func(_ *E2EContext) {
 		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 		defer cancel()
 
@@ -153,36 +155,26 @@ func TestIndividual_UserManagementCatalogProjection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var schema map[string]any
-			found := false
-			for _, tool := range result.Tools {
-				if tool.Name != tt.name {
-					continue
-				}
-				found = true
-				var ok bool
-				schema, ok = tool.InputSchema.(map[string]any)
-				if !ok {
-					t.Fatalf("%s input schema type = %T, want map[string]any", tt.name, tool.InputSchema)
-				}
-				requireTruef(t, tool.OutputSchema != nil, "%s OutputSchema is nil", tt.name)
-				if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil {
-					t.Fatalf("%s destructive annotation missing", tt.name)
-				}
-				if *tool.Annotations.DestructiveHint != tt.wantDestructive {
-					t.Fatalf("%s destructiveHint = %t, want %t", tt.name, *tool.Annotations.DestructiveHint, tt.wantDestructive)
-				}
-				break
-			}
-			if !found {
-				t.Fatalf("%s not found in individual tools/list", tt.name)
-			}
-			for _, required := range tt.required {
-				requireSchemaRequired(t, schema, required)
-			}
-			requireSchemaConfirmProperty(t, schema, tt.wantConfirm)
+			assertUserToolProjection(t, result.Tools, tt.name, tt.required, tt.wantConfirm, tt.wantDestructive)
 		})
 	}
+}
+
+func assertUserToolProjection(t *testing.T, tools []*mcp.Tool, name string, required []string, wantConfirm, wantDestructive bool) {
+	t.Helper()
+	tool := findE2ETool(t, tools, name)
+	schema := schemaMapFromAny(t, tool.InputSchema)
+	requireTruef(t, tool.OutputSchema != nil, "%s OutputSchema is nil", name)
+	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil {
+		t.Fatalf("%s destructive annotation missing", name)
+	}
+	if *tool.Annotations.DestructiveHint != wantDestructive {
+		t.Fatalf("%s destructiveHint = %t, want %t", name, *tool.Annotations.DestructiveHint, wantDestructive)
+	}
+	for _, field := range required {
+		requireSchemaRequired(t, schema, field)
+	}
+	requireSchemaConfirmProperty(t, schema, wantConfirm)
 }
 
 // TestMeta_Users exercises the same user operations via the gitlab_user meta-tool:

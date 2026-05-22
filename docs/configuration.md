@@ -201,7 +201,7 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 | ----------------------------- | ------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | **Dynamic toolset** (default) | `TOOL_SURFACE=dynamic`    | `gitlab_find_action`, `gitlab_execute_tool`                        | Most users — lowest startup context while retaining full catalog reachability |
 | **Meta-tools**                | `TOOL_SURFACE=meta`       | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise    | Clients that prefer consolidated domain dispatchers with `action` parameters  |
-| **Individual tools**          | `TOOL_SURFACE=individual` | 866 CE / 1017 self-managed enterprise / 1023 GitLab.com Enterprise | Clients that need granular tool selection                                     |
+| **Individual tools**          | `TOOL_SURFACE=individual` | 866 CE / 1025 self-managed enterprise / 1031 GitLab.com Enterprise | Clients that need granular tool selection                                     |
 
 Use the default dynamic surface for normal low-token deployments. Set `TOOL_SURFACE=meta` only when a client or workflow prefers domain meta-tools. `META_TOOLS` remains accepted for compatibility only and should appear only in migration guidance.
 
@@ -249,7 +249,7 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--auto-update`          | `true`                       | Enable automatic binary updates                                                                                                                                                     |
 | `--auto-update-repo`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                                                                                                |
 | `--auto-update-interval` | `1h`                         | Interval between periodic update checks                                                                                                                                             |
-| `--auto-update-timeout`  | `60s`                        | Timeout for pre-start update download (range: 5s–10m)                                                                                                                               |
+| `--auto-update-timeout`  | `60s`                        | Timeout for startup/background update checks (range: 5s–10m)                                                                                                                        |
 | `--read-only`            | `false`                      | Expose only read-only tools                                                                                                                                                         |
 | `--safe-mode`            | `false`                      | Intercept mutating tools, return preview                                                                                                                                            |
 | `--embedded-resources`   | `true`                       | Embed canonical `gitlab://` MCP resource URIs as `EmbeddedResource` content blocks in `gitlab_*_get` tool results                                                                   |

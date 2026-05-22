@@ -248,48 +248,11 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 		opts.RequiredApprovalCount = input.RequiredApprovalCount
 	}
 	if len(input.DeployAccessLevels) > 0 {
-		levels := make([]*gl.EnvironmentAccessOptions, 0, len(input.DeployAccessLevels))
-		for _, d := range input.DeployAccessLevels {
-			eao := &gl.EnvironmentAccessOptions{}
-			if d.AccessLevel != nil {
-				alv := gl.AccessLevelValue(int64(*d.AccessLevel))
-				eao.AccessLevel = &alv
-			}
-			if d.UserID != nil {
-				eao.UserID = d.UserID
-			}
-			if d.GroupID != nil {
-				eao.GroupID = d.GroupID
-			}
-			if d.GroupInheritanceType != nil {
-				eao.GroupInheritanceType = d.GroupInheritanceType
-			}
-			levels = append(levels, eao)
-		}
+		levels := protectEnvironmentAccessOptions(input.DeployAccessLevels)
 		opts.DeployAccessLevels = &levels
 	}
 	if len(input.ApprovalRules) > 0 {
-		rules := make([]*gl.EnvironmentApprovalRuleOptions, 0, len(input.ApprovalRules))
-		for _, r := range input.ApprovalRules {
-			aro := &gl.EnvironmentApprovalRuleOptions{}
-			if r.AccessLevel != nil {
-				alv := gl.AccessLevelValue(int64(*r.AccessLevel))
-				aro.AccessLevel = &alv
-			}
-			if r.UserID != nil {
-				aro.UserID = r.UserID
-			}
-			if r.GroupID != nil {
-				aro.GroupID = r.GroupID
-			}
-			if r.RequiredApprovalCount != nil {
-				aro.RequiredApprovalCount = r.RequiredApprovalCount
-			}
-			if r.GroupInheritanceType != nil {
-				aro.GroupInheritanceType = r.GroupInheritanceType
-			}
-			rules = append(rules, aro)
-		}
+		rules := protectEnvironmentApprovalRuleOptions(input.ApprovalRules)
 		opts.ApprovalRules = &rules
 	}
 
@@ -303,6 +266,32 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 			"the environment is already protected \u2014 use gitlab_protected_environment_update to modify access levels")
 	}
 	return toOutput(pe), nil
+}
+
+func protectEnvironmentAccessOptions(inputs []DeployAccessLevelInput) []*gl.EnvironmentAccessOptions {
+	levels := make([]*gl.EnvironmentAccessOptions, 0, len(inputs))
+	for _, input := range inputs {
+		accessOptions := &gl.EnvironmentAccessOptions{UserID: input.UserID, GroupID: input.GroupID, GroupInheritanceType: input.GroupInheritanceType}
+		if input.AccessLevel != nil {
+			accessLevel := gl.AccessLevelValue(int64(*input.AccessLevel))
+			accessOptions.AccessLevel = &accessLevel
+		}
+		levels = append(levels, accessOptions)
+	}
+	return levels
+}
+
+func protectEnvironmentApprovalRuleOptions(inputs []ApprovalRuleInput) []*gl.EnvironmentApprovalRuleOptions {
+	rules := make([]*gl.EnvironmentApprovalRuleOptions, 0, len(inputs))
+	for _, input := range inputs {
+		approvalOptions := &gl.EnvironmentApprovalRuleOptions{UserID: input.UserID, GroupID: input.GroupID, RequiredApprovalCount: input.RequiredApprovalCount, GroupInheritanceType: input.GroupInheritanceType}
+		if input.AccessLevel != nil {
+			accessLevel := gl.AccessLevelValue(int64(*input.AccessLevel))
+			approvalOptions.AccessLevel = &accessLevel
+		}
+		rules = append(rules, approvalOptions)
+	}
+	return rules
 }
 
 // Update modifies an existing protected environment.
@@ -325,60 +314,11 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.RequiredApprovalCount = input.RequiredApprovalCount
 	}
 	if len(input.DeployAccessLevels) > 0 {
-		levels := make([]*gl.UpdateEnvironmentAccessOptions, 0, len(input.DeployAccessLevels))
-		for _, d := range input.DeployAccessLevels {
-			eao := &gl.UpdateEnvironmentAccessOptions{}
-			if d.ID != nil {
-				eao.ID = d.ID
-			}
-			if d.AccessLevel != nil {
-				alv := gl.AccessLevelValue(int64(*d.AccessLevel))
-				eao.AccessLevel = &alv
-			}
-			if d.UserID != nil {
-				eao.UserID = d.UserID
-			}
-			if d.GroupID != nil {
-				eao.GroupID = d.GroupID
-			}
-			if d.GroupInheritanceType != nil {
-				eao.GroupInheritanceType = d.GroupInheritanceType
-			}
-			if d.Destroy != nil {
-				eao.Destroy = d.Destroy
-			}
-			levels = append(levels, eao)
-		}
+		levels := updateEnvironmentAccessOptions(input.DeployAccessLevels)
 		opts.DeployAccessLevels = &levels
 	}
 	if len(input.ApprovalRules) > 0 {
-		rules := make([]*gl.UpdateEnvironmentApprovalRuleOptions, 0, len(input.ApprovalRules))
-		for _, r := range input.ApprovalRules {
-			aro := &gl.UpdateEnvironmentApprovalRuleOptions{}
-			if r.ID != nil {
-				aro.ID = r.ID
-			}
-			if r.AccessLevel != nil {
-				alv := gl.AccessLevelValue(int64(*r.AccessLevel))
-				aro.AccessLevel = &alv
-			}
-			if r.UserID != nil {
-				aro.UserID = r.UserID
-			}
-			if r.GroupID != nil {
-				aro.GroupID = r.GroupID
-			}
-			if r.RequiredApprovalCount != nil {
-				aro.RequiredApprovalCount = r.RequiredApprovalCount
-			}
-			if r.GroupInheritanceType != nil {
-				aro.GroupInheritanceType = r.GroupInheritanceType
-			}
-			if r.Destroy != nil {
-				aro.Destroy = r.Destroy
-			}
-			rules = append(rules, aro)
-		}
+		rules := updateEnvironmentApprovalRuleOptions(input.ApprovalRules)
 		opts.ApprovalRules = &rules
 	}
 
@@ -392,6 +332,32 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 			"the environment may not be protected \u2014 use gitlab_protected_environment_protect first")
 	}
 	return toOutput(pe), nil
+}
+
+func updateEnvironmentAccessOptions(inputs []UpdateDeployAccessLevelInput) []*gl.UpdateEnvironmentAccessOptions {
+	levels := make([]*gl.UpdateEnvironmentAccessOptions, 0, len(inputs))
+	for _, input := range inputs {
+		eao := &gl.UpdateEnvironmentAccessOptions{ID: input.ID, UserID: input.UserID, GroupID: input.GroupID, GroupInheritanceType: input.GroupInheritanceType, Destroy: input.Destroy}
+		if input.AccessLevel != nil {
+			accessLevel := gl.AccessLevelValue(int64(*input.AccessLevel))
+			eao.AccessLevel = &accessLevel
+		}
+		levels = append(levels, eao)
+	}
+	return levels
+}
+
+func updateEnvironmentApprovalRuleOptions(inputs []UpdateApprovalRuleInput) []*gl.UpdateEnvironmentApprovalRuleOptions {
+	rules := make([]*gl.UpdateEnvironmentApprovalRuleOptions, 0, len(inputs))
+	for _, input := range inputs {
+		aro := &gl.UpdateEnvironmentApprovalRuleOptions{ID: input.ID, UserID: input.UserID, GroupID: input.GroupID, RequiredApprovalCount: input.RequiredApprovalCount, GroupInheritanceType: input.GroupInheritanceType, Destroy: input.Destroy}
+		if input.AccessLevel != nil {
+			accessLevel := gl.AccessLevelValue(int64(*input.AccessLevel))
+			aro.AccessLevel = &accessLevel
+		}
+		rules = append(rules, aro)
+	}
+	return rules
 }
 
 // Unprotect removes protection from an environment.

@@ -281,21 +281,45 @@ func failureDiagnosticCategoryForResult(opts options, result taskResult) string 
 
 func commonFailureCategory(text string) string {
 	switch {
-	case strings.Contains(text, "invalid_api_key") || strings.Contains(text, "incorrect api key") || strings.Contains(text, "api key") && strings.Contains(text, "invalid"):
+	case providerAuthFailure(text):
 		return "model_provider_auth"
-	case strings.Contains(text, "not_found_error") && strings.Contains(text, "model") || strings.Contains(text, "model is not found") || strings.Contains(text, "models/") && strings.Contains(text, diagnosticNotFound):
+	case providerModelUnavailable(text):
 		return "model_provider_model_unavailable"
-	case strings.Contains(text, "int64") || strings.Contains(text, "cannot unmarshal") || strings.Contains(text, "integer") && strings.Contains(text, "invalid"):
+	case implementationBugFailure(text):
 		return "mcp_implementation_bug"
-	case strings.Contains(text, "500") || strings.Contains(text, "502") || strings.Contains(text, "503") || strings.Contains(text, "504") || strings.Contains(text, "internal server error") || strings.Contains(text, "bad gateway") || strings.Contains(text, "service unavailable") || strings.Contains(text, "gateway timeout"):
+	case transientGitLabFailure(text):
 		return "transient_gitlab_5xx"
-	case strings.Contains(text, "timeout") || strings.Contains(text, "deadline exceeded") || strings.Contains(text, "resource exhausted") || strings.Contains(text, "too many requests") || strings.Contains(text, "429"):
+	case resourceExhaustionFailure(text):
 		return "timeout_resource_exhaustion"
-	case strings.Contains(text, "404") || strings.Contains(text, diagnosticNotFound):
+	case notFoundFailure(text):
 		return "not_found"
 	default:
 		return ""
 	}
+}
+
+func providerAuthFailure(text string) bool {
+	return strings.Contains(text, "invalid_api_key") || strings.Contains(text, "incorrect api key") || strings.Contains(text, "api key") && strings.Contains(text, "invalid")
+}
+
+func providerModelUnavailable(text string) bool {
+	return strings.Contains(text, "not_found_error") && strings.Contains(text, "model") || strings.Contains(text, "model is not found") || strings.Contains(text, "models/") && strings.Contains(text, diagnosticNotFound)
+}
+
+func implementationBugFailure(text string) bool {
+	return strings.Contains(text, "int64") || strings.Contains(text, "cannot unmarshal") || strings.Contains(text, "integer") && strings.Contains(text, "invalid")
+}
+
+func transientGitLabFailure(text string) bool {
+	return textContainsAny(text, "500", "502", "503", "504", "internal server error", "bad gateway", "service unavailable", "gateway timeout")
+}
+
+func resourceExhaustionFailure(text string) bool {
+	return textContainsAny(text, "timeout", "deadline exceeded", "resource exhausted", "too many requests", "429")
+}
+
+func notFoundFailure(text string) bool {
+	return strings.Contains(text, "404") || strings.Contains(text, diagnosticNotFound)
 }
 
 // dynamicFailureDiagnosticCategory separates dynamic-mode failures into buckets
@@ -308,25 +332,49 @@ func dynamicFailureDiagnosticCategory(result taskResult) string {
 	switch {
 	case text == "":
 		return "other"
-	case strings.Contains(text, "sampling_unsupported") || strings.Contains(text, "sampling capability unsupported") || strings.Contains(text, "ce") && (strings.Contains(text, "unavailable") || strings.Contains(text, "unsupported")) || strings.Contains(text, "requires premium") || strings.Contains(text, "requires ultimate") || strings.Contains(text, "license") || strings.Contains(text, "not available"):
+	case limitedByEditionOrSampling(text):
 		return "ce_or_sampling_limitation"
-	case strings.Contains(text, "expected tool gitlab_discover_project") || strings.Contains(text, "expected tool gitlab_interactive_") || strings.Contains(text, "standalone tool"):
+	case standaloneUnavailable(text):
 		return "standalone_unavailable"
 	case dynamicRankerMiss(text):
 		return "ranker_miss"
 	case dynamicAliasMiss(text):
 		return "alias_miss"
-	case strings.Contains(text, diagnosticMissingRequiredParams) || strings.Contains(text, diagnosticMissingRequiredStandalone) || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter):
+	case parameterShapeFailure(text):
 		return "params_shape_miss"
 	case dynamicMultiStepOrderMiss(text):
 		return "multi_step_order_miss"
-	case strings.Contains(text, diagnosticExpectedAction) || strings.Contains(text, "expected tool") || strings.Contains(text, "unknown action") || strings.Contains(text, "model returned no tool_use"):
+	case discoveryFailure(text):
 		return "true_discovery_miss"
-	case strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive"):
+	case destructiveSafetyFailure(text):
 		return "destructive_safety"
 	default:
 		return "other"
 	}
+}
+
+func limitedByEditionOrSampling(text string) bool {
+	return strings.Contains(text, "sampling_unsupported") || strings.Contains(text, "sampling capability unsupported") || editionLimitation(text)
+}
+
+func editionLimitation(text string) bool {
+	return strings.Contains(text, "ce") && (strings.Contains(text, "unavailable") || strings.Contains(text, "unsupported")) || textContainsAny(text, "requires premium", "requires ultimate", "license", "not available")
+}
+
+func standaloneUnavailable(text string) bool {
+	return textContainsAny(text, "expected tool gitlab_discover_project", "expected tool gitlab_interactive_", "standalone tool")
+}
+
+func parameterShapeFailure(text string) bool {
+	return textContainsAny(text, diagnosticMissingRequiredParams, diagnosticMissingRequiredStandalone, diagnosticUnknownParams, diagnosticUnexpectedTopLevelParameter)
+}
+
+func discoveryFailure(text string) bool {
+	return textContainsAny(text, diagnosticExpectedAction, "expected tool", "unknown action", "model returned no tool_use")
+}
+
+func destructiveSafetyFailure(text string) bool {
+	return strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive")
 }
 
 // dynamicRankerMiss reports whether a failure points to dynamic search ranking.
@@ -378,19 +426,28 @@ func failureDiagnosticCategory(notes []string) string {
 		return category
 	}
 	switch {
-	case strings.Contains(text, "ce") && (strings.Contains(text, "unavailable") || strings.Contains(text, "unsupported")) || strings.Contains(text, "requires premium") || strings.Contains(text, "requires ultimate") || strings.Contains(text, "license") || strings.Contains(text, "not available"):
+	case editionLimitation(text):
 		return "gitlab_ce_limitation"
-	case strings.Contains(text, "fixture unavailable") || strings.Contains(text, "fixture state") || strings.Contains(text, "prepare fixtures"):
+	case textContainsAny(text, "fixture unavailable", "fixture state", "prepare fixtures"):
 		return "fixture_setup_failure"
 	case strings.Contains(text, diagnosticExpectedAction) || strings.Contains(text, "expected tool"):
 		return "model_route_selection_miss"
-	case strings.Contains(text, diagnosticMissingRequiredParams) || strings.Contains(text, diagnosticMissingRequiredStandalone) || strings.Contains(text, diagnosticUnknownParams) || strings.Contains(text, diagnosticUnexpectedTopLevelParameter) || strings.Contains(text, "standalone tool uses top-level"):
+	case parameterShapeFailure(text) || strings.Contains(text, "standalone tool uses top-level"):
 		return "model_parameter_shape_miss"
-	case strings.Contains(text, "confirm:true") || strings.Contains(text, "destructive"):
+	case destructiveSafetyFailure(text):
 		return "destructive_safety"
 	default:
 		return "other"
 	}
+}
+
+func textContainsAny(text string, substrs ...string) bool {
+	for _, substr := range substrs {
+		if strings.Contains(text, substr) {
+			return true
+		}
+	}
+	return false
 }
 
 func writeTraceArtifacts(dir string, results []taskResult, traceProviderBodies bool) error {
@@ -1063,60 +1120,76 @@ type metrics struct {
 	FinalSuccess      float64
 }
 
+type metricCounters struct {
+	toolOK             int
+	actionOK           int
+	firstOK            int
+	lookupOK           int
+	resourceLookupOK   int
+	capabilityLookupOK int
+	repairTotal        int
+	repairOK           int
+	destructiveTotal   int
+	destructiveOK      int
+	finalOK            int
+}
+
 // calculateMetrics derives evaluator success metrics from task results.
 func calculateMetrics(results []taskResult) metrics {
 	if len(results) == 0 {
 		return metrics{}
 	}
-	var toolOK, actionOK, firstOK, lookupOK, resourceLookupOK, capabilityLookupOK, destructiveTotal, destructiveOK, finalOK int
-	var repairTotal, repairOK int
+	counters := metricCounters{}
 	for _, result := range results {
-		firstToolOK, firstActionOK, firstPassOK := effectiveFirstOutcome(result)
-		if firstToolOK {
-			toolOK++
-		}
-		if firstActionOK {
-			actionOK++
-		}
-		if firstPassOK {
-			firstOK++
-		}
-		if result.SchemaLookupUsed {
-			lookupOK++
-		}
-		if result.ResourceLookupUsed {
-			resourceLookupOK++
-		}
-		if result.CapabilityLookupUsed {
-			capabilityLookupOK++
-		}
-		if result.RepairAttempted {
-			repairTotal++
-			if result.RepairSuccess {
-				repairOK++
-			}
-		}
-		if taskHasDestructiveStep(result.Task) {
-			destructiveTotal++
-			if result.DestructiveSafe {
-				destructiveOK++
-			}
-		}
-		if result.FinalSuccess {
-			finalOK++
-		}
+		counters.record(result)
 	}
 	return metrics{
-		ToolSelection:     percent(toolOK, len(results)),
-		ActionSelection:   percent(actionOK, len(results)),
-		FirstPass:         percent(firstOK, len(results)),
-		SchemaLookup:      percent(lookupOK, len(results)),
-		ResourceLookup:    percent(resourceLookupOK, len(results)),
-		CapabilityLookup:  percent(capabilityLookupOK, len(results)),
-		RepairSuccess:     percent(repairOK, repairTotal),
-		DestructiveSafety: percent(destructiveOK, destructiveTotal),
-		FinalSuccess:      percent(finalOK, len(results)),
+		ToolSelection:     percent(counters.toolOK, len(results)),
+		ActionSelection:   percent(counters.actionOK, len(results)),
+		FirstPass:         percent(counters.firstOK, len(results)),
+		SchemaLookup:      percent(counters.lookupOK, len(results)),
+		ResourceLookup:    percent(counters.resourceLookupOK, len(results)),
+		CapabilityLookup:  percent(counters.capabilityLookupOK, len(results)),
+		RepairSuccess:     percent(counters.repairOK, counters.repairTotal),
+		DestructiveSafety: percent(counters.destructiveOK, counters.destructiveTotal),
+		FinalSuccess:      percent(counters.finalOK, len(results)),
 	}
+}
+
+func (c *metricCounters) record(result taskResult) {
+	firstToolOK, firstActionOK, firstPassOK := effectiveFirstOutcome(result)
+	c.toolOK += boolCount(firstToolOK)
+	c.actionOK += boolCount(firstActionOK)
+	c.firstOK += boolCount(firstPassOK)
+	c.lookupOK += boolCount(result.SchemaLookupUsed)
+	c.resourceLookupOK += boolCount(result.ResourceLookupUsed)
+	c.capabilityLookupOK += boolCount(result.CapabilityLookupUsed)
+	c.recordRepair(result)
+	c.recordDestructiveSafety(result)
+	c.finalOK += boolCount(result.FinalSuccess)
+}
+
+func (c *metricCounters) recordRepair(result taskResult) {
+	if !result.RepairAttempted {
+		return
+	}
+	c.repairTotal++
+	c.repairOK += boolCount(result.RepairSuccess)
+}
+
+func (c *metricCounters) recordDestructiveSafety(result taskResult) {
+	if !taskHasDestructiveStep(result.Task) {
+		return
+	}
+	c.destructiveTotal++
+	c.destructiveOK += boolCount(result.DestructiveSafe)
+}
+
+func boolCount(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 // effectiveFirstOutcome returns first-call metrics after applying accepted dynamic alternatives.

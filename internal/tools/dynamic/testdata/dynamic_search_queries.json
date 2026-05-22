@@ -12,6 +12,18 @@
         "notes": "Compatibility aliases should canonicalize for discovery."
     },
     {
+        "category": "provider_invented_alias_terraform_state_unlock",
+        "query": "terraform_state.unlock",
+        "want_top": "admin.terraform_state_unlock",
+        "notes": "Observed provider-inferred Terraform state spelling should resolve to the canonical admin action."
+    },
+    {
+        "category": "natural_language_terraform_state_unlock",
+        "query": "unlock terraform state in project",
+        "want_top": "admin.terraform_state_unlock",
+        "notes": "Natural language Terraform state unlock requests should prefer the admin Terraform state action."
+    },
+    {
         "category": "provider_invented_alias_pipeline_jobs",
         "query": "pipeline jobs",
         "want_top": "job.list",

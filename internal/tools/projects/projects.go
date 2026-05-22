@@ -293,22 +293,20 @@ func ToOutput(p *gl.Project) Output {
 		MergeCommitTemplate:                       p.MergeCommitTemplate,
 		SquashCommitTemplate:                      p.SquashCommitTemplate,
 		AutocloseReferencedIssues:                 p.AutocloseReferencedIssues,
-		//lint:ignore SA1019 no replacement field on Project struct
-		ApprovalsBeforeMerge:           p.ApprovalsBeforeMerge, //nolint:staticcheck // SA1019: no replacement field
-		ResolveOutdatedDiffDiscussions: p.ResolveOutdatedDiffDiscussions,
-		ContainerRegistryEnabled:       accessLevelEnabled(p.ContainerRegistryAccessLevel),
-		SharedRunnersEnabled:           p.SharedRunnersEnabled,
-		PublicBuilds:                   p.PublicJobs,
-		SnippetsEnabled:                accessLevelEnabled(p.SnippetsAccessLevel),
-		//lint:ignore SA1019 backward compat with PackagesEnabled field
-		PackagesEnabled:                   p.PackagesEnabled, //nolint:staticcheck // SA1019: use PackageRegistryAccessLevel
-		PackageRegistryAccessLevel:        string(p.PackageRegistryAccessLevel),
-		BuildTimeout:                      p.BuildTimeout,
-		SuggestionCommitMessage:           p.SuggestionCommitMessage,
-		ComplianceFrameworks:              p.ComplianceFrameworks,
-		ImportURL:                         p.ImportURL,
-		MergeRequestTitleRegex:            p.MergeRequestTitleRegex,
-		MergeRequestTitleRegexDescription: p.MergeRequestTitleRegexDescription,
+		ApprovalsBeforeMerge:                      p.ApprovalsBeforeMerge, //nolint:staticcheck // No replacement field on Project struct.
+		ResolveOutdatedDiffDiscussions:            p.ResolveOutdatedDiffDiscussions,
+		ContainerRegistryEnabled:                  accessLevelEnabled(p.ContainerRegistryAccessLevel),
+		SharedRunnersEnabled:                      p.SharedRunnersEnabled,
+		PublicBuilds:                              p.PublicJobs,
+		SnippetsEnabled:                           accessLevelEnabled(p.SnippetsAccessLevel),
+		PackagesEnabled:                           p.PackagesEnabled, //nolint:staticcheck // Preserve backward-compatible field in output.
+		PackageRegistryAccessLevel:                string(p.PackageRegistryAccessLevel),
+		BuildTimeout:                              p.BuildTimeout,
+		SuggestionCommitMessage:                   p.SuggestionCommitMessage,
+		ComplianceFrameworks:                      p.ComplianceFrameworks,
+		ImportURL:                                 p.ImportURL,
+		MergeRequestTitleRegex:                    p.MergeRequestTitleRegex,
+		MergeRequestTitleRegexDescription:         p.MergeRequestTitleRegexDescription,
 	}
 	if out.Topics == nil {
 		out.Topics = []string{}
@@ -433,8 +431,7 @@ func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 		opts.PublicJobs = input.PublicBuilds
 	}
 	if input.PackagesEnabled != nil {
-		//lint:ignore SA1019 backward compat with PackagesEnabled field
-		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // SA1019: use PackageRegistryAccessLevel
+		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // Preserve backward-compatible input field.
 	}
 	if input.PackageRegistryAccessLevel != "" {
 		opts.PackageRegistryAccessLevel = new(gl.AccessControlValue(input.PackageRegistryAccessLevel))
@@ -775,6 +772,11 @@ func buildUpdateOpts(input UpdateInput) *gl.EditProjectOptions {
 
 // applyUpdateFeatureOpts sets optional feature toggles and advanced merge settings.
 func applyUpdateFeatureOpts(opts *gl.EditProjectOptions, input UpdateInput) {
+	applyUpdateMergeOpts(opts, input)
+	applyUpdateAccessOpts(opts, input)
+}
+
+func applyUpdateMergeOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.CIConfigPath != "" {
 		opts.CIConfigPath = new(input.CIConfigPath)
 	}
@@ -806,12 +808,14 @@ func applyUpdateFeatureOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 		opts.ResolveOutdatedDiffDiscussions = input.ResolveOutdatedDiffDiscussions
 	}
 	if input.ApprovalsBeforeMerge > 0 {
-		//lint:ignore SA1019 no replacement field, needs Merge Request Approvals API
-		opts.ApprovalsBeforeMerge = new(input.ApprovalsBeforeMerge) //nolint:staticcheck // SA1019: no replacement field
+		opts.ApprovalsBeforeMerge = new(input.ApprovalsBeforeMerge) //nolint:staticcheck // No replacement field, needs Merge Request Approvals API.
 	}
 	if input.LFSEnabled != nil {
 		opts.LFSEnabled = input.LFSEnabled
 	}
+}
+
+func applyUpdateAccessOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.RequestAccessEnabled != nil {
 		opts.RequestAccessEnabled = input.RequestAccessEnabled
 	}
@@ -822,8 +826,7 @@ func applyUpdateFeatureOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 		opts.PublicJobs = input.PublicBuilds
 	}
 	if input.PackagesEnabled != nil {
-		//lint:ignore SA1019 backward compat with PackagesEnabled field
-		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // SA1019: use PackageRegistryAccessLevel
+		opts.PackagesEnabled = input.PackagesEnabled //nolint:staticcheck // Preserve backward-compatible input field.
 	}
 	if input.PackageRegistryAccessLevel != "" {
 		opts.PackageRegistryAccessLevel = new(gl.AccessControlValue(input.PackageRegistryAccessLevel))
@@ -1681,27 +1684,27 @@ type ListUserProjectsInput struct {
 
 // ListUserProjects lists projects owned by the given user.
 func ListUserProjects(ctx context.Context, client *gitlabclient.Client, input ListUserProjectsInput) (ListOutput, error) {
-	if input.UserID == "" {
-		return ListOutput{}, errors.New("projectListUserProjects: user_id is required. Use gitlab_get_user to find the user ID")
+	return listUserScopedProjects(ctx, input.UserID, "projectListUserProjects", "projectListUserProjects: user_id is required. Use gitlab_get_user to find the user ID",
+		"user not found - use gitlab_get_user to verify user_id (numeric ID or exact username)", userProjectFilter{
+			Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
+			OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
+			Page: input.Page, PerPage: input.PerPage,
+		}, client.GL().Projects.ListUserProjects)
+}
+
+func listUserScopedProjects(ctx context.Context, userID toolutil.StringOrInt, operation, missingUserMsg, notFoundHint string, filters userProjectFilter, list func(any, *gl.ListProjectsOptions, ...gl.RequestOptionFunc) ([]*gl.Project, *gl.Response, error)) (ListOutput, error) {
+	if userID == "" {
+		return ListOutput{}, errors.New(missingUserMsg)
 	}
-	opts := buildUserProjectOpts(userProjectFilter{
-		Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
-		OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
-		Page: input.Page, PerPage: input.PerPage,
-	})
-	projects, resp, err := client.GL().Projects.ListUserProjects(string(input.UserID), opts, gl.WithContext(ctx))
+	projects, resp, err := list(string(userID), buildUserProjectOpts(filters), gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectListUserProjects", err, http.StatusNotFound,
-			"user not found \u2014 use gitlab_get_user to verify user_id (numeric ID or exact username)")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
 	}
 	out := make([]Output, len(projects))
-	for i, p := range projects {
-		out[i] = ToOutput(p)
+	for i, project := range projects {
+		out[i] = ToOutput(project)
 	}
-	return ListOutput{
-		Projects:   out,
-		Pagination: toolutil.PaginationFromResponse(resp),
-	}, nil
+	return ListOutput{Projects: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -2078,27 +2081,12 @@ type ListUserContributedProjectsInput struct {
 
 // ListUserContributedProjects lists projects a specific user has contributed to.
 func ListUserContributedProjects(ctx context.Context, client *gitlabclient.Client, input ListUserContributedProjectsInput) (ListOutput, error) {
-	if input.UserID == "" {
-		return ListOutput{}, errors.New("projectListUserContributed: user_id is required. Use gitlab_get_user to find the user ID")
-	}
-	opts := buildUserProjectOpts(userProjectFilter{
-		Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
-		OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
-		Page: input.Page, PerPage: input.PerPage,
-	})
-	projects, resp, err := client.GL().Projects.ListUserContributedProjects(string(input.UserID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectListUserContributed", err, http.StatusNotFound,
-			"user not found \u2014 use gitlab_get_user to verify user_id")
-	}
-	out := make([]Output, len(projects))
-	for i, p := range projects {
-		out[i] = ToOutput(p)
-	}
-	return ListOutput{
-		Projects:   out,
-		Pagination: toolutil.PaginationFromResponse(resp),
-	}, nil
+	return listUserScopedProjects(ctx, input.UserID, "projectListUserContributed", "projectListUserContributed: user_id is required. Use gitlab_get_user to find the user ID",
+		"user not found - use gitlab_get_user to verify user_id", userProjectFilter{
+			Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
+			OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
+			Page: input.Page, PerPage: input.PerPage,
+		}, client.GL().Projects.ListUserContributedProjects)
 }
 
 // ---------------------------------------------------------------------------
@@ -2119,27 +2107,12 @@ type ListUserStarredProjectsInput struct {
 
 // ListUserStarredProjects lists projects starred by a specific user.
 func ListUserStarredProjects(ctx context.Context, client *gitlabclient.Client, input ListUserStarredProjectsInput) (ListOutput, error) {
-	if input.UserID == "" {
-		return ListOutput{}, errors.New("projectListUserStarred: user_id is required. Use gitlab_get_user to find the user ID")
-	}
-	opts := buildUserProjectOpts(userProjectFilter{
-		Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
-		OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
-		Page: input.Page, PerPage: input.PerPage,
-	})
-	projects, resp, err := client.GL().Projects.ListUserStarredProjects(string(input.UserID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("projectListUserStarred", err, http.StatusNotFound,
-			"user not found \u2014 use gitlab_get_user to verify user_id")
-	}
-	out := make([]Output, len(projects))
-	for i, p := range projects {
-		out[i] = ToOutput(p)
-	}
-	return ListOutput{
-		Projects:   out,
-		Pagination: toolutil.PaginationFromResponse(resp),
-	}, nil
+	return listUserScopedProjects(ctx, input.UserID, "projectListUserStarred", "projectListUserStarred: user_id is required. Use gitlab_get_user to find the user ID",
+		"user not found - use gitlab_get_user to verify user_id", userProjectFilter{
+			Search: input.Search, Visibility: input.Visibility, Archived: input.Archived,
+			OrderBy: input.OrderBy, Sort: input.Sort, Simple: input.Simple,
+			Page: input.Page, PerPage: input.PerPage,
+		}, client.GL().Projects.ListUserStarredProjects)
 }
 
 // userProjectFilter holds the filter parameters for user-scoped project listings.

@@ -219,6 +219,11 @@ func GetHook(ctx context.Context, client *gitlabclient.Client, input GetHookInpu
 }
 
 func applyGroupHookOptions(input HookInput, opts *gl.AddGroupHookOptions) {
+	applyGroupHookIdentityOptions(input, opts)
+	applyGroupHookEventOptions(input, opts)
+}
+
+func applyGroupHookIdentityOptions(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.URL != "" {
 		opts.URL = new(input.URL)
 	}
@@ -240,6 +245,9 @@ func applyGroupHookOptions(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.PushEventsBranchFilter != "" {
 		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
 	}
+}
+
+func applyGroupHookEventOptions(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.PushEvents != nil {
 		opts.PushEvents = input.PushEvents
 	}

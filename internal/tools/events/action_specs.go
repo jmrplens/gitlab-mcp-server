@@ -16,11 +16,9 @@ func UserActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 func userEventReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"user", "event"},
-		ReadOnly:       true,
-		Idempotent:     true,
 		OpenWorld:      true,
 		OwnerPackage:   "events",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, options)
 }

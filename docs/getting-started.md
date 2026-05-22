@@ -146,7 +146,7 @@ The server handles all GitLab API calls. You do not need to know project IDs, en
 
 By default, the server registers the **dynamic find/execute surface**: `gitlab_find_action` and `gitlab_execute_tool`. The same canonical GitLab action catalog remains reachable, and `gitlab_find_action` returns exact schemas before execution. Set `TOOL_SURFACE=meta` to use **33 meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit).
 
-To register the complete individual tool set instead (one tool per GitLab operation; up to 1023 on GitLab.com Enterprise/Premium), set:
+To register the complete individual tool set instead (one tool per GitLab operation; up to 1031 on GitLab.com Enterprise/Premium), set:
 
 ```env
 TOOL_SURFACE=individual
@@ -197,7 +197,7 @@ The host passes these environment variables through to the container:
 | `AUTO_UPDATE`                    | No       | Auto-update mode in the container; default is `false` for Open Plugins installs         |
 | `AUTO_UPDATE_REPO`               | No       | GitHub repository slug for release assets (default `jmrplens/gitlab-mcp-server`)        |
 | `AUTO_UPDATE_INTERVAL`           | No       | Periodic update check interval in HTTP mode (default `1h`)                              |
-| `AUTO_UPDATE_TIMEOUT`            | No       | Pre-start download timeout (default `60s`)                                              |
+| `AUTO_UPDATE_TIMEOUT`            | No       | Startup/background update timeout (default `60s`)                                       |
 | `LOG_LEVEL`                      | No       | `debug`, `info`, `warn`, `error` (default `info`)                                       |
 
 Prefer `TOOL_SURFACE` for new configurations: `dynamic` is the default two-tool low-token find/execute surface, `meta` exposes consolidated domain dispatchers, and `individual` exposes every tool separately. The server still supports the deprecated `META_TOOLS` selector for compatibility, but the Open Plugins config forwards the explicit `TOOL_SURFACE` variable.

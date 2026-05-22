@@ -37,36 +37,26 @@ func forcePushOutput(ctx context.Context, client *gitlabclient.Client, input For
 }
 
 func mirrorReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mirrorOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, mirrorOptions(individualTool))
 }
 
 func mirrorCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, mirrorOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, mirrorOptions(individualTool))
 }
 
 func mirrorUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mirrorOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, mirrorOptions(individualTool))
 }
 
 func mirrorDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mirrorOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, mirrorOptions(individualTool))
 }
 
 func mirrorForcePushSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	individualDestructive := false
 	options := mirrorOptions("gitlab_force_push_mirror_update")
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewActionSpec("mirror_force_push", toolutil.DestructiveAction(client, forcePushOutput), options)
+	return toolutil.NewDeleteActionSpec("mirror_force_push", toolutil.DestructiveAction(client, forcePushOutput), options)
 }
 
 func mirrorOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -200,64 +200,112 @@ func TestAdminActions_TableDriven(t *testing.T) {
 	}
 
 	for _, action := range actions {
-		t.Run(action.name+"_Success", func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == action.method && r.URL.Path == action.path {
-					w.WriteHeader(action.mockStatus)
-					return
-				}
-				http.NotFound(w, r)
-			}))
+		runAdminActionCases(t, action)
+	}
+}
 
-			out, err := action.fn(context.Background(), client, AdminActionInput{UserID: 42})
-			if err != nil {
-				t.Fatalf("%s() unexpected error: %v", action.name, err)
-			}
-			if !out.Success {
-				t.Errorf("%s(): Success = false, want true", action.name)
-			}
-			if out.Action != action.wantAction {
-				t.Errorf("%s(): Action = %q, want %q", action.name, out.Action, action.wantAction)
-			}
-			if out.UserID != 42 {
-				t.Errorf("%s(): UserID = %d, want 42", action.name, out.UserID)
-			}
-		})
+func runAdminActionCases(t *testing.T, action struct {
+	name       string
+	fn         func(context.Context, *gitlabclient.Client, AdminActionInput) (AdminActionOutput, error)
+	method     string
+	path       string
+	mockStatus int
+	wantAction string
+},
+) {
+	t.Helper()
+	t.Run(action.name+"_Success", func(t *testing.T) { assertAdminActionSuccess(t, action) })
+	t.Run(action.name+"_ValidationError", func(t *testing.T) { assertAdminActionValidationError(t, action) })
+	t.Run(action.name+"_APIError", func(t *testing.T) { assertAdminActionAPIError(t, action) })
+	t.Run(action.name+"_CancelledContext", func(t *testing.T) { assertAdminActionCancelledContext(t, action) })
+}
 
-		t.Run(action.name+"_ValidationError", func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				http.NotFound(w, nil)
-			}))
+func assertAdminActionSuccess(t *testing.T, action struct {
+	name       string
+	fn         func(context.Context, *gitlabclient.Client, AdminActionInput) (AdminActionOutput, error)
+	method     string
+	path       string
+	mockStatus int
+	wantAction string
+},
+) {
+	t.Helper()
+	client := testutil.NewTestClient(t, adminActionSuccessHandler(action.method, action.path, action.mockStatus))
+	out, err := action.fn(context.Background(), client, AdminActionInput{UserID: 42})
+	if err != nil {
+		t.Fatalf("%s() unexpected error: %v", action.name, err)
+	}
+	if !out.Success {
+		t.Errorf("%s(): Success = false, want true", action.name)
+	}
+	if out.Action != action.wantAction {
+		t.Errorf("%s(): Action = %q, want %q", action.name, out.Action, action.wantAction)
+	}
+	if out.UserID != 42 {
+		t.Errorf("%s(): UserID = %d, want 42", action.name, out.UserID)
+	}
+}
 
-			_, err := action.fn(context.Background(), client, AdminActionInput{UserID: 0})
-			if err == nil {
-				t.Fatalf("%s(): expected validation error for zero user_id, got nil", action.name)
-			}
-		})
+func adminActionSuccessHandler(method, path string, status int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == method && r.URL.Path == path {
+			w.WriteHeader(status)
+			return
+		}
+		http.NotFound(w, r)
+	}
+}
 
-		t.Run(action.name+"_APIError", func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
-			}))
+func assertAdminActionValidationError(t *testing.T, action struct {
+	name       string
+	fn         func(context.Context, *gitlabclient.Client, AdminActionInput) (AdminActionOutput, error)
+	method     string
+	path       string
+	mockStatus int
+	wantAction string
+},
+) {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) }))
+	_, err := action.fn(context.Background(), client, AdminActionInput{UserID: 0})
+	if err == nil {
+		t.Fatalf("%s(): expected validation error for zero user_id, got nil", action.name)
+	}
+}
 
-			_, err := action.fn(context.Background(), client, AdminActionInput{UserID: 42})
-			if err == nil {
-				t.Fatalf("%s(): expected API error, got nil", action.name)
-			}
-		})
+func assertAdminActionAPIError(t *testing.T, action struct {
+	name       string
+	fn         func(context.Context, *gitlabclient.Client, AdminActionInput) (AdminActionOutput, error)
+	method     string
+	path       string
+	mockStatus int
+	wantAction string
+},
+) {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+	_, err := action.fn(context.Background(), client, AdminActionInput{UserID: 42})
+	if err == nil {
+		t.Fatalf("%s(): expected API error, got nil", action.name)
+	}
+}
 
-		t.Run(action.name+"_CancelledContext", func(t *testing.T) {
-			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(http.StatusCreated)
-			}))
-
-			ctx := testutil.CancelledCtx(t)
-
-			_, err := action.fn(ctx, client, AdminActionInput{UserID: 42})
-			if err == nil {
-				t.Fatalf("%s(): expected error for cancelled context, got nil", action.name)
-			}
-		})
+func assertAdminActionCancelledContext(t *testing.T, action struct {
+	name       string
+	fn         func(context.Context, *gitlabclient.Client, AdminActionInput) (AdminActionOutput, error)
+	method     string
+	path       string
+	mockStatus int
+	wantAction string
+},
+) {
+	t.Helper()
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) }))
+	_, err := action.fn(testutil.CancelledCtx(t), client, AdminActionInput{UserID: 42})
+	if err == nil {
+		t.Fatalf("%s(): expected error for cancelled context, got nil", action.name)
 	}
 }
 

@@ -24,21 +24,15 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func licenseReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := licenseOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, licenseOptions(individualTool))
 }
 
 func licenseCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, licenseOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, licenseOptions(individualTool))
 }
 
 func licenseDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := licenseOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, licenseOptions(individualTool))
 }
 
 func licenseOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -39,6 +39,11 @@ linters:
     - gosec # OWASP-oriented security scanner (G1xx-G7xx)
 
     # --- Code Quality ---
+    - gocyclo # Function cyclomatic complexity guard
+    - gocognit # Cognitive complexity guard
+    - nestif # Nested if complexity guard
+    - maintidx # Maintainability index guard
+    - dupl # Duplicate code guard
     - revive # Configurable Go linter (golint replacement)
     - gocritic # ~100 diagnostics: bugs, performance, style
     - unconvert # Unnecessary type conversions
@@ -100,9 +105,6 @@ linters:
     staticcheck:
       checks:
         - "all"
-        - "-ST1000" # Package comments (handled by revive)
-        - "-ST1016" # Consistent receiver names (handled by revive)
-        - "-QF1008" # Omit embedded fields from selector (too noisy)
 
     errcheck:
       check-type-assertions: true
@@ -111,13 +113,12 @@ linters:
     gosec:
       excludes:
         - G104 # Unhandled errors (covered by errcheck)
-        - G304 # File path from variable (many legitimate uses in tools)
       config:
         global:
-          audit: "false"
+          audit: "true"
 
     revive:
-      severity: warning
+      severity: error
       enable-all-rules: false
       enable-default-rules: true
       rules:
@@ -153,11 +154,11 @@ linters:
         - diagnostic
         - performance
         - style
+        - opinionated
+        - experimental
       disabled-checks:
         - hugeParam # Too strict for tool input/output structs
         - rangeValCopy # Often false positives with simple structs
-        - ifElseChain # Sometimes clearer than switch
-        - sloppyReassign # Conflicts with govet shadow strict mode
 
     misspell:
       locale: US
@@ -173,22 +174,45 @@ linters:
     nolintlint:
       require-explanation: true
       require-specific: true
+      allow-unused: false
 
     usetesting:
+      context-background: false # Too noisy across existing tests
+      context-todo: true
+      os-chdir: true
+      os-mkdir-temp: true
+      os-setenv: true
       os-temp-dir: true
 
+    gocyclo:
+      min-complexity: 20
+
+    gocognit:
+      min-complexity: 25
+
+    nestif:
+      min-complexity: 5
+
+    maintidx:
+      under: 20
+
+    dupl:
+      threshold: 150
+
     perfsprint:
+      integer-format: true
       int-conversion: true
       err-error: true
       errorf: true
       sprintf1: true
-      strconcat: false
+      strconcat: true
 
   exclusions:
     # Keep focused package runs warning-free when exclusions for unrelated
     # packages are not exercised by the selected target.
     warn-unused: false
-    # Default exclusion presets
+    # Keep upstream presets that suppress generated comment noise, unchecked
+    # standard-library writes/closes, and common test fixture false positives.
     presets:
       - comments
       - std-error-handling
@@ -200,38 +224,22 @@ linters:
       - path: "_test\\.go"
         linters:
           - errcheck
-          - gosec
-          - bodyclose
           - gocritic
           - revive
           - unparam
-          - perfsprint
-          - noctx
-          - wastedassign
-          - fatcontext
-          - nilnil
+          - dupl
 
-      # Main entry point: allow os.Exit
-      - path: "cmd/server/main\\.go"
+      # Test fixtures intentionally use fake tokens, passwords, and keys.
+      - path: "_test\\.go"
         linters:
           - gosec
-        text: "G114"
-
-      # Test utilities
-      - path: "internal/testutil/"
-        linters:
-          - errcheck
-          - gosec
+        text: "G101: Potential hardcoded credentials"
 
       # E2E tests run sequentially by design (shared GitLab fixtures across subtests).
-      # Disable t.Parallel() requirement and context propagation strictness for the
-      # e2e suite — fixtures use fresh contexts in t.Cleanup, polling helpers carry
-      # their own deadlines, and mock auth probes intentionally decouple ctx.
+      # Disable only the t.Parallel() requirement for the e2e suite.
       - path: "test/e2e/"
         linters:
           - tparallel
-          - thelper
-          - contextcheck
 
 output:
   formats:
@@ -246,7 +254,18 @@ output:
 formatters:
   enable:
     - goimports # Import grouping and ordering
+    - gofumpt # Stricter gofmt-compatible formatting
+    - gci # Enforce deterministic import section grouping
   settings:
+    gofumpt:
+      module-path: github.com/jmrplens/gitlab-mcp-server/v2
+      extra-rules: true
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/jmrplens/gitlab-mcp-server/v2)
+      custom-order: true
     goimports:
       local-prefixes:
-        - github.com/jmrplens/gitlab-mcp-server
+        - github.com/jmrplens/gitlab-mcp-server/v2

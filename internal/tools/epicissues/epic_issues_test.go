@@ -193,13 +193,7 @@ func resolveHandler(childPath string) http.HandlerFunc {
 
 // TestList uses table-driven subtests to exercise List across success, pagination, empty result, missing-parent, validation, and API-error scenarios.
 func TestList(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   ListInput
-		handler http.Handler
-		wantErr string
-		check   func(t *testing.T, out ListOutput)
-	}{
+	tests := []listCase{
 		{
 			name:  "returns child issues with correct fields",
 			input: ListInput{FullPath: testFullPath, IID: 1},
@@ -211,25 +205,7 @@ func TestList(t *testing.T) {
 				if len(out.Issues) != 1 {
 					t.Fatalf("got %d issues, want 1", len(out.Issues))
 				}
-				issue := out.Issues[0]
-				if issue.ID != "gid://gitlab/WorkItem/10" {
-					t.Errorf("ID = %q, want gid://gitlab/WorkItem/10", issue.ID)
-				}
-				if issue.IID != 10 {
-					t.Errorf("IID = %d, want 10", issue.IID)
-				}
-				if issue.Title != "Fix login bug" {
-					t.Errorf("Title = %q, want %q", issue.Title, "Fix login bug")
-				}
-				if issue.State != "opened" {
-					t.Errorf("State = %q, want opened", issue.State)
-				}
-				if issue.Author != "alice" {
-					t.Errorf("Author = %q, want alice", issue.Author)
-				}
-				if len(issue.Labels) != 2 || issue.Labels[0] != "bug" {
-					t.Errorf("Labels = %v, want [bug critical]", issue.Labels)
-				}
+				assertChildIssueFields(t, out.Issues[0])
 			},
 		},
 		{
@@ -325,21 +301,49 @@ func TestList(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, tt.handler)
-			out, err := List(context.Background(), client, tt.input)
-			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("List() error = %v, want containing %q", err, tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("List() unexpected error: %v", err)
-			}
-			if tt.check != nil {
-				tt.check(t, out)
-			}
+			runListCase(t, tt)
 		})
+	}
+}
+
+type listCase struct {
+	name    string
+	input   ListInput
+	handler http.Handler
+	wantErr string
+	check   func(t *testing.T, out ListOutput)
+}
+
+func runListCase(t *testing.T, tt listCase) {
+	t.Helper()
+	client := testutil.NewTestClient(t, tt.handler)
+	out, err := List(context.Background(), client, tt.input)
+	assertListCaseResult(t, out, err, tt)
+}
+
+func assertListCaseResult(t *testing.T, out ListOutput, err error, tt listCase) {
+	t.Helper()
+	if tt.wantErr != "" {
+		if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+			t.Fatalf("List() error = %v, want containing %q", err, tt.wantErr)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	if tt.check != nil {
+		tt.check(t, out)
+	}
+}
+
+func assertChildIssueFields(t *testing.T, issue ChildOutput) {
+	t.Helper()
+	if issue.ID != "gid://gitlab/WorkItem/10" || issue.IID != 10 || issue.Title != "Fix login bug" || issue.State != "opened" || issue.Author != "alice" {
+		t.Fatalf("child issue = %+v, want full issue fields", issue)
+	}
+	if len(issue.Labels) != 2 || issue.Labels[0] != "bug" {
+		t.Errorf("Labels = %v, want [bug critical]", issue.Labels)
 	}
 }
 
@@ -378,15 +382,12 @@ func TestList_SkipsWidgetsWithoutChildren(t *testing.T) {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
 	if len(out.Issues) != 0 {
-		t.Fatalf("len(Issues) = %d, want 0", len(out.Issues))
+		t.Fatalf("List() issues = %d, want 0", len(out.Issues))
 	}
 }
 
-// --------------------------------------------------------------------------
-// Assign
-// --------------------------------------------------------------------------
-
-// TestAssign uses table-driven subtests to exercise Assign across success, validation, GID-resolution failure, mutation errors, and API errors.
+// TestAssign uses table-driven subtests to exercise Assign across success,
+// validation, GID resolution failures, mutation errors, and API failures.
 func TestAssign(t *testing.T) {
 	tests := []struct {
 		name    string

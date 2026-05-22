@@ -15,7 +15,7 @@ import (
 func TestAuditActionAliases_ReportsGovernanceFindings(t *testing.T) {
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
-	route := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return nil, nil })
+	route := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil })
 	group.SetAction(actioncatalog.Action{Name: "get", Route: route})
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)
@@ -86,7 +86,7 @@ func TestAuditDiscoveryTerms_NilAndSparseInputs(t *testing.T) {
 
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
-	group.SetAction(actioncatalog.Action{Name: "get", Route: toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return nil, nil })})
+	group.SetAction(actioncatalog.Action{Name: "get", Route: toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil })})
 	if err := catalog.AddGroup(group); err != nil {
 		t.Fatalf("AddGroup() error = %v", err)
 	}
@@ -103,7 +103,7 @@ func TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals(t *testing.T
 	catalog := actioncatalog.NewCatalog()
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
 	secondGroup := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_beta"})
-	weakRoute := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return nil, nil })
+	weakRoute := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil })
 	for index := range 8 {
 		action := actioncatalog.Action{Name: "weak_action_" + string(rune('a'+index)), Route: weakRoute}
 		if index == 0 {

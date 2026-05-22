@@ -20,7 +20,7 @@ func TestIndividual_Todos(t *testing.T) {
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
-	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(_ *E2EContext) {
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 
@@ -45,7 +45,7 @@ func TestMeta_Todos(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
-	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(t *testing.T, _ *E2EContext) {
+	RunWithCapabilities(t, []Capability{CapabilityCurrentUserState}, func(_ *E2EContext) {
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
 

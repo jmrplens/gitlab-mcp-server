@@ -25,7 +25,7 @@ type samplingUnsupportedOutput struct {
 // wrapSamplingAction wraps a sampling handler as an ActionFunc, converting
 // sampling.ErrSamplingNotSupported into a sentinel so the meta handler returns
 // an informational error result instead of a Go error.
-func wrapSamplingAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), toolName ...string) toolutil.ActionFunc {
+func wrapSamplingAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), toolName ...string) toolutil.ActionFunc {
 	return func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := toolutil.UnmarshalParams[T](params)
 		if err != nil {
@@ -49,7 +49,7 @@ func samplingToolName(toolName ...string) string {
 // samplingRoute preserves the sampling-specific unsupported-capability handling
 // while still attaching the typed input/output schemas expected by meta-route
 // schema resources and audits.
-func samplingRoute[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), toolName ...string) toolutil.ActionRoute {
+func samplingRoute[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), toolName ...string) toolutil.ActionRoute {
 	route := toolutil.RouteActionWithRequest(client, fn)
 	route.Handler = wrapSamplingAction[T, R](client, fn, toolName...)
 	return route

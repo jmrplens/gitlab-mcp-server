@@ -162,7 +162,7 @@ func specsByName(t *testing.T, specs []toolutil.ActionSpec) map[string]toolutil.
 	return byName
 }
 
-func assertBoolOverride(t *testing.T, name string, got *bool, want *bool) {
+func assertBoolOverride(t *testing.T, name string, got, want *bool) {
 	t.Helper()
 	if want == nil {
 		if got != nil {

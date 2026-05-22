@@ -61,7 +61,7 @@ func streamDownloadPackageFile(
 
 	hasher := sha256.New()
 
-	var baseWriter = io.MultiWriter(outFile, hasher)
+	baseWriter := io.MultiWriter(outFile, hasher)
 
 	tracker := progress.FromRequest(req)
 	if tracker.IsActive() {

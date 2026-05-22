@@ -64,7 +64,7 @@ type logEntry struct {
 //     so the server's InitializedHandler can fetch them via ListRoots.
 //
 // The session is closed in t.Cleanup.
-func newCapabilitiesSession(t *testing.T, client *gitlabclient.Client, enterprise bool, withLogging, withProgress bool, withRoots []*mcp.Root) *capabilitiesSession {
+func newCapabilitiesSession(t *testing.T, client *gitlabclient.Client, enterprise, withLogging, withProgress bool, withRoots []*mcp.Root) *capabilitiesSession {
 	t.Helper()
 
 	completionHandler := completions.NewHandler(client)

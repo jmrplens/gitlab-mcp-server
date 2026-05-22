@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -738,7 +738,12 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 	input.PerPage = 50
 
 	opts := buildListOpts(input)
+	assertPipelineListStringFilters(t, opts)
+	assertPipelineListTimeAndPaginationFilters(t, opts)
+}
 
+func assertPipelineListStringFilters(t *testing.T, opts *gl.ListProjectPipelinesOptions) {
+	t.Helper()
 	if opts.Scope == nil || *opts.Scope != "running" {
 		t.Errorf("Scope = %v, want running", opts.Scope)
 	}
@@ -769,6 +774,10 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 	if opts.Sort == nil || *opts.Sort != "desc" {
 		t.Errorf("Sort = %v, want desc", opts.Sort)
 	}
+}
+
+func assertPipelineListTimeAndPaginationFilters(t *testing.T, opts *gl.ListProjectPipelinesOptions) {
+	t.Helper()
 	if opts.CreatedAfter == nil {
 		t.Error("CreatedAfter should not be nil")
 	}
@@ -1374,8 +1383,10 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_ClickablePipelineLinks(t *testing.T) {
 	out := ListOutput{
 		Pipelines: []Output{
-			{ID: 42, Status: "success", Source: "push", Ref: "main", SHA: "abc12345",
-				WebURL: "https://gitlab.example.com/-/pipelines/42"},
+			{
+				ID: 42, Status: "success", Source: "push", Ref: "main", SHA: "abc12345",
+				WebURL: "https://gitlab.example.com/-/pipelines/42",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}

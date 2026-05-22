@@ -135,8 +135,8 @@ func testHTTPLegacyIdentityPropagation(t *testing.T, cfg e2eOAuthConfig) {
 
 	type ProbeInput struct{}
 	type ProbeOutput struct{}
-	mcp.AddTool(server, &mcp.Tool{Name: "identity_legacy_probe"}, func(_ context.Context, req *mcp.CallToolRequest, _ ProbeInput) (*mcp.CallToolResult, ProbeOutput, error) {
-		capturedIdentity = toolutil.ResolveIdentity(context.Background(), req)
+	mcp.AddTool(server, &mcp.Tool{Name: "identity_legacy_probe"}, func(ctx context.Context, req *mcp.CallToolRequest, _ ProbeInput) (*mcp.CallToolResult, ProbeOutput, error) {
+		capturedIdentity = toolutil.ResolveIdentity(ctx, req)
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: "ok"}},
 		}, ProbeOutput{}, nil

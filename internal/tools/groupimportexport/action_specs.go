@@ -15,14 +15,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func groupImportExportReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupImportExportOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupImportExportOptions(individualTool))
 }
 
 func groupImportExportCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupImportExportOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupImportExportOptions(individualTool))
 }
 
 func groupImportExportOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -19,27 +19,19 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func broadcastMessageReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := broadcastMessageOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, broadcastMessageOptions(individualTool))
 }
 
 func broadcastMessageCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, broadcastMessageOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, broadcastMessageOptions(individualTool))
 }
 
 func broadcastMessageUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := broadcastMessageOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, broadcastMessageOptions(individualTool))
 }
 
 func broadcastMessageDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := broadcastMessageOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, broadcastMessageOptions(individualTool))
 }
 
 func broadcastMessageOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -879,7 +879,7 @@ func TestPublish_ContextCancelled(t *testing.T) {
 // TestPublish_FilePathSmallFile verifies Publish when file path small file.
 func TestPublish_FilePathSmallFile(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "small.bin")
-	if err := os.WriteFile(tmpFile, []byte("small-data"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("small-data"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

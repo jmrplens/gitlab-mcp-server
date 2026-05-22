@@ -19,7 +19,7 @@ var ErrPollTimeout = errors.New("poll timeout")
 // Poll repeatedly evaluates condition until it succeeds, fails, times out, or
 // the context is canceled. The condition should return an error only for
 // non-retryable failures; retryable observations should be reported as state.
-func Poll(ctx context.Context, interval time.Duration, timeout time.Duration, condition func() (bool, string, error)) error {
+func Poll(ctx context.Context, interval, timeout time.Duration, condition func() (bool, string, error)) error {
 	if condition == nil {
 		return errors.New("poll condition is nil")
 	}
@@ -95,6 +95,7 @@ func stopTimer(timer *time.Timer) {
 // retryWithBackoff runs operation with a one-second base delay between
 // retryable failures.
 func retryWithBackoff[O any](ctx context.Context, t *testing.T, label string, maxRetries int, operation func(attempt int) (O, bool, string, error)) (O, error) {
+	t.Helper()
 	return retryWithBackoffInterval(ctx, t, label, maxRetries, time.Second, operation)
 }
 
@@ -146,7 +147,6 @@ func TestPoll_ImmediateSuccess(t *testing.T) {
 		calls++
 		return true, "ready", nil
 	})
-
 	if err != nil {
 		t.Fatalf("Poll() error = %v, want nil", err)
 	}
@@ -166,7 +166,6 @@ func TestPoll_RetrySuccess(t *testing.T) {
 		}
 		return true, "ready", nil
 	})
-
 	if err != nil {
 		t.Fatalf("Poll() error = %v, want nil", err)
 	}
@@ -236,7 +235,6 @@ func TestRetryWithBackoffInterval_RetrySuccess(t *testing.T) {
 		}
 		return 42, false, "", nil
 	})
-
 	if err != nil {
 		t.Fatalf("retryWithBackoffInterval() error = %v, want nil", err)
 	}

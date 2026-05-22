@@ -16,14 +16,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func mergeTrainReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mergeTrainOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, mergeTrainOptions(individualTool))
 }
 
 func mergeTrainCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, mergeTrainOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, mergeTrainOptions(individualTool))
 }
 
 func mergeTrainOptions(individualTool string) toolutil.ActionSpecOptions {

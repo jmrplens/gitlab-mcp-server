@@ -161,24 +161,7 @@ func TestList(t *testing.T) {
 			}),
 			validate: func(t *testing.T, out ListOutput) {
 				t.Helper()
-				if len(out.Notes) != 2 {
-					t.Fatalf("len(Notes) = %d, want 2", len(out.Notes))
-				}
-				if out.Notes[0].ID != 100 {
-					t.Errorf("Notes[0].ID = %d, want 100", out.Notes[0].ID)
-				}
-				if out.Notes[0].Body != "This looks good" {
-					t.Errorf("Notes[0].Body = %q, want %q", out.Notes[0].Body, "This looks good")
-				}
-				if out.Notes[0].Author != "alice" {
-					t.Errorf("Notes[0].Author = %q, want %q", out.Notes[0].Author, "alice")
-				}
-				if out.Notes[1].System != true {
-					t.Error("Notes[1].System = false, want true")
-				}
-				if out.Notes[1].ID != 101 {
-					t.Errorf("Notes[1].ID = %d, want 101", out.Notes[1].ID)
-				}
+				assertEpicNotesList(t, out)
 			},
 		},
 		{
@@ -275,6 +258,31 @@ func TestList(t *testing.T) {
 				tt.validate(t, out)
 			}
 		})
+	}
+}
+
+func assertEpicNotesList(t *testing.T, out ListOutput) {
+	t.Helper()
+	if len(out.Notes) != 2 {
+		t.Fatalf("len(Notes) = %d, want 2", len(out.Notes))
+	}
+	assertEpicNote(t, out.Notes[0], 100, "This looks good", "alice", false, 0)
+	assertEpicNote(t, out.Notes[1], 101, "", "", true, 1)
+}
+
+func assertEpicNote(t *testing.T, got Output, wantID int64, wantBody, wantAuthor string, wantSystem bool, index int) {
+	t.Helper()
+	if got.ID != wantID {
+		t.Errorf("Notes[%d].ID = %d, want %d", index, got.ID, wantID)
+	}
+	if wantBody != "" && got.Body != wantBody {
+		t.Errorf("Notes[%d].Body = %q, want %q", index, got.Body, wantBody)
+	}
+	if wantAuthor != "" && got.Author != wantAuthor {
+		t.Errorf("Notes[%d].Author = %q, want %q", index, got.Author, wantAuthor)
+	}
+	if got.System != wantSystem {
+		t.Errorf("Notes[%d].System = %v, want %v", index, got.System, wantSystem)
 	}
 }
 

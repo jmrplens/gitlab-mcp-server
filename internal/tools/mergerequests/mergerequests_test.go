@@ -10,14 +10,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // Test constants for merge request endpoint paths and reusable values.
@@ -2081,8 +2081,10 @@ func TestFormatCreateTodoMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_ClickableMRLinks(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		MergeRequests: []Output{
-			{IID: 7, Title: "MR7", State: testStateOpened, Author: testAuthorAlice,
-				WebURL: "https://gitlab.example.com/mr/7", SourceBranch: "a", TargetBranch: "b"},
+			{
+				IID: 7, Title: "MR7", State: testStateOpened, Author: testAuthorAlice,
+				WebURL: "https://gitlab.example.com/mr/7", SourceBranch: "a", TargetBranch: "b",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})

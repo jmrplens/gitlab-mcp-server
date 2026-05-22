@@ -10,6 +10,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
@@ -205,6 +206,34 @@ func TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions(t *testing.T) {
 	}
 	if group.ToolName != "gitlab_server" || group.Description == "" || len(group.Icons) == 0 {
 		t.Fatalf("BuildMCPActionGroup metadata = %+v, want tool name, description, and icons", group)
+	}
+}
+
+// TestBuildActionCatalog_WithUpdaterIncludesUpdateSchemas verifies updater-backed
+// server maintenance actions remain valid in the dynamic action catalog.
+func TestBuildActionCatalog_WithUpdaterIncludesUpdateSchemas(t *testing.T) {
+	updater := autoupdate.NewUpdaterWithSource(autoupdate.Config{
+		Mode:           autoupdate.ModeCheck,
+		Repository:     "owner/repo",
+		CurrentVersion: "1.0.0",
+	}, autoupdate.EmptySource{})
+
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{IncludeMCP: true, Updater: updater})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog(with updater) error = %v", err)
+	}
+
+	for _, actionID := range []actioncatalog.ActionID{"server.check_update", "server.apply_update"} {
+		action, ok := catalog.Action(actionID)
+		if !ok {
+			t.Fatalf("catalog missing %s", actionID)
+		}
+		if action.Route.InputSchema == nil {
+			t.Fatalf("%s Route.InputSchema is nil", actionID)
+		}
+		if got := action.Route.InputSchema["type"]; got != "object" {
+			t.Fatalf("%s input schema type = %v, want object", actionID, got)
+		}
 	}
 }
 
@@ -517,9 +546,9 @@ const (
 	// expectedBaseDynamicCatalogActions identifies the expected base dynamic catalog actions constant used by this package.
 	expectedBaseDynamicCatalogActions = 870
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
-	expectedEnterpriseDynamicCatalogActions = 1021
+	expectedEnterpriseDynamicCatalogActions = 1029
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	expectedGitLabComEnterpriseCatalogActions = 1027
+	expectedGitLabComEnterpriseCatalogActions = 1035
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

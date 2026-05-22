@@ -16,21 +16,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func groupLDAPReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupLDAPOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupLDAPOptions(individualTool))
 }
 
 func groupLDAPCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupLDAPOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupLDAPOptions(individualTool))
 }
 
 func groupLDAPDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupLDAPOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, groupLDAPOptions(individualTool))
 }
 
 func groupLDAPOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -292,7 +292,7 @@ func DestructiveRoute(fn ActionFunc) ActionRoute {
 
 // RouteFunc wraps a typed function as a non-destructive ActionRoute without a
 // GitLab client dependency and attaches input and output schemas.
-func RouteFunc[T any, R any](fn func(ctx context.Context, input T) (R, error)) ActionRoute {
+func RouteFunc[T, R any](fn func(ctx context.Context, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler: func(ctx context.Context, params map[string]any) (any, error) {
@@ -312,7 +312,7 @@ func RouteFunc[T any, R any](fn func(ctx context.Context, input T) (R, error)) A
 
 // RouteRequestFunc wraps a typed request-aware function as a non-destructive
 // ActionRoute without a GitLab client dependency and attaches schemas.
-func RouteRequestFunc[T any, R any](fn func(ctx context.Context, req *mcp.CallToolRequest, input T) (R, error)) ActionRoute {
+func RouteRequestFunc[T, R any](fn func(ctx context.Context, req *mcp.CallToolRequest, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler: func(ctx context.Context, params map[string]any) (any, error) {
@@ -332,7 +332,7 @@ func RouteRequestFunc[T any, R any](fn func(ctx context.Context, req *mcp.CallTo
 
 // DestructiveFunc wraps a typed function as a destructive ActionRoute without a
 // GitLab client dependency and attaches input and output schemas.
-func DestructiveFunc[T any, R any](fn func(ctx context.Context, input T) (R, error)) ActionRoute {
+func DestructiveFunc[T, R any](fn func(ctx context.Context, input T) (R, error)) ActionRoute {
 	route := RouteFunc(fn)
 	route.Destructive = true
 	return route
@@ -743,72 +743,84 @@ func normalizeParamAliasesWithFields(params map[string]any, fields map[string]st
 	for _, pair := range commonParamAliases {
 		value, hasAlias := out[pair.Alias]
 		_, hasCanonical := out[pair.Canonical]
-		if !hasAlias {
-			continue
-		}
-		if hasCanonical {
-			if accepts(pair.Canonical) && !accepts(pair.Alias) {
-				delete(clone(), pair.Alias)
-			}
-			continue
-		}
-		if !accepts(pair.Canonical) || accepts(pair.Alias) {
+		if !hasAlias || !accepts(pair.Canonical) || accepts(pair.Alias) {
 			continue
 		}
 		updated := clone()
-		updated[pair.Canonical] = value
+		if !hasCanonical {
+			updated[pair.Canonical] = value
+		}
 		delete(updated, pair.Alias)
 	}
 	normalizeIDAlias(out, fields, accepts, clone)
-	if value, hasActive := out["active"]; hasActive && accepts("paused") && !accepts("active") {
-		if _, hasPaused := out["paused"]; !hasPaused {
-			if active, ok := value.(bool); ok {
-				updated := clone()
-				updated["paused"] = !active
-				delete(updated, "active")
-			}
-		}
-	}
-	if value, hasFilePath := out["file_path"]; hasFilePath && accepts("path") && accepts("filename") && !accepts("file_path") {
-		if _, hasPath := out["path"]; !hasPath {
-			if _, hasFilename := out["filename"]; !hasFilename {
-				if filePath, ok := value.(string); ok && filePath != "" {
-					path, filename := splitPackageFilePath(filePath)
-					updated := clone()
-					updated["path"] = path
-					updated["filename"] = filename
-					delete(updated, "file_path")
-				}
-			}
-		}
-	}
-	if accepts("source_branch") && accepts("target_branch") {
-		if _, hasSource := out["source_branch"]; !hasSource {
-			for _, key := range []string{"ref", "branch", "from"} {
-				value, ok := out[key]
-				if !ok || !nonEmptyStringValue(value) || accepts(key) {
-					continue
-				}
-				updated := clone()
-				updated["source_branch"] = value
-				delete(updated, key)
-				break
-			}
-		}
-		if _, hasTarget := out["target_branch"]; !hasTarget {
-			for _, key := range []string{"to", "base"} {
-				value, ok := out[key]
-				if !ok || !nonEmptyStringValue(value) || accepts(key) {
-					continue
-				}
-				updated := clone()
-				updated["target_branch"] = value
-				delete(updated, key)
-				break
-			}
-		}
-	}
+	normalizeActiveAlias(out, accepts, clone)
+	normalizeFilePathAlias(out, accepts, clone)
+	normalizeBranchAliases(out, accepts, clone)
 	return out
+}
+
+func normalizeActiveAlias(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
+	value, hasActive := out["active"]
+	if !hasActive || !accepts("paused") || accepts("active") {
+		return
+	}
+	if _, hasPaused := out["paused"]; hasPaused {
+		return
+	}
+	active, ok := value.(bool)
+	if !ok {
+		return
+	}
+	updated := clone()
+	updated["paused"] = !active
+	delete(updated, "active")
+}
+
+func normalizeFilePathAlias(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
+	value, hasFilePath := out["file_path"]
+	if !hasFilePath || !accepts("path") || !accepts("filename") || accepts("file_path") {
+		return
+	}
+	if _, hasPath := out["path"]; hasPath {
+		return
+	}
+	if _, hasFilename := out["filename"]; hasFilename {
+		return
+	}
+	filePath, ok := value.(string)
+	if !ok || filePath == "" {
+		return
+	}
+	path, filename := splitPackageFilePath(filePath)
+	updated := clone()
+	updated["path"] = path
+	updated["filename"] = filename
+	delete(updated, "file_path")
+}
+
+func normalizeBranchAliases(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
+	if !accepts("source_branch") || !accepts("target_branch") {
+		return
+	}
+	if _, hasSource := out["source_branch"]; !hasSource {
+		copyBranchAlias(out, accepts, clone, "source_branch", []string{"ref", "branch", "from"})
+	}
+	if _, hasTarget := out["target_branch"]; !hasTarget {
+		copyBranchAlias(out, accepts, clone, "target_branch", []string{"to", "base"})
+	}
+}
+
+func copyBranchAlias(out map[string]any, accepts func(string) bool, clone func() map[string]any, target string, aliases []string) {
+	for _, key := range aliases {
+		value, ok := out[key]
+		if !ok || !nonEmptyStringValue(value) || accepts(key) {
+			continue
+		}
+		updated := clone()
+		updated[target] = value
+		delete(updated, key)
+		return
+	}
 }
 
 func nonEmptyStringValue(value any) bool {
@@ -1494,7 +1506,7 @@ func coerceNumericStrings(params map[string]any) map[string]any {
 }
 
 // WrapAction wraps a typed handler (input T -> output R) into a generic ActionFunc.
-func WrapAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionFunc {
+func WrapAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionFunc {
 	return func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := UnmarshalParams[T](params)
 		if err != nil {
@@ -1518,7 +1530,7 @@ func WrapVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Cont
 // WrapActionWithRequest wraps a handler that also requires the MCP request
 // (e.g., for progress tracking). The request is extracted from context via
 // RequestFromContext; if absent, nil is passed.
-func WrapActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionFunc {
+func WrapActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionFunc {
 	return func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := UnmarshalParams[T](params)
 		if err != nil {
@@ -1564,7 +1576,7 @@ func withVoidOutput(inner ActionFunc, successOutput any) ActionFunc {
 
 // RouteAction wraps a typed function as a non-destructive ActionRoute
 // and attaches the JSON Schema for the input type T and output type R.
-func RouteAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+func RouteAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler:      WrapAction(client, fn),
@@ -1591,7 +1603,7 @@ func RouteVoidAction[T any](client *gitlabclient.Client, fn func(ctx context.Con
 
 // RouteActionWithRequest wraps a typed function that needs the MCP request
 // as a non-destructive ActionRoute and attaches input/output schemas.
-func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+func RouteActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler:      WrapActionWithRequest(client, fn),
@@ -1604,7 +1616,7 @@ func RouteActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(c
 
 // DestructiveAction wraps a typed function as a destructive ActionRoute
 // and attaches input/output schemas.
-func DestructiveAction[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+func DestructiveAction[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler:      WrapAction(client, fn),
@@ -1631,7 +1643,7 @@ func DestructiveVoidAction[T any](client *gitlabclient.Client, fn func(ctx conte
 
 // DestructiveActionWithRequest wraps a typed function that needs the MCP request
 // as a destructive ActionRoute and attaches input/output schemas.
-func DestructiveActionWithRequest[T any, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
+func DestructiveActionWithRequest[T, R any](client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error)) ActionRoute {
 	inputType := reflect.TypeFor[T]()
 	return ActionRoute{
 		Handler:      WrapActionWithRequest(client, fn),
@@ -1707,24 +1719,9 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		formatResult = defaultFormatResult
 	}
 	return func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
-		if input.Action == "" {
-			return ErrorResult(fmt.Sprintf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes))), nil, nil
-		}
-		input.Action = NormalizeActionAlias(input.Action, routes)
-
-		route, ok := routes[input.Action]
-		if !ok {
-			return ErrorResult(fmt.Sprintf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes))), nil, nil
-		}
-
-		if input.Params == nil {
-			required := requiredParamNames(route.InputSchema)
-			if len(required) > 0 {
-				return ErrorResult(fmt.Sprintf("%s/%s: 'params' is required for this action. Required params: %s.", toolName, input.Action, strings.Join(required, ", "))), nil, nil
-			}
-		}
-		if missing := missingRequiredParamNames(route.InputSchema, input.Params); len(missing) > 0 && !hasUnknownParamNames(route.InputSchema, input.Params) {
-			return ErrorResult(fmt.Sprintf("%s/%s: missing required params: %s. Put action-specific fields under params.", toolName, input.Action, strings.Join(missing, ", "))), nil, nil
+		route, validationResult := validateMetaToolInput(toolName, routes, &input)
+		if validationResult != nil {
+			return validationResult, nil, nil
 		}
 
 		// Confirm destructive actions before execution using route metadata.
@@ -1757,6 +1754,34 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		}
 		return callResult, enrichWithHints(result, callResult), nil
 	}
+}
+
+func validateMetaToolInput(toolName string, routes ActionMap, input *MetaToolInput) (ActionRoute, *mcp.CallToolResult) {
+	if input.Action == "" {
+		return ActionRoute{}, ErrorResult(fmt.Sprintf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes)))
+	}
+	input.Action = NormalizeActionAlias(input.Action, routes)
+	route, ok := routes[input.Action]
+	if !ok {
+		return ActionRoute{}, ErrorResult(fmt.Sprintf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes)))
+	}
+	if result := validateMetaToolParams(toolName, route, input); result != nil {
+		return ActionRoute{}, result
+	}
+	return route, nil
+}
+
+func validateMetaToolParams(toolName string, route ActionRoute, input *MetaToolInput) *mcp.CallToolResult {
+	if input.Params == nil {
+		required := requiredParamNames(route.InputSchema)
+		if len(required) > 0 {
+			return ErrorResult(fmt.Sprintf("%s/%s: 'params' is required for this action. Required params: %s.", toolName, input.Action, strings.Join(required, ", ")))
+		}
+	}
+	if missing := missingRequiredParamNames(route.InputSchema, input.Params); len(missing) > 0 && !hasUnknownParamNames(route.InputSchema, input.Params) {
+		return ErrorResult(fmt.Sprintf("%s/%s: missing required params: %s. Put action-specific fields under params.", toolName, input.Action, strings.Join(missing, ", ")))
+	}
+	return nil
 }
 
 func requiredParamNames(schema map[string]any) []string {

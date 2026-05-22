@@ -147,138 +147,94 @@ func TestLegacyOutputWrappers_ReturnMessages(t *testing.T) {
 
 	tests := []struct {
 		name string
-		call func(t *testing.T) string
+		call func() (string, error)
 		want string
 	}{
 		{
 			name: "delete hook",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := DeleteHookOutput(context.Background(), client, DeleteHookInput{ProjectID: "42", HookID: 1})
-				if err != nil {
-					t.Fatalf("DeleteHookOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "Successfully deleted webhook 1",
 		},
 		{
 			name: "delete shared group",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := DeleteSharedGroupOutput(context.Background(), client, DeleteSharedGroupInput{ProjectID: "42", GroupID: 1})
-				if err != nil {
-					t.Fatalf("DeleteSharedGroupOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "Successfully deleted shared group 1",
 		},
 		{
 			name: "set custom header",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := SetCustomHeaderOutput(context.Background(), client, SetCustomHeaderInput{ProjectID: "42", HookID: 1, Key: "X-Test", Value: "value"})
-				if err != nil {
-					t.Fatalf("SetCustomHeaderOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "Custom header \"X-Test\" set",
 		},
 		{
 			name: "delete custom header",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := DeleteCustomHeaderOutput(context.Background(), client, DeleteCustomHeaderInput{ProjectID: "42", HookID: 1, Key: "X-Test"})
-				if err != nil {
-					t.Fatalf("DeleteCustomHeaderOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "Custom header \"X-Test\" deleted",
 		},
 		{
 			name: "set webhook URL variable",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := SetWebhookURLVariableOutput(context.Background(), client, SetWebhookURLVariableInput{ProjectID: "42", HookID: 1, Key: "token", Value: "secret"})
-				if err != nil {
-					t.Fatalf("SetWebhookURLVariableOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "URL variable \"token\" set",
 		},
 		{
 			name: "delete webhook URL variable",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := DeleteWebhookURLVariableOutput(context.Background(), client, DeleteWebhookURLVariableInput{ProjectID: "42", HookID: 1, Key: "token"})
-				if err != nil {
-					t.Fatalf("DeleteWebhookURLVariableOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "URL variable \"token\" deleted",
 		},
 		{
 			name: "delete fork relation",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := DeleteForkRelationOutput(context.Background(), client, DeleteForkRelationInput{ProjectID: "42"})
-				if err != nil {
-					t.Fatalf("DeleteForkRelationOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "Fork relation removed",
 		},
 		{
 			name: "delete approval rule",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := DeleteApprovalRuleOutput(context.Background(), client, DeleteApprovalRuleInput{ProjectID: "42", RuleID: 1})
-				if err != nil {
-					t.Fatalf("DeleteApprovalRuleOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "Approval rule 1 deleted",
 		},
 		{
 			name: "start mirroring",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := StartMirroringOutput(context.Background(), client, StartMirroringInput{ProjectID: "42"})
-				if err != nil {
-					t.Fatalf("StartMirroringOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "Mirror update triggered",
 		},
 		{
 			name: "start housekeeping",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := StartHousekeepingOutput(context.Background(), client, StartHousekeepingInput{ProjectID: "42"})
-				if err != nil {
-					t.Fatalf("StartHousekeepingOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "Housekeeping started",
 		},
 		{
 			name: "delete push rule",
-			call: func(t *testing.T) string {
-				t.Helper()
+			call: func() (string, error) {
 				out, err := DeletePushRuleOutput(context.Background(), client, DeletePushRuleInput{ProjectID: "42"})
-				if err != nil {
-					t.Fatalf("DeletePushRuleOutput() error: %v", err)
-				}
-				return out.Message
+				return out.Message, err
 			},
 			want: "Successfully deleted push rules",
 		},
@@ -286,7 +242,11 @@ func TestLegacyOutputWrappers_ReturnMessages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if message := tt.call(t); !strings.Contains(message, tt.want) {
+			message, err := tt.call()
+			if err != nil {
+				t.Fatalf("wrapper call error: %v", err)
+			}
+			if !strings.Contains(message, tt.want) {
 				t.Fatalf("message = %q, want it to contain %q", message, tt.want)
 			}
 		})

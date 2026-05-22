@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 // errExpMissingProjectID identifies the err exp missing project ID constant used by this package.

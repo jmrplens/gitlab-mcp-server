@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"reflect"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -19,6 +20,202 @@ type IntegrationItem struct {
 	Active    bool   `json:"active"`
 	CreatedAt string `json:"created_at,omitempty"`
 	UpdatedAt string `json:"updated_at,omitempty"`
+}
+
+type integrationGetter func(context.Context, gl.ServicesServiceInterface, string) (*gl.Integration, error)
+
+var integrationGetters = map[string]integrationGetter{
+	"jira": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetJiraService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"slack": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetSlackService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"discord": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetDiscordService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"mattermost": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetMattermostService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"microsoft-teams": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetMicrosoftTeamsService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"telegram": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetTelegramService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"datadog": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetDataDogService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"jenkins": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetJenkinsCIService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"emails-on-push": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetEmailsOnPushService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"pipelines-email": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetPipelinesEmailService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"external-wiki": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetExternalWikiService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"custom-issue-tracker": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetCustomIssueTrackerService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"drone-ci": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetDroneCIService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"github": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetGithubService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"harbor": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetHarborService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"matrix": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetMatrixService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"redmine": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetRedmineService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"youtrack": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetYouTrackService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"slack-slash-commands": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetSlackSlashCommandsService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+	"mattermost-slash-commands": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) (*gl.Integration, error) {
+		service, _, err := services.GetMattermostSlashCommandsService(projectID, gl.WithContext(ctx))
+		return integrationFromService(service, err)
+	},
+}
+
+type integrationDeleter func(context.Context, gl.ServicesServiceInterface, string) error
+
+var integrationDeleters = map[string]integrationDeleter{
+	"jira": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteJiraService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"slack": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteSlackService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"discord": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteDiscordService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"mattermost": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteMattermostService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"microsoft-teams": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteMicrosoftTeamsService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"telegram": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteTelegramService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"datadog": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteDataDogService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"jenkins": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteJenkinsCIService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"emails-on-push": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteEmailsOnPushService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"pipelines-email": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeletePipelinesEmailService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"external-wiki": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteExternalWikiService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"custom-issue-tracker": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteCustomIssueTrackerService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"drone-ci": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteDroneCIService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"github": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteGithubService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"harbor": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteHarborService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"matrix": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteMatrixService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"redmine": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteRedmineService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"youtrack": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteYouTrackService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"slack-slash-commands": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteSlackSlashCommandsService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"mattermost-slash-commands": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DeleteMattermostSlashCommandsService(projectID, gl.WithContext(ctx))
+		return err
+	},
+	"slack-application": func(ctx context.Context, services gl.ServicesServiceInterface, projectID string) error {
+		_, err := services.DisableSlackApplication(projectID, gl.WithContext(ctx))
+		return err
+	},
+}
+
+func integrationFromService(service any, err error) (*gl.Integration, error) {
+	if service == nil {
+		return nil, err
+	}
+	value := reflect.ValueOf(service)
+	if value.Kind() == reflect.Pointer && value.IsNil() {
+		return nil, err
+	}
+	if value.Kind() == reflect.Pointer {
+		value = value.Elem()
+	}
+	field := value.FieldByName("Service")
+	if !field.IsValid() || !field.CanAddr() {
+		return nil, err
+	}
+	integration, ok := field.Addr().Interface().(*gl.Integration)
+	if !ok {
+		return nil, err
+	}
+	return integration, err
 }
 
 // integrationToItem maps integration to item between API and evaluator models.
@@ -81,134 +278,11 @@ type GetOutput struct {
 
 // Get retrieves a specific integration by slug, dispatching to the typed client-go method.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetOutput, error) {
-	var result *gl.Integration
-	var err error
-
-	switch input.Slug {
-	case "jira":
-		var s *gl.JiraService
-		s, _, err = client.GL().Services.GetJiraService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "slack":
-		var s *gl.SlackService
-		s, _, err = client.GL().Services.GetSlackService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "discord":
-		var s *gl.DiscordService
-		s, _, err = client.GL().Services.GetDiscordService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "mattermost":
-		var s *gl.MattermostService
-		s, _, err = client.GL().Services.GetMattermostService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "microsoft-teams":
-		var s *gl.MicrosoftTeamsService
-		s, _, err = client.GL().Services.GetMicrosoftTeamsService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "telegram":
-		var s *gl.TelegramService
-		s, _, err = client.GL().Services.GetTelegramService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "datadog":
-		var s *gl.DataDogService
-		s, _, err = client.GL().Services.GetDataDogService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "jenkins":
-		var s *gl.JenkinsCIService
-		s, _, err = client.GL().Services.GetJenkinsCIService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "emails-on-push":
-		var s *gl.EmailsOnPushService
-		s, _, err = client.GL().Services.GetEmailsOnPushService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "pipelines-email":
-		var s *gl.PipelinesEmailService
-		s, _, err = client.GL().Services.GetPipelinesEmailService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "external-wiki":
-		var s *gl.ExternalWikiService
-		s, _, err = client.GL().Services.GetExternalWikiService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "custom-issue-tracker":
-		var s *gl.CustomIssueTrackerService
-		s, _, err = client.GL().Services.GetCustomIssueTrackerService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "drone-ci":
-		var s *gl.DroneCIService
-		s, _, err = client.GL().Services.GetDroneCIService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "github":
-		var s *gl.GithubService
-		s, _, err = client.GL().Services.GetGithubService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "harbor":
-		var s *gl.HarborService
-		s, _, err = client.GL().Services.GetHarborService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "matrix":
-		var s *gl.MatrixService
-		s, _, err = client.GL().Services.GetMatrixService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "redmine":
-		var s *gl.RedmineService
-		s, _, err = client.GL().Services.GetRedmineService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "youtrack":
-		var s *gl.YouTrackService
-		s, _, err = client.GL().Services.GetYouTrackService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "slack-slash-commands":
-		var s *gl.SlackSlashCommandsService
-		s, _, err = client.GL().Services.GetSlackSlashCommandsService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	case "mattermost-slash-commands":
-		var s *gl.MattermostSlashCommandsService
-		s, _, err = client.GL().Services.GetMattermostSlashCommandsService(string(input.ProjectID), gl.WithContext(ctx))
-		if s != nil {
-			result = &s.Service
-		}
-	default:
+	getter, ok := integrationGetters[input.Slug]
+	if !ok {
 		return GetOutput{}, toolutil.WrapErrWithMessage("get_integration", fmt.Errorf("unsupported integration slug: %s", input.Slug))
 	}
-
+	result, err := getter(ctx, client.GL().Services, string(input.ProjectID))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_integration", err, http.StatusNotFound,
 			"verify slug is a valid integration name (e.g. slack, jira, microsoft-teams, jenkins); integration must be active on the project; use gitlab_list_integrations to enumerate enabled integrations")
@@ -229,56 +303,11 @@ type DeleteInput struct {
 
 // Delete removes/disables a specific integration from a project.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
-	svc := client.GL().Services
-	var err error
-
-	switch input.Slug {
-	case "jira":
-		_, err = svc.DeleteJiraService(string(input.ProjectID), gl.WithContext(ctx))
-	case "slack":
-		_, err = svc.DeleteSlackService(string(input.ProjectID), gl.WithContext(ctx))
-	case "discord":
-		_, err = svc.DeleteDiscordService(string(input.ProjectID), gl.WithContext(ctx))
-	case "mattermost":
-		_, err = svc.DeleteMattermostService(string(input.ProjectID), gl.WithContext(ctx))
-	case "microsoft-teams":
-		_, err = svc.DeleteMicrosoftTeamsService(string(input.ProjectID), gl.WithContext(ctx))
-	case "telegram":
-		_, err = svc.DeleteTelegramService(string(input.ProjectID), gl.WithContext(ctx))
-	case "datadog":
-		_, err = svc.DeleteDataDogService(string(input.ProjectID), gl.WithContext(ctx))
-	case "jenkins":
-		_, err = svc.DeleteJenkinsCIService(string(input.ProjectID), gl.WithContext(ctx))
-	case "emails-on-push":
-		_, err = svc.DeleteEmailsOnPushService(string(input.ProjectID), gl.WithContext(ctx))
-	case "pipelines-email":
-		_, err = svc.DeletePipelinesEmailService(string(input.ProjectID), gl.WithContext(ctx))
-	case "external-wiki":
-		_, err = svc.DeleteExternalWikiService(string(input.ProjectID), gl.WithContext(ctx))
-	case "custom-issue-tracker":
-		_, err = svc.DeleteCustomIssueTrackerService(string(input.ProjectID), gl.WithContext(ctx))
-	case "drone-ci":
-		_, err = svc.DeleteDroneCIService(string(input.ProjectID), gl.WithContext(ctx))
-	case "github":
-		_, err = svc.DeleteGithubService(string(input.ProjectID), gl.WithContext(ctx))
-	case "harbor":
-		_, err = svc.DeleteHarborService(string(input.ProjectID), gl.WithContext(ctx))
-	case "matrix":
-		_, err = svc.DeleteMatrixService(string(input.ProjectID), gl.WithContext(ctx))
-	case "redmine":
-		_, err = svc.DeleteRedmineService(string(input.ProjectID), gl.WithContext(ctx))
-	case "youtrack":
-		_, err = svc.DeleteYouTrackService(string(input.ProjectID), gl.WithContext(ctx))
-	case "slack-slash-commands":
-		_, err = svc.DeleteSlackSlashCommandsService(string(input.ProjectID), gl.WithContext(ctx))
-	case "mattermost-slash-commands":
-		_, err = svc.DeleteMattermostSlashCommandsService(string(input.ProjectID), gl.WithContext(ctx))
-	case "slack-application":
-		_, err = svc.DisableSlackApplication(string(input.ProjectID), gl.WithContext(ctx))
-	default:
+	deleter, ok := integrationDeleters[input.Slug]
+	if !ok {
 		return toolutil.WrapErrWithMessage("delete_integration", fmt.Errorf("unsupported integration slug: %s", input.Slug))
 	}
-
+	err := deleter(ctx, client.GL().Services, string(input.ProjectID))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete_integration", err, http.StatusForbidden,
 			"requires Maintainer role; deactivates the integration on the project; verify slug with gitlab_list_integrations; deletion is irreversible (configuration is removed)")

@@ -36,7 +36,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | [AI Model Evaluation](testing/model-evaluation.md)                                         | How model evaluations validate MCP tool use against schema and Docker GitLab                     |
 | [AI Model Evaluation Developer Guide](testing/model-evaluation-developer.md)               | Commands, fixtures, traces, and maintenance workflow for model evaluation                        |
 | [AI Model Evaluation Results](testing/model-results.md)                                    | Curated model compatibility and benchmark snapshots                                              |
-| [Static Analysis](development/static-analysis.md)                                          | Static analysis tools: vet, modernize, golangci-lint, gosec, staticcheck, govulncheck            |
+| [Static Analysis](development/static-analysis.md)                                          | Consolidated static analysis with golangci-lint, govulncheck, and markdownlint                   |
 | [Godoc Compliance](development/godoc.md)                                                   | Godoc audit workflow for packages, exported symbols, and test functions                          |
 
 ## Reference

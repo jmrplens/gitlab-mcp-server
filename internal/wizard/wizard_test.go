@@ -4,6 +4,7 @@ package wizard
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -275,7 +276,7 @@ func TestApply_MergeFailure(t *testing.T) {
 	// Create a file that blocks MergeServerEntry from creating the config
 	tmpDir := t.TempDir()
 	blocker := filepath.Join(tmpDir, "blocker")
-	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	blockedPath := filepath.Join(blocker, "subdir", "config.json")
@@ -503,7 +504,7 @@ func TestApply_WriteEnvFileFails(t *testing.T) {
 
 	orig := writeEnvFileFn
 	writeEnvFileFn = func(ServerConfig) (string, error) {
-		return "", fmt.Errorf("disk full")
+		return "", errors.New("disk full")
 	}
 	t.Cleanup(func() { writeEnvFileFn = orig })
 

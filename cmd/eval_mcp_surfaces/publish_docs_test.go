@@ -732,7 +732,7 @@ func singleModelPublishReportForSurface(model, preset string, attempts int, tool
 		if i == attempts {
 			steps = "2/2"
 		}
-		rows.WriteString("| 1 | MT-001 | `gitlab_project` / `get` | `gitlab_project` / `get` | " + steps + " | No | Yes | - | Yes | 1 | 1 | - |\n")
+		fmt.Fprintf(&rows, "| 1 | MT-001 | `gitlab_project` / `get` | `gitlab_project` / `get` | %s | No | Yes | - | Yes | 1 | 1 | - |\n", steps)
 	}
 	expectedOps := attempts + 1
 	return "# Meta-Tool Model Evaluation\n\n" +

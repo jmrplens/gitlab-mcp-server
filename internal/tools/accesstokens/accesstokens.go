@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -194,7 +195,7 @@ func ProjectGet(ctx context.Context, client *gitlabclient.Client, input ProjectG
 	t, _, err := client.GL().ProjectAccessTokens.GetProjectAccessToken(string(input.ProjectID), input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get project access token", err, http.StatusNotFound,
-			"token_id not found on this project (already revoked or never existed) \u2014 use gitlab_access_token_project_list to discover current token IDs")
+			"token_id not found on this project (already revoked or never existed) - use gitlab_access_token_project_list to discover current token IDs")
 	}
 	return fromProjectToken(t), nil
 }
@@ -211,48 +212,89 @@ type ProjectCreateInput struct {
 
 // ProjectCreate creates a new project access token.
 func ProjectCreate(ctx context.Context, client *gitlabclient.Client, input ProjectCreateInput) (Output, error) {
-	if input.ProjectID == "" {
-		return Output{}, toolutil.ErrFieldRequired("project_id")
+	return createAccessToken(ctx, accessTokenCreateArgs{
+		scopeID:        input.ProjectID,
+		requiredField:  "project_id",
+		operation:      "create project access token",
+		validationHint: "validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (10|20|30|40|50), and expires_at format (YYYY-MM-DD, must be within instance-configured maximum lifetime)",
+		forbiddenHint:  "creating project access tokens requires Maintainer or Owner role; the requested access_level cannot exceed the caller's role",
+		req:            accessTokenCreateRequest{Name: input.Name, Description: input.Description, Scopes: input.Scopes, AccessLevel: input.AccessLevel, ExpiresAt: input.ExpiresAt},
+		create: func(scopeID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
+			return createProjectAccessToken(ctx, client, scopeID, req, expiresAt)
+		},
+	})
+}
+
+func createProjectAccessToken(ctx context.Context, client *gitlabclient.Client, projectID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
+	opts := &gl.CreateProjectAccessTokenOptions{Name: new(req.Name), Scopes: &req.Scopes, ExpiresAt: expiresAt}
+	applyAccessTokenCreateOptions(req, func(value *string) { opts.Description = value }, func(value *gl.AccessLevelValue) { opts.AccessLevel = value })
+	token, _, err := client.GL().ProjectAccessTokens.CreateProjectAccessToken(projectID, opts, gl.WithContext(ctx))
+	if err != nil {
+		return Output{}, err
 	}
-	if input.Name == "" {
+	return fromProjectToken(token), nil
+}
+
+type accessTokenCreateRequest struct {
+	Name        string
+	Description string
+	Scopes      []string
+	AccessLevel int
+	ExpiresAt   string
+}
+
+type accessTokenCreateArgs struct {
+	scopeID        toolutil.StringOrInt
+	requiredField  string
+	operation      string
+	validationHint string
+	forbiddenHint  string
+	req            accessTokenCreateRequest
+	create         func(string, accessTokenCreateRequest, *gl.ISOTime) (Output, error)
+}
+
+func createAccessToken(ctx context.Context, args accessTokenCreateArgs) (Output, error) {
+	if args.scopeID == "" {
+		return Output{}, toolutil.ErrFieldRequired(args.requiredField)
+	}
+	if args.req.Name == "" {
 		return Output{}, toolutil.ErrFieldRequired("name")
 	}
-	if len(input.Scopes) == 0 {
+	if len(args.req.Scopes) == 0 {
 		return Output{}, toolutil.ErrFieldRequired("scopes")
+	}
+	if err := validateAccessTokenScopes(args.req.Scopes); err != nil {
+		return Output{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
-
-	opts := &gl.CreateProjectAccessTokenOptions{
-		Name:   new(input.Name),
-		Scopes: &input.Scopes,
+	expiresAtValue, hasExpiresAt, err := parseAccessTokenExpiresAt(args.req.ExpiresAt)
+	if err != nil {
+		return Output{}, err
 	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
+	var expiresAt *gl.ISOTime
+	if hasExpiresAt {
+		expiresAt = &expiresAtValue
 	}
-	if input.AccessLevel > 0 {
-		opts.AccessLevel = new(gl.AccessLevelValue(input.AccessLevel))
-	}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf(errInvalidExpiresAtFmt, err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
-	}
-
-	token, _, err := client.GL().ProjectAccessTokens.CreateProjectAccessToken(string(input.ProjectID), opts, gl.WithContext(ctx))
+	out, err := args.create(string(args.scopeID), args.req, expiresAt)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("create project access token", err,
-				"validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (10|20|30|40|50), and expires_at format (YYYY-MM-DD, must be within instance-configured maximum lifetime)")
+			return Output{}, toolutil.WrapErrWithHint(args.operation, err, args.validationHint)
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("create project access token", err, http.StatusForbidden,
-			"creating project access tokens requires Maintainer or Owner role; the requested access_level cannot exceed the caller's role")
+		return Output{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusForbidden, args.forbiddenHint)
 	}
-	return fromProjectToken(token), nil
+	return out, nil
+}
+
+func applyAccessTokenCreateOptions(req accessTokenCreateRequest, setDescription func(*string), setAccessLevel func(*gl.AccessLevelValue)) {
+	if req.Description != "" {
+		setDescription(&req.Description)
+	}
+	if req.AccessLevel > 0 {
+		level := gl.AccessLevelValue(req.AccessLevel)
+		setAccessLevel(&level)
+	}
 }
 
 // ProjectRotateInput defines parameters for rotating a project access token.
@@ -264,36 +306,62 @@ type ProjectRotateInput struct {
 
 // ProjectRotate rotates a project access token and returns the new token.
 func ProjectRotate(ctx context.Context, client *gitlabclient.Client, input ProjectRotateInput) (Output, error) {
-	if input.ProjectID == "" {
-		return Output{}, toolutil.ErrFieldRequired("project_id")
+	return rotateAccessToken(ctx, accessTokenRotateArgs{
+		scopeID:        input.ProjectID,
+		tokenID:        input.TokenID,
+		expiresAtValue: input.ExpiresAt,
+		requiredField:  "project_id",
+		operation:      "rotate project access token",
+		validationHint: "token may already be revoked/expired; expires_at must be YYYY-MM-DD and within instance maximum lifetime",
+		notFoundHint:   "token_id not found - use gitlab_access_token_project_list to verify",
+		rotate: func(scopeID string, tokenID int64, expiresAt *gl.ISOTime) (Output, error) {
+			opts := &gl.RotateProjectAccessTokenOptions{ExpiresAt: expiresAt}
+			token, _, err := client.GL().ProjectAccessTokens.RotateProjectAccessToken(scopeID, tokenID, opts, gl.WithContext(ctx))
+			if err != nil {
+				return Output{}, err
+			}
+			return fromProjectToken(token), nil
+		},
+	})
+}
+
+type accessTokenRotateArgs struct {
+	scopeID        toolutil.StringOrInt
+	tokenID        int64
+	expiresAtValue string
+	requiredField  string
+	operation      string
+	validationHint string
+	notFoundHint   string
+	rotate         func(string, int64, *gl.ISOTime) (Output, error)
+}
+
+func rotateAccessToken(ctx context.Context, args accessTokenRotateArgs) (Output, error) {
+	if args.scopeID == "" {
+		return Output{}, toolutil.ErrFieldRequired(args.requiredField)
 	}
-	if input.TokenID == 0 {
+	if args.tokenID == 0 {
 		return Output{}, errors.New(errTokenIDInvalid)
 	}
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
-
-	opts := &gl.RotateProjectAccessTokenOptions{}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf(errInvalidExpiresAtFmt, err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
+	expiresAtParsed, hasExpiresAt, err := parseAccessTokenExpiresAt(args.expiresAtValue)
+	if err != nil {
+		return Output{}, err
 	}
-
-	token, _, err := client.GL().ProjectAccessTokens.RotateProjectAccessToken(string(input.ProjectID), input.TokenID, opts, gl.WithContext(ctx))
+	var expiresAt *gl.ISOTime
+	if hasExpiresAt {
+		expiresAt = &expiresAtParsed
+	}
+	out, err := args.rotate(string(args.scopeID), args.tokenID, expiresAt)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("rotate project access token", err,
-				"token may already be revoked/expired; expires_at must be YYYY-MM-DD and within instance maximum lifetime")
+			return Output{}, toolutil.WrapErrWithHint(args.operation, err, args.validationHint)
 		}
-		return Output{}, toolutil.WrapErrWithStatusHint("rotate project access token", err, http.StatusNotFound,
-			"token_id not found \u2014 use gitlab_access_token_project_list to verify")
+		return Output{}, toolutil.WrapErrWithStatusHint(args.operation, err, http.StatusNotFound, args.notFoundHint)
 	}
-	return fromProjectToken(token), nil
+	return out, nil
 }
 
 // ProjectRevokeInput defines parameters for revoking a project access token.
@@ -330,29 +398,16 @@ type ProjectRotateSelfInput struct {
 
 // ProjectRotateSelf rotates the project access token used for the current request.
 func ProjectRotateSelf(ctx context.Context, client *gitlabclient.Client, input ProjectRotateSelfInput) (Output, error) {
-	if input.ProjectID == "" {
-		return Output{}, toolutil.ErrFieldRequired("project_id")
-	}
-	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
-	}
-
-	opts := &gl.RotateProjectAccessTokenOptions{}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf(errInvalidExpiresAtFmt, err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
-	}
-
-	token, _, err := client.GL().ProjectAccessTokens.RotateProjectAccessTokenSelf(string(input.ProjectID), opts, gl.WithContext(ctx))
-	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("self-rotate project access token", err, http.StatusUnauthorized,
-			"the calling token is not a project access token for this project, or has already been rotated/revoked")
-	}
-	return fromProjectToken(token), nil
+	return rotateSelfAccessToken(ctx, input.ProjectID, input.ExpiresAt, "project_id", "self-rotate project access token",
+		"the calling token is not a project access token for this project, or has already been rotated/revoked",
+		func(scopeID string, expiresAt *gl.ISOTime) (Output, error) {
+			opts := &gl.RotateProjectAccessTokenOptions{ExpiresAt: expiresAt}
+			token, _, err := client.GL().ProjectAccessTokens.RotateProjectAccessTokenSelf(scopeID, opts, gl.WithContext(ctx))
+			if err != nil {
+				return Output{}, err
+			}
+			return fromProjectToken(token), nil
+		})
 }
 
 // ---------------------------------------------------------------------------
@@ -438,46 +493,25 @@ type GroupCreateInput struct {
 
 // GroupCreate creates a new group access token.
 func GroupCreate(ctx context.Context, client *gitlabclient.Client, input GroupCreateInput) (Output, error) {
-	if input.GroupID == "" {
-		return Output{}, toolutil.ErrFieldRequired("group_id")
-	}
-	if input.Name == "" {
-		return Output{}, toolutil.ErrFieldRequired("name")
-	}
-	if len(input.Scopes) == 0 {
-		return Output{}, toolutil.ErrFieldRequired("scopes")
-	}
-	if err := ctx.Err(); err != nil {
-		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
-	}
+	return createAccessToken(ctx, accessTokenCreateArgs{
+		scopeID:        input.GroupID,
+		requiredField:  "group_id",
+		operation:      "create group access token",
+		validationHint: "validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (10|20|30|40|50), and expires_at format (YYYY-MM-DD)",
+		forbiddenHint:  "creating group access tokens requires Owner role; the requested access_level cannot exceed the caller's role",
+		req:            accessTokenCreateRequest{Name: input.Name, Description: input.Description, Scopes: input.Scopes, AccessLevel: input.AccessLevel, ExpiresAt: input.ExpiresAt},
+		create: func(scopeID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
+			return createGroupAccessToken(ctx, client, scopeID, req, expiresAt)
+		},
+	})
+}
 
-	opts := &gl.CreateGroupAccessTokenOptions{
-		Name:   new(input.Name),
-		Scopes: &input.Scopes,
-	}
-	if input.Description != "" {
-		opts.Description = new(input.Description)
-	}
-	if input.AccessLevel > 0 {
-		opts.AccessLevel = new(gl.AccessLevelValue(input.AccessLevel))
-	}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf(errInvalidExpiresAtFmt, err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
-	}
-
-	token, _, err := client.GL().GroupAccessTokens.CreateGroupAccessToken(string(input.GroupID), opts, gl.WithContext(ctx))
+func createGroupAccessToken(ctx context.Context, client *gitlabclient.Client, groupID string, req accessTokenCreateRequest, expiresAt *gl.ISOTime) (Output, error) {
+	opts := &gl.CreateGroupAccessTokenOptions{Name: new(req.Name), Scopes: &req.Scopes, ExpiresAt: expiresAt}
+	applyAccessTokenCreateOptions(req, func(value *string) { opts.Description = value }, func(value *gl.AccessLevelValue) { opts.AccessLevel = value })
+	token, _, err := client.GL().GroupAccessTokens.CreateGroupAccessToken(groupID, opts, gl.WithContext(ctx))
 	if err != nil {
-		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return Output{}, toolutil.WrapErrWithHint("create group access token", err,
-				"validate scopes (api|read_api|read_repository|write_repository|read_registry|write_registry), access_level (10|20|30|40|50), and expires_at format (YYYY-MM-DD)")
-		}
-		return Output{}, toolutil.WrapErrWithStatusHint("create group access token", err, http.StatusForbidden,
-			"creating group access tokens requires Owner role; the requested access_level cannot exceed the caller's role")
+		return Output{}, err
 	}
 	return fromGroupToken(token), nil
 }
@@ -557,29 +591,100 @@ type GroupRotateSelfInput struct {
 
 // GroupRotateSelf rotates the group access token used for the current request.
 func GroupRotateSelf(ctx context.Context, client *gitlabclient.Client, input GroupRotateSelfInput) (Output, error) {
-	if input.GroupID == "" {
-		return Output{}, toolutil.ErrFieldRequired("group_id")
+	return rotateSelfAccessToken(ctx, input.GroupID, input.ExpiresAt, "group_id", "self-rotate group access token",
+		"the calling token is not a group access token for this group, or has already been rotated/revoked",
+		func(scopeID string, expiresAt *gl.ISOTime) (Output, error) {
+			opts := &gl.RotateGroupAccessTokenOptions{ExpiresAt: expiresAt}
+			token, _, err := client.GL().GroupAccessTokens.RotateGroupAccessTokenSelf(scopeID, opts, gl.WithContext(ctx))
+			if err != nil {
+				return Output{}, err
+			}
+			return fromGroupToken(token), nil
+		})
+}
+
+func rotateSelfAccessToken(ctx context.Context, scopeID toolutil.StringOrInt, expiresAtValue, requiredField, operation, unauthorizedHint string, rotate func(string, *gl.ISOTime) (Output, error)) (Output, error) {
+	if scopeID == "" {
+		return Output{}, toolutil.ErrFieldRequired(requiredField)
 	}
 	if err := ctx.Err(); err != nil {
 		return Output{}, toolutil.WrapErrWithMessage(toolutil.ErrMsgContextCanceled, err)
 	}
-
-	opts := &gl.RotateGroupAccessTokenOptions{}
-	if input.ExpiresAt != "" {
-		t, err := time.Parse(toolutil.DateFormatISO, input.ExpiresAt)
-		if err != nil {
-			return Output{}, fmt.Errorf(errInvalidExpiresAtFmt, err)
-		}
-		isoT := gl.ISOTime(t)
-		opts.ExpiresAt = &isoT
-	}
-
-	token, _, err := client.GL().GroupAccessTokens.RotateGroupAccessTokenSelf(string(input.GroupID), opts, gl.WithContext(ctx))
+	expiresAtParsed, hasExpiresAt, err := parseAccessTokenExpiresAt(expiresAtValue)
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("self-rotate group access token", err, http.StatusUnauthorized,
-			"the calling token is not a group access token for this group, or has already been rotated/revoked")
+		return Output{}, err
 	}
-	return fromGroupToken(token), nil
+	var expiresAt *gl.ISOTime
+	if hasExpiresAt {
+		expiresAt = &expiresAtParsed
+	}
+	out, err := rotate(string(scopeID), expiresAt)
+	if err != nil {
+		return Output{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusUnauthorized, unauthorizedHint)
+	}
+	return out, nil
+}
+
+func parseAccessTokenExpiresAt(value string) (gl.ISOTime, bool, error) {
+	if value == "" {
+		return gl.ISOTime{}, false, nil
+	}
+	t, err := time.Parse(toolutil.DateFormatISO, value)
+	if err != nil {
+		return gl.ISOTime{}, false, fmt.Errorf(errInvalidExpiresAtFmt, err)
+	}
+	return gl.ISOTime(t), true, nil
+}
+
+var validAccessTokenScopeNames = []string{
+	"admin_mode",
+	"ai_features",
+	"api",
+	"create_runner",
+	"k8s_proxy",
+	"manage_runner",
+	"read_api",
+	"read_observability",
+	"read_registry",
+	"read_repository",
+	"read_service_ping",
+	"read_user",
+	"read_virtual_registry",
+	"self_rotate",
+	"sudo",
+	"write_observability",
+	"write_registry",
+	"write_repository",
+	"write_virtual_registry",
+}
+
+var validAccessTokenScopes = func() map[string]struct{} {
+	out := make(map[string]struct{}, len(validAccessTokenScopeNames))
+	for _, scope := range validAccessTokenScopeNames {
+		out[scope] = struct{}{}
+	}
+	return out
+}()
+
+func validateAccessTokenScopes(scopes []string) error {
+	seen := make(map[string]struct{}, len(scopes))
+	for index, scope := range scopes {
+		trimmed := strings.TrimSpace(scope)
+		if trimmed == "" {
+			return fmt.Errorf("scopes[%d] must not be empty", index)
+		}
+		if trimmed != scope {
+			return fmt.Errorf("scopes[%d] %q must not contain surrounding whitespace", index, scope)
+		}
+		if _, ok := validAccessTokenScopes[scope]; !ok {
+			return fmt.Errorf("scopes[%d] %q is not supported; expected one of %s", index, scope, strings.Join(validAccessTokenScopeNames, ", "))
+		}
+		if _, duplicate := seen[scope]; duplicate {
+			return fmt.Errorf("scopes[%d] %q is duplicated", index, scope)
+		}
+		seen[scope] = struct{}{}
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------

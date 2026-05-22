@@ -12,12 +12,11 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // Test endpoint paths and JSON response fixtures for issue operation tests.
@@ -1576,8 +1575,10 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 func TestFormatListMarkdown_ClickableIssueLinks(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Issues: []Output{
-			{IID: 42, Title: "Bug", State: "opened", Author: "alice",
-				WebURL: "https://gitlab.example.com/issues/42"},
+			{
+				IID: 42, Title: "Bug", State: "opened", Author: "alice",
+				WebURL: "https://gitlab.example.com/issues/42",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -1614,8 +1615,10 @@ func TestFormatListGroupMarkdown_Populated(t *testing.T) {
 func TestFormatListGroupMarkdown_ClickableLinks(t *testing.T) {
 	md := FormatListGroupMarkdown(ListGroupOutput{
 		Issues: []Output{
-			{IID: 5, Title: "GroupIssue", State: "opened", Author: "carol",
-				WebURL: "https://gitlab.example.com/issues/5"},
+			{
+				IID: 5, Title: "GroupIssue", State: "opened", Author: "carol",
+				WebURL: "https://gitlab.example.com/issues/5",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
@@ -1660,8 +1663,10 @@ func TestFormatListAllMarkdown_Empty(t *testing.T) {
 func TestFormatListAllMarkdown_ClickableLinks(t *testing.T) {
 	md := FormatListAllMarkdown(ListOutput{
 		Issues: []Output{
-			{IID: 100, Title: "AllIssue", State: "closed", Author: "dave",
-				WebURL: "https://gitlab.example.com/issues/100"},
+			{
+				IID: 100, Title: "AllIssue", State: "closed", Author: "dave",
+				WebURL: "https://gitlab.example.com/issues/100",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})

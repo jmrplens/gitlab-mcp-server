@@ -154,7 +154,8 @@ func TestProjectUpload_SendsFileContent(t *testing.T) {
 			return
 		}
 
-		err := r.ParseMultipartForm(10 << 20)
+		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+		err := r.ParseMultipartForm(10 << 20) //nolint:gosec // Test handler bounds r.Body with http.MaxBytesReader above.
 		if err != nil {
 			t.Fatalf("failed to parse multipart form: %v", err)
 		}
@@ -213,7 +214,8 @@ func TestProjectUpload_WithProgressToken(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		if err := r.ParseMultipartForm(10 << 20); err != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+		if err := r.ParseMultipartForm(10 << 20); err != nil { //nolint:gosec // Test handler bounds r.Body with http.MaxBytesReader above.
 			t.Fatalf("failed to parse multipart form: %v", err)
 		}
 		file, _, err := r.FormFile("file")
@@ -291,7 +293,7 @@ func TestProjectUpload_FilePath_Success(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "upload.txt")
 	content := []byte("file content for upload")
-	if err := os.WriteFile(path, content, 0644); err != nil {
+	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -301,7 +303,10 @@ func TestProjectUpload_FilePath_Success(t *testing.T) {
 			return
 		}
 
-		_ = r.ParseMultipartForm(10 << 20)
+		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+		if err := r.ParseMultipartForm(10 << 20); err != nil { //nolint:gosec // Test handler bounds r.Body with http.MaxBytesReader above.
+			t.Fatalf("failed to parse multipart form: %v", err)
+		}
 		file, _, err := r.FormFile("file")
 		if err != nil {
 			t.Fatalf("failed to get form file: %v", err)
@@ -427,7 +432,7 @@ func TestProjectUpload_FilePath_TooLarge(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "huge.bin")
 	// Create a file just over the configured max (5 MB)
-	if err := os.WriteFile(path, make([]byte, 6*1024*1024), 0644); err != nil {
+	if err := os.WriteFile(path, make([]byte, 6*1024*1024), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

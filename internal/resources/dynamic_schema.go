@@ -128,29 +128,8 @@ func dynamicActionSchema(action actioncatalog.Action) map[string]any {
 }
 
 func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action) map[string]any {
-	if len(action.Route.ParameterGuidance) > 0 {
-		guidance := make(map[string]any, len(action.Route.ParameterGuidance))
-		for name, item := range action.Route.ParameterGuidance {
-			entry := make(map[string]any, 4)
-			if item.SemanticRole != "" {
-				entry["semantic_role"] = item.SemanticRole
-			}
-			if item.ValueSource != "" {
-				entry["value_source"] = item.ValueSource
-			}
-			if len(item.CommonConfusions) > 0 {
-				entry["common_confusions"] = append([]string(nil), item.CommonConfusions...)
-			}
-			if item.ExampleBinding != "" {
-				entry["example_binding"] = item.ExampleBinding
-			}
-			if len(entry) > 0 {
-				guidance[name] = entry
-			}
-		}
-		if len(guidance) > 0 {
-			schema["x_parameter_guidance"] = guidance
-		}
+	if guidance := dynamicParameterGuidance(action); len(guidance) > 0 {
+		schema["x_parameter_guidance"] = guidance
 	}
 	if action.Route.Destructive {
 		schema["x_destructive"] = true
@@ -160,6 +139,37 @@ func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action) map
 		}
 	}
 	return schema
+}
+
+func dynamicParameterGuidance(action actioncatalog.Action) map[string]any {
+	if len(action.Route.ParameterGuidance) == 0 {
+		return nil
+	}
+	guidance := make(map[string]any, len(action.Route.ParameterGuidance))
+	for name, item := range action.Route.ParameterGuidance {
+		entry := dynamicParameterGuidanceEntry(item)
+		if len(entry) > 0 {
+			guidance[name] = entry
+		}
+	}
+	return guidance
+}
+
+func dynamicParameterGuidanceEntry(item toolutil.ParameterGuidance) map[string]any {
+	entry := make(map[string]any, 4)
+	if item.SemanticRole != "" {
+		entry["semantic_role"] = item.SemanticRole
+	}
+	if item.ValueSource != "" {
+		entry["value_source"] = item.ValueSource
+	}
+	if len(item.CommonConfusions) > 0 {
+		entry["common_confusions"] = append([]string(nil), item.CommonConfusions...)
+	}
+	if item.ExampleBinding != "" {
+		entry["example_binding"] = item.ExampleBinding
+	}
+	return entry
 }
 
 func dynamicSchemaURI(id actioncatalog.ActionID) string {

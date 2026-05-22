@@ -76,25 +76,46 @@ type GetGroupInput struct {
 
 // GetGroup retrieves issue statistics for a group.
 func GetGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupInput) (StatisticsOutput, error) {
-	opts := &gl.GetGroupIssuesStatisticsOptions{}
-	if input.Labels != "" {
-		lbl := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &lbl
-	}
-	if input.Milestone != "" {
-		opts.Milestone = new(input.Milestone)
-	}
-	if input.Scope != "" {
-		opts.Scope = new(input.Scope)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	stats, _, err := client.GL().IssuesStatistics.GetGroupIssuesStatistics(input.GroupID, opts, gl.WithContext(ctx))
+	stats, _, err := client.GL().IssuesStatistics.GetGroupIssuesStatistics(input.GroupID, groupIssueStatsOptions(statisticsFilters{
+		Labels: input.Labels, Milestone: input.Milestone, Scope: input.Scope, Search: input.Search,
+	}), gl.WithContext(ctx))
 	if err != nil {
 		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_group_issue_statistics", err, http.StatusNotFound, "verify group_id with gitlab_group_get")
 	}
 	return fromGL(stats), nil
+}
+
+type statisticsFilters struct {
+	Labels    string
+	Milestone string
+	Scope     string
+	Search    string
+}
+
+func applyStatisticsFilters(filters statisticsFilters, setLabels func(*gl.LabelOptions), setMilestone, setScope, setSearch func(*string)) {
+	if filters.Labels != "" {
+		labels := gl.LabelOptions(strings.Split(filters.Labels, ","))
+		setLabels(&labels)
+	}
+	if filters.Milestone != "" {
+		setMilestone(&filters.Milestone)
+	}
+	if filters.Scope != "" {
+		setScope(&filters.Scope)
+	}
+	if filters.Search != "" {
+		setSearch(&filters.Search)
+	}
+}
+
+func groupIssueStatsOptions(filters statisticsFilters) *gl.GetGroupIssuesStatisticsOptions {
+	opts := &gl.GetGroupIssuesStatisticsOptions{}
+	applyStatisticsFilters(filters,
+		func(value *gl.LabelOptions) { opts.Labels = value },
+		func(value *string) { opts.Milestone = value },
+		func(value *string) { opts.Scope = value },
+		func(value *string) { opts.Search = value })
+	return opts
 }
 
 // GetProject.
@@ -110,25 +131,23 @@ type GetProjectInput struct {
 
 // GetProject retrieves issue statistics for a project.
 func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProjectInput) (StatisticsOutput, error) {
-	opts := &gl.GetProjectIssuesStatisticsOptions{}
-	if input.Labels != "" {
-		lbl := gl.LabelOptions(strings.Split(input.Labels, ","))
-		opts.Labels = &lbl
-	}
-	if input.Milestone != "" {
-		opts.Milestone = new(input.Milestone)
-	}
-	if input.Scope != "" {
-		opts.Scope = new(input.Scope)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	stats, _, err := client.GL().IssuesStatistics.GetProjectIssuesStatistics(input.ProjectID, opts, gl.WithContext(ctx))
+	stats, _, err := client.GL().IssuesStatistics.GetProjectIssuesStatistics(input.ProjectID, projectIssueStatsOptions(statisticsFilters{
+		Labels: input.Labels, Milestone: input.Milestone, Scope: input.Scope, Search: input.Search,
+	}), gl.WithContext(ctx))
 	if err != nil {
 		return StatisticsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_issue_statistics", err, http.StatusNotFound, "verify project_id with gitlab_project_get")
 	}
 	return fromGL(stats), nil
+}
+
+func projectIssueStatsOptions(filters statisticsFilters) *gl.GetProjectIssuesStatisticsOptions {
+	opts := &gl.GetProjectIssuesStatisticsOptions{}
+	applyStatisticsFilters(filters,
+		func(value *gl.LabelOptions) { opts.Labels = value },
+		func(value *string) { opts.Milestone = value },
+		func(value *string) { opts.Scope = value },
+		func(value *string) { opts.Search = value })
+	return opts
 }
 
 // formatters.

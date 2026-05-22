@@ -12,12 +12,12 @@ import (
 // ActionSpecs returns canonical specs for project wiki actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		wikiSpec("list", toolutil.RouteAction(client, List), "gitlab_wiki_list", true, true),
-		wikiSpec("get", wikiGetRoute(client), "gitlab_wiki_get", true, true),
-		wikiSpec("create", toolutil.RouteAction(client, Create), "gitlab_wiki_create", false, false),
-		wikiSpec("update", toolutil.RouteAction(client, Update), "gitlab_wiki_update", false, true),
-		wikiSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_wiki_delete", false, true),
-		wikiSpec("upload_attachment", toolutil.RouteAction(client, UploadAttachment), "gitlab_wiki_upload_attachment", false, false),
+		wikiReadSpec("list", toolutil.RouteAction(client, List), "gitlab_wiki_list"),
+		wikiReadSpec("get", wikiGetRoute(client), "gitlab_wiki_get"),
+		wikiCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_wiki_create"),
+		wikiUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_wiki_update"),
+		wikiDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_wiki_delete"),
+		wikiCreateSpec("upload_attachment", toolutil.RouteAction(client, UploadAttachment), "gitlab_wiki_upload_attachment"),
 	}
 }
 
@@ -35,14 +35,28 @@ func wikiGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	return route
 }
 
-func wikiSpec(name string, route toolutil.ActionRoute, individualTool string, readOnly, idempotent bool) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, toolutil.ActionSpecOptions{
+func wikiReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewReadActionSpec(name, route, wikiOptions(individualTool))
+}
+
+func wikiCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewCreateActionSpec(name, route, wikiOptions(individualTool))
+}
+
+func wikiUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewUpdateActionSpec(name, route, wikiOptions(individualTool))
+}
+
+func wikiDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewDeleteActionSpec(name, route, wikiOptions(individualTool))
+}
+
+func wikiOptions(individualTool string) toolutil.ActionSpecOptions {
+	return toolutil.ActionSpecOptions{
 		Tags:           []string{"wiki"},
 		RelatedActions: []string{"wiki.list", "wiki.get", "project.get", "repository.file_get"},
-		ReadOnly:       readOnly,
-		Idempotent:     idempotent,
 		OpenWorld:      true,
 		OwnerPackage:   "wikis",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
-	})
+	}
 }

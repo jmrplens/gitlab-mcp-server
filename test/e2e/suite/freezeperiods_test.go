@@ -6,7 +6,7 @@ package suite
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/freezeperiods"
@@ -55,7 +55,7 @@ func TestMeta_FreezePeriods(t *testing.T) {
 			"action": "freeze_get",
 			"params": map[string]any{
 				"project_id":       proj.pidStr(),
-				"freeze_period_id": fmt.Sprintf("%d", freezePeriodID),
+				"freeze_period_id": strconv.FormatInt(freezePeriodID, 10),
 			},
 		})
 		requireNoError(t, err, "freeze period get")
@@ -69,7 +69,7 @@ func TestMeta_FreezePeriods(t *testing.T) {
 			"action": "freeze_update",
 			"params": map[string]any{
 				"project_id":       proj.pidStr(),
-				"freeze_period_id": fmt.Sprintf("%d", freezePeriodID),
+				"freeze_period_id": strconv.FormatInt(freezePeriodID, 10),
 				"cron_timezone":    "America/New_York",
 			},
 		})
@@ -84,7 +84,7 @@ func TestMeta_FreezePeriods(t *testing.T) {
 			"action": "freeze_delete",
 			"params": map[string]any{
 				"project_id":       proj.pidStr(),
-				"freeze_period_id": fmt.Sprintf("%d", freezePeriodID),
+				"freeze_period_id": strconv.FormatInt(freezePeriodID, 10),
 			},
 		})
 		requireNoError(t, err, "freeze period delete")

@@ -24,12 +24,18 @@ func TestBranchMRSummary_ListsMRsByBranch(t *testing.T) {
 			t.Errorf("expected target_branch=release/1.0, got %s", r.URL.Query().Get("target_branch"))
 		}
 		mrs := []*gl.BasicMergeRequest{
-			{IID: 1, Title: "Fix auth", SourceBranch: "fix/auth", TargetBranch: "release/1.0",
-				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created, Draft: true},
-			{IID: 2, Title: "Add cache", SourceBranch: "feat/cache", TargetBranch: "release/1.0",
-				Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created, HasConflicts: true},
-			{IID: 3, Title: "Update docs", SourceBranch: "docs/update", TargetBranch: "release/1.0",
-				Author: &gl.BasicUser{Username: "charlie"}, CreatedAt: &created},
+			{
+				IID: 1, Title: "Fix auth", SourceBranch: "fix/auth", TargetBranch: "release/1.0",
+				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created, Draft: true,
+			},
+			{
+				IID: 2, Title: "Add cache", SourceBranch: "feat/cache", TargetBranch: "release/1.0",
+				Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created, HasConflicts: true,
+			},
+			{
+				IID: 3, Title: "Update docs", SourceBranch: "docs/update", TargetBranch: "release/1.0",
+				Author: &gl.BasicUser{Username: "charlie"}, CreatedAt: &created,
+			},
 		}
 		data, _ := json.Marshal(mrs)
 		respondJSON(w, http.StatusOK, string(data))
@@ -269,8 +275,10 @@ func TestUnassignedItems_FindsUnownedItems(t *testing.T) {
 
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, r *http.Request) {
 		mrs := []*gl.BasicMergeRequest{
-			{IID: 1, Title: "Orphan MR", SourceBranch: "fix/orphan", TargetBranch: "main",
-				CreatedAt: &created},
+			{
+				IID: 1, Title: "Orphan MR", SourceBranch: "fix/orphan", TargetBranch: "main",
+				CreatedAt: &created,
+			},
 		}
 		data, _ := json.Marshal(mrs)
 		respondJSON(w, http.StatusOK, string(data))
@@ -347,8 +355,10 @@ func TestStaleItemsReport_FindsStaleItems(t *testing.T) {
 
 	mux.HandleFunc("GET /api/v4/projects/{project}/merge_requests", func(w http.ResponseWriter, r *http.Request) {
 		mrs := []*gl.BasicMergeRequest{
-			{IID: 1, Title: "Old MR", SourceBranch: "feat/old", TargetBranch: "main",
-				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &staleDate},
+			{
+				IID: 1, Title: "Old MR", SourceBranch: "feat/old", TargetBranch: "main",
+				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &staleDate,
+			},
 		}
 		data, _ := json.Marshal(mrs)
 		respondJSON(w, http.StatusOK, string(data))

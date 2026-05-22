@@ -50,18 +50,9 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 
 	interval := toolutil.ClampPollInterval(opts.IntervalSeconds)
 	timeout := toolutil.ClampPollTimeout(opts.TimeoutSeconds)
-	failOnError := true
-	if opts.FailOnError != nil {
-		failOnError = *opts.FailOnError
-	}
-	duration := opts.PollDuration
-	if duration == nil {
-		duration = func(seconds int) time.Duration { return time.Duration(seconds) * time.Second }
-	}
-	progressMessage := opts.ProgressMessage
-	if progressMessage == nil {
-		progressMessage = func(int) string { return "" }
-	}
+	failOnError := pollFailOnError(opts.FailOnError)
+	duration := pollDurationFunc(opts.PollDuration)
+	progressMessage := pollProgressMessage(opts.ProgressMessage)
 
 	tracker := progress.FromRequest(opts.Request)
 	timeoutDuration := duration(timeout)
@@ -78,13 +69,7 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 
 	for {
 		if time.Until(deadlineAt) <= 0 {
-			return Result[T]{
-				Item:        lastItem,
-				WaitedFor:   time.Since(startTime).Round(time.Second).String(),
-				PollCount:   pollCount,
-				FinalStatus: lastStatus,
-				TimedOut:    true,
-			}, nil
+			return timedOutPollResult(lastItem, startTime, pollCount, lastStatus), nil
 		}
 		if err := ctx.Err(); err != nil {
 			return Result[T]{}, err
@@ -97,14 +82,8 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 		item, err := opts.Poll(pollCtx)
 		cancel()
 		if err != nil {
-			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil && !time.Now().Before(deadlineAt) {
-				return Result[T]{
-					Item:        lastItem,
-					WaitedFor:   time.Since(startTime).Round(time.Second).String(),
-					PollCount:   pollCount,
-					FinalStatus: lastStatus,
-					TimedOut:    true,
-				}, nil
+			if pollReachedDeadline(ctx, err, deadlineAt) {
+				return timedOutPollResult(lastItem, startTime, pollCount, lastStatus), nil
 			}
 			return Result[T]{}, err
 		}
@@ -113,33 +92,66 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 		lastItem = item
 		lastStatus = status
 		if toolutil.IsTerminalStatus(status) {
-			result := Result[T]{
-				Item:        item,
-				WaitedFor:   time.Since(startTime).Round(time.Second).String(),
-				PollCount:   pollCount,
-				FinalStatus: status,
-			}
-			if failOnError && (status == "failed" || status == "canceled") {
-				if opts.FailureError == nil {
-					return result, fmt.Errorf("waitpoll: terminal status %q requires failure error callback", status)
-				}
-				return result, opts.FailureError(item)
-			}
-			return result, nil
+			return terminalPollResult(item, startTime, pollCount, status, failOnError, opts.FailureError)
 		}
 
 		select {
 		case <-ctx.Done():
 			return Result[T]{}, ctx.Err()
 		case <-deadline.C:
-			return Result[T]{
-				Item:        item,
-				WaitedFor:   time.Since(startTime).Round(time.Second).String(),
-				PollCount:   pollCount,
-				FinalStatus: status,
-				TimedOut:    true,
-			}, nil
+			return timedOutPollResult(item, startTime, pollCount, status), nil
 		case <-ticker.C:
 		}
 	}
+}
+
+func pollReachedDeadline(ctx context.Context, err error, deadlineAt time.Time) bool {
+	return errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil && !time.Now().Before(deadlineAt)
+}
+
+func timedOutPollResult[T any](item T, startTime time.Time, pollCount int, status string) Result[T] {
+	return Result[T]{
+		Item:        item,
+		WaitedFor:   time.Since(startTime).Round(time.Second).String(),
+		PollCount:   pollCount,
+		FinalStatus: status,
+		TimedOut:    true,
+	}
+}
+
+func terminalPollResult[T any](item T, startTime time.Time, pollCount int, status string, failOnError bool, failureError func(T) error) (Result[T], error) {
+	result := Result[T]{
+		Item:        item,
+		WaitedFor:   time.Since(startTime).Round(time.Second).String(),
+		PollCount:   pollCount,
+		FinalStatus: status,
+	}
+	if failOnError && (status == "failed" || status == "canceled") {
+		if failureError == nil {
+			return result, fmt.Errorf("waitpoll: terminal status %q requires failure error callback", status)
+		}
+		return result, failureError(item)
+	}
+	return result, nil
+}
+
+func pollFailOnError(value *bool) bool {
+	if value == nil {
+		return true
+	}
+	return *value
+}
+
+func pollDurationFunc(duration DurationFunc) DurationFunc {
+	if duration != nil {
+		return duration
+	}
+	return func(seconds int) time.Duration { return time.Duration(seconds) * time.Second }
+}
+
+func pollProgressMessage(message func(attempt int) string) func(attempt int) string {
+	if message != nil {
+		return message
+	}
+	return func(int) string { return "" }
 }

@@ -13,8 +13,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const actionSpecRoleJSON = `{"id":1,"name":"custom_role","base_access_level":30,"description":"A custom role"}`
-const actionSpecRoleListJSON = `[{"id":1,"name":"custom_role","base_access_level":30}]`
+const (
+	actionSpecRoleJSON     = `{"id":1,"name":"custom_role","base_access_level":30,"description":"A custom role"}`
+	actionSpecRoleListJSON = `[{"id":1,"name":"custom_role","base_access_level":30}]`
+)
 
 // TestActionSpecs_CallAllRoutes exercises every member role tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {

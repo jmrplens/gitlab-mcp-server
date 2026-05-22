@@ -42,7 +42,7 @@ This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab 
 | Transport          | stdio (primary), HTTP (optional)                        |
 | Architecture       | 172 domain sub-packages under `internal/tools/`         |
 | Test Infrastructure| `net/http/httptest` mocks, `testutil.NewTestClient`     |
-| Static Analysis    | golangci-lint v2, gosec, staticcheck, govulncheck       |
+| Static Analysis    | golangci-lint v2 (Go linters/formatters), govulncheck, markdownlint |
 
 ### Key Project Patterns
 
@@ -86,7 +86,7 @@ You operate in different modes depending on the type of plan requested. Always i
 **Analysis workflow**:
 
 1. Read all files in the target package/area
-2. Run `go vet` and `golangci-lint` to identify existing issues
+2. Run `golangci-lint` to identify existing Go issues
 3. Analyze code metrics: function lengths, cyclomatic complexity, duplication
 4. Identify safe refactoring boundaries (what can change without breaking interfaces)
 5. Plan atomic steps that maintain compilation at every point
@@ -219,7 +219,7 @@ Before producing any plan, you MUST complete these steps:
 ### Step 3: Current State Assessment
 
 ```text
-1. Run go vet on affected packages (read existing errors)
+1. Run `golangci-lint` on affected packages (read existing errors)
 2. Check test coverage on affected packages
 3. Read existing plan/ files for prior work
 4. Read relevant docs/adr/ for architectural context
@@ -307,9 +307,8 @@ Include: file counts, coverage percentages, specific patterns found, existing is
 
 ## 9. Verification Checklist
 
-- [ ] `go vet ./internal/tools/{domain}/`
 - [ ] `go test ./internal/tools/{domain}/ -count=1`
-- [ ] `golangci-lint run ./internal/tools/{domain}/`
+- [ ] `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`
 - [ ] Coverage ≥ [target]%
 - [ ] Documentation updated in `docs/tools/`
 

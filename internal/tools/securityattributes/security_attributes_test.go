@@ -319,69 +319,52 @@ func TestHandlers_WrapGitLabErrors(t *testing.T) {
 // test expects each handler to preserve the top-level error text so callers can
 // distinguish transport success from GraphQL execution failure.
 func TestHandlers_WrapTopLevelGraphQLErrors(t *testing.T) {
-	tests := []struct {
-		name     string
-		queryKey string
-		call     func(*gitlabclient.Client) error
-	}{
-		{
-			name:     "create",
-			queryKey: "securityAttributeCreate",
-			call: func(client *gitlabclient.Client) error {
-				_, err := Create(context.Background(), client, CreateInput{
-					NamespaceID: 101,
-					CategoryID:  7,
-					Attributes:  []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}},
-				})
-				return err
-			},
-		},
-		{
-			name:     "update",
-			queryKey: "securityAttributeUpdate",
-			call: func(client *gitlabclient.Client) error {
-				name := "High"
-				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
-				return err
-			},
-		},
-		{
-			name:     "delete",
-			queryKey: "securityAttributeDestroy",
-			call: func(client *gitlabclient.Client) error {
-				_, err := Delete(context.Background(), client, DeleteInput{AttributeID: 9})
-				return err
-			},
-		},
-		{
-			name:     "project update",
-			queryKey: "securityAttributeProjectUpdate",
-			call: func(client *gitlabclient.Client) error {
-				_, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}})
-				return err
-			},
-		},
-		{
-			name:     "bulk update",
-			queryKey: "bulkUpdateSecurityAttributes",
-			call: func(client *gitlabclient.Client) error {
-				_, err := BulkUpdate(context.Background(), client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd})
-				return err
-			},
-		},
-	}
+	runSecurityAttributeMutationErrorCases(t, "top-level forbidden", "top-level GraphQL error", func(w http.ResponseWriter) {
+		testutil.RespondGraphQLError(w, http.StatusOK, "top-level forbidden")
+	})
+}
 
-	for _, tt := range tests {
+type mutationErrorCase struct {
+	name     string
+	queryKey string
+	call     func(*gitlabclient.Client) error
+}
+
+func securityAttributeMutationErrorCases() []mutationErrorCase {
+	return []mutationErrorCase{
+		{name: "create", queryKey: "securityAttributeCreate", call: func(client *gitlabclient.Client) error {
+			_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}})
+			return err
+		}},
+		{name: "update", queryKey: "securityAttributeUpdate", call: func(client *gitlabclient.Client) error {
+			name := "High"
+			_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
+			return err
+		}},
+		{name: "delete", queryKey: "securityAttributeDestroy", call: func(client *gitlabclient.Client) error {
+			_, err := Delete(context.Background(), client, DeleteInput{AttributeID: 9})
+			return err
+		}},
+		{name: "project update", queryKey: "securityAttributeProjectUpdate", call: func(client *gitlabclient.Client) error {
+			_, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}})
+			return err
+		}},
+		{name: "bulk update", queryKey: "bulkUpdateSecurityAttributes", call: func(client *gitlabclient.Client) error {
+			_, err := BulkUpdate(context.Background(), client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd})
+			return err
+		}},
+	}
+}
+
+func runSecurityAttributeMutationErrorCases(t *testing.T, wantSubstring, wantLabel string, respond func(http.ResponseWriter)) {
+	t.Helper()
+	for _, tt := range securityAttributeMutationErrorCases() {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
-				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
-					testutil.RespondGraphQLError(w, http.StatusOK, "top-level forbidden")
-				},
-			})
+			handler := attributeGraphQLMux(map[string]http.HandlerFunc{tt.queryKey: func(w http.ResponseWriter, _ *http.Request) { respond(w) }})
 			client := testutil.NewTestClient(t, handler)
 			err := tt.call(client)
-			if err == nil || !strings.Contains(err.Error(), "top-level forbidden") {
-				t.Fatalf("handler error = %v, want top-level GraphQL error", err)
+			if err == nil || !strings.Contains(err.Error(), wantSubstring) {
+				t.Fatalf("handler error = %v, want %s", err, wantLabel)
 			}
 		})
 	}
@@ -394,68 +377,9 @@ func TestHandlers_WrapTopLevelGraphQLErrors(t *testing.T) {
 // includes the status code, protecting the shared error path used by all
 // security attribute operations.
 func TestHandlers_WrapTransportErrors(t *testing.T) {
-	tests := []struct {
-		name     string
-		queryKey string
-		call     func(*gitlabclient.Client) error
-	}{
-		{
-			name:     "create",
-			queryKey: "securityAttributeCreate",
-			call: func(client *gitlabclient.Client) error {
-				_, err := Create(context.Background(), client, CreateInput{NamespaceID: 101, CategoryID: 7, Attributes: []AttributeInput{{Name: "High", Description: "High impact", Color: "#FF0000"}}})
-				return err
-			},
-		},
-		{
-			name:     "update",
-			queryKey: "securityAttributeUpdate",
-			call: func(client *gitlabclient.Client) error {
-				name := "High"
-				_, err := Update(context.Background(), client, UpdateInput{AttributeID: 9, Name: &name})
-				return err
-			},
-		},
-		{
-			name:     "delete",
-			queryKey: "securityAttributeDestroy",
-			call: func(client *gitlabclient.Client) error {
-				_, err := Delete(context.Background(), client, DeleteInput{AttributeID: 9})
-				return err
-			},
-		},
-		{
-			name:     "project update",
-			queryKey: "securityAttributeProjectUpdate",
-			call: func(client *gitlabclient.Client) error {
-				_, err := ProjectUpdate(context.Background(), client, ProjectUpdateInput{ProjectID: 42, AddAttributeIDs: []int64{9}})
-				return err
-			},
-		},
-		{
-			name:     "bulk update",
-			queryKey: "bulkUpdateSecurityAttributes",
-			call: func(client *gitlabclient.Client) error {
-				_, err := BulkUpdate(context.Background(), client, BulkUpdateInput{ProjectIDs: []int64{42}, AttributeIDs: []int64{9}, Mode: BulkUpdateModeAdd})
-				return err
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			handler := attributeGraphQLMux(map[string]http.HandlerFunc{
-				tt.queryKey: func(w http.ResponseWriter, _ *http.Request) {
-					http.Error(w, "boom", http.StatusForbidden)
-				},
-			})
-			client := testutil.NewTestClient(t, handler)
-			err := tt.call(client)
-			if err == nil || !strings.Contains(err.Error(), "403") {
-				t.Fatalf("handler error = %v, want HTTP 403", err)
-			}
-		})
-	}
+	runSecurityAttributeMutationErrorCases(t, "403", "HTTP 403", func(w http.ResponseWriter) {
+		http.Error(w, "boom", http.StatusForbidden)
+	})
 }
 
 // TestHandlers_ReturnNotFoundOnEmptyGraphQLPayload verifies that empty mutation

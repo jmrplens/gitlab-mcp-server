@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 )
 
 // TestAuditRegisterMetaDefinitions_ClassifiesCentralReferences verifies AuditRegisterMetaDefinitions classifies central references.
@@ -114,7 +116,7 @@ func TestAuditRegisterMetaDefinitionViolations_ConvertsUnexpectedDefinitions(t *
 
 // TestCurrentRegisterMetaDefinitions_NoneRemain verifies CurrentRegisterMetaDefinitions when none remain.
 func TestCurrentRegisterMetaDefinitions_NoneRemain(t *testing.T) {
-	root, err := repositoryRoot(".")
+	root, err := cmdutil.RepositoryRoot(".")
 	if err != nil {
 		t.Fatalf("repositoryRoot() error = %v", err)
 	}
@@ -184,11 +186,11 @@ func TestRepositoryRoot_FindsNearestGoMod(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, root, "go.mod", "module example.com/test\n")
 	nested := filepath.Join(root, "a", "b")
-	if err := os.MkdirAll(nested, 0o755); err != nil {
+	if err := os.MkdirAll(nested, 0o750); err != nil {
 		t.Fatalf("MkdirAll(%q) error = %v", nested, err)
 	}
 
-	foundRoot, err := repositoryRoot(nested)
+	foundRoot, err := cmdutil.RepositoryRoot(nested)
 	if err != nil {
 		t.Fatalf("repositoryRoot() error = %v", err)
 	}
@@ -199,7 +201,7 @@ func TestRepositoryRoot_FindsNearestGoMod(t *testing.T) {
 
 // TestRepositoryRoot_MissingGoModReturnsError verifies RepositoryRoot when missing go mod returns error.
 func TestRepositoryRoot_MissingGoModReturnsError(t *testing.T) {
-	_, err := repositoryRoot(t.TempDir())
+	_, err := cmdutil.RepositoryRoot(t.TempDir())
 	if err == nil {
 		t.Fatal("repositoryRoot() error = nil, want error")
 	}
@@ -209,13 +211,13 @@ func TestRepositoryRoot_MissingGoModReturnsError(t *testing.T) {
 }
 
 // writeTestFile writes test file fixture data for tests.
-func writeTestFile(t *testing.T, root string, name string, content string) {
+func writeTestFile(t *testing.T, root, name, content string) {
 	t.Helper()
 	path := filepath.Join(root, name)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatalf("MkdirAll(%q) error = %v", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("WriteFile(%q) error = %v", path, err)
 	}
 }

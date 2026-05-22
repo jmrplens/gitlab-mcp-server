@@ -4,6 +4,7 @@ package wizard
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -132,7 +133,12 @@ func TestRun_WebModeCompletesAfterConfigure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal configure request: %v", err)
 	}
-	resp, err := http.Post(webURL+"/api/configure", mimeJSON, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, webURL+"/api/configure", bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("build POST /api/configure request: %v", err)
+	}
+	req.Header.Set("Content-Type", mimeJSON)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST /api/configure: %v", err)
 	}

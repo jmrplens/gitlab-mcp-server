@@ -278,18 +278,11 @@ func (c *Catalog) AddAction(toolName string, action Action, groupOptions ...Grou
 	next := c.Clone()
 	group, ok := next.groups[toolName]
 	if !ok {
-		opts := GroupOptions{ToolName: toolName}
-		if len(groupOptions) == 1 {
-			opts = groupOptions[0]
-			opts.ToolName = strings.TrimSpace(opts.ToolName)
-			if opts.ToolName == "" {
-				opts.ToolName = toolName
-			}
-			if opts.ToolName != toolName {
-				return fmt.Errorf("group options tool name %q does not match %q", opts.ToolName, toolName)
-			}
+		var err error
+		group, err = newAddActionGroup(toolName, groupOptions)
+		if err != nil {
+			return err
 		}
-		group = NewGroup(opts)
 	}
 	group.SetAction(action)
 	if ok {
@@ -306,6 +299,22 @@ func (c *Catalog) AddAction(toolName string, action Action, groupOptions ...Grou
 	c.groups = next.groups
 	c.actions = next.actions
 	return nil
+}
+
+func newAddActionGroup(toolName string, groupOptions []GroupOptions) (Group, error) {
+	opts := GroupOptions{ToolName: toolName}
+	if len(groupOptions) == 0 {
+		return NewGroup(opts), nil
+	}
+	opts = groupOptions[0]
+	opts.ToolName = strings.TrimSpace(opts.ToolName)
+	if opts.ToolName == "" {
+		opts.ToolName = toolName
+	}
+	if opts.ToolName != toolName {
+		return Group{}, fmt.Errorf("group options tool name %q does not match %q", opts.ToolName, toolName)
+	}
+	return NewGroup(opts), nil
 }
 
 // Group returns a defensive copy of one group by tool name.
@@ -421,34 +430,55 @@ func (c *Catalog) Validate() error {
 	}
 	seenAliases := make(map[string]ActionID)
 	for _, group := range c.Groups() {
-		if strings.TrimSpace(group.ToolName) == "" {
-			return errors.New(errToolNameRequired)
-		}
-		for _, action := range group.ActionsInOrder() {
-			if strings.TrimSpace(action.Name) == "" {
-				return fmt.Errorf("action name is required for tool %q", group.ToolName)
-			}
-			if action.Route.Handler == nil {
-				return fmt.Errorf("action %q has nil handler", action.ID)
-			}
-			if action.Route.InputSchema == nil {
-				return fmt.Errorf("action %q has nil input schema", action.ID)
-			}
-			if tool, actionName := toolutil.ParseMetaSchemaURI(action.SchemaURI); tool != action.ToolName || actionName != action.Name {
-				return fmt.Errorf("action %q has malformed schema URI %q", action.ID, action.SchemaURI)
-			}
-			for _, alias := range action.Aliases {
-				alias = strings.TrimSpace(strings.ToLower(alias))
-				if alias == "" {
-					continue
-				}
-				if existing, ok := seenAliases[alias]; ok && existing != action.ID {
-					return fmt.Errorf("alias %q maps to both %q and %q", alias, existing, action.ID)
-				}
-				seenAliases[alias] = action.ID
-			}
+		if err := validateCatalogGroup(group, seenAliases); err != nil {
+			return err
 		}
 	}
+	return nil
+}
+
+func validateCatalogGroup(group Group, seenAliases map[string]ActionID) error {
+	if strings.TrimSpace(group.ToolName) == "" {
+		return errors.New(errToolNameRequired)
+	}
+	for _, action := range group.ActionsInOrder() {
+		if err := validateCatalogAction(group, action, seenAliases); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateCatalogAction(group Group, action Action, seenAliases map[string]ActionID) error {
+	if strings.TrimSpace(action.Name) == "" {
+		return fmt.Errorf("action name is required for tool %q", group.ToolName)
+	}
+	if action.Route.Handler == nil {
+		return fmt.Errorf("action %q has nil handler", action.ID)
+	}
+	if action.Route.InputSchema == nil {
+		return fmt.Errorf("action %q has nil input schema", action.ID)
+	}
+	if tool, actionName := toolutil.ParseMetaSchemaURI(action.SchemaURI); tool != action.ToolName || actionName != action.Name {
+		return fmt.Errorf("action %q has malformed schema URI %q", action.ID, action.SchemaURI)
+	}
+	for _, alias := range action.Aliases {
+		if err := recordCatalogAlias(seenAliases, action.ID, alias); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func recordCatalogAlias(seenAliases map[string]ActionID, actionID ActionID, alias string) error {
+	alias = strings.TrimSpace(strings.ToLower(alias))
+	if alias == "" {
+		return nil
+	}
+	if existing, ok := seenAliases[alias]; ok && existing != actionID {
+		return fmt.Errorf("alias %q maps to both %q and %q", alias, existing, actionID)
+	}
+	seenAliases[alias] = actionID
 	return nil
 }
 

@@ -60,25 +60,19 @@ func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func issueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := issueOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, issueOptions(individualTool))
 }
 
 func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, issueOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, issueOptions(individualTool))
 }
 
 func issueUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := issueOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, issueOptions(individualTool))
 }
 
 func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := issueOptions("gitlab_issue_update")
-	options.Idempotent = true
 	options.Usage = "Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen; dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically."
 	options.Aliases = []string{"close issue", "reopen issue", "change issue state", "transition issue"}
 	options.RelatedActions = []string{"issue.get", "issue.delete", "issue.list"}
@@ -99,14 +93,11 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 			},
 		},
 	}
-	return toolutil.NewActionSpec("update", toolutil.RouteAction(client, Update), options)
+	return toolutil.NewUpdateActionSpec("update", toolutil.RouteAction(client, Update), options)
 }
 
 func issueDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := issueOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, issueOptions(individualTool))
 }
 
 func issueOptions(individualTool string) toolutil.ActionSpecOptions {
@@ -119,10 +110,7 @@ func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 }
 
 func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupIssueOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupIssueOptions(individualTool))
 }
 
 func groupIssueOptions(individualTool string) toolutil.ActionSpecOptions {

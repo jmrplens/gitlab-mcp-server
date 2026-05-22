@@ -15,10 +15,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func groupAnalyticsReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupAnalyticsOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupAnalyticsOptions(individualTool))
 }
 
 func groupAnalyticsOptions(individualTool string) toolutil.ActionSpecOptions {

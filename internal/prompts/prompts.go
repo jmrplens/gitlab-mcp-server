@@ -257,7 +257,7 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 	for _, j := range jobs {
 		line := fmt.Sprintf("- **%s** (%s): %s", j.Name, j.Stage, j.Status)
 		if j.FailureReason != "" {
-			line += fmt.Sprintf(" — reason: %s", j.FailureReason)
+			line += " — reason: " + j.FailureReason
 		}
 		switch j.Status {
 		case "failed":
@@ -661,7 +661,7 @@ func countBranchStats(branches []*gl.Branch) (merged, stale int) {
 			}
 		}
 	}
-	return
+	return merged, stale
 }
 
 // registerCompareBranchesPrompt registers the compare_branches prompt.
@@ -716,11 +716,12 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 	fmt.Fprintf(&b, "\n## File Changes (%d)\n\n", len(comparison.Diffs))
 	for _, d := range comparison.Diffs {
 		ct := "modified"
-		if d.NewFile {
+		switch {
+		case d.NewFile:
 			ct = "new"
-		} else if d.DeletedFile {
+		case d.DeletedFile:
 			ct = "deleted"
-		} else if d.RenamedFile {
+		case d.RenamedFile:
 			ct = "renamed"
 		}
 		fmt.Fprintf(&b, fmtListItem, d.NewPath, ct)
@@ -1383,7 +1384,7 @@ func countDiffLines(diff string) (additions, deletions int) {
 			deletions++
 		}
 	}
-	return
+	return additions, deletions
 }
 
 // isSensitivePath reports whether a file path matches known sensitive patterns
@@ -1438,7 +1439,7 @@ func categorizeDiffs(diffs []*gl.MergeRequestDiff) (highRisk, logic, tests, docs
 			logic = append(logic, d)
 		}
 	}
-	return
+	return highRisk, logic, tests, docs
 }
 
 // writeDiffGroup writes a section with per-file metrics and full diffs.

@@ -207,7 +207,7 @@ func defaultOutputPath(model string) string {
 // defaultComparisonOutputPath returns the default comparison output path.
 func defaultComparisonOutputPath() string {
 	stamp := time.Now().UTC().Format(timestampLayout)
-	return filepath.Join(defaultEvalDir, "comparison", fmt.Sprintf("%s-summary.md", stamp))
+	return filepath.Join(defaultEvalDir, "comparison", stamp+"-summary.md")
 }
 
 // defaultTraceDir returns the default trace dir.
@@ -222,7 +222,7 @@ func defaultTraceDir(reportPath string) string {
 func defaultTerminalLogPath(outputPath string) string {
 	if strings.TrimSpace(outputPath) == "" {
 		stamp := time.Now().UTC().Format(timestampLayout)
-		return filepath.Join(defaultEvalDir, "terminal", fmt.Sprintf("%s.log", stamp))
+		return filepath.Join(defaultEvalDir, "terminal", stamp+".log")
 	}
 	ext := filepath.Ext(outputPath)
 	if ext == "" {

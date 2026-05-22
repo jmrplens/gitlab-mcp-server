@@ -44,7 +44,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func interactiveCreateSpec(name string, route toolutil.ActionRoute, individualTool, usage, description string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, toolutil.ActionSpecOptions{
+	return toolutil.NewCreateActionSpec(name, route, toolutil.ActionSpecOptions{
 		Tags:           []string{"interactive", "elicitation"},
 		Usage:          usage,
 		OpenWorld:      true,
@@ -53,7 +53,7 @@ func interactiveCreateSpec(name string, route toolutil.ActionRoute, individualTo
 	})
 }
 
-func elicitationRoute[T any, R any](client *gitlabclient.Client, toolName, cancelMessage string, fn func(context.Context, *mcp.CallToolRequest, *gitlabclient.Client, T) (R, error)) toolutil.ActionRoute {
+func elicitationRoute[T, R any](client *gitlabclient.Client, toolName, cancelMessage string, fn func(context.Context, *mcp.CallToolRequest, *gitlabclient.Client, T) (R, error)) toolutil.ActionRoute {
 	route := toolutil.RouteActionWithRequest(client, fn)
 	route.Handler = func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := toolutil.UnmarshalParams[T](params)

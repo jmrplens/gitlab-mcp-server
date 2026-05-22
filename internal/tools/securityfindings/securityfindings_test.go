@@ -89,49 +89,37 @@ func TestList_Success(t *testing.T) {
 	if len(out.Findings) != 1 {
 		t.Fatalf("expected 1 finding, got %d", len(out.Findings))
 	}
-	f := out.Findings[0]
-	if f.UUID != "550e8400-e29b-41d4-a716-446655440001" {
-		t.Errorf("UUID = %q, want 550e8400-e29b-41d4-a716-446655440001", f.UUID)
+	assertSampleSecurityFinding(t, out.Findings[0])
+	assertSecurityFindingPagination(t, out)
+}
+
+func assertSampleSecurityFinding(t *testing.T, finding FindingItem) {
+	t.Helper()
+	if finding.UUID != "550e8400-e29b-41d4-a716-446655440001" || finding.Name != "Cross-site Scripting (XSS)" {
+		t.Fatalf("finding identity = %+v, want sample XSS finding", finding)
 	}
-	if f.Name != "Cross-site Scripting (XSS)" {
-		t.Errorf("Name = %q, want Cross-site Scripting (XSS)", f.Name)
+	if finding.Severity != "HIGH" || finding.Confidence != "MEDIUM" || finding.ReportType != "SAST" || finding.State != "DETECTED" {
+		t.Errorf("finding classification = %+v, want HIGH/MEDIUM/SAST/DETECTED", finding)
 	}
-	if f.Severity != "HIGH" {
-		t.Errorf("Severity = %q, want HIGH", f.Severity)
+	if finding.Scanner == nil || finding.Scanner.Name != "Semgrep" || finding.Scanner.ExternalID != "semgrep-sast" {
+		t.Errorf("Scanner = %+v, want Semgrep semgrep-sast", finding.Scanner)
 	}
-	if f.Confidence != "MEDIUM" {
-		t.Errorf("Confidence = %q, want MEDIUM", f.Confidence)
+	if finding.Location == nil || finding.Location.File != "src/app.js" || finding.Location.StartLine != 42 {
+		t.Errorf("Location = %+v, want src/app.js:42", finding.Location)
 	}
-	if f.ReportType != "SAST" {
-		t.Errorf("ReportType = %q, want SAST", f.ReportType)
+	if len(finding.Identifiers) != 2 || finding.Identifiers[0].Name != "CWE-79" {
+		t.Fatalf("Identifiers = %+v, want CWE-79 first plus second identifier", finding.Identifiers)
 	}
-	if f.State != "DETECTED" {
-		t.Errorf("State = %q, want DETECTED", f.State)
+	if finding.Evidence == nil || finding.Evidence.Data != "element.innerHTML = userInput;" {
+		t.Errorf("Evidence.Data = %v, want evidence data", finding.Evidence)
 	}
-	if f.Scanner == nil || f.Scanner.Name != "Semgrep" {
-		t.Errorf("Scanner.Name = %v, want Semgrep", f.Scanner)
+	if finding.VulnID != "gid://gitlab/Vulnerability/12345" {
+		t.Errorf("VulnID = %q, want gid://gitlab/Vulnerability/12345", finding.VulnID)
 	}
-	if f.Scanner.ExternalID != "semgrep-sast" {
-		t.Errorf("Scanner.ExternalID = %q, want semgrep-sast", f.Scanner.ExternalID)
-	}
-	if f.Location == nil || f.Location.File != "src/app.js" {
-		t.Errorf("Location.File = %v, want src/app.js", f.Location)
-	}
-	if f.Location.StartLine != 42 {
-		t.Errorf("Location.StartLine = %d, want 42", f.Location.StartLine)
-	}
-	if len(f.Identifiers) != 2 {
-		t.Fatalf("expected 2 identifiers, got %d", len(f.Identifiers))
-	}
-	if f.Identifiers[0].Name != "CWE-79" {
-		t.Errorf("Identifier[0].Name = %q, want CWE-79", f.Identifiers[0].Name)
-	}
-	if f.Evidence == nil || f.Evidence.Data != "element.innerHTML = userInput;" {
-		t.Errorf("Evidence.Data = %v, want evidence data", f.Evidence)
-	}
-	if f.VulnID != "gid://gitlab/Vulnerability/12345" {
-		t.Errorf("VulnID = %q, want gid://gitlab/Vulnerability/12345", f.VulnID)
-	}
+}
+
+func assertSecurityFindingPagination(t *testing.T, out ListOutput) {
+	t.Helper()
 	if !out.Pagination.HasNextPage {
 		t.Error("expected HasNextPage=true")
 	}

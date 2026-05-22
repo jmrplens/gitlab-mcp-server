@@ -21,7 +21,7 @@ func TestRun_DefaultMetaToolsOutputsSortedJSON(t *testing.T) {
 	if len(tools) == 0 {
 		t.Fatal("run() emitted no tools")
 	}
-	if !slices.IsSortedFunc(tools, func(a dockerTool, b dockerTool) int {
+	if !slices.IsSortedFunc(tools, func(a, b dockerTool) int {
 		return strings.Compare(a.Name, b.Name)
 	}) {
 		t.Fatalf("run() emitted tools out of order: %#v", tools)

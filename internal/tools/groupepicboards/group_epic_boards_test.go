@@ -43,35 +43,11 @@ func TestList(t *testing.T) {
 		validate  func(t *testing.T, out ListOutput)
 	}{
 		{
-			name:  "returns boards on success",
-			input: ListInput{GroupID: testGroupID},
-			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				testutil.AssertRequestMethod(t, r, http.MethodGet)
-				testutil.AssertRequestPath(t, r, pathBoards)
-				testutil.RespondJSON(w, http.StatusOK, "["+boardJSON+"]")
-			}),
+			name:      "returns boards on success",
+			input:     ListInput{GroupID: testGroupID},
+			handler:   listBoardsSuccessHandler(t),
 			wantCount: 1,
-			validate: func(t *testing.T, out ListOutput) {
-				t.Helper()
-				if out.Boards[0].ID != 1 {
-					t.Errorf("Boards[0].ID = %d, want 1", out.Boards[0].ID)
-				}
-				if out.Boards[0].Name != "Epic Board" {
-					t.Errorf("Boards[0].Name = %q, want %q", out.Boards[0].Name, "Epic Board")
-				}
-				if len(out.Boards[0].Labels) != 1 {
-					t.Fatalf("len(Labels) = %d, want 1", len(out.Boards[0].Labels))
-				}
-				if out.Boards[0].Labels[0] != "Priority" {
-					t.Errorf("Labels[0] = %q, want %q", out.Boards[0].Labels[0], "Priority")
-				}
-				if len(out.Boards[0].Lists) != 1 {
-					t.Fatalf("len(Lists) = %d, want 1", len(out.Boards[0].Lists))
-				}
-				if out.Boards[0].Lists[0].Label != "Priority" {
-					t.Errorf("Lists[0].Label = %q, want %q", out.Boards[0].Lists[0].Label, "Priority")
-				}
-			},
+			validate:  assertListBoardDetails,
 		},
 		{
 			name:  "returns empty boards for empty array",
@@ -136,6 +112,48 @@ func TestList(t *testing.T) {
 	}
 }
 
+func listBoardsSuccessHandler(t *testing.T) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
+		testutil.AssertRequestPath(t, r, pathBoards)
+		testutil.RespondJSON(w, http.StatusOK, "["+boardJSON+"]")
+	}
+}
+
+func assertListBoardDetails(t *testing.T, out ListOutput) {
+	t.Helper()
+	board := out.Boards[0]
+	if board.ID != 1 {
+		t.Errorf("Boards[0].ID = %d, want 1", board.ID)
+	}
+	if board.Name != "Epic Board" {
+		t.Errorf("Boards[0].Name = %q, want %q", board.Name, "Epic Board")
+	}
+	assertListBoardLabels(t, board)
+	assertListBoardLists(t, board)
+}
+
+func assertListBoardLabels(t *testing.T, board Output) {
+	t.Helper()
+	if len(board.Labels) != 1 {
+		t.Fatalf("len(Labels) = %d, want 1", len(board.Labels))
+	}
+	if board.Labels[0] != "Priority" {
+		t.Errorf("Labels[0] = %q, want %q", board.Labels[0], "Priority")
+	}
+}
+
+func assertListBoardLists(t *testing.T, board Output) {
+	t.Helper()
+	if len(board.Lists) != 1 {
+		t.Fatalf("len(Lists) = %d, want 1", len(board.Lists))
+	}
+	if board.Lists[0].Label != "Priority" {
+		t.Errorf("Lists[0].Label = %q, want %q", board.Lists[0].Label, "Priority")
+	}
+}
+
 // TestList_CancelledContext verifies the List handler returns an error
 // immediately when the context is already cancelled.
 func TestList_CancelledContext(t *testing.T) {
@@ -152,13 +170,7 @@ func TestList_CancelledContext(t *testing.T) {
 // TestGet validates the Get handler for group epic boards across success,
 // error, validation, and edge-case scenarios.
 func TestGet(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    GetInput
-		handler  http.HandlerFunc
-		wantErr  bool
-		validate func(t *testing.T, out Output)
-	}{
+	tests := []getCase{
 		{
 			name:  "returns board on success",
 			input: GetInput{GroupID: testGroupID, BoardID: 1},
@@ -167,27 +179,7 @@ func TestGet(t *testing.T) {
 				testutil.AssertRequestPath(t, r, pathBoard1)
 				testutil.RespondJSON(w, http.StatusOK, boardJSON)
 			}),
-			validate: func(t *testing.T, out Output) {
-				t.Helper()
-				if out.ID != 1 {
-					t.Errorf("ID = %d, want 1", out.ID)
-				}
-				if out.Name != "Epic Board" {
-					t.Errorf("Name = %q, want %q", out.Name, "Epic Board")
-				}
-				if len(out.Labels) != 1 || out.Labels[0] != "Priority" {
-					t.Errorf("Labels = %v, want [Priority]", out.Labels)
-				}
-				if len(out.Lists) != 1 {
-					t.Fatalf("len(Lists) = %d, want 1", len(out.Lists))
-				}
-				if out.Lists[0].LabelID != 10 {
-					t.Errorf("Lists[0].LabelID = %d, want 10", out.Lists[0].LabelID)
-				}
-				if out.Lists[0].Position != 0 {
-					t.Errorf("Lists[0].Position = %d, want 0", out.Lists[0].Position)
-				}
-			},
+			validate: assertEpicBoardDetails,
 		},
 		{
 			name:  "returns board with no labels and no lists",
@@ -195,18 +187,7 @@ func TestGet(t *testing.T) {
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"Empty Board"}`)
 			}),
-			validate: func(t *testing.T, out Output) {
-				t.Helper()
-				if out.Name != "Empty Board" {
-					t.Errorf("Name = %q, want %q", out.Name, "Empty Board")
-				}
-				if len(out.Labels) != 0 {
-					t.Errorf("len(Labels) = %d, want 0", len(out.Labels))
-				}
-				if len(out.Lists) != 0 {
-					t.Errorf("len(Lists) = %d, want 0", len(out.Lists))
-				}
-			},
+			validate: assertEmptyEpicBoard,
 		},
 		{
 			name:  "handles list entry without label",
@@ -214,21 +195,7 @@ func TestGet(t *testing.T) {
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"B","lists":[{"id":50,"position":2}]}`)
 			}),
-			validate: func(t *testing.T, out Output) {
-				t.Helper()
-				if len(out.Lists) != 1 {
-					t.Fatalf("len(Lists) = %d, want 1", len(out.Lists))
-				}
-				if out.Lists[0].Label != "" {
-					t.Errorf("Lists[0].Label = %q, want empty", out.Lists[0].Label)
-				}
-				if out.Lists[0].LabelID != 0 {
-					t.Errorf("Lists[0].LabelID = %d, want 0", out.Lists[0].LabelID)
-				}
-				if out.Lists[0].Position != 2 {
-					t.Errorf("Lists[0].Position = %d, want 2", out.Lists[0].Position)
-				}
-			},
+			validate: assertBoardListWithoutLabel,
 		},
 		{
 			name:  "handles null label entry in labels array",
@@ -236,15 +203,7 @@ func TestGet(t *testing.T) {
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"B","labels":[null,{"id":1,"name":"Bug"}]}`)
 			}),
-			validate: func(t *testing.T, out Output) {
-				t.Helper()
-				if len(out.Labels) != 1 {
-					t.Fatalf("len(Labels) = %d, want 1", len(out.Labels))
-				}
-				if out.Labels[0] != "Bug" {
-					t.Errorf("Labels[0] = %q, want %q", out.Labels[0], "Bug")
-				}
-			},
+			validate: assertNullLabelFiltered,
 		},
 		{
 			name:  "returns error for missing group_id",
@@ -290,15 +249,89 @@ func TestGet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, tt.handler)
-			out, err := Get(context.Background(), client, tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("Get() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.validate != nil {
-				tt.validate(t, out)
-			}
+			runGetCase(t, tt)
 		})
+	}
+}
+
+func assertEpicBoardDetails(t *testing.T, out Output) {
+	t.Helper()
+	if out.ID != 1 {
+		t.Errorf("ID = %d, want 1", out.ID)
+	}
+	if out.Name != "Epic Board" {
+		t.Errorf("Name = %q, want %q", out.Name, "Epic Board")
+	}
+	if len(out.Labels) != 1 || out.Labels[0] != "Priority" {
+		t.Errorf("Labels = %v, want [Priority]", out.Labels)
+	}
+	if len(out.Lists) != 1 {
+		t.Fatalf("len(Lists) = %d, want 1", len(out.Lists))
+	}
+	if out.Lists[0].LabelID != 10 {
+		t.Errorf("Lists[0].LabelID = %d, want 10", out.Lists[0].LabelID)
+	}
+	if out.Lists[0].Position != 0 {
+		t.Errorf("Lists[0].Position = %d, want 0", out.Lists[0].Position)
+	}
+}
+
+func assertEmptyEpicBoard(t *testing.T, out Output) {
+	t.Helper()
+	if out.Name != "Empty Board" {
+		t.Errorf("Name = %q, want %q", out.Name, "Empty Board")
+	}
+	if len(out.Labels) != 0 {
+		t.Errorf("len(Labels) = %d, want 0", len(out.Labels))
+	}
+	if len(out.Lists) != 0 {
+		t.Errorf("len(Lists) = %d, want 0", len(out.Lists))
+	}
+}
+
+func assertBoardListWithoutLabel(t *testing.T, out Output) {
+	t.Helper()
+	if len(out.Lists) != 1 {
+		t.Fatalf("len(Lists) = %d, want 1", len(out.Lists))
+	}
+	if out.Lists[0].Label != "" {
+		t.Errorf("Lists[0].Label = %q, want empty", out.Lists[0].Label)
+	}
+	if out.Lists[0].LabelID != 0 {
+		t.Errorf("Lists[0].LabelID = %d, want 0", out.Lists[0].LabelID)
+	}
+	if out.Lists[0].Position != 2 {
+		t.Errorf("Lists[0].Position = %d, want 2", out.Lists[0].Position)
+	}
+}
+
+func assertNullLabelFiltered(t *testing.T, out Output) {
+	t.Helper()
+	if len(out.Labels) != 1 {
+		t.Fatalf("len(Labels) = %d, want 1", len(out.Labels))
+	}
+	if out.Labels[0] != "Bug" {
+		t.Errorf("Labels[0] = %q, want %q", out.Labels[0], "Bug")
+	}
+}
+
+type getCase struct {
+	name     string
+	input    GetInput
+	handler  http.HandlerFunc
+	wantErr  bool
+	validate func(t *testing.T, out Output)
+}
+
+func runGetCase(t *testing.T, tt getCase) {
+	t.Helper()
+	client := testutil.NewTestClient(t, tt.handler)
+	out, err := Get(context.Background(), client, tt.input)
+	if (err != nil) != tt.wantErr {
+		t.Fatalf("Get() error = %v, wantErr %v", err, tt.wantErr)
+	}
+	if tt.validate != nil {
+		tt.validate(t, out)
 	}
 }
 

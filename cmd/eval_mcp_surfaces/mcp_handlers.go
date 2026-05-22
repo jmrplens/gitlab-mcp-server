@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -111,7 +110,7 @@ func evalElicitationTextValue(fieldName string) string {
 	case "description":
 		return "Created by eval_mcp_surfaces elicitation handler"
 	case "name":
-		return fmt.Sprintf("eval-elicit-resource-%s", liveUniqueSuffix())
+		return "eval-elicit-resource-" + liveUniqueSuffix()
 	case "source_branch":
 		return liveFixtureFeatureRef
 	case "target_branch", "default_branch":

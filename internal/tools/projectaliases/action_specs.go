@@ -27,21 +27,15 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func projectAliasReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := projectAliasOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, projectAliasOptions(individualTool))
 }
 
 func projectAliasCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, projectAliasOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, projectAliasOptions(individualTool))
 }
 
 func projectAliasDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := projectAliasOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, projectAliasOptions(individualTool))
 }
 
 func projectAliasOptions(individualTool string) toolutil.ActionSpecOptions {

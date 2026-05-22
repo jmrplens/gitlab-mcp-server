@@ -21,10 +21,7 @@ func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func issueEventReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := issueEventOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, issueEventOptions(individualTool))
 }
 
 func issueEventOptions(individualTool string) toolutil.ActionSpecOptions {
@@ -49,10 +46,7 @@ func MergeRequestActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec 
 }
 
 func mergeRequestEventReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mergeRequestEventOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, mergeRequestEventOptions(individualTool))
 }
 
 func mergeRequestEventOptions(individualTool string) toolutil.ActionSpecOptions {

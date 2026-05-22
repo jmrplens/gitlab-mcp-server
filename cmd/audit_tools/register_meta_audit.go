@@ -6,7 +6,6 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -185,21 +184,4 @@ func referencedRegisterMetaPackages(registerMetaPath string) (map[string]struct{
 		return true
 	})
 	return references, nil
-}
-
-func repositoryRoot(start string) (string, error) {
-	current, err := filepath.Abs(start)
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, statErr := os.Stat(filepath.Join(current, "go.mod")); statErr == nil {
-			return current, nil
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", fmt.Errorf("go.mod not found from %s", start)
-		}
-		current = parent
-	}
 }

@@ -300,58 +300,16 @@ func (m tuiModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
 		case "enter":
-			if m.gitlabFocus == 0 {
-				m.urlInput.SetValue(effectiveGitLabURL(m.urlInput.Value()))
-				m.gitlabFocus = 1
-				m.urlInput.Blur()
-				m.tokenInput.Focus()
-				return m, textinput.Blink
-			}
-			m.urlInput.SetValue(effectiveGitLabURL(m.urlInput.Value()))
-			if _, parseErr := url.ParseRequestURI(m.urlInput.Value()); parseErr != nil {
-				m.err = fmt.Sprintf("Invalid URL: %v", parseErr)
-				return m, nil
-			}
-			if m.tokenInput.Value() == "" {
-				m.err = "Token is required"
-				return m, nil
-			}
-			m.err = ""
-			// Skip advanced options, go straight to clients
-			m.step = tuiStepClients
-			m.tokenInput.Blur()
-			return m, nil
+			return m.handleGitLabEnter()
 		case "ctrl+t":
 			_ = openBrowserFn(TokenCreationURL(m.urlInput.Value()))
 			return m, nil
 		case "ctrl+o":
-			// Only from token field: open advanced options
-			if m.gitlabFocus == 1 {
-				m.urlInput.SetValue(effectiveGitLabURL(m.urlInput.Value()))
-				if m.tokenInput.Value() == "" {
-					m.err = "Token is required"
-					return m, nil
-				}
-				m.err = ""
-				m.showAdvanced = true
-				m.step = tuiStepOptions
-				m.tokenInput.Blur()
-				return m, nil
-			}
+			return m.handleGitLabAdvanced()
 		case "shift+tab":
-			if m.gitlabFocus == 1 {
-				m.gitlabFocus = 0
-				m.tokenInput.Blur()
-				m.urlInput.Focus()
-				return m, textinput.Blink
-			}
+			return m.handleGitLabShiftTab()
 		case "tab":
-			if m.gitlabFocus == 0 {
-				m.gitlabFocus = 1
-				m.urlInput.Blur()
-				m.tokenInput.Focus()
-				return m, textinput.Blink
-			}
+			return m.handleGitLabTab()
 		}
 	}
 
@@ -362,6 +320,66 @@ func (m tuiModel) updateGitLab(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tokenInput, cmd = m.tokenInput.Update(msg)
 	}
 	return m, cmd
+}
+
+func (m tuiModel) handleGitLabEnter() (tea.Model, tea.Cmd) {
+	if m.gitlabFocus == 0 {
+		return m.focusGitLabToken()
+	}
+	m.urlInput.SetValue(effectiveGitLabURL(m.urlInput.Value()))
+	if _, parseErr := url.ParseRequestURI(m.urlInput.Value()); parseErr != nil {
+		m.err = fmt.Sprintf("Invalid URL: %v", parseErr)
+		return m, nil
+	}
+	if m.tokenInput.Value() == "" {
+		m.err = "Token is required"
+		return m, nil
+	}
+	m.err = ""
+	m.step = tuiStepClients
+	m.tokenInput.Blur()
+	return m, nil
+}
+
+func (m tuiModel) handleGitLabAdvanced() (tea.Model, tea.Cmd) {
+	if m.gitlabFocus != 1 {
+		return m, nil
+	}
+	m.urlInput.SetValue(effectiveGitLabURL(m.urlInput.Value()))
+	if m.tokenInput.Value() == "" {
+		m.err = "Token is required"
+		return m, nil
+	}
+	m.err = ""
+	m.showAdvanced = true
+	m.step = tuiStepOptions
+	m.tokenInput.Blur()
+	return m, nil
+}
+
+func (m tuiModel) handleGitLabShiftTab() (tea.Model, tea.Cmd) {
+	if m.gitlabFocus != 1 {
+		return m, nil
+	}
+	m.gitlabFocus = 0
+	m.tokenInput.Blur()
+	m.urlInput.Focus()
+	return m, textinput.Blink
+}
+
+func (m tuiModel) handleGitLabTab() (tea.Model, tea.Cmd) {
+	if m.gitlabFocus != 0 {
+		return m, nil
+	}
+	return m.focusGitLabToken()
+}
+
+func (m tuiModel) focusGitLabToken() (tea.Model, tea.Cmd) {
+	m.urlInput.SetValue(effectiveGitLabURL(m.urlInput.Value()))
+	m.gitlabFocus = 1
+	m.urlInput.Blur()
+	m.tokenInput.Focus()
+	return m, textinput.Blink
 }
 
 // updateOptions handles keyboard navigation and toggles for advanced wizard
@@ -645,13 +663,14 @@ func (m tuiModel) renderProgress(width int) string {
 	var parts []string
 	for i, s := range steps {
 		var icon, label string
-		if s.completed {
+		switch {
+		case s.completed:
 			icon = tuiProgressDone.Render("✓")
 			label = tuiProgressDone.Render(s.name)
-		} else if s.active {
+		case s.active:
 			icon = tuiProgressActive.Render("●")
 			label = tuiProgressActive.Render(s.name)
-		} else {
+		default:
 			icon = tuiProgressPending.Render("○")
 			label = tuiProgressPending.Render(s.name)
 		}
@@ -759,9 +778,9 @@ func (m tuiModel) optionRows() []tuiOptionRow {
 		{"Ignore PAT scopes", boolLabel(m.optIgnoreScopes), "Skip token scope detection and register tools without scope filtering."},
 		{"Excluded tools", emptyLabel(m.optExcludeTools), "Comma-separated tool names to omit from registration."},
 		{"Upload max file size", m.optUploadMaxFileSize, "Maximum file size accepted by upload and file tools."},
-		{"Auto-update mode", AutoUpdateModeOptions[m.optAutoUpdateMode], "true applies pre-start updates, check logs only, false disables."},
+		{"Auto-update mode", AutoUpdateModeOptions[m.optAutoUpdateMode], "true applies background updates, check logs only, false disables."},
 		{"Auto-update repository", m.optAutoUpdateRepo, "GitHub owner/repo used for release update checks."},
-		{"Auto-update timeout", m.optAutoUpdateTimeout, "Maximum time spent on the stdio pre-start update check."},
+		{"Auto-update timeout", m.optAutoUpdateTimeout, "Maximum time spent on startup/background update checks."},
 		{"Rate limit RPS", m.optRateLimitRPS, "Global stdio tools/call limit; 0 disables the limiter."},
 		{"Rate limit burst", m.optRateLimitBurst, "Token-bucket burst size when rate limiting is enabled."},
 		{"YOLO mode", boolLabel(m.optYolo), "Enable less restrictive local execution safeguards."},

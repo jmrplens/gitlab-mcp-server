@@ -191,6 +191,10 @@ func TestProjectCreate_Validation(t *testing.T) {
 		{"missing project_id", ProjectCreateInput{Name: "x", Scopes: []string{"api"}}, errProjectIDRequired},
 		{"missing name", ProjectCreateInput{ProjectID: "42", Scopes: []string{"api"}}, "name is required"},
 		{"missing scopes", ProjectCreateInput{ProjectID: "42", Name: "x"}, "scopes is required"},
+		{"empty scope", ProjectCreateInput{ProjectID: "42", Name: "x", Scopes: []string{""}}, "must not be empty"},
+		{"scope with whitespace", ProjectCreateInput{ProjectID: "42", Name: "x", Scopes: []string{" api"}}, "surrounding whitespace"},
+		{"unsupported scope", ProjectCreateInput{ProjectID: "42", Name: "x", Scopes: []string{"everything"}}, "is not supported"},
+		{"duplicate scope", ProjectCreateInput{ProjectID: "42", Name: "x", Scopes: []string{"api", "api"}}, "duplicated"},
 		{"bad date", ProjectCreateInput{ProjectID: "42", Name: "x", Scopes: []string{"api"}, ExpiresAt: "not-a-date"}, errInvalidExpiresAt},
 	}
 

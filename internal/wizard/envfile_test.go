@@ -184,7 +184,7 @@ func TestLoadExistingConfigFromPath_ValidFile(t *testing.T) {
 		"LOG_LEVEL=debug\n" +
 		"YOLO_MODE=true\n"
 
-	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("writing test file: %v", err)
 	}
 
@@ -224,7 +224,7 @@ func TestLoadExistingConfigFromPath_LegacyMetaToolsDynamic(t *testing.T) {
 	content := "GITLAB_URL=https://gitlab.example.com\n" +
 		"GITLAB_TOKEN=test-token-abc123def456\n" +
 		"META_TOOLS=dynamic\n"
-	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("writing test file: %v", err)
 	}
 
@@ -252,7 +252,7 @@ func TestLoadExistingConfigFromPath_EmptyFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, EnvFileName)
 
-	if err := os.WriteFile(path, []byte(""), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(""), 0o600); err != nil {
 		t.Fatalf("writing test file: %v", err)
 	}
 
@@ -269,7 +269,7 @@ func TestLoadExistingConfigFromPath_OnlyComments(t *testing.T) {
 	path := filepath.Join(dir, EnvFileName)
 
 	content := "# Just comments\n# Another comment\n\n"
-	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("writing test file: %v", err)
 	}
 
@@ -286,7 +286,7 @@ func TestLoadExistingConfigFromPath_OnlyPreferences(t *testing.T) {
 	path := filepath.Join(dir, EnvFileName)
 
 	content := "LOG_LEVEL=debug\nTOOL_SURFACE=dynamic\n"
-	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("writing test file: %v", err)
 	}
 
@@ -306,7 +306,7 @@ func TestLoadExistingConfigFromPath_SkipTLSFalse(t *testing.T) {
 	path := filepath.Join(dir, EnvFileName)
 
 	content := "GITLAB_URL=https://gitlab.example.com\nGITLAB_SKIP_TLS_VERIFY=false\n"
-	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("writing test file: %v", err)
 	}
 
@@ -327,7 +327,7 @@ func TestLoadExistingConfigFromPath_SensibleDefaults(t *testing.T) {
 	path := filepath.Join(dir, EnvFileName)
 
 	content := "GITLAB_URL=https://gitlab.example.com\n"
-	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("writing test file: %v", err)
 	}
 

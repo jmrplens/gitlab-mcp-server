@@ -32,7 +32,7 @@ func TestApplyToGroupSpecs_ProjectsAllGroups(t *testing.T) {
 // TestApplyToGroupSpec_ClonesAndUsesToolNameDomain verifies group projection clones inputs and falls back to the tool name domain.
 func TestApplyToGroupSpec_ClonesAndUsesToolNameDomain(t *testing.T) {
 	route := toolutil.ActionRoute{
-		Handler:     func(_ context.Context, _ map[string]any) (any, error) { return nil, nil },
+		Handler:     func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil },
 		InputSchema: map[string]any{"properties": map[string]any{"scope": map[string]any{}}},
 	}
 	original := actioncatalog.CatalogGroupSpec{
@@ -55,7 +55,7 @@ func TestApplyToGroupSpec_ClonesAndUsesToolNameDomain(t *testing.T) {
 // TestApplyToActionSpecs_ProjectsCompatibilityMetadata verifies ApplyToActionSpecs projects compatibility metadata.
 func TestApplyToActionSpecs_ProjectsCompatibilityMetadata(t *testing.T) {
 	route := toolutil.ActionRoute{
-		Handler: func(_ context.Context, _ map[string]any) (any, error) { return nil, nil },
+		Handler: func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil },
 		InputSchema: map[string]any{"properties": map[string]any{
 			"project_id": map[string]any{},
 			"scope":      map[string]any{},
@@ -165,6 +165,7 @@ func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
 		"merge_request.time_spent_set":          "merge_request.spent_time_add",
 		"release_link.create_batch":             "release.link_create_batch",
 		"release_link.link_create_batch":        "release.link_create_batch",
+		"terraform_state.unlock":                "admin.terraform_state_unlock",
 	} {
 		canonical, ok = NormalizeActionAlias(alias)
 		if !ok || canonical != want {

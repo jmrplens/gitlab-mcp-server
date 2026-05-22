@@ -26,6 +26,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
@@ -337,83 +338,94 @@ func TestHTTPHandler_Initialize_AdvertisesListChangedCapabilities(t *testing.T) 
 // that the initialize handshake mirrors the selected resource and prompt surface.
 func TestHTTPHandler_Initialize_CapabilitySurfaceControlsPromptsCapability(t *testing.T) {
 	client := newMockGitLabClient(t)
-	testCases := []struct {
-		name                  string
-		capabilitySurface     string
-		wantPromptsCapability bool
-	}{
+	testCases := []initializeCapabilityCase{
 		{name: "full", capabilitySurface: config.CapabilitySurfaceFull, wantPromptsCapability: true},
 		{name: "minimal", capabilitySurface: config.CapabilitySurfaceMinimal, wantPromptsCapability: false},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			server := mustCreateServer(t, client, &config.ServerConfig{
-				MetaTools:         true,
-				ToolSurface:       config.ToolSurfaceDynamic,
-				CapabilitySurface: tc.capabilitySurface,
-			})
-			handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-				return server
-			}, nil)
-			ts := httptest.NewServer(handler)
-			t.Cleanup(ts.Close)
-
-			body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}`
-			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
-			if err != nil {
-				t.Fatalf("failed to create request: %v", err)
-			}
-			req.Header.Set(hdrContentType, mimeJSON)
-			req.Header.Set("Accept", mimeJSONSSE)
-
-			resp, err := testHTTPClient.Do(req)
-			if err != nil {
-				t.Fatalf("request failed: %v", err)
-			}
-			defer resp.Body.Close()
-
-			sessionID := resp.Header.Get(hdrMCPSessionID)
-			t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
-
-			result := parseJSONRPCResponse(t, resp)
-			res, ok := result["result"].(map[string]any)
-			if !ok {
-				t.Fatalf("response missing 'result' field: %v", result)
-			}
-			caps, ok := res["capabilities"].(map[string]any)
-			if !ok {
-				t.Fatalf("response missing 'capabilities' field: %v", res)
-			}
-
-			for _, key := range []string{"tools", "resources"} {
-				group, gok := caps[key].(map[string]any)
-				if !gok {
-					t.Fatalf("capabilities.%s missing or not an object: %v", key, caps[key])
-				}
-				if got := group["listChanged"]; got != true {
-					t.Fatalf("capabilities.%s.listChanged = %v, want true", key, got)
-				}
-			}
-
-			promptsCapabilityValue, hasPromptsCapability := caps["prompts"]
-			if tc.wantPromptsCapability {
-				if !hasPromptsCapability {
-					t.Fatal("full capability surface should advertise prompts")
-				}
-				promptsCapability, promptCapabilityIsObject := promptsCapabilityValue.(map[string]any)
-				if !promptCapabilityIsObject {
-					t.Fatalf("capabilities.prompts is not an object: %v", promptsCapabilityValue)
-				}
-				if got := promptsCapability["listChanged"]; got != true {
-					t.Fatalf("capabilities.prompts.listChanged = %v, want true", got)
-				}
-				return
-			}
-			if hasPromptsCapability {
-				t.Fatalf("minimal capability surface advertised prompts: %v", promptsCapabilityValue)
-			}
+			server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic, CapabilitySurface: tc.capabilitySurface})
+			caps := initializeCapabilities(t, server)
+			assertListChangedCapabilities(t, caps, "tools", "resources")
+			assertPromptsCapability(t, caps, tc.wantPromptsCapability)
 		})
+	}
+}
+
+type initializeCapabilityCase struct {
+	name                  string
+	capabilitySurface     string
+	wantPromptsCapability bool
+}
+
+func initializeCapabilities(t *testing.T, server *mcp.Server) map[string]any {
+	t.Helper()
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { return server }, nil)
+	ts := httptest.NewServer(handler)
+	t.Cleanup(ts.Close)
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test-client","version":"1.0.0"}}}`
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	t.Cleanup(func() { closeMCPSession(t, ts.URL, resp.Header.Get(hdrMCPSessionID)) })
+	return responseCapabilities(t, parseJSONRPCResponse(t, resp))
+}
+
+func responseCapabilities(t *testing.T, result map[string]any) map[string]any {
+	t.Helper()
+	res, ok := result["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("response missing 'result' field: %v", result)
+	}
+	caps, ok := res["capabilities"].(map[string]any)
+	if !ok {
+		t.Fatalf("response missing 'capabilities' field: %v", res)
+	}
+	return caps
+}
+
+func assertListChangedCapabilities(t *testing.T, caps map[string]any, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		group, ok := caps[key].(map[string]any)
+		if !ok {
+			t.Fatalf("capabilities.%s missing or not an object: %v", key, caps[key])
+		}
+		if got := group["listChanged"]; got != true {
+			t.Fatalf("capabilities.%s.listChanged = %v, want true", key, got)
+		}
+	}
+}
+
+func assertPromptsCapability(t *testing.T, caps map[string]any, wantPrompts bool) {
+	t.Helper()
+	promptsCapabilityValue, hasPromptsCapability := caps["prompts"]
+	if !wantPrompts {
+		if hasPromptsCapability {
+			t.Fatalf("minimal capability surface advertised prompts: %v", promptsCapabilityValue)
+		}
+		return
+	}
+	if !hasPromptsCapability {
+		t.Fatal("full capability surface should advertise prompts")
+	}
+	promptsCapability, ok := promptsCapabilityValue.(map[string]any)
+	if !ok {
+		t.Fatalf("capabilities.prompts is not an object: %v", promptsCapabilityValue)
+	}
+	if got := promptsCapability["listChanged"]; got != true {
+		t.Fatalf("capabilities.prompts.listChanged = %v, want true", got)
 	}
 }
 
@@ -803,13 +815,16 @@ func TestRunWithContext_HTTPInvalidURL(t *testing.T) {
 // TestCreateServer_ReturnsConfiguredServer verifies that [createServer]
 // produces a valid MCP server with tools, resources, and prompts registered.
 func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
-	client := newMockGitLabClient(t)
-	cfg := &config.ServerConfig{MetaTools: false}
-	server := mustCreateServer(t, client, cfg)
+	serverInfo := initializeTestServer(t, &config.ServerConfig{MetaTools: false})
+	if name := serverInfo["name"]; name != serverName {
+		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
+	}
+}
 
-	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		return server
-	}, nil)
+func initializeTestServer(t *testing.T, cfg *config.ServerConfig) map[string]any {
+	t.Helper()
+	server := mustCreateServer(t, newMockGitLabClient(t), cfg)
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { return server }, nil)
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 
@@ -826,7 +841,6 @@ func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 
 	sessionID := resp.Header.Get(hdrMCPSessionID)
 	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
-
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
@@ -840,9 +854,7 @@ func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
 	if !ok {
 		t.Fatalf("response missing 'serverInfo': %v", res)
 	}
-	if name := serverInfo["name"]; name != serverName {
-		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
-	}
+	return serverInfo
 }
 
 // TestPrintHelp_ContainsExpectedSections verifies that printHelp outputs
@@ -985,43 +997,7 @@ func TestProjectMetadata_Constants(t *testing.T) {
 // TestCreateServer_MetaToolsEnabled verifies that createServer registers
 // meta-tools when MetaTools is true and returns an operational MCP server.
 func TestCreateServer_MetaToolsEnabled(t *testing.T) {
-	client := newMockGitLabClient(t)
-	cfg := &config.ServerConfig{MetaTools: true}
-	server := mustCreateServer(t, client, cfg)
-
-	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		return server
-	}, nil)
-	ts := httptest.NewServer(handler)
-	t.Cleanup(ts.Close)
-
-	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
-	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, ts.URL, strings.NewReader(body))
-	req.Header.Set(hdrContentType, mimeJSON)
-	req.Header.Set("Accept", mimeJSONSSE)
-
-	resp, err := testHTTPClient.Do(req)
-	if err != nil {
-		t.Fatalf("request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	sessionID := resp.Header.Get(hdrMCPSessionID)
-	t.Cleanup(func() { closeMCPSession(t, ts.URL, sessionID) })
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", resp.StatusCode)
-	}
-
-	result := parseJSONRPCResponse(t, resp)
-	res, ok := result["result"].(map[string]any)
-	if !ok {
-		t.Fatalf("response missing 'result': %v", result)
-	}
-	serverInfo, ok := res["serverInfo"].(map[string]any)
-	if !ok {
-		t.Fatalf("response missing 'serverInfo': %v", res)
-	}
+	serverInfo := initializeTestServer(t, &config.ServerConfig{MetaTools: true})
 	if name := serverInfo["name"]; name != serverName {
 		t.Errorf("serverInfo.name = %q, want %q", name, serverName)
 	}
@@ -1111,12 +1087,7 @@ func TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities(t *testing.T) {
 // surfaces while action schemas are served through gitlab://tools.
 func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 	client := newMockGitLabClient(t)
-	testCases := []struct {
-		name              string
-		toolSurface       string
-		capabilitySurface string
-		wantFullCatalog   bool
-	}{
+	testCases := []capabilitySurfaceParityCase{
 		{name: "meta full", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true},
 		{name: "meta minimal", toolSurface: config.ToolSurfaceMeta, capabilitySurface: config.CapabilitySurfaceMinimal},
 		{name: "dynamic full", toolSurface: config.ToolSurfaceDynamic, capabilitySurface: config.CapabilitySurfaceFull, wantFullCatalog: true},
@@ -1127,72 +1098,93 @@ func TestCreateServer_CapabilitySurfaceParity(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			server := mustCreateServer(t, client, &config.ServerConfig{
-				MetaTools:         true,
-				ToolSurface:       tc.toolSurface,
-				CapabilitySurface: tc.capabilitySurface,
-			})
-			session := newInMemorySession(t, server)
-
-			resourcesResult, err := session.ListResources(t.Context(), nil)
-			if err != nil {
-				t.Fatalf("ListResources() error = %v", err)
-			}
-			if !resourceListHasURI(resourcesResult.Resources, "gitlab://workspace/roots") {
-				t.Fatalf("resources = %+v, want workspace roots", resourcesResult.Resources)
-			}
-			if !resourceListHasURI(resourcesResult.Resources, "gitlab://tools") {
-				t.Fatalf("resources = %+v, want tool manifest", resourcesResult.Resources)
-			}
-			if tc.wantFullCatalog {
-				for _, uri := range []string{"gitlab://user/current", "gitlab://guides/git-workflow"} {
-					if !resourceListHasURI(resourcesResult.Resources, uri) {
-						t.Fatalf("full resources missing %q: %+v", uri, resourcesResult.Resources)
-					}
-				}
-			} else {
-				wantResourceCount := 2
-				if len(resourcesResult.Resources) != wantResourceCount {
-					t.Fatalf("minimal resources = %+v, want %d resources", resourcesResult.Resources, wantResourceCount)
-				}
-			}
-			if resourceListHasURI(resourcesResult.Resources, "gitlab://schema/meta/") || resourceListHasURI(resourcesResult.Resources, "gitlab://schema/dynamic/") {
-				t.Fatalf("resources should expose gitlab://tools instead of legacy schema indexes: %+v", resourcesResult.Resources)
-			}
-
-			templatesResult, err := session.ListResourceTemplates(t.Context(), nil)
-			if err != nil {
-				t.Fatalf("ListResourceTemplates() error = %v", err)
-			}
-			if !resourceTemplateListHasURI(templatesResult.ResourceTemplates, "gitlab://tools/{id}") {
-				t.Fatalf("resource templates missing tool manifest template: %+v", templatesResult.ResourceTemplates)
-			}
-			if resourceTemplateListHasURI(templatesResult.ResourceTemplates, "gitlab://schema/meta/{tool}/{action}") || resourceTemplateListHasURI(templatesResult.ResourceTemplates, "gitlab://schema/dynamic/{action}") {
-				t.Fatalf("resource templates should expose gitlab://tools/{id} instead of legacy schema templates: %+v", templatesResult.ResourceTemplates)
-			}
-			wantTemplateCount := 1
-			if !tc.wantFullCatalog && len(templatesResult.ResourceTemplates) != wantTemplateCount {
-				t.Fatalf("minimal resource templates = %+v, want %d", templatesResult.ResourceTemplates, wantTemplateCount)
-			}
-
-			_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/meta/gitlab_project/get"})
-			if err == nil {
-				t.Fatal("server should omit legacy meta-schema resources")
-			}
-			_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://schema/dynamic/project.get"})
-			if err == nil {
-				t.Fatal("server should omit legacy dynamic-schema resources")
-			}
-			_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: manifestDetailURIForSurface(tc.toolSurface)})
-			if err != nil {
-				t.Fatalf("tool manifest detail should be readable: %v", err)
-			}
-
-			assertPromptSurface(t, session, tc.wantFullCatalog)
-			assertCompletionHandlerAvailable(t, session)
+			server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: tc.toolSurface, CapabilitySurface: tc.capabilitySurface})
+			assertCapabilitySurfaceParity(t, newInMemorySession(t, server), tc)
 		})
 	}
 }
+
+type capabilitySurfaceParityCase struct {
+	name              string
+	toolSurface       string
+	capabilitySurface string
+	wantFullCatalog   bool
+}
+
+func assertCapabilitySurfaceParity(t *testing.T, session *mcp.ClientSession, tc capabilitySurfaceParityCase) {
+	t.Helper()
+	assertCapabilityResources(t, session, tc.wantFullCatalog)
+	assertCapabilityResourceTemplates(t, session, tc.wantFullCatalog)
+	assertLegacySchemaResourcesOmitted(t, session)
+	assertManifestDetailReadable(t, session, tc.toolSurface)
+	assertPromptSurface(t, session, tc.wantFullCatalog)
+	assertCompletionHandlerAvailable(t, session)
+}
+
+func assertCapabilityResources(t *testing.T, session *mcp.ClientSession, wantFullCatalog bool) {
+	t.Helper()
+	resourcesResult, err := session.ListResources(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResources() error = %v", err)
+	}
+	resources := resourcesResult.Resources
+	for _, uri := range []string{"gitlab://workspace/roots", "gitlab://tools"} {
+		if !resourceListHasURI(resources, uri) {
+			t.Fatalf("resources = %+v, want %s", resources, uri)
+		}
+	}
+	if wantFullCatalog {
+		assertFullCatalogResources(t, resources)
+		return
+	}
+	if len(resources) != 2 {
+		t.Fatalf("minimal resources = %+v, want 2 resources", resources)
+	}
+}
+
+func assertFullCatalogResources(t *testing.T, resources []*mcp.Resource) {
+	t.Helper()
+	for _, uri := range []string{"gitlab://user/current", "gitlab://guides/git-workflow"} {
+		if !resourceListHasURI(resources, uri) {
+			t.Fatalf("full resources missing %q: %+v", uri, resources)
+		}
+	}
+}
+
+func assertCapabilityResourceTemplates(t *testing.T, session *mcp.ClientSession, wantFullCatalog bool) {
+	t.Helper()
+	templatesResult, err := session.ListResourceTemplates(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates() error = %v", err)
+	}
+	templates := templatesResult.ResourceTemplates
+	if !resourceTemplateListHasURI(templates, "gitlab://tools/{id}") {
+		t.Fatalf("resource templates missing tool manifest template: %+v", templates)
+	}
+	if resourceTemplateListHasURI(templates, "gitlab://schema/meta/{tool}/{action}") || resourceTemplateListHasURI(templates, "gitlab://schema/dynamic/{action}") {
+		t.Fatalf("resource templates should expose gitlab://tools/{id} instead of legacy schema templates: %+v", templates)
+	}
+	if !wantFullCatalog && len(templates) != 1 {
+		t.Fatalf("minimal resource templates = %+v, want 1", templates)
+	}
+}
+
+func assertLegacySchemaResourcesOmitted(t *testing.T, session *mcp.ClientSession) {
+	t.Helper()
+	for _, uri := range []string{"gitlab://schema/meta/gitlab_project/get", "gitlab://schema/dynamic/project.get"} {
+		if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: uri}); err == nil {
+			t.Fatalf("server should omit legacy schema resource %s", uri)
+		}
+	}
+}
+
+func assertManifestDetailReadable(t *testing.T, session *mcp.ClientSession, toolSurface string) {
+	t.Helper()
+	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: manifestDetailURIForSurface(toolSurface)}); err != nil {
+		t.Fatalf("tool manifest detail should be readable: %v", err)
+	}
+}
+
 func resourceListHasURI(items []*mcp.Resource, uri string) bool {
 	for _, item := range items {
 		if item.URI == uri {
@@ -1484,33 +1476,102 @@ func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 	})
 }
 
-// TestPreStartAutoUpdate_InvalidMode verifies that preStartAutoUpdate
+// TestStartStdioAutoUpdate_InvalidMode verifies that startStdioAutoUpdate
 // returns immediately when the AUTO_UPDATE value is invalid.
-func TestPreStartAutoUpdate_InvalidMode(t *testing.T) {
+func TestStartStdioAutoUpdate_InvalidMode(t *testing.T) {
 	cfg := &config.Config{AutoUpdate: "invalid-value"}
 	// Should log warning and return without panic.
-	preStartAutoUpdate(cfg)
+	startStdioAutoUpdate(t.Context(), cfg)
 }
 
-// TestPreStartAutoUpdate_DisabledMode verifies that preStartAutoUpdate
+// TestStartStdioAutoUpdate_DisabledMode verifies that startStdioAutoUpdate
 // returns immediately when AUTO_UPDATE is "false" (disabled).
-func TestPreStartAutoUpdate_DisabledMode(t *testing.T) {
+func TestStartStdioAutoUpdate_DisabledMode(t *testing.T) {
 	cfg := &config.Config{AutoUpdate: "false"}
-	// Should return immediately without calling PreStartUpdate.
-	preStartAutoUpdate(cfg)
+	startStdioAutoUpdate(t.Context(), cfg)
 }
 
-// TestPreStartAutoUpdate_ValidMode verifies that preStartAutoUpdate
-// exercises the full path through PreStartUpdate when mode is valid.
-// With version="dev" (test default), PreStartUpdate is called but
-// NewUpdater fails internally — this still covers the code path.
-func TestPreStartAutoUpdate_ValidMode(t *testing.T) {
+// TestStartStdioAutoUpdate_ValidMode verifies that startStdioAutoUpdate
+// exercises the full path when mode is valid.
+func TestStartStdioAutoUpdate_ValidMode(t *testing.T) {
+	called := make(chan struct{})
+	check := func(context.Context, autoupdate.Config) (string, bool, error) {
+		close(called)
+		return "", false, nil
+	}
+
 	cfg := &config.Config{
 		AutoUpdate:     "true",
 		AutoUpdateRepo: "group/project",
 	}
-	// Will exercise PreStartUpdate which fails internally (version="dev").
-	preStartAutoUpdate(cfg)
+	startStdioAutoUpdateWithCheck(t.Context(), cfg, check)
+
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		t.Fatal("expected startup auto-update check to run")
+	}
+}
+
+// TestStartStdioAutoUpdate_ValidModeReturnsBeforeCheckCompletes verifies that
+// startup auto-update work runs in the background instead of delaying stdio MCP
+// startup while an update check or download is still in progress.
+func TestStartStdioAutoUpdate_ValidModeReturnsBeforeCheckCompletes(t *testing.T) {
+	oldVersion := version
+	version = "1.0.0"
+	t.Cleanup(func() { version = oldVersion })
+
+	started := make(chan autoupdate.Config, 1)
+	releaseCheck := make(chan struct{})
+	checkDone := make(chan struct{})
+	check := func(_ context.Context, cfg autoupdate.Config) (string, bool, error) {
+		started <- cfg
+		<-releaseCheck
+		close(checkDone)
+		return "1.1.0", true, nil
+	}
+
+	cfg := &config.Config{
+		AutoUpdate:        "true",
+		AutoUpdateRepo:    "group/project",
+		AutoUpdateTimeout: time.Minute,
+	}
+	returned := make(chan struct{})
+	go func() {
+		startStdioAutoUpdateWithCheck(t.Context(), cfg, check)
+		close(returned)
+	}()
+
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("startStdioAutoUpdate blocked waiting for the background check")
+	}
+
+	select {
+	case updateCfg := <-started:
+		if updateCfg.Repository != cfg.AutoUpdateRepo {
+			t.Fatalf("Repository = %q, want %q", updateCfg.Repository, cfg.AutoUpdateRepo)
+		}
+		if updateCfg.Timeout != cfg.AutoUpdateTimeout {
+			t.Fatalf("Timeout = %s, want %s", updateCfg.Timeout, cfg.AutoUpdateTimeout)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("background update check did not start")
+	}
+
+	select {
+	case <-checkDone:
+		t.Fatal("background update check completed before the test released it")
+	default:
+	}
+
+	close(releaseCheck)
+	select {
+	case <-checkDone:
+	case <-time.After(time.Second):
+		t.Fatal("background update check did not finish after release")
+	}
 }
 
 // TestNewUpdaterForTools_InvalidMode verifies that newUpdaterForTools
@@ -2047,7 +2108,7 @@ func TestHealthHandler_ReturnsOK(t *testing.T) {
 	t.Parallel()
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health", nil)
 	healthHandler(rec, req)
 
 	if rec.Code != http.StatusOK {
@@ -2172,7 +2233,7 @@ func TestRunToolSearch_ErrorExits(t *testing.T) {
 	}
 
 	type exitCode int
-	toolSearchRunner = func(_ string, _ string, _ bool) error {
+	toolSearchRunner = func(_, _ string, _ bool) error {
 		return errors.New("forced search failure")
 	}
 	exitProcess = func(code int) { panic(exitCode(code)) }
@@ -2901,7 +2962,7 @@ func TestHostValidationMiddleware_BlockedHost(t *testing.T) {
 	})
 	handler := hostValidationMiddleware(allowed, inner)
 
-	req := httptest.NewRequest(http.MethodGet, "http://evil.example.com/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://evil.example.com/", nil)
 	req.Host = "evil.example.com"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -2920,7 +2981,7 @@ func TestHostValidationMiddleware_AllowedHost(t *testing.T) {
 	})
 	handler := hostValidationMiddleware(allowed, inner)
 
-	req := httptest.NewRequest(http.MethodGet, "http://localhost/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost/", nil)
 	req.Host = "localhost"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -2939,7 +3000,7 @@ func TestHostValidationMiddleware_HostWithPort(t *testing.T) {
 	})
 	handler := hostValidationMiddleware(allowed, inner)
 
-	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://localhost:8080/", nil)
 	req.Host = "localhost:8080"
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -2959,7 +3020,7 @@ func TestCrossOriginProtectionMiddleware_AllowsNonBrowserPost(t *testing.T) {
 	})
 	handler := crossOriginProtectionMiddleware(inner)
 
-	req := httptest.NewRequest(http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
 	req.Header.Set(hdrContentType, mimeJSON)
 	req.Header.Set("Accept", mimeJSONSSE)
 	rr := httptest.NewRecorder()
@@ -2983,7 +3044,7 @@ func TestCrossOriginProtectionMiddleware_AllowsSameOriginPost(t *testing.T) {
 	})
 	handler := crossOriginProtectionMiddleware(inner)
 
-	req := httptest.NewRequest(http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
 	req.Header.Set(hdrContentType, mimeJSON)
 	req.Header.Set("Accept", mimeJSONSSE)
 	req.Header.Set("Origin", "http://mcp.example")
@@ -3242,8 +3303,13 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(data, &card); unmarshalErr != nil {
 		t.Fatalf("buildServerCard() returned invalid JSON: %v", unmarshalErr)
 	}
+	toolsRaw := assertServerCardBasics(t, card)
+	assertServerCardCatalogs(t, card)
+	assertServerCardToolMetadata(t, toolsRaw)
+}
 
-	// Verify serverInfo
+func assertServerCardBasics(t *testing.T, card map[string]any) []any {
+	t.Helper()
 	serverInfo, siOK := card["serverInfo"].(map[string]any)
 	if !siOK {
 		t.Fatal("card missing 'serverInfo' object")
@@ -3269,8 +3335,6 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	if len(toolsRaw) == 0 {
 		t.Fatal("tools array is empty, expected registered tools")
 	}
-
-	// Spot-check first tool has name and description
 	firstRaw := toolsRaw[0]
 	tool, toolOK := firstRaw.(map[string]any)
 	if !toolOK {
@@ -3282,11 +3346,11 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	if desc, descOK := tool["description"].(string); !descOK || desc == "" {
 		t.Error("tools[0] missing or empty 'description'")
 	}
+	return toolsRaw
+}
 
-	// Verify the card carries resources, resourceTemplates, and prompts.
-	// These are gated by configured registration in createServer; if any
-	// is empty the external scanners (Smithery, Glama) report 0 and the
-	// quality score drops, so we treat empty as a regression.
+func assertServerCardCatalogs(t *testing.T, card map[string]any) {
+	t.Helper()
 	if resourcesRaw, ok := card["resources"].([]any); !ok || len(resourcesRaw) == 0 {
 		t.Error("card 'resources' array missing or empty")
 	}
@@ -3296,9 +3360,10 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 	if promptsRaw, ok := card["prompts"].([]any); !ok || len(promptsRaw) == 0 {
 		t.Error("card 'prompts' array missing or empty")
 	}
+}
 
-	// Verify per-tool metadata: at least one tool must expose
-	// outputSchema and annotations so external scanners pick them up.
+func assertServerCardToolMetadata(t *testing.T, toolsRaw []any) {
+	t.Helper()
 	var withOutputSchema, withAnnotations int
 	for _, raw := range toolsRaw {
 		tEntry, _ := raw.(map[string]any)

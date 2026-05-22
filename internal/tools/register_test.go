@@ -168,7 +168,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1017
+		const expectedTools = 1025
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -342,1027 +342,7 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 		t.Fatalf(fmtListToolsErr, err)
 	}
 
-	expectedNames := map[string]bool{
-		"gitlab_access_request_approve_group":         true,
-		"gitlab_access_request_approve_project":       true,
-		"gitlab_access_request_deny_group":            true,
-		"gitlab_access_request_deny_project":          true,
-		"gitlab_access_request_list_group":            true,
-		"gitlab_access_request_list_project":          true,
-		"gitlab_access_request_request_group":         true,
-		"gitlab_access_request_request_project":       true,
-		"gitlab_activate_user":                        true,
-		"gitlab_add_commit_discussion_note":           true,
-		"gitlab_add_email":                            true,
-		"gitlab_add_email_for_user":                   true,
-		"gitlab_add_epic_discussion_note":             true,
-		"gitlab_add_gpg_key":                          true,
-		"gitlab_add_gpg_key_for_user":                 true,
-		"gitlab_add_group_badge":                      true,
-		"gitlab_add_group_job_token_allowlist":        true,
-		"gitlab_add_issue_discussion_note":            true,
-		"gitlab_add_license":                          true,
-		"gitlab_add_merge_request_to_merge_train":     true,
-		"gitlab_add_project_badge":                    true,
-		"gitlab_add_project_job_token_allowlist":      true,
-		"gitlab_add_project_mirror":                   true,
-		"gitlab_add_snippet_discussion_note":          true,
-		"gitlab_add_ssh_key":                          true,
-		"gitlab_add_ssh_key_for_user":                 true,
-		"gitlab_add_system_hook":                      true,
-		"gitlab_analyze_ci_configuration":             true,
-		"gitlab_analyze_deployment_history":           true,
-		"gitlab_analyze_issue_scope":                  true,
-		"gitlab_analyze_mr_changes":                   true,
-		"gitlab_analyze_pipeline_failure":             true,
-		"gitlab_approve_user":                         true,
-		"gitlab_ban_user":                             true,
-		"gitlab_block_user":                           true,
-		"gitlab_bulk_update_security_attributes":      true,
-		"gitlab_board_create":                         true,
-		"gitlab_board_delete":                         true,
-		"gitlab_board_get":                            true,
-		"gitlab_board_list":                           true,
-		"gitlab_board_list_create":                    true,
-		"gitlab_board_list_delete":                    true,
-		"gitlab_board_list_get":                       true,
-		"gitlab_board_list_lists":                     true,
-		"gitlab_board_list_update":                    true,
-		"gitlab_board_update":                         true,
-		"gitlab_branch_create":                        true,
-		"gitlab_branch_delete":                        true,
-		"gitlab_branch_delete_merged":                 true,
-		"gitlab_branch_get":                           true,
-		"gitlab_branch_list":                          true,
-		"gitlab_branch_protect":                       true,
-		"gitlab_branch_unprotect":                     true,
-		"gitlab_cancel_github_import":                 true,
-		"gitlab_change_plan_limits":                   true,
-		"gitlab_ci_lint":                              true,
-		"gitlab_ci_lint_project":                      true,
-		"gitlab_ci_variable_create":                   true,
-		"gitlab_ci_variable_delete":                   true,
-		"gitlab_ci_variable_get":                      true,
-		"gitlab_ci_variable_list":                     true,
-		"gitlab_ci_variable_update":                   true,
-		"gitlab_commit_cherry_pick":                   true,
-		"gitlab_commit_comment_create":                true,
-		"gitlab_commit_comments":                      true,
-		"gitlab_commit_create":                        true,
-		"gitlab_commit_diff":                          true,
-		"gitlab_commit_get":                           true,
-		"gitlab_commit_list":                          true,
-		"gitlab_commit_merge_requests":                true,
-		"gitlab_commit_refs":                          true,
-		"gitlab_commit_revert":                        true,
-		"gitlab_commit_signature":                     true,
-		"gitlab_commit_status_set":                    true,
-		"gitlab_commit_statuses":                      true,
-		"gitlab_confirm_vulnerability":                true,
-		"gitlab_create_application":                   true,
-		"gitlab_create_broadcast_message":             true,
-		"gitlab_create_cluster_agent_token":           true,
-		"gitlab_create_commit_discussion":             true,
-		"gitlab_create_current_user_pat":              true,
-		"gitlab_create_custom_emoji":                  true,
-		"gitlab_create_dependency_list_export":        true,
-		"gitlab_create_epic_discussion":               true,
-		"gitlab_create_error_tracking_client_key":     true,
-		"gitlab_create_freeze_period":                 true,
-		"gitlab_create_geo_site":                      true,
-		"gitlab_create_group_member_role":             true,
-		"gitlab_create_group_ssh_certificate":         true,
-		"gitlab_create_impersonation_token":           true,
-		"gitlab_create_instance_member_role":          true,
-		"gitlab_create_issue_discussion":              true,
-		"gitlab_create_mr_context_commits":            true,
-		"gitlab_create_package_protection_rule":       true,
-		"gitlab_create_personal_access_token":         true,
-		"gitlab_create_project_alias":                 true,
-		"gitlab_create_project_external_status_check": true,
-		"gitlab_create_security_attribute":            true,
-		"gitlab_create_security_category":             true,
-		"gitlab_create_secure_file":                   true,
-		"gitlab_create_service_account":               true,
-		"gitlab_create_snippet_discussion":            true,
-		"gitlab_create_topic":                         true,
-		"gitlab_create_user":                          true,
-		"gitlab_create_user_runner":                   true,
-
-		"gitlab_create_work_item":                       true,
-		"gitlab_current_user_status":                    true,
-		"gitlab_deactivate_user":                        true,
-		"gitlab_delete_alert_metric_image":              true,
-		"gitlab_delete_application":                     true,
-		"gitlab_delete_broadcast_message":               true,
-		"gitlab_delete_cluster_agent":                   true,
-		"gitlab_delete_commit_discussion_note":          true,
-		"gitlab_delete_custom_attribute":                true,
-		"gitlab_delete_custom_emoji":                    true,
-		"gitlab_delete_email":                           true,
-		"gitlab_delete_email_for_user":                  true,
-		"gitlab_delete_enterprise_user":                 true,
-		"gitlab_delete_epic_discussion_note":            true,
-		"gitlab_delete_error_tracking_client_key":       true,
-		"gitlab_delete_feature_flag":                    true,
-		"gitlab_delete_freeze_period":                   true,
-		"gitlab_delete_geo_site":                        true,
-		"gitlab_delete_gpg_key":                         true,
-		"gitlab_delete_gpg_key_for_user":                true,
-		"gitlab_delete_group_badge":                     true,
-		"gitlab_delete_group_markdown_upload_by_id":     true,
-		"gitlab_delete_group_markdown_upload_by_secret": true,
-		"gitlab_delete_group_member_role":               true,
-		"gitlab_delete_group_scim_identity":             true,
-		"gitlab_delete_group_ssh_certificate":           true,
-		"gitlab_delete_group_ssh_key":                   true,
-		"gitlab_delete_instance_member_role":            true,
-		"gitlab_delete_integration":                     true,
-		"gitlab_delete_issue_discussion_note":           true,
-		"gitlab_delete_license":                         true,
-		"gitlab_delete_mr_context_commits":              true,
-		"gitlab_delete_package_protection_rule":         true,
-		"gitlab_delete_project_alias":                   true,
-		"gitlab_delete_project_badge":                   true,
-		"gitlab_delete_project_external_status_check":   true,
-		"gitlab_delete_project_mirror":                  true,
-		"gitlab_delete_security_attribute":              true,
-		"gitlab_delete_security_category":               true,
-		"gitlab_delete_snippet_discussion_note":         true,
-		"gitlab_delete_ssh_key":                         true,
-		"gitlab_delete_ssh_key_for_user":                true,
-		"gitlab_delete_system_hook":                     true,
-		"gitlab_delete_system_hook_url_variable":        true,
-		"gitlab_delete_terraform_state":                 true,
-		"gitlab_delete_terraform_state_version":         true,
-		"gitlab_delete_topic":                           true,
-		"gitlab_delete_user":                            true,
-		"gitlab_delete_user_identity":                   true,
-		"gitlab_delete_work_item":                       true,
-		"gitlab_deploy_key_add":                         true,
-		"gitlab_deploy_key_add_instance":                true,
-		"gitlab_deploy_key_delete":                      true,
-		"gitlab_deploy_key_enable":                      true,
-		"gitlab_deploy_key_get":                         true,
-		"gitlab_deploy_key_list_all":                    true,
-		"gitlab_deploy_key_list_project":                true,
-		"gitlab_deploy_key_list_user_project":           true,
-		"gitlab_deploy_key_update":                      true,
-		"gitlab_deploy_token_create_group":              true,
-		"gitlab_deploy_token_create_project":            true,
-		"gitlab_deploy_token_delete_group":              true,
-		"gitlab_deploy_token_delete_project":            true,
-		"gitlab_deploy_token_get_group":                 true,
-		"gitlab_deploy_token_get_project":               true,
-		"gitlab_deploy_token_list_all":                  true,
-		"gitlab_deploy_token_list_group":                true,
-		"gitlab_deploy_token_list_project":              true,
-		"gitlab_deployment_approve_or_reject":           true,
-		"gitlab_deployment_create":                      true,
-		"gitlab_deployment_delete":                      true,
-		"gitlab_deployment_get":                         true,
-		"gitlab_deployment_list":                        true,
-		"gitlab_deployment_update":                      true,
-		"gitlab_disable_2fa_enterprise_user":            true,
-		"gitlab_disable_two_factor":                     true,
-		"gitlab_dismiss_vulnerability":                  true,
-		"gitlab_download_attestation":                   true,
-		"gitlab_download_dependency_list_export":        true,
-		"gitlab_download_group_export":                  true,
-		"gitlab_download_ml_model_package":              true,
-		"gitlab_download_project_export":                true,
-		"gitlab_edit_geo_site":                          true,
-		"gitlab_edit_group_badge":                       true,
-		"gitlab_edit_project_badge":                     true,
-		"gitlab_edit_project_mirror":                    true,
-		"gitlab_edit_resource_group":                    true,
-		"gitlab_edit_system_hook":                       true,
-		"gitlab_enable_disable_error_tracking":          true,
-		"gitlab_environment_create":                     true,
-		"gitlab_environment_delete":                     true,
-		"gitlab_environment_get":                        true,
-		"gitlab_environment_list":                       true,
-		"gitlab_environment_stop":                       true,
-		"gitlab_environment_update":                     true,
-		"gitlab_epic_create":                            true,
-		"gitlab_epic_delete":                            true,
-		"gitlab_epic_get":                               true,
-		"gitlab_epic_get_links":                         true,
-		"gitlab_epic_issue_assign":                      true,
-		"gitlab_epic_issue_list":                        true,
-		"gitlab_epic_issue_remove":                      true,
-		"gitlab_epic_issue_update":                      true,
-		"gitlab_epic_list":                              true,
-		"gitlab_epic_note_create":                       true,
-		"gitlab_epic_note_delete":                       true,
-		"gitlab_epic_note_get":                          true,
-		"gitlab_epic_note_list":                         true,
-		"gitlab_epic_note_update":                       true,
-		"gitlab_epic_update":                            true,
-		"gitlab_feature_flag_create":                    true,
-		"gitlab_feature_flag_delete":                    true,
-		"gitlab_feature_flag_get":                       true,
-		"gitlab_feature_flag_list":                      true,
-		"gitlab_feature_flag_update":                    true,
-		"gitlab_ff_user_list_create":                    true,
-		"gitlab_ff_user_list_delete":                    true,
-		"gitlab_ff_user_list_get":                       true,
-		"gitlab_ff_user_list_list":                      true,
-		"gitlab_ff_user_list_update":                    true,
-		"gitlab_file_blame":                             true,
-		"gitlab_file_create":                            true,
-		"gitlab_file_delete":                            true,
-		"gitlab_file_get":                               true,
-		"gitlab_file_metadata":                          true,
-		"gitlab_file_raw":                               true,
-		"gitlab_file_raw_metadata":                      true,
-		"gitlab_file_update":                            true,
-		"gitlab_find_technical_debt":                    true,
-		"gitlab_force_push_mirror_update":               true,
-		"gitlab_generate_milestone_report":              true,
-		"gitlab_generate_release_notes":                 true,
-		"gitlab_get_appearance":                         true,
-		"gitlab_get_application_statistics":             true,
-		"gitlab_get_avatar":                             true,
-		"gitlab_get_broadcast_message":                  true,
-		"gitlab_get_catalog_resource":                   true,
-		"gitlab_get_ci_yml_template":                    true,
-		"gitlab_get_cluster_agent":                      true,
-		"gitlab_get_cluster_agent_token":                true,
-		"gitlab_get_commit_discussion":                  true,
-		"gitlab_get_compliance_policy_settings":         true,
-		"gitlab_get_custom_attribute":                   true,
-		"gitlab_get_dependency_list_export":             true,
-		"gitlab_get_dockerfile_template":                true,
-		"gitlab_get_email":                              true,
-		"gitlab_get_enterprise_user":                    true,
-		"gitlab_get_epic_discussion":                    true,
-		"gitlab_get_error_tracking_settings":            true,
-		"gitlab_get_freeze_period":                      true,
-		"gitlab_get_geo_site":                           true,
-		"gitlab_get_gitignore_template":                 true,
-		"gitlab_get_gpg_key":                            true,
-		"gitlab_get_gpg_key_for_user":                   true,
-		"gitlab_get_group_audit_event":                  true,
-		"gitlab_get_group_badge":                        true,
-		"gitlab_get_group_dora_metrics":                 true,
-		"gitlab_get_group_issue_statistics":             true,
-		"gitlab_get_group_mr_approval_settings":         true,
-		"gitlab_get_group_scim_identity":                true,
-		"gitlab_get_group_storage_move":                 true,
-		"gitlab_get_group_storage_move_for_group":       true,
-		"gitlab_get_impersonation_token":                true,
-		"gitlab_get_instance_audit_event":               true,
-		"gitlab_get_integration":                        true,
-		"gitlab_get_issue_discussion":                   true,
-		"gitlab_get_issue_statistics":                   true,
-		"gitlab_get_job_token_access_settings":          true,
-		"gitlab_get_key_by_fingerprint":                 true,
-		"gitlab_get_key_with_user":                      true,
-		"gitlab_get_license":                            true,
-		"gitlab_get_license_template":                   true,
-		"gitlab_get_merge_request_on_merge_train":       true,
-		"gitlab_get_metadata":                           true,
-		"gitlab_get_metric_definitions":                 true,
-		"gitlab_get_non_sql_metrics":                    true,
-		"gitlab_get_plan_limits":                        true,
-		"gitlab_get_project_alias":                      true,
-		"gitlab_get_project_audit_event":                true,
-		"gitlab_get_project_badge":                      true,
-		"gitlab_get_project_dora_metrics":               true,
-		"gitlab_get_project_export_status":              true,
-		"gitlab_get_project_import_status":              true,
-		"gitlab_get_project_issue_statistics":           true,
-		"gitlab_get_project_mirror":                     true,
-		"gitlab_get_project_mirror_public_key":          true,
-		"gitlab_get_project_mr_approval_settings":       true,
-		"gitlab_get_project_security_settings":          true,
-		"gitlab_get_project_statistics":                 true,
-		"gitlab_get_project_storage_move":               true,
-		"gitlab_get_project_storage_move_for_project":   true,
-		"gitlab_get_project_template":                   true,
-		"gitlab_get_recently_added_members_count":       true,
-		"gitlab_get_recently_created_issues_count":      true,
-		"gitlab_get_recently_created_mr_count":          true,
-		"gitlab_get_resource_group":                     true,
-		"gitlab_get_service_ping":                       true,
-		"gitlab_get_settings":                           true,
-		"gitlab_get_sidekiq_compound_metrics":           true,
-		"gitlab_get_sidekiq_job_stats":                  true,
-		"gitlab_get_sidekiq_process_metrics":            true,
-		"gitlab_get_sidekiq_queue_metrics":              true,
-		"gitlab_get_snippet_discussion":                 true,
-		"gitlab_get_snippet_storage_move":               true,
-		"gitlab_get_snippet_storage_move_for_snippet":   true,
-		"gitlab_get_ssh_key":                            true,
-		"gitlab_get_ssh_key_for_user":                   true,
-		"gitlab_get_status_geo_site":                    true,
-		"gitlab_get_system_hook":                        true,
-		"gitlab_get_terraform_state":                    true,
-		"gitlab_get_topic":                              true,
-		"gitlab_get_usage_queries":                      true,
-		"gitlab_get_user":                               true,
-		"gitlab_get_user_activities":                    true,
-		"gitlab_get_user_associations_count":            true,
-		"gitlab_get_user_memberships":                   true,
-		"gitlab_get_user_status":                        true,
-		"gitlab_get_vulnerability":                      true,
-		"gitlab_get_work_item":                          true,
-		"gitlab_group_access_token_create":              true,
-		"gitlab_group_access_token_get":                 true,
-		"gitlab_group_access_token_list":                true,
-		"gitlab_group_access_token_revoke":              true,
-		"gitlab_group_access_token_rotate":              true,
-		"gitlab_group_access_token_rotate_self":         true,
-		"gitlab_group_board_create":                     true,
-		"gitlab_group_board_delete":                     true,
-		"gitlab_group_board_get":                        true,
-		"gitlab_group_board_list":                       true,
-		"gitlab_group_board_list_create":                true,
-		"gitlab_group_board_list_delete":                true,
-		"gitlab_group_board_list_get":                   true,
-		"gitlab_group_board_list_lists":                 true,
-		"gitlab_group_board_list_update":                true,
-		"gitlab_group_board_update":                     true,
-		"gitlab_group_create":                           true,
-		"gitlab_group_delete":                           true,
-		"gitlab_group_epic_board_get":                   true,
-		"gitlab_group_epic_board_list":                  true,
-		"gitlab_group_get":                              true,
-		"gitlab_group_hook_add":                         true,
-		"gitlab_group_hook_delete":                      true,
-		"gitlab_group_hook_edit":                        true,
-		"gitlab_group_hook_get":                         true,
-		"gitlab_group_hook_list":                        true,
-		"gitlab_group_invite":                           true,
-		"gitlab_group_invite_list_pending":              true,
-		"gitlab_group_label_create":                     true,
-		"gitlab_group_label_delete":                     true,
-		"gitlab_group_label_get":                        true,
-		"gitlab_group_label_list":                       true,
-		"gitlab_group_label_subscribe":                  true,
-		"gitlab_group_label_unsubscribe":                true,
-		"gitlab_group_label_update":                     true,
-		"gitlab_group_ldap_link_add":                    true,
-		"gitlab_group_ldap_link_delete":                 true,
-		"gitlab_group_ldap_link_delete_for_provider":    true,
-		"gitlab_group_ldap_link_list":                   true,
-		"gitlab_group_list":                             true,
-		"gitlab_group_member_add":                       true,
-		"gitlab_group_member_edit":                      true,
-		"gitlab_group_member_get":                       true,
-		"gitlab_group_member_get_inherited":             true,
-		"gitlab_group_member_remove":                    true,
-		"gitlab_group_members_list":                     true,
-		"gitlab_group_milestone_burndown_events":        true,
-		"gitlab_group_milestone_create":                 true,
-		"gitlab_group_milestone_delete":                 true,
-		"gitlab_group_milestone_get":                    true,
-		"gitlab_group_milestone_issues":                 true,
-		"gitlab_group_milestone_list":                   true,
-		"gitlab_group_milestone_merge_requests":         true,
-		"gitlab_group_milestone_update":                 true,
-		"gitlab_group_projects":                         true,
-		"gitlab_group_protected_branch_get":             true,
-		"gitlab_group_protected_branch_list":            true,
-		"gitlab_group_protected_branch_protect":         true,
-		"gitlab_group_protected_branch_unprotect":       true,
-		"gitlab_group_protected_branch_update":          true,
-		"gitlab_group_protected_environment_get":        true,
-		"gitlab_group_protected_environment_list":       true,
-		"gitlab_group_protected_environment_protect":    true,
-		"gitlab_group_protected_environment_unprotect":  true,
-		"gitlab_group_protected_environment_update":     true,
-		"gitlab_group_release_list":                     true,
-		"gitlab_group_restore":                          true,
-		"gitlab_group_archive":                          true,
-		"gitlab_group_unarchive":                        true,
-		"gitlab_group_saml_link_add":                    true,
-		"gitlab_group_saml_link_delete":                 true,
-		"gitlab_group_saml_link_get":                    true,
-		"gitlab_group_saml_link_list":                   true,
-		"gitlab_group_search":                           true,
-		"gitlab_group_service_account_create":           true,
-		"gitlab_group_service_account_delete":           true,
-		"gitlab_group_service_account_list":             true,
-		"gitlab_group_service_account_pat_create":       true,
-		"gitlab_group_service_account_pat_list":         true,
-		"gitlab_group_service_account_pat_revoke":       true,
-		"gitlab_group_service_account_update":           true,
-		"gitlab_group_share":                            true,
-		"gitlab_group_transfer_project":                 true,
-		"gitlab_group_unshare":                          true,
-		"gitlab_group_update":                           true,
-		"gitlab_group_variable_create":                  true,
-		"gitlab_group_variable_delete":                  true,
-		"gitlab_group_variable_get":                     true,
-		"gitlab_group_variable_list":                    true,
-		"gitlab_group_variable_update":                  true,
-		"gitlab_group_wiki_create":                      true,
-		"gitlab_group_wiki_delete":                      true,
-		"gitlab_group_wiki_edit":                        true,
-		"gitlab_group_wiki_get":                         true,
-		"gitlab_group_wiki_list":                        true,
-		"gitlab_import_from_bitbucket_cloud":            true,
-		"gitlab_import_from_bitbucket_server":           true,
-		"gitlab_import_from_github":                     true,
-		"gitlab_import_github_gists":                    true,
-		"gitlab_import_group_from_file":                 true,
-		"gitlab_import_project_from_file":               true,
-		"gitlab_instance_variable_create":               true,
-		"gitlab_instance_variable_delete":               true,
-		"gitlab_instance_variable_get":                  true,
-		"gitlab_instance_variable_list":                 true,
-		"gitlab_instance_variable_update":               true,
-		"gitlab_interactive_issue_create":               true,
-		"gitlab_interactive_mr_create":                  true,
-		"gitlab_interactive_project_create":             true,
-		"gitlab_interactive_release_create":             true,
-		"gitlab_issue_create":                           true,
-		"gitlab_issue_create_todo":                      true,
-		"gitlab_issue_delete":                           true,
-		"gitlab_issue_emoji_create":                     true,
-		"gitlab_issue_emoji_delete":                     true,
-		"gitlab_issue_emoji_get":                        true,
-		"gitlab_issue_emoji_list":                       true,
-		"gitlab_issue_get":                              true,
-		"gitlab_issue_get_by_id":                        true,
-		"gitlab_issue_iteration_event_get":              true,
-		"gitlab_issue_iteration_event_list":             true,
-		"gitlab_issue_label_event_get":                  true,
-		"gitlab_issue_label_event_list":                 true,
-		"gitlab_issue_link_create":                      true,
-		"gitlab_issue_link_delete":                      true,
-		"gitlab_issue_link_get":                         true,
-		"gitlab_issue_link_list":                        true,
-		"gitlab_issue_list":                             true,
-		"gitlab_issue_list_all":                         true,
-		"gitlab_issue_list_group":                       true,
-		"gitlab_issue_milestone_event_get":              true,
-		"gitlab_issue_milestone_event_list":             true,
-		"gitlab_issue_move":                             true,
-		"gitlab_issue_mrs_closing":                      true,
-		"gitlab_issue_mrs_related":                      true,
-		"gitlab_issue_note_create":                      true,
-		"gitlab_issue_note_delete":                      true,
-		"gitlab_issue_note_emoji_create":                true,
-		"gitlab_issue_note_emoji_delete":                true,
-		"gitlab_issue_note_emoji_get":                   true,
-		"gitlab_issue_note_emoji_list":                  true,
-		"gitlab_issue_note_get":                         true,
-		"gitlab_issue_note_list":                        true,
-		"gitlab_issue_note_update":                      true,
-		"gitlab_issue_participants":                     true,
-		"gitlab_issue_reorder":                          true,
-		"gitlab_issue_spent_time_add":                   true,
-		"gitlab_issue_spent_time_reset":                 true,
-		"gitlab_issue_state_event_get":                  true,
-		"gitlab_issue_state_event_list":                 true,
-		"gitlab_issue_subscribe":                        true,
-		"gitlab_issue_time_estimate_reset":              true,
-		"gitlab_issue_time_estimate_set":                true,
-		"gitlab_issue_time_stats_get":                   true,
-		"gitlab_issue_unsubscribe":                      true,
-		"gitlab_issue_update":                           true,
-		"gitlab_issue_weight_event_list":                true,
-		"gitlab_job_artifacts":                          true,
-		"gitlab_job_cancel":                             true,
-		"gitlab_job_delete_artifacts":                   true,
-		"gitlab_job_delete_project_artifacts":           true,
-		"gitlab_job_download_artifacts":                 true,
-		"gitlab_job_download_single_artifact":           true,
-		"gitlab_job_download_single_artifact_by_ref":    true,
-		"gitlab_job_erase":                              true,
-		"gitlab_job_get":                                true,
-		"gitlab_job_keep_artifacts":                     true,
-		"gitlab_job_list":                               true,
-		"gitlab_job_list_bridges":                       true,
-		"gitlab_job_list_project":                       true,
-		"gitlab_job_play":                               true,
-		"gitlab_job_retry":                              true,
-		"gitlab_job_trace":                              true,
-		"gitlab_job_wait":                               true,
-		"gitlab_label_create":                           true,
-		"gitlab_label_delete":                           true,
-		"gitlab_label_get":                              true,
-		"gitlab_label_list":                             true,
-		"gitlab_label_promote":                          true,
-		"gitlab_label_subscribe":                        true,
-		"gitlab_label_unsubscribe":                      true,
-		"gitlab_label_update":                           true,
-		"gitlab_list_alert_metric_images":               true,
-		"gitlab_list_applications":                      true,
-		"gitlab_list_attestations":                      true,
-		"gitlab_list_branch_rules":                      true,
-		"gitlab_list_broadcast_messages":                true,
-		"gitlab_list_catalog_resources":                 true,
-		"gitlab_list_ci_yml_templates":                  true,
-		"gitlab_list_cluster_agent_tokens":              true,
-		"gitlab_list_cluster_agents":                    true,
-		"gitlab_list_commit_discussions":                true,
-		"gitlab_list_custom_attributes":                 true,
-		"gitlab_list_custom_emoji":                      true,
-		"gitlab_list_deployment_merge_requests":         true,
-		"gitlab_list_dockerfile_templates":              true,
-		"gitlab_list_emails":                            true,
-		"gitlab_list_emails_for_user":                   true,
-		"gitlab_list_enterprise_users":                  true,
-		"gitlab_list_epic_discussions":                  true,
-		"gitlab_list_error_tracking_client_keys":        true,
-		"gitlab_list_feature_definitions":               true,
-		"gitlab_list_features":                          true,
-		"gitlab_list_freeze_periods":                    true,
-		"gitlab_list_geo_sites":                         true,
-		"gitlab_list_gitignore_templates":               true,
-		"gitlab_list_gpg_keys":                          true,
-		"gitlab_list_gpg_keys_for_user":                 true,
-		"gitlab_list_group_audit_events":                true,
-		"gitlab_list_group_badges":                      true,
-		"gitlab_list_group_iterations":                  true,
-		"gitlab_list_group_markdown_uploads":            true,
-		"gitlab_list_group_member_roles":                true,
-		"gitlab_list_group_personal_access_tokens":      true,
-		"gitlab_list_group_relations_export_status":     true,
-		"gitlab_list_group_scim_identities":             true,
-		"gitlab_list_group_ssh_certificates":            true,
-		"gitlab_list_group_ssh_keys":                    true,
-		"gitlab_list_impersonation_tokens":              true,
-		"gitlab_list_instance_audit_events":             true,
-		"gitlab_list_instance_member_roles":             true,
-		"gitlab_list_integrations":                      true,
-		"gitlab_list_issue_discussions":                 true,
-		"gitlab_list_job_token_group_allowlist":         true,
-		"gitlab_list_job_token_inbound_allowlist":       true,
-		"gitlab_list_license_templates":                 true,
-		"gitlab_list_merge_request_in_merge_train":      true,
-		"gitlab_list_mr_context_commits":                true,
-		"gitlab_list_package_protection_rules":          true,
-		"gitlab_list_project_aliases":                   true,
-		"gitlab_list_project_audit_events":              true,
-		"gitlab_list_project_badges":                    true,
-		"gitlab_list_project_dependencies":              true,
-		"gitlab_list_project_external_status_checks":    true,
-		"gitlab_list_project_iterations":                true,
-		"gitlab_list_project_merge_trains":              true,
-		"gitlab_list_project_mirrors":                   true,
-		"gitlab_list_project_mr_external_status_checks": true,
-		"gitlab_list_project_status_checks":             true,
-		"gitlab_list_project_templates":                 true,
-
-		"gitlab_list_repository_submodules":                        true,
-		"gitlab_list_resource_group_upcoming_jobs":                 true,
-		"gitlab_list_resource_groups":                              true,
-		"gitlab_list_secure_files":                                 true,
-		"gitlab_list_security_findings":                            true,
-		"gitlab_list_service_accounts":                             true,
-		"gitlab_list_snippet_discussions":                          true,
-		"gitlab_list_ssh_keys":                                     true,
-		"gitlab_list_ssh_keys_for_user":                            true,
-		"gitlab_list_status_all_geo_sites":                         true,
-		"gitlab_list_system_hooks":                                 true,
-		"gitlab_list_terraform_states":                             true,
-		"gitlab_list_topics":                                       true,
-		"gitlab_list_user_contribution_events":                     true,
-		"gitlab_list_users":                                        true,
-		"gitlab_list_vulnerabilities":                              true,
-		"gitlab_list_work_items":                                   true,
-		"gitlab_lock_terraform_state":                              true,
-		"gitlab_mark_migration":                                    true,
-		"gitlab_server_status":                                     true,
-		"gitlab_milestone_create":                                  true,
-		"gitlab_milestone_delete":                                  true,
-		"gitlab_milestone_get":                                     true,
-		"gitlab_milestone_issues":                                  true,
-		"gitlab_milestone_list":                                    true,
-		"gitlab_milestone_merge_requests":                          true,
-		"gitlab_milestone_update":                                  true,
-		"gitlab_modify_user":                                       true,
-		"gitlab_mr_add_spent_time":                                 true,
-		"gitlab_mr_approval_config":                                true,
-		"gitlab_mr_approval_reset":                                 true,
-		"gitlab_mr_approval_rule_create":                           true,
-		"gitlab_mr_approval_rule_delete":                           true,
-		"gitlab_mr_approval_rule_update":                           true,
-		"gitlab_mr_approval_rules":                                 true,
-		"gitlab_mr_approval_state":                                 true,
-		"gitlab_mr_approve":                                        true,
-		"gitlab_mr_cancel_auto_merge":                              true,
-		"gitlab_mr_changes_get":                                    true,
-		"gitlab_mr_commits":                                        true,
-		"gitlab_mr_create":                                         true,
-		"gitlab_mr_create_pipeline":                                true,
-		"gitlab_mr_create_todo":                                    true,
-		"gitlab_mr_delete":                                         true,
-		"gitlab_mr_dependencies_list":                              true,
-		"gitlab_mr_dependency_create":                              true,
-		"gitlab_mr_dependency_delete":                              true,
-		"gitlab_mr_diff_version_get":                               true,
-		"gitlab_mr_diff_versions_list":                             true,
-		"gitlab_mr_discussion_create":                              true,
-		"gitlab_mr_discussion_get":                                 true,
-		"gitlab_mr_discussion_list":                                true,
-		"gitlab_mr_discussion_note_delete":                         true,
-		"gitlab_mr_discussion_note_update":                         true,
-		"gitlab_mr_discussion_reply":                               true,
-		"gitlab_mr_discussion_resolve":                             true,
-		"gitlab_mr_draft_note_create":                              true,
-		"gitlab_mr_draft_note_delete":                              true,
-		"gitlab_mr_draft_note_get":                                 true,
-		"gitlab_mr_draft_note_list":                                true,
-		"gitlab_mr_draft_note_publish":                             true,
-		"gitlab_mr_draft_note_publish_all":                         true,
-		"gitlab_mr_draft_note_update":                              true,
-		"gitlab_mr_emoji_create":                                   true,
-		"gitlab_mr_emoji_delete":                                   true,
-		"gitlab_mr_emoji_get":                                      true,
-		"gitlab_mr_emoji_list":                                     true,
-		"gitlab_mr_get":                                            true,
-		"gitlab_mr_issues_closed":                                  true,
-		"gitlab_mr_label_event_get":                                true,
-		"gitlab_mr_label_event_list":                               true,
-		"gitlab_mr_list":                                           true,
-		"gitlab_mr_list_global":                                    true,
-		"gitlab_mr_list_group":                                     true,
-		"gitlab_mr_merge":                                          true,
-		"gitlab_mr_milestone_event_get":                            true,
-		"gitlab_mr_milestone_event_list":                           true,
-		"gitlab_mr_note_create":                                    true,
-		"gitlab_mr_note_delete":                                    true,
-		"gitlab_mr_note_emoji_create":                              true,
-		"gitlab_mr_note_emoji_delete":                              true,
-		"gitlab_mr_note_emoji_get":                                 true,
-		"gitlab_mr_note_emoji_list":                                true,
-		"gitlab_mr_note_get":                                       true,
-		"gitlab_mr_note_update":                                    true,
-		"gitlab_mr_notes_list":                                     true,
-		"gitlab_mr_participants":                                   true,
-		"gitlab_mr_pipelines":                                      true,
-		"gitlab_mr_raw_diffs":                                      true,
-		"gitlab_mr_rebase":                                         true,
-		"gitlab_mr_related_issues":                                 true,
-		"gitlab_mr_reset_spent_time":                               true,
-		"gitlab_mr_reset_time_estimate":                            true,
-		"gitlab_mr_reviewers":                                      true,
-		"gitlab_mr_set_time_estimate":                              true,
-		"gitlab_mr_state_event_get":                                true,
-		"gitlab_mr_state_event_list":                               true,
-		"gitlab_mr_subscribe":                                      true,
-		"gitlab_mr_time_stats":                                     true,
-		"gitlab_mr_unapprove":                                      true,
-		"gitlab_mr_unsubscribe":                                    true,
-		"gitlab_mr_update":                                         true,
-		"gitlab_namespace_exists":                                  true,
-		"gitlab_namespace_get":                                     true,
-		"gitlab_namespace_list":                                    true,
-		"gitlab_namespace_search":                                  true,
-		"gitlab_notification_global_get":                           true,
-		"gitlab_notification_global_update":                        true,
-		"gitlab_notification_group_get":                            true,
-		"gitlab_notification_group_update":                         true,
-		"gitlab_notification_project_get":                          true,
-		"gitlab_notification_project_update":                       true,
-		"gitlab_package_delete":                                    true,
-		"gitlab_package_download":                                  true,
-		"gitlab_package_file_delete":                               true,
-		"gitlab_package_file_list":                                 true,
-		"gitlab_package_list":                                      true,
-		"gitlab_package_publish":                                   true,
-		"gitlab_package_publish_and_link":                          true,
-		"gitlab_package_publish_directory":                         true,
-		"gitlab_pages_domain_create":                               true,
-		"gitlab_pages_domain_delete":                               true,
-		"gitlab_pages_domain_get":                                  true,
-		"gitlab_pages_domain_list":                                 true,
-		"gitlab_pages_domain_list_all":                             true,
-		"gitlab_pages_domain_update":                               true,
-		"gitlab_pages_get":                                         true,
-		"gitlab_pages_unpublish":                                   true,
-		"gitlab_pages_update":                                      true,
-		"gitlab_patch_job_token_access_settings":                   true,
-		"gitlab_personal_access_token_get":                         true,
-		"gitlab_personal_access_token_list":                        true,
-		"gitlab_personal_access_token_revoke":                      true,
-		"gitlab_personal_access_token_revoke_self":                 true,
-		"gitlab_personal_access_token_rotate":                      true,
-		"gitlab_personal_access_token_rotate_self":                 true,
-		"gitlab_pipeline_cancel":                                   true,
-		"gitlab_pipeline_create":                                   true,
-		"gitlab_pipeline_delete":                                   true,
-		"gitlab_pipeline_get":                                      true,
-		"gitlab_pipeline_latest":                                   true,
-		"gitlab_pipeline_list":                                     true,
-		"gitlab_pipeline_retry":                                    true,
-		"gitlab_pipeline_security_summary":                         true,
-		"gitlab_pipeline_schedule_create":                          true,
-		"gitlab_pipeline_schedule_create_variable":                 true,
-		"gitlab_pipeline_schedule_delete":                          true,
-		"gitlab_pipeline_schedule_delete_variable":                 true,
-		"gitlab_pipeline_schedule_edit_variable":                   true,
-		"gitlab_pipeline_schedule_get":                             true,
-		"gitlab_pipeline_schedule_list":                            true,
-		"gitlab_pipeline_schedule_list_triggered_pipelines":        true,
-		"gitlab_pipeline_schedule_run":                             true,
-		"gitlab_pipeline_schedule_take_ownership":                  true,
-		"gitlab_pipeline_schedule_update":                          true,
-		"gitlab_pipeline_test_report":                              true,
-		"gitlab_pipeline_test_report_summary":                      true,
-		"gitlab_pipeline_trigger_create":                           true,
-		"gitlab_pipeline_trigger_delete":                           true,
-		"gitlab_pipeline_trigger_get":                              true,
-		"gitlab_pipeline_trigger_list":                             true,
-		"gitlab_pipeline_trigger_run":                              true,
-		"gitlab_pipeline_trigger_update":                           true,
-		"gitlab_pipeline_update_metadata":                          true,
-		"gitlab_pipeline_variables":                                true,
-		"gitlab_pipeline_wait":                                     true,
-		"gitlab_preview_group_badge":                               true,
-		"gitlab_preview_project_badge":                             true,
-		"gitlab_project_access_token_create":                       true,
-		"gitlab_project_access_token_get":                          true,
-		"gitlab_project_access_token_list":                         true,
-		"gitlab_project_access_token_revoke":                       true,
-		"gitlab_project_access_token_rotate":                       true,
-		"gitlab_project_access_token_rotate_self":                  true,
-		"gitlab_project_add_push_rule":                             true,
-		"gitlab_project_approval_config_change":                    true,
-		"gitlab_project_approval_config_get":                       true,
-		"gitlab_project_approval_rule_create":                      true,
-		"gitlab_project_approval_rule_delete":                      true,
-		"gitlab_project_approval_rule_get":                         true,
-		"gitlab_project_approval_rule_list":                        true,
-		"gitlab_project_approval_rule_update":                      true,
-		"gitlab_project_archive":                                   true,
-		"gitlab_project_create":                                    true,
-		"gitlab_project_create_for_user":                           true,
-		"gitlab_project_create_fork_relation":                      true,
-		"gitlab_project_delete":                                    true,
-		"gitlab_project_delete_fork_relation":                      true,
-		"gitlab_project_delete_push_rule":                          true,
-		"gitlab_project_delete_shared_group":                       true,
-		"gitlab_project_download_avatar":                           true,
-		"gitlab_project_edit_push_rule":                            true,
-		"gitlab_project_event_list":                                true,
-		"gitlab_project_fork":                                      true,
-		"gitlab_project_get":                                       true,
-		"gitlab_project_get_push_rules":                            true,
-		"gitlab_project_hook_add":                                  true,
-		"gitlab_project_hook_delete":                               true,
-		"gitlab_project_hook_delete_custom_header":                 true,
-		"gitlab_project_hook_delete_url_variable":                  true,
-		"gitlab_project_hook_edit":                                 true,
-		"gitlab_project_hook_get":                                  true,
-		"gitlab_project_hook_list":                                 true,
-		"gitlab_project_hook_set_custom_header":                    true,
-		"gitlab_project_hook_set_url_variable":                     true,
-		"gitlab_project_hook_test":                                 true,
-		"gitlab_project_invite":                                    true,
-		"gitlab_project_invite_list_pending":                       true,
-		"gitlab_project_languages":                                 true,
-		"gitlab_project_list":                                      true,
-		"gitlab_project_list_forks":                                true,
-		"gitlab_project_list_groups":                               true,
-		"gitlab_project_list_invited_groups":                       true,
-		"gitlab_project_list_starrers":                             true,
-		"gitlab_project_list_user_contributed":                     true,
-		"gitlab_project_list_user_projects":                        true,
-		"gitlab_project_list_user_starred":                         true,
-		"gitlab_project_list_users":                                true,
-		"gitlab_project_member_add":                                true,
-		"gitlab_project_member_delete":                             true,
-		"gitlab_project_member_edit":                               true,
-		"gitlab_project_member_get":                                true,
-		"gitlab_project_member_get_inherited":                      true,
-		"gitlab_project_members_list":                              true,
-		"gitlab_project_pull_mirror_configure":                     true,
-		"gitlab_project_pull_mirror_get":                           true,
-		"gitlab_project_repository_storage_get":                    true,
-		"gitlab_project_restore":                                   true,
-		"gitlab_project_share_with_group":                          true,
-		"gitlab_project_snippet_content":                           true,
-		"gitlab_project_snippet_create":                            true,
-		"gitlab_project_snippet_delete":                            true,
-		"gitlab_project_snippet_get":                               true,
-		"gitlab_project_snippet_list":                              true,
-		"gitlab_project_snippet_update":                            true,
-		"gitlab_project_star":                                      true,
-		"gitlab_project_start_housekeeping":                        true,
-		"gitlab_project_start_mirroring":                           true,
-		"gitlab_project_transfer":                                  true,
-		"gitlab_project_unarchive":                                 true,
-		"gitlab_project_unstar":                                    true,
-		"gitlab_project_update":                                    true,
-		"gitlab_project_upload":                                    true,
-		"gitlab_project_upload_avatar":                             true,
-		"gitlab_project_upload_delete":                             true,
-		"gitlab_project_upload_list":                               true,
-		"gitlab_protected_branch_get":                              true,
-		"gitlab_protected_branch_update":                           true,
-		"gitlab_protected_branches_list":                           true,
-		"gitlab_protected_environment_get":                         true,
-		"gitlab_protected_environment_list":                        true,
-		"gitlab_protected_environment_protect":                     true,
-		"gitlab_protected_environment_unprotect":                   true,
-		"gitlab_protected_environment_update":                      true,
-		"gitlab_purge_dependency_proxy":                            true,
-		"gitlab_read_repository_submodule_file":                    true,
-		"gitlab_register_cluster_agent":                            true,
-		"gitlab_registry_delete_repository":                        true,
-		"gitlab_registry_delete_tag":                               true,
-		"gitlab_registry_delete_tags_bulk":                         true,
-		"gitlab_registry_get_repository":                           true,
-		"gitlab_registry_get_tag":                                  true,
-		"gitlab_registry_list_group":                               true,
-		"gitlab_registry_list_project":                             true,
-		"gitlab_registry_list_tags":                                true,
-		"gitlab_registry_protection_create":                        true,
-		"gitlab_registry_protection_delete":                        true,
-		"gitlab_registry_protection_list":                          true,
-		"gitlab_registry_protection_update":                        true,
-		"gitlab_reject_user":                                       true,
-		"gitlab_release_create":                                    true,
-		"gitlab_release_delete":                                    true,
-		"gitlab_release_get":                                       true,
-		"gitlab_release_latest":                                    true,
-		"gitlab_release_link_create":                               true,
-		"gitlab_release_link_create_batch":                         true,
-		"gitlab_release_link_delete":                               true,
-		"gitlab_release_link_get":                                  true,
-		"gitlab_release_link_list":                                 true,
-		"gitlab_release_link_update":                               true,
-		"gitlab_release_list":                                      true,
-		"gitlab_release_update":                                    true,
-		"gitlab_remove_group_job_token_allowlist":                  true,
-		"gitlab_remove_project_job_token_allowlist":                true,
-		"gitlab_remove_secure_file":                                true,
-		"gitlab_render_markdown":                                   true,
-		"gitlab_repair_geo_site":                                   true,
-		"gitlab_repository_archive":                                true,
-		"gitlab_repository_blob":                                   true,
-		"gitlab_repository_changelog_add":                          true,
-		"gitlab_repository_changelog_generate":                     true,
-		"gitlab_repository_compare":                                true,
-		"gitlab_repository_contributors":                           true,
-		"gitlab_repository_merge_base":                             true,
-		"gitlab_repository_raw_blob":                               true,
-		"gitlab_repository_tree":                                   true,
-		"gitlab_discover_project":                                  true,
-		"gitlab_resolve_vulnerability":                             true,
-		"gitlab_retrieve_all_group_storage_moves":                  true,
-		"gitlab_retrieve_all_project_storage_moves":                true,
-		"gitlab_retrieve_all_snippet_storage_moves":                true,
-		"gitlab_retrieve_group_storage_moves":                      true,
-		"gitlab_retrieve_project_storage_moves":                    true,
-		"gitlab_retrieve_snippet_storage_moves":                    true,
-		"gitlab_retry_failed_external_status_check_for_project_mr": true,
-		"gitlab_revert_vulnerability":                              true,
-		"gitlab_review_mr_security":                                true,
-		"gitlab_revoke_cluster_agent_token":                        true,
-		"gitlab_revoke_group_personal_access_token":                true,
-		"gitlab_revoke_impersonation_token":                        true,
-		"gitlab_runner_controller_create":                          true,
-		"gitlab_runner_controller_delete":                          true,
-		"gitlab_runner_controller_get":                             true,
-		"gitlab_runner_controller_list":                            true,
-		"gitlab_runner_controller_scope_add_instance":              true,
-		"gitlab_runner_controller_scope_add_runner":                true,
-		"gitlab_runner_controller_scope_list":                      true,
-		"gitlab_runner_controller_scope_remove_instance":           true,
-		"gitlab_runner_controller_scope_remove_runner":             true,
-		"gitlab_runner_controller_token_create":                    true,
-		"gitlab_runner_controller_token_get":                       true,
-		"gitlab_runner_controller_token_list":                      true,
-		"gitlab_runner_controller_token_revoke":                    true,
-		"gitlab_runner_controller_token_rotate":                    true,
-		"gitlab_runner_controller_update":                          true,
-		"gitlab_runner_delete_by_token":                            true,
-		"gitlab_runner_delete_registered":                          true,
-		"gitlab_runner_disable_project":                            true,
-		"gitlab_runner_enable_project":                             true,
-		"gitlab_runner_get":                                        true,
-		"gitlab_runner_jobs":                                       true,
-		"gitlab_runner_list":                                       true,
-		"gitlab_runner_list_all":                                   true,
-		"gitlab_runner_list_group":                                 true,
-		"gitlab_runner_list_managers":                              true,
-		"gitlab_runner_list_project":                               true,
-		"gitlab_runner_register":                                   true,
-		"gitlab_runner_remove":                                     true,
-		"gitlab_runner_reset_group_reg_token":                      true,
-		"gitlab_runner_reset_instance_reg_token":                   true,
-		"gitlab_runner_reset_project_reg_token":                    true,
-		"gitlab_runner_reset_token":                                true,
-		"gitlab_runner_update":                                     true,
-		"gitlab_runner_verify":                                     true,
-		"gitlab_schedule_all_group_storage_moves":                  true,
-		"gitlab_schedule_all_project_storage_moves":                true,
-		"gitlab_schedule_all_snippet_storage_moves":                true,
-		"gitlab_schedule_group_export":                             true,
-		"gitlab_schedule_group_relations_export":                   true,
-		"gitlab_schedule_group_storage_move":                       true,
-		"gitlab_schedule_project_export":                           true,
-		"gitlab_schedule_project_storage_move":                     true,
-		"gitlab_schedule_snippet_storage_move":                     true,
-		"gitlab_search_code":                                       true,
-		"gitlab_search_commits":                                    true,
-		"gitlab_search_issues":                                     true,
-		"gitlab_search_merge_requests":                             true,
-		"gitlab_search_milestones":                                 true,
-		"gitlab_search_notes":                                      true,
-		"gitlab_search_projects":                                   true,
-		"gitlab_search_snippets":                                   true,
-		"gitlab_search_users":                                      true,
-		"gitlab_search_wiki":                                       true,
-		"gitlab_set_custom_attribute":                              true,
-		"gitlab_set_feature_flag":                                  true,
-		"gitlab_set_jira_integration":                              true,
-		"gitlab_set_project_mr_external_status_check_status":       true,
-		"gitlab_set_system_hook_url_variable":                      true,
-		"gitlab_set_user_status":                                   true,
-		"gitlab_show_secure_file":                                  true,
-		"gitlab_snippet_content":                                   true,
-		"gitlab_snippet_create":                                    true,
-		"gitlab_snippet_delete":                                    true,
-		"gitlab_snippet_emoji_create":                              true,
-		"gitlab_snippet_emoji_delete":                              true,
-		"gitlab_snippet_emoji_get":                                 true,
-		"gitlab_snippet_emoji_list":                                true,
-		"gitlab_snippet_explore":                                   true,
-		"gitlab_snippet_file_content":                              true,
-		"gitlab_snippet_get":                                       true,
-		"gitlab_snippet_list":                                      true,
-		"gitlab_snippet_list_all":                                  true,
-		"gitlab_snippet_note_create":                               true,
-		"gitlab_snippet_note_delete":                               true,
-		"gitlab_snippet_note_emoji_create":                         true,
-		"gitlab_snippet_note_emoji_delete":                         true,
-		"gitlab_snippet_note_emoji_get":                            true,
-		"gitlab_snippet_note_emoji_list":                           true,
-		"gitlab_snippet_note_get":                                  true,
-		"gitlab_snippet_note_list":                                 true,
-		"gitlab_snippet_note_update":                               true,
-		"gitlab_snippet_update":                                    true,
-		"gitlab_start_bulk_import":                                 true,
-		"gitlab_list_bulk_imports":                                 true,
-		"gitlab_get_bulk_import":                                   true,
-		"gitlab_cancel_bulk_import":                                true,
-		"gitlab_list_bulk_import_entities":                         true,
-		"gitlab_get_bulk_import_entity":                            true,
-		"gitlab_list_bulk_import_entity_failures":                  true,
-		"gitlab_subgroups_list":                                    true,
-		"gitlab_summarize_issue":                                   true,
-		"gitlab_summarize_mr_review":                               true,
-		"gitlab_tag_create":                                        true,
-		"gitlab_tag_delete":                                        true,
-		"gitlab_tag_get":                                           true,
-		"gitlab_tag_get_protected":                                 true,
-		"gitlab_tag_get_signature":                                 true,
-		"gitlab_tag_list":                                          true,
-		"gitlab_tag_list_protected":                                true,
-		"gitlab_tag_protect":                                       true,
-		"gitlab_tag_unprotect":                                     true,
-		"gitlab_test_system_hook":                                  true,
-		"gitlab_todo_list":                                         true,
-		"gitlab_todo_mark_all_done":                                true,
-		"gitlab_todo_mark_done":                                    true,
-		"gitlab_track_event":                                       true,
-		"gitlab_track_events":                                      true,
-		"gitlab_unban_user":                                        true,
-		"gitlab_unblock_user":                                      true,
-		"gitlab_unlock_terraform_state":                            true,
-		"gitlab_update_alert_metric_image":                         true,
-		"gitlab_update_appearance":                                 true,
-		"gitlab_update_broadcast_message":                          true,
-		"gitlab_update_commit_discussion_note":                     true,
-		"gitlab_update_compliance_policy_settings":                 true,
-		"gitlab_update_epic_discussion_note":                       true,
-		"gitlab_update_freeze_period":                              true,
-		"gitlab_update_group_mr_approval_settings":                 true,
-		"gitlab_update_group_scim_identity":                        true,
-		"gitlab_update_group_secret_push_protection":               true,
-		"gitlab_update_issue_discussion_note":                      true,
-		"gitlab_update_package_protection_rule":                    true,
-		"gitlab_update_project_external_status_check":              true,
-		"gitlab_update_project_mr_approval_settings":               true,
-		"gitlab_update_project_security_attributes":                true,
-		"gitlab_update_project_secret_push_protection":             true,
-		"gitlab_update_repository_submodule":                       true,
-		"gitlab_update_security_attribute":                         true,
-		"gitlab_update_security_category":                          true,
-		"gitlab_update_settings":                                   true,
-		"gitlab_update_snippet_discussion_note":                    true,
-		"gitlab_update_topic":                                      true,
-		"gitlab_update_work_item":                                  true,
-		"gitlab_upload_alert_metric_image":                         true,
-		"gitlab_user_contribution_event_list":                      true,
-		"gitlab_user_current":                                      true,
-		"gitlab_vulnerability_severity_count":                      true,
-		"gitlab_wiki_create":                                       true,
-		"gitlab_wiki_delete":                                       true,
-		"gitlab_wiki_get":                                          true,
-		"gitlab_wiki_list":                                         true,
-		"gitlab_wiki_update":                                       true,
-		"gitlab_wiki_upload_attachment":                            true,
-	}
+	expectedNames := expectedRegisterAllToolNames(t, true)
 
 	for _, tool := range result.Tools {
 		if !expectedNames[tool.Name] {
@@ -1377,6 +357,36 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 
 // TestRegisterAllMeta_ToolNames verifies that every expected meta-tool name
 // is present after RegisterAllMeta (enterprise=true) and that no unexpected tools are registered.
+func expectedRegisterAllToolNames(t *testing.T, enterprise bool) map[string]bool {
+	t.Helper()
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
+	opts := IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true}
+	state := individualCatalogRegisterState{
+		opts:       opts,
+		allowed:    stringSet(opts.AllowedToolNames),
+		excluded:   stringSet(opts.ExcludeToolNames),
+		registered: make(map[string]struct{}),
+	}
+	names := make(map[string]bool)
+	for _, group := range catalog.Groups() {
+		if !individualCatalogGroupEligible(group, opts) {
+			continue
+		}
+		for _, action := range group.ActionsInOrder() {
+			toolName := strings.TrimSpace(action.IndividualTool.Name)
+			if !individualCatalogToolEligible(toolName, action, state) {
+				continue
+			}
+			names[toolName] = true
+			state.registered[toolName] = struct{}{}
+		}
+	}
+	for _, spec := range StandaloneSurfaceToolSpecs(nil) {
+		names[spec.Name] = true
+	}
+	return names
+}
+
 func TestRegisterAllMeta_ToolNames(t *testing.T) {
 	session := newMetaMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)
@@ -1615,95 +625,17 @@ func TestAllMarkdownFormattersRegistered(t *testing.T) {
 //   - Backtick-quoted `gitlab_*` tool references must match a registered tool name
 //   - `action 'xxx'` references must match a meta-tool action key
 func TestAllHintReferencesValid(t *testing.T) {
-	// 1. Build set of all registered individual tool names from sub-package register.go files.
-	validTools := make(map[string]bool)
-	reToolName := regexp.MustCompile(`Name:\s+"(gitlab_\w+)"`)
-
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)
 	}
-
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		regPath := filepath.Join(e.Name(), "register.go")
-		src, readErr := os.ReadFile(regPath)
-		if readErr != nil {
-			continue
-		}
-		for _, m := range reToolName.FindAllStringSubmatch(string(src), -1) {
-			validTools[m[1]] = true
-		}
-	}
-	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Actions {
-			if name := strings.TrimSpace(spec.IndividualTool.Name); name != "" {
-				validTools[name] = true
-			}
-		}
-	}
-
-	// Also add meta-tool names from register_meta*.go files.
 	metaSrc := readRegisterMetaSource(t)
-	reMetaTool := regexp.MustCompile(`add(?:ReadOnly)?MetaTool\(server,\s+"(gitlab_\w+)"`)
-	for _, m := range reMetaTool.FindAllStringSubmatch(metaSrc, -1) {
-		validTools[m[1]] = true
-	}
-
-	// Also add meta-tools from sub-package RegisterMeta (via mcp.AddTool Name).
-	// These are already captured by reToolName above if they use Name: "gitlab_*".
+	validTools := collectValidHintTools(t, entries, metaSrc)
 
 	if len(validTools) == 0 {
 		t.Fatal("no tool names found — parsing may be broken")
 	}
-
-	// 2. Build set of all meta-tool action keys from route maps.
-	validActions := make(map[string]bool)
-	// Pattern for register_meta*.go: "key": wrapAction/wrapVoidAction/wrapDelegateAction (map literal)
-	reInlineAction := regexp.MustCompile(`"(\w+)":\s+(?:route|destructive)(?:Action|VoidAction|ActionWithRequest)\b`)
-	for _, m := range reInlineAction.FindAllStringSubmatch(metaSrc, -1) {
-		validActions[m[1]] = true
-	}
-	// Pattern for register_meta*.go: routes["key"] = route/destructiveRoute/routeAction/etc. (enterprise assignment)
-	reRouteAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*(?:route(?:Action|VoidAction|ActionWithRequest)?|destructive(?:Route|Action|VoidAction|ActionWithRequest))\b`)
-	for _, m := range reRouteAssign.FindAllStringSubmatch(metaSrc, -1) {
-		validActions[m[1]] = true
-	}
-	// Also match custom action variables wrapped in route/destructiveRoute (e.g., "publish": route(publishAction)).
-	reCustomAction := regexp.MustCompile(`"(\w+)":\s+(?:route|destructiveRoute)\(\w+Action\b`)
-	for _, m := range reCustomAction.FindAllStringSubmatch(metaSrc, -1) {
-		validActions[m[1]] = true
-	}
-
-	// Pattern for sub-package register.go: "key": toolutil.RouteAction/RouteVoidAction/Route/DestructiveAction etc.
-	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
-	// Pattern for sub-package register.go: routes["key"] = toolutil.Route/DestructiveRoute(...) (enterprise)
-	reDelegatedAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		regPath := filepath.Join(e.Name(), "register.go")
-		src, readErr := os.ReadFile(regPath)
-		if readErr != nil {
-			continue
-		}
-		for _, m := range reDelegatedAction.FindAllStringSubmatch(string(src), -1) {
-			validActions[m[1]] = true
-		}
-		for _, m := range reDelegatedAssign.FindAllStringSubmatch(string(src), -1) {
-			validActions[m[1]] = true
-		}
-	}
-	for _, group := range CollectActionSpecs(nil, true) {
-		for _, spec := range group.Actions {
-			if actionName := strings.TrimSpace(spec.Name); actionName != "" {
-				validActions[actionName] = true
-			}
-		}
-	}
+	validActions := collectValidHintActions(entries, metaSrc)
 
 	if len(validActions) == 0 {
 		t.Fatal("no action keys found — parsing may be broken")
@@ -1713,42 +645,114 @@ func TestAllHintReferencesValid(t *testing.T) {
 	reToolRef := regexp.MustCompile("`(gitlab_\\w+)`")
 	reActionRef := regexp.MustCompile(`action '(\w+)'`)
 
-	var toolErrors, actionErrors int
-
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		mdPath := filepath.Join(e.Name(), "markdown.go")
-		src, readErr := os.ReadFile(mdPath)
-		if readErr != nil {
-			continue
-		}
-
-		// Extract lines that belong to WriteHints calls.
-		hintLines := extractWriteHintLines(string(src))
-		for _, line := range hintLines {
-			// Check backtick-quoted tool references.
-			for _, m := range reToolRef.FindAllStringSubmatch(line, -1) {
-				toolName := m[1]
-				if !validTools[toolName] {
-					t.Errorf("%s: hint references non-existent tool %q", e.Name(), toolName)
-					toolErrors++
-				}
-			}
-			// Check action name references.
-			for _, m := range reActionRef.FindAllStringSubmatch(line, -1) {
-				actionName := m[1]
-				if !validActions[actionName] {
-					t.Errorf("%s: hint references non-existent action %q", e.Name(), actionName)
-					actionErrors++
-				}
-			}
-		}
-	}
+	toolErrors, actionErrors := validateWriteHintReferences(t, entries, validTools, validActions, reToolRef, reActionRef)
 
 	t.Logf("validated hints across all packages: %d valid tools, %d valid actions, %d tool errors, %d action errors",
 		len(validTools), len(validActions), toolErrors, actionErrors)
+}
+
+func collectValidHintTools(t *testing.T, entries []os.DirEntry, metaSrc string) map[string]bool {
+	t.Helper()
+	validTools := make(map[string]bool)
+	reToolName := regexp.MustCompile(`Name:\s+"(gitlab_\w+)"`)
+	for _, entry := range entries {
+		addRegisterFileMatches(validTools, entry, reToolName)
+	}
+	for _, group := range CollectActionSpecs(nil, true) {
+		for _, spec := range group.Actions {
+			if name := strings.TrimSpace(spec.IndividualTool.Name); name != "" {
+				validTools[name] = true
+			}
+		}
+	}
+	reMetaTool := regexp.MustCompile(`add(?:ReadOnly)?MetaTool\(server,\s+"(gitlab_\w+)"`)
+	for _, match := range reMetaTool.FindAllStringSubmatch(metaSrc, -1) {
+		validTools[match[1]] = true
+	}
+	return validTools
+}
+
+func collectValidHintActions(entries []os.DirEntry, metaSrc string) map[string]bool {
+	validActions := make(map[string]bool)
+	addMatches(validActions, regexp.MustCompile(`"(\w+)":\s+(?:route|destructive)(?:Action|VoidAction|ActionWithRequest)\b`), metaSrc)
+	addMatches(validActions, regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*(?:route(?:Action|VoidAction|ActionWithRequest)?|destructive(?:Route|Action|VoidAction|ActionWithRequest))\b`), metaSrc)
+	addMatches(validActions, regexp.MustCompile(`"(\w+)":\s+(?:route|destructiveRoute)\(\w+Action\b`), metaSrc)
+	reDelegatedAction := regexp.MustCompile(`"(\w+)":\s+toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
+	reDelegatedAssign := regexp.MustCompile(`routes\["(\w+)"\]\s*=\s*toolutil\.(?:Route(?:Action|VoidAction|ActionWithRequest)?|Destructive(?:Action|VoidAction|ActionWithRequest|Route))\b`)
+	for _, entry := range entries {
+		addRegisterFileMatches(validActions, entry, reDelegatedAction)
+		addRegisterFileMatches(validActions, entry, reDelegatedAssign)
+	}
+	for _, group := range CollectActionSpecs(nil, true) {
+		for _, spec := range group.Actions {
+			if actionName := strings.TrimSpace(spec.Name); actionName != "" {
+				validActions[actionName] = true
+			}
+		}
+	}
+	return validActions
+}
+
+func addRegisterFileMatches(values map[string]bool, entry os.DirEntry, pattern *regexp.Regexp) {
+	if !entry.IsDir() {
+		return
+	}
+	src, readErr := os.ReadFile(filepath.Join(entry.Name(), "register.go"))
+	if readErr != nil {
+		return
+	}
+	addMatches(values, pattern, string(src))
+}
+
+func addMatches(values map[string]bool, pattern *regexp.Regexp, src string) {
+	for _, match := range pattern.FindAllStringSubmatch(src, -1) {
+		values[match[1]] = true
+	}
+}
+
+func validateWriteHintReferences(t *testing.T, entries []os.DirEntry, validTools, validActions map[string]bool, reToolRef, reActionRef *regexp.Regexp) (int, int) {
+	t.Helper()
+	var toolErrors, actionErrors int
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		src, readErr := os.ReadFile(filepath.Join(entry.Name(), "markdown.go"))
+		if readErr != nil {
+			continue
+		}
+		for _, line := range extractWriteHintLines(string(src)) {
+			toolErrors += reportInvalidToolReferences(t, entry.Name(), line, validTools, reToolRef)
+			actionErrors += reportInvalidActionReferences(t, entry.Name(), line, validActions, reActionRef)
+		}
+	}
+	return toolErrors, actionErrors
+}
+
+func reportInvalidToolReferences(t *testing.T, packageName, line string, validTools map[string]bool, reToolRef *regexp.Regexp) int {
+	t.Helper()
+	errors := 0
+	for _, match := range reToolRef.FindAllStringSubmatch(line, -1) {
+		toolName := match[1]
+		if !validTools[toolName] {
+			t.Errorf("%s: hint references non-existent tool %q", packageName, toolName)
+			errors++
+		}
+	}
+	return errors
+}
+
+func reportInvalidActionReferences(t *testing.T, packageName, line string, validActions map[string]bool, reActionRef *regexp.Regexp) int {
+	t.Helper()
+	errors := 0
+	for _, match := range reActionRef.FindAllStringSubmatch(line, -1) {
+		actionName := match[1]
+		if !validActions[actionName] {
+			t.Errorf("%s: hint references non-existent action %q", packageName, actionName)
+			errors++
+		}
+	}
+	return errors
 }
 
 // extractWriteHintLines finds string literal lines inside WriteHints() calls.
@@ -1780,19 +784,24 @@ func extractWriteHintLines(src string) []string {
 // and that non-destructive routes do not correspond to individual tools with
 // DeleteAnnotations. This catches misclassified routes after migration.
 func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *testing.T) {
-	// 1. Build set of sub-package actions with their destructive wrapper status.
-	type routeInfo struct {
-		pkg         string
-		destructive bool
-	}
-	routeMap := make(map[string][]routeInfo)
-
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatalf("ReadDir: %v", err)
 	}
+	routeMap := collectRouteDestructiveMetadata(t, entries)
+	deleteTools := collectDeleteAnnotationPackages(t, entries)
+	mismatches := validateDestructiveMetadataMatches(t, routeMap, deleteTools)
+	t.Logf("validated %d route entries across %d packages, %d mismatches", len(routeMap), len(entries), mismatches)
+}
 
-	// Patterns for destructive wrappers in sub-packages.
+type destructiveRouteInfo struct {
+	pkg         string
+	destructive bool
+}
+
+func collectRouteDestructiveMetadata(t *testing.T, entries []os.DirEntry) map[string][]destructiveRouteInfo {
+	t.Helper()
+	routeMap := make(map[string][]destructiveRouteInfo)
 	reSubDestructive := regexp.MustCompile(`"(\w+)":\s+toolutil\.Destructive(?:Action|VoidAction|ActionWithRequest|Route)\b`)
 	reSubNonDestructive := regexp.MustCompile(`"(\w+)":\s+toolutil\.Route(?:Action|VoidAction|ActionWithRequest|)\b`)
 
@@ -1807,15 +816,18 @@ func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *
 		}
 		srcStr := string(src)
 		for _, m := range reSubDestructive.FindAllStringSubmatch(srcStr, -1) {
-			routeMap[m[1]] = append(routeMap[m[1]], routeInfo{pkg: e.Name(), destructive: true})
+			routeMap[m[1]] = append(routeMap[m[1]], destructiveRouteInfo{pkg: e.Name(), destructive: true})
 		}
 		for _, m := range reSubNonDestructive.FindAllStringSubmatch(srcStr, -1) {
-			routeMap[m[1]] = append(routeMap[m[1]], routeInfo{pkg: e.Name(), destructive: false})
+			routeMap[m[1]] = append(routeMap[m[1]], destructiveRouteInfo{pkg: e.Name(), destructive: false})
 		}
 	}
+	return routeMap
+}
 
-	// 2. Build set of individual tools with DeleteAnnotations per sub-package.
-	deleteTools := make(map[string]bool) // key: "pkg/action" approximate
+func collectDeleteAnnotationPackages(t *testing.T, entries []os.DirEntry) map[string]bool {
+	t.Helper()
+	deleteTools := make(map[string]bool)
 	reDeleteAnn := regexp.MustCompile(`Annotations:\s+toolutil\.DeleteAnnotations`)
 	for _, e := range entries {
 		if !e.IsDir() {
@@ -1830,8 +842,11 @@ func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *
 			deleteTools[e.Name()] = true
 		}
 	}
+	return deleteTools
+}
 
-	// 3. Validate: destructive routes should correspond to packages with DeleteAnnotations.
+func validateDestructiveMetadataMatches(t *testing.T, routeMap map[string][]destructiveRouteInfo, deleteTools map[string]bool) int {
+	t.Helper()
 	var mismatches int
 	for action, infos := range routeMap {
 		for _, info := range infos {
@@ -1851,8 +866,7 @@ func TestDestructiveMetadata_RegisteredRoutes_MatchIndividualToolAnnotations(t *
 			}
 		}
 	}
-
-	t.Logf("validated %d route entries across %d packages, %d mismatches", len(routeMap), len(entries), mismatches)
+	return mismatches
 }
 
 // Actions that are destructive but do NOT contain a destructive keyword.
@@ -2207,7 +1221,7 @@ func auditToolMetadata(tool *mcp.Tool) (nameOK, descOK, annOK, schemaOK bool, is
 	if !schemaOK {
 		issues = append(issues, "schema")
 	}
-	return
+	return nameOK, descOK, annOK, schemaOK, issues
 }
 
 // auditMetaToolMetadata returns metadata validation flags for a meta-tool.
@@ -2217,22 +1231,22 @@ func auditMetaToolMetadata(tool *mcp.Tool) (annOK, enumOK bool, actionCount int)
 		tool.Annotations.DestructiveHint != nil
 	schema, ok := tool.InputSchema.(map[string]any)
 	if !ok {
-		return
+		return annOK, enumOK, actionCount
 	}
 	props, ok := schema["properties"].(map[string]any)
 	if !ok {
-		return
+		return annOK, enumOK, actionCount
 	}
 	action, ok := props["action"].(map[string]any)
 	if !ok {
-		return
+		return annOK, enumOK, actionCount
 	}
 	enumList, ok := action["enum"].([]any)
 	if ok {
 		enumOK = len(enumList) > 0
 		actionCount = len(enumList)
 	}
-	return
+	return annOK, enumOK, actionCount
 }
 
 // ---------- Individual tool metadata audit ----------.
@@ -2705,6 +1719,16 @@ func routeReleases(w http.ResponseWriter, r *http.Request, b mockBodies) bool {
 func routeMergeRequests(w http.ResponseWriter, r *http.Request, b mockBodies) bool {
 	p := r.URL.Path
 	hasMR1 := strings.Contains(p, "/merge_requests/1")
+	if routeMergeRequestReadWrite(w, r, b, p, hasMR1) {
+		return true
+	}
+	if routeMergeRequestReview(w, r, b, p) {
+		return true
+	}
+	return false
+}
+
+func routeMergeRequestReadWrite(w http.ResponseWriter, r *http.Request, b mockBodies, p string, hasMR1 bool) bool {
 	switch {
 	case r.Method == http.MethodPost && strings.HasSuffix(p, "/merge_requests"):
 		respondJSON(w, http.StatusCreated, b.mr)
@@ -2716,6 +1740,14 @@ func routeMergeRequests(w http.ResponseWriter, r *http.Request, b mockBodies) bo
 		respondJSON(w, http.StatusOK, b.mr)
 	case r.Method == http.MethodPut && strings.HasSuffix(p, "/merge"):
 		respondJSON(w, http.StatusOK, b.mr)
+	default:
+		return false
+	}
+	return true
+}
+
+func routeMergeRequestReview(w http.ResponseWriter, r *http.Request, b mockBodies, p string) bool {
+	switch {
 	case r.Method == http.MethodPost && strings.HasSuffix(p, "/approve"):
 		respondJSON(w, http.StatusOK, `{}`)
 	case r.Method == http.MethodPost && strings.HasSuffix(p, "/unapprove"):
@@ -3260,34 +2292,44 @@ func TestResponseCompliance_ContentHasTextContent(t *testing.T) {
 			if result == nil {
 				t.Skip("nil dispatch -- tracked in markdown_audit_test.go")
 			}
-
-			if len(result.Content) == 0 {
-				t.Fatal("CallToolResult.Content is empty")
-			}
-
-			var foundText bool
-			for _, c := range result.Content {
-				switch v := c.(type) {
-				case *mcp.TextContent:
-					if v.Text == "" {
-						t.Error("TextContent.Text is empty")
-					} else {
-						foundText = true
-					}
-				case *mcp.ImageContent:
-					if len(v.Data) == 0 {
-						t.Error("ImageContent.Data is empty")
-					}
-				default:
-					t.Logf("unexpected content type: %T", c)
-				}
-			}
-
-			if !foundText {
-				t.Error("no non-empty TextContent found in Content array")
-			}
+			assertResultHasTextContent(t, result)
 		})
 	}
+}
+
+func assertResultHasTextContent(t *testing.T, result *mcp.CallToolResult) {
+	t.Helper()
+	if len(result.Content) == 0 {
+		t.Fatal("CallToolResult.Content is empty")
+	}
+	foundText := false
+	for _, content := range result.Content {
+		if contentHasValidText(t, content) {
+			foundText = true
+		}
+	}
+	if !foundText {
+		t.Error("no non-empty TextContent found in Content array")
+	}
+}
+
+func contentHasValidText(t *testing.T, content mcp.Content) bool {
+	t.Helper()
+	switch typed := content.(type) {
+	case *mcp.TextContent:
+		if typed.Text == "" {
+			t.Error("TextContent.Text is empty")
+			return false
+		}
+		return true
+	case *mcp.ImageContent:
+		if len(typed.Data) == 0 {
+			t.Error("ImageContent.Data is empty")
+		}
+	default:
+		t.Logf("unexpected content type: %T", content)
+	}
+	return false
 }
 
 // TestResponseCompliance_ErrorResponseFormat verifies that tool calls
@@ -3432,27 +2474,40 @@ func TestResponseCompliance_MarkdownContentWellFormed(t *testing.T) {
 				t.Fatal("expected at least 1 TextContent entry with markdown, got 0")
 			}
 
-			for i, c := range result.Content {
-				tc, ok := c.(*mcp.TextContent)
-				if !ok {
-					continue
-				}
-				text := strings.TrimSpace(tc.Text)
-				if text == "" {
-					t.Errorf("Content[%d]: TextContent.Text is empty", i)
-					continue
-				}
-				hasMarkdown := strings.Contains(text, "**") ||
-					strings.Contains(text, "| ") ||
-					strings.Contains(text, "## ") ||
-					strings.Contains(text, "- ")
-				if !hasMarkdown {
-					t.Errorf("Content[%d]: text lacks markdown indicators (headers, bold, tables, lists)", i)
-				}
-				t.Logf("Content[%d]: well-formed markdown (%d bytes)", i, len(text))
-			}
+			assertResultMarkdownContent(t, result)
 		})
 	}
+}
+
+func assertResultMarkdownContent(t *testing.T, result *mcp.CallToolResult) {
+	t.Helper()
+	for i, content := range result.Content {
+		textContent, ok := content.(*mcp.TextContent)
+		if !ok {
+			continue
+		}
+		assertMarkdownTextContent(t, i, textContent.Text)
+	}
+}
+
+func assertMarkdownTextContent(t *testing.T, index int, text string) {
+	t.Helper()
+	text = strings.TrimSpace(text)
+	if text == "" {
+		t.Errorf("Content[%d]: TextContent.Text is empty", index)
+		return
+	}
+	if !hasMarkdownIndicator(text) {
+		t.Errorf("Content[%d]: text lacks markdown indicators (headers, bold, tables, lists)", index)
+	}
+	t.Logf("Content[%d]: well-formed markdown (%d bytes)", index, len(text))
+}
+
+func hasMarkdownIndicator(text string) bool {
+	return strings.Contains(text, "**") ||
+		strings.Contains(text, "| ") ||
+		strings.Contains(text, "## ") ||
+		strings.Contains(text, "- ")
 }
 
 // TestResponseCompliance_NilResultFallback verifies that markdownForResult
@@ -3636,10 +2691,10 @@ func compareOrUpdate(t *testing.T, goldenPath string, current []toolSnapshot) {
 	}
 
 	if os.Getenv("UPDATE_TOOLSNAPS") == "true" {
-		if mkdirErr := os.MkdirAll(filepath.Dir(goldenPath), 0o755); mkdirErr != nil {
+		if mkdirErr := os.MkdirAll(filepath.Dir(goldenPath), 0o750); mkdirErr != nil {
 			t.Fatalf("create testdata dir: %v", mkdirErr)
 		}
-		if writeErr := os.WriteFile(goldenPath, got, 0o644); writeErr != nil {
+		if writeErr := os.WriteFile(goldenPath, got, 0o600); writeErr != nil {
 			t.Fatalf("write golden file: %v", writeErr)
 		}
 		t.Logf("Updated golden file: %s (%d tools)", goldenPath, len(current))

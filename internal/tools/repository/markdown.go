@@ -62,11 +62,12 @@ func FormatCompareMarkdown(out CompareOutput) string {
 		b.WriteString("| --- | --- |\n")
 		for _, d := range out.Diffs {
 			status := "modified"
-			if d.NewFile {
+			switch {
+			case d.NewFile:
 				status = "added"
-			} else if d.DeletedFile {
+			case d.DeletedFile:
 				status = "deleted"
-			} else if d.RenamedFile {
+			case d.RenamedFile:
 				status = "renamed"
 			}
 			fmt.Fprintf(&b, "| %s | %s |\n", status, toolutil.EscapeMdTableCell(d.NewPath))

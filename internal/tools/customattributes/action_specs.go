@@ -18,25 +18,18 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func customAttributeReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := customAttributeOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, customAttributeOptions(individualTool))
 }
 
 func customAttributeSetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	individualIdempotent := false
 	options := customAttributeOptions("gitlab_set_custom_attribute")
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
-	return toolutil.NewActionSpec("custom_attr_set", toolutil.RouteAction(client, Set), options)
+	return toolutil.NewUpdateActionSpec("custom_attr_set", toolutil.RouteAction(client, Set), options)
 }
 
 func customAttributeDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := customAttributeOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, customAttributeOptions(individualTool))
 }
 
 func customAttributeOptions(individualTool string) toolutil.ActionSpecOptions {

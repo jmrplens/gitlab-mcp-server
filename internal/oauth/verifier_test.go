@@ -36,7 +36,7 @@ func TestNewGitLabVerifier_ValidToken(t *testing.T) {
 	defer srv.Close()
 
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
-	info, err := verifier(context.Background(), "valid-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	info, err := verifier(context.Background(), "valid-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestNewGitLabVerifier_InvalidToken(t *testing.T) {
 	defer srv.Close()
 
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
-	_, err := verifier(context.Background(), "bad-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "bad-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for invalid token")
 	}
@@ -86,7 +86,7 @@ func TestNewGitLabVerifier_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
-	_, err := verifier(context.Background(), "some-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "some-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for 500 response")
 	}
@@ -106,7 +106,7 @@ func TestNewGitLabVerifier_NetworkError(t *testing.T) {
 	srv.Close() // close immediately to force connection error
 
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
-	_, err := verifier(context.Background(), "token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for closed server")
 	}
@@ -124,7 +124,7 @@ func TestNewGitLabVerifier_MalformedJSON(t *testing.T) {
 	defer srv.Close()
 
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
-	_, err := verifier(context.Background(), "token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for malformed JSON")
 	}
@@ -143,7 +143,7 @@ func TestNewGitLabVerifier_SkipTLSVerify(t *testing.T) {
 	defer srv.Close()
 
 	verifier := NewGitLabVerifier(srv.URL, true, 10*time.Minute, nil)
-	info, err := verifier(context.Background(), "tls-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	info, err := verifier(context.Background(), "tls-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("unexpected error with skipTLS=true: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestNewGitLabVerifier_CacheHit(t *testing.T) {
 	cache := NewTokenCache()
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, cache)
 
-	info1, err := verifier(context.Background(), "my-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	info1, err := verifier(context.Background(), "my-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestNewGitLabVerifier_CacheHit(t *testing.T) {
 		t.Fatalf("expected 1 API call after first call, got %d", apiCalls)
 	}
 
-	info2, err := verifier(context.Background(), "my-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	info2, err := verifier(context.Background(), "my-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("second call: %v", err)
 	}
@@ -206,14 +206,14 @@ func TestNewGitLabVerifier_CacheExpiry(t *testing.T) {
 	cache := NewTokenCache()
 	verifier := NewGitLabVerifier(srv.URL, false, 1*time.Millisecond, cache)
 
-	_, err := verifier(context.Background(), "exp-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "exp-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
 
 	time.Sleep(5 * time.Millisecond)
 
-	_, err = verifier(context.Background(), "exp-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err = verifier(context.Background(), "exp-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("second call: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestNewGitLabVerifier_CacheInvalidationOnError(t *testing.T) {
 	cache := NewTokenCache()
 	verifier := NewGitLabVerifier(srv.URL, false, 1*time.Hour, cache)
 
-	_, err := verifier(context.Background(), "inv-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "inv-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestNewGitLabVerifier_CacheInvalidationOnError(t *testing.T) {
 	// Expire the cached entry to force re-validation against the now-401 server
 	cache.Delete("inv-token")
 
-	_, err = verifier(context.Background(), "inv-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err = verifier(context.Background(), "inv-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error on revoked token")
 	}
@@ -282,11 +282,11 @@ func TestNewGitLabVerifier_CacheDifferentTokens(t *testing.T) {
 	cache := NewTokenCache()
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, cache)
 
-	info1, err := verifier(context.Background(), "token-a", httptest.NewRequest(http.MethodGet, "/", nil))
+	info1, err := verifier(context.Background(), "token-a", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("token-a: %v", err)
 	}
-	info2, err := verifier(context.Background(), "token-b", httptest.NewRequest(http.MethodGet, "/", nil))
+	info2, err := verifier(context.Background(), "token-b", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("token-b: %v", err)
 	}
@@ -298,8 +298,8 @@ func TestNewGitLabVerifier_CacheDifferentTokens(t *testing.T) {
 	}
 
 	// Re-fetch both: should be cache hits
-	_, _ = verifier(context.Background(), "token-a", httptest.NewRequest(http.MethodGet, "/", nil))
-	_, _ = verifier(context.Background(), "token-b", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, _ = verifier(context.Background(), "token-a", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
+	_, _ = verifier(context.Background(), "token-b", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if apiCalls != 2 {
 		t.Errorf("expected still 2 API calls after cache hits, got %d", apiCalls)
 	}
@@ -312,7 +312,7 @@ func TestNewGitLabVerifier_InvalidURL(t *testing.T) {
 
 	// Control character in URL makes NewRequestWithContext fail
 	verifier := NewGitLabVerifier("http://invalid\x00url", false, 15*time.Minute, nil)
-	_, err := verifier(context.Background(), "token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for invalid URL")
 	}
@@ -332,7 +332,7 @@ func TestNewGitLabVerifier_NetworkErrorWithCache(t *testing.T) {
 	cache := NewTokenCache()
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, cache)
 
-	_, err := verifier(context.Background(), "net-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "net-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestNewGitLabVerifier_NetworkErrorWithCache(t *testing.T) {
 	srv.Close()
 
 	cache.Delete("net-token")
-	_, err = verifier(context.Background(), "net-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err = verifier(context.Background(), "net-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for closed server")
 	}
@@ -374,14 +374,14 @@ func TestNewGitLabVerifier_ServerErrorWithCache(t *testing.T) {
 	cache := NewTokenCache()
 	verifier := NewGitLabVerifier(srv.URL, false, 1*time.Hour, cache)
 
-	_, err := verifier(context.Background(), "srv-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "srv-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
 
 	cache.Delete("srv-token")
 
-	_, err = verifier(context.Background(), "srv-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err = verifier(context.Background(), "srv-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for 500 response")
 	}
@@ -404,7 +404,7 @@ func TestNewGitLabVerifier_Forbidden(t *testing.T) {
 	defer srv.Close()
 
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
-	_, err := verifier(context.Background(), "forbidden-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "forbidden-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for 403 response")
 	}
@@ -424,7 +424,7 @@ func TestNewGitLabVerifier_RateLimited(t *testing.T) {
 	defer srv.Close()
 
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
-	_, err := verifier(context.Background(), "rate-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "rate-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for 429 response")
 	}
@@ -445,7 +445,7 @@ func TestNewGitLabVerifier_UserIDZero(t *testing.T) {
 	defer srv.Close()
 
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
-	_, err := verifier(context.Background(), "zero-id-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "zero-id-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for user ID 0")
 	}
@@ -465,7 +465,7 @@ func TestNewGitLabVerifier_UnexpectedStatusCode(t *testing.T) {
 	defer srv.Close()
 
 	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
-	_, err := verifier(context.Background(), "teapot-token", httptest.NewRequest(http.MethodGet, "/", nil))
+	_, err := verifier(context.Background(), "teapot-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for 418 response")
 	}

@@ -173,52 +173,54 @@ func FormatNotesMarkdown(out NotesOutput) string {
 // FormatProjectsMarkdown renders a paginated list of project search results.
 // Shows the full namespace path instead of numeric IDs.
 func FormatProjectsMarkdown(out ProjectsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Project Search Results (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Projects), out.Pagination)
-	if len(out.Projects) == 0 {
-		b.WriteString("No projects found.\n")
-		return b.String()
-	}
-	b.WriteString("| Name | Path | Visibility | Default Branch |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	rows := make([]searchResultRow, 0, len(out.Projects))
 	for _, p := range out.Projects {
-		fmt.Fprintf(&b, fmtTableRow4Col,
+		rows = append(rows, searchResultRow{
 			fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(p.Name), p.WebURL),
 			toolutil.EscapeMdTableCell(p.PathWithNamespace),
 			p.Visibility,
-			toolutil.EscapeMdTableCell(p.DefaultBranch))
+			toolutil.EscapeMdTableCell(p.DefaultBranch),
+		})
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	return formatSearchResultList("Project", len(out.Projects), out.Pagination, "No projects found.", "| Name | Path | Visibility | Default Branch |", rows,
 		toolutil.HintPreserveLinks,
 		"Use gitlab_project action 'get' with the project path to see full details")
+}
+
+type searchResultRow [4]string
+
+func formatSearchResultList(kind string, count int, pagination toolutil.PaginationOutput, emptyMessage, header string, rows []searchResultRow, hints ...string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## %s Search Results (%d)\n\n", kind, pagination.TotalItems)
+	toolutil.WriteListSummary(&b, count, pagination)
+	if count == 0 {
+		b.WriteString(emptyMessage + "\n")
+		return b.String()
+	}
+	b.WriteString(header + "\n")
+	b.WriteString(toolutil.TblSep4Col)
+	for _, row := range rows {
+		fmt.Fprintf(&b, fmtTableRow4Col, row[0], row[1], row[2], row[3])
+	}
+	toolutil.WritePagination(&b, pagination)
+	toolutil.WriteHints(&b, hints...)
 	return b.String()
 }
 
 // FormatSnippetsMarkdown renders a paginated list of snippet search results.
 func FormatSnippetsMarkdown(out SnippetsOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Snippet Search Results (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Snippets), out.Pagination)
-	if len(out.Snippets) == 0 {
-		b.WriteString("No snippets found.\n")
-		return b.String()
-	}
-	b.WriteString("| Title | File | Visibility | Author |\n")
-	b.WriteString(toolutil.TblSep4Col)
+	rows := make([]searchResultRow, 0, len(out.Snippets))
 	for _, s := range out.Snippets {
-		fmt.Fprintf(&b, fmtTableRow4Col,
+		rows = append(rows, searchResultRow{
 			fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(s.Title), s.WebURL),
 			toolutil.EscapeMdTableCell(s.FileName),
 			s.Visibility,
-			toolutil.EscapeMdTableCell(s.Author))
+			toolutil.EscapeMdTableCell(s.Author),
+		})
 	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	return formatSearchResultList("Snippet", len(out.Snippets), out.Pagination, "No snippets found.", "| Title | File | Visibility | Author |", rows,
 		toolutil.HintPreserveLinks,
 		"Use gitlab_snippet action 'get' with snippet_id to see full content")
-	return b.String()
 }
 
 // FormatUsersMarkdown renders a paginated list of user search results.

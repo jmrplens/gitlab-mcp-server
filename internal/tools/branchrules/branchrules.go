@@ -213,7 +213,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("list_branch_rules: project_path is required")
 	}
 
-	vars := input.GraphQLPaginationInput.Variables()
+	vars := input.Variables()
 	vars["projectPath"] = input.ProjectPath
 
 	query := queryListBranchRulesCE

@@ -36,14 +36,7 @@ const storageMoveNoProjectJSON = `{
 // TestRetrieveAll validates the RetrieveAll function covering success with
 // pagination, empty results, API errors, and context cancellation.
 func TestRetrieveAll(t *testing.T) {
-	tests := []struct {
-		name      string
-		input     ListInput
-		handler   http.HandlerFunc
-		wantErr   bool
-		wantMoves int
-		validate  func(t *testing.T, out ListOutput)
-	}{
+	tests := []retrieveAllCase{
 		{
 			name:  "returns moves with pagination",
 			input: ListInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}},
@@ -134,20 +127,40 @@ func TestRetrieveAll(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := testutil.NewTestClient(t, tt.handler)
-			out, err := RetrieveAll(context.Background(), client, tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if !tt.wantErr {
-				if len(out.Moves) != tt.wantMoves {
-					t.Fatalf("got %d moves, want %d", len(out.Moves), tt.wantMoves)
-				}
-				if tt.validate != nil {
-					tt.validate(t, out)
-				}
-			}
+			runRetrieveAllCase(t, tt)
 		})
+	}
+}
+
+type retrieveAllCase struct {
+	name      string
+	input     ListInput
+	handler   http.HandlerFunc
+	wantErr   bool
+	wantMoves int
+	validate  func(t *testing.T, out ListOutput)
+}
+
+func runRetrieveAllCase(t *testing.T, tt retrieveAllCase) {
+	t.Helper()
+	client := testutil.NewTestClient(t, tt.handler)
+	out, err := RetrieveAll(context.Background(), client, tt.input)
+	assertListOutputCase(t, out, err, tt.wantErr, tt.wantMoves, tt.validate)
+}
+
+func assertListOutputCase(t *testing.T, out ListOutput, err error, wantErr bool, wantMoves int, validate func(t *testing.T, out ListOutput)) {
+	t.Helper()
+	if (err != nil) != wantErr {
+		t.Fatalf("error = %v, wantErr %v", err, wantErr)
+	}
+	if wantErr {
+		return
+	}
+	if len(out.Moves) != wantMoves {
+		t.Fatalf("got %d moves, want %d", len(out.Moves), wantMoves)
+	}
+	if validate != nil {
+		validate(t, out)
 	}
 }
 

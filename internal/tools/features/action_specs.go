@@ -65,25 +65,18 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func featureReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := featureOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, featureOptions(individualTool))
 }
 
 func featureSetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	individualIdempotent := false
 	options := featureOptions("gitlab_set_feature_flag")
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
-	return toolutil.NewActionSpec("feature_set", SetRoute(client), options)
+	return toolutil.NewUpdateActionSpec("feature_set", SetRoute(client), options)
 }
 
 func featureDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := featureOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, featureOptions(individualTool))
 }
 
 func featureOptions(individualTool string) toolutil.ActionSpecOptions {

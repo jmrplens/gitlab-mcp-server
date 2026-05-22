@@ -56,85 +56,9 @@ func FormatGetMarkdown(out GetOutput) string {
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "## Vulnerability: %s\n\n", v.Title)
-	sb.WriteString("| Field | Value |\n|-------|-------|\n")
-	fmt.Fprintf(&sb, "| ID | %s |\n", toolutil.EscapeMdTableCell(v.ID))
-	fmt.Fprintf(&sb, "| Severity | %s |\n", severityBadge(v.Severity))
-	fmt.Fprintf(&sb, "| State | %s |\n", toolutil.EscapeMdTableCell(v.State))
-	fmt.Fprintf(&sb, "| Report Type | %s |\n", toolutil.EscapeMdTableCell(v.ReportType))
-
-	if v.Scanner != nil {
-		scanner := v.Scanner.Name
-		if v.Scanner.Vendor != "" {
-			scanner += " (" + v.Scanner.Vendor + ")"
-		}
-		fmt.Fprintf(&sb, "| Scanner | %s |\n", toolutil.EscapeMdTableCell(scanner))
-	}
-
-	if v.PrimaryID != nil {
-		id := v.PrimaryID.Name
-		if v.PrimaryID.URL != "" {
-			id = fmt.Sprintf("[%s](%s)", v.PrimaryID.Name, v.PrimaryID.URL)
-		}
-		fmt.Fprintf(&sb, "| Primary Identifier | %s |\n", id)
-	}
-
-	if v.Location != nil {
-		loc := v.Location.File
-		if v.Location.StartLine > 0 {
-			loc += fmt.Sprintf(":%d", v.Location.StartLine)
-			if v.Location.EndLine > 0 && v.Location.EndLine != v.Location.StartLine {
-				loc += fmt.Sprintf("-%d", v.Location.EndLine)
-			}
-		}
-		fmt.Fprintf(&sb, "| Location | %s |\n", toolutil.EscapeMdTableCell(loc))
-	}
-
-	fmt.Fprintf(&sb, "| Detected | %s |\n", formatDate(v.DetectedAt))
-	if v.DismissedAt != "" {
-		fmt.Fprintf(&sb, "| Dismissed | %s |\n", formatDate(v.DismissedAt))
-	}
-	if v.ConfirmedAt != "" {
-		fmt.Fprintf(&sb, "| Confirmed | %s |\n", formatDate(v.ConfirmedAt))
-	}
-	if v.ResolvedAt != "" {
-		fmt.Fprintf(&sb, "| Resolved | %s |\n", formatDate(v.ResolvedAt))
-	}
-	if v.DismissalReason != "" {
-		fmt.Fprintf(&sb, "| Dismissal Reason | %s |\n", toolutil.EscapeMdTableCell(v.DismissalReason))
-	}
-	if v.Solution != "" {
-		fmt.Fprintf(&sb, "| Solution | %s |\n", toolutil.EscapeMdTableCell(v.Solution))
-	}
-	fmt.Fprintf(&sb, "| Has Issues | %v |\n", v.HasIssues)
-	fmt.Fprintf(&sb, "| Has MR | %v |\n", v.HasMR)
-
-	if v.Project != nil {
-		fmt.Fprintf(&sb, "| Project | %s |\n", toolutil.EscapeMdTableCell(v.Project.FullPath))
-	}
-
-	if len(v.Identifiers) > 0 {
-		sb.WriteString("\n### Identifiers\n\n")
-		sb.WriteString("| Name | Type | External ID | URL |\n")
-		sb.WriteString("|------|------|-------------|-----|\n")
-		for _, id := range v.Identifiers {
-			name := toolutil.EscapeMdTableCell(id.Name)
-			if id.URL != "" {
-				name = fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(id.Name), id.URL)
-			}
-			fmt.Fprintf(&sb, "| %s | %s | %s | %s |\n",
-				name,
-				toolutil.EscapeMdTableCell(id.ExternalType),
-				toolutil.EscapeMdTableCell(id.ExternalID),
-				id.URL,
-			)
-		}
-	}
-
-	if v.Description != "" {
-		sb.WriteString("\n### Description\n\n")
-		sb.WriteString(v.Description)
-		sb.WriteString("\n")
-	}
+	writeVulnerabilitySummary(&sb, v)
+	writeVulnerabilityIdentifiers(&sb, v.Identifiers)
+	writeVulnerabilityDescription(&sb, v.Description)
 
 	toolutil.WriteHints(&sb,
 		"Use `gitlab_dismiss_vulnerability` to dismiss this finding",
@@ -142,6 +66,101 @@ func FormatGetMarkdown(out GetOutput) string {
 		"Use `gitlab_resolve_vulnerability` to mark as resolved",
 	)
 	return sb.String()
+}
+
+func writeVulnerabilitySummary(sb *strings.Builder, v Item) {
+	sb.WriteString("| Field | Value |\n|-------|-------|\n")
+	fmt.Fprintf(sb, "| ID | %s |\n", toolutil.EscapeMdTableCell(v.ID))
+	fmt.Fprintf(sb, "| Severity | %s |\n", severityBadge(v.Severity))
+	fmt.Fprintf(sb, "| State | %s |\n", toolutil.EscapeMdTableCell(v.State))
+	fmt.Fprintf(sb, "| Report Type | %s |\n", toolutil.EscapeMdTableCell(v.ReportType))
+
+	if v.Scanner != nil {
+		scanner := v.Scanner.Name
+		if v.Scanner.Vendor != "" {
+			scanner += " (" + v.Scanner.Vendor + ")"
+		}
+		fmt.Fprintf(sb, "| Scanner | %s |\n", toolutil.EscapeMdTableCell(scanner))
+	}
+
+	if v.PrimaryID != nil {
+		id := v.PrimaryID.Name
+		if v.PrimaryID.URL != "" {
+			id = fmt.Sprintf("[%s](%s)", v.PrimaryID.Name, v.PrimaryID.URL)
+		}
+		fmt.Fprintf(sb, "| Primary Identifier | %s |\n", id)
+	}
+
+	if v.Location != nil {
+		fmt.Fprintf(sb, "| Location | %s |\n", toolutil.EscapeMdTableCell(formatVulnerabilityLocation(v.Location)))
+	}
+
+	fmt.Fprintf(sb, "| Detected | %s |\n", formatDate(v.DetectedAt))
+	if v.DismissedAt != "" {
+		fmt.Fprintf(sb, "| Dismissed | %s |\n", formatDate(v.DismissedAt))
+	}
+	if v.ConfirmedAt != "" {
+		fmt.Fprintf(sb, "| Confirmed | %s |\n", formatDate(v.ConfirmedAt))
+	}
+	if v.ResolvedAt != "" {
+		fmt.Fprintf(sb, "| Resolved | %s |\n", formatDate(v.ResolvedAt))
+	}
+	if v.DismissalReason != "" {
+		fmt.Fprintf(sb, "| Dismissal Reason | %s |\n", toolutil.EscapeMdTableCell(v.DismissalReason))
+	}
+	if v.Solution != "" {
+		fmt.Fprintf(sb, "| Solution | %s |\n", toolutil.EscapeMdTableCell(v.Solution))
+	}
+	fmt.Fprintf(sb, "| Has Issues | %v |\n", v.HasIssues)
+	fmt.Fprintf(sb, "| Has MR | %v |\n", v.HasMR)
+
+	if v.Project != nil {
+		fmt.Fprintf(sb, "| Project | %s |\n", toolutil.EscapeMdTableCell(v.Project.FullPath))
+	}
+}
+
+func formatVulnerabilityLocation(location *LocationItem) string {
+	loc := location.File
+	if location.StartLine > 0 {
+		loc += fmt.Sprintf(":%d", location.StartLine)
+		if location.EndLine > 0 && location.EndLine != location.StartLine {
+			loc += fmt.Sprintf("-%d", location.EndLine)
+		}
+	}
+	return loc
+}
+
+func writeVulnerabilityIdentifiers(sb *strings.Builder, identifiers []IdentifierItem) {
+	if len(identifiers) == 0 {
+		return
+	}
+	sb.WriteString("\n### Identifiers\n\n")
+	sb.WriteString("| Name | Type | External ID | URL |\n")
+	sb.WriteString("|------|------|-------------|-----|\n")
+	for _, id := range identifiers {
+		writeVulnerabilityIdentifier(sb, id)
+	}
+}
+
+func writeVulnerabilityIdentifier(sb *strings.Builder, id IdentifierItem) {
+	name := toolutil.EscapeMdTableCell(id.Name)
+	if id.URL != "" {
+		name = fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(id.Name), id.URL)
+	}
+	fmt.Fprintf(sb, "| %s | %s | %s | %s |\n",
+		name,
+		toolutil.EscapeMdTableCell(id.ExternalType),
+		toolutil.EscapeMdTableCell(id.ExternalID),
+		id.URL,
+	)
+}
+
+func writeVulnerabilityDescription(sb *strings.Builder, description string) {
+	if description != "" {
+		sb.WriteString("\n### Description\n\n")
+		sb.WriteString(description)
+		sb.WriteString("\n")
+	}
 }
 
 // FormatMutationMarkdown renders a vulnerability state mutation result as Markdown.

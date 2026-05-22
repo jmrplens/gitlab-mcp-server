@@ -266,6 +266,7 @@ func TestFilterTasksByAvailableRoutes(t *testing.T) {
 			"environment.deployment_approve_or_reject": {},
 			"issue.list":                               {},
 			"job.retry":                                {},
+			"merge_train.list_project":                 {},
 			"merge_request.merge":                      {},
 			"model_registry.download":                  {},
 			"mr_review.draft_note_create":              {},
@@ -276,6 +277,9 @@ func TestFilterTasksByAvailableRoutes(t *testing.T) {
 		"gitlab_model_registry": {
 			"download": {},
 		},
+	}
+	if !catalogHasEnterpriseRoutes(routes) {
+		t.Fatal("catalogHasEnterpriseRoutes() = false, want true for mixed CE/Enterprise catalog")
 	}
 	tasks := []evalTask{
 		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "issue.list"},
@@ -299,7 +303,7 @@ func TestFilterTasksByAvailableRoutes(t *testing.T) {
 		{ID: "workflow", Steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "project.get"}, {ExpectedTool: "gitlab", ExpectedAction: "dependency.list"}}},
 	}
 
-	filtered := filterTasksByAvailableRoutes(tasks, routes)
+	filtered := filterTasksByAvailableRoutes(tasks, routes, false)
 	if got := taskIDs(filtered); got != "read,MT-017,MT-023,MT-069,MT-063,draft-notes-ce,MT-107,MT-114,MT-116,standalone,interactive" {
 		t.Fatalf("filtered IDs = %q, want reactivated CE/docker-safe tasks plus standalone interactive tools", got)
 	}
@@ -323,7 +327,7 @@ func TestFilterTasksByAvailableRoutes_KeepsDynamicInteractiveCapabilities(t *tes
 		}},
 	}
 
-	filtered := filterTasksByAvailableRoutes(tasks, routes)
+	filtered := filterTasksByAvailableRoutes(tasks, routes, false)
 	if got := taskIDs(filtered); got != "create,interactive,workflow" {
 		t.Fatalf("filtered IDs = %q, want create,interactive,workflow", got)
 	}
@@ -1913,6 +1917,29 @@ func TestValidateStepCallWithRoutes_DynamicCompatibilityAndNormalization(t *test
 				},
 			},
 		},
+		{
+			name:       "accepts terraform state unlock compatibility envelope",
+			step:       evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "admin.terraform_state_unlock", RequiredParams: []string{"project_id", "name"}, Destructive: true},
+			wantAction: "admin.terraform_state_unlock",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteTool: {
+					"admin.terraform_state_unlock": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type":     "object",
+						"required": []any{"project_id", "name"},
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+							"name":       map[string]any{"type": "string"},
+						},
+					}},
+				},
+			},
+			input: map[string]any{
+				"action":  "terraform_state.unlock",
+				"confirm": true,
+				"params":  map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "id": "eval-unlock"},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -2296,80 +2323,46 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 		ExpectedAction: "project.list",
 	}
 	prompt := taskPrompt(task)
-	if !strings.Contains(prompt, "exactly one tool call") {
-		t.Fatalf("taskPrompt() = %q, want one-tool guidance", prompt)
-	}
-	if !strings.Contains(prompt, "A schema lookup before the task call is a failure") {
-		t.Fatalf("taskPrompt() = %q, want constrained schema lookup guidance", prompt)
-	}
-	if !strings.Contains(prompt, "Do not look up schemas for ordinary parameter names already supplied by the task prompt") {
-		t.Fatalf("taskPrompt() = %q, want ordinary-param no-lookup guidance", prompt)
-	}
-	if !strings.Contains(prompt, "do not add any params that the task did not ask for") {
-		t.Fatalf("taskPrompt() = %q, want no-extra-param guidance", prompt)
-	}
-	if !strings.Contains(prompt, "Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow") {
-		t.Fatalf("taskPrompt() = %q, want interactive tool disambiguation", prompt)
-	}
-	if !strings.Contains(prompt, "A value like group/project is params.project_id, not remote_url") {
-		t.Fatalf("taskPrompt() = %q, want project path vs remote URL guidance", prompt)
-	}
-	if !strings.Contains(prompt, "never call gitlab without an input object containing action and params") {
-		t.Fatalf("taskPrompt() = %q, want non-empty dispatcher input guidance", prompt)
-	}
-	if !strings.Contains(prompt, "server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check") {
-		t.Fatalf("taskPrompt() = %q, want health_check standalone guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For subgroup creation with group.create, use params.name, params.path, and params.parent_id") {
-		t.Fatalf("taskPrompt() = %q, want subgroup create guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For merge request creation, from is params.source_branch, into is params.target_branch, and titled is params.title") {
-		t.Fatalf("taskPrompt() = %q, want merge request create guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For merge request notes or comments, use mr_review.note_create") || !strings.Contains(prompt, "Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion") {
-		t.Fatalf("taskPrompt() = %q, want merge request note/discussion guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For personal snippets, snippet ID is params.snippet_id") || !strings.Contains(prompt, "or file_path") {
-		t.Fatalf("taskPrompt() = %q, want snippet_id guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For custom emoji group operations, use custom_emoji.list with params.group_path") {
-		t.Fatalf("taskPrompt() = %q, want custom emoji group_path guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For project access tokens, scope names go in params.scopes as an array") {
-		t.Fatalf("taskPrompt() = %q, want access token scopes guidance", prompt)
-	}
-	if !strings.Contains(prompt, "expiring dates go in params.expires_at") {
-		t.Fatalf("taskPrompt() = %q, want access token expiration guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For broadcast messages, saying maps to params.message") {
-		t.Fatalf("taskPrompt() = %q, want broadcast message guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For job.play variables, use params.variables as an array") {
-		t.Fatalf("taskPrompt() = %q, want job.play variables guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id") || !strings.Contains(prompt, "for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id") || !strings.Contains(prompt, "use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied") {
-		t.Fatalf("taskPrompt() = %q, want project/group/instance CI variable action guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For runner.list_project, use params.project_id by default") || !strings.Contains(prompt, "Do not send params.paused, params.type, params.tag_list") {
-		t.Fatalf("taskPrompt() = %q, want runner list filter guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message") {
-		t.Fatalf("taskPrompt() = %q, want repository file write guidance", prompt)
-	}
-	if !strings.Contains(prompt, "For CI variables, variable name maps to params.key, value maps to params.value, and environment_scope or production scope maps to params.environment_scope") {
-		t.Fatalf("taskPrompt() = %q, want CI variable field mapping guidance", prompt)
-	}
-	if !strings.Contains(prompt, "linking to a URL means params.link_url and image means params.image_url") {
-		t.Fatalf("taskPrompt() = %q, want badge field mapping guidance", prompt)
-	}
-	if !strings.Contains(prompt, "latest pipelines plural means pipeline.list") {
-		t.Fatalf("taskPrompt() = %q, want pipeline plural disambiguation", prompt)
-	}
-	if !strings.Contains(prompt, "do not send empty arrays or objects") {
-		t.Fatalf("taskPrompt() = %q, want empty optional guidance", prompt)
-	}
-	if !strings.Contains(prompt, "call the selected action with params:{}") {
-		t.Fatalf("taskPrompt() = %q, want no-parameter action guidance", prompt)
+	assertTaskPromptContains(t, prompt,
+		"exactly one tool call",
+		"A schema lookup before the task call is a failure",
+		"Do not look up schemas for ordinary parameter names already supplied by the task prompt",
+		"do not add any params that the task did not ask for",
+		"Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow",
+		"A value like group/project is params.project_id, not remote_url",
+		"never call gitlab without an input object containing action and params",
+		"server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check",
+		"For subgroup creation with group.create, use params.name, params.path, and params.parent_id",
+		"For merge request creation, from is params.source_branch, into is params.target_branch, and titled is params.title",
+		"For merge request notes or comments, use mr_review.note_create",
+		"Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion",
+		"For personal snippets, snippet ID is params.snippet_id",
+		"or file_path",
+		"For custom emoji group operations, use custom_emoji.list with params.group_path",
+		"For project access tokens, scope names go in params.scopes as an array",
+		"expiring dates go in params.expires_at",
+		"For broadcast messages, saying maps to params.message",
+		"For job.play variables, use params.variables as an array",
+		"For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id",
+		"for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id",
+		"use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied",
+		"For runner.list_project, use params.project_id by default",
+		"Do not send params.paused, params.type, params.tag_list",
+		"For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message",
+		"For CI variables, variable name maps to params.key, value maps to params.value, and environment_scope or production scope maps to params.environment_scope",
+		"linking to a URL means params.link_url and image means params.image_url",
+		"latest pipelines plural means pipeline.list",
+		"do not send empty arrays or objects",
+		"call the selected action with params:{}",
+	)
+}
+
+func assertTaskPromptContains(t *testing.T, prompt string, snippets ...string) {
+	t.Helper()
+	for _, snippet := range snippets {
+		if !strings.Contains(prompt, snippet) {
+			t.Fatalf("taskPrompt() = %q, want %q", prompt, snippet)
+		}
 	}
 }
 
@@ -4213,12 +4206,12 @@ func TestDefaultFixture_ValidatesAgainstLiveCatalog(t *testing.T) {
 	if problems := validateTaskFixture(tasks); len(problems) > 0 {
 		t.Fatalf("fixture validation problems = %+v", problems)
 	}
-	_, routes, err := loadCatalog(options{})
+	_, routes, catalogEnterprise, err := loadCatalog(options{})
 	if err != nil {
 		t.Fatalf("loadCatalog() error = %v", err)
 	}
 	tasks = normalizeTasksForRoutes(tasks, routes)
-	tasks = filterTasksByAvailableRoutes(tasks, routes)
+	tasks = filterTasksByAvailableRoutes(tasks, routes, catalogEnterprise)
 	if problems := validateTaskFixtureAgainstRoutes(tasks, routes); len(problems) > 0 {
 		t.Fatalf("route validation problems = %+v", problems)
 	}
@@ -4226,7 +4219,7 @@ func TestDefaultFixture_ValidatesAgainstLiveCatalog(t *testing.T) {
 
 // TestLoadCatalog_RejectsUnknownBackend verifies LoadCatalog rejects unknown backend.
 func TestLoadCatalog_RejectsUnknownBackend(t *testing.T) {
-	_, _, err := loadCatalog(options{Backend: "missing"})
+	_, _, _, err := loadCatalog(options{Backend: "missing"})
 	if err == nil || !strings.Contains(err.Error(), "unknown backend") {
 		t.Fatalf("error = %v, want unknown backend", err)
 	}
@@ -4384,30 +4377,8 @@ func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 		if err != nil {
 			return nil, nil, err
 		}
-		if result.Action != "accept" || result.Content["confirmed"] != true {
-			return nil, nil, fmt.Errorf("elicitation result = %+v, want accepted confirmation", result)
-		}
-		if _, ok := result.Content["enabled"].(bool); !ok {
-			return nil, nil, fmt.Errorf("elicitation enabled = %T, want bool", result.Content["enabled"])
-		}
-		count, ok := result.Content["count"]
-		if !ok {
-			return nil, nil, errors.New("elicitation count must be a numeric value")
-		}
-		switch typed := count.(type) {
-		case float64:
-			if typed != 0 {
-				return nil, nil, fmt.Errorf("elicitation count = %v, want numeric zero", typed)
-			}
-		case int:
-			if typed != 0 {
-				return nil, nil, fmt.Errorf("elicitation count = %v, want numeric zero", typed)
-			}
-		default:
-			return nil, nil, fmt.Errorf("elicitation count must be a numeric value, got %T", count)
-		}
-		if result.Content["selection"] != "private" {
-			return nil, nil, fmt.Errorf("elicitation selection = %v, want private", result.Content["selection"])
+		if validationErr := validateElicitationProbeResult(result); validationErr != nil {
+			return nil, nil, validationErr
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprint(result.Content["title"])}}}, nil, nil
 	})
@@ -4431,6 +4402,41 @@ func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 	}
 	if got := toolResultContent(result); !strings.Contains(got, "Evaluation elicitation test") {
 		t.Fatalf("elicitation result = %q, want evaluator title", got)
+	}
+}
+
+func validateElicitationProbeResult(result *mcp.ElicitResult) error {
+	if result.Action != "accept" || result.Content["confirmed"] != true {
+		return fmt.Errorf("elicitation result = %+v, want accepted confirmation", result)
+	}
+	if _, ok := result.Content["enabled"].(bool); !ok {
+		return fmt.Errorf("elicitation enabled = %T, want bool", result.Content["enabled"])
+	}
+	if err := validateElicitationNumericZero(result.Content["count"]); err != nil {
+		return err
+	}
+	if result.Content["selection"] != "private" {
+		return fmt.Errorf("elicitation selection = %v, want private", result.Content["selection"])
+	}
+	return nil
+}
+
+func validateElicitationNumericZero(count any) error {
+	switch typed := count.(type) {
+	case float64:
+		if typed == 0 {
+			return nil
+		}
+		return fmt.Errorf("elicitation count = %v, want numeric zero", typed)
+	case int:
+		if typed == 0 {
+			return nil
+		}
+		return fmt.Errorf("elicitation count = %v, want numeric zero", typed)
+	case nil:
+		return errors.New("elicitation count must be a numeric value")
+	default:
+		return fmt.Errorf("elicitation count must be a numeric value, got %T", count)
 	}
 }
 
@@ -4513,39 +4519,10 @@ Task attempts: 3
 	if err != nil {
 		t.Fatalf("parseComparisonInput(eval) error = %v", err)
 	}
-	if evalInput.Kind != "evaluation" || evalInput.Label != "current-abc123" || evalInput.TaskAttempts != 3 {
-		t.Fatalf("eval input = %+v", evalInput)
-	}
-	if evalInput.Metrics["Action-selection accuracy"] != 99.5 || evalInput.Diagnostics["model_parameter_shape_miss"] != 1 || evalInput.Coverage["Missing action routes"] != 651 {
-		t.Fatalf("eval metrics = %+v diagnostics=%+v coverage=%+v", evalInput.Metrics, evalInput.Diagnostics, evalInput.Coverage)
-	}
+	assertEvaluationComparisonInput(t, evalInput)
 
-	dynamicPath := filepath.Join(tmp, "current-abc123", "dynamic-base-read.md")
-	dynamicReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# Dynamic Surface Model Evaluation", 1)
-	dynamicReport = strings.Replace(dynamicReport, "Model: `claude-sonnet-4-6`", "Model: `test:model`\nTool surface: `dynamic`", 1)
-	if writeErr := os.WriteFile(dynamicPath, []byte(dynamicReport), 0o600); writeErr != nil {
-		t.Fatalf("write dynamic report: %v", writeErr)
-	}
-	dynamicInput, err := parseComparisonInput(dynamicPath)
-	if err != nil {
-		t.Fatalf("parseComparisonInput(dynamic) error = %v", err)
-	}
-	if dynamicInput.Kind != "evaluation" || dynamicInput.ToolSurface != config.ToolSurfaceDynamic || dynamicInput.TaskAttempts != 3 {
-		t.Fatalf("dynamic input = %+v", dynamicInput)
-	}
-
-	defaultTitlePath := filepath.Join(tmp, "current-abc123", "default-title.md")
-	defaultTitleReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# MCP Surface Model Evaluation", 1)
-	if writeErr := os.WriteFile(defaultTitlePath, []byte(defaultTitleReport), 0o600); writeErr != nil {
-		t.Fatalf("write default title report: %v", writeErr)
-	}
-	defaultTitleInput, err := parseComparisonInput(defaultTitlePath)
-	if err != nil {
-		t.Fatalf("parseComparisonInput(default title) error = %v", err)
-	}
-	if defaultTitleInput.Kind != "evaluation" || defaultTitleInput.TaskAttempts != 3 {
-		t.Fatalf("default title input = %+v", defaultTitleInput)
-	}
+	assertDynamicComparisonInput(t, tmp, evalReport)
+	assertDefaultTitleComparisonInput(t, tmp, evalReport)
 
 	tokenPath := filepath.Join(tmp, "current-abc123", "tokens.md")
 	tokenReport := `# Tools Snapshot Token Audit
@@ -4574,6 +4551,49 @@ Tools file: ` + "`dist/evaluation/mcp-surfaces/snapshots/current-abc123/tools.js
 		if !strings.Contains(comparison, want) {
 			t.Fatalf("comparison missing %q:\n%s", want, comparison)
 		}
+	}
+}
+
+func assertEvaluationComparisonInput(t *testing.T, evalInput comparisonInput) {
+	t.Helper()
+	if evalInput.Kind != "evaluation" || evalInput.Label != "current-abc123" || evalInput.TaskAttempts != 3 {
+		t.Fatalf("eval input = %+v", evalInput)
+	}
+	if evalInput.Metrics["Action-selection accuracy"] != 99.5 || evalInput.Diagnostics["model_parameter_shape_miss"] != 1 || evalInput.Coverage["Missing action routes"] != 651 {
+		t.Fatalf("eval metrics = %+v diagnostics=%+v coverage=%+v", evalInput.Metrics, evalInput.Diagnostics, evalInput.Coverage)
+	}
+}
+
+func assertDynamicComparisonInput(t *testing.T, tmp, evalReport string) {
+	t.Helper()
+	dynamicPath := filepath.Join(tmp, "current-abc123", "dynamic-base-read.md")
+	dynamicReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# Dynamic Surface Model Evaluation", 1)
+	dynamicReport = strings.Replace(dynamicReport, "Model: `claude-sonnet-4-6`", "Model: `test:model`\nTool surface: `dynamic`", 1)
+	if writeErr := os.WriteFile(dynamicPath, []byte(dynamicReport), 0o600); writeErr != nil {
+		t.Fatalf("write dynamic report: %v", writeErr)
+	}
+	dynamicInput, err := parseComparisonInput(dynamicPath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(dynamic) error = %v", err)
+	}
+	if dynamicInput.Kind != "evaluation" || dynamicInput.ToolSurface != config.ToolSurfaceDynamic || dynamicInput.TaskAttempts != 3 {
+		t.Fatalf("dynamic input = %+v", dynamicInput)
+	}
+}
+
+func assertDefaultTitleComparisonInput(t *testing.T, tmp, evalReport string) {
+	t.Helper()
+	defaultTitlePath := filepath.Join(tmp, "current-abc123", "default-title.md")
+	defaultTitleReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# MCP Surface Model Evaluation", 1)
+	if writeErr := os.WriteFile(defaultTitlePath, []byte(defaultTitleReport), 0o600); writeErr != nil {
+		t.Fatalf("write default title report: %v", writeErr)
+	}
+	defaultTitleInput, err := parseComparisonInput(defaultTitlePath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(default title) error = %v", err)
+	}
+	if defaultTitleInput.Kind != "evaluation" || defaultTitleInput.TaskAttempts != 3 {
+		t.Fatalf("default title input = %+v", defaultTitleInput)
 	}
 }
 

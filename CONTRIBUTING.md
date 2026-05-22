@@ -120,7 +120,7 @@ docs(readme): update tool count after wiki tools
 
 - [ ] Code compiles: `go build ./...`
 - [ ] All tests pass: `go test ./... -count=1`
-- [ ] Static analysis is clean: `make analyze` (run `make analyze-fix` first to auto-fix `goimports`/`gofmt`/`modernize` issues)
+- [ ] Static analysis is clean: `make analyze` (run `make analyze-fix` first to apply supported Go and Markdown fixes)
 - [ ] New tools have tests with >80% coverage
 - [ ] Documentation is updated if public API changed
 - [ ] Commit messages follow conventional commits
@@ -144,7 +144,7 @@ docs(readme): update tool count after wiki tools
 
 ### Go Conventions
 
-- Follow idiomatic Go: `gofmt`, `goimports`, `go vet`, `staticcheck`
+- Follow idiomatic Go and the repository's consolidated `golangci-lint` configuration (`goimports`, `gofumpt`, `gci`, `govet`, `staticcheck`, `gosec`, and related checks)
 - All exported types and functions must have doc comments
 - Error wrapping with `fmt.Errorf("context: %w", err)`
 - Use `context.Context` consistently for cancellation/timeouts

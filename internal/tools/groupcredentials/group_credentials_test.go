@@ -11,8 +11,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const patJSON = `[{"id":1,"name":"my-token","revoked":false,"created_at":"2026-01-01T00:00:00Z","description":"desc","scopes":["api"],"user_id":10,"active":true,"expires_at":"2026-01-01"}]`
-const sshKeyJSON = `[{"id":5,"title":"my-key","created_at":"2026-01-01T00:00:00Z","expires_at":"2026-06-01T00:00:00Z","usage_type":"auth","user_id":10}]`
+const (
+	patJSON    = `[{"id":1,"name":"my-token","revoked":false,"created_at":"2026-01-01T00:00:00Z","description":"desc","scopes":["api"],"user_id":10,"active":true,"expires_at":"2026-01-01"}]`
+	sshKeyJSON = `[{"id":5,"title":"my-key","created_at":"2026-01-01T00:00:00Z","expires_at":"2026-06-01T00:00:00Z","usage_type":"auth","user_id":10}]`
+)
 
 // TestListPATs_Success verifies that ListPATs returns the expected output when the GitLab API responds successfully.
 func TestListPATs_Success(t *testing.T) {

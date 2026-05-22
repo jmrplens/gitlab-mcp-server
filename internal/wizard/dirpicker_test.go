@@ -16,7 +16,7 @@ func TestPickDirectory_LinuxDialogTools(t *testing.T) {
 	}
 
 	t.Run("missing dialog tools", func(t *testing.T) {
-		t.Setenv("PATH", t.TempDir())
+		stubLinuxDialogToolPaths(t, nil)
 		_, err := pickDirectory(t.TempDir())
 		if err == nil || !strings.Contains(err.Error(), "no dialog tool") {
 			t.Fatalf("pickDirectory() error = %v, want missing dialog tool", err)
@@ -26,8 +26,8 @@ func TestPickDirectory_LinuxDialogTools(t *testing.T) {
 	t.Run("zenity success", func(t *testing.T) {
 		binDir := t.TempDir()
 		selected := t.TempDir()
-		writeFakeDialogTool(t, binDir, "zenity", "#!/bin/sh\nprintf '%s\\n' \""+selected+"\"\n")
-		t.Setenv("PATH", binDir)
+		zenityPath := writeFakeDialogTool(t, binDir, "zenity", "#!/bin/sh\nprintf '%s\\n' \""+selected+"\"\n")
+		stubLinuxDialogToolPaths(t, map[string]string{"zenity": zenityPath})
 
 		got, err := pickDirectory(t.TempDir())
 		if err != nil {
@@ -41,8 +41,8 @@ func TestPickDirectory_LinuxDialogTools(t *testing.T) {
 	t.Run("kdialog fallback", func(t *testing.T) {
 		binDir := t.TempDir()
 		selected := t.TempDir()
-		writeFakeDialogTool(t, binDir, "kdialog", "#!/bin/sh\nprintf '%s\\n' \""+selected+"\"\n")
-		t.Setenv("PATH", binDir)
+		kdialogPath := writeFakeDialogTool(t, binDir, "kdialog", "#!/bin/sh\nprintf '%s\\n' \""+selected+"\"\n")
+		stubLinuxDialogToolPaths(t, map[string]string{"kdialog": kdialogPath})
 
 		got, err := pickDirectory("")
 		if err != nil {
@@ -55,8 +55,8 @@ func TestPickDirectory_LinuxDialogTools(t *testing.T) {
 
 	t.Run("empty selection", func(t *testing.T) {
 		binDir := t.TempDir()
-		writeFakeDialogTool(t, binDir, "zenity", "#!/bin/sh\nexit 0\n")
-		t.Setenv("PATH", binDir)
+		zenityPath := writeFakeDialogTool(t, binDir, "zenity", "#!/bin/sh\nexit 0\n")
+		stubLinuxDialogToolPaths(t, map[string]string{"zenity": zenityPath})
 
 		_, err := pickDirectory(t.TempDir())
 		if err == nil || !strings.Contains(err.Error(), "no directory selected") {
@@ -66,8 +66,8 @@ func TestPickDirectory_LinuxDialogTools(t *testing.T) {
 
 	t.Run("dialog failure", func(t *testing.T) {
 		binDir := t.TempDir()
-		writeFakeDialogTool(t, binDir, "zenity", "#!/bin/sh\nexit 1\n")
-		t.Setenv("PATH", binDir)
+		zenityPath := writeFakeDialogTool(t, binDir, "zenity", "#!/bin/sh\nexit 1\n")
+		stubLinuxDialogToolPaths(t, map[string]string{"zenity": zenityPath})
 
 		_, err := pickDirectory(t.TempDir())
 		if err == nil || !strings.Contains(err.Error(), "dialog cancelled or failed") {
@@ -76,10 +76,24 @@ func TestPickDirectory_LinuxDialogTools(t *testing.T) {
 	})
 }
 
-func writeFakeDialogTool(t *testing.T, dir, name, script string) {
+func stubLinuxDialogToolPaths(t *testing.T, paths map[string]string) {
+	t.Helper()
+	original := findLinuxDialogToolPath
+	findLinuxDialogToolPath = func(name string) (string, bool) {
+		path, ok := paths[name]
+		if !ok {
+			return "", false
+		}
+		return path, true
+	}
+	t.Cleanup(func() { findLinuxDialogToolPath = original })
+}
+
+func writeFakeDialogTool(t *testing.T, dir, name, script string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil { //nolint:gosec // Executable dialog fixture is required for PATH lookup.
 		t.Fatal(err)
 	}
+	return path
 }

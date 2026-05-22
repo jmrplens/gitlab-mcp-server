@@ -13,8 +13,10 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const errDeploymentIDRequired = "deployment_id is required and must be > 0"
-const opCreateDeployment = "create deployment"
+const (
+	errDeploymentIDRequired = "deployment_id is required and must be > 0"
+	opCreateDeployment      = "create deployment"
+)
 
 // ---------------------------------------------------------------------------
 // Input types

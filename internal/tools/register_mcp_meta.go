@@ -76,7 +76,11 @@ See also: gitlab_discover_project (resolve git remote URL → project_id), gitla
 		Icons:       toolutil.IconHealth,
 		ReadOnly:    updater == nil,
 	})
-	specActions, specErr := actioncatalog.ActionsFromSpecs(actioncompat.ApplyToActionSpecs("gitlab_server", "server", health.ActionSpecs(client)))
+	actionSpecs := health.ActionSpecs(client)
+	if updater != nil {
+		actionSpecs = append(actionSpecs, serverupdate.ActionSpecs(updater)...)
+	}
+	specActions, specErr := actioncatalog.ActionsFromSpecs(actioncompat.ApplyToActionSpecs("gitlab_server", "server", actionSpecs))
 	if specErr != nil {
 		slog.Error("failed to build MCP health action specs", "error", specErr)
 	}
@@ -96,7 +100,7 @@ See also: gitlab_discover_project (resolve git remote URL → project_id), gitla
 
 // wrapUpdaterAction wraps a function that takes an *autoupdate.Updater (instead
 // of *gitlabclient.Client) into an actionFunc for meta-tool dispatch.
-func wrapUpdaterAction[T any, R any](updater *autoupdate.Updater, fn func(ctx context.Context, updater *autoupdate.Updater, input T) (R, error)) actionFunc {
+func wrapUpdaterAction[T, R any](updater *autoupdate.Updater, fn func(ctx context.Context, updater *autoupdate.Updater, input T) (R, error)) actionFunc {
 	return func(ctx context.Context, params map[string]any) (any, error) {
 		input, err := unmarshalParams[T](params)
 		if err != nil {

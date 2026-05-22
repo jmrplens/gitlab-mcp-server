@@ -18,14 +18,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func projectStorageMoveReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := projectStorageMoveOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, projectStorageMoveOptions(individualTool))
 }
 
 func projectStorageMoveCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, projectStorageMoveOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, projectStorageMoveOptions(individualTool))
 }
 
 func projectStorageMoveOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -264,6 +264,12 @@ func envMapPreferences(cfg ServerConfig) map[string]string {
 	if cfg.UploadMaxFileSize != "" && cfg.UploadMaxFileSize != defaultUploadMaxFileSize {
 		env["UPLOAD_MAX_FILE_SIZE"] = cfg.UploadMaxFileSize
 	}
+	addAutoUpdateEnv(env, cfg)
+	addRuntimeLimitEnv(env, cfg)
+	return env
+}
+
+func addAutoUpdateEnv(env map[string]string, cfg ServerConfig) {
 	if mode := strings.TrimSpace(cfg.AutoUpdateMode); mode != "" && mode != "true" {
 		env["AUTO_UPDATE"] = mode
 	} else if cfg.AutoUpdate && cfg.AutoUpdateMode == "" {
@@ -275,6 +281,9 @@ func envMapPreferences(cfg ServerConfig) map[string]string {
 	if cfg.AutoUpdateTimeout != "" && cfg.AutoUpdateTimeout != defaultAutoUpdateTimeout {
 		env["AUTO_UPDATE_TIMEOUT"] = cfg.AutoUpdateTimeout
 	}
+}
+
+func addRuntimeLimitEnv(env map[string]string, cfg ServerConfig) {
 	if cfg.RateLimitRPS != "" && cfg.RateLimitRPS != defaultRateLimitRPS {
 		env["RATE_LIMIT_RPS"] = cfg.RateLimitRPS
 	}
@@ -287,7 +296,6 @@ func envMapPreferences(cfg ServerConfig) map[string]string {
 	if cfg.LogLevel != "" && cfg.LogLevel != "info" {
 		env["LOG_LEVEL"] = cfg.LogLevel
 	}
-	return env
 }
 
 // envMap builds the full environment variable map for a server configuration.

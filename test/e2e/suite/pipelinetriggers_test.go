@@ -7,7 +7,7 @@ package suite
 
 import (
 	"context"
-	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelinetriggers"
@@ -54,7 +54,7 @@ func TestMeta_PipelineTriggers(t *testing.T) {
 			"action": "trigger_get",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"trigger_id": fmt.Sprintf("%d", triggerID),
+				"trigger_id": strconv.FormatInt(triggerID, 10),
 			},
 		})
 		requireNoError(t, err, "pipeline trigger get")
@@ -68,7 +68,7 @@ func TestMeta_PipelineTriggers(t *testing.T) {
 			"action": "trigger_update",
 			"params": map[string]any{
 				"project_id":  proj.pidStr(),
-				"trigger_id":  fmt.Sprintf("%d", triggerID),
+				"trigger_id":  strconv.FormatInt(triggerID, 10),
 				"description": "e2e-trigger-updated",
 			},
 		})
@@ -83,7 +83,7 @@ func TestMeta_PipelineTriggers(t *testing.T) {
 			"action": "trigger_delete",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
-				"trigger_id": fmt.Sprintf("%d", triggerID),
+				"trigger_id": strconv.FormatInt(triggerID, 10),
 			},
 		})
 		requireNoError(t, err, "pipeline trigger delete")

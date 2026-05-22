@@ -1583,9 +1583,11 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_ClickableCommitLinks(t *testing.T) {
 	out := ListOutput{
 		Commits: []Output{
-			{ShortID: "abc123", Title: "feat: x", AuthorName: "A",
+			{
+				ShortID: "abc123", Title: "feat: x", AuthorName: "A",
 				CommittedDate: "2026-01-01",
-				WebURL:        "https://gitlab.example.com/commit/abc123"},
+				WebURL:        "https://gitlab.example.com/commit/abc123",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}

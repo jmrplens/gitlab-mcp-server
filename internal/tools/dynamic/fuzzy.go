@@ -158,47 +158,51 @@ func fuzzyTokenScoreCore(alternative string, searchTokens []string) (score int, 
 			continue
 		}
 		eligibleParts++
-
-		partPrefix := firstRuneString(part)
-		partBestScore := 0
-		partMatchedValue := ""
-		partDistance := 0
-		for _, token := range searchTokens {
-			if !comparableTokenLength(part, token) {
-				continue
-			}
-
-			distance, withinThreshold := boundedLevenshtein(part, token, fuzzyMaxDistance)
-			if !withinThreshold {
-				continue
-			}
-
-			candidateScore := fuzzyDistanceScore(distance)
-			if partPrefix != "" && strings.HasPrefix(token, partPrefix) {
-				candidateScore += 2
-			}
-			if candidateScore > partBestScore {
-				partBestScore = candidateScore
-				partMatchedValue = token
-				partDistance = distance
-			}
-		}
-
-		if partBestScore == 0 {
+		partScore, partMatchedValue, partDistance, matched := bestFuzzyTokenMatch(part, searchTokens)
+		if !matched {
 			return 0, "", 0, false
 		}
-		if partBestScore > bestOverallScore {
-			bestOverallScore = partBestScore
+		if partScore > bestOverallScore {
+			bestOverallScore = partScore
 			bestMatchedValue = partMatchedValue
 			bestDistance = partDistance
 		}
-		total += partBestScore
+		total += partScore
 	}
 
 	if total == 0 || eligibleParts == 0 {
 		return 0, "", 0, false
 	}
 	return total / eligibleParts, bestMatchedValue, bestDistance, true
+}
+
+func bestFuzzyTokenMatch(part string, searchTokens []string) (score int, matchedValue string, distance int, ok bool) {
+	partPrefix := firstRuneString(part)
+	for _, token := range searchTokens {
+		candidateScore, candidateDistance, matched := scoreFuzzyTokenCandidate(part, partPrefix, token)
+		if matched && candidateScore > score {
+			score = candidateScore
+			matchedValue = token
+			distance = candidateDistance
+			ok = true
+		}
+	}
+	return score, matchedValue, distance, ok
+}
+
+func scoreFuzzyTokenCandidate(part, partPrefix, token string) (score, distance int, ok bool) {
+	if !comparableTokenLength(part, token) {
+		return 0, 0, false
+	}
+	distance, withinThreshold := boundedLevenshtein(part, token, fuzzyMaxDistance)
+	if !withinThreshold {
+		return 0, 0, false
+	}
+	score = fuzzyDistanceScore(distance)
+	if partPrefix != "" && strings.HasPrefix(token, partPrefix) {
+		score += 2
+	}
+	return score, distance, true
 }
 
 func splitWordTokens(value string) []string {

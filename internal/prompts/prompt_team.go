@@ -22,6 +22,19 @@ const (
 	tblCategoryCount = "| Category | Count |\n|----------|-------|\n"
 )
 
+type teamOverviewMemberStats struct {
+	name      string
+	openMRs   int
+	mergedMRs int
+	reviewMRs int
+}
+
+type reviewerWorkloadStats struct {
+	name     string
+	count    int
+	oldestMR *time.Time
+}
+
 // registerTeamPrompts registers all team management prompts.
 func registerTeamPrompts(server *mcp.Server, client *gitlabclient.Client) {
 	registerUserActivityReportPrompt(server, client)
@@ -204,78 +217,82 @@ func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *m
 		ListOptions:  gl.ListOptions{PerPage: maxListItems},
 	}, gl.WithContext(ctx))
 
-	// Build per-member stats
-	type memberStats struct {
-		name      string
-		openMRs   int
-		mergedMRs int
-		reviewMRs int
-	}
-	stats := make(map[string]*memberStats)
-	for _, m := range members {
-		if m.State != "active" {
-			continue
-		}
-		stats[m.Username] = &memberStats{name: m.Name}
-	}
-
-	for _, mr := range openMRs {
-		if mr.Author != nil {
-			if s, ok := stats[mr.Author.Username]; ok {
-				s.openMRs++
-			}
-		}
-		for _, r := range mr.Reviewers {
-			if s, ok := stats[r.Username]; ok {
-				s.reviewMRs++
-			}
-		}
-	}
-	for _, mr := range mergedMRs {
-		if mr.Author != nil {
-			if s, ok := stats[mr.Author.Username]; ok {
-				s.mergedMRs++
-			}
-		}
-	}
+	stats := buildTeamOverviewStats(members, openMRs, mergedMRs)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Team Overview — Group %s (last %d days)\n\n", groupID, days)
-
-	// Summary
-	b.WriteString(mdSummaryHeading)
-	b.WriteString(tblCategoryCount)
-	activeCount := len(stats)
-	fmt.Fprintf(&b, "| Active members | %d |\n", activeCount)
-	fmt.Fprintf(&b, "| Open MRs | %d |\n", len(openMRs))
-	fmt.Fprintf(&b, "| Merged MRs (period) | %d |\n", len(mergedMRs))
-	b.WriteString("\n")
-
-	// Member workload table
-	b.WriteString("## Member Workload\n\n")
-	b.WriteString("| Member | Name | Open MRs | Merged | Reviewing |\n")
-	b.WriteString("|--------|------|----------|--------|-----------|\n")
-	for _, uname := range sortedKeys(stats) {
-		s := stats[uname]
-		fmt.Fprintf(&b, "| @%s | %s | %d | %d | %d |\n", uname, s.name, s.openMRs, s.mergedMRs, s.reviewMRs)
-	}
-	b.WriteString("\n")
-
-	// Mermaid pie chart
-	if activeCount > 0 {
-		b.WriteString("## Workload Distribution (Open MRs)\n\n```mermaid\npie title Open MRs by Author\n")
-		for _, uname := range sortedKeys(stats) {
-			s := stats[uname]
-			if s.openMRs > 0 {
-				fmt.Fprintf(&b, "  \"%s\" : %d\n", uname, s.openMRs)
-			}
-		}
-		b.WriteString("```\n\n")
-	}
-
+	writeTeamOverviewSummary(&b, stats, len(openMRs), len(mergedMRs))
+	writeTeamOverviewWorkload(&b, stats)
+	writeTeamOverviewChart(&b, stats)
 	b.WriteString("---\nPlease analyze the team's workload distribution, identify bottlenecks, and suggest rebalancing actions.\n")
 
 	return promptResult(b.String()), nil
+}
+
+func buildTeamOverviewStats(members []*gl.GroupMember, openMRs, mergedMRs []*gl.BasicMergeRequest) map[string]*teamOverviewMemberStats {
+	stats := make(map[string]*teamOverviewMemberStats)
+	for _, member := range members {
+		if member.State == "active" {
+			stats[member.Username] = &teamOverviewMemberStats{name: member.Name}
+		}
+	}
+	for _, mr := range openMRs {
+		recordTeamOverviewOpenMR(stats, mr)
+	}
+	for _, mr := range mergedMRs {
+		if mr.Author != nil {
+			if stat, ok := stats[mr.Author.Username]; ok {
+				stat.mergedMRs++
+			}
+		}
+	}
+	return stats
+}
+
+func recordTeamOverviewOpenMR(stats map[string]*teamOverviewMemberStats, mr *gl.BasicMergeRequest) {
+	if mr.Author != nil {
+		if stat, ok := stats[mr.Author.Username]; ok {
+			stat.openMRs++
+		}
+	}
+	for _, reviewer := range mr.Reviewers {
+		if stat, ok := stats[reviewer.Username]; ok {
+			stat.reviewMRs++
+		}
+	}
+}
+
+func writeTeamOverviewSummary(b *strings.Builder, stats map[string]*teamOverviewMemberStats, openCount, mergedCount int) {
+	b.WriteString(mdSummaryHeading)
+	b.WriteString(tblCategoryCount)
+	fmt.Fprintf(b, "| Active members | %d |\n", len(stats))
+	fmt.Fprintf(b, "| Open MRs | %d |\n", openCount)
+	fmt.Fprintf(b, "| Merged MRs (period) | %d |\n", mergedCount)
+	b.WriteString("\n")
+}
+
+func writeTeamOverviewWorkload(b *strings.Builder, stats map[string]*teamOverviewMemberStats) {
+	b.WriteString("## Member Workload\n\n")
+	b.WriteString("| Member | Name | Open MRs | Merged | Reviewing |\n")
+	b.WriteString("|--------|------|----------|--------|-----------|\n")
+	for _, username := range sortedKeys(stats) {
+		stat := stats[username]
+		fmt.Fprintf(b, "| @%s | %s | %d | %d | %d |\n", username, stat.name, stat.openMRs, stat.mergedMRs, stat.reviewMRs)
+	}
+	b.WriteString("\n")
+}
+
+func writeTeamOverviewChart(b *strings.Builder, stats map[string]*teamOverviewMemberStats) {
+	if len(stats) == 0 {
+		return
+	}
+	b.WriteString("## Workload Distribution (Open MRs)\n\n```mermaid\npie title Open MRs by Author\n")
+	for _, username := range sortedKeys(stats) {
+		if stats[username].openMRs > 0 {
+			fmt.Fprintf(b, "  \"%s\" : %d\n", username, stats[username].openMRs)
+		}
+	}
+	b.WriteString("```\n\n")
 }
 
 // registerGroupMRDashboardPrompt registers the group_mr_dashboard prompt.
@@ -319,7 +336,7 @@ func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, re
 	var b strings.Builder
 	branchInfo := ""
 	if opts.TargetBranch != nil {
-		branchInfo = fmt.Sprintf(" targeting %s", *opts.TargetBranch)
+		branchInfo = " targeting " + *opts.TargetBranch
 	}
 	fmt.Fprintf(&b, "# Group MR Dashboard — %s (%d %s MRs%s)\n\n", groupID, len(mrs), state, branchInfo)
 
@@ -395,85 +412,93 @@ func handleReviewerWorkload(ctx context.Context, client *gitlabclient.Client, re
 		ListOptions: gl.ListOptions{PerPage: maxListItems},
 	}, gl.WithContext(ctx))
 
-	// Build reviewer stats
-	type reviewerStats struct {
-		name     string
-		count    int
-		oldestMR *time.Time
-	}
-	rStats := make(map[string]*reviewerStats)
-	for _, m := range members {
-		if m.State != "active" {
-			continue
-		}
-		rStats[m.Username] = &reviewerStats{name: m.Name}
-	}
-
-	for _, mr := range openMRs {
-		for _, rev := range mr.Reviewers {
-			s, ok := rStats[rev.Username]
-			if !ok {
-				s = &reviewerStats{name: rev.Username}
-				rStats[rev.Username] = s
-			}
-			s.count++
-			if mr.CreatedAt != nil && (s.oldestMR == nil || mr.CreatedAt.Before(*s.oldestMR)) {
-				s.oldestMR = mr.CreatedAt
-			}
-		}
-	}
+	rStats := buildReviewerWorkloadStats(members, openMRs)
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Reviewer Workload — Group %s\n\n", groupID)
-
-	// Summary
-	totalReviews := 0
-	for _, s := range rStats {
-		totalReviews += s.count
-	}
-	activeReviewers := 0
-	for _, s := range rStats {
-		if s.count > 0 {
-			activeReviewers++
-		}
-	}
-	b.WriteString(mdSummaryHeading)
-	b.WriteString(tblCategoryCount)
-	fmt.Fprintf(&b, "| Total open MRs | %d |\n", len(openMRs))
-	fmt.Fprintf(&b, "| Total review assignments | %d |\n", totalReviews)
-	fmt.Fprintf(&b, "| Active reviewers | %d |\n", activeReviewers)
-	if activeReviewers > 0 {
-		fmt.Fprintf(&b, "| Avg reviews/reviewer | %.1f |\n", float64(totalReviews)/float64(activeReviewers))
-	}
-	b.WriteString("\n")
-
-	// Reviewer table
-	b.WriteString("## Review Distribution\n\n")
-	b.WriteString("| Reviewer | Name | MRs to Review | Oldest Pending |\n")
-	b.WriteString("|----------|------|---------------|----------------|\n")
-	for _, uname := range sortedKeys(rStats) {
-		s := rStats[uname]
-		oldest := "-"
-		if s.oldestMR != nil {
-			oldest = formatAge(time.Since(*s.oldestMR))
-		}
-		fmt.Fprintf(&b, "| @%s | %s | %d | %s |\n", uname, s.name, s.count, oldest)
-	}
-	b.WriteString("\n")
-
-	// Mermaid pie chart
-	if activeReviewers > 0 {
-		b.WriteString("## Distribution Chart\n\n```mermaid\npie title Review Distribution\n")
-		for _, uname := range sortedKeys(rStats) {
-			s := rStats[uname]
-			if s.count > 0 {
-				fmt.Fprintf(&b, "  \"%s\" : %d\n", uname, s.count)
-			}
-		}
-		b.WriteString("```\n\n")
-	}
-
+	activeReviewers := writeReviewerWorkloadSummary(&b, rStats, len(openMRs))
+	writeReviewerWorkloadTable(&b, rStats)
+	writeReviewerWorkloadChart(&b, rStats, activeReviewers)
 	b.WriteString("---\nPlease analyze the review distribution, identify overloaded reviewers, and suggest rebalancing actions.\n")
 
 	return promptResult(b.String()), nil
+}
+
+func buildReviewerWorkloadStats(members []*gl.GroupMember, openMRs []*gl.BasicMergeRequest) map[string]*reviewerWorkloadStats {
+	stats := make(map[string]*reviewerWorkloadStats)
+	for _, member := range members {
+		if member.State == "active" {
+			stats[member.Username] = &reviewerWorkloadStats{name: member.Name}
+		}
+	}
+	for _, mr := range openMRs {
+		for _, reviewer := range mr.Reviewers {
+			recordReviewerWorkloadMR(stats, reviewer.Username, mr.CreatedAt)
+		}
+	}
+	return stats
+}
+
+func recordReviewerWorkloadMR(stats map[string]*reviewerWorkloadStats, username string, createdAt *time.Time) {
+	stat, ok := stats[username]
+	if !ok {
+		stat = &reviewerWorkloadStats{name: username}
+		stats[username] = stat
+	}
+	stat.count++
+	if createdAt != nil && (stat.oldestMR == nil || createdAt.Before(*stat.oldestMR)) {
+		stat.oldestMR = createdAt
+	}
+}
+
+func writeReviewerWorkloadSummary(b *strings.Builder, stats map[string]*reviewerWorkloadStats, openCount int) int {
+	totalReviews, activeReviewers := reviewerWorkloadTotals(stats)
+	b.WriteString(mdSummaryHeading)
+	b.WriteString(tblCategoryCount)
+	fmt.Fprintf(b, "| Total open MRs | %d |\n", openCount)
+	fmt.Fprintf(b, "| Total review assignments | %d |\n", totalReviews)
+	fmt.Fprintf(b, "| Active reviewers | %d |\n", activeReviewers)
+	if activeReviewers > 0 {
+		fmt.Fprintf(b, "| Avg reviews/reviewer | %.1f |\n", float64(totalReviews)/float64(activeReviewers))
+	}
+	b.WriteString("\n")
+	return activeReviewers
+}
+
+func reviewerWorkloadTotals(stats map[string]*reviewerWorkloadStats) (totalReviews, activeReviewers int) {
+	for _, stat := range stats {
+		totalReviews += stat.count
+		if stat.count > 0 {
+			activeReviewers++
+		}
+	}
+	return totalReviews, activeReviewers
+}
+
+func writeReviewerWorkloadTable(b *strings.Builder, stats map[string]*reviewerWorkloadStats) {
+	b.WriteString("## Review Distribution\n\n")
+	b.WriteString("| Reviewer | Name | MRs to Review | Oldest Pending |\n")
+	b.WriteString("|----------|------|---------------|----------------|\n")
+	for _, username := range sortedKeys(stats) {
+		stat := stats[username]
+		oldest := "-"
+		if stat.oldestMR != nil {
+			oldest = formatAge(time.Since(*stat.oldestMR))
+		}
+		fmt.Fprintf(b, "| @%s | %s | %d | %s |\n", username, stat.name, stat.count, oldest)
+	}
+	b.WriteString("\n")
+}
+
+func writeReviewerWorkloadChart(b *strings.Builder, stats map[string]*reviewerWorkloadStats, activeReviewers int) {
+	if activeReviewers == 0 {
+		return
+	}
+	b.WriteString("## Distribution Chart\n\n```mermaid\npie title Review Distribution\n")
+	for _, username := range sortedKeys(stats) {
+		if stats[username].count > 0 {
+			fmt.Fprintf(b, "  \"%s\" : %d\n", username, stats[username].count)
+		}
+	}
+	b.WriteString("```\n\n")
 }

@@ -106,7 +106,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("terraform_state_get", toolutil.RouteAction(client, terraformstates.Get), "gitlab_get_terraform_state"),
 		adminDeleteSpec("terraform_state_delete", toolutil.DestructiveVoidAction(client, terraformstates.Delete), "gitlab_delete_terraform_state"),
 		adminUpdateSpec("terraform_state_lock", toolutil.RouteAction(client, terraformstates.Lock), "gitlab_lock_terraform_state"),
-		adminDestructiveUpdateIndividualSpec("terraform_state_unlock", toolutil.DestructiveAction(client, terraformstates.Unlock), "gitlab_unlock_terraform_state"),
+		adminTerraformStateUnlockSpec(client),
 		adminDeleteSpec("terraform_version_delete", toolutil.DestructiveVoidAction(client, terraformstates.DeleteVersion), "gitlab_delete_terraform_state_version"),
 		adminReadSpec("cluster_agent_list", toolutil.RouteAction(client, clusteragents.ListAgents), "gitlab_list_cluster_agents"),
 		adminReadSpec("cluster_agent_get", toolutil.RouteAction(client, clusteragents.GetAgent), "gitlab_get_cluster_agent"),
@@ -126,44 +126,33 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func adminReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := adminOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, adminOptions(individualTool))
 }
 
 func adminCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, adminOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, adminOptions(individualTool))
 }
 
 func adminUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := adminOptions(individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, adminOptions(individualTool))
 }
 
 func adminDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := adminOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, adminOptions(individualTool))
 }
 
 func adminUpdateCreateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	individualIdempotent := false
 	options := adminOptions(individualTool)
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 func adminDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	individualDestructive := false
 	options := adminOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
 func adminSystemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -172,49 +161,64 @@ func adminSystemHookTestSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_test_system_hook")
 	options.IndividualTool.AnnotationOverrides.ReadOnly = &individualReadOnly
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
-	return toolutil.NewActionSpec("system_hook_test", toolutil.RouteAction(client, systemhooks.Test), options)
+	return toolutil.NewCreateActionSpec("system_hook_test", toolutil.RouteAction(client, systemhooks.Test), options)
 }
 
 func adminSystemHookEditSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_edit_system_hook")
-	options.Idempotent = true
 	options.IndividualTool.Description = "Edit an instance system hook, including event triggers, SSL verification, and URL settings. Returns: the updated system hook object. See also: gitlab_get_system_hook, gitlab_list_system_hooks, gitlab_test_system_hook."
-	return toolutil.NewActionSpec("system_hook_edit", toolutil.RouteAction(client, systemhooks.Edit), options)
+	return toolutil.NewUpdateActionSpec("system_hook_edit", toolutil.RouteAction(client, systemhooks.Edit), options)
 }
 
 func adminSystemHookSetURLVariableSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_set_system_hook_url_variable")
-	options.Idempotent = true
 	options.IndividualTool.Description = "Create or update one URL variable for an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_edit_system_hook, gitlab_get_system_hook."
-	return toolutil.NewActionSpec("system_hook_set_url_variable", toolutil.RouteVoidAction(client, systemhooks.SetURLVariable), options)
+	return toolutil.NewUpdateActionSpec("system_hook_set_url_variable", toolutil.RouteVoidAction(client, systemhooks.SetURLVariable), options)
 }
 
 func adminSystemHookDeleteURLVariableSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_delete_system_hook_url_variable")
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.Description = "Delete one URL variable from an instance system hook. Returns: a success status and message naming the variable key. See also: gitlab_set_system_hook_url_variable, gitlab_get_system_hook."
-	return toolutil.NewActionSpec("system_hook_delete_url_variable", toolutil.DestructiveVoidAction(client, systemhooks.DeleteURLVariable), options)
+	return toolutil.NewDeleteActionSpec("system_hook_delete_url_variable", toolutil.DestructiveVoidAction(client, systemhooks.DeleteURLVariable), options)
 }
 
 func adminSettingsGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_get_settings")
-	options.ReadOnly = true
-	options.Idempotent = true
 	options.Usage = "Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information."
 	options.Aliases = []string{"application settings", "instance settings", "current settings", "admin settings", "gitlab settings"}
 	options.Tags = append(options.Tags, "settings", "application_settings")
-	return toolutil.NewActionSpec("settings_get", toolutil.RouteAction(client, settings.Get), options)
+	return toolutil.NewReadActionSpec("settings_get", toolutil.RouteAction(client, settings.Get), options)
 }
 
 func adminMetadataGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := adminOptions("gitlab_get_metadata")
-	options.ReadOnly = true
-	options.Idempotent = true
 	options.Usage = "Read GitLab instance metadata such as version and revision. Do not use this for application settings."
 	options.Aliases = []string{"instance metadata", "gitlab version", "server metadata", "gitlab revision"}
 	options.Tags = append(options.Tags, "metadata", "version")
-	return toolutil.NewActionSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), options)
+	return toolutil.NewReadActionSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), options)
+}
+
+func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	individualDestructive := false
+	options := adminOptions("gitlab_unlock_terraform_state")
+	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
+	options.Tags = append(options.Tags, "terraform", "terraform_state", "state", "lock", "unlock")
+	options.Usage = "Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name; do not send the state name as id."
+	options.Aliases = []string{"terraform_state.unlock", "unlock terraform state", "unlock terraform state lock", "terraform state unlock"}
+	options.RelatedActions = []string{"admin.terraform_state_get", "admin.terraform_state_lock", "admin.terraform_state_list"}
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"name": {
+			SemanticRole: "terraform_state_name",
+			ValueSource:  "Terraform state name from the prompt or admin.terraform_state_list output.",
+			CommonConfusions: []string{
+				"Do not send the state name as id; use params.name.",
+			},
+		},
+	}
+	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+		toolutil.SchemaPropertyOverride("name", map[string]any{"description": "Terraform state name. Use params.name for values such as production or eval-unlock-123; do not use id."}),
+	}
+	return toolutil.NewDeleteActionSpec("terraform_state_unlock", toolutil.DestructiveAction(client, terraformstates.Unlock), options)
 }
 
 func adminOptions(individualTool string) toolutil.ActionSpecOptions {

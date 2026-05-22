@@ -43,24 +43,25 @@ func newMockGitLabClient() (*gitlabclient.Client, func(), error) {
 }
 
 // loadCatalog loads catalog from evaluator inputs.
-func loadCatalog(opts options) ([]modelTool, map[string]toolutil.ActionMap, error) {
+func loadCatalog(opts options) (catalog []modelTool, routes map[string]toolutil.ActionMap, enterprise bool, err error) {
 	if opts.ToolsFile != "" {
-		return loadToolsSnapshot(opts.ToolsFile)
+		snapshotTools, snapshotRoutes, snapshotErr := loadToolsSnapshot(opts.ToolsFile)
+		return snapshotTools, snapshotRoutes, catalogHasEnterpriseRoutes(snapshotRoutes), snapshotErr
 	}
 	toolSurface, err := normalizeEvalToolSurface(opts.ToolSurface)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	client, cleanup, err := newCatalogGitLabClient(opts)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	defer cleanup()
 	mcpTools, routes, err := buildCatalog(client, toolSurface)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
-	return convertTools(mcpTools), routes, nil
+	return convertTools(mcpTools), routes, client.IsEnterprise(), nil
 }
 
 // newCatalogGitLabClient derives new catalog GitLab client from catalog metadata.

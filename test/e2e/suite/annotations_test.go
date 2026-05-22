@@ -29,9 +29,6 @@ func TestAnnotations_DestructiveHint_Individual(t *testing.T) {
 
 	t.Logf("Checking %d individual tools for annotation correctness", len(result.Tools))
 
-	destructiveVerbs := []string{"_delete_", "_revoke_", "_unprotect_", "_remove_", "_purge_"}
-	readOnlyVerbs := []string{"_list_", "_get_", "_search_"}
-
 	var destructiveCount, readOnlyCount, missingAnnotations int
 
 	for _, tool := range result.Tools {
@@ -43,52 +40,8 @@ func TestAnnotations_DestructiveHint_Individual(t *testing.T) {
 			continue
 		}
 
-		isDestructive := false
-		for _, verb := range destructiveVerbs {
-			if strings.Contains(name, verb) {
-				isDestructive = true
-				break
-			}
-		}
-		// Also check suffix (e.g. gitlab_group_delete)
-		for _, verb := range destructiveVerbs {
-			suffix := strings.TrimPrefix(verb, "_")
-			suffix = strings.TrimSuffix(suffix, "_")
-			if strings.HasSuffix(name, "_"+suffix) {
-				isDestructive = true
-				break
-			}
-		}
-
-		// Mutating suffixes override read-only heuristic (e.g. gitlab_board_list_create
-		// contains "_list_" in the resource name but ends with a mutating verb).
-		mutatingVerbs := []string{"_create", "_update", "_add", "_edit", "_set", "_upload"}
-		isMutating := false
-		for _, verb := range mutatingVerbs {
-			if strings.HasSuffix(name, verb) {
-				isMutating = true
-				break
-			}
-		}
-
-		isReadOnly := false
-		if !isMutating {
-			for _, verb := range readOnlyVerbs {
-				if strings.Contains(name, verb) {
-					isReadOnly = true
-					break
-				}
-			}
-			// Also check suffix
-			for _, verb := range readOnlyVerbs {
-				suffix := strings.TrimPrefix(verb, "_")
-				suffix = strings.TrimSuffix(suffix, "_")
-				if strings.HasSuffix(name, "_"+suffix) {
-					isReadOnly = true
-					break
-				}
-			}
-		}
+		isDestructive := isDestructiveIndividualToolName(name)
+		isReadOnly := isReadOnlyIndividualToolName(name)
 
 		if isDestructive {
 			destructiveCount++
@@ -117,6 +70,39 @@ func TestAnnotations_DestructiveHint_Individual(t *testing.T) {
 	requireTruef(t, destructiveCount > 0, "expected at least 1 destructive tool, found 0")
 	requireTruef(t, readOnlyCount > 0, "expected at least 1 read-only tool, found 0")
 	requireTruef(t, missingAnnotations == 0, "found %d tools with missing annotations", missingAnnotations)
+}
+
+func isDestructiveIndividualToolName(name string) bool {
+	return toolNameHasMarkerOrSuffix(name, []string{"_delete_", "_revoke_", "_unprotect_", "_remove_", "_purge_"})
+}
+
+func isReadOnlyIndividualToolName(name string) bool {
+	if toolNameHasSuffix(name, []string{"_create", "_update", "_add", "_edit", "_set", "_upload"}) {
+		return false
+	}
+	return toolNameHasMarkerOrSuffix(name, []string{"_list_", "_get_", "_search_"})
+}
+
+func toolNameHasMarkerOrSuffix(name string, verbs []string) bool {
+	for _, verb := range verbs {
+		if strings.Contains(name, verb) {
+			return true
+		}
+		suffix := strings.TrimPrefix(strings.TrimSuffix(verb, "_"), "_")
+		if strings.HasSuffix(name, "_"+suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+func toolNameHasSuffix(name string, suffixes []string) bool {
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestAnnotations_DestructiveHint_Meta verifies that meta-tools containing

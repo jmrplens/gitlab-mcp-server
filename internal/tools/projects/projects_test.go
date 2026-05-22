@@ -1655,39 +1655,35 @@ func TestProjectListHooks_Success(t *testing.T) {
 	if len(out.Hooks) != 1 {
 		t.Fatalf("len(Hooks) = %d, want 1", len(out.Hooks))
 	}
-	if out.Hooks[0].URL != testHookURL {
-		t.Errorf("URL = %q, want %q", out.Hooks[0].URL, testHookURL)
-	}
-	if !out.Hooks[0].PushEvents {
-		t.Error("PushEvents = false, want true")
-	}
-	if !out.Hooks[0].EnableSSLVerification {
-		t.Error("EnableSSLVerification = false, want true")
-	}
-	if !out.Hooks[0].TokenPresent || !out.Hooks[0].SigningTokenPresent {
-		t.Error("expected token presence flags to be true")
-	}
-	if !out.Hooks[0].MilestoneEvents || !out.Hooks[0].FeatureFlagEvents || !out.Hooks[0].VulnerabilityEvents {
-		t.Error("expected milestone, feature flag, and vulnerability events to be true")
-	}
-	if !out.Hooks[0].ResourceDeployTokenEvents {
-		t.Error("ResourceDeployTokenEvents = false, want true")
-	}
-	if out.Hooks[0].DisabledUntil == "" {
-		t.Error("DisabledUntil is empty, want timestamp")
-	}
-	if len(out.Hooks[0].URLVariables) != 1 || out.Hooks[0].URLVariables[0].Key != "env" {
-		t.Fatalf("unexpected URL variables: %+v", out.Hooks[0].URLVariables)
-	}
-	if len(out.Hooks[0].CustomHeaders) != 1 || out.Hooks[0].CustomHeaders[0].Key != "X-Env" {
-		t.Fatalf("unexpected custom headers: %+v", out.Hooks[0].CustomHeaders)
-	}
+	assertProjectHookOutput(t, out.Hooks[0])
 	encodedHook, err := json.Marshal(out.Hooks[0])
 	if err != nil {
 		t.Fatalf("marshal hook output: %v", err)
 	}
 	if strings.Contains(string(encodedHook), `"value"`) || strings.Contains(string(encodedHook), "prod") {
 		t.Fatalf("hook output exposed secret-bearing values: %s", encodedHook)
+	}
+}
+
+func assertProjectHookOutput(t *testing.T, hook HookOutput) {
+	t.Helper()
+	if hook.URL != testHookURL || !hook.PushEvents || !hook.EnableSSLVerification {
+		t.Fatalf("hook core fields = %+v, want URL, push events, and SSL verification", hook)
+	}
+	if !hook.TokenPresent || !hook.SigningTokenPresent {
+		t.Error("expected token presence flags to be true")
+	}
+	if !hook.MilestoneEvents || !hook.FeatureFlagEvents || !hook.VulnerabilityEvents || !hook.ResourceDeployTokenEvents {
+		t.Error("expected milestone, feature flag, vulnerability, and resource deploy token events to be true")
+	}
+	if hook.DisabledUntil == "" {
+		t.Error("DisabledUntil is empty, want timestamp")
+	}
+	if len(hook.URLVariables) != 1 || hook.URLVariables[0].Key != "env" {
+		t.Fatalf("unexpected URL variables: %+v", hook.URLVariables)
+	}
+	if len(hook.CustomHeaders) != 1 || hook.CustomHeaders[0].Key != "X-Env" {
+		t.Fatalf("unexpected custom headers: %+v", hook.CustomHeaders)
 	}
 }
 
@@ -3293,8 +3289,10 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatListMarkdown_ClickableProjectLinks(t *testing.T) {
 	out := ListOutput{
 		Projects: []Output{
-			{ID: 1, Name: "My Project", PathWithNamespace: "ns/my-project",
-				Visibility: testPublic, WebURL: "https://gitlab.example.com/ns/my-project"},
+			{
+				ID: 1, Name: "My Project", PathWithNamespace: "ns/my-project",
+				Visibility: testPublic, WebURL: "https://gitlab.example.com/ns/my-project",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}
@@ -3795,6 +3793,12 @@ func assertEditProjectCoreOpts(t *testing.T, opts *gl.EditProjectOptions) {
 // assertEditProjectAdvancedOpts checks edit project advanced opts invariants for tests.
 func assertEditProjectAdvancedOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	t.Helper()
+	assertEditProjectMergeOpts(t, opts)
+	assertEditProjectAccessOpts(t, opts)
+}
+
+func assertEditProjectMergeOpts(t *testing.T, opts *gl.EditProjectOptions) {
+	t.Helper()
 	if opts.BuildsAccessLevel == nil {
 		t.Error("BuildsAccessLevel not set")
 	}
@@ -3828,13 +3832,16 @@ func assertEditProjectAdvancedOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	if opts.ResolveOutdatedDiffDiscussions == nil {
 		t.Error("ResolveOutdatedDiffDiscussions not set")
 	}
-	//lint:ignore SA1019 no replacement field, needs Merge Request Approvals API
-	if opts.ApprovalsBeforeMerge == nil || *opts.ApprovalsBeforeMerge != 2 { //nolint:staticcheck // testing deprecated field intentionally
+	if opts.ApprovalsBeforeMerge == nil || *opts.ApprovalsBeforeMerge != 2 { //nolint:staticcheck // Test deprecated compatibility field.
 		t.Error("ApprovalsBeforeMerge not set")
 	}
 	if opts.LFSEnabled == nil {
 		t.Error("LFSEnabled not set")
 	}
+}
+
+func assertEditProjectAccessOpts(t *testing.T, opts *gl.EditProjectOptions) {
+	t.Helper()
 	if opts.RequestAccessEnabled == nil {
 		t.Error("RequestAccessEnabled not set")
 	}
@@ -3844,8 +3851,7 @@ func assertEditProjectAdvancedOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	if opts.PublicJobs == nil {
 		t.Error("PublicJobs not set")
 	}
-	//lint:ignore SA1019 backward compat with PackagesEnabled field
-	if opts.PackagesEnabled == nil { //nolint:staticcheck // SA1019
+	if opts.PackagesEnabled == nil { //nolint:staticcheck // Test deprecated compatibility field.
 		t.Error("PackagesEnabled not set")
 	}
 	if opts.PackageRegistryAccessLevel == nil {
@@ -5352,28 +5358,7 @@ func TestProjectCreate_RemoveSourceBranch(t *testing.T) {
 // feature toggles set to false (issues, wiki, jobs, snippets disabled).
 func TestProjectCreate_FeatureTogglesDisabled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
-			var body map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode body: %v", err)
-			}
-			// boolToAccessLevel(false) maps to "disabled"
-			if v := body["issues_access_level"]; v != "disabled" {
-				t.Errorf("issues_access_level = %v, want disabled", v)
-			}
-			if v := body["wiki_access_level"]; v != "disabled" {
-				t.Errorf("wiki_access_level = %v, want disabled", v)
-			}
-			if v := body["builds_access_level"]; v != "disabled" {
-				t.Errorf("builds_access_level = %v, want disabled", v)
-			}
-			if v := body["snippets_access_level"]; v != "disabled" {
-				t.Errorf("snippets_access_level = %v, want disabled", v)
-			}
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":102,"name":"minimal-proj","path_with_namespace":"ns/minimal-proj","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/ns/minimal-proj","description":""}`)
-			return
-		}
-		http.NotFound(w, r)
+		handleProjectCreateFeatureTogglesDisabled(t, w, r)
 	}))
 
 	issues := false
@@ -5389,6 +5374,36 @@ func TestProjectCreate_FeatureTogglesDisabled(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
+	}
+}
+
+func handleProjectCreateFeatureTogglesDisabled(t *testing.T, w http.ResponseWriter, r *http.Request) {
+	t.Helper()
+	if r.Method != http.MethodPost || r.URL.Path != pathProjects {
+		http.NotFound(w, r)
+		return
+	}
+	var body map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode body: %v", err)
+	}
+	assertDisabledProjectFeatureToggles(t, body)
+	testutil.RespondJSON(w, http.StatusCreated, `{"id":102,"name":"minimal-proj","path_with_namespace":"ns/minimal-proj","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/ns/minimal-proj","description":""}`)
+}
+
+func assertDisabledProjectFeatureToggles(t *testing.T, body map[string]any) {
+	t.Helper()
+	if v := body["issues_access_level"]; v != "disabled" {
+		t.Errorf("issues_access_level = %v, want disabled", v)
+	}
+	if v := body["wiki_access_level"]; v != "disabled" {
+		t.Errorf("wiki_access_level = %v, want disabled", v)
+	}
+	if v := body["builds_access_level"]; v != "disabled" {
+		t.Errorf("builds_access_level = %v, want disabled", v)
+	}
+	if v := body["snippets_access_level"]; v != "disabled" {
+		t.Errorf("snippets_access_level = %v, want disabled", v)
 	}
 }
 

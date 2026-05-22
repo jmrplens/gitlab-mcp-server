@@ -12,22 +12,21 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
-
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // Format strings and test file constants used across E2E test helpers.
@@ -88,44 +87,194 @@ type resourceSnapshot struct {
 // before running tests, and verifies they remain unchanged after tests
 // complete. In Docker mode (E2E_MODE=docker), snapshots are skipped.
 func TestMain(m *testing.M) {
-	// Allow overriding the project prefix.
+	configureE2EStartupEnvironment()
+
+	enterprise := strings.EqualFold(os.Getenv("GITLAB_ENTERPRISE"), "true")
+	glClient := mustE2EGitLabClient()
+	username := mustE2EUsername(glClient)
+	runtime := startE2ERuntime(glClient, enterprise)
+	sess = runtime.sessions
+	sess.username = username
+	sess.glClient = glClient
+	sess.enterprise = enterprise
+	captureE2ESnapshot(glClient)
+
+	code := m.Run()
+	code = verifyE2ESnapshotAfterRun(glClient, code)
+	cleanupOrphanedProjects(glClient)
+	closeE2ESessions(runtime.running)
+	os.Exit(code)
+}
+
+type runningE2ESession struct {
+	session *mcp.ClientSession
+	cancel  context.CancelFunc
+}
+
+type e2eRuntime struct {
+	sessions sessions
+	running  []runningE2ESession
+}
+
+func startE2ERuntime(glClient *gitlabclient.Client, enterprise bool) e2eRuntime {
+	runtime := e2eRuntime{}
+	runtime.sessions.individual = mustStartE2ESession(&runtime, "individual", "gitlab-mcp-server-e2e", "e2e-test-client", nil, configureIndividualE2EServer(glClient, enterprise))
+	runtime.sessions.meta = mustStartE2ESession(&runtime, "meta", "gitlab-mcp-server-e2e-meta", "e2e-test-meta-client", nil, configureMetaE2EServer(glClient, enterprise))
+	runtime.sessions.dynamic = mustStartE2ESession(&runtime, "dynamic", "gitlab-mcp-server-e2e-dynamic", "e2e-test-dynamic-client", nil, configureDynamicE2EServer(glClient, enterprise))
+	runtime.sessions.sampling = mustStartE2ESession(&runtime, "sampling", "gitlab-mcp-server-e2e-sampling", "e2e-test-sampling-client", samplingClientOptions(), configureToolOnlyE2EServer(glClient, enterprise))
+	runtime.sessions.elicitation = mustStartE2ESession(&runtime, "elicitation", "gitlab-mcp-server-e2e-elicit", "e2e-test-elicit-client", elicitationClientOptions(), configureToolOnlyE2EServer(glClient, enterprise))
+	runtime.sessions.safeMode = mustStartE2ESession(&runtime, "safemode", "gitlab-mcp-server-e2e-safemode", "e2e-test-safemode-client", nil, configureSafeModeE2EServer(glClient, enterprise))
+	return runtime
+}
+
+func mustStartE2ESession(runtime *e2eRuntime, label, serverName, clientName string, clientOptions *mcp.ClientOptions, configure func(*mcp.Server) error) *mcp.ClientSession {
+	running, err := startE2ESession(serverName, clientName, clientOptions, configure)
+	if err != nil {
+		closeE2ESessions(runtime.running)
+		log.Fatalf("e2e: %s session: %v", label, err)
+	}
+	runtime.running = append(runtime.running, running)
+	return running.session
+}
+
+func startE2ESession(serverName, clientName string, clientOptions *mcp.ClientOptions, configure func(*mcp.Server) error) (runningE2ESession, error) {
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: "test"}, nil)
+	if err := configure(server); err != nil {
+		return runningE2ESession{}, err
+	}
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	go func() {
+		if srvErr := server.Run(serverCtx, serverTransport); srvErr != nil && serverCtx.Err() == nil {
+			log.Printf("e2e: %s server stopped unexpectedly: %v", serverName, srvErr)
+		}
+	}()
+
+	client := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: "test"}, clientOptions)
+	session, err := client.Connect(context.Background(), clientTransport, nil)
+	if err != nil {
+		serverCancel()
+		return runningE2ESession{}, fmt.Errorf("connect %s MCP client: %w", clientName, err)
+	}
+	return runningE2ESession{session: session, cancel: serverCancel}, nil
+}
+
+func configureIndividualE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		tools.RegisterAll(server, glClient, enterprise)
+		resources.Register(server, glClient)
+		resources.RegisterWorkflowGuides(server)
+		return nil
+	}
+}
+
+func configureMetaE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		return tools.RegisterAllMeta(server, glClient, enterprise)
+	}
+}
+
+func configureDynamicE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		catalog, err := tools.BuildActionCatalog(glClient, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
+		if err != nil {
+			return fmt.Errorf("build dynamic action catalog: %w", err)
+		}
+		catalog, err = dynamictools.AddStandaloneCatalog(catalog, glClient, dynamictools.StandaloneOptions{})
+		if err != nil {
+			return fmt.Errorf("add standalone dynamic catalog: %w", err)
+		}
+		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
+		return nil
+	}
+}
+
+func configureToolOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		tools.RegisterAll(server, glClient, enterprise)
+		return nil
+	}
+}
+
+func configureSafeModeE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		tools.RegisterAll(server, glClient, enterprise)
+		tools.WrapMutatingToolsForSafeMode(server)
+		return nil
+	}
+}
+
+func samplingClientOptions() *mcp.ClientOptions {
+	return &mcp.ClientOptions{CreateMessageHandler: mockCreateMessageHandler}
+}
+
+func elicitationClientOptions() *mcp.ClientOptions {
+	return &mcp.ClientOptions{ElicitationHandler: mockElicitHandler}
+}
+
+func captureE2ESnapshot(glClient *gitlabclient.Client) {
+	if isDockerMode() {
+		return
+	}
+	snap, err := snapshotState(glClient)
+	if err != nil {
+		log.Fatalf("e2e: snapshot pre-existing state: %v", err)
+	}
+	sess.snapshot = snap
+	log.Printf("e2e: snapshot captured — %d groups, %d projects", len(snap.groups), len(snap.projects))
+}
+
+func verifyE2ESnapshotAfterRun(glClient *gitlabclient.Client, code int) int {
+	if isDockerMode() || sess.snapshot == nil {
+		return code
+	}
+	if err := verifySnapshotIntegrity(glClient, sess.snapshot); err != nil {
+		log.Printf("e2e: SNAPSHOT INTEGRITY FAILURE: %v", err)
+		if code == 0 {
+			return 1
+		}
+		return code
+	}
+	log.Println("e2e: snapshot integrity verified — all pre-existing resources unchanged")
+	return code
+}
+
+func closeE2ESessions(running []runningE2ESession) {
+	for _, runningSession := range slices.Backward(running) {
+		_ = runningSession.session.Close()
+		runningSession.cancel()
+	}
+}
+
+func configureE2EStartupEnvironment() {
 	if p := os.Getenv("E2E_PROJECT_PREFIX"); p != "" {
 		e2eProjectPrefix = p
 	}
 	e2eRunID = configuredE2ERunID(time.Now())
 	log.Printf("e2e: run ID %s", e2eRunID)
-
-	// Load .env — Docker mode uses a different file.
 	if isDockerMode() {
 		_ = godotenv.Load("../../../test/e2e/.env.docker")
 		_ = godotenv.Load("../.env.docker")
-	} else {
-		_ = godotenv.Load("../../../.env")
+		return
 	}
+	_ = godotenv.Load("../../../.env")
+}
 
-	enterprise := strings.EqualFold(os.Getenv("GITLAB_ENTERPRISE"), "true")
-
+func mustE2EGitLabClient() *gitlabclient.Client {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("e2e: load config: %v", err)
 	}
-
 	glClient, err := gitlabclient.NewClient(cfg)
 	if err != nil {
 		log.Fatalf("e2e: create GitLab client: %v", err)
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if _, err = glClient.Ping(ctx); err != nil {
 		log.Fatalf("e2e: gitlab ping failed: %v", err)
 	}
-
 	disableRateLimiting(glClient)
-
-	// In Docker mode, wait for the API to handle concurrent requests reliably.
-	// The readiness probe returns OK before nginx/puma workers are fully warmed
-	// up, causing EOF/connection-reset under burst traffic from parallel tests.
 	if isDockerMode() {
 		log.Println("e2e: warming up GitLab API for concurrent load...")
 		if stableErr := waitForAPIStable(glClient, 60*time.Second); stableErr != nil {
@@ -133,260 +282,16 @@ func TestMain(m *testing.M) {
 		}
 		log.Println("e2e: API stable — proceeding with test setup")
 	}
+	return glClient
+}
 
-	// Auto-detect authenticated username from token.
+func mustE2EUsername(glClient *gitlabclient.Client) string {
 	userInfo, userErr := currentUserWithRetry(glClient, 60*time.Second)
 	if userErr != nil {
 		log.Fatalf("e2e: auto-detect username: %v", userErr)
 	}
-	username := userInfo.Username
-	log.Printf("e2e: authenticated as %s", username)
-
-	// Create MCP server with all individual tools registered.
-	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e",
-		Version: "test",
-	}, nil)
-	tools.RegisterAll(server, glClient, enterprise)
-	resources.Register(server, glClient)
-	resources.RegisterWorkflowGuides(server)
-
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-
-	serverCtx, serverCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := server.Run(serverCtx, serverTransport); srvErr != nil && serverCtx.Err() == nil {
-			log.Printf("e2e: server stopped unexpectedly: %v", srvErr)
-		}
-	}()
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-client",
-		Version: "test",
-	}, nil)
-	session, err := mcpClient.Connect(context.Background(), clientTransport, nil)
-	if err != nil {
-		serverCancel()
-		log.Fatalf("e2e: connect MCP client: %v", err)
-	}
-
-	// Create a second MCP server with meta-tools for meta-tool E2E tests.
-	metaServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-meta",
-		Version: "test",
-	}, nil)
-	if registerErr := tools.RegisterAllMeta(metaServer, glClient, enterprise); registerErr != nil {
-		log.Fatalf("e2e: register meta tools: %v", registerErr)
-	}
-
-	metaServerTransport, metaClientTransport := mcp.NewInMemoryTransports()
-
-	metaServerCtx, metaServerCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := metaServer.Run(metaServerCtx, metaServerTransport); srvErr != nil && metaServerCtx.Err() == nil {
-			log.Printf("e2e: meta server stopped unexpectedly: %v", srvErr)
-		}
-	}()
-
-	metaClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-meta-client",
-		Version: "test",
-	}, nil)
-	metaSession, err := metaClient.Connect(context.Background(), metaClientTransport, nil)
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		log.Fatalf("e2e: connect meta MCP client: %v", err)
-	}
-
-	// Create a dynamic MCP server/client pair with the low-token find and
-	// execute surface backed by the canonical action catalog.
-	dynamicServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-dynamic",
-		Version: "test",
-	}, nil)
-	dynamicCatalog, err := tools.BuildActionCatalog(glClient, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		log.Fatalf("e2e: build dynamic action catalog: %v", err)
-	}
-	dynamicCatalog, err = dynamictools.AddStandaloneCatalog(dynamicCatalog, glClient, dynamictools.StandaloneOptions{})
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		log.Fatalf("e2e: add standalone dynamic catalog: %v", err)
-	}
-	dynamictools.RegisterCatalogFindExecuteTools(dynamicServer, dynamicCatalog)
-
-	dynamicServerTransport, dynamicClientTransport := mcp.NewInMemoryTransports()
-
-	dynamicServerCtx, dynamicServerCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := dynamicServer.Run(dynamicServerCtx, dynamicServerTransport); srvErr != nil && dynamicServerCtx.Err() == nil {
-			log.Printf("e2e: dynamic server stopped unexpectedly: %v", srvErr)
-		}
-	}()
-
-	dynamicClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-dynamic-client",
-		Version: "test",
-	}, nil)
-	dynamicSession, err := dynamicClient.Connect(context.Background(), dynamicClientTransport, nil)
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		dynamicServerCancel()
-		log.Fatalf("e2e: connect dynamic MCP client: %v", err)
-	}
-
-	// Create an MCP server/client pair with sampling capability (mock LLM).
-	samplingServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-sampling",
-		Version: "test",
-	}, nil)
-	tools.RegisterAll(samplingServer, glClient, enterprise)
-
-	samplingServerTransport, samplingClientTransport := mcp.NewInMemoryTransports()
-
-	samplingServerCtx, samplingServerCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := samplingServer.Run(samplingServerCtx, samplingServerTransport); srvErr != nil && samplingServerCtx.Err() == nil {
-			log.Printf("e2e: sampling server stopped unexpectedly: %v", srvErr)
-		}
-	}()
-
-	samplingClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-sampling-client",
-		Version: "test",
-	}, &mcp.ClientOptions{
-		CreateMessageHandler: mockCreateMessageHandler,
-	})
-	samplingSession, err := samplingClient.Connect(context.Background(), samplingClientTransport, nil)
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		dynamicServerCancel()
-		samplingServerCancel()
-		log.Fatalf("e2e: connect sampling MCP client: %v", err)
-	}
-
-	// Create an MCP server/client pair with elicitation capability (auto-accept mock).
-	elicitServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-elicit",
-		Version: "test",
-	}, nil)
-	tools.RegisterAll(elicitServer, glClient, enterprise)
-
-	elicitServerTransport, elicitClientTransport := mcp.NewInMemoryTransports()
-
-	elicitServerCtx, elicitServerCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := elicitServer.Run(elicitServerCtx, elicitServerTransport); srvErr != nil && elicitServerCtx.Err() == nil {
-			log.Printf("e2e: elicit server stopped unexpectedly: %v", srvErr)
-		}
-	}()
-
-	elicitClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-elicit-client",
-		Version: "test",
-	}, &mcp.ClientOptions{
-		ElicitationHandler: mockElicitHandler,
-	})
-	elicitSession, err := elicitClient.Connect(context.Background(), elicitClientTransport, nil)
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		dynamicServerCancel()
-		samplingServerCancel()
-		elicitServerCancel()
-		log.Fatalf("e2e: connect elicit MCP client: %v", err)
-	}
-
-	// Create an MCP server with Safe Mode enabled (mutating tools return previews).
-	safeModeServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "gitlab-mcp-server-e2e-safemode",
-		Version: "test",
-	}, nil)
-	tools.RegisterAll(safeModeServer, glClient, enterprise)
-	tools.WrapMutatingToolsForSafeMode(safeModeServer)
-
-	safeModeServerTransport, safeModeClientTransport := mcp.NewInMemoryTransports()
-
-	safeModeServerCtx, safeModeServerCancel := context.WithCancel(context.Background())
-	go func() {
-		if srvErr := safeModeServer.Run(safeModeServerCtx, safeModeServerTransport); srvErr != nil && safeModeServerCtx.Err() == nil {
-			log.Printf("e2e: safemode server stopped unexpectedly: %v", srvErr)
-		}
-	}()
-
-	safeModeClient := mcp.NewClient(&mcp.Implementation{
-		Name:    "e2e-test-safemode-client",
-		Version: "test",
-	}, nil)
-	safeModeSession, err := safeModeClient.Connect(context.Background(), safeModeClientTransport, nil)
-	if err != nil {
-		serverCancel()
-		metaServerCancel()
-		dynamicServerCancel()
-		samplingServerCancel()
-		elicitServerCancel()
-		safeModeServerCancel()
-		log.Fatalf("e2e: connect safemode MCP client: %v", err)
-	}
-
-	sess = sessions{
-		individual:  session,
-		meta:        metaSession,
-		dynamic:     dynamicSession,
-		sampling:    samplingSession,
-		elicitation: elicitSession,
-		safeMode:    safeModeSession,
-		glClient:    glClient,
-		username:    username,
-		enterprise:  enterprise,
-	}
-
-	// Snapshot pre-existing resources in self-hosted mode.
-	if !isDockerMode() {
-		snap, snapErr := snapshotState(glClient)
-		if snapErr != nil {
-			log.Fatalf("e2e: snapshot pre-existing state: %v", snapErr)
-		}
-		sess.snapshot = snap
-		log.Printf("e2e: snapshot captured — %d groups, %d projects", len(snap.groups), len(snap.projects))
-	}
-
-	code := m.Run()
-
-	// Verify snapshot integrity in self-hosted mode.
-	if !isDockerMode() && sess.snapshot != nil {
-		if intErr := verifySnapshotIntegrity(glClient, sess.snapshot); intErr != nil {
-			log.Printf("e2e: SNAPSHOT INTEGRITY FAILURE: %v", intErr)
-			if code == 0 {
-				code = 1
-			}
-		} else {
-			log.Println("e2e: snapshot integrity verified — all pre-existing resources unchanged")
-		}
-	}
-
-	// Cleanup: delete any orphaned test projects (prefix-based).
-	cleanupOrphanedProjects(glClient)
-
-	_ = session.Close()
-	serverCancel()
-	_ = metaSession.Close()
-	metaServerCancel()
-	_ = dynamicSession.Close()
-	dynamicServerCancel()
-	_ = samplingSession.Close()
-	samplingServerCancel()
-	_ = elicitSession.Close()
-	elicitServerCancel()
-	_ = safeModeSession.Close()
-	safeModeServerCancel()
-	os.Exit(code)
+	log.Printf("e2e: authenticated as %s", userInfo.Username)
+	return userInfo.Username
 }
 
 // mockCreateMessageHandler returns a deterministic mock LLM response for
@@ -405,33 +310,42 @@ func mockCreateMessageHandler(_ context.Context, req *mcp.CreateMessageRequest) 
 // (bool), "selection" (enum), and text fields (string) by inspecting the
 // schema properties.
 func mockElicitHandler(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
-	content := make(map[string]any)
-
-	schema, ok := req.Params.RequestedSchema.(map[string]any)
-	if ok {
-		if props, pOk := schema["properties"].(map[string]any); pOk {
-			for key, val := range props {
-				prop, propOk := val.(map[string]any)
-				if !propOk {
-					continue
-				}
-				switch key {
-				case "confirmed":
-					content[key] = true
-				case "selection":
-					if enumVals, eOk := prop["enum"].([]any); eOk && len(enumVals) > 0 {
-						content[key] = enumVals[0]
-					} else {
-						content[key] = "default"
-					}
-				default:
-					content[key] = elicitTextValue(key)
-				}
-			}
-		}
-	}
-
+	content := mockElicitContent(req)
 	return &mcp.ElicitResult{Action: "accept", Content: content}, nil
+}
+
+func mockElicitContent(req *mcp.ElicitRequest) map[string]any {
+	content := make(map[string]any)
+	schema, ok := req.Params.RequestedSchema.(map[string]any)
+	if !ok {
+		return content
+	}
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return content
+	}
+	for key, val := range props {
+		prop, propOk := val.(map[string]any)
+		if !propOk {
+			continue
+		}
+		content[key] = mockElicitPropertyValue(key, prop)
+	}
+	return content
+}
+
+func mockElicitPropertyValue(key string, prop map[string]any) any {
+	switch key {
+	case "confirmed":
+		return true
+	case "selection":
+		if enumVals, ok := prop["enum"].([]any); ok && len(enumVals) > 0 {
+			return enumVals[0]
+		}
+		return "default"
+	default:
+		return elicitTextValue(key)
+	}
 }
 
 // elicitTextValue returns a plausible mock value for a text field based on
@@ -910,18 +824,18 @@ func drainSidekiq(ctx context.Context, t *testing.T, client *gitlabclient.Client
 //     errors before giving up).
 //   - Reports the final observed status in timeout errors so runner state is
 //     easy to diagnose.
-func waitForPipeline(t *testing.T, client *gitlabclient.Client, projectID int64, pipelineID int64, timeout time.Duration) string {
+func waitForPipeline(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID, pipelineID int64, timeout time.Duration) string {
 	t.Helper()
 	if client == nil {
 		t.Fatal("waitForPipeline: GitLab client not configured")
 	}
-	drainSidekiq(context.Background(), t, client)
+	drainSidekiq(ctx, t, client)
 	if timeout == 0 {
 		timeout = 900 * time.Second
 	}
 	const pollInterval = 5 * time.Second
 	const maxConsecutiveErrors = 10
-	pollCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	pollCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	lastStatus := "unknown"

@@ -42,27 +42,19 @@ func deleteVariableOutput(ctx context.Context, client *gitlabclient.Client, inpu
 }
 
 func pipelineScheduleReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineScheduleOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, pipelineScheduleOptions(name, individualTool))
 }
 
 func pipelineScheduleCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, pipelineScheduleOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, pipelineScheduleOptions(name, individualTool))
 }
 
 func pipelineScheduleUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineScheduleOptions(name, individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, pipelineScheduleOptions(name, individualTool))
 }
 
 func pipelineScheduleDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := pipelineScheduleOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, pipelineScheduleOptions(name, individualTool))
 }
 
 func pipelineScheduleOptions(actionName, individualTool string) toolutil.ActionSpecOptions {

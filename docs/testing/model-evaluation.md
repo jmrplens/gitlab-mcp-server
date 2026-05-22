@@ -90,6 +90,44 @@ Docker evaluation is split into safe presets:
 | `docker-mutating-safe`    | Safe create/update tasks  | Mutates disposable Docker fixtures.                                          |
 | `docker-destructive-safe` | Safe delete/archive tasks | Uses disposable or just-in-time fixtures and requires confirmation metadata. |
 
+### One-Command Docker Suite
+
+Use the wrapper when you want a full CE model run for one surface without
+assembling the Docker, fixture, preset, and publication commands by hand:
+
+```bash
+make eval-surfaces-docker SURFACE=dynamic
+```
+
+To rerun a single preset for focused regression checks, pass `PRESET`:
+
+```bash
+make eval-surfaces-docker SURFACE=dynamic PRESET=docker-destructive-safe
+```
+
+The same workflow is available directly as
+`scripts/eval-surfaces-docker.sh dynamic`, with an optional second preset
+argument. The only required input is the tool surface (`dynamic` or `meta`). The
+wrapper cleans and starts the Docker GitLab CE stack, waits for readiness,
+provisions the E2E token and runner, prepares live fixtures, runs the selected
+Docker preset set with `GITLAB_ENTERPRISE=false`, and then publishes the reviewed
+reports into [AI Model Evaluation Results](model-results.md) and the managed
+README summary after full runs. Single-preset runs skip documentation publishing
+so partial results do not replace the current full-run summary.
+
+Artifacts are written under `dist/evaluation/surfaces/<timestamp>-<surface>-docker/`.
+The timestamp is captured once at startup and reused for every report, trace,
+fixture, and log file in that run. By default the wrapper uses the current
+four-model matrix:
+
+```text
+anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash
+```
+
+Set `EVAL_SURFACE_MODELS` to override the model matrix, `EVAL_SURFACE_OUT_ROOT`
+to change the artifact root, or `EVAL_SURFACE_KEEP_DOCKER=1` to leave the Docker
+GitLab instance running for inspection after the run.
+
 The Docker fixture base must contain all resources needed by successful tasks.
 If a task is not intentionally testing an error, missing GitLab state is treated
 as harness noise and should be fixed in fixtures before judging the model.

@@ -199,7 +199,7 @@ func parseSource(t *testing.T, source string) *ast.File {
 	return node
 }
 
-func writeDuplicateSource(t *testing.T, filename string, value string, count int) {
+func writeDuplicateSource(t *testing.T, filename, value string, count int) {
 	t.Helper()
 	var buf bytes.Buffer
 	buf.WriteString("package sample\n\nfunc f() {\n")

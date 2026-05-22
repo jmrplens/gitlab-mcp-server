@@ -17,7 +17,7 @@ const (
 // ActionSpecs returns canonical specs for merge request actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		toolutil.NewActionSpec("create",
+		toolutil.NewCreateActionSpec("create",
 			toolutil.RouteAction(client, Create),
 			toolutil.ActionSpecOptions{
 				Tags:           []string{"merge-request", "branch"},
@@ -111,36 +111,26 @@ func DeleteDependencyOutput(ctx context.Context, client *gitlabclient.Client, in
 }
 
 func mergeRequestReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mergeRequestOptions(name, individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, mergeRequestOptions(name, individualTool))
 }
 
 func mergeRequestCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, mergeRequestOptions(name, individualTool))
+	return toolutil.NewCreateActionSpec(name, route, mergeRequestOptions(name, individualTool))
 }
 
 func mergeRequestUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mergeRequestOptions(name, individualTool)
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewUpdateActionSpec(name, route, mergeRequestOptions(name, individualTool))
 }
 
 func mergeRequestDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := mergeRequestOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, mergeRequestOptions(name, individualTool))
 }
 
 func mergeRequestDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	individualDestructive := false
 	options := mergeRequestOptions(name, individualTool)
-	options.Destructive = true
-	options.Idempotent = true
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
 func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecOptions {

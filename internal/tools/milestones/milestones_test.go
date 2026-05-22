@@ -1116,8 +1116,10 @@ func TestFormatListMarkdown(t *testing.T) {
 func TestFormatListMarkdownString_ClickableLinks(t *testing.T) {
 	out := ListOutput{
 		Milestones: []Output{
-			{IID: 3, Title: "v3.0", State: "active",
-				WebURL: "https://gitlab.example.com/-/milestones/3"},
+			{
+				IID: 3, Title: "v3.0", State: "active",
+				WebURL: "https://gitlab.example.com/-/milestones/3",
+			},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}

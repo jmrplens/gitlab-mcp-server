@@ -93,7 +93,7 @@ func TestStripJSONC(t *testing.T) {
 func TestReadJSONFile_MalformedJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bad.json")
-	if err := os.WriteFile(path, []byte("{not valid json!}"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("{not valid json!}"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -121,7 +121,7 @@ func TestReadJSONFile_ValidFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "valid.json")
 	content := `{"key": "value", "nested": {"inner": 42}}`
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -199,7 +199,7 @@ func TestWriteJSONFile_MkdirAllFailure(t *testing.T) {
 	dir := t.TempDir()
 	// Create a regular file that will block MkdirAll from creating a subdirectory
 	blocker := filepath.Join(dir, "blocker")
-	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -218,7 +218,7 @@ func TestWriteJSONFile_MkdirAllFailure(t *testing.T) {
 func TestMergeServerEntry_InvalidExistingJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "broken.json")
-	if err := os.WriteFile(path, []byte("NOT JSON AT ALL"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("NOT JSON AT ALL"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -235,7 +235,7 @@ func TestMergeServerEntry_RootKeyNotObject(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	// Root key exists but is a string, not a map
-	if err := os.WriteFile(path, []byte(`{"servers": "not-a-map"}`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"servers": "not-a-map"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -283,10 +283,10 @@ func TestWriteJSONFile_WriteFileFails(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	readOnly := filepath.Join(tmpDir, "locked")
-	if err := os.Mkdir(readOnly, 0o555); err != nil {
+	if err := os.Mkdir(readOnly, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(readOnly, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(readOnly, 0o700) }) //nolint:gosec // Cleanup restores directory traversal after readonly-permission test.
 
 	path := filepath.Join(readOnly, "test.json")
 	data := map[string]any{"key": "value"}

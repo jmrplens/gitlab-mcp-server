@@ -25,6 +25,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 func main() {
@@ -36,14 +37,9 @@ func main() {
 
 // run runs resources for the main package.
 func run() (runErr error) {
-	opts := parseFlags()
-	closeTerminalOutput := func() error { return nil }
-	if shouldConfigureTerminalOutput(opts) {
-		var terminalErr error
-		opts, closeTerminalOutput, terminalErr = configureTerminalOutput(opts)
-		if terminalErr != nil {
-			return terminalErr
-		}
+	opts, closeTerminalOutput, err := prepareRunOptions()
+	if err != nil {
+		return err
 	}
 	defer func() {
 		if closeErr := closeTerminalOutput(); closeErr != nil {
@@ -55,45 +51,146 @@ func run() (runErr error) {
 			terminalLogPrintf("eval_mcp_surfaces: %v\n", runErr)
 		}
 	}()
+	handled, immediateErr := runImmediateMode(opts)
+	if handled {
+		return immediateErr
+	}
+	opts, modelSpecs, err := resolveRunModels(opts)
+	if err != nil {
+		return err
+	}
+	finalReportWritten := false
+	cleanupReport, err := prepareRunFailureReport(
+		opts,
+		func() error { return runErr },
+		func(err error) { runErr = err },
+		func() bool { return finalReportWritten },
+	)
+	if err != nil {
+		return err
+	}
+	defer cleanupReport()
+	tasks, fixtures, err := prepareRunTasks(opts)
+	if err != nil {
+		return err
+	}
+	if opts.PrepareFixtures && opts.FixturesOnly {
+		return nil
+	}
+	catalog, routes, tasks, err := prepareRunCatalog(opts, tasks, fixtures)
+	if err != nil {
+		return err
+	}
+	if opts.DryRun {
+		if dryRunErr := runDryRunEvaluation(opts, tasks, catalog, routes); dryRunErr != nil {
+			return dryRunErr
+		}
+		finalReportWritten = true
+		return nil
+	}
+	runtime, err := newEvaluationRuntime(opts, catalog)
+	if err != nil {
+		return err
+	}
+	defer runtime.close()
+	results, err := runModelEvaluations(context.Background(), modelEvaluationRun{
+		opts:    runtime.opts,
+		tasks:   tasks,
+		catalog: runtime.catalog,
+		routes:  routes,
+		runtime: runtime,
+	}, modelSpecs)
+	if err != nil {
+		return err
+	}
+	if writeErr := writeReport(runtime.opts.Output, runtime.opts, results, runtime.catalog, routes, false); writeErr != nil {
+		return writeErr
+	}
+	finalReportWritten = true
+	if coverageErr := writeCoverageReportIfRequested(runtime.opts, results, routes); coverageErr != nil {
+		return coverageErr
+	}
+	return writeTraceArtifacts(runtime.opts.TraceDir, results, runtime.opts.TraceProviderBodies)
+}
+
+func prepareRunFailureReport(opts options, currentRunErr func() error, setRunErr func(error), finalReportWritten func() bool) (func(), error) {
+	if !shouldWriteStartupReport(opts) {
+		return func() {}, nil
+	}
+	if writeErr := writeStartupReport(opts.Output, opts); writeErr != nil {
+		return nil, writeErr
+	}
+	return func() {
+		if currentRunErr() == nil || finalReportWritten() {
+			return
+		}
+		if writeErr := writeErrorReport(opts.Output, opts, currentRunErr()); writeErr != nil {
+			setRunErr(errors.Join(currentRunErr(), writeErr))
+		}
+	}, nil
+}
+
+func prepareRunOptions() (options, func() error, error) {
+	opts := parseFlags()
+	closeTerminalOutput := noopCloseTerminalOutput
+	if shouldConfigureTerminalOutput(opts) {
+		var terminalErr error
+		opts, closeTerminalOutput, terminalErr = configureTerminalOutput(opts)
+		if terminalErr != nil {
+			return options{}, nil, terminalErr
+		}
+	}
 	var presetErr error
 	opts, presetErr = applyPresetDefaults(opts)
 	if presetErr != nil {
-		return presetErr
+		return options{}, nil, presetErr
 	}
 	var surfaceErr error
 	opts.ToolSurface, surfaceErr = normalizeEvalToolSurface(opts.ToolSurface)
 	if surfaceErr != nil {
-		return surfaceErr
+		return options{}, nil, surfaceErr
 	}
 	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("load .env: %w", err)
+		return options{}, nil, fmt.Errorf("load .env: %w", err)
 	}
 	if opts.GitLabEnv != "" {
 		if err := godotenv.Overload(opts.GitLabEnv); err != nil {
-			return fmt.Errorf("load gitlab env file %s: %w", opts.GitLabEnv, err)
+			return options{}, nil, fmt.Errorf("load gitlab env file %s: %w", opts.GitLabEnv, err)
 		}
 	}
+	return opts, closeTerminalOutput, nil
+}
+
+func noopCloseTerminalOutput() error {
+	return nil
+}
+
+func runImmediateMode(opts options) (bool, error) {
 	if opts.PublishDocs || opts.CheckDocs {
-		return publishEvaluationDocs(opts)
+		return true, publishEvaluationDocs(opts)
 	}
 	if len(opts.CheckEfficiency) > 0 {
-		return runEfficiencyCheck(opts)
+		return true, runEfficiencyCheck(opts)
 	}
 	if len(opts.CompareTraces) > 0 {
-		return runTraceComparison(opts)
+		return true, runTraceComparison(opts)
 	}
 	if len(opts.CompareReports) > 0 {
 		if opts.Output == "" {
 			opts.Output = defaultComparisonOutputPath()
 		}
-		return writeComparisonReport(opts.Output, opts.CompareReports)
+		return true, writeComparisonReport(opts.Output, opts.CompareReports)
 	}
+	return false, nil
+}
+
+func resolveRunModels(opts options) (options, []modelSpec, error) {
 	var modelSpecs []modelSpec
 	if !opts.DryRun {
 		var modelErr error
 		modelSpecs, modelErr = resolveModelSpecs(opts)
 		if modelErr != nil {
-			return modelErr
+			return options{}, nil, modelErr
 		}
 		opts.Model = modelReportLabel(modelSpecs)
 	} else if opts.Model == "" {
@@ -105,45 +202,35 @@ func run() (runErr error) {
 	if opts.TraceDir == "" && !opts.DryRun {
 		opts.TraceDir = defaultTraceDir(opts.Output)
 	}
-	finalReportWritten := false
-	if shouldWriteStartupReport(opts) {
-		if writeErr := writeStartupReport(opts.Output, opts); writeErr != nil {
-			return writeErr
-		}
-		defer func() {
-			if runErr == nil || finalReportWritten {
-				return
-			}
-			if writeErr := writeErrorReport(opts.Output, opts, runErr); writeErr != nil {
-				runErr = errors.Join(runErr, writeErr)
-			}
-		}()
-	}
+	return opts, modelSpecs, nil
+}
+
+func prepareRunTasks(opts options) ([]evalTask, *liveFixtureState, error) {
 	var fixtures *liveFixtureState
 	if opts.PrepareFixtures {
 		prepared, prepareErr := prepareLiveFixtures(opts)
 		if prepareErr != nil {
-			return prepareErr
+			return nil, nil, prepareErr
 		}
 		fixtures = prepared
 		if writeErr := writeLiveFixtures(opts.Fixtures, fixtures); writeErr != nil {
-			return writeErr
+			return nil, nil, writeErr
 		}
 		terminalPrintf("fixtures: wrote %s for %s\n", opts.Fixtures, fixtures.ProjectPath)
 		if opts.FixturesOnly {
-			return nil
+			return nil, fixtures, nil
 		}
 	}
 	tasks, parseErr := parseTasksFile(opts.TasksPath)
 	if parseErr != nil {
-		return parseErr
+		return nil, nil, parseErr
 	}
 	if opts.UseFixtures || opts.PrepareFixtures {
 		if fixtures == nil {
 			var readErr error
 			fixtures, readErr = readLiveFixtures(opts.Fixtures)
 			if readErr != nil {
-				return readErr
+				return nil, nil, readErr
 			}
 		}
 		tasks = applyLiveFixtureState(tasks, fixtures)
@@ -152,186 +239,278 @@ func run() (runErr error) {
 	var filterErr error
 	tasks, filterErr = filterTasksByDestructive(tasks, opts.SkipDestructive, opts.OnlyDestructive)
 	if filterErr != nil {
-		return filterErr
+		return nil, nil, filterErr
 	}
 	tasks, filterErr = filterTasksByMutation(tasks, opts.SkipMutating, opts.OnlyMutating)
 	if filterErr != nil {
-		return filterErr
+		return nil, nil, filterErr
 	}
 	if len(tasks) == 0 {
-		return errors.New("no tasks selected")
+		return nil, nil, errors.New("no tasks selected")
 	}
 	if opts.Repeat < 1 {
-		return errors.New("repeat must be >= 1")
+		return nil, nil, errors.New("repeat must be >= 1")
 	}
 	if problems := validateTaskFixture(tasks); len(problems) > 0 {
-		return fmt.Errorf("fixture validation failed:\n- %s", strings.Join(problems, "\n- "))
+		return nil, nil, fmt.Errorf("fixture validation failed:\n- %s", strings.Join(problems, "\n- "))
 	}
+	return tasks, fixtures, nil
+}
 
-	catalog, routes, catalogErr := loadCatalog(opts)
+func prepareRunCatalog(opts options, tasks []evalTask, fixtures *liveFixtureState) ([]modelTool, map[string]toolutil.ActionMap, []evalTask, error) {
+	catalog, routes, catalogEnterprise, catalogErr := loadCatalog(opts)
 	if catalogErr != nil {
-		return catalogErr
+		return nil, nil, nil, catalogErr
 	}
 	if opts.MCPSmoke {
 		if smokeErr := runMCPSmoke(opts); smokeErr != nil {
-			return smokeErr
+			return nil, nil, nil, smokeErr
 		}
 	}
 	tasks = normalizeTasksForCatalog(tasks, routes, opts.ToolSurface)
-	if opts.Partition != "" {
-		var partitionErr error
-		tasks, partitionErr = filterTasksByPartition(tasks, opts.Partition)
-		if partitionErr != nil {
-			return partitionErr
-		}
-		if len(tasks) == 0 {
-			return fmt.Errorf("no tasks selected after --partition=%s", opts.Partition)
-		}
+	var err error
+	if tasks, err = applyPartitionFilter(tasks, opts.Partition); err != nil {
+		return nil, nil, nil, err
 	}
-	if opts.SkipUnavailable {
-		tasks = filterTasksByAvailableRoutes(tasks, routes)
-		if fixtures != nil {
-			tasks = filterTasksByLiveFixtureState(tasks, fixtures)
-		}
-		if len(tasks) == 0 {
-			return errors.New("no tasks selected after --skip-unavailable")
-		}
+	if tasks, err = applyAvailabilityFilter(tasks, routes, catalogEnterprise, fixtures, opts.SkipUnavailable); err != nil {
+		return nil, nil, nil, err
 	}
 	if opts.Execute && opts.UseFixtures {
 		tasks = orderSharedFixtureDestructiveLast(tasks)
 	}
-	if opts.Preset != "" {
-		var presetFilterErr error
-		tasks, presetFilterErr = filterTasksByPreset(tasks, opts.Preset)
-		if presetFilterErr != nil {
-			return presetFilterErr
-		}
-		if len(tasks) == 0 {
-			return fmt.Errorf("no tasks selected after --preset=%s", opts.Preset)
-		}
+	if tasks, err = applyPresetFilter(tasks, opts.Preset); err != nil {
+		return nil, nil, nil, err
 	}
 	if opts.MaxTasks > 0 && opts.MaxTasks < len(tasks) {
 		tasks = tasks[:opts.MaxTasks]
 	}
 	if opts.ToolsFile == "" {
 		if problems := validateTaskFixtureAgainstRoutes(tasks, routes); len(problems) > 0 {
-			return fmt.Errorf("fixture route validation failed:\n- %s", strings.Join(problems, "\n- "))
+			return nil, nil, nil, fmt.Errorf("fixture route validation failed:\n- %s", strings.Join(problems, "\n- "))
 		}
 	}
+	return catalog, routes, tasks, nil
+}
 
-	if opts.DryRun {
-		if opts.ExposeResources {
-			bridgeSupport := mcpBridgeSupport{Capabilities: true, Resources: true, Prompts: true, Completion: true}
-			catalog = appendCapabilityBridgeTools(catalog, bridgeSupport)
-			opts.CapabilityAccessActive = true
-			opts.ResourceAccessActive = true
-			opts.PromptAccessActive = true
-			opts.CompletionAccessActive = true
-		}
-		toolNames := catalogToolNames(catalog)
-		results := make([]taskResult, 0, len(tasks)*opts.Repeat)
-		for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
-			results = append(results, runStaticValidation(tasks, routes, toolNames, runIndex)...)
-		}
-		if err := writeReport(opts.Output, opts, results, catalog, routes, true); err != nil {
-			return err
-		}
-		finalReportWritten = true
-		return writeCoverageReportIfRequested(opts, results, routes)
+func applyPartitionFilter(tasks []evalTask, partition string) ([]evalTask, error) {
+	if partition == "" {
+		return tasks, nil
 	}
+	filtered, err := filterTasksByPartition(tasks, partition)
+	if err != nil {
+		return nil, err
+	}
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("no tasks selected after --partition=%s", partition)
+	}
+	return filtered, nil
+}
 
+func applyAvailabilityFilter(tasks []evalTask, routes map[string]toolutil.ActionMap, catalogEnterprise bool, fixtures *liveFixtureState, skipUnavailable bool) ([]evalTask, error) {
+	if !skipUnavailable {
+		return tasks, nil
+	}
+	filtered := filterTasksByAvailableRoutes(tasks, routes, catalogEnterprise)
+	if fixtures != nil {
+		filtered = filterTasksByLiveFixtureState(filtered, fixtures)
+	}
+	if len(filtered) == 0 {
+		return nil, errors.New("no tasks selected after --skip-unavailable")
+	}
+	return filtered, nil
+}
+
+func applyPresetFilter(tasks []evalTask, preset string) ([]evalTask, error) {
+	if preset == "" {
+		return tasks, nil
+	}
+	filtered, err := filterTasksByPreset(tasks, preset)
+	if err != nil {
+		return nil, err
+	}
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("no tasks selected after --preset=%s", preset)
+	}
+	return filtered, nil
+}
+
+func runDryRunEvaluation(opts options, tasks []evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) error {
+	if opts.ExposeResources {
+		bridgeSupport := mcpBridgeSupport{Capabilities: true, Resources: true, Prompts: true, Completion: true}
+		catalog = appendCapabilityBridgeTools(catalog, bridgeSupport)
+		opts.CapabilityAccessActive = true
+		opts.ResourceAccessActive = true
+		opts.PromptAccessActive = true
+		opts.CompletionAccessActive = true
+	}
+	toolNames := catalogToolNames(catalog)
+	results := make([]taskResult, 0, len(tasks)*opts.Repeat)
+	for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
+		results = append(results, runStaticValidation(tasks, routes, toolNames, runIndex)...)
+	}
+	if err := writeReport(opts.Output, opts, results, catalog, routes, true); err != nil {
+		return err
+	}
+	return writeCoverageReportIfRequested(opts, results, routes)
+}
+
+type evaluationRuntime struct {
+	opts            options
+	catalog         []modelTool
+	mcpSession      *mcp.ClientSession
+	executionClient *gitlabclient.Client
+	bridgeSupport   mcpBridgeSupport
+	close           func()
+}
+
+func newEvaluationRuntime(opts options, catalog []modelTool) (evaluationRuntime, error) {
+	runtime := evaluationRuntime{opts: opts, catalog: catalog, close: noopCloseRuntime}
+	var closers []func()
 	var mcpSession *mcp.ClientSession
-	var executionClient *gitlabclient.Client
-	var bridgeSupport mcpBridgeSupport
 	if opts.Execute {
 		session, client, closeSession, execErr := newExecutionSession(opts)
 		if execErr != nil {
-			return execErr
+			return evaluationRuntime{}, execErr
 		}
-		defer closeSession()
 		mcpSession = session
-		executionClient = client
+		runtime.executionClient = client
+		closers = append(closers, closeSession)
 	}
 	if opts.ExposeResources && mcpSession == nil && opts.ToolsFile == "" {
 		session, closeSession, resourceErr := newResourceLookupSession(opts)
 		if resourceErr != nil {
-			return resourceErr
+			return evaluationRuntime{}, resourceErr
 		}
-		defer closeSession()
 		mcpSession = session
+		closers = append(closers, closeSession)
 	}
 	if opts.ExposeResources && mcpSession != nil {
-		bridgeSupport = probeCapabilityBridgeSupport(mcpSession)
-		if bridgeSupport.any() {
-			catalog = appendCapabilityBridgeTools(catalog, bridgeSupport)
-			opts.CapabilityAccessActive = bridgeSupport.Capabilities
-			opts.ResourceAccessActive = bridgeSupport.Resources
-			opts.PromptAccessActive = bridgeSupport.Prompts
-			opts.CompletionAccessActive = bridgeSupport.Completion
+		runtime.bridgeSupport = probeCapabilityBridgeSupport(mcpSession)
+		if runtime.bridgeSupport.any() {
+			runtime.catalog = appendCapabilityBridgeTools(runtime.catalog, runtime.bridgeSupport)
+			runtime.opts.CapabilityAccessActive = runtime.bridgeSupport.Capabilities
+			runtime.opts.ResourceAccessActive = runtime.bridgeSupport.Resources
+			runtime.opts.PromptAccessActive = runtime.bridgeSupport.Prompts
+			runtime.opts.CompletionAccessActive = runtime.bridgeSupport.Completion
 		}
 	}
+	runtime.mcpSession = mcpSession
+	runtime.close = closeRuntimeSessions(closers)
+	return runtime, nil
+}
 
-	ctx := context.Background()
-	results := make([]taskResult, 0, len(tasks)*opts.Repeat*len(modelSpecs))
-	liveAttemptRunSuffix := liveUniqueSuffix()
+func noopCloseRuntime() {
+	// No runtime sessions were opened, so there is nothing to close.
+}
+
+func closeRuntimeSessions(closers []func()) func() {
+	return func() {
+		for _, closeSession := range closers {
+			closeSession()
+		}
+	}
+}
+
+type modelEvaluationRun struct {
+	opts                 options
+	tasks                []evalTask
+	catalog              []modelTool
+	routes               map[string]toolutil.ActionMap
+	runtime              evaluationRuntime
+	liveAttemptRunSuffix string
+}
+
+func runModelEvaluations(ctx context.Context, run modelEvaluationRun, modelSpecs []modelSpec) ([]taskResult, error) {
+	results := make([]taskResult, 0, len(run.tasks)*run.opts.Repeat*len(modelSpecs))
+	run.liveAttemptRunSuffix = liveUniqueSuffix()
 	for _, spec := range modelSpecs {
-		apiKey, keyErr := apiKeyForModelProvider(spec.Provider)
-		if keyErr != nil {
-			return keyErr
+		specResults, err := runModelSpecEvaluations(ctx, run, spec)
+		if err != nil {
+			return nil, err
 		}
-		runner := &modelRunner{
-			apiKey:      apiKey,
-			provider:    spec.Provider,
-			model:       spec.Model,
-			modelLabel:  spec.String(),
-			toolSurface: opts.ToolSurface,
-			maxTokens:   opts.MaxTokens,
-			retries:     opts.Retries,
-			retryWait:   opts.RetryWait,
-			client:      &http.Client{Timeout: 60 * time.Second},
-			mcpSession:  mcpSession,
-			mcpBridge:   bridgeSupport,
-			traceBodies: opts.TraceProviderBodies,
-		}
-		for runIndex := 1; runIndex <= opts.Repeat; runIndex++ {
-			if opts.Execute && opts.UseFixtures {
-				if err := ensureLiveProjectActive(ctx, executionClient); err != nil {
-					return err
-				}
-			}
-			for _, task := range tasks {
-				taskForAttempt := task
-				if opts.Execute && opts.UseFixtures {
-					taskForAttempt = addLiveAttemptResourceSuffix(taskForAttempt, spec.String(), runIndex, liveAttemptRunSuffix)
-					var err error
-					taskForAttempt, err = ensureLiveAttemptResources(ctx, executionClient, mcpSession, taskForAttempt, opts.ToolSurface)
-					if err != nil {
-						return err
-					}
-				}
-				result := runner.evaluateTask(ctx, taskForAttempt, catalog, routes)
-				result.Run = runIndex
-				result.Model = spec.String()
-				result.Trace.Run = runIndex
-				result.Trace.Model = spec.String()
-				result.Trace.Summary = traceSummaryFromResult(result)
-				results = append(results, result)
-				terminalPrintf("model=%s run=%d %s: final=%t first=%s/%s final_call=%s/%s calls=%d tools=%d\n", spec.String(), runIndex, taskForAttempt.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction, result.ModelCalls, result.ToolCalls)
-				if opts.Pause > 0 {
-					time.Sleep(opts.Pause)
-				}
-			}
-		}
+		results = append(results, specResults...)
 	}
+	return results, nil
+}
 
-	if writeErr := writeReport(opts.Output, opts, results, catalog, routes, false); writeErr != nil {
-		return writeErr
+func runModelSpecEvaluations(ctx context.Context, run modelEvaluationRun, spec modelSpec) ([]taskResult, error) {
+	runner, err := newModelRunner(run.opts, spec, run.runtime)
+	if err != nil {
+		return nil, err
 	}
-	finalReportWritten = true
-	if err := writeCoverageReportIfRequested(opts, results, routes); err != nil {
-		return err
+	results := make([]taskResult, 0, len(run.tasks)*run.opts.Repeat)
+	for runIndex := 1; runIndex <= run.opts.Repeat; runIndex++ {
+		runResults, runErr := runModelEvaluationRound(ctx, run, spec, runIndex, runner)
+		if runErr != nil {
+			return nil, runErr
+		}
+		results = append(results, runResults...)
 	}
-	return writeTraceArtifacts(opts.TraceDir, results, opts.TraceProviderBodies)
+	return results, nil
+}
+
+func newModelRunner(opts options, spec modelSpec, runtime evaluationRuntime) (*modelRunner, error) {
+	apiKey, err := apiKeyForModelProvider(spec.Provider)
+	if err != nil {
+		return nil, err
+	}
+	return &modelRunner{
+		apiKey:      apiKey,
+		provider:    spec.Provider,
+		model:       spec.Model,
+		modelLabel:  spec.String(),
+		toolSurface: opts.ToolSurface,
+		maxTokens:   opts.MaxTokens,
+		retries:     opts.Retries,
+		retryWait:   opts.RetryWait,
+		client:      &http.Client{Timeout: 60 * time.Second},
+		mcpSession:  runtime.mcpSession,
+		mcpBridge:   runtime.bridgeSupport,
+		traceBodies: opts.TraceProviderBodies,
+	}, nil
+}
+
+func runModelEvaluationRound(ctx context.Context, run modelEvaluationRun, spec modelSpec, runIndex int, runner *modelRunner) ([]taskResult, error) {
+	if run.opts.Execute && run.opts.UseFixtures {
+		if err := ensureLiveProjectActive(ctx, run.runtime.executionClient); err != nil {
+			return nil, err
+		}
+	}
+	results := make([]taskResult, 0, len(run.tasks))
+	for _, task := range run.tasks {
+		result, err := evaluateModelTaskAttempt(ctx, run, spec, runIndex, task, runner)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, result)
+	}
+	return results, nil
+}
+
+func evaluateModelTaskAttempt(ctx context.Context, run modelEvaluationRun, spec modelSpec, runIndex int, task evalTask, runner *modelRunner) (taskResult, error) {
+	taskForAttempt, err := prepareTaskAttempt(ctx, run.opts, spec, runIndex, task, run.runtime, run.liveAttemptRunSuffix)
+	if err != nil {
+		return taskResult{}, err
+	}
+	result := runner.evaluateTask(ctx, taskForAttempt, run.catalog, run.routes)
+	result.Run = runIndex
+	result.Model = spec.String()
+	result.Trace.Run = runIndex
+	result.Trace.Model = spec.String()
+	result.Trace.Summary = traceSummaryFromResult(result)
+	terminalPrintf("model=%s run=%d %s: final=%t first=%s/%s final_call=%s/%s calls=%d tools=%d\n", spec.String(), runIndex, taskForAttempt.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction, result.ModelCalls, result.ToolCalls)
+	if run.opts.Pause > 0 {
+		time.Sleep(run.opts.Pause)
+	}
+	return result, nil
+}
+
+func prepareTaskAttempt(ctx context.Context, opts options, spec modelSpec, runIndex int, task evalTask, runtime evaluationRuntime, liveAttemptRunSuffix string) (evalTask, error) {
+	if !opts.Execute || !opts.UseFixtures {
+		return task, nil
+	}
+	task = addLiveAttemptResourceSuffix(task, spec.String(), runIndex, liveAttemptRunSuffix)
+	return ensureLiveAttemptResources(ctx, runtime.executionClient, runtime.mcpSession, task, opts.ToolSurface)
 }
 
 // parseFlags parses flags from evaluator input.

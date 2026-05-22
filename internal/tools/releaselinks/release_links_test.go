@@ -6,13 +6,14 @@ package releaselinks
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-
-	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
 // Test endpoint path for release asset link operations.
@@ -324,7 +325,7 @@ func TestReleaseLinkCreateBatch_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathReleaseLinks {
 			callCount++
-			testutil.RespondJSON(w, http.StatusCreated, `{"id":`+string(rune('0'+callCount))+`,"name":"link","url":"https://example.com","link_type":"package","external":true}`)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":`+strconv.Itoa(callCount)+`,"name":"link","url":"https://example.com","link_type":"package","external":true}`)
 			return
 		}
 		http.NotFound(w, r)

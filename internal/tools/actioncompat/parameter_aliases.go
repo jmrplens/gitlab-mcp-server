@@ -27,6 +27,7 @@ const (
 	reasonSnippetProjectCreateFilePath   = "snippet file entries use file_path"
 	reasonSnippetProjectCreateNoAction   = "project snippet creation file entries do not include an action field"
 	reasonFeatureFlagUserListNameRemoved = "feature flag user-list listing is project-scoped and does not accept a feature flag name"
+	reasonTerraformStateName             = "Terraform state actions use name for the state identifier"
 )
 
 // ParameterAlias describes one historical action-scoped parameter alias or
@@ -41,6 +42,118 @@ type ParameterAlias struct {
 	RemovalVersion string
 	Reason         string
 	SpecMetadata   bool
+}
+
+type paramNormalization struct {
+	params       map[string]any
+	fields       map[string]any
+	out          map[string]any
+	cloned       bool
+	explanations []toolutil.ParamAliasExplanation
+}
+
+type paramNormalizer func(*paramNormalization)
+
+var actionParamNormalizers = map[string]paramNormalizer{
+	actionJobList: func(state *paramNormalization) {
+		state.moveParam("status", "scope", "job.list uses scope for job status filtering")
+	},
+	actionRepositoryFileGet: func(state *paramNormalization) {
+		state.moveParam("branch", "ref", "repository.file_get reads file content at a ref")
+	},
+	actionIssueLinkCreate:           normalizeIssueLinkCreateParams,
+	actionIssueSpentTimeAdd:         func(state *paramNormalization) { state.moveParam("note", "summary", reasonIssueSpentTimeSummary) },
+	actionIssueTimeEstimateSet:      func(state *paramNormalization) { state.moveParam("time", "duration", reasonIssueTimeEstimateDuration) },
+	actionIssueUpdate:               normalizeIssueUpdateParams,
+	actionMergeRequestEmojiMRCreate: normalizeMergeRequestEmojiCreateParams,
+	actionPipelineScheduleCreate:    normalizePipelineScheduleParams,
+	actionPipelineScheduleUpdate:    normalizePipelineScheduleParams,
+	actionBranchProtect:             normalizeBranchProtectParams,
+	actionFeatureFlagCreate: func(state *paramNormalization) {
+		state.moveParam("new_version_flag", "version", "feature flag creation uses version for the flag API version")
+	},
+	actionFeatureFlagUserListList: func(state *paramNormalization) {
+		state.removeRejectedParam("name", "removed", reasonFeatureFlagUserListNameRemoved)
+	},
+	actionGroupLabelUpdate:          normalizeGroupLabelUpdateParams,
+	actionProjectMemberAdd:          normalizeProjectMemberAccessLevelParams,
+	actionProjectMemberEdit:         normalizeProjectMemberAccessLevelParams,
+	actionReleaseLinkCreate:         normalizeReleaseLinkTagNameParams,
+	actionReleaseLinkDelete:         normalizeReleaseLinkTagNameParams,
+	actionReleaseLinkGet:            normalizeReleaseLinkTagNameParams,
+	actionReleaseLinkList:           normalizeReleaseLinkTagNameParams,
+	actionReleaseLinkUpdate:         normalizeReleaseLinkTagNameParams,
+	actionReleaseLinkCreateBatch:    normalizeReleaseLinkCreateBatchParams,
+	actionRunnerUpdate:              normalizeRunnerUpdateParams,
+	actionSnippetProjectCreate:      normalizeSnippetProjectCreateParams,
+	actionAdminTerraformStateUnlock: normalizeTerraformStateNameParams,
+}
+
+func newParamNormalization(params, schema map[string]any) *paramNormalization {
+	return &paramNormalization{params: params, fields: actionSchemaProperties(schema), out: params}
+}
+
+func (state *paramNormalization) clone() map[string]any {
+	if !state.cloned {
+		state.out = maps.Clone(state.params)
+		state.cloned = true
+	}
+	return state.out
+}
+
+func (state *paramNormalization) accepts(name string) bool {
+	_, ok := state.fields[name]
+	return ok
+}
+
+func (state *paramNormalization) record(alias, target, reason string) {
+	state.explanations = append(state.explanations, toolutil.ParamAliasExplanation{Alias: alias, Canonical: target, Source: parameterAliasExplanationSource, Notes: reason})
+}
+
+func (state *paramNormalization) moveParam(alias, target, reason string) {
+	state.moveParamWithOptions(alias, target, reason, false)
+}
+
+func (state *paramNormalization) moveAcceptedAliasParam(alias, target, reason string) {
+	state.moveParamWithOptions(alias, target, reason, true)
+}
+
+func (state *paramNormalization) moveParamWithOptions(alias, target, reason string, allowAcceptedAlias bool) {
+	value, ok := state.out[alias]
+	if !ok || !state.accepts(target) || (!allowAcceptedAlias && state.accepts(alias)) {
+		return
+	}
+	if _, hasTarget := state.out[target]; hasTarget {
+		if allowAcceptedAlias && alias != target {
+			delete(state.clone(), alias)
+			state.record(alias, target, reason)
+		}
+		return
+	}
+	updated := state.clone()
+	updated[target] = value
+	delete(updated, alias)
+	state.record(alias, target, reason)
+}
+
+func (state *paramNormalization) copyParam(alias, target, reason string) {
+	value, ok := state.out[alias]
+	if !ok || !state.accepts(target) {
+		return
+	}
+	if _, hasTarget := state.out[target]; hasTarget {
+		return
+	}
+	state.clone()[target] = value
+	state.record(alias, target, reason)
+}
+
+func (state *paramNormalization) removeRejectedParam(alias, target, reason string) {
+	if _, ok := state.out[alias]; !ok || state.accepts(alias) {
+		return
+	}
+	delete(state.clone(), alias)
+	state.record(alias, target, reason)
 }
 
 // ParameterAliases returns historical action-scoped parameter aliases and
@@ -85,6 +198,9 @@ func defaultParameterAliases() []ParameterAlias {
 		parameterAlias(actionSnippetProjectCreate, "file_name/content", "files", reasonSnippetProjectCreateFiles),
 		parameterAlias(actionSnippetProjectCreate, "files.file_name", "files.file_path", reasonSnippetProjectCreateFilePath),
 		parameterAlias(actionSnippetProjectCreate, "files.action", "files", reasonSnippetProjectCreateNoAction),
+		parameterAlias(actionAdminTerraformStateUnlock, "id", "name", reasonTerraformStateName),
+		parameterAlias(actionAdminTerraformStateUnlock, "state", "name", reasonTerraformStateName),
+		parameterAlias(actionAdminTerraformStateUnlock, "state_name", "name", reasonTerraformStateName),
 	}
 }
 
@@ -114,204 +230,131 @@ func NormalizeParamsWithExplanation(actionID string, params, schema map[string]a
 	if len(params) == 0 {
 		return params, nil
 	}
-	fields := actionSchemaProperties(schema)
-	out := params
-	cloned := false
-	explanations := make([]toolutil.ParamAliasExplanation, 0)
-	clone := func() map[string]any {
-		if !cloned {
-			out = maps.Clone(params)
-			cloned = true
-		}
-		return out
+	state := newParamNormalization(params, schema)
+	if normalizer := actionParamNormalizers[actionID]; normalizer != nil {
+		normalizer(state)
 	}
-	record := func(alias, target, reason string) {
-		explanations = append(explanations, toolutil.ParamAliasExplanation{Alias: alias, Canonical: target, Source: parameterAliasExplanationSource, Notes: reason})
+	return state.out, state.explanations
+}
+
+func normalizeIssueLinkCreateParams(state *paramNormalization) {
+	state.moveParam("source_issue_iid", "issue_iid", reasonIssueLinkSourceIssueIID)
+	state.moveParam("linked_issue_iid", "target_issue_iid", reasonIssueLinkTargetIssueIID)
+	state.copyParam("project_id", "target_project_id", "same-project issue links reuse project_id as target_project_id")
+	state.moveParam("relation", "link_type", reasonIssueLinkRelation)
+	state.moveParam("type", "link_type", reasonIssueLinkRelation)
+}
+
+func normalizeIssueUpdateParams(state *paramNormalization) {
+	value, ok := state.out["state_event"]
+	if !ok || !state.accepts("state_event") {
+		return
 	}
-	accepts := func(name string) bool {
-		_, ok := fields[name]
-		return ok
+	stateEvent, converted := issueStateEventValue(value)
+	if !converted {
+		return
 	}
-	switch actionID {
-	case actionJobList:
-		if value, ok := out["status"]; ok && accepts("scope") && !accepts("status") {
-			if _, hasScope := out["scope"]; !hasScope {
-				updated := clone()
-				updated["scope"] = value
-				delete(updated, "status")
-				record("status", "scope", "job.list uses scope for job status filtering")
-			}
-		}
-	case actionRepositoryFileGet:
-		if value, ok := out["branch"]; ok && accepts("ref") && !accepts("branch") {
-			if _, hasRef := out["ref"]; !hasRef {
-				updated := clone()
-				updated["ref"] = value
-				delete(updated, "branch")
-				record("branch", "ref", "repository.file_get reads file content at a ref")
-			}
-		}
-	case actionIssueLinkCreate:
-		if value, ok := out["source_issue_iid"]; ok && accepts("issue_iid") && !accepts("source_issue_iid") {
-			if _, hasIssueIID := out["issue_iid"]; !hasIssueIID {
-				updated := clone()
-				updated["issue_iid"] = value
-				delete(updated, "source_issue_iid")
-				record("source_issue_iid", "issue_iid", reasonIssueLinkSourceIssueIID)
-			}
-		}
-		if value, ok := out["linked_issue_iid"]; ok && accepts("target_issue_iid") && !accepts("linked_issue_iid") {
-			if _, hasTargetIssueIID := out["target_issue_iid"]; !hasTargetIssueIID {
-				updated := clone()
-				updated["target_issue_iid"] = value
-				delete(updated, "linked_issue_iid")
-				record("linked_issue_iid", "target_issue_iid", reasonIssueLinkTargetIssueIID)
-			}
-		}
-		if value, ok := out["project_id"]; ok && accepts("target_project_id") {
-			if _, hasTargetProjectID := out["target_project_id"]; !hasTargetProjectID {
-				clone()["target_project_id"] = value
-				record("project_id", "target_project_id", "same-project issue links reuse project_id as target_project_id")
-			}
-		}
-		if value, ok := out["relation"]; ok && accepts("link_type") && !accepts("relation") {
-			if _, hasLinkType := out["link_type"]; !hasLinkType {
-				updated := clone()
-				updated["link_type"] = value
-				delete(updated, "relation")
-				record("relation", "link_type", reasonIssueLinkRelation)
-			}
-		}
-		if value, ok := out["type"]; ok && accepts("link_type") && !accepts("type") {
-			if _, hasLinkType := out["link_type"]; !hasLinkType {
-				updated := clone()
-				updated["link_type"] = value
-				delete(updated, "type")
-				record("type", "link_type", reasonIssueLinkRelation)
-			}
-		}
-	case actionIssueSpentTimeAdd:
-		if value, ok := out["note"]; ok && accepts("summary") && !accepts("note") {
-			if _, hasSummary := out["summary"]; !hasSummary {
-				updated := clone()
-				updated["summary"] = value
-				delete(updated, "note")
-				record("note", "summary", reasonIssueSpentTimeSummary)
-			}
-		}
-	case actionIssueTimeEstimateSet:
-		if value, ok := out["time"]; ok && accepts("duration") && !accepts("time") {
-			if _, hasDuration := out["duration"]; !hasDuration {
-				updated := clone()
-				updated["duration"] = value
-				delete(updated, "time")
-				record("time", "duration", reasonIssueTimeEstimateDuration)
-			}
-		}
-	case actionIssueUpdate:
-		if value, ok := out["state_event"]; ok && accepts("state_event") {
-			if stateEvent, converted := issueStateEventValue(value); converted {
-				clone()["state_event"] = stateEvent
-				record("state_event", "state_event", "normalized issue state event value")
-			}
-		}
-	case actionMergeRequestEmojiMRCreate:
-		if value, ok := out["emoji"]; ok && accepts("name") && !accepts("emoji") {
-			if _, hasName := out["name"]; !hasName {
-				updated := clone()
-				updated["name"] = value
-				delete(updated, "emoji")
-				record("emoji", "name", reasonMergeRequestEmojiName)
-			}
-		}
-		if _, ok := out["duration"]; ok && !accepts("duration") {
-			delete(clone(), "duration")
-			record("duration", "removed", reasonMergeRequestEmojiUnsupported)
-		}
-		if _, ok := out["awardable_type"]; ok && !accepts("awardable_type") {
-			delete(clone(), "awardable_type")
-			record("awardable_type", "removed", reasonMergeRequestEmojiUnsupported)
-		}
-	case actionPipelineScheduleCreate, actionPipelineScheduleUpdate:
-		if value, ok := out["name"]; ok && accepts("description") && !accepts("name") {
-			updated := clone()
-			if _, hasDescription := out["description"]; !hasDescription {
-				updated["description"] = value
-			}
-			delete(updated, "name")
-			record("name", "description", reasonPipelineScheduleDescription)
-		}
-	case actionBranchProtect:
-		for _, name := range []string{"push_access_level", "merge_access_level"} {
-			if value, ok := out[name]; ok && accepts(name) {
-				if accessLevel, converted := gitlabAccessLevelValue(value); converted {
-					clone()[name] = accessLevel
-					record(name, name, reasonNormalizeAccessLevel)
-				}
-			}
-		}
-	case actionFeatureFlagCreate:
-		if value, ok := out["new_version_flag"]; ok && accepts("version") && !accepts("new_version_flag") {
-			if _, hasVersion := out["version"]; !hasVersion {
-				updated := clone()
-				updated["version"] = value
-				delete(updated, "new_version_flag")
-				record("new_version_flag", "version", "feature flag creation uses version for the flag API version")
-			}
-		}
-	case actionFeatureFlagUserListList:
-		if _, ok := out["name"]; ok && !accepts("name") {
-			delete(clone(), "name")
-			record("name", "removed", reasonFeatureFlagUserListNameRemoved)
-		}
-	case actionGroupLabelUpdate:
-		if value, ok := out["name"]; ok {
-			if _, hasNewName := out["new_name"]; !hasNewName {
-				updated := clone()
-				updated["new_name"] = value
-				delete(updated, "name")
-				record("name", "new_name", "group label update renames labels with new_name")
-			}
-		}
-	case actionProjectMemberAdd, actionProjectMemberEdit:
-		if value, ok := out["access_level"]; ok && accepts("access_level") {
-			if accessLevel, converted := gitlabAccessLevelValue(value); converted {
-				clone()["access_level"] = accessLevel
-				record("access_level", "access_level", reasonNormalizeAccessLevel)
-			}
-		}
-	case actionReleaseLinkCreate, actionReleaseLinkDelete, actionReleaseLinkGet, actionReleaseLinkList, actionReleaseLinkUpdate:
-		if value, ok := out["release_tag_name"]; ok && accepts("tag_name") && !accepts("release_tag_name") {
-			if _, hasTagName := out["tag_name"]; !hasTagName {
-				updated := clone()
-				updated["tag_name"] = value
-				delete(updated, "release_tag_name")
-				record("release_tag_name", "tag_name", reasonReleaseLinkParentTagName)
-			}
-		}
-	case actionReleaseLinkCreateBatch:
-		if accepts("links") {
-			normalizeReleaseLinkBatchEntries(clone, out, record)
-		}
-	case actionRunnerUpdate:
-		if value, ok := out["paused"]; ok && accepts("paused") {
-			if paused, converted := boolStringValue(value); converted {
-				clone()["paused"] = paused
-				record("paused", "paused", "normalized string boolean to bool")
-			}
-		}
-	case actionSnippetProjectCreate:
-		if accepts("files") && (!accepts("file_name") || !accepts("content")) && buildSnippetCreateFilesFromSingleFileParams(clone, out) {
-			record("file_name/content", "files", reasonSnippetProjectCreateFiles)
-		}
-		if accepts("files") && normalizeSnippetFileNameFields(clone, out) {
-			record("files.file_name", "files.file_path", reasonSnippetProjectCreateFilePath)
-		}
-		if accepts("files") && stripSnippetCreateFileActions(clone, out) {
-			record("files.action", "files", reasonSnippetProjectCreateNoAction)
-		}
+	state.clone()["state_event"] = stateEvent
+	state.record("state_event", "state_event", "normalized issue state event value")
+}
+
+func normalizeMergeRequestEmojiCreateParams(state *paramNormalization) {
+	state.moveParam("emoji", "name", reasonMergeRequestEmojiName)
+	state.removeRejectedParam("duration", "removed", reasonMergeRequestEmojiUnsupported)
+	state.removeRejectedParam("awardable_type", "removed", reasonMergeRequestEmojiUnsupported)
+}
+
+func normalizePipelineScheduleParams(state *paramNormalization) {
+	state.moveAcceptedAliasParam("name", "description", reasonPipelineScheduleDescription)
+}
+
+func normalizeBranchProtectParams(state *paramNormalization) {
+	for _, name := range []string{"push_access_level", "merge_access_level"} {
+		normalizeAccessLevelParamWith(state, name, gitLabBranchProtectionAccessLevelValue)
 	}
-	return out, explanations
+}
+
+func normalizeProjectMemberAccessLevelParams(state *paramNormalization) {
+	normalizeAccessLevelParam(state, "access_level")
+}
+
+func normalizeAccessLevelParam(state *paramNormalization, name string) {
+	normalizeAccessLevelParamWith(state, name, gitlabAccessLevelValue)
+}
+
+func normalizeAccessLevelParamWith(state *paramNormalization, name string, convert func(any) (int, bool)) {
+	value, ok := state.out[name]
+	if !ok || !state.accepts(name) {
+		return
+	}
+	accessLevel, converted := convert(value)
+	if !converted {
+		return
+	}
+	state.clone()[name] = accessLevel
+	state.record(name, name, reasonNormalizeAccessLevel)
+}
+
+func normalizeTerraformStateNameParams(state *paramNormalization) {
+	state.moveParam("state_name", "name", reasonTerraformStateName)
+	state.moveParam("state", "name", reasonTerraformStateName)
+	state.moveParam("id", "name", reasonTerraformStateName)
+}
+
+func normalizeGroupLabelUpdateParams(state *paramNormalization) {
+	state.moveWithoutSchemaCheck("name", "new_name", "group label update renames labels with new_name")
+}
+
+func (state *paramNormalization) moveWithoutSchemaCheck(alias, target, reason string) {
+	value, ok := state.out[alias]
+	if !ok {
+		return
+	}
+	if _, hasTarget := state.out[target]; hasTarget {
+		return
+	}
+	updated := state.clone()
+	updated[target] = value
+	delete(updated, alias)
+	state.record(alias, target, reason)
+}
+
+func normalizeReleaseLinkTagNameParams(state *paramNormalization) {
+	state.moveParam("release_tag_name", "tag_name", reasonReleaseLinkParentTagName)
+}
+
+func normalizeReleaseLinkCreateBatchParams(state *paramNormalization) {
+	if state.accepts("links") {
+		normalizeReleaseLinkBatchEntries(state.clone, state.out, state.record)
+	}
+}
+
+func normalizeRunnerUpdateParams(state *paramNormalization) {
+	value, ok := state.out["paused"]
+	if !ok || !state.accepts("paused") {
+		return
+	}
+	paused, converted := boolStringValue(value)
+	if !converted {
+		return
+	}
+	state.clone()["paused"] = paused
+	state.record("paused", "paused", "normalized string boolean to bool")
+}
+
+func normalizeSnippetProjectCreateParams(state *paramNormalization) {
+	if !state.accepts("files") {
+		return
+	}
+	if (!state.accepts("file_name") || !state.accepts("content")) && buildSnippetCreateFilesFromSingleFileParams(state.clone, state.out) {
+		state.record("file_name/content", "files", reasonSnippetProjectCreateFiles)
+	}
+	if normalizeSnippetFileNameFields(state.clone, state.out) {
+		state.record("files.file_name", "files.file_path", reasonSnippetProjectCreateFilePath)
+	}
+	if stripSnippetCreateFileActions(state.clone, state.out) {
+		state.record("files.action", "files", reasonSnippetProjectCreateNoAction)
+	}
 }
 
 func normalizeReleaseLinkBatchEntries(clone func() map[string]any, params map[string]any, record func(alias, target, reason string)) bool {
@@ -515,16 +558,50 @@ func gitlabAccessLevelValue(value any) (int, bool) {
 		}
 	}
 	switch normalized {
-	case "guest":
+	case "guest", "guests":
 		return 10, true
-	case "reporter":
+	case "reporter", "reporters":
 		return 20, true
-	case "developer":
+	case "developer", "developers":
 		return 30, true
-	case "maintainer":
+	case "maintainer", "maintainers":
 		return 40, true
-	case "owner":
+	case "owner", "owners":
 		return 50, true
+	default:
+		return 0, false
+	}
+}
+
+func gitLabBranchProtectionAccessLevelValue(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return validGitLabBranchProtectionAccessLevel(typed)
+	case int64:
+		return validGitLabBranchProtectionAccessLevel(int(typed))
+	case float64:
+		accessLevel := int(typed)
+		if typed == float64(accessLevel) {
+			return validGitLabBranchProtectionAccessLevel(accessLevel)
+		}
+		return 0, false
+	}
+	text, ok := value.(string)
+	if !ok {
+		return 0, false
+	}
+	normalized := strings.ToLower(strings.TrimSpace(text))
+	if accessLevel, err := strconv.Atoi(normalized); err == nil {
+		return validGitLabBranchProtectionAccessLevel(accessLevel)
+	}
+	normalized = strings.NewReplacer("_", " ", "-", " ").Replace(normalized)
+	switch normalized {
+	case "developer", "developers":
+		return 30, true
+	case "maintainer", "maintainers":
+		return 40, true
+	case "no access", "no one", "nobody", "none":
+		return 0, true
 	default:
 		return 0, false
 	}
@@ -538,6 +615,15 @@ func GitLabAccessLevelValue(value any) (int, bool) {
 func validGitLabAccessLevel(accessLevel int) (int, bool) {
 	switch accessLevel {
 	case 10, 20, 30, 40, 50:
+		return accessLevel, true
+	default:
+		return 0, false
+	}
+}
+
+func validGitLabBranchProtectionAccessLevel(accessLevel int) (int, bool) {
+	switch accessLevel {
+	case 0, 30, 40:
 		return accessLevel, true
 	default:
 		return 0, false

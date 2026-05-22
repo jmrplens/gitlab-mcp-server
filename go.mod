@@ -11,8 +11,8 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.6.0
 	github.com/shirou/gopsutil/v4 v4.26.4
-	gitlab.com/gitlab-org/api/client-go/v2 v2.30.0
-	golang.org/x/crypto v0.51.0
+	gitlab.com/gitlab-org/api/client-go/v2 v2.31.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/time v0.15.0
 )
 
@@ -62,7 +62,7 @@ require (
 	golang.org/x/exp v0.0.0-20260508232706-74f9aab9d74a // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/tools v0.45.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

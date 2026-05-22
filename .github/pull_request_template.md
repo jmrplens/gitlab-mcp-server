@@ -45,9 +45,8 @@ N/A
 ### Code Quality
 
 - [ ] Code compiles: `go build ./...`
-- [ ] `go vet` passes on changed packages
-- [ ] Code is formatted: `make analyze-fix` (runs `goimports` + `gofmt`)
-- [ ] `golangci-lint run` passes on changed packages (or `make analyze`)
+- [ ] Consolidated Go analysis passes on changed packages (or `make golangci-lint` / `make analyze`)
+- [ ] Code is formatted: `make analyze-fix` (runs configured `golangci-lint` formatters: `goimports`, `gofumpt`, and `gci`)
 - [ ] Follows idiomatic Go patterns and the conventions documented in `CLAUDE.md` / `.github/instructions/`
 
 ### Testing

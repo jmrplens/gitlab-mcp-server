@@ -16,21 +16,15 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func groupSAMLReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupSAMLOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, groupSAMLOptions(individualTool))
 }
 
 func groupSAMLCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, groupSAMLOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupSAMLOptions(individualTool))
 }
 
 func groupSAMLDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := groupSAMLOptions(individualTool)
-	options.Destructive = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewDeleteActionSpec(name, route, groupSAMLOptions(individualTool))
 }
 
 func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -110,7 +109,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_discussion_get", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_list_snippet_discussions (discussion IDs are 40-char hex strings)")
 	}
-	return toOutput(d), nil
+	return toolutil.DiscussionOutputFromGitLab(d), nil
 }
 
 // Create creates a new snippet discussion thread.
@@ -129,7 +128,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return Output{}, toolutil.WrapErrWithStatusHint("snippet_discussion_create", err, http.StatusBadRequest,
 			"body is required and cannot be empty; commenting requires Reporter role or being the snippet author")
 	}
-	return toOutput(d), nil
+	return toolutil.DiscussionOutputFromGitLab(d), nil
 }
 
 // AddNote adds a note to an existing snippet discussion.
@@ -148,7 +147,7 @@ func AddNote(ctx context.Context, client *gitlabclient.Client, input AddNoteInpu
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_add_note", err, http.StatusNotFound,
 			"verify discussion_id with gitlab_list_snippet_discussions; the discussion must exist on this snippet")
 	}
-	return noteToOutput(note), nil
+	return toolutil.DiscussionNoteOutputFromGitLab(note), nil
 }
 
 // UpdateNote updates an existing snippet discussion note.
@@ -170,7 +169,7 @@ func UpdateNote(ctx context.Context, client *gitlabclient.Client, input UpdateNo
 		return NoteOutput{}, toolutil.WrapErrWithStatusHint("snippet_discussion_update_note", err, http.StatusForbidden,
 			"updating a note requires being the note author; system notes cannot be modified")
 	}
-	return noteToOutput(note), nil
+	return toolutil.DiscussionNoteOutputFromGitLab(note), nil
 }
 
 // DeleteNote deletes a snippet discussion note.
@@ -194,48 +193,12 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 
 // Converters.
 
-// noteToOutput converts the GitLab API response to the tool output format.
-func noteToOutput(n *gl.Note) NoteOutput {
-	out := NoteOutput{
-		ID:     n.ID,
-		Body:   n.Body,
-		System: n.System,
-	}
-	if n.Author.Username != "" {
-		out.Author = n.Author.Username
-	}
-	if !n.CreatedAt.IsZero() {
-		out.CreatedAt = n.CreatedAt.Format(time.RFC3339)
-	}
-	if n.UpdatedAt != nil && !n.UpdatedAt.IsZero() {
-		out.UpdatedAt = n.UpdatedAt.Format(time.RFC3339)
-	}
-	return out
-}
-
-// toOutput converts the GitLab API response to the tool output format.
-func toOutput(d *gl.Discussion) Output {
-	out := Output{
-		ID:             d.ID,
-		IndividualNote: d.IndividualNote,
-		Notes:          make([]NoteOutput, 0, len(d.Notes)),
-	}
-	for _, n := range d.Notes {
-		out.Notes = append(out.Notes, noteToOutput(n))
-	}
-	return out
-}
-
 // toListOutput converts the GitLab API response to the tool output format.
 func toListOutput(discussions []*gl.Discussion, resp *gl.Response) ListOutput {
-	out := ListOutput{
-		Discussions: make([]Output, 0, len(discussions)),
+	return ListOutput{
+		Discussions: toolutil.DiscussionOutputsFromGitLab(discussions),
 		Pagination:  toolutil.PaginationFromResponse(resp),
 	}
-	for _, d := range discussions {
-		out.Discussions = append(out.Discussions, toOutput(d))
-	}
-	return out
 }
 
 // Formatters.

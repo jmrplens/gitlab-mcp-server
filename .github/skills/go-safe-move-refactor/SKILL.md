@@ -30,7 +30,7 @@ Every change must be an atomic step that leaves `go build ./...` passing. The se
 
 ```bash
 go build ./...    # Must pass
-go vet ./...      # Must pass
+golangci-lint run --build-tags e2e ./... # Must pass
 go test ./...     # Record baseline (should pass)
 ```
 
@@ -224,7 +224,7 @@ go test ./internal/... -count=1
 
 ```bash
 go build ./...
-go vet ./...
+golangci-lint run --build-tags e2e ./...
 go test ./internal/... -count=1
 ```
 

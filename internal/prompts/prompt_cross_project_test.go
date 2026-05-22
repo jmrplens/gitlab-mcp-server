@@ -36,15 +36,21 @@ func TestMyOpenMRsGroups_ByProject(t *testing.T) {
 
 	mux.HandleFunc(routeGetMergeRequests, func(w http.ResponseWriter, r *http.Request) {
 		mrs := []*gl.BasicMergeRequest{
-			{IID: 1, Title: "Fix auth", ProjectID: 10, SourceBranch: "fix/auth", TargetBranch: "main",
+			{
+				IID: 1, Title: "Fix auth", ProjectID: 10, SourceBranch: "fix/auth", TargetBranch: "main",
 				Author: &gl.BasicUser{Username: "testuser"}, CreatedAt: &created,
-				References: &gl.IssueReferences{Full: "group/alpha!1"}},
-			{IID: 2, Title: "Add cache", ProjectID: 10, SourceBranch: "feat/cache", TargetBranch: "main",
+				References: &gl.IssueReferences{Full: "group/alpha!1"},
+			},
+			{
+				IID: 2, Title: "Add cache", ProjectID: 10, SourceBranch: "feat/cache", TargetBranch: "main",
 				Author: &gl.BasicUser{Username: "testuser"}, CreatedAt: &created, Draft: true,
-				References: &gl.IssueReferences{Full: "group/alpha!2"}},
-			{IID: 3, Title: "Update docs", ProjectID: 20, SourceBranch: "docs/update", TargetBranch: "main",
+				References: &gl.IssueReferences{Full: "group/alpha!2"},
+			},
+			{
+				IID: 3, Title: "Update docs", ProjectID: 20, SourceBranch: "docs/update", TargetBranch: "main",
 				Author: &gl.BasicUser{Username: "testuser"}, CreatedAt: &created, HasConflicts: true,
-				References: &gl.IssueReferences{Full: "group/beta!3"}},
+				References: &gl.IssueReferences{Full: "group/beta!3"},
+			},
 		}
 		data, _ := json.Marshal(mrs)
 		respondJSON(w, http.StatusOK, string(data))
@@ -108,12 +114,16 @@ func TestMy_PendingReviewsGroupsByProject(t *testing.T) {
 	})
 	mux.HandleFunc(routeGetMergeRequests, func(w http.ResponseWriter, r *http.Request) {
 		mrs := []*gl.BasicMergeRequest{
-			{IID: 10, Title: "Need review", ProjectID: 10, SourceBranch: "feat/a", TargetBranch: "main",
+			{
+				IID: 10, Title: "Need review", ProjectID: 10, SourceBranch: "feat/a", TargetBranch: "main",
 				Author: &gl.BasicUser{Username: "alice"}, CreatedAt: &created,
-				References: &gl.IssueReferences{Full: "team/frontend!10"}},
-			{IID: 20, Title: "Also review", ProjectID: 20, SourceBranch: "feat/b", TargetBranch: "develop",
+				References: &gl.IssueReferences{Full: "team/frontend!10"},
+			},
+			{
+				IID: 20, Title: "Also review", ProjectID: 20, SourceBranch: "feat/b", TargetBranch: "develop",
 				Author: &gl.BasicUser{Username: "bob"}, CreatedAt: &created,
-				References: &gl.IssueReferences{Full: "team/backend!20"}},
+				References: &gl.IssueReferences{Full: "team/backend!20"},
+			},
 		}
 		data, _ := json.Marshal(mrs)
 		respondJSON(w, http.StatusOK, string(data))
@@ -173,12 +183,16 @@ func TestMyIssuesGroups_ByProject(t *testing.T) {
 	})
 	mux.HandleFunc(routeGetIssues, func(w http.ResponseWriter, r *http.Request) {
 		issues := []*gl.Issue{
-			{IID: 1, Title: "Bug in login", ProjectID: 10, CreatedAt: &created,
+			{
+				IID: 1, Title: "Bug in login", ProjectID: 10, CreatedAt: &created,
 				Labels:     gl.Labels{"bug"},
-				References: &gl.IssueReferences{Full: "group/alpha#1"}},
-			{IID: 2, Title: "Add feature X", ProjectID: 20, CreatedAt: &created,
+				References: &gl.IssueReferences{Full: "group/alpha#1"},
+			},
+			{
+				IID: 2, Title: "Add feature X", ProjectID: 20, CreatedAt: &created,
 				Milestone:  &gl.Milestone{Title: "v2.0"},
-				References: &gl.IssueReferences{Full: "group/beta#2"}},
+				References: &gl.IssueReferences{Full: "group/beta#2"},
+			},
 		}
 		data, _ := json.Marshal(issues)
 		respondJSON(w, http.StatusOK, string(data))
@@ -215,9 +229,11 @@ func TestMyIssues_OverdueDetection(t *testing.T) {
 	})
 	mux.HandleFunc(routeGetIssues, func(w http.ResponseWriter, r *http.Request) {
 		issues := []*gl.Issue{
-			{IID: 1, Title: "Overdue task", ProjectID: 10, CreatedAt: &created,
+			{
+				IID: 1, Title: "Overdue task", ProjectID: 10, CreatedAt: &created,
 				DueDate:    &pastDue,
-				References: &gl.IssueReferences{Full: "group/alpha#1"}},
+				References: &gl.IssueReferences{Full: "group/alpha#1"},
+			},
 		}
 		data, _ := json.Marshal(issues)
 		respondJSON(w, http.StatusOK, string(data))

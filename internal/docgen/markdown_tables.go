@@ -33,29 +33,9 @@ func FormatMarkdownTables(content string) (string, bool) {
 		}
 
 		if !inFence && i+1 < len(lines) {
-			headers, headerOK := parseMarkdownTableRow(line.Text)
-			alignments, separatorOK := parseMarkdownTableSeparator(lines[i+1].Text, len(headers))
-			if headerOK && separatorOK {
-				rows := make([][]string, 0)
-				end := i + 2
-				for end < len(lines) {
-					if strings.TrimSpace(lines[end].Text) == "" {
-						break
-					}
-					row, ok := parseMarkdownTableRow(lines[end].Text)
-					if !ok {
-						break
-					}
-					rows = append(rows, normalizeMarkdownTableRow(row, len(headers)))
-					end++
-				}
-
-				rendered := RenderMarkdownTable(headers, alignments, rows)
-				rendered = applyMarkdownTableLineEnding(rendered, lines[i:end])
-				original := joinMarkdownLines(lines[i:end])
-				if rendered != original {
-					changed = true
-				}
+			rendered, end, tableChanged, ok := formatMarkdownTableAt(lines, i)
+			if ok {
+				changed = changed || tableChanged
 				b.WriteString(rendered)
 				i = end
 				continue
@@ -70,6 +50,36 @@ func FormatMarkdownTables(content string) (string, bool) {
 		return content, false
 	}
 	return b.String(), true
+}
+
+func formatMarkdownTableAt(lines []markdownLine, start int) (rendered string, end int, changed, ok bool) {
+	headers, headerOK := parseMarkdownTableRow(lines[start].Text)
+	alignments, separatorOK := parseMarkdownTableSeparator(lines[start+1].Text, len(headers))
+	if !headerOK || !separatorOK {
+		return "", start, false, false
+	}
+	rows, end := collectMarkdownTableRows(lines, start+2, len(headers))
+	rendered = RenderMarkdownTable(headers, alignments, rows)
+	rendered = applyMarkdownTableLineEnding(rendered, lines[start:end])
+	original := joinMarkdownLines(lines[start:end])
+	return rendered, end, rendered != original, true
+}
+
+func collectMarkdownTableRows(lines []markdownLine, start, width int) (rows [][]string, end int) {
+	rows = make([][]string, 0)
+	end = start
+	for end < len(lines) {
+		if strings.TrimSpace(lines[end].Text) == "" {
+			break
+		}
+		row, ok := parseMarkdownTableRow(lines[end].Text)
+		if !ok {
+			break
+		}
+		rows = append(rows, normalizeMarkdownTableRow(row, width))
+		end++
+	}
+	return rows, end
 }
 
 func splitMarkdownLines(content string) []markdownLine {

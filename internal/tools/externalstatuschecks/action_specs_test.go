@@ -9,9 +9,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-const mergeCheckJSON = `[{"id":1,"name":"CI Check","external_url":"https://ci.example.com","status":"passed"}]`
-const projectCheckJSON = `[{"id":1,"name":"CI Check","external_url":"https://ci.example.com","hmac":true,"protected_branches":[{"id":1,"name":"main"}]}]`
-const createdCheckJSON = `{"id":2,"name":"New Check","external_url":"https://new.example.com","hmac":false,"protected_branches":[]}`
+const (
+	mergeCheckJSON   = `[{"id":1,"name":"CI Check","external_url":"https://ci.example.com","status":"passed"}]`
+	projectCheckJSON = `[{"id":1,"name":"CI Check","external_url":"https://ci.example.com","hmac":true,"protected_branches":[{"id":1,"name":"main"}]}]`
+	createdCheckJSON = `{"id":2,"name":"New Check","external_url":"https://new.example.com","hmac":false,"protected_branches":[]}`
+)
 
 // TestActionSpecs_Metadata verifies canonical metadata for external status check actions.
 func TestActionSpecs_Metadata(t *testing.T) {

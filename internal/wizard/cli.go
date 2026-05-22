@@ -41,8 +41,8 @@ func RunCLI(version string, r io.Reader, w io.Writer) error {
 		return err
 	}
 	if advanced {
-		if err = stepOptions(p, w, cfg); err != nil {
-			return err
+		if stepErr := stepOptions(p, w, cfg); stepErr != nil {
+			return stepErr
 		}
 	}
 

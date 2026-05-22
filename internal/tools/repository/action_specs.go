@@ -22,22 +22,17 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func repositoryCompareSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	options := repositoryOptions("gitlab_repository_compare")
-	options.ReadOnly = true
-	options.Idempotent = true
 	options.Usage = "Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff."
 	options.RelatedActions = append(options.RelatedActions, "analyze.release_notes", "release.list")
-	return toolutil.NewActionSpec("compare", route, options)
+	return toolutil.NewReadActionSpec("compare", route, options)
 }
 
 func repositoryReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := repositoryOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, repositoryOptions(individualTool))
 }
 
 func repositoryCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, repositoryOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, repositoryOptions(individualTool))
 }
 
 func repositoryOptions(individualTool string) toolutil.ActionSpecOptions {

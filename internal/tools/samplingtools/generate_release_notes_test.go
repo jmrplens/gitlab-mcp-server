@@ -10,13 +10,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/sampling"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repository"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestFormatReleaseDataForAnalysis_Basic validates format release data for analysis basic across multiple scenarios using table-driven subtests.

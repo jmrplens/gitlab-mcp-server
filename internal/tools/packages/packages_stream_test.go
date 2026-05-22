@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -39,7 +40,7 @@ func testStreamServer(t *testing.T, fileBody string, statusCode int) http.Handle
 		switch {
 		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/packages/generic/"):
 			w.Header().Set(headerContentType, testOctetStream)
-			w.Header().Set("Content-Length", fmt.Sprintf("%d", len(fileBody)))
+			w.Header().Set("Content-Length", strconv.Itoa(len(fileBody)))
 			w.WriteHeader(statusCode)
 			w.Write([]byte(fileBody))
 		default:
@@ -203,7 +204,7 @@ func TestStreamDownloadPackageFile_APIError(t *testing.T) {
 // TestComputeSHA256_ViaToolutil verifies ComputeSHA256 when via toolutil.
 func TestComputeSHA256_ViaToolutil(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "test.bin")
-	os.WriteFile(f, []byte("hello"), 0644)
+	os.WriteFile(f, []byte("hello"), 0o600)
 
 	hash, err := toolutil.ComputeSHA256(f)
 	if err != nil {
@@ -222,7 +223,7 @@ func TestStreamDownload_UnwritablePath(t *testing.T) {
 
 	// Create a file where a directory is expected, so os.Create fails.
 	blocker := filepath.Join(t.TempDir(), "blocker")
-	os.WriteFile(blocker, []byte("x"), 0644)
+	os.WriteFile(blocker, []byte("x"), 0o600)
 	badPath := filepath.Join(blocker, "sub", testOutputBin)
 
 	_, err := Download(context.Background(), nil, client, DownloadInput{

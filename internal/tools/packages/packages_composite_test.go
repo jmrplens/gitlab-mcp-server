@@ -5,6 +5,7 @@ package packages
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -248,7 +249,7 @@ func TestPackagePublishAndLink_ContextCancelled(t *testing.T) {
 func TestPackagePublishDirectory_Success(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"a.tar.gz", "b.tar.gz", "readme.md"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("content-"+name), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("content-"+name), 0o600); err != nil {
 			t.Fatalf("write file: %v", err)
 		}
 	}
@@ -296,7 +297,7 @@ func TestPackagePublishDirectory_Success(t *testing.T) {
 func TestPackagePublishDirectory_WithPattern(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"a.tar.gz", "b.tar.gz", "readme.md", "notes.txt"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("content"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("content"), 0o600); err != nil {
 			t.Fatalf("write file: %v", err)
 		}
 	}
@@ -336,7 +337,7 @@ func TestPackagePublishDirectory_WithProgressToken(t *testing.T) {
 	defer cancel()
 
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "artifact.bin"), []byte("progress-data"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "artifact.bin"), []byte("progress-data"), 0o600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
 
@@ -406,7 +407,7 @@ func TestPackagePublishDirectory_WithProgressToken(t *testing.T) {
 // TestPackagePublishDirectory_NoMatchingFiles verifies PackagePublishDirectory when no matching files.
 func TestPackagePublishDirectory_NoMatchingFiles(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "readme.md"), []byte("text"), 0644)
+	os.WriteFile(filepath.Join(dir, "readme.md"), []byte("text"), 0o600)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -449,7 +450,7 @@ func TestPackagePublishDirectory_EmptyDir(t *testing.T) {
 // TestPackagePublishDirectory_NotADirectory verifies PackagePublishDirectory when not a directory.
 func TestPackagePublishDirectory_NotADirectory(t *testing.T) {
 	tmpFile := filepath.Join(t.TempDir(), "not-a-dir.txt")
-	os.WriteFile(tmpFile, []byte("file"), 0644)
+	os.WriteFile(tmpFile, []byte("file"), 0o600)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -491,7 +492,7 @@ func TestPackagePublishDirectory_MissingDirectoryPath(t *testing.T) {
 // TestPackagePublishDirectory_InvalidGlobPattern verifies PackagePublishDirectory when invalid glob pattern.
 func TestPackagePublishDirectory_InvalidGlobPattern(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("data"), 0644)
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("data"), 0o600)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -516,7 +517,7 @@ func TestPackagePublishDirectory_InvalidGlobPattern(t *testing.T) {
 func TestPackagePublishDirectory_PartialFailure(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"good.bin", "bad.bin"} {
-		os.WriteFile(filepath.Join(dir, name), []byte("content"), 0644)
+		os.WriteFile(filepath.Join(dir, name), []byte("content"), 0o600)
 	}
 
 	callCount := 0
@@ -559,7 +560,7 @@ func TestPackagePublishDirectory_PartialFailure(t *testing.T) {
 // TestPackagePublishDirectory_ContextCancelled verifies PackagePublishDirectory when context cancelled.
 func TestPackagePublishDirectory_ContextCancelled(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "a.bin"), []byte("data"), 0644)
+	os.WriteFile(filepath.Join(dir, "a.bin"), []byte("data"), 0o600)
 
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -582,7 +583,7 @@ func TestPackagePublishDirectory_ContextCancelled(t *testing.T) {
 func TestPackagePublishDirectory_CancelledDuringLoop(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"a.bin", "b.bin"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("content"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("content"), 0o600); err != nil {
 			t.Fatalf("write file: %v", err)
 		}
 	}
@@ -625,9 +626,9 @@ func TestPackagePublishDirectory_CancelledDuringLoop(t *testing.T) {
 // TestPackagePublishDirectory_SkipsSubdirectories verifies PackagePublishDirectory when skips subdirectories.
 func TestPackagePublishDirectory_SkipsSubdirectories(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "file.bin"), []byte("content"), 0644)
-	os.MkdirAll(filepath.Join(dir, "subdir"), 0755)
-	os.WriteFile(filepath.Join(dir, "subdir", "nested.bin"), []byte("nested"), 0644)
+	os.WriteFile(filepath.Join(dir, "file.bin"), []byte("content"), 0o600)
+	os.MkdirAll(filepath.Join(dir, "subdir"), 0o750)
+	os.WriteFile(filepath.Join(dir, "subdir", "nested.bin"), []byte("nested"), 0o600)
 
 	publishCount := 0
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -666,7 +667,7 @@ func TestPackagePublishDirectory_SkipsSymlinks(t *testing.T) {
 
 	// Create a regular file.
 	regular := filepath.Join(dir, "real.bin")
-	os.WriteFile(regular, []byte("real"), 0644)
+	os.WriteFile(regular, []byte("real"), 0o600)
 
 	// Create a symlink to that file.
 	symlink := filepath.Join(dir, "link.bin")
@@ -721,7 +722,7 @@ func (failingDirEntry) IsDir() bool { return false }
 
 func (failingDirEntry) Type() fs.FileMode { return 0 }
 
-func (failingDirEntry) Info() (fs.FileInfo, error) { return nil, fmt.Errorf("stat missing.bin") }
+func (failingDirEntry) Info() (fs.FileInfo, error) { return nil, errors.New("stat missing.bin") }
 
 // TestShouldIncludeFile_InfoError verifies shouldIncludeFile returns stat errors.
 func TestShouldIncludeFile_InfoError(t *testing.T) {

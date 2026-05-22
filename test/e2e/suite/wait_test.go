@@ -31,223 +31,225 @@ wait-job:
 // MCP wait tool (not the direct API helper), then waits for each job.
 func TestWaitTools(t *testing.T) {
 	t.Parallel()
-	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(t *testing.T, _ *E2EContext) {
-		ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
-		if deadline, ok := t.Deadline(); ok {
-			cancel()
-			ctx, cancel = context.WithDeadline(context.Background(), deadline)
-		}
+	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(_ *E2EContext) {
+		ctx, cancel := waitToolContext(t)
 		defer cancel()
 
-		// --- Individual tool session ---
-		proj := createProject(ctx, t, sess.individual)
-		commitFile(ctx, t, sess.individual, proj, "main", "init.txt", "bootstrap", "init commit")
-
-		_, ciErr := callToolOn[commits.Output](ctx, sess.individual, "gitlab_commit_create", commits.CreateInput{
-			ProjectID:     proj.pidOf(),
-			Branch:        "main",
-			CommitMessage: "ci: add .gitlab-ci.yml for wait tool tests",
-			Actions: []commits.Action{{
-				Action:   "create",
-				FilePath: ".gitlab-ci.yml",
-				Content:  waitCIYAML,
-			}},
-		})
-		if ciErr != nil {
-			t.Fatalf("commit CI config: %v", ciErr)
-		}
-
-		var pipelineID int64
-
-		t.Run("Individual/PipelineCreate", func(t *testing.T) {
-			out, err := callToolOn[pipelines.DetailOutput](ctx, sess.individual, "gitlab_pipeline_create", pipelines.CreateInput{
-				ProjectID: proj.pidOf(),
-				Ref:       "main",
-			})
-			if err != nil {
-				t.Fatalf("pipeline create: %v", err)
-			}
-			if out.ID <= 0 {
-				t.Fatal("expected positive pipeline ID")
-			}
-			pipelineID = out.ID
-			t.Logf("Created pipeline ID=%d status=%s", pipelineID, out.Status)
-		})
-
-		t.Run("Individual/PipelineWait", func(t *testing.T) {
-			drainSidekiq(ctx, t, sess.glClient)
-			failOnErr := false
-			out, err := callToolOn[pipelines.WaitOutput](ctx, sess.individual, "gitlab_pipeline_wait", pipelines.WaitInput{
-				ProjectID:       proj.pidOf(),
-				PipelineID:      pipelineID,
-				IntervalSeconds: 5,
-				TimeoutSeconds:  600,
-				FailOnError:     &failOnErr,
-			})
-			if err != nil {
-				t.Fatalf("pipeline wait: %v", err)
-			}
-			if out.FinalStatus == "" {
-				t.Fatal("expected non-empty FinalStatus")
-			}
-			if out.TimedOut {
-				t.Fatalf("pipeline wait timed out, last status: %s", out.FinalStatus)
-			}
-			if out.PollCount <= 0 {
-				t.Error("expected PollCount > 0")
-			}
-			if out.WaitedFor == "" {
-				t.Error("expected non-empty WaitedFor")
-			}
-			t.Logf("Pipeline wait done: status=%s waited=%s polls=%d", out.FinalStatus, out.WaitedFor, out.PollCount)
-		})
-
-		var jobID int64
-
-		t.Run("Individual/JobList", func(t *testing.T) {
-			out, err := callToolOn[jobs.ListOutput](ctx, sess.individual, "gitlab_job_list", jobs.ListInput{
-				ProjectID:  proj.pidOf(),
-				PipelineID: pipelineID,
-			})
-			if err != nil {
-				t.Fatalf("job list: %v", err)
-			}
-			if len(out.Jobs) == 0 {
-				t.Fatal("expected at least 1 job")
-			}
-			jobID = out.Jobs[0].ID
-			t.Logf("Found %d jobs; first: ID=%d name=%s status=%s", len(out.Jobs), jobID, out.Jobs[0].Name, out.Jobs[0].Status)
-		})
-
-		t.Run("Individual/JobWait", func(t *testing.T) {
-			failOnErr := false
-			out, err := callToolOn[jobs.WaitOutput](ctx, sess.individual, "gitlab_job_wait", jobs.WaitInput{
-				ProjectID:       proj.pidOf(),
-				JobID:           jobID,
-				IntervalSeconds: 5,
-				TimeoutSeconds:  600,
-				FailOnError:     &failOnErr,
-			})
-			if err != nil {
-				t.Fatalf("job wait: %v", err)
-			}
-			if out.FinalStatus == "" {
-				t.Fatal("expected non-empty FinalStatus")
-			}
-			if out.TimedOut {
-				t.Fatalf("job wait timed out, last status: %s", out.FinalStatus)
-			}
-			if out.PollCount <= 0 {
-				t.Error("expected PollCount > 0")
-			}
-			if out.WaitedFor == "" {
-				t.Error("expected non-empty WaitedFor")
-			}
-			t.Logf("Job wait done: status=%s waited=%s polls=%d", out.FinalStatus, out.WaitedFor, out.PollCount)
-		})
-
-		// --- Meta-tool session ---
-		projM := createProjectMeta(ctx, t, sess.meta)
-		commitFileMeta(ctx, t, sess.meta, projM, "main", "init.txt", "bootstrap", "init commit")
-
-		_, ciErr = callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
-			"action": "commit_create",
-			"params": map[string]any{
-				"project_id":     projM.pidStr(),
-				"branch":         "main",
-				"commit_message": "ci: add .gitlab-ci.yml for wait tool tests",
-				"actions": []map[string]any{{
-					"action":    "create",
-					"file_path": ".gitlab-ci.yml",
-					"content":   waitCIYAML,
-				}},
-			},
-		})
-		if ciErr != nil {
-			t.Fatalf("meta commit CI config: %v", ciErr)
-		}
-
-		var mPipelineID int64
-
-		t.Run("Meta/PipelineCreate", func(t *testing.T) {
-			out, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-				"action": "create",
-				"params": map[string]any{
-					"project_id": projM.pidStr(),
-					"ref":        "main",
-				},
-			})
-			if err != nil {
-				t.Fatalf("meta pipeline create: %v", err)
-			}
-			mPipelineID = out.ID
-			t.Logf("Meta created pipeline ID=%d", mPipelineID)
-		})
-
-		t.Run("Meta/PipelineWait", func(t *testing.T) {
-			drainSidekiq(ctx, t, sess.glClient)
-			out, err := callToolOn[pipelines.WaitOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
-				"action": "wait",
-				"params": map[string]any{
-					"project_id":       projM.pidStr(),
-					"pipeline_id":      mPipelineID,
-					"interval_seconds": 5,
-					"timeout_seconds":  600,
-					"fail_on_error":    false,
-				},
-			})
-			if err != nil {
-				t.Fatalf("meta pipeline wait: %v", err)
-			}
-			if out.FinalStatus == "" {
-				t.Fatal("expected non-empty FinalStatus (meta)")
-			}
-			if out.TimedOut {
-				t.Fatalf("meta pipeline wait timed out, last status: %s", out.FinalStatus)
-			}
-			t.Logf("Meta pipeline wait done: status=%s waited=%s polls=%d", out.FinalStatus, out.WaitedFor, out.PollCount)
-		})
-
-		var mJobID int64
-
-		t.Run("Meta/JobList", func(t *testing.T) {
-			out, err := callToolOn[jobs.ListOutput](ctx, sess.meta, "gitlab_job", map[string]any{
-				"action": "list",
-				"params": map[string]any{
-					"project_id":  projM.pidStr(),
-					"pipeline_id": mPipelineID,
-				},
-			})
-			if err != nil {
-				t.Fatalf("meta job list: %v", err)
-			}
-			if len(out.Jobs) == 0 {
-				t.Fatal("expected at least 1 job (meta)")
-			}
-			mJobID = out.Jobs[0].ID
-		})
-
-		t.Run("Meta/JobWait", func(t *testing.T) {
-			out, err := callToolOn[jobs.WaitOutput](ctx, sess.meta, "gitlab_job", map[string]any{
-				"action": "wait",
-				"params": map[string]any{
-					"project_id":       projM.pidStr(),
-					"job_id":           mJobID,
-					"interval_seconds": 5,
-					"timeout_seconds":  180,
-					"fail_on_error":    false,
-				},
-			})
-			if err != nil {
-				t.Fatalf("meta job wait: %v", err)
-			}
-			if out.FinalStatus == "" {
-				t.Fatal("expected non-empty FinalStatus (meta)")
-			}
-			if out.TimedOut {
-				t.Fatalf("meta job wait timed out, last status: %s", out.FinalStatus)
-			}
-			t.Logf("Meta job wait done: status=%s waited=%s polls=%d", out.FinalStatus, out.WaitedFor, out.PollCount)
-		})
+		runIndividualWaitToolFlow(ctx, t)
+		runMetaWaitToolFlow(ctx, t)
 	})
+}
+
+func waitToolContext(t *testing.T) (context.Context, context.CancelFunc) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 1800*time.Second)
+	if deadline, ok := t.Deadline(); ok {
+		cancel()
+		return context.WithDeadline(context.Background(), deadline)
+	}
+	return ctx, cancel
+}
+
+func runIndividualWaitToolFlow(ctx context.Context, t *testing.T) {
+	t.Helper()
+	proj := createProject(ctx, t, sess.individual)
+	commitFile(ctx, t, sess.individual, proj, "main", "init.txt", "bootstrap", "init commit")
+	commitIndividualWaitCI(ctx, t, proj)
+	pipelineID := createIndividualWaitPipeline(ctx, t, proj)
+	waitIndividualPipeline(ctx, t, proj, pipelineID)
+	jobID := firstIndividualPipelineJob(ctx, t, proj, pipelineID)
+	waitIndividualJob(ctx, t, proj, jobID)
+}
+
+func commitIndividualWaitCI(ctx context.Context, t *testing.T, proj ProjectFixture) {
+	t.Helper()
+	_, ciErr := callToolOn[commits.Output](ctx, sess.individual, "gitlab_commit_create", commits.CreateInput{
+		ProjectID:     proj.pidOf(),
+		Branch:        "main",
+		CommitMessage: "ci: add .gitlab-ci.yml for wait tool tests",
+		Actions:       []commits.Action{{Action: "create", FilePath: ".gitlab-ci.yml", Content: waitCIYAML}},
+	})
+	if ciErr != nil {
+		t.Fatalf("commit CI config: %v", ciErr)
+	}
+}
+
+func createIndividualWaitPipeline(ctx context.Context, t *testing.T, proj ProjectFixture) int64 {
+	t.Helper()
+	var pipelineID int64
+	t.Run("Individual/PipelineCreate", func(t *testing.T) {
+		out, err := callToolOn[pipelines.DetailOutput](ctx, sess.individual, "gitlab_pipeline_create", pipelines.CreateInput{ProjectID: proj.pidOf(), Ref: "main"})
+		if err != nil {
+			t.Fatalf("pipeline create: %v", err)
+		}
+		if out.ID <= 0 {
+			t.Fatal("expected positive pipeline ID")
+		}
+		pipelineID = out.ID
+		t.Logf("Created pipeline ID=%d status=%s", pipelineID, out.Status)
+	})
+	return pipelineID
+}
+
+func waitIndividualPipeline(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) {
+	t.Helper()
+	t.Run("Individual/PipelineWait", func(t *testing.T) {
+		drainSidekiq(ctx, t, sess.glClient)
+		failOnErr := false
+		out, err := callToolOn[pipelines.WaitOutput](ctx, sess.individual, "gitlab_pipeline_wait", pipelines.WaitInput{
+			ProjectID:       proj.pidOf(),
+			PipelineID:      pipelineID,
+			IntervalSeconds: 5,
+			TimeoutSeconds:  600,
+			FailOnError:     &failOnErr,
+		})
+		if err != nil {
+			t.Fatalf("pipeline wait: %v", err)
+		}
+		assertWaitOutput(t, "pipeline", out.FinalStatus, out.TimedOut, out.PollCount, out.WaitedFor)
+	})
+}
+
+func firstIndividualPipelineJob(ctx context.Context, t *testing.T, proj ProjectFixture, pipelineID int64) int64 {
+	t.Helper()
+	var jobID int64
+	t.Run("Individual/JobList", func(t *testing.T) {
+		out, err := callToolOn[jobs.ListOutput](ctx, sess.individual, "gitlab_job_list", jobs.ListInput{ProjectID: proj.pidOf(), PipelineID: pipelineID})
+		if err != nil {
+			t.Fatalf("job list: %v", err)
+		}
+		if len(out.Jobs) == 0 {
+			t.Fatal("expected at least 1 job")
+		}
+		jobID = out.Jobs[0].ID
+		t.Logf("Found %d jobs; first: ID=%d name=%s status=%s", len(out.Jobs), jobID, out.Jobs[0].Name, out.Jobs[0].Status)
+	})
+	return jobID
+}
+
+func waitIndividualJob(ctx context.Context, t *testing.T, proj ProjectFixture, jobID int64) {
+	t.Helper()
+	t.Run("Individual/JobWait", func(t *testing.T) {
+		failOnErr := false
+		out, err := callToolOn[jobs.WaitOutput](ctx, sess.individual, "gitlab_job_wait", jobs.WaitInput{
+			ProjectID:       proj.pidOf(),
+			JobID:           jobID,
+			IntervalSeconds: 5,
+			TimeoutSeconds:  600,
+			FailOnError:     &failOnErr,
+		})
+		if err != nil {
+			t.Fatalf("job wait: %v", err)
+		}
+		assertWaitOutput(t, "job", out.FinalStatus, out.TimedOut, out.PollCount, out.WaitedFor)
+	})
+}
+
+func runMetaWaitToolFlow(ctx context.Context, t *testing.T) {
+	t.Helper()
+	projM := createProjectMeta(ctx, t, sess.meta)
+	commitFileMeta(ctx, t, sess.meta, projM, "main", "init.txt", "bootstrap", "init commit")
+	commitMetaWaitCI(ctx, t, projM)
+	pipelineID := createMetaWaitPipeline(ctx, t, projM)
+	waitMetaPipeline(ctx, t, projM, pipelineID)
+	jobID := firstMetaPipelineJob(ctx, t, projM, pipelineID)
+	waitMetaJob(ctx, t, projM, jobID)
+}
+
+func commitMetaWaitCI(ctx context.Context, t *testing.T, projM ProjectFixture) {
+	t.Helper()
+	_, ciErr := callToolOn[commits.Output](ctx, sess.meta, "gitlab_repository", map[string]any{
+		"action": "commit_create",
+		"params": map[string]any{
+			"project_id":     projM.pidStr(),
+			"branch":         "main",
+			"commit_message": "ci: add .gitlab-ci.yml for wait tool tests",
+			"actions":        []map[string]any{{"action": "create", "file_path": ".gitlab-ci.yml", "content": waitCIYAML}},
+		},
+	})
+	if ciErr != nil {
+		t.Fatalf("meta commit CI config: %v", ciErr)
+	}
+}
+
+func createMetaWaitPipeline(ctx context.Context, t *testing.T, projM ProjectFixture) int64 {
+	t.Helper()
+	var pipelineID int64
+	t.Run("Meta/PipelineCreate", func(t *testing.T) {
+		out, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "create",
+			"params": map[string]any{"project_id": projM.pidStr(), "ref": "main"},
+		})
+		if err != nil {
+			t.Fatalf("meta pipeline create: %v", err)
+		}
+		pipelineID = out.ID
+		t.Logf("Meta created pipeline ID=%d", pipelineID)
+	})
+	return pipelineID
+}
+
+func waitMetaPipeline(ctx context.Context, t *testing.T, projM ProjectFixture, pipelineID int64) {
+	t.Helper()
+	t.Run("Meta/PipelineWait", func(t *testing.T) {
+		drainSidekiq(ctx, t, sess.glClient)
+		out, err := callToolOn[pipelines.WaitOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+			"action": "wait",
+			"params": map[string]any{"project_id": projM.pidStr(), "pipeline_id": pipelineID, "interval_seconds": 5, "timeout_seconds": 600, "fail_on_error": false},
+		})
+		if err != nil {
+			t.Fatalf("meta pipeline wait: %v", err)
+		}
+		assertWaitOutput(t, "meta pipeline", out.FinalStatus, out.TimedOut, out.PollCount, out.WaitedFor)
+	})
+}
+
+func firstMetaPipelineJob(ctx context.Context, t *testing.T, projM ProjectFixture, pipelineID int64) int64 {
+	t.Helper()
+	var jobID int64
+	t.Run("Meta/JobList", func(t *testing.T) {
+		out, err := callToolOn[jobs.ListOutput](ctx, sess.meta, "gitlab_job", map[string]any{
+			"action": "list",
+			"params": map[string]any{"project_id": projM.pidStr(), "pipeline_id": pipelineID},
+		})
+		if err != nil {
+			t.Fatalf("meta job list: %v", err)
+		}
+		if len(out.Jobs) == 0 {
+			t.Fatal("expected at least 1 job (meta)")
+		}
+		jobID = out.Jobs[0].ID
+	})
+	return jobID
+}
+
+func waitMetaJob(ctx context.Context, t *testing.T, projM ProjectFixture, jobID int64) {
+	t.Helper()
+	t.Run("Meta/JobWait", func(t *testing.T) {
+		out, err := callToolOn[jobs.WaitOutput](ctx, sess.meta, "gitlab_job", map[string]any{
+			"action": "wait",
+			"params": map[string]any{"project_id": projM.pidStr(), "job_id": jobID, "interval_seconds": 5, "timeout_seconds": 180, "fail_on_error": false},
+		})
+		if err != nil {
+			t.Fatalf("meta job wait: %v", err)
+		}
+		assertWaitOutput(t, "meta job", out.FinalStatus, out.TimedOut, out.PollCount, out.WaitedFor)
+	})
+}
+
+func assertWaitOutput(t *testing.T, label, finalStatus string, timedOut bool, pollCount int, waitedFor string) {
+	t.Helper()
+	if finalStatus == "" {
+		t.Fatalf("expected non-empty FinalStatus for %s", label)
+	}
+	if timedOut {
+		t.Fatalf("%s wait timed out, last status: %s", label, finalStatus)
+	}
+	if pollCount <= 0 {
+		t.Errorf("expected PollCount > 0 for %s", label)
+	}
+	if waitedFor == "" {
+		t.Errorf("expected non-empty WaitedFor for %s", label)
+	}
+	t.Logf("%s wait done: status=%s waited=%s polls=%d", label, finalStatus, waitedFor, pollCount)
 }

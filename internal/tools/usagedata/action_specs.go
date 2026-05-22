@@ -18,14 +18,11 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func usageDataReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := usageDataOptions(individualTool)
-	options.ReadOnly = true
-	options.Idempotent = true
-	return toolutil.NewActionSpec(name, route, options)
+	return toolutil.NewReadActionSpec(name, route, usageDataOptions(individualTool))
 }
 
 func usageDataCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewActionSpec(name, route, usageDataOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, usageDataOptions(individualTool))
 }
 
 func usageDataOptions(individualTool string) toolutil.ActionSpecOptions {

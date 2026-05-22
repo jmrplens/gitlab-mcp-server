@@ -83,11 +83,12 @@ func FormatDiffMarkdown(out DiffOutput) string {
 	b.WriteString(toolutil.TblSep3Col)
 	for _, d := range out.Diffs {
 		status := "modified"
-		if d.NewFile {
+		switch {
+		case d.NewFile:
 			status = "added"
-		} else if d.DeletedFile {
+		case d.DeletedFile:
 			status = "deleted"
-		} else if d.RenamedFile {
+		case d.RenamedFile:
 			status = "renamed"
 		}
 		fmt.Fprintf(&b, toolutil.FmtRow3Str, status, toolutil.EscapeMdTableCell(d.OldPath), toolutil.EscapeMdTableCell(d.NewPath))
