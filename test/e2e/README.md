@@ -62,10 +62,10 @@ Enterprise mode uses the same Docker topology with the EE image and a local
 Ultimate subscription. Store a 24-character activation code in `.env` as
 `ENTERPRISE_LICENSE` or `GITLAB_ACTIVATION_CODE`, or export it in the shell; the
 Docker target passes activation codes to the GitLab EE container during startup.
-`make test-e2e-docker-enterprise` runs only the Enterprise/Premium tests selected
-from `test/e2e/suite/*_ee_test.go`; CE/common Docker coverage remains in
-`make test-e2e-docker`. Override the generated selector with
-`E2E_DOCKER_ENTERPRISE_RUN` when retrying a focused subset.
+`make test-e2e-docker-enterprise` runs with the `e2e enterprise` build tags, so
+common harness files plus `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests
+are compiled and executed. CE-only tests live in `test/e2e/suite/*_ce_test.go`
+and remain in `make test-e2e-docker`.
 After a successful activation-code run, the setup script exports the generated
 license key to `test/e2e/.enterprise-license` with owner-only permissions. Future
 runs prefer that ignored local cache and install it through the License API, so

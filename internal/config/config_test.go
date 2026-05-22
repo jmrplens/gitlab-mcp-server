@@ -4,6 +4,7 @@
 package config
 
 import (
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -23,6 +24,24 @@ const (
 	fmtAutoUpdateWant  = "AutoUpdate = %q, want %q"
 	testCustomRepo     = "custom/group/project"
 )
+
+func TestMain(m *testing.M) {
+	homeDir, err := os.MkdirTemp("", "gitlab-mcp-config-test-home-")
+	if err != nil {
+		panic(err)
+	}
+
+	if setErr := os.Setenv("HOME", homeDir); setErr != nil {
+		panic(setErr)
+	}
+	if setErr := os.Setenv("USERPROFILE", homeDir); setErr != nil {
+		panic(setErr)
+	}
+
+	code := m.Run()
+	_ = os.RemoveAll(homeDir)
+	os.Exit(code)
+}
 
 // TestLoad_ValidConfig verifies that [Load] returns a fully populated [Config]
 // when all required environment variables are set with valid values.
@@ -151,6 +170,7 @@ func TestLoad_MetaToolsInvalid(t *testing.T) {
 	t.Setenv("GITLAB_URL", testGitLabURL)
 	t.Setenv("GITLAB_TOKEN", testGitLabToken)
 	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")
+	t.Setenv("TOOL_SURFACE", "")
 	t.Setenv("META_TOOLS", "notabool")
 
 	_, err := Load()
@@ -968,6 +988,7 @@ func TestLoad_InvalidSkipTLS(t *testing.T) {
 // META_TOOLS has an invalid tool surface value.
 func TestLoad_InvalidMetaTools(t *testing.T) {
 	t.Setenv("META_TOOLS", "notabool")
+	t.Setenv("TOOL_SURFACE", "")
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
 	t.Setenv("GITLAB_TOKEN", "test")
 	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "false")

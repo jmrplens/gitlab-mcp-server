@@ -1,4 +1,4 @@
-//go:build e2e
+//go:build e2e && !enterprise
 
 // enterprise_ce_test.go verifies CE catalog behavior for Enterprise-only tools.
 package suite

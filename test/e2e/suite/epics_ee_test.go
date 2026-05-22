@@ -1,4 +1,4 @@
-//go:build e2e
+//go:build e2e && enterprise
 
 // epics_test.go exercises epic-related tools via the gitlab_group meta-tool:
 // epic CRUD (Work Items API), epic notes (GraphQL), epic discussions (GraphQL),

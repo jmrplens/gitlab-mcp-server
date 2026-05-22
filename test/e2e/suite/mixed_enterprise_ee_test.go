@@ -1,8 +1,7 @@
-//go:build e2e
+//go:build e2e && enterprise
 
-// mixed_enterprise_ee_test.go exposes Enterprise-only selectors for tests that
-// still live in broader CE/common files while they are migrated to dedicated
-// *_ee_test.go files.
+// mixed_enterprise_ee_test.go covers Enterprise workflows that share helpers
+// with broader CE/common files.
 package suite
 
 import (
@@ -12,34 +11,6 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 )
-
-func TestEE_MetaProjectServiceAccounts(t *testing.T) {
-	if !sess.enterprise {
-		return
-	}
-	TestMeta_ProjectServiceAccounts(t)
-}
-
-func TestEE_MetaProjectSecuritySettings(t *testing.T) {
-	if !sess.enterprise {
-		return
-	}
-	TestMeta_ProjectSecuritySettings(t)
-}
-
-func TestEE_MetaProjectMirroring(t *testing.T) {
-	if !sess.enterprise {
-		return
-	}
-	TestMeta_ProjectMirroring(t)
-}
-
-func TestEE_MetaIssueWorkItems(t *testing.T) {
-	if !sess.enterprise {
-		return
-	}
-	TestMeta_IssueWorkItems(t)
-}
 
 func TestEE_MetaGroupEnterpriseOperations(t *testing.T) {
 	if !sess.enterprise {

@@ -1,4 +1,4 @@
-//go:build e2e
+//go:build e2e && enterprise
 
 // groupserviceaccounts_test.go exercises EE-only group service account actions
 // through the gitlab_group meta-tool when the target GitLab instance supports them.

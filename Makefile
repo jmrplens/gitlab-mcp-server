@@ -186,17 +186,12 @@ test-e2e-docker-enterprise:
 	@$(call MKDIR_P,$(E2E_REPORT_DIR))
 	@set +e; \
 	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && \
-	  enterprise_run="$${E2E_DOCKER_ENTERPRISE_RUN:-$$(./test/e2e/scripts/enterprise-test-regex.sh)}"; \
-	  if [ -z "$$enterprise_run" ]; then echo "ERROR: no Enterprise E2E tests found in test/e2e/suite/*_ee_test.go" >&2; exit 1; fi; \
-	  selector_file="$(E2E_REPORT_DIR)/e2e-docker-enterprise-selector.txt"; \
-	  printf "^(%s)$$\n" "$$enterprise_run" > "$$selector_file"; \
-	  enterprise_count=$$(printf "%s" "$$enterprise_run" | tr "|" "\n" | wc -l | tr -d " "); \
-	  echo "Enterprise E2E selector: $$enterprise_count tests (saved to $$selector_file)"; \
+	  echo "Enterprise E2E suite: build tags e2e,enterprise"; \
 	  E2E_MODE=docker gotestsum \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-enterprise-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-enterprise-log.json \
-	  -- -tags e2e -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) -run "^($$enterprise_run)$$" ./test/e2e/suite/ \
+	  -- -tags "e2e enterprise" -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) ./test/e2e/suite/ \
 	  2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-enterprise-output.txt'; \
 	  echo $$? > $(E2E_REPORT_DIR)/e2e-docker-enterprise-status
 	@echo "=== Tearing down ==="

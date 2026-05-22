@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,431 |
+| Total test functions                                  | 10,432 |
 | Unit test functions                                   | 10,177 |
-| E2E test functions                                    |    254 |
+| E2E test functions                                    |    255 |
 | cmd test functions                                    |    639 |
 | Test files (internal/)                                |    436 |
 | Test files (cmd/)                                     |     39 |
-| Test files (test/e2e/suite/)                          |    109 |
+| Test files (test/e2e/suite/)                          |    120 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     19 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  89.6% |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,349 | 89.6% |
+| `TestFunc_Scenario` (2-part)           | 9,350 | 89.6% |
 | `TestFunc` (no underscore)             |   788 |  7.6% |
 | `TestFunc_Scenario_Expected` (3+ part) |   294 |  2.8% |
 
@@ -48,9 +48,9 @@
 | Core packages           |          1,771 |         89 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          7,482 |        335 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            254 |        109 | build-tagged real GitLab integration suite                                                      |
+| E2E integration         |            255 |        120 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            639 |         39 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,431** |    **584** |                                                                                                 |
+| **Total**               |     **10,432** |    **595** |                                                                                                 |
 
 ### Core Packages
 
@@ -317,7 +317,7 @@
 | cmd/gen_llms                    |    27.4% |
 | cmd/gen_readme                  |    34.9% |
 | cmd/gen_testing_docs            |    27.6% |
-| cmd/server                      |    78.5% |
+| cmd/server                      |    78.1% |
 
 ### Core Packages
 
@@ -540,7 +540,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/add_docs** (67.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces** (67.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_action_spec_coverage** (77.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/server** (78.5%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
+- **cmd/server** (78.1%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_test_names** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_docker_tools** (81.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_meta_schema** (82.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
@@ -633,7 +633,7 @@ For Enterprise/Premium E2E coverage, set `ENTERPRISE_LICENSE` in `.env` or the s
 make test-e2e-docker-enterprise
 ```
 
-The Enterprise target runs only tests selected from `test/e2e/suite/*_ee_test.go`. CE/common Docker coverage remains in `make test-e2e-docker`, and Enterprise-specific fixture behavior can be tuned independently. Set `E2E_DOCKER_ENTERPRISE_RUN` to override the generated `go test -run` selector for focused retries.
+The Enterprise target runs with the `e2e enterprise` build tags, so common harness files plus `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests are compiled and executed. CE-only tests live in `test/e2e/suite/*_ce_test.go` and remain in `make test-e2e-docker`, while Enterprise-specific fixture behavior can be tuned independently.
 
 Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 
