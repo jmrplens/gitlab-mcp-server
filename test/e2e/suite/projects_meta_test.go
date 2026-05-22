@@ -224,7 +224,9 @@ func TestMeta_ProjectCore(t *testing.T) {
 // management through the gitlab_project meta-tool. Project service accounts are
 // Premium/Ultimate-only, so CE runs return before making GitLab calls.
 func TestMeta_ProjectServiceAccounts(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
@@ -370,7 +372,9 @@ func TestMeta_ProjectServiceAccounts(t *testing.T) {
 // TestMeta_ProjectSecuritySettings exercises Ultimate project security settings
 // get/update actions through the gitlab_project meta-tool.
 func TestMeta_ProjectSecuritySettings(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
@@ -1171,7 +1175,9 @@ func TestMeta_ProjectPages(t *testing.T) {
 
 // TestMeta_ProjectMirroring tests pull mirror and housekeeping actions.
 func TestMeta_ProjectMirroring(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

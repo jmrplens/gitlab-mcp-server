@@ -51,6 +51,8 @@ if cached_license_present():
 
 value = clean(os.environ.get("GITLAB_ACTIVATION_CODE", ""))
 if not activation_pattern.fullmatch(value):
+    value = clean(os.environ.get("ENTERPRISE_LICENSE", ""))
+if not activation_pattern.fullmatch(value):
     values = dotenv_values()
     value = values.get("GITLAB_ACTIVATION_CODE", "")
     if not activation_pattern.fullmatch(value):

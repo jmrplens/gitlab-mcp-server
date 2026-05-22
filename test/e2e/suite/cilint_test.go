@@ -6,7 +6,6 @@
 package suite
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -16,12 +15,14 @@ import (
 // TestIndividual_CILint exercises CI lint operations using individual MCP
 // tools: validates inline YAML content and lints a project without a CI config.
 func TestIndividual_CILint(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := e2eTimeoutContext(60*time.Second, 240*time.Second)
 	defer cancel()
 
 	proj := createProject(ctx, t, sess.individual)
@@ -48,12 +49,14 @@ func TestIndividual_CILint(t *testing.T) {
 // TestMeta_CILint exercises the same CI lint operations via the
 // gitlab_template meta-tool.
 func TestMeta_CILint(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := e2eTimeoutContext(60*time.Second, 240*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)

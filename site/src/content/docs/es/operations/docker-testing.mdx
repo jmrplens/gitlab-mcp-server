@@ -28,11 +28,13 @@ make test-e2e-docker
 
 Ese objetivo orquesta el stack Docker, espera a GitLab, configura el usuario y el runner de pruebas, ejecuta la suite E2E de Go con el build tag `e2e`, y escribe reportes JUnit y JSON.
 
-Para ejecutar la misma suite contra GitLab EE con herramientas Enterprise/Premium activadas, define `ENTERPRISE_LICENSE` en `.env` o en la shell y usa:
+Para ejecutar la cobertura Enterprise/Premium contra GitLab EE, define `ENTERPRISE_LICENSE` en `.env` o en la shell y usa:
 
 ```bash
 make test-e2e-docker-enterprise
 ```
+
+Ese objetivo ejecuta solo los tests seleccionados desde `test/e2e/suite/*_ee_test.go`, asi la cobertura CE/comun queda en `make test-e2e-docker` y las fixtures Enterprise pueden ajustarse de forma independiente. Define `E2E_DOCKER_ENTERPRISE_RUN` para sustituir el selector `go test -run` generado en un retry focalizado.
 
 Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecucion correcta exporta la licencia reutilizable generada a `test/e2e/.enterprise-license`. Las siguientes ejecuciones Enterprise prefieren ese cache local ignorado por Git y lo instalan mediante la License API, asi no consumen otra vez el activation code.
 

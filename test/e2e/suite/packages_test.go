@@ -23,7 +23,9 @@ func i64soi(v int64) toolutil.StringOrInt {
 // TestPackages exercises the package registry lifecycle: publish, list, file-list,
 // download, file-delete, and package-delete through both individual and meta-tool sessions.
 func TestPackages(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	ctx := context.Background()
 
 	proj := createProject(ctx, t, sess.individual)
@@ -65,7 +67,10 @@ func testIndividualPackageLifecycle(ctx context.Context, t *testing.T, proj Proj
 	})
 
 	t.Run("Individual/FileList", func(t *testing.T) {
-		assertIndividualPackageFileListed(ctx, t, proj, fixture, packageID)
+		listedFileID := assertIndividualPackageFileListed(ctx, t, proj, fixture, packageID)
+		if sess.enterprise {
+			packageFileID = listedFileID
+		}
 	})
 
 	t.Run("Individual/Download", func(t *testing.T) {
@@ -114,7 +119,7 @@ func assertIndividualPackageListed(ctx context.Context, t *testing.T, proj Proje
 	t.Fatalf("package %q not found in list", fixture.pkgName)
 }
 
-func assertIndividualPackageFileListed(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture, packageID int64) {
+func assertIndividualPackageFileListed(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture, packageID int64) int64 {
 	t.Helper()
 	out, err := callToolOn[packages.FileListOutput](ctx, sess.individual, "gitlab_package_file_list", packages.FileListInput{
 		ProjectID: proj.pidOf(),
@@ -129,6 +134,7 @@ func assertIndividualPackageFileListed(ctx context.Context, t *testing.T, proj P
 	if out.Files[0].FileName != fixture.fileName {
 		t.Fatalf("expected file %q, got %q", fixture.fileName, out.Files[0].FileName)
 	}
+	return out.Files[0].PackageFileID
 }
 
 func downloadIndividualPackage(ctx context.Context, t *testing.T, proj ProjectFixture, fixture packageLifecycleFixture) {
@@ -225,6 +231,9 @@ func testMetaPackageLifecycle(ctx context.Context, t *testing.T, projM ProjectFi
 		}
 		if len(out.Files) == 0 {
 			t.Fatal("expected at least one file (meta)")
+		}
+		if sess.enterprise {
+			mFileID = out.Files[0].PackageFileID
 		}
 	})
 

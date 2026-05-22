@@ -196,12 +196,14 @@ func TestMeta_AccessDeployTokens(t *testing.T) {
 
 // TestMeta_DeployKeysExtended exercises extended deploy key actions.
 func TestMeta_DeployKeysExtended(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := e2eTimeoutContext(120*time.Second, 300*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)

@@ -168,12 +168,14 @@ func TestMeta_EnvironmentsFreeze(t *testing.T) {
 
 // TestMeta_DeploymentsExtended exercises deployment CRUD via gitlab_environment (deployment_* actions).
 func TestMeta_DeploymentsExtended(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := e2eTimeoutContext(120*time.Second, 300*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)

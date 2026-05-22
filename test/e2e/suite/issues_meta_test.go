@@ -939,7 +939,9 @@ func setupIterationFixture(ctx context.Context, t *testing.T) (iterationFixture,
 // TestMeta_IssueWorkItems exercises the work_item_* actions on gitlab_issue
 // meta-tool: create → list → get → update → delete. Requires Enterprise license.
 func TestMeta_IssueWorkItems(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}

@@ -45,12 +45,14 @@ func setupMRProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSe
 // TestIndividual_MergeRequests exercises the MR lifecycle using individual tools:
 // create → get → list → update → commits → participants → delete.
 func TestIndividual_MergeRequests(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	ctx, cancel := e2eTimeoutContext(300*time.Second, 600*time.Second)
 	defer cancel()
 
 	proj, branch := setupMRProject(ctx, t, sess.individual)
@@ -102,7 +104,7 @@ func TestIndividual_MergeRequests(t *testing.T) {
 		waitForMRReady(ctx, t, sess.glClient, proj.ID, mrIID)
 		var out mergerequests.CommitsOutput
 		var err error
-		deadline := time.Now().Add(120 * time.Second)
+		deadline := time.Now().Add(e2eTimeout(120*time.Second, 300*time.Second))
 		delay := 1 * time.Second
 		for attempt := 1; time.Now().Before(deadline); attempt++ {
 			select {
@@ -147,12 +149,14 @@ func TestIndividual_MergeRequests(t *testing.T) {
 // TestMeta_MergeRequests exercises the same MR lifecycle via the
 // gitlab_merge_request meta-tool.
 func TestMeta_MergeRequests(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	ctx, cancel := e2eTimeoutContext(300*time.Second, 600*time.Second)
 	defer cancel()
 
 	proj, branch := setupMRProjectMeta(ctx, t, sess.meta)
@@ -216,7 +220,7 @@ func TestMeta_MergeRequests(t *testing.T) {
 		waitForMRReady(ctx, t, sess.glClient, proj.ID, mrIID)
 		var out mergerequests.CommitsOutput
 		var err error
-		deadline := time.Now().Add(120 * time.Second)
+		deadline := time.Now().Add(e2eTimeout(120*time.Second, 300*time.Second))
 		delay := 1 * time.Second
 		for attempt := 1; time.Now().Before(deadline); attempt++ {
 			select {

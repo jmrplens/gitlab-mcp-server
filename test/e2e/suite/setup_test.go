@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"slices"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Format strings and test file constants used across E2E test helpers.
@@ -760,6 +762,9 @@ func permanentlyDeleteProject(client *gitlabclient.Client, p *gl.Project) {
 	// Step 1: mark for deletion (may already be marked → ignore 400 errors).
 	_, err := client.GL().Projects.DeleteProject(p.ID, nil)
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return
+		}
 		errMsg := err.Error()
 		if !strings.Contains(errMsg, "already being deleted") && !strings.Contains(errMsg, "marked for deletion") {
 			log.Printf("e2e: cleanup: failed to mark orphan %q (ID=%d) for deletion: %v", p.PathWithNamespace, p.ID, err)
@@ -772,6 +777,8 @@ func permanentlyDeleteProject(client *gitlabclient.Client, p *gl.Project) {
 	path := p.PathWithNamespace
 	if getErr == nil && updated != nil {
 		path = updated.PathWithNamespace
+	} else if toolutil.IsHTTPStatus(getErr, http.StatusNotFound) {
+		return
 	}
 
 	_, err = client.GL().Projects.DeleteProject(p.ID, &gl.DeleteProjectOptions{
@@ -779,6 +786,9 @@ func permanentlyDeleteProject(client *gitlabclient.Client, p *gl.Project) {
 		FullPath:          &path,
 	})
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return
+		}
 		log.Printf("e2e: cleanup: failed to permanently delete orphan %q (ID=%d): %v", p.PathWithNamespace, p.ID, err)
 	} else {
 		log.Printf("e2e: cleanup: permanently deleted orphan project %q (ID=%d)", p.PathWithNamespace, p.ID)

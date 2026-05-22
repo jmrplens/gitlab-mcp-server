@@ -168,7 +168,7 @@ func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSess
 		if err == nil {
 			return out, false, "", nil
 		}
-		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err)
+		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err) || enterpriseProjectCreateRetryable(err)
 		return out, retryable, "name collision or transient network error", err
 	})
 	requireNoError(t, err, "create project fixture")
@@ -226,7 +226,7 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 		if err == nil {
 			return out, false, "", nil
 		}
-		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err)
+		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err) || enterpriseProjectCreateRetryable(err)
 		return out, retryable, "name collision or transient network error", err
 	})
 	requireNoError(t, err, "create project fixture (meta)")
@@ -262,6 +262,14 @@ func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSes
 	t.Helper()
 	//nolint:contextcheck // Legacy wrapper owns per-test cleanup through NewE2EContext; operation calls still receive ctx.
 	return CreateProjectMeta(ctx, NewE2EContext(t), session)
+}
+
+func enterpriseProjectCreateRetryable(err error) bool {
+	if err == nil || !sess.enterprise {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "Failed to create repository") || strings.Contains(message, "Internal API error (502)")
 }
 
 // CreateGroupMeta creates a group via the gitlab_group meta-tool and registers
@@ -560,7 +568,7 @@ func waitForBranch(ctx context.Context, client *gitlabclient.Client, projectID i
 	}
 	pid := int(projectID)
 
-	const maxWait = 90 * time.Second
+	maxWait := e2eTimeout(90*time.Second, 240*time.Second)
 	pollCtx, cancel := context.WithTimeout(ctx, maxWait)
 	defer cancel()
 
@@ -617,7 +625,7 @@ func waitForMRReadyState(ctx context.Context, client *gitlabclient.Client, proje
 	if client == nil {
 		return nil
 	}
-	const maxWait = 120 * time.Second
+	maxWait := e2eTimeout(120*time.Second, 300*time.Second)
 	pollCtx, cancel := context.WithTimeout(ctx, maxWait)
 	defer cancel()
 

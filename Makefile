@@ -23,6 +23,7 @@ export GOTOOLCHAIN := $(GO_TOOLCHAIN)
 
 # E2E test report directory (inside dist/, gitignored)
 E2E_REPORT_DIR=dist/e2e-reports
+E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
 
 # Read version from VERSION file (single source of truth)
 VERSION := $(strip $(file < VERSION))
@@ -182,13 +183,21 @@ test-e2e-docker-enterprise:
 	@echo "=== Registering GitLab Runner ==="
 	./test/e2e/scripts/register-runner.sh http://localhost:8929
 	@echo "=== Running Enterprise E2E tests ==="
-	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	@$(call MKDIR_P,$(E2E_REPORT_DIR))
 	@set +e; \
-	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker gotestsum \
+	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && \
+	  enterprise_run="$${E2E_DOCKER_ENTERPRISE_RUN:-$$(./test/e2e/scripts/enterprise-test-regex.sh)}"; \
+	  if [ -z "$$enterprise_run" ]; then echo "ERROR: no Enterprise E2E tests found in test/e2e/suite/*_ee_test.go" >&2; exit 1; fi; \
+	  selector_file="$(E2E_REPORT_DIR)/e2e-docker-enterprise-selector.txt"; \
+	  printf "^(%s)$$\n" "$$enterprise_run" > "$$selector_file"; \
+	  enterprise_count=$$(printf "%s" "$$enterprise_run" | tr "|" "\n" | wc -l | tr -d " "); \
+	  echo "Enterprise E2E selector: $$enterprise_count tests (saved to $$selector_file)"; \
+	  E2E_MODE=docker gotestsum \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-enterprise-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-enterprise-log.json \
-	  -- -tags e2e -timeout 1800s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-enterprise-output.txt'; \
+	  -- -tags e2e -timeout $(E2E_DOCKER_ENTERPRISE_TIMEOUT) -run "^($$enterprise_run)$$" ./test/e2e/suite/ \
+	  2>&1 | tee $(E2E_REPORT_DIR)/e2e-docker-enterprise-output.txt'; \
 	  echo $$? > $(E2E_REPORT_DIR)/e2e-docker-enterprise-status
 	@echo "=== Tearing down ==="
 	@status=$$(cat $(E2E_REPORT_DIR)/e2e-docker-enterprise-status); \

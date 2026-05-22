@@ -633,6 +633,8 @@ For Enterprise/Premium E2E coverage, set `ENTERPRISE_LICENSE` in `.env` or the s
 make test-e2e-docker-enterprise
 ```
 
+The Enterprise target runs only tests selected from `test/e2e/suite/*_ee_test.go`. CE/common Docker coverage remains in `make test-e2e-docker`, and Enterprise-specific fixture behavior can be tuned independently. Set `E2E_DOCKER_ENTERPRISE_RUN` to override the generated `go test -run` selector for focused retries.
+
 Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 
 #### Test Reports

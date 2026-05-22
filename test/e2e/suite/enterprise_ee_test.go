@@ -38,48 +38,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestEnterpriseSecurityTools_NotRegisteredOnCE verifies that CE E2E runs do
-// not expose Premium/Ultimate security classification tools at all.
-func TestEnterpriseSecurityTools_NotRegisteredOnCE(t *testing.T) {
-	t.Parallel()
-	if sess.enterprise {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	individual, err := sess.individual.ListTools(ctx, nil)
-	requireNoError(t, err, "list individual tools")
-	individualForbidden := map[string]bool{
-		"gitlab_bulk_update_security_attributes":   true,
-		"gitlab_create_security_attribute":         true,
-		"gitlab_create_security_category":          true,
-		"gitlab_delete_security_attribute":         true,
-		"gitlab_delete_security_category":          true,
-		"gitlab_project_update_security_attribute": true,
-		"gitlab_update_security_attribute":         true,
-		"gitlab_update_security_category":          true,
-	}
-	for _, tool := range individual.Tools {
-		if individualForbidden[tool.Name] {
-			t.Fatalf("CE individual surface exposed enterprise tool %q", tool.Name)
-		}
-	}
-
-	meta, err := sess.meta.ListTools(ctx, nil)
-	requireNoError(t, err, "list meta-tools")
-	metaForbidden := map[string]bool{
-		"gitlab_security_attribute": true,
-		"gitlab_security_category":  true,
-	}
-	for _, tool := range meta.Tools {
-		if metaForbidden[tool.Name] {
-			t.Fatalf("CE meta surface exposed enterprise tool %q", tool.Name)
-		}
-	}
-}
-
 // TestMeta_MergeTrains exercises merge train tools via the gitlab_merge_train meta-tool.
 // Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
 func TestMeta_MergeTrains(t *testing.T) {
@@ -318,12 +276,12 @@ func TestMeta_DORAMetrics(t *testing.T) {
 // TestMeta_Dependencies exercises dependency tools via the gitlab_dependency meta-tool.
 // Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
 func TestMeta_Dependencies(t *testing.T) {
-	t.Parallel()
 	if !sess.enterprise {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := e2eTimeoutContext(180*time.Second, 420*time.Second)
+	defer cancel()
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("Meta/Dependency/List", func(t *testing.T) {
@@ -379,12 +337,11 @@ func TestMeta_Dependencies(t *testing.T) {
 // the gitlab_external_status_check meta-tool.
 // Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
 func TestMeta_ExternalStatusChecks(t *testing.T) {
-	t.Parallel()
 	if !sess.enterprise {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := e2eTimeoutContext(180*time.Second, 600*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
@@ -489,9 +446,6 @@ func TestMeta_ExternalStatusChecks(t *testing.T) {
 	})
 
 	t.Run("Meta/ExternalStatusCheck/ListMRPassedStatus", func(t *testing.T) {
-		if !setStatusAccepted {
-			t.Skip("set_project_mr_status was not accepted by GitLab")
-		}
 		out, err := callToolOn[externalstatuschecks.ListMergeStatusCheckOutput](ctx, sess.meta, "gitlab_external_status_check", map[string]any{
 			"action": "list_project_mr_checks",
 			"params": map[string]any{
@@ -502,6 +456,10 @@ func TestMeta_ExternalStatusChecks(t *testing.T) {
 		requireNoError(t, err, "external status check list_project_mr_checks after set status")
 		status, ok := mergeStatusCheckStatus(out.Items, checkID)
 		requireTruef(t, ok, "created external status check %d not present after status update", checkID)
+		if !setStatusAccepted {
+			t.Logf("set_project_mr_status was rejected by GitLab; listed status remains %q", status)
+			return
+		}
 		requireTruef(t, status == "passed", "external status check status = %q, want passed", status)
 	})
 

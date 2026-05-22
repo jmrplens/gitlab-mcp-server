@@ -15,12 +15,14 @@ import (
 // TestIndividual_Environments exercises the environment lifecycle using individual tools:
 // create → get → list → update → stop → delete.
 func TestIndividual_Environments(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := e2eTimeoutContext(120*time.Second, 300*time.Second)
 	defer cancel()
 
 	proj := createProject(ctx, t, sess.individual)

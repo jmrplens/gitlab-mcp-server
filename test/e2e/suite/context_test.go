@@ -17,6 +17,10 @@ import (
 // defaultCleanupTimeout bounds per-test resource cleanup during t.Cleanup.
 const defaultCleanupTimeout = 60 * time.Second
 
+// enterpriseCleanupTimeout gives GitLab EE Docker more time to delete projects
+// and groups after resource-heavy Enterprise tests.
+const enterpriseCleanupTimeout = 180 * time.Second
+
 // E2EContext carries per-test E2E sessions, identity, and cleanup ownership.
 type E2EContext struct {
 	T        *testing.T
@@ -41,7 +45,11 @@ func NewE2EContext(t *testing.T) *E2EContext {
 	}
 
 	t.Cleanup(func() {
-		ctx, cancel := cleanupContext(defaultCleanupTimeout)
+		timeout := defaultCleanupTimeout
+		if sess.enterprise {
+			timeout = enterpriseCleanupTimeout
+		}
+		ctx, cancel := cleanupContext(timeout)
 		defer cancel()
 		e2e.Ledger.CleanupAll(ctx, t)
 	})
@@ -52,6 +60,21 @@ func NewE2EContext(t *testing.T) *E2EContext {
 // cleanupContext creates the bounded background context used by cleanup hooks.
 func cleanupContext(timeout time.Duration) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), timeout)
+}
+
+// e2eTimeout returns base outside Enterprise mode and enterprise in Enterprise
+// mode. It keeps CE timing unchanged while giving EE-only runs enough budget
+// for slower repository, MR, and CI convergence.
+func e2eTimeout(base, enterprise time.Duration) time.Duration {
+	if sess.enterprise && enterprise > base {
+		return enterprise
+	}
+	return base
+}
+
+// e2eTimeoutContext creates a background timeout context using [e2eTimeout].
+func e2eTimeoutContext(base, enterprise time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), e2eTimeout(base, enterprise))
 }
 
 // Individual returns the individual-tool MCP session or skips the test.

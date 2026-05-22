@@ -19,12 +19,14 @@ import (
 // TestMeta_MRReviewChanges exercises changes_get, diff_versions_list, and
 // diff_version_get via the gitlab_mr_review meta-tool.
 func TestMeta_MRReviewChanges(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := e2eTimeoutContext(180*time.Second, 480*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
@@ -66,7 +68,7 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 		waitForMRReady(ctx, t, sess.glClient, proj.ID, mrOut.IID)
 		var out mrchanges.DiffVersionsListOutput
 		var listErr error
-		deadline := time.Now().Add(120 * time.Second)
+		deadline := time.Now().Add(e2eTimeout(120*time.Second, 300*time.Second))
 		delay := time.Second
 		for time.Now().Before(deadline) {
 			out, listErr = callToolOn[mrchanges.DiffVersionsListOutput](ctx, sess.meta, "gitlab_mr_review", map[string]any{

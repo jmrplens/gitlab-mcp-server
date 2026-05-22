@@ -29,7 +29,9 @@ wait-job:
 // individual and meta-tool sessions. Creates a pipeline, waits for it via the
 // MCP wait tool (not the direct API helper), then waits for each job.
 func TestWaitTools(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	RunWithCapabilities(t, []Capability{CapabilityRunner}, func(_ *E2EContext) {
 		ctx, cancel := waitToolContext(t)
 		defer cancel()
@@ -173,9 +175,13 @@ func waitMetaPipeline(ctx context.Context, t *testing.T, projM ProjectFixture, p
 	t.Helper()
 	t.Run("Meta/PipelineWait", func(t *testing.T) {
 		drainSidekiq(ctx, t, sess.glClient)
+		timeoutSeconds := 600
+		if sess.enterprise {
+			timeoutSeconds = 1200
+		}
 		out, err := callToolOn[pipelines.WaitOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 			"action": "wait",
-			"params": map[string]any{"project_id": projM.pidStr(), "pipeline_id": pipelineID, "interval_seconds": 5, "timeout_seconds": 600, "fail_on_error": false},
+			"params": map[string]any{"project_id": projM.pidStr(), "pipeline_id": pipelineID, "interval_seconds": 5, "timeout_seconds": timeoutSeconds, "fail_on_error": false},
 		})
 		if err != nil {
 			t.Fatalf("meta pipeline wait: %v", err)
@@ -206,9 +212,13 @@ func firstMetaPipelineJob(ctx context.Context, t *testing.T, projM ProjectFixtur
 func waitMetaJob(ctx context.Context, t *testing.T, projM ProjectFixture, jobID int64) {
 	t.Helper()
 	t.Run("Meta/JobWait", func(t *testing.T) {
+		timeoutSeconds := 180
+		if sess.enterprise {
+			timeoutSeconds = 900
+		}
 		out, err := callToolOn[jobs.WaitOutput](ctx, sess.meta, "gitlab_job", map[string]any{
 			"action": "wait",
-			"params": map[string]any{"project_id": projM.pidStr(), "job_id": jobID, "interval_seconds": 5, "timeout_seconds": 180, "fail_on_error": false},
+			"params": map[string]any{"project_id": projM.pidStr(), "job_id": jobID, "interval_seconds": 5, "timeout_seconds": timeoutSeconds, "fail_on_error": false},
 		})
 		if err != nil {
 			t.Fatalf("meta job wait: %v", err)

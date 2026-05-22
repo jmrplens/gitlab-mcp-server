@@ -18,12 +18,14 @@ import (
 
 // TestMeta_GroupVariables exercises group CI variable CRUD via the gitlab_ci_variable meta-tool.
 func TestMeta_GroupVariables(t *testing.T) {
-	t.Parallel()
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	if !sess.enterprise {
+		t.Parallel()
+	}
+	ctx, cancel := e2eTimeoutContext(120*time.Second, 300*time.Second)
 	defer cancel()
 
 	// Create a dedicated group for this test.
-	groupPath := fmt.Sprintf("e2e-grpvar-%d", time.Now().UnixMilli())
+	groupPath := uniqueName("e2e-grpvar")
 	grp, grpErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 		"action": "create",
 		"params": map[string]any{
@@ -46,7 +48,7 @@ func TestMeta_GroupVariables(t *testing.T) {
 	})
 
 	gid := strconv.FormatInt(groupID, 10)
-	varKey := "E2E_GROUP_VAR"
+	varKey := fmt.Sprintf("E2E_GROUP_VAR_%d", time.Now().UnixNano())
 
 	t.Run("Meta/GroupVariable/Create", func(t *testing.T) {
 		out, err := callToolOn[groupvariables.Output](ctx, sess.meta, "gitlab_ci_variable", map[string]any{

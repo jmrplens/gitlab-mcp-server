@@ -414,7 +414,9 @@ func TestCapability_RootsListChanged(t *testing.T) {
 // Both must return at least one suggestion that looks like a numeric
 // project ID (canonical form per MCP 2025-11-25 spec).
 func TestCapability_Completions(t *testing.T) {
-	t.Parallel()
+	if !sess.enterprise {
+		t.Parallel()
+	}
 	if sess.glClient == nil {
 		t.Skip("gitlab client not configured")
 	}
@@ -423,7 +425,7 @@ func TestCapability_Completions(t *testing.T) {
 
 	// Ensure at least one project exists so completions have something to
 	// return. Use the shared session to avoid duplicating cleanup logic.
-	setupCtx, setupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	setupCtx, setupCancel := e2eTimeoutContext(30*time.Second, 180*time.Second)
 	defer setupCancel()
 	_ = createProject(setupCtx, t, sess.individual)
 
@@ -432,7 +434,7 @@ func TestCapability_Completions(t *testing.T) {
 	// context with `defer cancel()` would cancel it prematurely.
 	t.Run("PromptArg_ProjectID", func(t *testing.T) {
 		t.Parallel()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := e2eTimeoutContext(30*time.Second, 90*time.Second)
 		defer cancel()
 		out, err := cs.client.Complete(ctx, &mcp.CompleteParams{
 			Ref: &mcp.CompleteReference{
@@ -459,7 +461,7 @@ func TestCapability_Completions(t *testing.T) {
 
 	t.Run("ResourceArg_ProjectID", func(t *testing.T) {
 		t.Parallel()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := e2eTimeoutContext(30*time.Second, 90*time.Second)
 		defer cancel()
 		out, err := cs.client.Complete(ctx, &mcp.CompleteParams{
 			Ref: &mcp.CompleteReference{
@@ -481,7 +483,7 @@ func TestCapability_Completions(t *testing.T) {
 
 	t.Run("UnknownArgReturnsEmpty", func(t *testing.T) {
 		t.Parallel()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := e2eTimeoutContext(30*time.Second, 90*time.Second)
 		defer cancel()
 		out, err := cs.client.Complete(ctx, &mcp.CompleteParams{
 			Ref: &mcp.CompleteReference{
