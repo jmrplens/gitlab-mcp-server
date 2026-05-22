@@ -415,6 +415,34 @@ func TestPATAPIErrors(t *testing.T) {
 	}
 }
 
+// TestPATTokenIDHint verifies ambiguous token lookup failures guide callers to
+// use the PAT ID rather than the service account user ID.
+func TestPATTokenIDHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	for _, tt := range []struct {
+		name string
+		call func() error
+	}{
+		{name: "rotate", call: func() error {
+			_, err := RotatePAT(context.Background(), client, RotatePATInput{ProjectID: "42", ServiceAccountID: 7, TokenID: 7})
+			return err
+		}},
+		{name: "revoke", call: func() error {
+			return RevokePAT(context.Background(), client, RevokePATInput{ProjectID: "42", ServiceAccountID: 7, TokenID: 7})
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call()
+			for _, want := range []string{"token_id", "service_account_id", "service_account_pat_list", "service_account_pat_create"} {
+				assertErrorContains(t, err, want)
+			}
+		})
+	}
+}
+
 // TestActionSpecs verifies project service account catalog metadata and route
 // execution through ActionSpecs.
 func TestActionSpecs(t *testing.T) {
