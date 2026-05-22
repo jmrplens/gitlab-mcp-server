@@ -783,12 +783,32 @@ func TestMeta_CompliancePolicy(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Meta/CompliancePolicy/Get", func(t *testing.T) {
-		_, err := callToolOn[compliancepolicy.Output](ctx, sess.meta, "gitlab_compliance_policy", map[string]any{
+		out, err := callToolOn[compliancepolicy.Output](ctx, sess.meta, "gitlab_compliance_policy", map[string]any{
 			"action": "get",
 			"params": map[string]any{},
 		})
 		requirePremiumFeature(t, err, "compliance policy")
-		t.Log("Compliance policy get OK")
+		if out.CSPNamespaceID == nil {
+			t.Log("Compliance policy CSP namespace is not set")
+			return
+		}
+		t.Logf("Compliance policy CSP namespace: %d", *out.CSPNamespaceID)
+	})
+
+	t.Run("Meta/CompliancePolicy/UpdateMissingNamespace", func(t *testing.T) {
+		_, err := callToolOn[compliancepolicy.Output](ctx, sess.meta, "gitlab_compliance_policy", map[string]any{
+			"action": "update",
+			"params": map[string]any{},
+		})
+		requireErrorContainsAll(t, err, "csp_namespace_id", "required")
+	})
+
+	t.Run("Meta/CompliancePolicy/UpdateInvalidNamespace", func(t *testing.T) {
+		_, err := callToolOn[compliancepolicy.Output](ctx, sess.meta, "gitlab_compliance_policy", map[string]any{
+			"action": "update",
+			"params": map[string]any{"csp_namespace_id": int64(999999999)},
+		})
+		requireErrorContainsAll(t, err, "csp_namespace_id", "top-level group", "lock")
 	})
 }
 

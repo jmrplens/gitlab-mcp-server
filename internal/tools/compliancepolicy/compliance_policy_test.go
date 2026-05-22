@@ -129,12 +129,12 @@ func TestUpdate(t *testing.T) {
 			wantCSP: 456,
 		},
 		{
-			name:  "updates with nil csp_namespace_id",
+			name:  "rejects nil csp_namespace_id",
 			input: UpdateInput{CSPNamespaceID: nil},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				testutil.RespondJSON(w, http.StatusOK, `{}`)
+				t.Fatal("handler should not be called for nil csp_namespace_id")
 			}),
-			wantNilCSP: true,
+			wantErr: true,
 		},
 		{
 			name:  "updates with zero value csp_namespace_id",
@@ -201,6 +201,26 @@ func TestUpdate(t *testing.T) {
 				t.Errorf("CSPNamespaceID = %d, want %d", *out.CSPNamespaceID, tt.wantCSP)
 			}
 		})
+	}
+}
+
+// TestUpdate_BadRequestHint verifies that invalid CSP namespace IDs return
+// actionable guidance about top-level groups and GitLab's update lock.
+func TestUpdate_BadRequestHint(t *testing.T) {
+	nsID := int64(999)
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"error":"csp_namespace_id is invalid"}`)
+	}))
+
+	_, err := Update(context.Background(), client, UpdateInput{CSPNamespaceID: &nsID})
+	if err == nil {
+		t.Fatal("expected error for invalid csp_namespace_id")
+	}
+	errText := err.Error()
+	for _, want := range []string{"csp_namespace_id", "top-level group", "lock"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
 	}
 }
 

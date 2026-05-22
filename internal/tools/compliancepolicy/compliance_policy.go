@@ -2,6 +2,7 @@ package compliancepolicy
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -45,12 +46,19 @@ func Update(ctx context.Context, client *gitlabclient.Client, in UpdateInput) (O
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
+	if in.CSPNamespaceID == nil {
+		return Output{}, errors.New("csp_namespace_id is required; GitLab rejects empty compliance policy update requests")
+	}
 
 	opts := &gl.UpdateAdminCompliancePolicySettingsOptions{
 		CSPNamespaceID: in.CSPNamespaceID,
 	}
 	result, _, err := client.GL().AdminCompliancePolicySettings.UpdateCompliancePolicySettings(opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return Output{}, toolutil.WrapErrWithHint("update compliance policy settings", err,
+				"csp_namespace_id must be an existing top-level group namespace; GitLab may lock CSP namespace changes for several minutes after each update")
+		}
 		return Output{}, toolutil.WrapErrWithStatusHint("update compliance policy settings", err, http.StatusForbidden, "updating compliance policies requires Ultimate license and Owner role")
 	}
 
