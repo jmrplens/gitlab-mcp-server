@@ -34,6 +34,8 @@ To run the same suite against GitLab EE with Enterprise/Premium tools enabled, s
 make test-e2e-docker-enterprise
 ```
 
+When `ENTERPRISE_LICENSE` contains a 24-character activation code, the first successful run exports the generated reusable license key to `test/e2e/.enterprise-license`. Later Enterprise runs prefer that ignored local cache and install it through the License API, so they do not need to spend the activation code again.
+
 ## Manual workflow
 
 Use the manual sequence when you need to inspect the GitLab UI or rerun a focused test without recreating the stack every time.

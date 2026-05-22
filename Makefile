@@ -155,12 +155,15 @@ test-e2e-docker:
 	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
 	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
 
-## test-e2e-docker-enterprise: start ephemeral GitLab EE with ENTERPRISE_LICENSE, run E2E tests, tear down
+## test-e2e-docker-enterprise: start ephemeral GitLab EE with cached license, ENTERPRISE_LICENSE, or GITLAB_ACTIVATION_CODE, run E2E tests, tear down
 test-e2e-docker-enterprise:
 	@echo "=== Cleaning up previous containers (if any) ==="
 	GITLAB_IMAGE=$${GITLAB_IMAGE:-gitlab/gitlab-ee:latest} docker compose -f test/e2e/docker-compose.yml down -v 2>/dev/null || true
 	@echo "=== Starting ephemeral GitLab EE ==="
-	GITLAB_IMAGE=$${GITLAB_IMAGE:-gitlab/gitlab-ee:latest} docker compose -f test/e2e/docker-compose.yml up -d
+	@activation_code="$$(./test/e2e/scripts/enterprise-activation-code.sh)"; \
+	  if [ -n "$$activation_code" ]; then echo "    Passing Enterprise activation code to GitLab EE container"; fi; \
+	  if [ -z "$$activation_code" ] && [ -s "$${E2E_ENTERPRISE_LICENSE_FILE:-test/e2e/.enterprise-license}" ]; then echo "    Reusing cached Enterprise license during setup"; fi; \
+	  GITLAB_IMAGE=$${GITLAB_IMAGE:-gitlab/gitlab-ee:latest} GITLAB_ACTIVATION_CODE="$$activation_code" docker compose -f test/e2e/docker-compose.yml up -d
 	@echo "=== Waiting for GitLab readiness ==="
 	./test/e2e/scripts/wait-for-gitlab.sh http://localhost:8929 600
 	@echo "=== Setting up test user, token, and Enterprise license ==="

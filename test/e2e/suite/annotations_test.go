@@ -77,6 +77,9 @@ func isDestructiveIndividualToolName(name string) bool {
 }
 
 func isReadOnlyIndividualToolName(name string) bool {
+	if strings.HasPrefix(name, "gitlab_create_") || strings.HasPrefix(name, "gitlab_update_") || strings.HasPrefix(name, "gitlab_add_") || strings.HasPrefix(name, "gitlab_edit_") || strings.HasPrefix(name, "gitlab_set_") || strings.HasPrefix(name, "gitlab_upload_") {
+		return false
+	}
 	if toolNameHasSuffix(name, []string{"_create", "_update", "_add", "_edit", "_set", "_upload"}) {
 		return false
 	}

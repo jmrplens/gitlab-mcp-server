@@ -108,9 +108,15 @@ assembling the Docker, fixture, preset, and publication commands by hand:
 make eval-surfaces-docker SURFACE=dynamic
 ```
 
-For a full Enterprise Ultimate run, set `ENTERPRISE_LICENSE` in `.env` or the
-shell, then run the Enterprise wrapper target. It uses `gitlab/gitlab-ee:latest`
-by default and writes Enterprise artifacts under the same run directory layout:
+For a full Enterprise Ultimate run, set a 24-character activation code in
+`ENTERPRISE_LICENSE` or `GITLAB_ACTIVATION_CODE` in `.env` or the shell, then run
+the Enterprise wrapper target. Legacy `.gitlab-license` keys can still be stored
+in `ENTERPRISE_LICENSE`. After the first successful activation-code run, the
+setup script exports the generated reusable license key to
+`test/e2e/.enterprise-license` and later Enterprise Docker runs prefer that
+gitignored cache before passing the activation code again. The wrapper uses
+`gitlab/gitlab-ee:latest` by default and writes Enterprise artifacts under the
+same run directory layout:
 
 ```bash
 make eval-surfaces-docker-enterprise SURFACE=dynamic

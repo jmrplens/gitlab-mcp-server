@@ -55,6 +55,9 @@ func TestMeta_EnvironmentsProtected(t *testing.T) {
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 				"name":       envName,
+				"deploy_access_levels": []map[string]any{
+					{"access_level": 40},
+				},
 			},
 		})
 		requireNoError(t, err, "protected_protect")
@@ -66,8 +69,8 @@ func TestMeta_EnvironmentsProtected(t *testing.T) {
 		out, err := callToolOn[protectedenvs.Output](ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "protected_get",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"name":       envName,
+				"project_id":  proj.pidStr(),
+				"environment": envName,
 			},
 		})
 		requireNoError(t, err, "protected_get")
@@ -78,8 +81,8 @@ func TestMeta_EnvironmentsProtected(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_environment", map[string]any{
 			"action": "protected_unprotect",
 			"params": map[string]any{
-				"project_id": proj.pidStr(),
-				"name":       envName,
+				"project_id":  proj.pidStr(),
+				"environment": envName,
 			},
 		})
 		requireNoError(t, err, "protected_unprotect")

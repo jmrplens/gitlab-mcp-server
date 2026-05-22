@@ -113,15 +113,24 @@ timeout 1800s ./test/e2e/scripts/setup-gitlab.sh
 timeout 1800s ./test/e2e/scripts/register-runner.sh
 ```
 
-For Enterprise Ultimate validation, use the EE image and let
-`setup-gitlab.sh` install `ENTERPRISE_LICENSE` without echoing the license:
+For Enterprise Ultimate validation, use the EE image. With a 24-character
+activation code, pass it to the container as `GITLAB_ACTIVATION_CODE` during
+startup. Legacy `.gitlab-license` keys can remain in `ENTERPRISE_LICENSE`; the
+setup script installs those without echoing the license:
 
 ```bash
-timeout 3600s env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
+timeout 3600s env GITLAB_IMAGE=gitlab/gitlab-ee:latest GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" docker compose -f test/e2e/docker-compose.yml up -d
 timeout 1800s ./test/e2e/scripts/wait-for-gitlab.sh
 timeout 1800s GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
 timeout 1800s ./test/e2e/scripts/register-runner.sh
 ```
+
+After an activation-code run succeeds, `setup-gitlab.sh` exports the generated
+license key from GitLab's license usage CSV into `test/e2e/.enterprise-license`
+with owner-only permissions. The Docker Enterprise wrappers prefer that ignored
+cache on later runs and install it through the License API instead of passing the
+activation code again. Remove the cache file when you intentionally want to test
+a fresh activation-code flow.
 
 The evaluator can refresh its own model-evaluation fixtures with
 `--prepare-fixtures`. Some destructive tasks also create just-in-time resources

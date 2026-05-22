@@ -18,6 +18,10 @@ import (
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/epics") {
+			testutil.RespondJSON(w, http.StatusOK, `[`+epicLinkJSON+`]`)
+			return
+		}
 		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/epics/") {
 			testutil.RespondJSON(w, http.StatusOK, `[`+epicLinkJSON+`]`)
 			return

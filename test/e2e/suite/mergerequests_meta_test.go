@@ -9,10 +9,17 @@ package suite
 
 import (
 	"context"
+	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/accesstokens"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/awardemoji"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/labels"
@@ -21,6 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrapprovals"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrcontextcommits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrnotes"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourceevents"
 )
 
@@ -34,7 +42,7 @@ func TestMeta_MRDeep(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
@@ -282,16 +290,7 @@ func TestMeta_MRDeep(t *testing.T) {
 	})
 
 	t.Run("ApprovalReset", func(t *testing.T) {
-		if !sess.enterprise {
-			return
-		}
-		requireTruef(t, mrIID > 0, "mrIID not set")
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_merge_request", map[string]any{
-			"action": "approval_reset",
-			"params": map[string]any{"project_id": proj.pidStr(), "merge_request_iid": mrIID},
-		})
-		requireNoError(t, err, "approval_reset")
-		t.Log("Reset approvals")
+		exerciseApprovalResetWithGroupBot(ctx, t)
 	})
 
 	// ── Context commits ──────────────────────────────────────────────────
@@ -607,4 +606,221 @@ func TestMeta_MRDeep(t *testing.T) {
 		requireNoError(t, err, "cancel_auto_merge")
 		t.Log("cancel_auto_merge completed")
 	})
+}
+
+func exerciseApprovalResetWithGroupBot(ctx context.Context, t *testing.T) {
+	t.Helper()
+	if !sess.enterprise {
+		return
+	}
+
+	gitlabURL := strings.TrimSpace(os.Getenv("GITLAB_URL"))
+	if gitlabURL == "" {
+		t.Skip("GITLAB_URL not set; cannot mint a bot session for approval_reset")
+	}
+
+	approvalGroup := createApprovalResetGroup(ctx, t)
+	approvalProject := createApprovalResetProject(ctx, t, approvalGroup)
+
+	commitFileMeta(ctx, t, sess.meta, approvalProject, defaultBranch, "approval-reset-base.txt", "base", "base commit for approval reset")
+	createBranchMeta(ctx, t, sess.meta, approvalProject, "feature-approval-reset")
+	commitFileMeta(ctx, t, sess.meta, approvalProject, "feature-approval-reset", "approval-reset-feature.txt", "feature", "feature commit for approval reset")
+	approvalMR := createMRMeta(ctx, t, sess.meta, approvalProject, "feature-approval-reset", defaultBranch, "MR for approval reset")
+
+	botToken := createApprovalResetGroupBot(ctx, t, approvalGroup)
+	createApprovalResetBotRule(ctx, t, approvalProject, approvalMR, botToken.UserID)
+
+	botSession, closeBotSession := startApprovalResetBotSession(ctx, t, gitlabURL, botToken.Token)
+	defer closeBotSession()
+
+	drainSidekiq(ctx, t, sess.glClient)
+	waitForMRReady(ctx, t, sess.glClient, approvalProject.ID, approvalMR.IID)
+	approveApprovalResetMR(ctx, t, botSession, approvalProject, approvalMR)
+	resetApprovalResetMR(ctx, t, botSession, approvalProject, approvalMR)
+	assertApprovalResetCleared(ctx, t, approvalProject, approvalMR)
+}
+
+func createApprovalResetGroup(ctx context.Context, t *testing.T) GroupFixture {
+	t.Helper()
+	groupName := uniqueName("approval-reset-grp-")
+	out, err := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name": groupName,
+			"path": groupName,
+		},
+	})
+	requireNoError(t, err, "create group for approval_reset")
+	group := GroupFixture{ID: out.ID, Path: out.FullPath}
+	t.Cleanup(func() {
+		cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancelCleanup()
+		_ = callToolVoidOn(cleanupCtx, sess.meta, "gitlab_group", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"group_id": group.gidStr()},
+		})
+	})
+	return group
+}
+
+func createApprovalResetProject(ctx context.Context, t *testing.T, group GroupFixture) ProjectFixture {
+	t.Helper()
+	projectName := uniqueName(e2eProjectPrefix + "approval-reset-")
+	out, err := callToolOn[projects.Output](ctx, sess.meta, "gitlab_project", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name":                   projectName,
+			"path":                   projectName,
+			"namespace_id":           group.ID,
+			"description":            "E2E meta approval reset project",
+			"visibility":             "private",
+			"initialize_with_readme": true,
+			"default_branch":         defaultBranch,
+		},
+	})
+	requireNoError(t, err, "create group-scoped project for approval_reset")
+	project := ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
+	t.Cleanup(func() {
+		cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancelCleanup()
+		_ = callToolVoidOn(cleanupCtx, sess.meta, "gitlab_project", map[string]any{
+			"action": "delete",
+			"params": map[string]any{
+				"project_id":         project.pidStr(),
+				"permanently_remove": true,
+				"full_path":          project.Path,
+			},
+		})
+	})
+	waitForBranchOn(ctx, t, sess.glClient, project.ID, defaultBranch)
+	return project
+}
+
+func createApprovalResetGroupBot(ctx context.Context, t *testing.T, group GroupFixture) accesstokens.Output {
+	t.Helper()
+	botToken, err := callToolOn[accesstokens.Output](ctx, sess.meta, "gitlab_access", map[string]any{
+		"action": "token_group_create",
+		"params": map[string]any{
+			"group_id":     group.gidStr(),
+			"name":         uniqueName("approval-reset-bot-"),
+			"scopes":       []string{"api"},
+			"expires_at":   time.Now().AddDate(0, 0, 7).Format("2006-01-02"),
+			"access_level": 50,
+		},
+	})
+	requireNoError(t, err, "mint group access token for approval_reset bot")
+	requireTruef(t, botToken.Token != "", "bot token value empty")
+	requireTruef(t, botToken.UserID > 0, "bot token user_id empty")
+	t.Cleanup(func() {
+		cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancelCleanup()
+		_ = callToolVoidOn(cleanupCtx, sess.meta, "gitlab_access", map[string]any{
+			"action": "token_group_revoke",
+			"params": map[string]any{"group_id": group.gidStr(), "token_id": botToken.ID},
+		})
+	})
+	return botToken
+}
+
+func createApprovalResetBotRule(ctx context.Context, t *testing.T, project ProjectFixture, mr MRFixture, botUserID int64) {
+	t.Helper()
+	_, err := retryWithBackoffInterval(ctx, t, "approval_reset rule for group bot", 5, 2*time.Second,
+		func(attempt int) (mrapprovals.RuleOutput, bool, string, error) {
+			rule, callErr := callToolOn[mrapprovals.RuleOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
+				"action": "approval_rule_create",
+				"params": map[string]any{
+					"project_id":         project.pidStr(),
+					"merge_request_iid":  mr.IID,
+					"name":               "approval-reset-bot-rule",
+					"approvals_required": 1,
+					"user_ids":           []int64{botUserID},
+				},
+			})
+			if callErr == nil {
+				return rule, false, "", nil
+			}
+			retryable := isApprovalResetRuleRetryable(callErr)
+			return rule, retryable, "group bot membership propagation", callErr
+		})
+	requireNoError(t, err, "create approval rule for group bot")
+}
+
+func startApprovalResetBotSession(ctx context.Context, t *testing.T, gitlabURL, botToken string) (*mcp.ClientSession, func()) {
+	t.Helper()
+	botClient, err := gitlabclient.NewClientWithToken(gitlabURL, botToken, true)
+	requireNoError(t, err, "build bot GitLab client")
+
+	botServer := mcp.NewServer(&mcp.Implementation{Name: "gitlab-mcp-server-e2e-approval-reset-bot", Version: "test"}, nil)
+	requireNoError(t, tools.RegisterAllMeta(botServer, botClient, sess.enterprise), "RegisterAllMeta on bot server")
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	botCtx, botCancel := context.WithCancel(ctx)
+	go func() { _ = botServer.Run(botCtx, serverTransport) }()
+
+	botSession, err := mcp.NewClient(&mcp.Implementation{Name: "e2e-approval-reset-bot-client", Version: "test"}, nil).Connect(botCtx, clientTransport, nil)
+	requireNoError(t, err, "connect bot MCP client")
+	return botSession, func() {
+		botSession.Close()
+		botCancel()
+	}
+}
+
+func approveApprovalResetMR(ctx context.Context, t *testing.T, botSession *mcp.ClientSession, project ProjectFixture, mr MRFixture) {
+	t.Helper()
+	approveOut, err := retryWithBackoffInterval(ctx, t, "approval_reset bot approval", 5, 2*time.Second,
+		func(attempt int) (mergerequests.ApproveOutput, bool, string, error) {
+			out, callErr := callToolOn[mergerequests.ApproveOutput](ctx, botSession, "gitlab_merge_request", map[string]any{
+				"action": "approve",
+				"params": map[string]any{"project_id": project.pidStr(), "merge_request_iid": mr.IID},
+			})
+			if callErr == nil {
+				return out, false, "", nil
+			}
+			return out, isApprovalResetBotRetryable(callErr), "bot token propagation", callErr
+		})
+	requireNoError(t, err, "approve MR with group bot")
+	requireTruef(t, approveOut.ApprovedBy > 0, "expected group bot approval to be recorded")
+}
+
+func resetApprovalResetMR(ctx context.Context, t *testing.T, botSession *mcp.ClientSession, project ProjectFixture, mr MRFixture) {
+	t.Helper()
+	_, err := retryWithBackoffInterval(ctx, t, "approval_reset (group bot session)", 5, 2*time.Second,
+		func(attempt int) (struct{}, bool, string, error) {
+			callErr := callToolVoidOn(ctx, botSession, "gitlab_merge_request", map[string]any{
+				"action": "approval_reset",
+				"params": map[string]any{"project_id": project.pidStr(), "merge_request_iid": mr.IID},
+			})
+			if callErr == nil {
+				return struct{}{}, false, "", nil
+			}
+			return struct{}{}, isApprovalResetBotRetryable(callErr), "bot token propagation", callErr
+		})
+	requireNoError(t, err, "approval_reset (bot session)")
+}
+
+func assertApprovalResetCleared(ctx context.Context, t *testing.T, project ProjectFixture, mr MRFixture) {
+	t.Helper()
+	cfg, err := callToolOn[mrapprovals.ConfigOutput](ctx, sess.meta, "gitlab_merge_request", map[string]any{
+		"action": "approval_config",
+		"params": map[string]any{"project_id": project.pidStr(), "merge_request_iid": mr.IID},
+	})
+	requireNoError(t, err, "approval_config after approval_reset")
+	requireTruef(t, len(cfg.ApprovedBy) == 0, "expected approval_reset to clear approvals, found %d", len(cfg.ApprovedBy))
+	t.Log("Reset approvals via group bot session")
+}
+
+func isApprovalResetRuleRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "400") || strings.Contains(msg, "403") || strings.Contains(msg, "404") || strings.Contains(msg, "member")
+}
+
+func isApprovalResetBotRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "401") || strings.Contains(msg, "403") || strings.Contains(msg, "404") || strings.Contains(msg, "not found")
 }

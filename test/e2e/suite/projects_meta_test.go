@@ -831,8 +831,8 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 		out, err := callToolOn[projects.ApprovalRuleOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "approval_rule_get",
 			"params": map[string]any{
-				"project_id":       proj.pidStr(),
-				"approval_rule_id": ruleID,
+				"project_id": proj.pidStr(),
+				"rule_id":    ruleID,
 			},
 		})
 		requireNoError(t, err, "approval_rule_get")
@@ -848,7 +848,7 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 			"action": "approval_rule_update",
 			"params": map[string]any{
 				"project_id":         proj.pidStr(),
-				"approval_rule_id":   ruleID,
+				"rule_id":            ruleID,
 				"name":               "E2E Approval Rule Updated",
 				"approvals_required": 2,
 			},
@@ -864,8 +864,8 @@ func TestMeta_ProjectApprovals(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "approval_rule_delete",
 			"params": map[string]any{
-				"project_id":       proj.pidStr(),
-				"approval_rule_id": ruleID,
+				"project_id": proj.pidStr(),
+				"rule_id":    ruleID,
 			},
 		})
 		requireNoError(t, err, "approval_rule_delete")

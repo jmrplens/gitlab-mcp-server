@@ -308,6 +308,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	if resp.Data.Project == nil {
+		if _, _, projectErr := client.GL().Projects.GetProject(input.ProjectPath, nil, gl.WithContext(ctx)); projectErr == nil {
+			return ListOutput{Findings: []FindingItem{}}, nil
+		}
 		return ListOutput{}, fmt.Errorf("list_security_findings: project %q not found", input.ProjectPath)
 	}
 

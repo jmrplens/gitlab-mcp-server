@@ -523,6 +523,9 @@ func UpdateOrder(ctx context.Context, client *gitlabclient.Client, input UpdateI
 			}
 		}
 	}
+	if len(children) == 0 {
+		return List(ctx, client, ListInput{FullPath: input.FullPath, IID: input.IID})
+	}
 
 	return ListOutput{Issues: children}, nil
 }

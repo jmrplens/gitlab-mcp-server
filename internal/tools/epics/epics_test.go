@@ -125,13 +125,13 @@ const (
 // --- List tests ---
 
 // TestList_Success verifies List returns one epic with Type="Epic" when the
-// GraphQL namespace.workItems query responds 200 with a single work item.
+// REST group epics endpoint responds 200 with a single epic.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
+		if r.Method != http.MethodGet {
 			t.Errorf(fmtUnexpMethod, r.Method)
 		}
-		testutil.RespondJSON(w, http.StatusOK, listResponseJSON)
+		testutil.RespondJSON(w, http.StatusOK, `[`+epicLinkJSON+`]`)
 	}))
 	out, err := List(context.Background(), client, ListInput{FullPath: testFullPath})
 	if err != nil {
@@ -140,7 +140,7 @@ func TestList_Success(t *testing.T) {
 	if len(out.Epics) != 1 {
 		t.Fatalf("len(Epics) = %d, want 1", len(out.Epics))
 	}
-	if out.Epics[0].ID != 101 {
+	if out.Epics[0].ID != 201 {
 		t.Errorf(fmtWantID, out.Epics[0].ID)
 	}
 	if out.Epics[0].Type != "Epic" {

@@ -59,9 +59,17 @@ make test-e2e-docker
 ### Docker Enterprise Mode
 
 Enterprise mode uses the same Docker topology with the EE image and a local
-Ultimate license. Store the license in `.env` as `ENTERPRISE_LICENSE` or export
-it in the shell; the setup script installs it without writing the license into
-`test/e2e/.env.docker`.
+Ultimate subscription. Store a 24-character activation code in `.env` as
+`ENTERPRISE_LICENSE` or `GITLAB_ACTIVATION_CODE`, or export it in the shell; the
+Docker target passes activation codes to the GitLab EE container during startup.
+After a successful activation-code run, the setup script exports the generated
+license key to `test/e2e/.enterprise-license` with owner-only permissions. Future
+runs prefer that ignored local cache and install it through the License API, so
+they do not need to spend the activation code again. Delete the cache file to
+force a fresh activation-code flow.
+Legacy `.gitlab-license` keys can still be stored in `ENTERPRISE_LICENSE`; the
+setup script installs those through the License API without writing the secret
+into `test/e2e/.env.docker`.
 
 ```bash
 make test-e2e-docker-enterprise
@@ -70,7 +78,7 @@ make test-e2e-docker-enterprise
 Equivalent manual setup:
 
 ```bash
-env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
+GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
 ./test/e2e/scripts/wait-for-gitlab.sh
 GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
 ./test/e2e/scripts/register-runner.sh

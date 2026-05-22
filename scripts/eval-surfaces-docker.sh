@@ -46,6 +46,62 @@ bool_enabled() {
   esac
 }
 
+dotenv_value() {
+  local key="$1"
+  local file=".env"
+  [[ -f "$file" ]] || return 0
+  KEY="$key" ENV_PATH="$file" python3 -c 'import os
+key = os.environ.get("KEY", "")
+path = os.environ.get("ENV_PATH", "")
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        for raw in handle:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, value = line.split("=", 1)
+            name = name.strip()
+            if name.startswith("export "):
+                name = name.split(None, 1)[1].strip()
+            if name != key:
+                continue
+            print(value.strip().strip("\"").strip(chr(39)))
+            break
+except OSError:
+    pass
+' 2>/dev/null || true
+}
+
+activation_code_value() {
+  if enterprise_license_file_has_value; then
+    return 0
+  fi
+  local value="${GITLAB_ACTIVATION_CODE:-}"
+  if [[ -z "$value" ]]; then
+    value="$(dotenv_value GITLAB_ACTIVATION_CODE)"
+  fi
+  if [[ -z "$value" ]]; then
+    value="$(dotenv_value ENTERPRISE_LICENSE)"
+  fi
+  if [[ "$value" =~ ^[[:alnum:]]{24}$ ]]; then
+    printf '%s' "$value"
+  fi
+}
+
+enterprise_license_file_has_value() {
+  local file="${E2E_ENTERPRISE_LICENSE_FILE:-test/e2e/.enterprise-license}"
+  [[ -f "$file" ]] || return 1
+  python3 - "$file" <<'PY'
+import pathlib
+import sys
+
+try:
+    raise SystemExit(0 if pathlib.Path(sys.argv[1]).read_text(errors="replace").strip() else 1)
+except OSError:
+    raise SystemExit(1)
+PY
+}
+
 surface="${1:-${SURFACE:-}}"
 if [[ -z "$surface" || "$surface" == "-h" || "$surface" == "--help" ]]; then
   usage
@@ -112,7 +168,16 @@ compose=("${compose_command[@]}" -f "$compose_file")
 
 compose_env=()
 if [[ -n "$gitlab_image" ]]; then
-  compose_env=(env "GITLAB_IMAGE=$gitlab_image")
+  export GITLAB_IMAGE="$gitlab_image"
+fi
+if [[ "$enterprise" == "true" ]]; then
+  activation_code="$(activation_code_value)"
+  if [[ -n "$activation_code" ]]; then
+    export GITLAB_ACTIVATION_CODE="$activation_code"
+    printf 'Enterprise activation code: provided to GitLab EE container\n'
+  elif enterprise_license_file_has_value; then
+    printf 'Enterprise license cache: will install cached license during setup\n'
+  fi
 fi
 
 reports=()

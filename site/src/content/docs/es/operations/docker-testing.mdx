@@ -34,6 +34,8 @@ Para ejecutar la misma suite contra GitLab EE con herramientas Enterprise/Premiu
 make test-e2e-docker-enterprise
 ```
 
+Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecucion correcta exporta la licencia reutilizable generada a `test/e2e/.enterprise-license`. Las siguientes ejecuciones Enterprise prefieren ese cache local ignorado por Git y lo instalan mediante la License API, asi no consumen otra vez el activation code.
+
 ## Flujo manual
 
 Usa la secuencia manual cuando necesites inspeccionar la UI de GitLab o relanzar un test concreto sin recrear el stack cada vez.

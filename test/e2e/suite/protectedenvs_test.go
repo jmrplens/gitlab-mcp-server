@@ -32,6 +32,9 @@ func TestMeta_ProtectedEnvs(t *testing.T) {
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 				"name":       envName,
+				"deploy_access_levels": []map[string]any{
+					{"access_level": 40},
+				},
 			},
 		})
 		requireNoError(t, err, "meta protected env protect")

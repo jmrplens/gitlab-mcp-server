@@ -152,7 +152,8 @@ type ListOutput struct {
 
 // List retrieves work items for a project or group.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	opts := &gl.ListWorkItemsOptions{}
+	defaultFirst := int64(20)
+	opts := &gl.ListWorkItemsOptions{First: &defaultFirst}
 	if input.State != "" {
 		opts.State = new(input.State)
 	}

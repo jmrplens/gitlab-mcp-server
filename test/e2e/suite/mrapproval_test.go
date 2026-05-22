@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 )
 
 // TestIndividual_MRApproval exercises the MR approval/merge lifecycle via individual tools.
@@ -17,6 +18,16 @@ func TestIndividual_MRApproval(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	proj := createProject(ctx, t, sess.individual)
+	if sess.enterprise {
+		allowAuthorApproval := true
+		disableCommitterApproval := false
+		_, err := callToolOn[projects.ApprovalConfigOutput](ctx, sess.individual, "gitlab_project_approval_config_change", projects.ChangeApprovalConfigInput{
+			ProjectID:                              proj.pidOf(),
+			MergeRequestsAuthorApproval:            &allowAuthorApproval,
+			MergeRequestsDisableCommittersApproval: &disableCommitterApproval,
+		})
+		requireNoError(t, err, "allow MR author approval")
+	}
 
 	commitFile(ctx, t, sess.individual, proj, "main", "approval.txt", "base", "base commit for approval")
 	createBranch(ctx, t, sess.individual, proj, "feature-approval")
@@ -61,10 +72,14 @@ func TestIndividual_MRApproval(t *testing.T) {
 	})
 
 	t.Run("Individual/MR/Merge", func(t *testing.T) {
+		_, err := callToolOn[mergerequests.ApproveOutput](ctx, sess.individual, "gitlab_mr_approve", mergerequests.ApproveInput{
+			ProjectID: proj.pidOf(),
+			MRIID:     mr.IID,
+		})
+		requireNoError(t, err, "re-approve MR before merge")
 		drainSidekiq(ctx, t, sess.glClient)
 		waitForMRReady(ctx, t, sess.glClient, proj.ID, mr.IID)
 		var out mergerequests.Output
-		var err error
 		for i := range 5 {
 			out, err = callToolOn[mergerequests.Output](ctx, sess.individual, "gitlab_mr_merge", mergerequests.MergeInput{
 				ProjectID:                proj.pidOf(),
@@ -88,6 +103,19 @@ func TestMeta_MRApproval(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	proj := createProjectMeta(ctx, t, sess.meta)
+	if sess.enterprise {
+		allowAuthorApproval := true
+		disableCommitterApproval := false
+		_, err := callToolOn[projects.ApprovalConfigOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+			"action": "approval_config_change",
+			"params": map[string]any{
+				"project_id":                                 proj.pidStr(),
+				"merge_requests_author_approval":             allowAuthorApproval,
+				"merge_requests_disable_committers_approval": disableCommitterApproval,
+			},
+		})
+		requireNoError(t, err, "allow meta MR author approval")
+	}
 
 	commitFileMeta(ctx, t, sess.meta, proj, "main", "approval.txt", "base", "base commit for approval")
 	createBranchMeta(ctx, t, sess.meta, proj, "feature-approval")
