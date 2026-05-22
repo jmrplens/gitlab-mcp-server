@@ -7,6 +7,9 @@ package suite
 
 import (
 	"context"
+	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1172,19 +1175,109 @@ func TestMeta_ProjectMirroring(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	if !sess.enterprise {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
+	upstream := createProjectMirrorSourceMeta(ctx, t)
 	proj := createProjectMeta(ctx, t, sess.meta)
+	mirrorURL := projectMirrorSourceURL(upstream)
 
 	t.Run("PullMirrorGet", func(t *testing.T) {
-		// No mirror configured — expected to fail
 		_, err := callToolOn[projects.PullMirrorOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "pull_mirror_get",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
-		requireTruef(t, err != nil, "expected error: no mirror configured")
+		requireErrorContainsAll(t, err, "not mirrored", "pull_mirror_configure", "pull_mirror_get")
 		t.Logf("Expected error for pull_mirror_get without mirror: %v", err)
 	})
+
+	t.Run("PullMirrorConfigure", func(t *testing.T) {
+		out, err := callToolOn[projects.PullMirrorOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+			"action": "pull_mirror_configure",
+			"params": map[string]any{
+				"project_id":                          proj.pidStr(),
+				"enabled":                             true,
+				"url":                                 mirrorURL,
+				"mirror_trigger_builds":               false,
+				"only_mirror_protected_branches":      false,
+				"mirror_overwrites_diverged_branches": true,
+			},
+		})
+		requirePremiumFeature(t, err, "pull mirroring")
+		requireTruef(t, out.Enabled, "pull mirror should be enabled")
+		requireTruef(t, strings.Contains(out.URL, upstream.Path), "mirror URL %q should reference upstream %q", out.URL, upstream.Path)
+	})
+
+	t.Run("PullMirrorGetConfigured", func(t *testing.T) {
+		out, err := callToolOn[projects.PullMirrorOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+			"action": "pull_mirror_get",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		})
+		requireNoError(t, err, "pull mirror get after configure")
+		requireTruef(t, out.Enabled, "configured pull mirror should be enabled")
+		requireTruef(t, strings.Contains(out.URL, upstream.Path), "mirror URL %q should reference upstream %q", out.URL, upstream.Path)
+	})
+
+	t.Run("StartMirroring", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_project", map[string]any{
+			"action": "start_mirroring",
+			"params": map[string]any{"project_id": proj.pidStr()},
+		})
+		requireNoError(t, err, "start pull mirroring")
+	})
+
+	t.Run("PullMirrorDisable", func(t *testing.T) {
+		out, err := callToolOn[projects.PullMirrorOutput](ctx, sess.meta, "gitlab_project", map[string]any{
+			"action": "pull_mirror_configure",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"enabled":    false,
+			},
+		})
+		requireNoError(t, err, "disable pull mirroring")
+		requireTruef(t, !out.Enabled, "pull mirror should be disabled")
+	})
+}
+
+func createProjectMirrorSourceMeta(ctx context.Context, t *testing.T) projects.Output {
+	t.Helper()
+	name := uniqueName("mirror-source")
+	out, err := callToolOn[projects.Output](ctx, sess.meta, "gitlab_project", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name":                   name,
+			"description":            "E2E public pull mirror source: " + t.Name(),
+			"visibility":             "public",
+			"initialize_with_readme": true,
+			"default_branch":         defaultBranch,
+		},
+	})
+	requireNoError(t, err, "create public mirror source project")
+	//nolint:contextcheck // Cleanup must outlive the test context; uses a fresh background ctx with timeout.
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		_ = callToolVoidOn(cleanupCtx, sess.meta, "gitlab_project", map[string]any{
+			"action": "delete",
+			"params": map[string]any{
+				"project_id":         strconv.FormatInt(out.ID, 10),
+				"permanently_remove": true,
+				"full_path":          out.PathWithNamespace,
+			},
+		})
+	})
+	waitForBranchOn(ctx, t, sess.glClient, out.ID, defaultBranch)
+	return out
+}
+
+func projectMirrorSourceURL(project projects.Output) string {
+	baseURL := strings.TrimRight(os.Getenv("E2E_GITLAB_INTERNAL_URL"), "/")
+	if baseURL == "" {
+		return project.HTTPURLToRepo
+	}
+	return baseURL + "/" + project.PathWithNamespace + ".git"
 }
