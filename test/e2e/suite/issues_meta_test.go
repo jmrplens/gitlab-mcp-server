@@ -17,6 +17,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/awardemoji"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupiterations"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuelinks"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuenotes"
@@ -24,6 +25,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuestatistics"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/labels"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/milestones"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectiterations"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourceevents"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/workitems"
@@ -561,12 +563,14 @@ func TestMeta_IssuesDeep(t *testing.T) {
 	// fires when TestMeta_IssuesDeep ends, not when the sub-test completes;
 	// otherwise the project disappears before EventIssueIterationList runs.
 	var (
+		iterGroupID      int64
 		iterProj         ProjectFixture
 		iterIssueIID     int64
 		iterFixtureReady bool
 	)
 	if sess.enterprise {
 		if fx, ok := setupIterationFixture(ctx, t); ok {
+			iterGroupID = fx.groupID
 			iterProj = fx.proj
 			iterIssueIID = fx.issueIID
 			iterFixtureReady = true
@@ -580,6 +584,44 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			t.Skip("iteration fixture setup failed; see parent log")
 		}
 		t.Logf("Iteration fixture ready: project %s issue !%d", iterProj.Path, iterIssueIID)
+	})
+
+	t.Run("IterationListProject", func(t *testing.T) {
+		if !sess.enterprise {
+			return
+		}
+		if !iterFixtureReady {
+			t.Skip("iteration fixture setup failed; see IterationFixture log")
+		}
+		out, err := callToolOn[projectiterations.ListOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "iteration_list_project",
+			"params": map[string]any{
+				"project_id": iterProj.pidStr(),
+				"state":      "all",
+			},
+		})
+		requireNoError(t, err, "iteration_list_project")
+		requireTruef(t, len(out.Iterations) > 0, "expected at least 1 project iteration")
+		t.Logf("Listed %d project iterations", len(out.Iterations))
+	})
+
+	t.Run("IterationListGroup", func(t *testing.T) {
+		if !sess.enterprise {
+			return
+		}
+		if !iterFixtureReady {
+			t.Skip("iteration fixture setup failed; see IterationFixture log")
+		}
+		out, err := callToolOn[groupiterations.ListOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "iteration_list_group",
+			"params": map[string]any{
+				"group_id": strconv.FormatInt(iterGroupID, 10),
+				"state":    "all",
+			},
+		})
+		requireNoError(t, err, "iteration_list_group")
+		requireTruef(t, len(out.Iterations) > 0, "expected at least 1 group iteration")
+		t.Logf("Listed %d group iterations", len(out.Iterations))
 	})
 
 	t.Run("EventIssueIterationList", func(t *testing.T) {
@@ -645,6 +687,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 // events on an issue: a group with an iteration cadence, an iteration, a
 // project inside the group, and an issue assigned to that iteration.
 type iterationFixture struct {
+	groupID      int64
 	proj         ProjectFixture
 	issueIID     int64
 	iterationGID string
@@ -884,6 +927,7 @@ func setupIterationFixture(ctx context.Context, t *testing.T) (iterationFixture,
 	}
 
 	return iterationFixture{
+		groupID:      grp.ID,
 		proj:         proj,
 		issueIID:     issueOut.IID,
 		iterationGID: iterationGID,
