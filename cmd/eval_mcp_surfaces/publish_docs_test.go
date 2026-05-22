@@ -417,6 +417,23 @@ func TestPublishFormattingHelpers_CoverBranchLabels(t *testing.T) {
 	if presetRank(presetDockerRead) >= presetRank(presetDockerMutatingSafe) || presetRank("unknown") != 99 {
 		t.Fatalf("unexpected preset ranks: read=%d mutating=%d unknown=%d", presetRank(presetDockerRead), presetRank(presetDockerMutatingSafe), presetRank("unknown"))
 	}
+	orderedPresets := []string{
+		presetDockerRead,
+		presetDockerMutatingSafe,
+		presetDockerDestructiveSafe,
+		presetDockerEnterpriseRead,
+		presetDockerEnterpriseMutatingSafe,
+		presetDockerEnterpriseDestructiveSafe,
+		partitionErrorRecovery,
+		partitionCapabilityFallback,
+		presetSchemaEnterprise,
+	}
+	for index, preset := range orderedPresets {
+		wantRank := index + 1
+		if got := presetRank(preset); got != wantRank {
+			t.Fatalf("presetRank(%q) = %d, want %d", preset, got, wantRank)
+		}
+	}
 
 	providerCases := map[string][2]string{
 		"anthropic:claude": {"Anthropic", "claude"},

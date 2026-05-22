@@ -458,13 +458,13 @@ func (p *liveFixturePreparer) ensureProject(ctx context.Context, namespaceID int
 // ensureProjectServiceAccount seeds a Premium/Ultimate project service account
 // and PAT used by Enterprise live evaluator tasks.
 func (p *liveFixturePreparer) ensureProjectServiceAccount(ctx context.Context) error {
-	account, err := p.findProjectServiceAccount(ctx)
+	account, foundAccount, err := p.findProjectServiceAccount(ctx)
 	if err != nil {
 		return err
 	}
-	if account == nil {
+	if !foundAccount {
 		username := fmt.Sprintf("%s-%d", liveFixtureProjectServiceAccountUsername, p.state.ProjectID)
-		email := fmt.Sprintf("%s@example.com", username)
+		email := username + "@example.com"
 		account, _, err = p.client.GL().Projects.CreateProjectServiceAccount(p.state.ProjectID, &gl.CreateProjectServiceAccountOptions{
 			Name:     new(liveFixtureProjectServiceAccountName),
 			Username: &username,
@@ -475,11 +475,11 @@ func (p *liveFixturePreparer) ensureProjectServiceAccount(ctx context.Context) e
 		}
 	}
 	p.state.ProjectServiceAccountID = account.ID
-	token, err := p.findProjectServiceAccountPAT(ctx, account.ID)
+	token, foundToken, err := p.findProjectServiceAccountPAT(ctx, account.ID)
 	if err != nil {
 		return err
 	}
-	if token == nil {
+	if !foundToken {
 		scopes := []string{"api"}
 		description := "Evaluation fixture token for project service-account scenarios"
 		expiresAt := gl.ISOTime(time.Now().AddDate(0, 1, 0))
@@ -497,31 +497,31 @@ func (p *liveFixturePreparer) ensureProjectServiceAccount(ctx context.Context) e
 	return nil
 }
 
-func (p *liveFixturePreparer) findProjectServiceAccount(ctx context.Context) (*gl.ProjectServiceAccount, error) {
+func (p *liveFixturePreparer) findProjectServiceAccount(ctx context.Context) (*gl.ProjectServiceAccount, bool, error) {
 	accounts, _, err := p.client.GL().Projects.ListProjectServiceAccounts(p.state.ProjectID, &gl.ListProjectServiceAccountsOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("list project service accounts: %w", err)
+		return nil, false, fmt.Errorf("list project service accounts: %w", err)
 	}
 	usernamePrefix := fmt.Sprintf("%s-%d", liveFixtureProjectServiceAccountUsername, p.state.ProjectID)
 	for _, account := range accounts {
 		if account.Name == liveFixtureProjectServiceAccountName || strings.HasPrefix(account.Username, usernamePrefix) {
-			return account, nil
+			return account, true, nil
 		}
 	}
-	return nil, nil
+	return nil, false, nil
 }
 
-func (p *liveFixturePreparer) findProjectServiceAccountPAT(ctx context.Context, serviceAccountID int64) (*gl.PersonalAccessToken, error) {
+func (p *liveFixturePreparer) findProjectServiceAccountPAT(ctx context.Context, serviceAccountID int64) (*gl.PersonalAccessToken, bool, error) {
 	tokens, _, err := p.client.GL().Projects.ListProjectServiceAccountPersonalAccessTokens(p.state.ProjectID, serviceAccountID, &gl.ListProjectServiceAccountPersonalAccessTokensOptions{}, gl.WithContext(ctx))
 	if err != nil {
-		return nil, fmt.Errorf("list project service account PATs: %w", err)
+		return nil, false, fmt.Errorf("list project service account PATs: %w", err)
 	}
 	for _, token := range tokens {
 		if token.Name == liveFixtureProjectServiceAccountPATName && token.Active && !token.Revoked {
-			return token, nil
+			return token, true, nil
 		}
 	}
-	return nil, nil
+	return nil, false, nil
 }
 
 // ensureRepository ensures repository exists for liveFixturePreparer.

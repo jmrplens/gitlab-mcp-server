@@ -581,7 +581,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			return
 		}
 		if !iterFixtureReady {
-			t.Skip("iteration fixture setup failed; see parent log")
+			t.Fatal("iteration fixture setup failed; see parent log")
 		}
 		t.Logf("Iteration fixture ready: project %s issue !%d", iterProj.Path, iterIssueIID)
 	})
@@ -591,7 +591,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			return
 		}
 		if !iterFixtureReady {
-			t.Skip("iteration fixture setup failed; see IterationFixture log")
+			t.Fatal("iteration fixture setup failed; see IterationFixture log")
 		}
 		out, err := callToolOn[projectiterations.ListOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "iteration_list_project",
@@ -610,7 +610,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			return
 		}
 		if !iterFixtureReady {
-			t.Skip("iteration fixture setup failed; see IterationFixture log")
+			t.Fatal("iteration fixture setup failed; see IterationFixture log")
 		}
 		out, err := callToolOn[groupiterations.ListOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "iteration_list_group",
@@ -629,7 +629,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			return
 		}
 		if !iterFixtureReady {
-			t.Skip("iteration fixture setup failed; see IterationFixture log")
+			t.Fatal("iteration fixture setup failed; see IterationFixture log")
 		}
 		out, err := callToolOn[resourceevents.ListIterationEventsOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_iteration_list",
@@ -645,7 +645,7 @@ func TestMeta_IssuesDeep(t *testing.T) {
 			return
 		}
 		if !iterFixtureReady {
-			t.Skip("iteration fixture setup failed; see IterationFixture log")
+			t.Fatal("iteration fixture setup failed; see IterationFixture log")
 		}
 		list, err := callToolOn[resourceevents.ListIterationEventsOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "event_issue_iteration_list",
@@ -695,9 +695,11 @@ type iterationFixture struct {
 
 // setupIterationFixture provisions the group, iteration cadence + iteration
 // (via GraphQL — there is no REST endpoint for iteration creation), a project
-// inside the group, and an issue assigned to that iteration. Returns
-// (fixture, false) and t.Logf-s when any step fails so callers can skip
-// gracefully without failing the whole subtree.
+// inside the group, and an issue assigned to that iteration. It returns
+// (fixture, false) and t.Logf-s when any step fails so callers can fail the
+// iteration subtree with the setup context preserved in the parent log.
+//
+//nolint:maintidx // This E2E fixture is deliberately linear so each GitLab setup step logs its own failure context.
 func setupIterationFixture(ctx context.Context, t *testing.T) (iterationFixture, bool) {
 	t.Helper()
 	if sess.glClient == nil {
@@ -941,6 +943,9 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
+	if !sess.enterprise {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 900*time.Second)
 	defer cancel()
@@ -949,10 +954,7 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "main", testFileMainGo, "work items test", "init commit")
 
 	var workItemIID int64
-
-	if !sess.enterprise {
-		return
-	}
+	workItemTitle := uniqueName("work-item")
 
 	t.Run("WorkItemCreate", func(t *testing.T) {
 		out, err := callToolOn[workitems.GetOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
@@ -960,7 +962,7 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 			"params": map[string]any{
 				"full_path":         proj.Path,
 				"work_item_type_id": "gid://gitlab/WorkItems::Type/1",
-				"title":             uniqueName("work-item"),
+				"title":             workItemTitle,
 			},
 		})
 		requireNoError(t, err, "work_item_create")
@@ -969,16 +971,26 @@ func TestMeta_IssueWorkItems(t *testing.T) {
 	})
 
 	t.Run("WorkItemList", func(t *testing.T) {
-		// Known limitation on GitLab EE Ultimate + upstream client-go v2.31.0:
-		// the namespace.workItems GraphQL query embeds the full WorkItem widget
-		// template (upstream-fixed), and on EE Ultimate this evaluation returns
-		// HTTP 500 with `failed to parse unexpected error type: float64`
-		// deterministically on a fresh project. The error originates server-side
-		// (GitLab cannot serialize one of the widget fields) and is not retryable.
-		// Create/get/update/delete on a known work item IID still work, so we
-		// only skip the list operation here. Re-enable when upstream client-go
-		// trims the widget template or GitLab fixes the serialization bug.
-		t.Skip("upstream client-go v2.31.0 WorkItem widget template triggers a deterministic GitLab EE Ultimate 500 (float64 parse) on namespace.workItems")
+		if workItemIID == 0 {
+			return
+		}
+		first := int64(5)
+		out, err := callToolOn[workitems.ListOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "work_item_list",
+			"params": map[string]any{
+				"full_path": proj.Path,
+				"search":    workItemTitle,
+				"first":     first,
+			},
+		})
+		requireNoError(t, err, "work_item_list")
+		for _, item := range out.WorkItems {
+			if item.IID == workItemIID || item.Title == workItemTitle {
+				t.Logf("Listed work item IID=%d title=%q", item.IID, item.Title)
+				return
+			}
+		}
+		t.Fatalf("work_item_list did not include created work item IID=%d title=%q: %+v", workItemIID, workItemTitle, out.WorkItems)
 	})
 
 	t.Run("WorkItemGet", func(t *testing.T) {

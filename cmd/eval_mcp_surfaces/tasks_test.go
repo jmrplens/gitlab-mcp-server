@@ -154,3 +154,38 @@ func TestParseTaskRow_ReportsColumnErrors(t *testing.T) {
 		t.Fatalf("parseTaskRow() error = %v, want required params error", err)
 	}
 }
+
+// TestParseExpectedToolAction_CoversStandaloneAndErrorForms verifies expected tool/action parsing edge cases.
+func TestParseExpectedToolAction_CoversStandaloneAndErrorForms(t *testing.T) {
+	tests := []struct {
+		name       string
+		value      string
+		wantTool   string
+		wantAction string
+		wantErr    string
+	}{
+		{name: "standalone", value: "`resource_list`", wantTool: "resource_list"},
+		{name: "none action", value: "`gitlab_project` / `none`", wantTool: "gitlab_project"},
+		{name: "dash action", value: "`gitlab_project` / `-`", wantTool: "gitlab_project"},
+		{name: "empty standalone", value: "   ", wantErr: "empty tool"},
+		{name: "too many separators", value: "gitlab / project / get", wantErr: "expected tool/action pair"},
+		{name: "empty tool action", value: " / get", wantErr: "empty tool/action"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool, action, err := parseExpectedToolAction(tt.value)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("parseExpectedToolAction(%q) error = %v, want substring %q", tt.value, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseExpectedToolAction(%q) error = %v", tt.value, err)
+			}
+			if tool != tt.wantTool || action != tt.wantAction {
+				t.Fatalf("parseExpectedToolAction(%q) = %q/%q, want %q/%q", tt.value, tool, action, tt.wantTool, tt.wantAction)
+			}
+		})
+	}
+}

@@ -18,25 +18,25 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,410 |
-| Unit test functions                                   | 10,156 |
+| Total test functions                                  | 10,431 |
+| Unit test functions                                   | 10,177 |
 | E2E test functions                                    |    254 |
-| cmd test functions                                    |    636 |
+| cmd test functions                                    |    639 |
 | Test files (internal/)                                |    436 |
 | Test files (cmd/)                                     |     39 |
 | Test files (test/e2e/suite/)                          |    109 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     19 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  89.5% |
-| Overall coverage (`go test ./internal/...`)           |  98.7% |
-| Average package coverage                              |  95.4% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  89.6% |
+| Overall coverage (`go test ./internal/...`)           |  98.8% |
+| Average package coverage                              |  95.5% |
 
 ### Naming Convention Stats
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,330 | 89.6% |
-| `TestFunc` (no underscore)             |   786 |  7.6% |
+| `TestFunc_Scenario` (2-part)           | 9,349 | 89.6% |
+| `TestFunc` (no underscore)             |   788 |  7.6% |
 | `TestFunc_Scenario_Expected` (3+ part) |   294 |  2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,771 |         89 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          7,464 |        335 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          7,482 |        335 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            254 |        109 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            636 |         39 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,410** |    **584** |                                                                                                 |
+| cmd packages            |            639 |         39 | server entry point and developer command utilities                                              |
+| **Total**               |     **10,431** |    **584** |                                                                                                 |
 
 ### Core Packages
 
@@ -104,8 +104,8 @@
 | snippets          |    78 |    99.4% |    15 |
 | tags              |    77 |    99.6% |     9 |
 | containerregistry |    74 |   100.0% |    12 |
+| workitems         |    71 |   100.0% |     5 |
 | milestones        |    69 |   100.0% |     7 |
-| deploykeys        |    66 |    99.5% |     9 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -123,7 +123,7 @@
 | appearance              |        10 |          1 |   100.0% |         2 |
 | applications            |        15 |          1 |   100.0% |         3 |
 | appstatistics           |         9 |          1 |    96.8% |         1 |
-| attestations            |        17 |          2 |    97.5% |         2 |
+| attestations            |        18 |          2 |   100.0% |         2 |
 | auditevents             |        42 |          2 |   100.0% |         6 |
 | avatar                  |         9 |          1 |   100.0% |         1 |
 | awardemoji              |       109 |          1 |    99.0% |        24 |
@@ -160,7 +160,7 @@
 | epicdiscussions         |        14 |          2 |   100.0% |         6 |
 | epicissues              |        18 |          2 |   100.0% |         4 |
 | epicnotes               |        11 |          2 |   100.0% |         5 |
-| epics                   |        46 |          2 |    95.8% |         6 |
+| epics                   |        49 |          2 |   100.0% |         6 |
 | epicworkitems           |         3 |          1 |   100.0% |         0 |
 | errortracking           |        23 |          2 |   100.0% |         5 |
 | events                  |        41 |          1 |   100.0% |         2 |
@@ -184,7 +184,7 @@
 | groupmembers            |        59 |          2 |   100.0% |         7 |
 | groupmilestones         |        87 |          2 |   100.0% |         8 |
 | groupprotectedbranches  |        16 |          2 |   100.0% |         5 |
-| groupprotectedenvs      |        13 |          2 |    98.6% |         5 |
+| groupprotectedenvs      |        15 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        25 |          2 |   100.0% |         2 |
 | groupreleases           |        14 |          3 |   100.0% |         1 |
 | groups                  |       127 |          3 |   100.0% |        18 |
@@ -215,14 +215,14 @@
 | license                 |        17 |          2 |   100.0% |         3 |
 | licensetemplates        |        18 |          1 |    97.1% |         2 |
 | markdown                |         8 |          1 |   100.0% |         1 |
-| memberroles             |        43 |          3 |    98.9% |         6 |
+| memberroles             |        45 |          3 |   100.0% |         6 |
 | members                 |        59 |          2 |   100.0% |         6 |
 | mergerequests           |       224 |          2 |   100.0% |        30 |
 | mergetrains             |        10 |          2 |   100.0% |         4 |
 | metadata                |         8 |          1 |   100.0% |         1 |
 | milestones              |        69 |          1 |   100.0% |         7 |
 | modelregistry           |         5 |          3 |   100.0% |         1 |
-| mrapprovals             |        60 |          2 |    99.5% |         7 |
+| mrapprovals             |        61 |          2 |   100.0% |         7 |
 | mrapprovalsettings      |         9 |          2 |   100.0% |         4 |
 | mrchanges               |        32 |          1 |   100.0% |         4 |
 | mrcontextcommits        |        22 |          1 |   100.0% |         3 |
@@ -265,7 +265,7 @@
 | securefiles             |        24 |          2 |    98.7% |         4 |
 | securityattributes      |        24 |          1 |   100.0% |         5 |
 | securitycategories      |        16 |          1 |   100.0% |         3 |
-| securityfindings        |        18 |          1 |    98.8% |         1 |
+| securityfindings        |        20 |          1 |   100.0% |         1 |
 | securitysettings        |        31 |          3 |   100.0% |         3 |
 | serverupdate            |        23 |          1 |    93.8% |         2 |
 | settings                |        14 |          1 |    93.2% |         2 |
@@ -285,11 +285,11 @@
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
 | users                   |       186 |          7 |   100.0% |        36 |
-| vulnerabilities         |        57 |          3 |    99.7% |         8 |
+| vulnerabilities         |        59 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
-| workitems               |        66 |          2 |   100.0% |         5 |
-| **Total**               | **7,464** |    **335** |          | **1,127** |
+| workitems               |        71 |          2 |   100.0% |         5 |
+| **Total**               | **7,482** |    **335** |          | **1,127** |
 
 </details>
 
@@ -309,7 +309,7 @@
 | cmd/audit_test_names            |    81.6% |
 | cmd/audit_tokens                |    19.5% |
 | cmd/audit_tools                 |    34.9% |
-| cmd/eval_mcp_surfaces           |    67.4% |
+| cmd/eval_mcp_surfaces           |    67.8% |
 | cmd/find_dupes                  |    90.1% |
 | cmd/format_md_tables            |    87.2% |
 | cmd/gen_action_catalog_manifest |    58.3% |
@@ -357,7 +357,7 @@
 | appearance              |   100.0% |
 | applications            |   100.0% |
 | appstatistics           |    96.8% |
-| attestations            |    97.5% |
+| attestations            |   100.0% |
 | auditevents             |   100.0% |
 | avatar                  |   100.0% |
 | awardemoji              |    99.0% |
@@ -394,7 +394,7 @@
 | epicdiscussions         |   100.0% |
 | epicissues              |   100.0% |
 | epicnotes               |   100.0% |
-| epics                   |    95.8% |
+| epics                   |   100.0% |
 | epicworkitems           |   100.0% |
 | errortracking           |   100.0% |
 | events                  |   100.0% |
@@ -418,7 +418,7 @@
 | groupmembers            |   100.0% |
 | groupmilestones         |   100.0% |
 | groupprotectedbranches  |   100.0% |
-| groupprotectedenvs      |    98.6% |
+| groupprotectedenvs      |   100.0% |
 | grouprelationsexport    |   100.0% |
 | groupreleases           |   100.0% |
 | groups                  |   100.0% |
@@ -449,14 +449,14 @@
 | license                 |   100.0% |
 | licensetemplates        |    97.1% |
 | markdown                |   100.0% |
-| memberroles             |    98.9% |
+| memberroles             |   100.0% |
 | members                 |   100.0% |
 | mergerequests           |   100.0% |
 | mergetrains             |   100.0% |
 | metadata                |   100.0% |
 | milestones              |   100.0% |
 | modelregistry           |   100.0% |
-| mrapprovals             |    99.5% |
+| mrapprovals             |   100.0% |
 | mrapprovalsettings      |   100.0% |
 | mrchanges               |   100.0% |
 | mrcontextcommits        |   100.0% |
@@ -499,7 +499,7 @@
 | securefiles             |    98.7% |
 | securityattributes      |   100.0% |
 | securitycategories      |   100.0% |
-| securityfindings        |    98.8% |
+| securityfindings        |   100.0% |
 | securitysettings        |   100.0% |
 | serverupdate            |    93.8% |
 | settings                |    93.2% |
@@ -519,7 +519,7 @@
 | useremails              |   100.0% |
 | usergpgkeys             |   100.0% |
 | users                   |   100.0% |
-| vulnerabilities         |    99.7% |
+| vulnerabilities         |   100.0% |
 | waitpoll                |   100.0% |
 | wikis                   |    99.4% |
 | workitems               |   100.0% |
@@ -538,7 +538,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/add_docs** (67.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_mcp_surfaces** (67.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_mcp_surfaces** (67.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_action_spec_coverage** (77.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.5%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_test_names** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

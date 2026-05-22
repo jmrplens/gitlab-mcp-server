@@ -148,6 +148,40 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
+// TestList_RESTFilterOptions verifies List applies REST-compatible filters without falling back to Work Items.
+func TestList_RESTFilterOptions(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf(fmtUnexpMethod, r.Method)
+		}
+		query := r.URL.Query()
+		for _, key := range []string{"state", "search", "labels", "sort", "include_ancestor_groups", "include_descendant_groups", "per_page"} {
+			if query.Get(key) == "" {
+				t.Errorf("query missing %q in %s", key, r.URL.RawQuery)
+			}
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+	include := true
+	first := int64(10)
+	out, err := List(context.Background(), client, ListInput{
+		FullPath:           testFullPath,
+		State:              "opened",
+		Search:             "planning",
+		LabelName:          []string{"urgent"},
+		Sort:               "created_desc",
+		First:              &first,
+		IncludeAncestors:   &include,
+		IncludeDescendants: &include,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Epics) != 0 {
+		t.Fatalf("len(Epics) = %d, want 0", len(out.Epics))
+	}
+}
+
 // TestList_MissingFullPath verifies List returns a validation error when
 // full_path is empty, without issuing any GraphQL request.
 func TestList_MissingFullPath(t *testing.T) {
@@ -671,6 +705,39 @@ func TestToLinkItem_NilAuthorAndCreatedAt(t *testing.T) {
 	}
 }
 
+// TestEpicToOutput_FullRESTEpic verifies REST epic mapping includes optional author and timeline fields.
+func TestEpicToOutput_FullRESTEpic(t *testing.T) {
+	start := gl.ISOTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	due := gl.ISOTime(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC))
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	updated := time.Date(2026, 1, 3, 3, 4, 5, 0, time.UTC)
+	closed := time.Date(2026, 1, 4, 3, 4, 5, 0, time.UTC)
+
+	out := epicToOutput(&gl.Epic{
+		ID:           44,
+		IID:          7,
+		Title:        "REST Epic",
+		State:        "opened",
+		Author:       &gl.EpicAuthor{Username: "alice"},
+		StartDate:    &start,
+		DueDate:      &due,
+		CreatedAt:    &created,
+		UpdatedAt:    &updated,
+		ClosedAt:     &closed,
+		Confidential: true,
+		ParentID:     3,
+	})
+	if out.ID != 44 || out.IID != 7 || out.Author != "alice" || out.ParentIID != 3 {
+		t.Fatalf("unexpected epic output identity fields: %+v", out)
+	}
+	if out.StartDate != "2026-01-01" || out.DueDate != "2026-02-01" {
+		t.Fatalf("unexpected date fields: %+v", out)
+	}
+	if out.CreatedAt == "" || out.UpdatedAt == "" || out.ClosedAt == "" {
+		t.Fatalf("expected timestamp fields to be populated: %+v", out)
+	}
+}
+
 // --- List with all filter options ---
 
 // TestList_WithAllFilters verifies that List passes all filter parameters to
@@ -708,6 +775,21 @@ func TestList_WithAllFilters(t *testing.T) {
 	}
 	if len(out.Epics) != 1 {
 		t.Errorf("len(Epics) = %d, want 1", len(out.Epics))
+	}
+}
+
+// TestList_WorkItemsAPIError verifies Work Items fallback errors include the Premium/Ultimate hint.
+func TestList_WorkItemsAPIError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{FullPath: testFullPath, AuthorUsername: "alice"})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "epics require GitLab Premium or Ultimate") {
+		t.Fatalf("error missing Premium/Ultimate hint: %v", err)
 	}
 }
 

@@ -2,7 +2,7 @@
 
 // vulnerabilities_test.go tests the GitLab vulnerability GraphQL MCP tools
 // against a live GitLab instance. Requires GitLab Premium/Ultimate
-// (GITLAB_ENTERPRISE=true) — tests are skipped otherwise.
+// (GITLAB_ENTERPRISE=true); CE runs return before making GitLab calls.
 package suite
 
 import (

@@ -876,6 +876,23 @@ func TestReset_ServerError(t *testing.T) {
 	}
 }
 
+// TestReset_NotFoundMentionsAccessTokenRequirement verifies 404 responses explain the bot-token requirement.
+func TestReset_NotFoundMentionsAccessTokenRequirement(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	err := Reset(context.Background(), client, ResetInput{ProjectID: "42", MRIID: 1})
+	if err == nil {
+		t.Fatal("expected error for 404 response")
+	}
+	for _, want := range []string{"bot user", "project/group access token", "PATs from human users"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // CreateRule — canceled context, server error & ApprovalProjectRuleID path
 // ---------------------------------------------------------------------------.

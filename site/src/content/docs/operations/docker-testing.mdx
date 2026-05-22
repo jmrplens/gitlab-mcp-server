@@ -92,7 +92,7 @@ docker compose -f test/e2e/docker-compose.yml down -v
 | Symptom                                   | What to check                                                               |
 | ----------------------------------------- | --------------------------------------------------------------------------- |
 | GitLab never becomes ready                | Docker memory and CPU limits; GitLab needs several GB of RAM                |
-| Enterprise tests stay skipped             | `GITLAB_ENTERPRISE=true`, the EE image, and `ENTERPRISE_LICENSE` in `.env`  |
+| Enterprise scenarios are not enabled      | `GITLAB_ENTERPRISE=true`, the EE image, and `ENTERPRISE_LICENSE` in `.env`  |
 | Pipeline or job tests are skipped/failing | Runner registration output and `test/e2e/.env.docker` values                |
 | Webhook or mirror tests fail              | Fixture service container health and internal Docker network URLs           |
 | A rerun sees stale data                   | Run `docker compose -f test/e2e/docker-compose.yml down -v` and start again |

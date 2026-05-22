@@ -4,6 +4,7 @@
 package workitems
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -68,7 +69,7 @@ func TestList_Success(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf(fmtUnexpMethod, r.Method)
 		}
-		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item 1","author":{"username":"dev1"},"widgets":[]},{"id":"gid://gitlab/WorkItem/2","iid":"11","workItemType":{"name":"Task"},"state":"CLOSED","title":"Item 2","author":{"username":"dev2"},"widgets":[]}],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item 1","description":"Desc 1","confidential":true,"webUrl":"https://gitlab.example.com/work_items/10","author":{"username":"dev1"},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","closedAt":""},{"id":"gid://gitlab/WorkItem/2","iid":"11","workItemType":{"name":"Task"},"state":"CLOSED","title":"Item 2","author":{"username":"dev2"}}]}}}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
@@ -78,12 +79,19 @@ func TestList_Success(t *testing.T) {
 	if len(out.WorkItems) != 2 {
 		t.Fatalf("expected 2 work items, got %d", len(out.WorkItems))
 	}
+	first := out.WorkItems[0]
+	if first.ID != 1 || first.IID != 10 || first.Type != testTypeIssue || first.Author != "dev1" {
+		t.Fatalf("unexpected first work item: %+v", first)
+	}
+	if !first.Confidential || first.WebURL == "" || first.CreatedAt == "" || first.UpdatedAt == "" {
+		t.Fatalf("expected mapped optional fields, got %+v", first)
+	}
 }
 
 // TestList_Empty verifies List when empty.
 func TestList_Empty(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""}}}}}`)
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[]}}}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
@@ -92,6 +100,59 @@ func TestList_Empty(t *testing.T) {
 	}
 	if len(out.WorkItems) != 0 {
 		t.Fatalf("expected 0 work items, got %d", len(out.WorkItems))
+	}
+}
+
+// TestList_Filters verifies List forwards supported filters to the minimal GraphQL query.
+func TestList_Filters(t *testing.T) {
+	confidential := true
+	first := int64(5)
+	includeAncestors := true
+	includeDescendants := false
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Variables map[string]any `json:"variables"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode GraphQL request: %v", err)
+		}
+		expected := map[string]any{
+			"fullPath":           testFullPath,
+			"state":              "opened",
+			"search":             "needle",
+			"authorUsername":     testAuthorDev,
+			"confidential":       true,
+			"sort":               "CREATED_DESC",
+			"first":              float64(5),
+			"after":              "cursor-1",
+			"includeAncestors":   true,
+			"includeDescendants": false,
+		}
+		for key, want := range expected {
+			if got := request.Variables[key]; got != want {
+				t.Fatalf("variable %s = %#v, want %#v", key, got, want)
+			}
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[]}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := List(t.Context(), client, ListInput{
+		FullPath:           testFullPath,
+		State:              "opened",
+		Search:             "needle",
+		Types:              []string{testTypeIssue},
+		AuthorUsername:     testAuthorDev,
+		LabelName:          []string{testLabelBug},
+		Confidential:       &confidential,
+		Sort:               "CREATED_DESC",
+		First:              &first,
+		After:              "cursor-1",
+		IncludeAncestors:   &includeAncestors,
+		IncludeDescendants: &includeDescendants,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
@@ -104,6 +165,85 @@ func TestList_Error(t *testing.T) {
 	_, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
 	if err == nil {
 		t.Fatal(errExpectedNil)
+	}
+}
+
+// TestList_MissingFullPath verifies List validates full_path before calling GitLab.
+func TestList_MissingFullPath(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach API")
+	}))
+	_, err := List(t.Context(), client, ListInput{})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "full_path") {
+		t.Fatalf("expected error to mention full_path, got %v", err)
+	}
+}
+
+// TestList_GraphQLErrors verifies List surfaces GraphQL errors from 200 responses.
+func TestList_GraphQLErrors(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"errors":[{"message":"field error"}]}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "field error") {
+		t.Fatalf("expected GraphQL error detail, got %v", err)
+	}
+}
+
+// TestList_NamespaceNotFound verifies List gives an actionable error when full_path is absent.
+func TestList_NamespaceNotFound(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":null}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "gitlab_project_list") {
+		t.Fatalf("expected actionable hint, got %v", err)
+	}
+}
+
+// TestList_InvalidGraphQLIDs verifies List rejects malformed ID fields instead of returning misleading zeros.
+func TestList_InvalidGraphQLIDs(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "invalid gid",
+			body: `{"data":{"namespace":{"workItems":{"nodes":[{"id":"not-a-gid","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item"}]}}}}`,
+			want: "invalid work item id",
+		},
+		{
+			name: "invalid iid",
+			body: `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"abc","workItemType":{"name":"Issue"},"state":"OPEN","title":"Item"}]}}}}`,
+			want: "invalid work item iid",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				testutil.RespondJSON(w, http.StatusOK, tt.body)
+			})
+			client := testutil.NewTestClient(t, handler)
+			_, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
+			if err == nil {
+				t.Fatal(errExpectedNil)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want substring %q", err, tt.want)
+			}
+		})
 	}
 }
 

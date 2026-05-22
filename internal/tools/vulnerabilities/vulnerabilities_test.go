@@ -5,6 +5,7 @@ package vulnerabilities
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -222,16 +223,64 @@ func TestList_WithFilters(t *testing.T) {
 
 	client := testutil.NewTestClient(t, handler)
 	out, err := List(context.Background(), client, ListInput{
-		ProjectPath: "my-group/my-project",
-		Severity:    []string{"CRITICAL", "HIGH"},
-		State:       []string{"DETECTED"},
-		ReportType:  []string{"SAST"},
+		ProjectPath:   "my-group/my-project",
+		Severity:      []string{"CRITICAL", "HIGH"},
+		State:         []string{"DETECTED"},
+		Scanner:       []string{"semgrep"},
+		ReportType:    []string{"SAST"},
+		HasIssues:     new(true),
+		HasResolution: new(false),
+		Sort:          "severity_desc",
 	})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
 	if len(out.Vulnerabilities) != 0 {
 		t.Errorf("expected 0 vulnerabilities, got %d", len(out.Vulnerabilities))
+	}
+}
+
+// TestList_ProjectNilExistingProjectReturnsEmpty verifies unavailable vulnerability data returns an empty list when the project exists.
+func TestList_ProjectNilExistingProjectReturnsEmpty(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.Handle("/api/graphql", testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"vulnerabilities": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": null}`)
+		},
+	}))
+	mux.HandleFunc("/api/v4/projects/my-group%2Fmy-project", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"path_with_namespace":"my-group/my-project"}`)
+	})
+
+	client := testutil.NewTestClient(t, mux)
+	out, err := List(context.Background(), client, ListInput{ProjectPath: "my-group/my-project"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Vulnerabilities) != 0 {
+		t.Fatalf("expected empty vulnerabilities, got %d", len(out.Vulnerabilities))
+	}
+}
+
+// TestList_ProjectNilMissingProjectErrors verifies null GraphQL projects are checked against REST project lookup.
+func TestList_ProjectNilMissingProjectErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.Handle("/api/graphql", testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"vulnerabilities": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": null}`)
+		},
+	}))
+	mux.HandleFunc("/api/v4/projects/my-group%2Fmy-project", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	})
+
+	client := testutil.NewTestClient(t, mux)
+	_, err := List(context.Background(), client, ListInput{ProjectPath: "my-group/my-project"})
+	if err == nil {
+		t.Fatal("expected missing project error")
+	}
+	if !strings.Contains(err.Error(), "project \"my-group/my-project\" not found") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

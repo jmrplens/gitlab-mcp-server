@@ -129,10 +129,14 @@ func TestEnsurePackageReleaseFixtureFiles_WritesLocalFiles(t *testing.T) {
 // TestFilterTasksByLiveFixtureState_SkipsMissingJobResources verifies that missing Docker job fixtures do not become model failures.
 func TestFilterTasksByLiveFixtureState_SkipsMissingJobResources(t *testing.T) {
 	tasks := []evalTask{
+		{ID: "MT-020"},
 		{ID: "MT-022"},
 		{ID: "MT-064"},
+		{ID: "MT-046"},
 		{ID: "MT-065"},
+		{ID: "MT-182"},
 		{ID: "MT-186"},
+		{ID: "MT-187"},
 		{ID: "MS-008"},
 		{ID: "MT-003"},
 	}
@@ -140,26 +144,30 @@ func TestFilterTasksByLiveFixtureState_SkipsMissingJobResources(t *testing.T) {
 
 	filtered := filterTasksByLiveFixtureState(tasks, state)
 
-	if got := taskIDs(filtered); got != "MT-064,MT-003" {
-		t.Fatalf("filtered IDs = %q, want MT-064,MT-003", got)
+	if got := taskIDs(filtered); got != "MT-064,MT-046,MT-003" {
+		t.Fatalf("filtered IDs = %q, want MT-064,MT-046,MT-003", got)
 	}
 }
 
 // TestFilterTasksByLiveFixtureState_KeepsSeededJobResources verifies seeded Docker jobs keep dependent tasks eligible.
 func TestFilterTasksByLiveFixtureState_KeepsSeededJobResources(t *testing.T) {
 	tasks := []evalTask{
+		{ID: "MT-020"},
 		{ID: "MT-022"},
 		{ID: "MT-064"},
+		{ID: "MT-046"},
 		{ID: "MT-065"},
+		{ID: "MT-182"},
 		{ID: "MT-186"},
+		{ID: "MT-187"},
 		{ID: "MS-008"},
 	}
-	state := &liveFixtureState{FailedJobID: 18, ManualJobID: 19, RunnerID: 20, ProjectServiceAccountID: 21, ProjectServiceAccountTokenID: 22}
+	state := &liveFixtureState{PipelineID: 17, FailedJobID: 18, ManualJobID: 19, RunnerID: 20, ProjectServiceAccountID: 21, ProjectServiceAccountTokenID: 22}
 
 	filtered := filterTasksByLiveFixtureState(tasks, state)
 
-	if got := taskIDs(filtered); got != "MT-022,MT-064,MT-065,MT-186,MS-008" {
-		t.Fatalf("filtered IDs = %q, want MT-022,MT-064,MT-065,MT-186,MS-008", got)
+	if got := taskIDs(filtered); got != "MT-020,MT-022,MT-064,MT-046,MT-065,MT-182,MT-186,MT-187,MS-008" {
+		t.Fatalf("filtered IDs = %q, want all seeded dependency tasks", got)
 	}
 }
 
@@ -788,6 +796,102 @@ func TestEnsureFile_UpdateMissingFile_CreatesFile(t *testing.T) {
 	}
 	if !created {
 		t.Fatal("CreateFile was not called after missing-file update error")
+	}
+}
+
+// TestFindProjectServiceAccount verifies fixture reuse finds existing service accounts by stable identity.
+func TestFindProjectServiceAccount(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		statusCode int
+		wantFound  bool
+		wantID     int64
+		wantErr    string
+	}{
+		{name: "matches by name", body: `[{"id":7,"name":"eval-project-service-account","username":"other"}]`, statusCode: http.StatusOK, wantFound: true, wantID: 7},
+		{name: "matches by username prefix", body: `[{"id":8,"name":"other","username":"eval-project-svc-101-suffix"}]`, statusCode: http.StatusOK, wantFound: true, wantID: 8},
+		{name: "not found", body: `[{"id":9,"name":"other","username":"unrelated"}]`, statusCode: http.StatusOK},
+		{name: "list error", body: `{"message":"fail"}`, statusCode: http.StatusForbidden, wantErr: "list project service accounts"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/101/service_accounts" {
+					w.WriteHeader(tt.statusCode)
+					_, _ = w.Write([]byte(tt.body))
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			defer server.Close()
+			preparer := &liveFixturePreparer{client: newFixtureTestClient(t, server.URL), state: &liveFixtureState{ProjectID: 101}}
+
+			account, found, err := preparer.findProjectServiceAccount(t.Context())
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("findProjectServiceAccount() error = %v, want substring %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("findProjectServiceAccount() error = %v", err)
+			}
+			if found != tt.wantFound {
+				t.Fatalf("found = %v, want %v", found, tt.wantFound)
+			}
+			if tt.wantFound && account.ID != tt.wantID {
+				t.Fatalf("account.ID = %d, want %d", account.ID, tt.wantID)
+			}
+		})
+	}
+}
+
+// TestFindProjectServiceAccountPAT verifies fixture reuse finds only active, non-revoked PATs.
+func TestFindProjectServiceAccountPAT(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		statusCode int
+		wantFound  bool
+		wantID     int64
+		wantErr    string
+	}{
+		{name: "matches active token", body: `[{"id":11,"name":"eval-project-service-token","active":true,"revoked":false}]`, statusCode: http.StatusOK, wantFound: true, wantID: 11},
+		{name: "ignores inactive token", body: `[{"id":12,"name":"eval-project-service-token","active":false,"revoked":false}]`, statusCode: http.StatusOK},
+		{name: "ignores revoked token", body: `[{"id":13,"name":"eval-project-service-token","active":true,"revoked":true}]`, statusCode: http.StatusOK},
+		{name: "list error", body: `{"message":"fail"}`, statusCode: http.StatusForbidden, wantErr: "list project service account PATs"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/101/service_accounts/7/personal_access_tokens" {
+					w.WriteHeader(tt.statusCode)
+					_, _ = w.Write([]byte(tt.body))
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			defer server.Close()
+			preparer := &liveFixturePreparer{client: newFixtureTestClient(t, server.URL), state: &liveFixtureState{ProjectID: 101}}
+
+			token, found, err := preparer.findProjectServiceAccountPAT(t.Context(), 7)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("findProjectServiceAccountPAT() error = %v, want substring %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("findProjectServiceAccountPAT() error = %v", err)
+			}
+			if found != tt.wantFound {
+				t.Fatalf("found = %v, want %v", found, tt.wantFound)
+			}
+			if tt.wantFound && token.ID != tt.wantID {
+				t.Fatalf("token.ID = %d, want %d", token.ID, tt.wantID)
+			}
+		})
 	}
 }
 

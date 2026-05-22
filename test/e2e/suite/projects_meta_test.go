@@ -222,7 +222,7 @@ func TestMeta_ProjectCore(t *testing.T) {
 
 // TestMeta_ProjectServiceAccounts exercises project service account CRUD and PAT
 // management through the gitlab_project meta-tool. Project service accounts are
-// Premium/Ultimate-only, so CE runs skip this test.
+// Premium/Ultimate-only, so CE runs return before making GitLab calls.
 func TestMeta_ProjectServiceAccounts(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

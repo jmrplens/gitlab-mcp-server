@@ -546,6 +546,13 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	if got := taskIDs(enterprise); got != "enterprise,enterprise-write,enterprise-delete" {
 		t.Fatalf("schema-enterprise IDs = %q, want enterprise,enterprise-write,enterprise-delete", got)
 	}
+	enterpriseRead, err := filterTasksByPreset(tasks, presetDockerEnterpriseRead)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-enterprise-read) error = %v", err)
+	}
+	if got := taskIDs(enterpriseRead); got != "enterprise" {
+		t.Fatalf("docker-enterprise-read IDs = %q, want enterprise", got)
+	}
 	enterpriseMutating, err := filterTasksByPreset(tasks, presetDockerEnterpriseMutatingSafe)
 	if err != nil {
 		t.Fatalf("filterTasksByPreset(docker-enterprise-mutating-safe) error = %v", err)

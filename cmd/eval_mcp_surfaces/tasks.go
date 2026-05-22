@@ -320,30 +320,57 @@ func taskDeletesProjectServiceAccount(task evalTask) bool {
 
 // taskMatchesPreset reports whether task matches preset.
 func taskMatchesPreset(task evalTask, preset string) bool {
-	enterprise := taskHasEnterpriseStep(task)
-	destructive := taskHasDestructiveStep(task)
-	mutating := taskHasMutatingStep(task)
-	special := strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) || taskUsesCapabilityFallback(task)
-	switch preset {
-	case presetSchemaEnterprise:
-		return enterprise
-	case presetDockerRead:
-		return !enterprise && !mutating && !destructive && !special
-	case presetDockerMutatingSafe:
-		return !enterprise && mutating && !destructive && !special
-	case presetDockerDestructiveSafe:
-		return !enterprise && destructive && !special
-	case presetDockerEnterpriseRead:
-		return enterprise && !mutating && !destructive && !special
-	case presetDockerEnterpriseMutatingSafe:
-		return enterprise && mutating && !destructive && !special
-	case presetDockerEnterpriseDestructiveSafe:
-		return enterprise && destructive && !special
-	case presetDockerCapabilityDiscovery:
-		return taskUsesCapabilityFallback(task)
-	default:
-		return false
+	capabilityFallback := taskUsesCapabilityFallback(task)
+	traits := taskPresetTraits{
+		Enterprise:         taskHasEnterpriseStep(task),
+		Destructive:        taskHasDestructiveStep(task),
+		Mutating:           taskHasMutatingStep(task),
+		Special:            strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) || capabilityFallback,
+		CapabilityFallback: capabilityFallback,
 	}
+	return taskPresetMatchesTraits(traits, preset)
+}
+
+type taskPresetTraits struct {
+	Enterprise         bool
+	Destructive        bool
+	Mutating           bool
+	Special            bool
+	CapabilityFallback bool
+}
+
+type taskPresetPredicate func(taskPresetTraits) bool
+
+var taskPresetPredicates = map[string]taskPresetPredicate{
+	presetSchemaEnterprise: func(traits taskPresetTraits) bool {
+		return traits.Enterprise
+	},
+	presetDockerRead: func(traits taskPresetTraits) bool {
+		return !traits.Enterprise && !traits.Mutating && !traits.Destructive && !traits.Special
+	},
+	presetDockerMutatingSafe: func(traits taskPresetTraits) bool {
+		return !traits.Enterprise && traits.Mutating && !traits.Destructive && !traits.Special
+	},
+	presetDockerDestructiveSafe: func(traits taskPresetTraits) bool {
+		return !traits.Enterprise && traits.Destructive && !traits.Special
+	},
+	presetDockerEnterpriseRead: func(traits taskPresetTraits) bool {
+		return traits.Enterprise && !traits.Mutating && !traits.Destructive && !traits.Special
+	},
+	presetDockerEnterpriseMutatingSafe: func(traits taskPresetTraits) bool {
+		return traits.Enterprise && traits.Mutating && !traits.Destructive && !traits.Special
+	},
+	presetDockerEnterpriseDestructiveSafe: func(traits taskPresetTraits) bool {
+		return traits.Enterprise && traits.Destructive && !traits.Special
+	},
+	presetDockerCapabilityDiscovery: func(traits taskPresetTraits) bool {
+		return traits.CapabilityFallback
+	},
+}
+
+func taskPresetMatchesTraits(traits taskPresetTraits, preset string) bool {
+	predicate, ok := taskPresetPredicates[preset]
+	return ok && predicate(traits)
 }
 
 // taskHasEnterpriseStep reports whether task has enterprise step.

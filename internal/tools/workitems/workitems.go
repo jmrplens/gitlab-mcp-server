@@ -2,7 +2,11 @@ package workitems
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -150,54 +154,210 @@ type ListOutput struct {
 	WorkItems []WorkItemItem `json:"work_items"`
 }
 
+const queryListWorkItems = `
+query ListWorkItems(
+  $fullPath: ID!
+  $state: IssuableState
+  $search: String
+  $types: [IssueType!]
+  $authorUsername: String
+  $labelName: [String!]
+  $confidential: Boolean
+  $sort: WorkItemSort
+  $first: Int
+  $after: String
+  $includeAncestors: Boolean
+  $includeDescendants: Boolean
+) {
+  namespace(fullPath: $fullPath) {
+    workItems(
+      state: $state
+      search: $search
+      types: $types
+      authorUsername: $authorUsername
+      labelName: $labelName
+      confidential: $confidential
+      sort: $sort
+      first: $first
+      after: $after
+      includeAncestors: $includeAncestors
+      includeDescendants: $includeDescendants
+    ) {
+      nodes {
+        id
+        iid
+        workItemType {
+          name
+        }
+        state
+        title
+        description
+        confidential
+        author {
+          username
+        }
+        createdAt
+        updatedAt
+        closedAt
+        webUrl
+      }
+    }
+  }
+}
+`
+
+type listWorkItemsResponse struct {
+	Data struct {
+		Namespace *struct {
+			WorkItems struct {
+				Nodes []gqlListWorkItem `json:"nodes"`
+			} `json:"workItems"`
+		} `json:"namespace"`
+	} `json:"data"`
+	gl.GenericGraphQLErrors
+}
+
+type gqlListWorkItem struct {
+	ID           string `json:"id"`
+	IID          string `json:"iid"`
+	WorkItemType struct {
+		Name string `json:"name"`
+	} `json:"workItemType"`
+	State        string `json:"state"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	Confidential bool   `json:"confidential"`
+	Author       *struct {
+		Username string `json:"username"`
+	} `json:"author"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+	ClosedAt  string `json:"closedAt"`
+	WebURL    string `json:"webUrl"`
+}
+
 // List retrieves work items for a project or group.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	defaultFirst := int64(20)
-	opts := &gl.ListWorkItemsOptions{First: &defaultFirst}
-	if input.State != "" {
-		opts.State = new(input.State)
-	}
-	if input.Search != "" {
-		opts.Search = new(input.Search)
-	}
-	if len(input.Types) > 0 {
-		opts.Types = input.Types
-	}
-	if input.AuthorUsername != "" {
-		opts.AuthorUsername = new(input.AuthorUsername)
-	}
-	if len(input.LabelName) > 0 {
-		opts.LabelName = input.LabelName
-	}
-	if input.Confidential != nil {
-		opts.Confidential = input.Confidential
-	}
-	if input.Sort != "" {
-		opts.Sort = new(input.Sort)
-	}
-	if input.First != nil {
-		opts.First = input.First
-	}
-	if input.After != "" {
-		opts.After = new(input.After)
-	}
-	if input.IncludeAncestors != nil {
-		opts.IncludeAncestors = input.IncludeAncestors
-	}
-	if input.IncludeDescendants != nil {
-		opts.IncludeDescendants = input.IncludeDescendants
+	if input.FullPath == "" {
+		return ListOutput{}, toolutil.ErrRequiredString("list_work_items", "full_path")
 	}
 
-	items, _, err := client.GL().WorkItems.ListWorkItems(input.FullPath, opts, gl.WithContext(ctx))
+	defaultFirst := int64(20)
+	first := &defaultFirst
+	if input.First != nil {
+		first = input.First
+	}
+
+	variables := map[string]any{
+		"fullPath": input.FullPath,
+		"first":    first,
+	}
+	if input.State != "" {
+		variables["state"] = input.State
+	}
+	if input.Search != "" {
+		variables["search"] = input.Search
+	}
+	if len(input.Types) > 0 {
+		variables["types"] = input.Types
+	}
+	if input.AuthorUsername != "" {
+		variables["authorUsername"] = input.AuthorUsername
+	}
+	if len(input.LabelName) > 0 {
+		variables["labelName"] = input.LabelName
+	}
+	if input.Confidential != nil {
+		variables["confidential"] = input.Confidential
+	}
+	if input.Sort != "" {
+		variables["sort"] = input.Sort
+	}
+	if input.After != "" {
+		variables["after"] = input.After
+	}
+	if input.IncludeAncestors != nil {
+		variables["includeAncestors"] = input.IncludeAncestors
+	}
+	if input.IncludeDescendants != nil {
+		variables["includeDescendants"] = input.IncludeDescendants
+	}
+
+	var resp listWorkItemsResponse
+	_, err := client.GL().GraphQL.Do(gl.GraphQLQuery{
+		Query:     queryListWorkItems,
+		Variables: variables,
+	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_work_items", err, http.StatusNotFound,
 			"verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)")
 	}
+	if len(resp.Errors) > 0 {
+		return ListOutput{}, toolutil.WrapErrWithHint("list_work_items", &gl.GraphQLResponseError{
+			Err:    errors.New("GraphQL query failed"),
+			Errors: resp.GenericGraphQLErrors,
+		}, "verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)")
+	}
+	if resp.Data.Namespace == nil {
+		return ListOutput{}, toolutil.WrapErrWithHint("list_work_items", gl.ErrNotFound,
+			"verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)")
+	}
+
+	items := resp.Data.Namespace.WorkItems.Nodes
 	result := make([]WorkItemItem, 0, len(items))
-	for _, wi := range items {
-		result = append(result, workItemToItem(wi))
+	for _, item := range items {
+		mapped, mapErr := gqlListWorkItemToItem(item)
+		if mapErr != nil {
+			return ListOutput{}, fmt.Errorf("list_work_items: parsing work item: %w", mapErr)
+		}
+		result = append(result, mapped)
 	}
 	return ListOutput{WorkItems: result}, nil
+}
+
+func gqlListWorkItemToItem(item gqlListWorkItem) (WorkItemItem, error) {
+	id, err := parseWorkItemGID(item.ID)
+	if err != nil {
+		return WorkItemItem{}, err
+	}
+	iid, err := parseWorkItemInt64("iid", item.IID)
+	if err != nil {
+		return WorkItemItem{}, err
+	}
+
+	mapped := WorkItemItem{
+		ID:           id,
+		IID:          iid,
+		Type:         item.WorkItemType.Name,
+		State:        item.State,
+		Title:        item.Title,
+		Description:  item.Description,
+		WebURL:       item.WebURL,
+		Confidential: item.Confidential,
+		CreatedAt:    item.CreatedAt,
+		UpdatedAt:    item.UpdatedAt,
+		ClosedAt:     item.ClosedAt,
+	}
+	if item.Author != nil {
+		mapped.Author = item.Author.Username
+	}
+	return mapped, nil
+}
+
+func parseWorkItemGID(value string) (int64, error) {
+	lastSlash := strings.LastIndex(value, "/")
+	if lastSlash < 0 || lastSlash == len(value)-1 {
+		return 0, fmt.Errorf("invalid work item id %q", value)
+	}
+	return parseWorkItemInt64("id", value[lastSlash+1:])
+}
+
+func parseWorkItemInt64(field, value string) (int64, error) {
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid work item %s %q: %w", field, value, err)
+	}
+	return parsed, nil
 }
 
 // Create.

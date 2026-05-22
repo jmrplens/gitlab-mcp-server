@@ -157,6 +157,25 @@ func TestListGroup_SelfManagedDeprecationHint(t *testing.T) {
 	assertGroupMemberRoleDeprecationHint(t, err)
 }
 
+// TestListGroup_ForbiddenIncludesAccessHint verifies non-400 failures use the group access guidance.
+func TestListGroup_ForbiddenIncludesAccessHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/member_roles" {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: toolutil.StringOrInt("mygroup")})
+	if err == nil {
+		t.Fatal("expected error for 403 response, got nil")
+	}
+	if !strings.Contains(err.Error(), "requires Owner role") {
+		t.Fatalf("error missing group access guidance: %v", err)
+	}
+}
+
 // TestCreateInstance_Success verifies CreateInstance returns the new role when
 // POST /member_roles responds 201 Created.
 func TestCreateInstance_Success(t *testing.T) {
@@ -381,6 +400,29 @@ func TestCreateGroup_SelfManagedDeprecationHint(t *testing.T) {
 		BaseAccessLevel: 30,
 	})
 	assertGroupMemberRoleDeprecationHint(t, err)
+}
+
+// TestCreateGroup_ForbiddenUsesGenericCreateGuidance verifies non-400 create errors do not use the self-managed deprecation hint.
+func TestCreateGroup_ForbiddenUsesGenericCreateGuidance(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/member_roles" {
+			testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := CreateGroup(context.Background(), client, CreateGroupInput{
+		GroupID:         toolutil.StringOrInt("mygroup"),
+		Name:            "custom-dev",
+		BaseAccessLevel: 30,
+	})
+	if err == nil {
+		t.Fatal("expected error for 403 response, got nil")
+	}
+	if strings.Contains(err.Error(), groupMemberRoleSelfManagedHint) {
+		t.Fatalf("unexpected self-managed hint for 403 response: %v", err)
+	}
 }
 
 // TestDeleteInstance_Success verifies DeleteInstance returns no error when
