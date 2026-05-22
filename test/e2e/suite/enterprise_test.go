@@ -357,16 +357,175 @@ func TestMeta_MemberRoles(t *testing.T) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	grpName := uniqueName("member-role")
+	grpOut, setupErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name":       grpName,
+			"path":       grpName,
+			"visibility": "private",
+		},
+	})
+	requireNoError(t, setupErr, "create group for member roles")
+	defer func() {
+		_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"group_id": strconv.FormatInt(grpOut.ID, 10)},
+		})
+	}()
+
+	var instanceRoleID int64
+	var groupRoleID int64
+	var groupMemberRolesUnavailable bool
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		if instanceRoleID > 0 {
+			_ = callToolVoidOn(cleanupCtx, sess.meta, "gitlab_member_role", map[string]any{
+				"action": "delete_instance",
+				"params": map[string]any{"member_role_id": instanceRoleID},
+			})
+		}
+		if groupRoleID > 0 {
+			_ = callToolVoidOn(cleanupCtx, sess.meta, "gitlab_member_role", map[string]any{
+				"action": "delete_group",
+				"params": map[string]any{
+					"group_id":       strconv.FormatInt(grpOut.ID, 10),
+					"member_role_id": groupRoleID,
+				},
+			})
+		}
+	})
 
 	t.Run("Meta/MemberRole/ListInstance", func(t *testing.T) {
-		_, err := callToolOn[memberroles.ListOutput](ctx, sess.meta, "gitlab_member_role", map[string]any{
+		out, err := callToolOn[memberroles.ListOutput](ctx, sess.meta, "gitlab_member_role", map[string]any{
 			"action": "list_instance",
 			"params": map[string]any{},
 		})
 		requirePremiumFeature(t, err, "member roles")
-		t.Log("Member role list OK")
+		t.Logf("Listed %d instance member role(s)", len(out.Roles))
 	})
+
+	t.Run("Meta/MemberRole/CreateInstance", func(t *testing.T) {
+		readCode := true
+		out, err := callToolOn[memberroles.Output](ctx, sess.meta, "gitlab_member_role", map[string]any{
+			"action": "create_instance",
+			"params": map[string]any{
+				"name":              uniqueName("e2e-instance-role"),
+				"base_access_level": int64(10),
+				"description":       "E2E instance custom role",
+				"read_code":         readCode,
+			},
+		})
+		requirePremiumFeature(t, err, "member role create_instance")
+		requireTruef(t, out.ID > 0, "instance member role ID should be > 0")
+		instanceRoleID = out.ID
+	})
+
+	t.Run("Meta/MemberRole/ListInstanceIncludesCreated", func(t *testing.T) {
+		requireTruef(t, instanceRoleID > 0, "instanceRoleID not set")
+		out, err := callToolOn[memberroles.ListOutput](ctx, sess.meta, "gitlab_member_role", map[string]any{
+			"action": "list_instance",
+			"params": map[string]any{},
+		})
+		requireNoError(t, err, "member role list_instance after create")
+		requireTruef(t, memberRoleListed(out.Roles, instanceRoleID), "created instance member role %d not present in list", instanceRoleID)
+	})
+
+	t.Run("Meta/MemberRole/ListGroup", func(t *testing.T) {
+		out, err := callToolOn[memberroles.ListOutput](ctx, sess.meta, "gitlab_member_role", map[string]any{
+			"action": "list_group",
+			"params": map[string]any{"group_id": strconv.FormatInt(grpOut.ID, 10)},
+		})
+		if err != nil {
+			requireErrorContainsAll(t, err, "deprecated", "self-managed", "instance-level")
+			groupMemberRolesUnavailable = true
+			return
+		}
+		requireNoError(t, err, "member role list_group")
+		t.Logf("Listed %d group member role(s)", len(out.Roles))
+	})
+
+	t.Run("Meta/MemberRole/CreateGroup", func(t *testing.T) {
+		readCode := true
+		out, err := callToolOn[memberroles.Output](ctx, sess.meta, "gitlab_member_role", map[string]any{
+			"action": "create_group",
+			"params": map[string]any{
+				"group_id":          strconv.FormatInt(grpOut.ID, 10),
+				"name":              uniqueName("e2e-group-role"),
+				"base_access_level": int64(10),
+				"description":       "E2E group custom role",
+				"read_code":         readCode,
+			},
+		})
+		if err != nil {
+			requireErrorContainsAll(t, err, "deprecated", "self-managed", "instance-level")
+			groupMemberRolesUnavailable = true
+			return
+		}
+		requireNoError(t, err, "member role create_group")
+		requireTruef(t, out.ID > 0, "group member role ID should be > 0")
+		groupRoleID = out.ID
+	})
+
+	t.Run("Meta/MemberRole/ListGroupIncludesCreated", func(t *testing.T) {
+		if groupMemberRolesUnavailable || groupRoleID <= 0 {
+			return
+		}
+		requireTruef(t, groupRoleID > 0, "groupRoleID not set")
+		out, err := callToolOn[memberroles.ListOutput](ctx, sess.meta, "gitlab_member_role", map[string]any{
+			"action": "list_group",
+			"params": map[string]any{"group_id": strconv.FormatInt(grpOut.ID, 10)},
+		})
+		requireNoError(t, err, "member role list_group after create")
+		requireTruef(t, memberRoleListed(out.Roles, groupRoleID), "created group member role %d not present in list", groupRoleID)
+	})
+
+	t.Run("Meta/MemberRole/DeleteGroup", func(t *testing.T) {
+		if groupMemberRolesUnavailable || groupRoleID <= 0 {
+			err := callToolVoidOn(ctx, sess.meta, "gitlab_member_role", map[string]any{
+				"action": "delete_group",
+				"params": map[string]any{
+					"group_id":       strconv.FormatInt(grpOut.ID, 10),
+					"member_role_id": int64(1),
+				},
+			})
+			requireErrorContainsAll(t, err, "deprecated", "self-managed", "instance-level")
+			return
+		}
+		requireTruef(t, groupRoleID > 0, "groupRoleID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_member_role", map[string]any{
+			"action": "delete_group",
+			"params": map[string]any{
+				"group_id":       strconv.FormatInt(grpOut.ID, 10),
+				"member_role_id": groupRoleID,
+			},
+		})
+		requireNoError(t, err, "member role delete_group")
+		groupRoleID = 0
+	})
+
+	t.Run("Meta/MemberRole/DeleteInstance", func(t *testing.T) {
+		requireTruef(t, instanceRoleID > 0, "instanceRoleID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_member_role", map[string]any{
+			"action": "delete_instance",
+			"params": map[string]any{"member_role_id": instanceRoleID},
+		})
+		requireNoError(t, err, "member role delete_instance")
+		instanceRoleID = 0
+	})
+}
+
+func memberRoleListed(roles []memberroles.Output, roleID int64) bool {
+	for _, role := range roles {
+		if role.ID == roleID {
+			return true
+		}
+	}
+	return false
 }
 
 // TestMeta_Attestations exercises attestation tools via the gitlab_attestation meta-tool.

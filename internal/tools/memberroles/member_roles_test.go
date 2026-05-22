@@ -142,6 +142,21 @@ func TestListGroup_APIError(t *testing.T) {
 	}
 }
 
+// TestListGroup_SelfManagedDeprecationHint verifies 400 responses explain
+// self-managed group role deprecation and point to instance-level roles.
+func TestListGroup_SelfManagedDeprecationHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/member_roles" {
+			testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Group-level custom roles are deprecated on self-managed instances"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := ListGroup(context.Background(), client, ListGroupInput{GroupID: toolutil.StringOrInt("mygroup")})
+	assertGroupMemberRoleDeprecationHint(t, err)
+}
+
 // TestCreateInstance_Success verifies CreateInstance returns the new role when
 // POST /member_roles responds 201 Created.
 func TestCreateInstance_Success(t *testing.T) {
@@ -349,6 +364,25 @@ func TestCreateGroup_APIError(t *testing.T) {
 	}
 }
 
+// TestCreateGroup_SelfManagedDeprecationHint verifies create failures on
+// self-managed GitLab tell callers to use instance-level member roles.
+func TestCreateGroup_SelfManagedDeprecationHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/member_roles" {
+			testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Group-level custom roles are deprecated on self-managed instances"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := CreateGroup(context.Background(), client, CreateGroupInput{
+		GroupID:         toolutil.StringOrInt("mygroup"),
+		Name:            "custom-dev",
+		BaseAccessLevel: 30,
+	})
+	assertGroupMemberRoleDeprecationHint(t, err)
+}
+
 // TestDeleteInstance_Success verifies DeleteInstance returns no error when
 // DELETE /member_roles/:id responds 204 No Content.
 func TestDeleteInstance_Success(t *testing.T) {
@@ -494,6 +528,36 @@ func TestDeleteGroup_APIError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for 500 response, got nil")
+	}
+}
+
+// TestDeleteGroup_SelfManagedDeprecationHint verifies delete failures on
+// self-managed GitLab include the same actionable deprecation guidance.
+func TestDeleteGroup_SelfManagedDeprecationHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/mygroup/member_roles/1" {
+			testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Group-level custom roles are deprecated on self-managed instances"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	err := DeleteGroup(context.Background(), client, DeleteGroupInput{
+		GroupID:      toolutil.StringOrInt("mygroup"),
+		MemberRoleID: 1,
+	})
+	assertGroupMemberRoleDeprecationHint(t, err)
+}
+
+func assertGroupMemberRoleDeprecationHint(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	for _, want := range []string{"deprecated", "self-managed", "instance-level", "GitLab.com Ultimate"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
 	}
 }
 

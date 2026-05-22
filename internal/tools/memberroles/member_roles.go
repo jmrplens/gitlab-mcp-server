@@ -10,6 +10,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const groupMemberRoleSelfManagedHint = "group-level custom roles are deprecated on self-managed GitLab; use instance-level member roles with list_instance/create_instance on gitlab_member_role, or retry group-level roles only on GitLab.com Ultimate where supported"
+
 // ListInstanceInput holds parameters for listing instance member roles.
 type ListInstanceInput struct{}
 
@@ -228,6 +230,9 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, in ListGroupInp
 	}
 	roles, _, err := client.GL().MemberRolesService.ListMemberRoles(in.GroupID.String())
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return ListOutput{}, toolutil.WrapErrWithHint("list group member roles", err, groupMemberRoleSelfManagedHint)
+		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group member roles", err, http.StatusForbidden,
 			"requires Owner role on the group + Ultimate license; group-level custom roles are available on GitLab.com Ultimate; verify group_id with gitlab_group_list")
 	}
@@ -275,6 +280,9 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 	opts := buildCreateOpts(in.Name, in.BaseAccessLevel, in.Description, in.Permissions)
 	role, _, err := client.GL().MemberRolesService.CreateMemberRole(in.GroupID.String(), opts)
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return Output{}, toolutil.WrapErrWithHint("create group member role", err, groupMemberRoleSelfManagedHint)
+		}
 		return Output{}, toolutil.WrapErrWithStatusHint("create group member role", err, http.StatusBadRequest,
 			"requires Owner + Ultimate; base_access_level 10/20/30/40; name unique within group; permissions must be valid; group_id must reference a top-level group")
 	}
@@ -310,6 +318,9 @@ func DeleteGroup(ctx context.Context, client *gitlabclient.Client, in DeleteGrou
 	}
 	_, err := client.GL().MemberRolesService.DeleteMemberRole(in.GroupID.String(), in.MemberRoleID)
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return toolutil.WrapErrWithHint("delete group member role", err, groupMemberRoleSelfManagedHint)
+		}
 		return toolutil.WrapErrWithStatusHint("delete group member role", err, http.StatusForbidden,
 			"requires Owner + Ultimate; verify member_role_id with gitlab_list_group_member_roles; deletion is irreversible and may fail if role is still assigned")
 	}
