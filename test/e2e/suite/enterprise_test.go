@@ -325,14 +325,51 @@ func TestMeta_Dependencies(t *testing.T) {
 	proj := createProjectMeta(ctx, t, sess.meta)
 
 	t.Run("Meta/Dependency/List", func(t *testing.T) {
-		_, err := callToolOn[dependencies.ListOutput](ctx, sess.meta, "gitlab_dependency", map[string]any{
+		out, err := callToolOn[dependencies.ListOutput](ctx, sess.meta, "gitlab_dependency", map[string]any{
 			"action": "list",
 			"params": map[string]any{
 				"project_id": proj.pidStr(),
 			},
 		})
 		requirePremiumFeature(t, err, "dependencies")
-		t.Log("Dependency list OK")
+		t.Logf("Dependencies: %d", len(out.Dependencies))
+	})
+
+	t.Run("Meta/Dependency/ListFiltered", func(t *testing.T) {
+		out, err := callToolOn[dependencies.ListOutput](ctx, sess.meta, "gitlab_dependency", map[string]any{
+			"action": "list",
+			"params": map[string]any{
+				"project_id":      proj.pidStr(),
+				"package_manager": "npm",
+				"per_page":        10,
+			},
+		})
+		requireNoError(t, err, "dependency list with package_manager filter")
+		t.Logf("Filtered dependencies: %d", len(out.Dependencies))
+	})
+
+	t.Run("Meta/Dependency/ExportCreateInvalidPipeline", func(t *testing.T) {
+		_, err := callToolOn[dependencies.ExportOutput](ctx, sess.meta, "gitlab_dependency", map[string]any{
+			"action": "export_create",
+			"params": map[string]any{"pipeline_id": int64(999999999)},
+		})
+		requireErrorContainsAll(t, err, "pipeline_id", "gitlab_pipeline", "dependency scanning", "SBOM")
+	})
+
+	t.Run("Meta/Dependency/ExportGetInvalidID", func(t *testing.T) {
+		_, err := callToolOn[dependencies.ExportOutput](ctx, sess.meta, "gitlab_dependency", map[string]any{
+			"action": "export_get",
+			"params": map[string]any{"export_id": int64(999999999)},
+		})
+		requireErrorContainsAll(t, err, "export_id", "gitlab_create_dependency_list_export", "finished")
+	})
+
+	t.Run("Meta/Dependency/ExportDownloadInvalidID", func(t *testing.T) {
+		_, err := callToolOn[dependencies.DownloadOutput](ctx, sess.meta, "gitlab_dependency", map[string]any{
+			"action": "export_download",
+			"params": map[string]any{"export_id": int64(999999999)},
+		})
+		requireErrorContainsAll(t, err, "export_id", "gitlab_get_dependency_list_export", "CycloneDX")
 	})
 }
 
