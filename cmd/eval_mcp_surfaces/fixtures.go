@@ -1453,7 +1453,7 @@ func taskLiveFixtureStateAvailable(task evalTask, state *liveFixtureState) bool 
 		return state.ManualJobID > 0
 	case "MT-046", "MT-047":
 		return state.RunnerID > 0
-	case "MT-182", "MT-183", "MT-184", "MT-185":
+	case "MT-182", "MT-183", "MT-184", "MT-185", "MT-195", "MS-054":
 		return state.ProjectServiceAccountID > 0
 	case "MT-186", "MT-187":
 		return state.ProjectServiceAccountID > 0 && state.ProjectServiceAccountTokenID > 0
@@ -1517,7 +1517,7 @@ func suffixEvaluationBacktickValuesMatching(prompt, suffix string, shouldSuffix 
 func taskNeedsAttemptResourceSuffix(taskID string) bool {
 	switch taskID {
 	case "MT-007", "MT-015", "MT-026", taskFileCreateID, "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068",
-		"MT-069", "MT-181", "MT-182", "MT-185", "MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", taskMergeRequestAwardID, "MS-035", "MS-036", taskPackageReleaseID, "MS-043":
+		"MT-069", "MT-181", "MT-182", "MT-185", "MT-195", "MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", taskMergeRequestAwardID, "MS-035", "MS-036", taskPackageReleaseID, "MS-043", "MS-045", "MS-046", "MS-047", "MS-048", "MS-049", "MS-050", "MS-051", "MS-052", "MS-053", "MS-054":
 		return true
 	default:
 		return false
@@ -1799,6 +1799,8 @@ var resourceIDReplacements = map[string]resourceIDReplacement{
 	"MT-185": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
 	"MT-186": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
 	"MT-187": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
+	"MT-195": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
+	"MS-054": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
 }
 
 func replaceSimpleResourceIDPlaceholder(taskID, prompt string, state *liveFixtureState) string {

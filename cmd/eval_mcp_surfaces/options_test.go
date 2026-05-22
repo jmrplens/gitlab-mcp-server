@@ -22,6 +22,12 @@ func TestOptionNormalizationHelpers_DefaultsAndValidation(t *testing.T) {
 	if got, err := normalizeEvalToolSurface(" DYNAMIC "); err != nil || got != config.ToolSurfaceDynamic {
 		t.Fatalf("normalizeEvalToolSurface(dynamic) = %q, %v", got, err)
 	}
+	if got, err := normalizeEvalEdition(" Enterprise "); err != nil || got != editionEnterprise {
+		t.Fatalf("normalizeEvalEdition(enterprise) = %q, %v", got, err)
+	}
+	if _, err := normalizeEvalEdition("ultimate"); err == nil {
+		t.Fatal("normalizeEvalEdition(ultimate) error = nil, want unsupported edition")
+	}
 	if _, err := normalizeEvalToolSurface("individual"); err == nil {
 		t.Fatal("normalizeEvalToolSurface(individual) error = nil, want unsupported surface")
 	}
@@ -48,7 +54,7 @@ func TestApplyDockerEnterprisePresetDefaults_ConfiguresLiveEnterprisePartitions(
 			if err != nil {
 				t.Fatalf("applyPresetDefaults() error = %v", err)
 			}
-			if opts.Backend != backendGitLab || opts.GitLabEnv != "test/e2e/.env.docker" || opts.Partition != tc.partition || !opts.Execute || !opts.UseFixtures || !opts.SkipUnavailable {
+			if opts.Backend != backendGitLab || opts.GitLabEnv != "test/e2e/.env.docker" || opts.Partition != tc.partition || opts.Edition != editionEnterprise || !opts.Execute || !opts.UseFixtures || !opts.SkipUnavailable {
 				t.Fatalf("opts = %+v, want live GitLab Docker defaults for %s", opts, tc.preset)
 			}
 			if opts.OnlyMutating != tc.onlyMutating || opts.OnlyDestructive != tc.onlyDestruct || opts.SkipMutating != tc.skipMutating || opts.SkipDestructive != tc.skipDestruct {
@@ -135,7 +141,7 @@ func TestApplyDockerPresetDefaults_RespectsExplicitValues(t *testing.T) {
 	if opts.Backend != "custom" || opts.Partition != "custom-partition" {
 		t.Fatalf("opts = %+v, want explicit backend and partition preserved", opts)
 	}
-	if !opts.Execute || !opts.UseFixtures || !opts.SkipUnavailable || !opts.SkipMutating || !opts.SkipDestructive {
+	if opts.Edition != editionCE || !opts.Execute || !opts.UseFixtures || !opts.SkipUnavailable || !opts.SkipMutating || !opts.SkipDestructive {
 		t.Fatalf("opts = %+v, want Docker capability defaults enabled", opts)
 	}
 }

@@ -2,8 +2,9 @@
 
 This document publishes the current model-evaluation results selected with
 `cmd/eval_mcp_surfaces --publish-docs`. Meta-tools and dynamic results are
-kept in separate managed sections so publishing one surface does not replace the
-other. Raw reports and traces are not committed.
+kept in separate managed sections, with additional Enterprise/Premium sections
+for licensed Docker runs, so publishing one surface or edition does not replace
+the others. Raw reports and traces are not committed.
 
 ## Meta-Tools Results
 
@@ -56,3 +57,15 @@ Published with `cmd/eval_mcp_surfaces --publish-docs` from reviewed Markdown rep
 
 Published with `cmd/eval_mcp_surfaces --publish-docs` from reviewed Markdown reports. Raw traces and JSON artifacts are not included here.
 <!-- END MODEL EVAL DYNAMIC RESULTS -->
+
+## Enterprise Meta-Tools Results
+
+<!-- START MODEL EVAL ENTERPRISE META RESULTS -->
+No Enterprise meta-tool model evaluation results have been published yet.
+<!-- END MODEL EVAL ENTERPRISE META RESULTS -->
+
+## Enterprise Dynamic Results
+
+<!-- START MODEL EVAL ENTERPRISE DYNAMIC RESULTS -->
+No Enterprise dynamic model evaluation results have been published yet.
+<!-- END MODEL EVAL ENTERPRISE DYNAMIC RESULTS -->

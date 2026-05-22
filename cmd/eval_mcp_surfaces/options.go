@@ -31,6 +31,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.Preset, "preset", "", "Optional evaluation preset: docker-read, docker-mutating-safe, docker-destructive-safe, docker-enterprise-read, docker-enterprise-mutating-safe, docker-enterprise-destructive-safe, docker-capability-discovery, or schema-enterprise")
 	flag.StringVar(&opts.Partition, "partition", "", "Optional schema fixture partition: base-read, base-mutating, base-destructive, enterprise-read, enterprise-mutating, enterprise-destructive, error-recovery, or capability-fallback")
 	flag.StringVar(&opts.ToolSurface, "tool-surface", config.DefaultToolSurface, "Tool catalog surface to evaluate: dynamic or meta")
+	flag.StringVar(&opts.Edition, "edition", editionAll, "Task edition filter: all, ce, or enterprise")
 	flag.StringVar(&opts.CoverageReport, "coverage-report", "", "Optional Markdown report listing uncovered high-risk routes after the selected evaluation")
 	flag.StringVar(&opts.Backend, "backend", backendMock, "Live catalog backend: mock or gitlab. gitlab uses GITLAB_URL/GITLAB_TOKEN, optionally loaded from --gitlab-env-file")
 	flag.StringVar(&opts.GitLabEnv, "gitlab-env-file", "", "Optional env file loaded after .env for --backend=gitlab, for example test/e2e/.env.docker")
@@ -87,31 +88,39 @@ func applyPresetDefaults(opts options) (options, error) {
 	opts.Preset = preset
 	switch preset {
 	case presetSchemaEnterprise:
+		setStringDefault(&opts.Edition, opts, "edition", editionEnterprise)
 		setBoolDefault(&opts.DryRun, opts, "dry-run")
 		setBoolDefault(&opts.SkipUnavailable, opts, flagSkipUnavailable)
 	case presetDockerRead:
+		setStringDefault(&opts.Edition, opts, "edition", editionCE)
 		applyDockerPresetDefaults(&opts, partitionBaseRead)
 		setBoolDefault(&opts.SkipMutating, opts, flagSkipMutating)
 		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	case presetDockerMutatingSafe:
+		setStringDefault(&opts.Edition, opts, "edition", editionCE)
 		applyDockerPresetDefaults(&opts, partitionBaseMutating)
 		setBoolDefault(&opts.OnlyMutating, opts, "only-mutating")
 		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	case presetDockerDestructiveSafe:
+		setStringDefault(&opts.Edition, opts, "edition", editionCE)
 		applyDockerPresetDefaults(&opts, partitionBaseDestructive)
 		setBoolDefault(&opts.OnlyDestructive, opts, "only-destructive")
 	case presetDockerEnterpriseRead:
+		setStringDefault(&opts.Edition, opts, "edition", editionEnterprise)
 		applyDockerPresetDefaults(&opts, partitionEnterpriseRead)
 		setBoolDefault(&opts.SkipMutating, opts, flagSkipMutating)
 		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	case presetDockerEnterpriseMutatingSafe:
+		setStringDefault(&opts.Edition, opts, "edition", editionEnterprise)
 		applyDockerPresetDefaults(&opts, partitionEnterpriseMutating)
 		setBoolDefault(&opts.OnlyMutating, opts, "only-mutating")
 		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	case presetDockerEnterpriseDestructiveSafe:
+		setStringDefault(&opts.Edition, opts, "edition", editionEnterprise)
 		applyDockerPresetDefaults(&opts, partitionEnterpriseDestructive)
 		setBoolDefault(&opts.OnlyDestructive, opts, "only-destructive")
 	case presetDockerCapabilityDiscovery:
+		setStringDefault(&opts.Edition, opts, "edition", editionCE)
 		applyDockerPresetDefaults(&opts, partitionCapabilityFallback)
 		setBoolDefault(&opts.SkipMutating, opts, flagSkipMutating)
 		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
@@ -150,6 +159,20 @@ func setStringDefault(target *string, opts options, flagName, value string) {
 func setBoolDefault(target *bool, opts options, flagName string) {
 	if !opts.explicitFlags[flagName] {
 		*target = true
+	}
+}
+
+// normalizeEvalEdition validates the task edition selector.
+func normalizeEvalEdition(edition string) (string, error) {
+	edition = strings.ToLower(strings.TrimSpace(edition))
+	if edition == "" {
+		return editionAll, nil
+	}
+	switch edition {
+	case editionAll, editionCE, editionEnterprise:
+		return edition, nil
+	default:
+		return "", fmt.Errorf("--edition must be %q, %q, or %q, got %q", editionAll, editionCE, editionEnterprise, edition)
 	}
 }
 

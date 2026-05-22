@@ -23,11 +23,44 @@ func TestTaskRoutePredicates_ClassifyEnterpriseMutationAndDestruction(t *testing
 	if !routeLooksDestructive("gitlab_project.archive") || !routeLooksDestructive("mr_review.draft_note_publish_all") {
 		t.Fatal("routeLooksDestructive() missed archive or publish_all")
 	}
-	if !routeLooksMutating("gitlab_runner", "runner.update") || routeLooksMutating("gitlab_project", "get") {
+	if !routeLooksMutating("gitlab_runner", "runner.update") || !routeLooksMutating("gitlab_project", "push_rule_edit") || routeLooksMutating("gitlab_project", "get") {
 		t.Fatal("routeLooksMutating() did not classify update/read correctly")
 	}
-	if !routeLooksEnterprise("gitlab_merge_train", "list_project") || !routeUnavailableOnCE("gitlab_environment", "deployment_approve_or_reject") {
+	if !routeLooksEnterprise("gitlab_merge_train", "list_project") || !routeLooksEnterprise("gitlab_environment", "protected_list") || !routeUnavailableOnCE("gitlab_environment", "deployment_approve_or_reject") {
 		t.Fatal("enterprise/CE route predicates missed known routes")
+	}
+}
+
+// TestFilterTasksByPreset_EnterpriseDockerUsesLiveFixtureRows verifies Docker
+// Enterprise presets avoid schema-only Enterprise rows that do not have live fixtures.
+func TestFilterTasksByPreset_EnterpriseDockerUsesLiveFixtureRows(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "MT-137", ExpectedTool: "gitlab", ExpectedAction: "group.epic_create"},
+		{ID: "MT-192", ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_add"},
+		{ID: "MT-196", ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_delete", Destructive: true},
+		{ID: "MS-045", Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_add"}, {ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_delete", Destructive: true}}},
+	}
+
+	mutating, err := filterTasksByPreset(tasks, presetDockerEnterpriseMutatingSafe)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-enterprise-mutating-safe) error = %v", err)
+	}
+	if got := taskIDs(mutating); got != "MT-192" {
+		t.Fatalf("docker-enterprise-mutating-safe IDs = %q, want MT-192", got)
+	}
+	destructive, err := filterTasksByPreset(tasks, presetDockerEnterpriseDestructiveSafe)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-enterprise-destructive-safe) error = %v", err)
+	}
+	if got := taskIDs(destructive); got != "MT-196,MS-045" {
+		t.Fatalf("docker-enterprise-destructive-safe IDs = %q, want MT-196,MS-045", got)
+	}
+	schema, err := filterTasksByPreset(tasks, presetSchemaEnterprise)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(schema-enterprise) error = %v", err)
+	}
+	if got := taskIDs(schema); got != "MT-137,MT-192,MT-196,MS-045" {
+		t.Fatalf("schema-enterprise IDs = %q, want all Enterprise rows", got)
 	}
 }
 

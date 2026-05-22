@@ -19,6 +19,7 @@ type comparisonInput struct {
 	Mode          string
 	Model         string
 	ToolSurface   string
+	Edition       string
 	Backend       string
 	Preset        string
 	Partition     string
@@ -88,6 +89,7 @@ func parseComparisonInput(path string) (comparisonInput, error) {
 		input.Mode = firstMetadataValue(content, "Mode")
 		input.Model = firstMetadataValue(content, "Model")
 		input.ToolSurface = firstMetadataValue(content, "Tool surface")
+		input.Edition = firstMetadataValue(content, "Edition")
 		input.Backend = firstMetadataValue(content, "Backend")
 		input.Preset = firstMetadataValue(content, "Preset")
 		input.Partition = firstMetadataValue(content, "Partition")

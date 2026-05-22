@@ -150,6 +150,11 @@ func prepareRunOptions() (options, func() error, error) {
 	if surfaceErr != nil {
 		return options{}, nil, surfaceErr
 	}
+	var editionErr error
+	opts.Edition, editionErr = normalizeEvalEdition(opts.Edition)
+	if editionErr != nil {
+		return options{}, nil, editionErr
+	}
 	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return options{}, nil, fmt.Errorf("load .env: %w", err)
 	}
@@ -269,6 +274,9 @@ func prepareRunCatalog(opts options, tasks []evalTask, fixtures *liveFixtureStat
 	}
 	tasks = normalizeTasksForCatalog(tasks, routes, opts.ToolSurface)
 	var err error
+	if tasks, err = applyEditionFilter(tasks, opts.Edition); err != nil {
+		return nil, nil, nil, err
+	}
 	if tasks, err = applyPartitionFilter(tasks, opts.Partition); err != nil {
 		return nil, nil, nil, err
 	}
@@ -290,6 +298,17 @@ func prepareRunCatalog(opts options, tasks []evalTask, fixtures *liveFixtureStat
 		}
 	}
 	return catalog, routes, tasks, nil
+}
+
+func applyEditionFilter(tasks []evalTask, edition string) ([]evalTask, error) {
+	filtered, err := filterTasksByEdition(tasks, edition)
+	if err != nil {
+		return nil, err
+	}
+	if len(filtered) == 0 {
+		return nil, fmt.Errorf("no tasks selected after --edition=%s", edition)
+	}
+	return filtered, nil
 }
 
 func applyPartitionFilter(tasks []evalTask, partition string) ([]evalTask, error) {

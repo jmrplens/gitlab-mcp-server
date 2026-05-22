@@ -53,7 +53,7 @@ Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_P
 
 - **1025 MCP tools** on self-managed Enterprise/Premium, or **1031 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 176 packages under `internal/tools`: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security attributes, security categories, templates, admin settings, access tokens, deploy keys, Orbit, and more
 - **Default dynamic toolset** — exposes only `gitlab_find_action` and `gitlab_execute_tool` while keeping the same canonical GitLab action catalog. Optional domain meta-tools remain available with `TOOL_SURFACE=meta`: 33 base, 49 on self-managed Enterprise/Premium, or 50 on GitLab.com Enterprise/Premium
-- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against a populated GitLab CE instance measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. Published summaries appear in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
+- **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against populated GitLab CE and licensed Enterprise instances measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. Published summaries appear in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
 - **4 elicitation tools** — interactive creation wizards (issue, MR, release, project) with step-by-step user prompts
 - **46 MCP resources** in default dynamic/full mode — read-only data: user, groups, group members, group projects, projects, issues, pipelines, members, labels, milestones, branches, MRs, releases, tags, commits, file blobs, wiki pages, MR notes, MR discussions, single-entity templates (issue, MR, branch, tag, release, label, milestone, commit, wiki page, deployment, environment, job, board, snippet, deploy key, feature flag, group label, group milestone), the surface-aware `gitlab://tools` manifest and `gitlab://tools/{id}` detail template, workspace roots, and 5 workflow best-practice guides
@@ -278,7 +278,8 @@ See the full [Compatibility Matrix](https://jmrplens.github.io/gitlab-mcp-server
 
 The project includes an automated evaluator for model-facing MCP quality. It can
 run schema-only checks against the tool catalog or execute validated model tool
-calls through MCP against a Docker GitLab CE instance populated with fixtures.
+calls through MCP against Docker GitLab CE or licensed Enterprise instances
+populated with fixtures.
 The evaluator measures whether each model chooses the correct meta-tool and
 action, sends valid parameters, recovers from actionable GitLab errors, and
 respects destructive-action safeguards.
@@ -308,6 +309,14 @@ Current published result: **Docker CE dynamic 20260522-005714**.
 
 The published model-evaluation set covers 552 task attempts and 1064 expected MCP operations. Across the selected reports, models emitted 1097 tool calls over 1097 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
+
+<!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
+No Enterprise meta-tool model evaluation summary has been published yet.
+<!-- END MODEL EVAL ENTERPRISE META SUMMARY -->
+
+<!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
+No Enterprise dynamic model evaluation summary has been published yet.
+<!-- END MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
 
 ## Documentation
 

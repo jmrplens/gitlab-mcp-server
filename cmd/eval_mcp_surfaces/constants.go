@@ -13,6 +13,12 @@ const (
 	backendMock = "mock"
 	// backendGitLab identifies the backend GitLab constant used by this package.
 	backendGitLab = "gitlab"
+	// editionAll identifies the edition selector that keeps every task.
+	editionAll = "all"
+	// editionCE identifies the GitLab CE/base task selector.
+	editionCE = "ce"
+	// editionEnterprise identifies the GitLab Enterprise/Premium task selector.
+	editionEnterprise = "enterprise"
 	// anthropicAPI identifies the anthropic API constant used by this package.
 	anthropicAPI = "https://api.anthropic.com/v1/messages"
 	// anthropicVersion identifies the anthropic version constant used by this package.

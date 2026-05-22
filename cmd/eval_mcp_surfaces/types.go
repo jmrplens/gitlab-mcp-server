@@ -28,6 +28,7 @@ type options struct {
 	Preset                 string
 	Partition              string
 	ToolSurface            string
+	Edition                string
 	CoverageReport         string
 	Backend                string
 	GitLabEnv              string

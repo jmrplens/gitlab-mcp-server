@@ -18,16 +18,16 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,432 |
-| Unit test functions                                   | 10,177 |
+| Total test functions                                  | 10,435 |
+| Unit test functions                                   | 10,180 |
 | E2E test functions                                    |    255 |
-| cmd test functions                                    |    639 |
+| cmd test functions                                    |    642 |
 | Test files (internal/)                                |    436 |
 | Test files (cmd/)                                     |     39 |
 | Test files (test/e2e/suite/)                          |    120 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     19 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  89.6% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  89.5% |
 | Overall coverage (`go test ./internal/...`)           |  98.8% |
 | Average package coverage                              |  95.5% |
 
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,350 | 89.6% |
+| `TestFunc_Scenario` (2-part)           | 9,353 | 89.6% |
 | `TestFunc` (no underscore)             |   788 |  7.6% |
 | `TestFunc_Scenario_Expected` (3+ part) |   294 |  2.8% |
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          7,482 |        335 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            255 |        120 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            639 |         39 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,432** |    **595** |                                                                                                 |
+| cmd packages            |            642 |         39 | server entry point and developer command utilities                                              |
+| **Total**               |     **10,435** |    **595** |                                                                                                 |
 
 ### Core Packages
 
@@ -309,7 +309,7 @@
 | cmd/audit_test_names            |    81.6% |
 | cmd/audit_tokens                |    19.5% |
 | cmd/audit_tools                 |    34.9% |
-| cmd/eval_mcp_surfaces           |    67.8% |
+| cmd/eval_mcp_surfaces           |    67.2% |
 | cmd/find_dupes                  |    90.1% |
 | cmd/format_md_tables            |    87.2% |
 | cmd/gen_action_catalog_manifest |    58.3% |
@@ -538,7 +538,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/add_docs** (67.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_mcp_surfaces** (67.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_mcp_surfaces** (67.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_action_spec_coverage** (77.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.1%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_test_names** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

@@ -31,6 +31,29 @@ func filterTasks(tasks []evalTask, onlyIDs string) []evalTask {
 	return filtered
 }
 
+// filterTasksByEdition filters tasks by GitLab edition coverage.
+func filterTasksByEdition(tasks []evalTask, edition string) ([]evalTask, error) {
+	edition = strings.ToLower(strings.TrimSpace(edition))
+	if edition == "" || edition == editionAll {
+		return tasks, nil
+	}
+	if edition != editionCE && edition != editionEnterprise {
+		return nil, fmt.Errorf("unknown --edition %q", edition)
+	}
+	filtered := make([]evalTask, 0, len(tasks))
+	for _, task := range tasks {
+		enterprise := taskHasEnterpriseStep(task)
+		if edition == editionCE && enterprise {
+			continue
+		}
+		if edition == editionEnterprise && !enterprise {
+			continue
+		}
+		filtered = append(filtered, task)
+	}
+	return filtered, nil
+}
+
 // filterTasksByDestructive handles filter tasks by destructive and returns [[]evalTask].
 func filterTasksByDestructive(tasks []evalTask, skipDestructive, onlyDestructive bool) ([]evalTask, error) {
 	if skipDestructive && onlyDestructive {
@@ -322,21 +345,23 @@ func taskDeletesProjectServiceAccount(task evalTask) bool {
 func taskMatchesPreset(task evalTask, preset string) bool {
 	capabilityFallback := taskUsesCapabilityFallback(task)
 	traits := taskPresetTraits{
-		Enterprise:         taskHasEnterpriseStep(task),
-		Destructive:        taskHasDestructiveStep(task),
-		Mutating:           taskHasMutatingStep(task),
-		Special:            strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) || capabilityFallback,
-		CapabilityFallback: capabilityFallback,
+		Enterprise:              taskHasEnterpriseStep(task),
+		EnterpriseDockerFixture: taskIsEnterpriseDockerFixture(task),
+		Destructive:             taskHasDestructiveStep(task),
+		Mutating:                taskHasMutatingStep(task),
+		Special:                 strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) || capabilityFallback,
+		CapabilityFallback:      capabilityFallback,
 	}
 	return taskPresetMatchesTraits(traits, preset)
 }
 
 type taskPresetTraits struct {
-	Enterprise         bool
-	Destructive        bool
-	Mutating           bool
-	Special            bool
-	CapabilityFallback bool
+	Enterprise              bool
+	EnterpriseDockerFixture bool
+	Destructive             bool
+	Mutating                bool
+	Special                 bool
+	CapabilityFallback      bool
 }
 
 type taskPresetPredicate func(taskPresetTraits) bool
@@ -355,13 +380,13 @@ var taskPresetPredicates = map[string]taskPresetPredicate{
 		return !traits.Enterprise && traits.Destructive && !traits.Special
 	},
 	presetDockerEnterpriseRead: func(traits taskPresetTraits) bool {
-		return traits.Enterprise && !traits.Mutating && !traits.Destructive && !traits.Special
+		return traits.Enterprise && traits.EnterpriseDockerFixture && !traits.Mutating && !traits.Destructive && !traits.Special
 	},
 	presetDockerEnterpriseMutatingSafe: func(traits taskPresetTraits) bool {
-		return traits.Enterprise && traits.Mutating && !traits.Destructive && !traits.Special
+		return traits.Enterprise && traits.EnterpriseDockerFixture && traits.Mutating && !traits.Destructive && !traits.Special
 	},
 	presetDockerEnterpriseDestructiveSafe: func(traits taskPresetTraits) bool {
-		return traits.Enterprise && traits.Destructive && !traits.Special
+		return traits.Enterprise && traits.EnterpriseDockerFixture && traits.Destructive && !traits.Special
 	},
 	presetDockerCapabilityDiscovery: func(traits taskPresetTraits) bool {
 		return traits.CapabilityFallback
@@ -371,6 +396,37 @@ var taskPresetPredicates = map[string]taskPresetPredicate{
 func taskPresetMatchesTraits(traits taskPresetTraits, preset string) bool {
 	predicate, ok := taskPresetPredicates[preset]
 	return ok && predicate(traits)
+}
+
+var enterpriseDockerFixtureTasks = map[string]struct{}{
+	"MT-188": {},
+	"MT-189": {},
+	"MT-190": {},
+	"MT-191": {},
+	"MT-192": {},
+	"MT-193": {},
+	"MT-194": {},
+	"MT-195": {},
+	"MT-196": {},
+	"MT-197": {},
+	"MT-198": {},
+	"MS-043": {},
+	"MS-044": {},
+	"MS-045": {},
+	"MS-046": {},
+	"MS-047": {},
+	"MS-048": {},
+	"MS-049": {},
+	"MS-050": {},
+	"MS-051": {},
+	"MS-052": {},
+	"MS-053": {},
+	"MS-054": {},
+}
+
+func taskIsEnterpriseDockerFixture(task evalTask) bool {
+	_, ok := enterpriseDockerFixtureTasks[task.ID]
+	return ok
 }
 
 // taskHasEnterpriseStep reports whether task has enterprise step.
@@ -392,6 +448,7 @@ func routeLooksEnterprise(tool, action string) bool {
 	for _, prefix := range []string{
 		"attestation.", "audit_event.", "compliance_policy.", "dependency.", "dora_metrics.", "enterprise_user.", "external_status_check.", "geo.", "group_analytics.", "group_credential.", "group_epic_board.", "group_iteration.", "group_ldap.", "group_protected_branch.", "group_protected_env.", "group_release.", "group_saml.", "group_scim.", "group_service_account.", "group_ssh_cert.", "group_wiki.", "member_role.", "merge_train.", "project_alias.", "project_iteration.", "security_finding.", "security_setting.", "storage_move.", "vulnerability.",
 		"epic.", "epic_discussion.", "epic_issue.", "epic_note.",
+		"environment.protected_",
 		"project.mirror_", "project.push_rule_", "project.security_settings_", "project.service_account_",
 		"group.analytics_", "group.credential_", "group.epic_", "group.iteration_", "group.ldap_", "group.protected_branch_", "group.protected_env_", "group.release_", "group.saml_", "group.security_settings_", "group.service_account_", "group.ssh_cert_", "group.wiki_",
 		"issue.iteration_",
@@ -495,7 +552,7 @@ func routeLooksMutating(tool, action string) bool {
 	}
 	for _, token := range strings.FieldsFunc(action, func(r rune) bool { return r == '.' || r == '_' || r == '-' }) {
 		switch token {
-		case "add", "approve", "archive", "assign", "bulk", "cancel", "clear", "close", "create", "delete", "disable", "enable", "fork", "keep", "lock", "merge", "move", "play", "protect", "publish", "reject", "remove", "reopen", "resolve", "retry", "revoke", "rotate", "run", "set", "star", "stop", "subscribe", "transfer", "trigger", "unarchive", "unassign", "unlock", "unprotect", "unsubscribe", "update", "upload":
+		case "add", "approve", "archive", "assign", "bulk", "cancel", "clear", "close", "create", "delete", "disable", "edit", "enable", "fork", "keep", "lock", "merge", "move", "play", "protect", "publish", "reject", "remove", "reopen", "resolve", "retry", "revoke", "rotate", "run", "set", "star", "stop", "subscribe", "transfer", "trigger", "unarchive", "unassign", "unlock", "unprotect", "unsubscribe", "update", "upload":
 			return true
 		}
 	}

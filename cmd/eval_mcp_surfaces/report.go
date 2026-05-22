@@ -67,6 +67,9 @@ func writeReportHeader(b *strings.Builder, opts options, dryRun bool) {
 	fmt.Fprintf(b, "Mode: %s\n", reportMode(dryRun))
 	fmt.Fprintf(b, "Model: `%s`\n", opts.Model)
 	fmt.Fprintf(b, "Tool surface: `%s`\n", opts.ToolSurface)
+	if opts.Edition != "" && opts.Edition != editionAll {
+		fmt.Fprintf(b, "Edition: `%s`\n", opts.Edition)
+	}
 	fmt.Fprintf(b, "Backend: `%s`\n", normalizedBackend(opts.Backend))
 	if opts.TerminalLog != "" {
 		fmt.Fprintf(b, "Terminal output: `%s`\n", opts.TerminalLog)

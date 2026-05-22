@@ -134,9 +134,12 @@ argument. The only required input is the tool surface (`dynamic` or `meta`). The
 wrapper cleans and starts the Docker GitLab stack, waits for readiness,
 provisions the E2E token and runner, prepares live fixtures, runs the selected
 Docker preset set with the requested edition flag, and then publishes the
-reviewed reports into [AI Model Evaluation Results](model-results.md) and the
-managed README summary after full runs. Single-preset runs skip documentation
-publishing so partial results do not replace the current full-run summary.
+reviewed reports into the matching CE/base or Enterprise/Premium sections in
+[AI Model Evaluation Results](model-results.md) and the managed README summary
+after full runs. Single-preset runs skip documentation publishing so partial
+results do not replace the current full-run summary. Enterprise full runs use
+only the `docker-enterprise-*` presets; CE capability-discovery checks stay in
+the CE wrapper.
 
 Artifacts are written under `dist/evaluation/surfaces/<timestamp>-<surface>-docker/`.
 The timestamp is captured once at startup and reused for every report, trace,

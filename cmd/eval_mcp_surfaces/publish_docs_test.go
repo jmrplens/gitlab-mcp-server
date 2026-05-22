@@ -333,6 +333,70 @@ func TestPublishEvaluationDocs_RoutesDynamicReportsToDynamicSection(t *testing.T
 	}
 }
 
+// TestPublishEvaluationDocs_RoutesEnterpriseReportsToEnterpriseSections verifies
+// Enterprise dynamic and meta reports update their dedicated managed blocks.
+func TestPublishEvaluationDocs_RoutesEnterpriseReportsToEnterpriseSections(t *testing.T) {
+	tmp := t.TempDir()
+	metaReport := filepath.Join(tmp, "enterprise-meta-report.md")
+	if err := os.WriteFile(metaReport, []byte(singleModelPublishReport("openai:gpt-5.4-nano", presetDockerEnterpriseRead, fullDockerAttemptsByPreset[presetDockerEnterpriseRead])), 0o600); err != nil {
+		t.Fatalf("write meta report: %v", err)
+	}
+	dynamicReport := filepath.Join(tmp, "enterprise-dynamic-report.md")
+	if err := os.WriteFile(dynamicReport, []byte(dynamicSingleModelPublishReport("google:gemini-3.1-flash-lite-preview", presetDockerEnterpriseMutatingSafe, fullDockerAttemptsByPreset[presetDockerEnterpriseMutatingSafe])), 0o600); err != nil {
+		t.Fatalf("write dynamic report: %v", err)
+	}
+	resultsPath := filepath.Join(tmp, "model-results.md")
+	readmePath := filepath.Join(tmp, "README.md")
+	resultsDoc := "# Results\n\n" +
+		modelEvalMetaResultsStart + "\nexisting CE meta results\n" + modelEvalMetaResultsEnd + "\n\n" +
+		modelEvalDynamicResultsStart + "\nexisting CE dynamic results\n" + modelEvalDynamicResultsEnd + "\n\n" +
+		modelEvalEnterpriseMetaResultsStart + "\n" + modelEvalEnterpriseMetaResultsEnd + "\n\n" +
+		modelEvalEnterpriseDynamicResultsStart + "\n" + modelEvalEnterpriseDynamicResultsEnd + "\n"
+	if err := os.WriteFile(resultsPath, []byte(resultsDoc), 0o600); err != nil {
+		t.Fatalf("write results doc: %v", err)
+	}
+	readmeDoc := "# README\n\n" +
+		modelEvalMetaSummaryStart + "\nexisting CE meta summary\n" + modelEvalMetaSummaryEnd + "\n\n" +
+		modelEvalDynamicSummaryStart + "\nexisting CE dynamic summary\n" + modelEvalDynamicSummaryEnd + "\n\n" +
+		modelEvalEnterpriseMetaSummaryStart + "\n" + modelEvalEnterpriseMetaSummaryEnd + "\n\n" +
+		modelEvalEnterpriseDynamicSummaryStart + "\n" + modelEvalEnterpriseDynamicSummaryEnd + "\n"
+	if err := os.WriteFile(readmePath, []byte(readmeDoc), 0o600); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+
+	opts := options{
+		PublishDocs:    true,
+		PublishFrom:    stringList{metaReport, dynamicReport},
+		PublishResults: resultsPath,
+		PublishReadme:  readmePath,
+		PublishLabel:   "2026-05-10 Enterprise Docker full run",
+		PublishMode:    publishModeReplaceCurrent,
+	}
+	if err := publishEvaluationDocs(opts); err != nil {
+		t.Fatalf("publishEvaluationDocs(enterprise) error = %v", err)
+	}
+	results, err := os.ReadFile(resultsPath)
+	if err != nil {
+		t.Fatalf("read results: %v", err)
+	}
+	if !strings.Contains(string(results), "existing CE meta results") || !strings.Contains(string(results), "existing CE dynamic results") {
+		t.Fatalf("enterprise publish did not preserve CE results: %s", results)
+	}
+	if !strings.Contains(string(results), "| `openai:gpt-5.4-nano` | `docker-enterprise-read`") || !strings.Contains(string(results), "| `google:gemini-3.1-flash-lite-preview` | `docker-enterprise-mutating-safe`") {
+		t.Fatalf("enterprise result sections were not updated: %s", results)
+	}
+	readme, err := os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatalf("read readme: %v", err)
+	}
+	if !strings.Contains(string(readme), "existing CE meta summary") || !strings.Contains(string(readme), "existing CE dynamic summary") {
+		t.Fatalf("enterprise publish did not preserve CE summaries: %s", readme)
+	}
+	if count := strings.Count(string(readme), "Current published result: **2026-05-10 Enterprise Docker full run**."); count != 2 {
+		t.Fatalf("enterprise readme summaries updated %d sections, want 2: %s", count, readme)
+	}
+}
+
 // TestReadPublishReport_SplitsFullRunByPresetFromTraceArtifacts verifies that
 // full dynamic runs without a report-level preset are still published as
 // preset-scoped rows when trace artifacts are available.
@@ -456,6 +520,9 @@ func TestPublishFormattingHelpers_CoverBranchLabels(t *testing.T) {
 	}
 	if got := publishSectionForReport(publishReport{ToolSurface: config.ToolSurfaceDynamic}); got != publishSectionDynamic {
 		t.Fatalf("publishSectionForReport(dynamic) = %q, want dynamic", got)
+	}
+	if got := publishSectionForReport(publishReport{ToolSurface: config.ToolSurfaceMeta, Preset: presetDockerEnterpriseRead}); got != publishSectionEnterpriseMeta {
+		t.Fatalf("publishSectionForReport(enterprise meta) = %q, want enterprise-meta", got)
 	}
 	if got := publishSectionForReport(publishReport{ToolSurface: "experimental"}); got != publishSectionUnknown {
 		t.Fatalf("publishSectionForReport(unknown) = %q, want unknown", got)

@@ -511,9 +511,9 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 		{ID: "schema-title-write", Prompt: "Create an issue titled `Evaluate schema discovery`.", ExpectedTool: "gitlab", ExpectedAction: "issue.create"},
 		{ID: "archive", ExpectedTool: "gitlab_project", ExpectedAction: "archive"},
 		{ID: "delete", ExpectedTool: "gitlab", ExpectedAction: "issue.delete", Destructive: true},
-		{ID: "enterprise", ExpectedTool: "gitlab", ExpectedAction: "merge_train.list_project"},
-		{ID: "enterprise-write", ExpectedTool: "gitlab", ExpectedAction: "project.service_account_create"},
-		{ID: "enterprise-delete", ExpectedTool: "gitlab", ExpectedAction: "project.service_account_delete", Destructive: true},
+		{ID: "MT-188", ExpectedTool: "gitlab_project", ExpectedAction: "security_settings_get"},
+		{ID: "MT-192", ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_add"},
+		{ID: "MT-196", ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_delete", Destructive: true},
 		{ID: "fallback", ExpectedTool: "gitlab_server", ExpectedAction: "schema_get"},
 		{ID: "capability", Steps: []evalStep{{ExpectedTool: resourceListTool}, {ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}},
 	}
@@ -543,29 +543,29 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("filterTasksByPreset(schema-enterprise) error = %v", err)
 	}
-	if got := taskIDs(enterprise); got != "enterprise,enterprise-write,enterprise-delete" {
-		t.Fatalf("schema-enterprise IDs = %q, want enterprise,enterprise-write,enterprise-delete", got)
+	if got := taskIDs(enterprise); got != "MT-188,MT-192,MT-196" {
+		t.Fatalf("schema-enterprise IDs = %q, want MT-188,MT-192,MT-196", got)
 	}
 	enterpriseRead, err := filterTasksByPreset(tasks, presetDockerEnterpriseRead)
 	if err != nil {
 		t.Fatalf("filterTasksByPreset(docker-enterprise-read) error = %v", err)
 	}
-	if got := taskIDs(enterpriseRead); got != "enterprise" {
-		t.Fatalf("docker-enterprise-read IDs = %q, want enterprise", got)
+	if got := taskIDs(enterpriseRead); got != "MT-188" {
+		t.Fatalf("docker-enterprise-read IDs = %q, want MT-188", got)
 	}
 	enterpriseMutating, err := filterTasksByPreset(tasks, presetDockerEnterpriseMutatingSafe)
 	if err != nil {
 		t.Fatalf("filterTasksByPreset(docker-enterprise-mutating-safe) error = %v", err)
 	}
-	if got := taskIDs(enterpriseMutating); got != "enterprise-write" {
-		t.Fatalf("docker-enterprise-mutating-safe IDs = %q, want enterprise-write", got)
+	if got := taskIDs(enterpriseMutating); got != "MT-192" {
+		t.Fatalf("docker-enterprise-mutating-safe IDs = %q, want MT-192", got)
 	}
 	enterpriseDestructive, err := filterTasksByPreset(tasks, presetDockerEnterpriseDestructiveSafe)
 	if err != nil {
 		t.Fatalf("filterTasksByPreset(docker-enterprise-destructive-safe) error = %v", err)
 	}
-	if got := taskIDs(enterpriseDestructive); got != "enterprise-delete" {
-		t.Fatalf("docker-enterprise-destructive-safe IDs = %q, want enterprise-delete", got)
+	if got := taskIDs(enterpriseDestructive); got != "MT-196" {
+		t.Fatalf("docker-enterprise-destructive-safe IDs = %q, want MT-196", got)
 	}
 	capability, err := filterTasksByPreset(tasks, presetDockerCapabilityDiscovery)
 	if err != nil {
@@ -573,6 +573,38 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 	}
 	if got := taskIDs(capability); got != "fallback,capability" {
 		t.Fatalf("docker-capability-discovery IDs = %q, want fallback,capability", got)
+	}
+}
+
+// TestFilterTasksByEdition_SelectsCEAndEnterpriseTasks verifies edition-level
+// filtering keeps base/capability tasks separate from Enterprise tasks.
+func TestFilterTasksByEdition_SelectsCEAndEnterpriseTasks(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
+		{ID: "enterprise", ExpectedTool: "gitlab", ExpectedAction: "merge_train.list_project"},
+		{ID: "capability", Steps: []evalStep{{ExpectedTool: resourceListTool}}},
+	}
+
+	ce, err := filterTasksByEdition(tasks, editionCE)
+	if err != nil {
+		t.Fatalf("filterTasksByEdition(ce) error = %v", err)
+	}
+	if got := taskIDs(ce); got != "read,capability" {
+		t.Fatalf("CE IDs = %q, want read,capability", got)
+	}
+	enterprise, err := filterTasksByEdition(tasks, editionEnterprise)
+	if err != nil {
+		t.Fatalf("filterTasksByEdition(enterprise) error = %v", err)
+	}
+	if got := taskIDs(enterprise); got != "enterprise" {
+		t.Fatalf("Enterprise IDs = %q, want enterprise", got)
+	}
+	all, err := filterTasksByEdition(tasks, editionAll)
+	if err != nil {
+		t.Fatalf("filterTasksByEdition(all) error = %v", err)
+	}
+	if got := taskIDs(all); got != "read,enterprise,capability" {
+		t.Fatalf("All IDs = %q, want read,enterprise,capability", got)
 	}
 }
 

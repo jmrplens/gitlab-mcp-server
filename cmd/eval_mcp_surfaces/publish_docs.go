@@ -36,6 +36,14 @@ const (
 	modelEvalDynamicSummaryStart = "<!-- START MODEL EVAL DYNAMIC SUMMARY -->"
 	// modelEvalDynamicSummaryEnd identifies the model eval dynamic summary end constant used by this package.
 	modelEvalDynamicSummaryEnd = "<!-- END MODEL EVAL DYNAMIC SUMMARY -->"
+	// modelEvalEnterpriseMetaSummaryStart identifies the Enterprise meta summary start marker.
+	modelEvalEnterpriseMetaSummaryStart = "<!-- START MODEL EVAL ENTERPRISE META SUMMARY -->"
+	// modelEvalEnterpriseMetaSummaryEnd identifies the Enterprise meta summary end marker.
+	modelEvalEnterpriseMetaSummaryEnd = "<!-- END MODEL EVAL ENTERPRISE META SUMMARY -->"
+	// modelEvalEnterpriseDynamicSummaryStart identifies the Enterprise dynamic summary start marker.
+	modelEvalEnterpriseDynamicSummaryStart = "<!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->"
+	// modelEvalEnterpriseDynamicSummaryEnd identifies the Enterprise dynamic summary end marker.
+	modelEvalEnterpriseDynamicSummaryEnd = "<!-- END MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->"
 	// modelEvalMetaResultsStart identifies the model eval meta results start constant used by this package.
 	modelEvalMetaResultsStart = "<!-- START MODEL EVAL META RESULTS -->"
 	// modelEvalMetaResultsEnd identifies the model eval meta results end constant used by this package.
@@ -44,6 +52,14 @@ const (
 	modelEvalDynamicResultsStart = "<!-- START MODEL EVAL DYNAMIC RESULTS -->"
 	// modelEvalDynamicResultsEnd identifies the model eval dynamic results end constant used by this package.
 	modelEvalDynamicResultsEnd = "<!-- END MODEL EVAL DYNAMIC RESULTS -->"
+	// modelEvalEnterpriseMetaResultsStart identifies the Enterprise meta results start marker.
+	modelEvalEnterpriseMetaResultsStart = "<!-- START MODEL EVAL ENTERPRISE META RESULTS -->"
+	// modelEvalEnterpriseMetaResultsEnd identifies the Enterprise meta results end marker.
+	modelEvalEnterpriseMetaResultsEnd = "<!-- END MODEL EVAL ENTERPRISE META RESULTS -->"
+	// modelEvalEnterpriseDynamicResultsStart identifies the Enterprise dynamic results start marker.
+	modelEvalEnterpriseDynamicResultsStart = "<!-- START MODEL EVAL ENTERPRISE DYNAMIC RESULTS -->"
+	// modelEvalEnterpriseDynamicResultsEnd identifies the Enterprise dynamic results end marker.
+	modelEvalEnterpriseDynamicResultsEnd = "<!-- END MODEL EVAL ENTERPRISE DYNAMIC RESULTS -->"
 	// modelEvalResultsStart identifies the model eval results start constant used by this package.
 	modelEvalResultsStart = "<!-- START MODEL EVAL RESULTS -->"
 	// modelEvalResultsEnd identifies the model eval results end constant used by this package.
@@ -52,6 +68,10 @@ const (
 	publishSectionMeta = "meta"
 	// publishSectionDynamic identifies the publish section dynamic constant used by this package.
 	publishSectionDynamic = "dynamic"
+	// publishSectionEnterpriseMeta identifies the Enterprise meta publication section.
+	publishSectionEnterpriseMeta = "enterprise-meta"
+	// publishSectionEnterpriseDynamic identifies the Enterprise dynamic publication section.
+	publishSectionEnterpriseDynamic = "enterprise-dynamic"
 	// publishSectionUnknown identifies the publish section unknown constant used by this package.
 	publishSectionUnknown = "unknown"
 	// maxPublishTraceLineBytes identifies the max publish trace line bytes constant used by this package.
@@ -77,9 +97,12 @@ const (
 
 // fullDockerAttemptsByPreset stores the minimum per-model attempts for complete Docker preset reports.
 var fullDockerAttemptsByPreset = map[string]int{
-	presetDockerRead:            38,
-	presetDockerMutatingSafe:    33,
-	presetDockerDestructiveSafe: 63,
+	presetDockerRead:                      38,
+	presetDockerMutatingSafe:              33,
+	presetDockerDestructiveSafe:           63,
+	presetDockerEnterpriseRead:            5,
+	presetDockerEnterpriseMutatingSafe:    5,
+	presetDockerEnterpriseDestructiveSafe: 13,
 }
 
 // publishReport captures publish report data for published evaluation reports.
@@ -89,6 +112,7 @@ type publishReport struct {
 	Mode                   string
 	Model                  string
 	ToolSurface            string
+	Edition                string
 	Backend                string
 	Preset                 string
 	ToolExecution          string
@@ -231,10 +255,16 @@ func publishEvaluationDocs(opts options) error {
 func publishDocSectionsForReports(reports []publishReport) []publishDocSection {
 	keys := map[string]bool{}
 	for _, report := range reports {
-		keys[publishSectionForReport(report)] = true
+		if len(report.Rows) == 0 {
+			keys[publishSectionForReport(report)] = true
+			continue
+		}
+		for _, row := range report.Rows {
+			keys[publishSectionForRow(report, row)] = true
+		}
 	}
 	sections := make([]publishDocSection, 0, len(keys))
-	for _, key := range []string{publishSectionMeta, publishSectionDynamic} {
+	for _, key := range []string{publishSectionMeta, publishSectionDynamic, publishSectionEnterpriseMeta, publishSectionEnterpriseDynamic} {
 		if keys[key] {
 			sections = append(sections, publishDocSectionForKey(key))
 		}
@@ -246,8 +276,20 @@ func publishDocSectionsForReports(reports []publishReport) []publishDocSection {
 func filterPublishReportsBySection(reports []publishReport, sectionKey string) []publishReport {
 	filtered := make([]publishReport, 0, len(reports))
 	for _, report := range reports {
-		if publishSectionForReport(report) == sectionKey {
+		if len(report.Rows) == 0 && publishSectionForReport(report) == sectionKey {
 			filtered = append(filtered, report)
+			continue
+		}
+		sectionRows := make([]publishRow, 0, len(report.Rows))
+		for _, row := range report.Rows {
+			if publishSectionForRow(report, row) == sectionKey {
+				sectionRows = append(sectionRows, row)
+			}
+		}
+		if len(sectionRows) > 0 {
+			sectionReport := report
+			sectionReport.Rows = sectionRows
+			filtered = append(filtered, sectionReport)
 		}
 	}
 	return filtered
@@ -255,7 +297,36 @@ func filterPublishReportsBySection(reports []publishReport, sectionKey string) [
 
 // publishSectionForReport maps a report tool surface to its publication section.
 func publishSectionForReport(report publishReport) string {
-	surface := strings.ToLower(strings.TrimSpace(report.ToolSurface))
+	section := publishSectionForSurface(report.ToolSurface)
+	if section == publishSectionUnknown {
+		return section
+	}
+	if publishReportEdition(report) == editionEnterprise {
+		return enterprisePublishSection(section)
+	}
+	for _, row := range report.Rows {
+		if publishPresetIsEnterprise(row.Preset) {
+			return enterprisePublishSection(section)
+		}
+	}
+	return section
+}
+
+// publishSectionForRow maps a publish row to its edition-aware section.
+func publishSectionForRow(report publishReport, row publishRow) string {
+	section := publishSectionForSurface(report.ToolSurface)
+	if section == publishSectionUnknown {
+		return section
+	}
+	if publishReportEdition(report) == editionEnterprise || publishPresetIsEnterprise(row.Preset) {
+		return enterprisePublishSection(section)
+	}
+	return section
+}
+
+// publishSectionForSurface maps a tool surface to its base publication section.
+func publishSectionForSurface(toolSurface string) string {
+	surface := strings.ToLower(strings.TrimSpace(toolSurface))
 	switch surface {
 	case "", config.ToolSurfaceMeta:
 		return publishSectionMeta
@@ -266,9 +337,61 @@ func publishSectionForReport(report publishReport) string {
 	}
 }
 
+// enterprisePublishSection returns the Enterprise variant of a base section.
+func enterprisePublishSection(sectionKey string) string {
+	switch sectionKey {
+	case publishSectionMeta:
+		return publishSectionEnterpriseMeta
+	case publishSectionDynamic:
+		return publishSectionEnterpriseDynamic
+	default:
+		return sectionKey
+	}
+}
+
+// publishReportEdition normalizes report edition metadata for publication.
+func publishReportEdition(report publishReport) string {
+	edition := strings.ToLower(strings.TrimSpace(report.Edition))
+	switch edition {
+	case editionCE, editionEnterprise:
+		return edition
+	}
+	if publishPresetIsEnterprise(report.Preset) {
+		return editionEnterprise
+	}
+	return editionAll
+}
+
+// publishPresetIsEnterprise reports whether a preset belongs to Enterprise output tables.
+func publishPresetIsEnterprise(preset string) bool {
+	switch strings.TrimSpace(preset) {
+	case presetSchemaEnterprise, presetDockerEnterpriseRead, presetDockerEnterpriseMutatingSafe, presetDockerEnterpriseDestructiveSafe,
+		partitionEnterpriseRead, partitionEnterpriseMutating, partitionEnterpriseDestructive:
+		return true
+	default:
+		return false
+	}
+}
+
 // publishDocSectionForKey returns marker pairs for a publication section.
 func publishDocSectionForKey(sectionKey string) publishDocSection {
 	switch sectionKey {
+	case publishSectionEnterpriseDynamic:
+		return publishDocSection{
+			Key:                publishSectionEnterpriseDynamic,
+			ResultsStartMarker: modelEvalEnterpriseDynamicResultsStart,
+			ResultsEndMarker:   modelEvalEnterpriseDynamicResultsEnd,
+			SummaryStartMarker: modelEvalEnterpriseDynamicSummaryStart,
+			SummaryEndMarker:   modelEvalEnterpriseDynamicSummaryEnd,
+		}
+	case publishSectionEnterpriseMeta:
+		return publishDocSection{
+			Key:                publishSectionEnterpriseMeta,
+			ResultsStartMarker: modelEvalEnterpriseMetaResultsStart,
+			ResultsEndMarker:   modelEvalEnterpriseMetaResultsEnd,
+			SummaryStartMarker: modelEvalEnterpriseMetaSummaryStart,
+			SummaryEndMarker:   modelEvalEnterpriseMetaSummaryEnd,
+		}
 	case publishSectionDynamic:
 		return publishDocSection{
 			Key:                publishSectionDynamic,
@@ -332,6 +455,7 @@ func readPublishReport(path string) (publishReport, error) {
 		Mode:                   input.Mode,
 		Model:                  input.Model,
 		ToolSurface:            input.ToolSurface,
+		Edition:                input.Edition,
 		Backend:                input.Backend,
 		Preset:                 input.Preset,
 		ToolExecution:          input.ToolExecution,
@@ -817,7 +941,7 @@ func publishCostTokens(usage map[string]string) string {
 func validatePublishReports(reports []publishReport, label string, allowHarnessNoise bool) error {
 	labelLower := strings.ToLower(label)
 	for _, report := range reports {
-		if publishSectionForReport(report) == publishSectionUnknown {
+		if publishSectionForSurface(report.ToolSurface) == publishSectionUnknown {
 			return fmt.Errorf("publish input %s uses unsupported tool_surface %q", report.Path, report.ToolSurface)
 		}
 		if report.Backend == backendGitLab && report.ToolExecution != "mcp" {

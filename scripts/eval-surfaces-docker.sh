@@ -25,7 +25,7 @@ Preset values:
 
 Environment overrides:
   EVAL_SURFACE_MODELS       Comma-separated provider:model list.
-  EVAL_SURFACE_ENTERPRISE   Set to true to use GitLab EE plus Enterprise presets.
+  EVAL_SURFACE_ENTERPRISE   Set to true to use GitLab EE plus Enterprise-only presets.
   EVAL_SURFACE_OUT_ROOT     Artifact root (default: dist/evaluation/surfaces).
   EVAL_SURFACE_RUN_DIR      Exact artifact directory for this run.
   EVAL_SURFACE_TIMESTAMP    UTC-like timestamp used in names.
@@ -134,14 +134,16 @@ if [[ "$requested_preset" == docker-enterprise-* ]]; then
   enterprise=true
 fi
 edition_label="CE"
+edition_arg="ce"
 image_default="${GITLAB_IMAGE:-}"
 if [[ "$enterprise" == "true" ]]; then
   edition_label="Enterprise"
+  edition_arg="enterprise"
   image_default="${image_default:-gitlab/gitlab-ee:latest}"
 fi
 gitlab_image="${EVAL_DOCKER_GITLAB_IMAGE:-$image_default}"
 if [[ "$enterprise" == "true" ]]; then
-  all_presets=(docker-enterprise-read docker-enterprise-mutating-safe docker-enterprise-destructive-safe docker-capability-discovery)
+  all_presets=(docker-enterprise-read docker-enterprise-mutating-safe docker-enterprise-destructive-safe)
 else
   all_presets=(docker-read docker-mutating-safe docker-destructive-safe docker-capability-discovery)
 fi
@@ -149,6 +151,10 @@ presets=("${all_presets[@]}")
 run_all_presets=1
 
 if [[ -n "$requested_preset" ]]; then
+  if [[ "$enterprise" == "true" && "$requested_preset" != docker-enterprise-* ]]; then
+    echo "ERROR: Enterprise mode only accepts docker-enterprise-* presets (got: $requested_preset)" >&2
+    exit 1
+  fi
   case "$requested_preset" in
     docker-read|docker-mutating-safe|docker-destructive-safe|docker-enterprise-read|docker-enterprise-mutating-safe|docker-enterprise-destructive-safe|docker-capability-discovery)
       presets=("$requested_preset")
@@ -243,6 +249,7 @@ prepare_fixtures() {
   local preset="$2"
   run_evaluator "$name" \
     --tool-surface "$surface" \
+    --edition "$edition_arg" \
     --preset "$preset" \
     --backend gitlab \
     --gitlab-env-file test/e2e/.env.docker \
@@ -291,6 +298,7 @@ for preset in "${presets[@]}"; do
   printf '=== %s ===\n' "$preset" | tee -a "$status_file"
   if run_evaluator "$preset" \
     --tool-surface "$surface" \
+    --edition "$edition_arg" \
     --preset "$preset" \
     --models "$models" \
     --backend gitlab \

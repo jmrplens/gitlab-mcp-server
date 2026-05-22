@@ -85,6 +85,21 @@ var liveAttemptResourceHandlers = map[string]liveAttemptResourceHandler{
 	"MT-116": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return ensureLiveMirrorForcePushTarget(ctx, client, task)
 	},
+	"MT-192": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
+		return ensureLivePushRuleTarget(ctx, client, task, "MT-192", false)
+	},
+	"MT-193": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
+		return ensureLivePushRuleTarget(ctx, client, task, "MT-193", true)
+	},
+	"MT-196": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
+		return ensureLivePushRuleTarget(ctx, client, task, "MT-196", true)
+	},
+	"MT-197": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
+		return ensureLiveGroupServiceAccountPATRevokeTarget(ctx, client, task)
+	},
+	"MT-198": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
+		return ensureLiveGroupServiceAccountDeleteTarget(ctx, client, task)
+	},
 	"MS-004": func(ctx context.Context, client *gitlabclient.Client, _ *mcp.ClientSession, task evalTask, _ string) (evalTask, error) {
 		return task, ensureLiveReleaseDeleteTarget(ctx, client, task.Prompt)
 	},
@@ -502,6 +517,105 @@ func ensureLiveMirrorForcePushTarget(ctx context.Context, client *gitlabclient.C
 	}
 	task.Prompt = prompt
 	return task, nil
+}
+
+func ensureLivePushRuleTarget(ctx context.Context, client *gitlabclient.Client, task evalTask, taskID string, seedRule bool) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
+	project, err := createLiveTemporaryProject(setupCtx, client, "push-rule")
+	if err != nil {
+		return task, fmt.Errorf("prepare %s fixture project: %w", taskID, err)
+	}
+	if seedRule {
+		commitMessageRegex := ".*"
+		_, _, err = client.GL().Projects.AddProjectPushRule(project.PathWithNamespace, &gl.AddProjectPushRuleOptions{CommitMessageRegex: &commitMessageRegex}, gl.WithContext(setupCtx))
+		if err != nil {
+			return task, fmt.Errorf("prepare %s fixture push rule: %w", taskID, err)
+		}
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, promptMarkerProject, project.PathWithNamespace)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveGroupServiceAccountPATRevokeTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	accountID, tokenID, err := createLiveGroupServiceAccountPAT(ctx, client, "MT-197")
+	if err != nil {
+		return task, err
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "service account user ID ", accountID)
+	if err != nil {
+		return task, err
+	}
+	prompt, err = replacePromptBacktickValueAfter(prompt, "PAT ID ", tokenID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func ensureLiveGroupServiceAccountDeleteTarget(ctx context.Context, client *gitlabclient.Client, task evalTask) (evalTask, error) {
+	if client == nil {
+		return task, nil
+	}
+	accountID, _, err := createLiveGroupServiceAccount(ctx, client, "MT-198")
+	if err != nil {
+		return task, err
+	}
+	prompt, err := replacePromptBacktickValueAfter(task.Prompt, "service account user ID ", accountID)
+	if err != nil {
+		return task, err
+	}
+	task.Prompt = prompt
+	return task, nil
+}
+
+func createLiveGroupServiceAccountPAT(ctx context.Context, client *gitlabclient.Client, taskID string) (accountID, tokenID int64, err error) {
+	accountID, suffix, err := createLiveGroupServiceAccount(ctx, client, taskID)
+	if err != nil {
+		return 0, 0, err
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	scopes := []string{"api"}
+	tokenName := "eval-group-service-token-" + suffix
+	pat, _, err := client.GL().Groups.CreateServiceAccountPersonalAccessToken(liveFixtureGroupPath, accountID, &gl.CreateServiceAccountPersonalAccessTokenOptions{
+		Name:   &tokenName,
+		Scopes: &scopes,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return 0, 0, fmt.Errorf("prepare %s fixture group service account PAT: %w", taskID, err)
+	}
+	return accountID, pat.ID, nil
+}
+
+func createLiveGroupServiceAccount(ctx context.Context, client *gitlabclient.Client, taskID string) (accountID int64, suffix string, err error) {
+	if client == nil {
+		return 0, "", nil
+	}
+	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	suffix = liveUniqueSuffix()
+	accountName := "eval-group-service-account-" + suffix
+	username := "eval-group-svc-" + suffix
+	account, _, err := client.GL().Groups.CreateServiceAccount(liveFixtureGroupPath, &gl.CreateServiceAccountOptions{
+		Name:     &accountName,
+		Username: &username,
+	}, gl.WithContext(setupCtx))
+	if err != nil {
+		return 0, "", fmt.Errorf("prepare %s fixture group service account: %w", taskID, err)
+	}
+	return account.ID, suffix, nil
 }
 
 // ensureLiveProjectVariableUpdateTarget ensures live project variable update target exists for live evaluation.

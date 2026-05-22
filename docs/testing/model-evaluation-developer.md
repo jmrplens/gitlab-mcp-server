@@ -202,8 +202,9 @@ make eval-surfaces-docker-enterprise SURFACE=dynamic
 ```
 
 The underlying presets are `docker-enterprise-read`,
-`docker-enterprise-mutating-safe`, and `docker-enterprise-destructive-safe`. A
-focused run can pass one preset:
+`docker-enterprise-mutating-safe`, and `docker-enterprise-destructive-safe`.
+The wrapper passes `--edition enterprise`, so it excludes CE/base and capability
+discovery cases from the full Enterprise run. A focused run can pass one preset:
 
 ```bash
 make eval-surfaces-docker-enterprise SURFACE=dynamic PRESET=docker-enterprise-read
@@ -244,6 +245,7 @@ timeout 1800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
 | `--preset docker-enterprise-read`             | Docker Enterprise/Premium read-only partition.                                                                                                            |
 | `--preset docker-enterprise-mutating-safe`    | Docker Enterprise/Premium safe mutation partition.                                                                                                        |
 | `--preset docker-enterprise-destructive-safe` | Docker Enterprise/Premium safe destructive partition.                                                                                                     |
+| `--edition ce\|enterprise\|all`               | Filter tasks by GitLab edition. Docker presets set this automatically unless explicitly overridden.                                                       |
 | `--model`                                     | One provider/model pair. Overrides `--models`.                                                                                                            |
 | `--models`                                    | Comma-separated provider/model list.                                                                                                                      |
 | `--backend=gitlab`                            | Build the catalog against the real GitLab backend.                                                                                                        |
@@ -307,10 +309,12 @@ output is only progress logging and stays in the log file by default.
 
 Use `--publish-from` once per reviewed Markdown report and set a clear
 `--publish-label`. The publication phase updates only the managed marker blocks
-in [AI Model Evaluation Results](model-results.md) and the repository README;
-normal evaluator runs never update documentation automatically. Use
-`--check-docs` in CI-style validation when the selected reports should already
-match the committed docs.
+in [AI Model Evaluation Results](model-results.md) and the repository README.
+CE/base and Enterprise/Premium rows are routed into separate dynamic and
+meta-tool blocks, so publishing licensed runs does not overwrite CE results.
+Normal evaluator runs never update documentation automatically. Use `--check-docs`
+in CI-style validation when the selected reports should already match the
+committed docs.
 
 ## Adding Or Updating Cases
 
