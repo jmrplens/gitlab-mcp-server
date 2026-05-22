@@ -16,6 +16,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epicissues"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epicnotes"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/epics"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupepicboards"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
@@ -86,6 +87,47 @@ func TestMeta_Epics(t *testing.T) {
 		requireNoError(t, err, "epic_list")
 		requireTruef(t, len(out.Epics) >= 1, "expected at least 1 epic, got %d", len(out.Epics))
 		t.Logf("Listed %d epic(s)", len(out.Epics))
+	})
+
+	// ── Epic boards ──────────────────────────────────────────────────────
+	var epicBoardID int64
+	t.Run("EpicBoardList", func(t *testing.T) {
+		out, err := callToolOn[groupepicboards.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "epic_board_list",
+			"params": map[string]any{
+				"group_id": groupPath,
+			},
+		})
+		requireNoError(t, err, "epic_board_list")
+		if len(out.Boards) > 0 {
+			requireTruef(t, out.Boards[0].ID > 0, "epic board ID should be > 0")
+			epicBoardID = out.Boards[0].ID
+		}
+		t.Logf("Listed %d epic board(s)", len(out.Boards))
+	})
+
+	t.Run("EpicBoardGet", func(t *testing.T) {
+		if epicBoardID <= 0 {
+			_, err := callToolOn[groupepicboards.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "epic_board_get",
+				"params": map[string]any{
+					"group_id": groupPath,
+					"board_id": int64(1),
+				},
+			})
+			requireErrorContainsAll(t, err, "epic_board_list", "gitlab_group", "configure an epic board")
+			return
+		}
+		out, err := callToolOn[groupepicboards.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "epic_board_get",
+			"params": map[string]any{
+				"group_id": groupPath,
+				"board_id": epicBoardID,
+			},
+		})
+		requireNoError(t, err, "epic_board_get")
+		requireTruef(t, out.ID == epicBoardID, "epic board ID mismatch: want %d, got %d", epicBoardID, out.ID)
+		t.Logf("Got epic board %d", out.ID)
 	})
 
 	// ── Get epic ─────────────────────────────────────────────────────────
