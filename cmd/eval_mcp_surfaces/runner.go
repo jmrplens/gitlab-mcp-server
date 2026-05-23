@@ -468,6 +468,9 @@ func (r *modelRunner) canExecuteInvalidToolCall(step evalStep, validation valida
 	if strings.Contains(validation.Message, diagnosticUnknownParams) {
 		return false
 	}
+	if !validation.ToolMatches && validation.ActionMatches && strings.Contains(validation.Message, diagnosticMissingRequiredParams) {
+		return false
+	}
 	if toolUse.Name == dynamicExecuteActionTool {
 		if _, hasParams := toolUse.Input["params"]; !hasParams {
 			return false

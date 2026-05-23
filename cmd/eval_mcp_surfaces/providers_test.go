@@ -249,6 +249,22 @@ func TestParseOpenAIToolArguments_WrapsMissingOpeningBrace(t *testing.T) {
 	if got := input["project_id"]; got != "42" {
 		t.Fatalf("project_id = %v, want 42", got)
 	}
+
+	prefixed, err := parseOpenAIToolArguments(", {\"action\":\"service_account_update\",\"params\":{\"project_id\":\"42\"}}")
+	if err != nil {
+		t.Fatalf("parseOpenAIToolArguments(prefixed) error = %v", err)
+	}
+	if prefixed["action"] != "service_account_update" {
+		t.Fatalf("prefixed action = %v, want service_account_update", prefixed["action"])
+	}
+
+	fragment, err := parseOpenAIToolArguments("`,\n \"action\":\"service_account_update\",\"params\":{\"project_id\":\"42\"},`")
+	if err != nil {
+		t.Fatalf("parseOpenAIToolArguments(fragment) error = %v", err)
+	}
+	if fragment["action"] != "service_account_update" {
+		t.Fatalf("fragment action = %v, want service_account_update", fragment["action"])
+	}
 }
 
 // TestGoogleProviderCallOnce_SendsAPIKeyHeader verifies GoogleProviderCallOnce when sends API key header.

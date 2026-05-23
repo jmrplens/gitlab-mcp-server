@@ -228,6 +228,81 @@ func TestNormalizeParamsWithExplanation_CompatibilityBranches(t *testing.T) {
 	}
 }
 
+func TestNormalizeParamsWithExplanation_EnterpriseCompatibilityBranches(t *testing.T) {
+	testCases := []struct {
+		name             string
+		actionID         string
+		params           map[string]any
+		schemaProperties []string
+		wantParams       map[string]any
+		wantAliases      []string
+	}{
+		{
+			name:             "group protected branch protect maps branch and access levels",
+			actionID:         "group.protected_branch_protect",
+			params:           map[string]any{"branch": "release/*", "push_access_level": "Maintainer", "merge_access_level": "developer"},
+			schemaProperties: []string{"name", "push_access_level", "merge_access_level"},
+			wantParams:       map[string]any{"name": "release/*", "push_access_level": 40, "merge_access_level": 30},
+			wantAliases:      []string{"branch->name", "push_access_level->push_access_level", "merge_access_level->merge_access_level"},
+		},
+		{
+			name:             "project push rule unsigned alias maps",
+			actionID:         "project.push_rule_edit",
+			params:           map[string]any{"deny_unsigned_commits": true},
+			schemaProperties: []string{"reject_unsigned_commits"},
+			wantParams:       map[string]any{"reject_unsigned_commits": true},
+			wantAliases:      []string{"deny_unsigned_commits->reject_unsigned_commits"},
+		},
+		{
+			name:             "protected environment entries normalize",
+			actionID:         "group.protected_env_protect",
+			params:           map[string]any{"deploy_access_levels": "Maintainer", "approval_rules": map[string]any{"access_level": "Maintainer", "required_approval_count": 1}},
+			schemaProperties: []string{"deploy_access_levels", "approval_rules"},
+			wantParams: map[string]any{
+				"deploy_access_levels": []any{map[string]any{"access_level": 40}},
+				"approval_rules":       []any{map[string]any{"access_level": 40, "required_approvals": 1}},
+			},
+			wantAliases: []string{"deploy_access_levels->deploy_access_levels", "approval_rules->approval_rules"},
+		},
+		{
+			name:             "protected environment approval count maps to approval rules",
+			actionID:         "environment.protected_update",
+			params:           map[string]any{"required_approval_count": 1},
+			schemaProperties: []string{"required_approval_count", "approval_rules"},
+			wantParams:       map[string]any{"approval_rules": []any{map[string]any{"access_level": 40, "required_approvals": 1}}},
+			wantAliases:      []string{"required_approval_count->approval_rules"},
+		},
+		{
+			name:             "pagination boolean maps to numeric page size",
+			actionID:         "group.epic_discussion_list",
+			params:           map[string]any{"first": true},
+			schemaProperties: []string{"first"},
+			wantParams:       map[string]any{"first": 100},
+			wantAliases:      []string{"first->first"},
+		},
+		{
+			name:             "approval rule count gets default maintainer principal",
+			actionID:         "environment.protected_protect",
+			params:           map[string]any{"approval_rules": []any{map[string]any{"required_approvals": 1}}},
+			schemaProperties: []string{"approval_rules"},
+			wantParams:       map[string]any{"approval_rules": []any{map[string]any{"access_level": 40, "required_approvals": 1}}},
+			wantAliases:      []string{"approval_rules->approval_rules"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			normalized, explanations := NormalizeParamsWithExplanation(testCase.actionID, testCase.params, schemaWithProperties(testCase.schemaProperties...))
+			if !reflect.DeepEqual(normalized, testCase.wantParams) {
+				t.Fatalf("normalized params = %#v, want %#v", normalized, testCase.wantParams)
+			}
+			if gotAliases := explanationAliases(explanations); !reflect.DeepEqual(gotAliases, testCase.wantAliases) {
+				t.Fatalf("explanations = %#v, want %#v", gotAliases, testCase.wantAliases)
+			}
+		})
+	}
+}
+
 // TestNormalizeParamsWithExplanation_NoChangeScenarios verifies canonical values are not overwritten by aliases.
 func TestNormalizeParamsWithExplanation_NoChangeScenarios(t *testing.T) {
 	testCases := []struct {

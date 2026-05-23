@@ -35,12 +35,29 @@ func groupServiceAccountDeleteSpec(name string, route toolutil.ActionRoute, indi
 }
 
 func groupServiceAccountOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"group", "service-account"},
+		Usage:          "Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Requires GitLab Premium/Ultimate and Owner permissions.",
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",
 		OpenWorld:      true,
 		OwnerPackage:   "groupserviceaccounts",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if individualTool == "gitlab_group_service_account_create" || individualTool == "gitlab_group_service_account_update" {
+		options.Usage += " Omit email unless the task gives an explicit valid email address."
+	}
+	if individualTool == "gitlab_group_service_account_pat_create" {
+		options.Usage += " Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime."
+	}
+	if individualTool == "gitlab_group_service_account_pat_revoke" {
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"token_id": {
+				SemanticRole:     "access_token",
+				ValueSource:      "Group service account personal access token ID returned by service_account_pat_list or service_account_pat_create.",
+				CommonConfusions: []string{"Do not use service_account_id as token_id; token_id identifies the personal access token itself."},
+			},
+		}
+	}
+	return options
 }

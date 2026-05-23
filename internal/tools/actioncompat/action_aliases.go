@@ -18,7 +18,13 @@ const (
 	actionBranchProtect                  = "branch.protect"
 	actionExternalStatusCheckListProject = "external_status_check.list_project"
 	actionFeatureFlagUserListList        = "feature_flags.ff_user_list_list"
+	actionGroupEpicBoardList             = "group.epic_board_list"
+	actionGroupEpicDiscussionUpdateNote  = "group.epic_discussion_update_note"
+	actionGroupEpicDiscussionDeleteNote  = "group.epic_discussion_delete_note"
 	actionGroupLabelUpdate               = "group.group_label_update"
+	actionGroupProtectedBranchProtect    = "group.protected_branch_protect"
+	actionGroupProtectedEnvProtect       = "group.protected_env_protect"
+	actionGroupProtectedEnvUpdate        = "group.protected_env_update"
 	actionInteractiveIssueCreate         = "interactive.issue_create"
 	actionIssueLinkCreate                = "issue.link_create"
 	actionIssueNoteList                  = "issue.note_list"
@@ -33,10 +39,14 @@ const (
 	actionPackagePublishDirectory        = "package.publish_directory"
 	actionPipelineScheduleCreate         = "pipeline.schedule_create"
 	actionPipelineScheduleUpdate         = "pipeline.schedule_update"
+	actionProjectProtectedEnvProtect     = "environment.protected_protect"
+	actionProjectProtectedEnvUpdate      = "environment.protected_update"
 	actionProjectHookAdd                 = "project.hook_add"
 	actionProjectMemberAdd               = "project.member_add"
 	actionProjectMemberDelete            = "project.member_delete"
 	actionProjectMemberEdit              = "project.member_edit"
+	actionProjectPushRuleAdd             = "project.push_rule_add"
+	actionProjectPushRuleEdit            = "project.push_rule_edit"
 	actionReleaseCreate                  = "release.create"
 	actionReleaseLinkCreate              = "release.link_create"
 	actionReleaseLinkCreateBatch         = "release.link_create_batch"
@@ -107,6 +117,9 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("gitlab_issue.create", "issue.create"),
 		compatActionAlias("gitlab_issue.delete", "issue.delete"),
 		compatActionAlias("group.custom_member_roles_list", "member_role.list_group"),
+		compatActionAlias("group.group_board_list", actionGroupEpicBoardList),
+		compatActionAlias("group.epic_discussion_note_update", actionGroupEpicDiscussionUpdateNote),
+		compatActionAlias("group.epic_discussion_note_delete", actionGroupEpicDiscussionDeleteNote),
 		compatActionAlias("group.ldap_link_delete", "group.ldap_link_delete_for_provider"),
 		compatActionAlias("issue.note.create", "issue.note_create"),
 		compatActionAlias("issue.note.delete", "issue.note_delete"),
@@ -206,6 +219,18 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("variable.create", "ci_variable.create"),
 		compatActionAlias("group.variable.create", "ci_variable.group_create"),
 		compatActionAlias("group.audit_events", "audit_event.list_group"),
+		compatActionAlias("service_account.delete", "group.service_account_delete"),
+		compatActionAlias("service_account_pat.revoke", "group.service_account_pat_revoke"),
+		compatActionAlias("group_service_account.delete", "group.service_account_delete"),
+		compatActionAlias("group_service_account.pat_revoke", "group.service_account_pat_revoke"),
+		compatActionAlias("group_service_account.personal_access_token_revoke", "group.service_account_pat_revoke"),
+		compatActionAlias("group_service_account.revoke_pat", "group.service_account_pat_revoke"),
+		compatActionAlias("group_service_account.update", "group.service_account_update"),
+		compatActionAlias("project_service_account.delete", "project.service_account_delete"),
+		compatActionAlias("project_service_account.pat_revoke", "project.service_account_pat_revoke"),
+		compatActionAlias("project_service_account.personal_access_token_revoke", "project.service_account_pat_revoke"),
+		compatActionAlias("project_service_account.revoke_pat", "project.service_account_pat_revoke"),
+		compatActionAlias("project_service_account.update", "project.service_account_update"),
 		standaloneActionAlias("gitlab_discover_project", "discover_project.resolve"),
 		standaloneActionAlias("interactive_issue.create", actionInteractiveIssueCreate),
 		standaloneActionAlias("interactive_issue_create", actionInteractiveIssueCreate),

@@ -604,6 +604,9 @@ func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 	if parsedInput, ok := parsePrefixedOpenAIJSONObject(candidate); ok {
 		return parsedInput, nil
 	}
+	if parsedInput, ok := parseOpenAIJSONObjectFragment(candidate); ok {
+		return parsedInput, nil
+	}
 	candidate = strings.Trim(candidate, " \t\r\n,")
 	if candidate == "" {
 		return nil, errors.New("empty arguments after normalization")
@@ -627,13 +630,31 @@ func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 	return input, nil
 }
 
+func parseOpenAIJSONObjectFragment(candidate string) (map[string]any, bool) {
+	start := strings.Index(candidate, "\"")
+	if start < 0 {
+		return nil, false
+	}
+	fragment := strings.Trim(candidate[start:], " \t\r\n,`")
+	if fragment == "" {
+		return nil, false
+	}
+	for _, raw := range []string{"{" + fragment, "{" + strings.TrimRight(strings.TrimSpace(fragment), ",") + "}"} {
+		input := map[string]any{}
+		if err := json.Unmarshal([]byte(raw), &input); err == nil {
+			return input, true
+		}
+	}
+	return nil, false
+}
+
 func parsePrefixedOpenAIJSONObject(candidate string) (map[string]any, bool) {
 	start := strings.Index(candidate, "{")
 	if start < 0 {
 		return nil, false
 	}
 	prefix := strings.TrimSpace(candidate[:start])
-	if prefix == "" || strings.ContainsAny(prefix, "\":,") {
+	if strings.ContainsAny(prefix, "\":") {
 		return nil, false
 	}
 	end := strings.LastIndex(candidate, "}")

@@ -4961,6 +4961,20 @@ func TestCanExecuteInvalidToolCallSkipsUnknownParams(t *testing.T) {
 	}
 }
 
+// TestCanExecuteInvalidToolCallSkipsWrongDomainSameAction verifies wrong-domain
+// calls that happen to share an action name receive exact repair feedback.
+func TestCanExecuteInvalidToolCallSkipsWrongDomainSameAction(t *testing.T) {
+	runner := &modelRunner{mcpSession: &mcp.ClientSession{}}
+	step := evalStep{ExpectedTool: "gitlab_project", ExpectedAction: "service_account_list", RequiredParams: []string{"project_id"}}
+	validation := validationResult{ToolMatches: false, ActionMatches: true, Action: "service_account_list", RequiredPresent: false, DestructiveSafe: true, Message: "expected tool gitlab_project, got gitlab_group; missing required params: project_id"}
+	toolUse := modelContentBlock{Name: "gitlab_group"}
+	routes := map[string]toolutil.ActionMap{"gitlab_group": {"service_account_list": toolutil.ActionRoute{}}}
+
+	if runner.canExecuteInvalidToolCall(step, validation, toolUse, routes) {
+		t.Fatal("canExecuteInvalidToolCall() = true, want wrong-domain same-action call to receive repair guidance")
+	}
+}
+
 // TestCanExecuteInvalidToolCallSkipsIncompleteDynamicCalls verifies malformed
 // dynamic envelopes receive evaluator repair feedback instead of repeated MCP
 // schema errors.

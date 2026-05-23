@@ -88,6 +88,25 @@ type testPackageFilePathInput struct {
 	Filename string `json:"filename"`
 }
 
+type testAccessEntry struct {
+	AccessLevel       *int   `json:"access_level,omitempty"`
+	RequiredApprovals *int64 `json:"required_approvals,omitempty"`
+}
+
+type testStructuredInput struct {
+	PushAccessLevel    int               `json:"push_access_level,omitempty"`
+	DeployAccessLevels []testAccessEntry `json:"deploy_access_levels,omitempty"`
+	ApprovalRules      []testAccessEntry `json:"approval_rules,omitempty"`
+}
+
+type testPaginationInput struct {
+	First int `json:"first,omitempty"`
+}
+
+type testNoteInput struct {
+	NoteID int `json:"note_id"`
+}
+
 // testRequiredInput defines parameters for the test required operation.
 type testRequiredInput struct {
 	Name string `json:"name" jsonschema:"Resource name,required"`
@@ -248,6 +267,46 @@ func TestUnmarshalParams_NormalizesActiveAndFilePathAliases(t *testing.T) {
 	}
 	if path.Path != "packages/npm" || path.Filename != "package.tgz" {
 		t.Fatalf("path = %+v, want packages/npm + package.tgz", path)
+	}
+}
+
+func TestUnmarshalParams_CoercesStructuredAccessLevelShapes(t *testing.T) {
+	got, err := UnmarshalParams[testStructuredInput](map[string]any{
+		"push_access_level":    "Maintainer",
+		"deploy_access_levels": map[string]any{"group_access_level": "Developer"},
+		"approval_rules":       []any{map[string]any{"access_level": "Maintainer", "required_approval_count": 1}},
+	})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error = %v", err)
+	}
+	if got.PushAccessLevel != 40 {
+		t.Fatalf("PushAccessLevel = %d, want 40", got.PushAccessLevel)
+	}
+	if len(got.DeployAccessLevels) != 1 || got.DeployAccessLevels[0].AccessLevel == nil || *got.DeployAccessLevels[0].AccessLevel != 30 {
+		t.Fatalf("DeployAccessLevels = %+v, want developer access level", got.DeployAccessLevels)
+	}
+	if len(got.ApprovalRules) != 1 || got.ApprovalRules[0].AccessLevel == nil || *got.ApprovalRules[0].AccessLevel != 40 || got.ApprovalRules[0].RequiredApprovals == nil || *got.ApprovalRules[0].RequiredApprovals != 1 {
+		t.Fatalf("ApprovalRules = %+v, want maintainer required approval", got.ApprovalRules)
+	}
+}
+
+func TestUnmarshalParams_CoercesPaginationBoolean(t *testing.T) {
+	got, err := UnmarshalParams[testPaginationInput](map[string]any{"first": true})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error = %v", err)
+	}
+	if got.First != 100 {
+		t.Fatalf("First = %d, want 100", got.First)
+	}
+}
+
+func TestUnmarshalParams_DropsDiscussionIDWhenNoteIDIsCanonical(t *testing.T) {
+	got, err := UnmarshalParams[testNoteInput](map[string]any{"note_id": 44, "discussion_id": "abc123"})
+	if err != nil {
+		t.Fatalf("UnmarshalParams() error = %v", err)
+	}
+	if got.NoteID != 44 {
+		t.Fatalf("NoteID = %d, want 44", got.NoteID)
 	}
 }
 
@@ -591,10 +650,20 @@ func TestNormalizeParamAliasesForSchema_ObservedDynamicAliases(t *testing.T) {
 			params: map[string]any{"id": "123"},
 			want:   map[string]any{"user_id": int64(123)},
 		},
+		"iid to only iid field": {
+			schema: map[string]any{"properties": map[string]any{"epic_iid": map[string]any{"type": "integer"}}},
+			params: map[string]any{"iid": "16"},
+			want:   map[string]any{"epic_iid": int64(16)},
+		},
 		"ambiguous id is preserved": {
 			schema: map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "integer"}, "group_id": map[string]any{"type": "integer"}}},
 			params: map[string]any{"id": "42"},
 			want:   map[string]any{"id": "42"},
+		},
+		"ambiguous iid is preserved": {
+			schema: map[string]any{"properties": map[string]any{"epic_iid": map[string]any{"type": "integer"}, "child_iid": map[string]any{"type": "integer"}}},
+			params: map[string]any{"iid": "42"},
+			want:   map[string]any{"iid": "42"},
 		},
 		"branch to branch_name": {
 			schema: map[string]any{"properties": map[string]any{"branch_name": map[string]any{"type": "string"}}},
@@ -630,6 +699,26 @@ func TestNormalizeParamAliasesForSchema_ObservedDynamicAliases(t *testing.T) {
 			schema: map[string]any{"properties": map[string]any{"duration": map[string]any{"type": "string"}}},
 			params: map[string]any{"time_estimate": "1h"},
 			want:   map[string]any{"duration": "1h"},
+		},
+		"environment to name when schema only names protected environment": {
+			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}}},
+			params: map[string]any{"environment": "staging"},
+			want:   map[string]any{"name": "staging"},
+		},
+		"environment_id to environment when schema names protected environment": {
+			schema: map[string]any{"properties": map[string]any{"environment": map[string]any{"type": "string"}}},
+			params: map[string]any{"environment_id": "staging"},
+			want:   map[string]any{"environment": "staging"},
+		},
+		"environment_id is preserved when schema accepts environment_id": {
+			schema: map[string]any{"properties": map[string]any{"environment_id": map[string]any{"type": "integer"}}},
+			params: map[string]any{"environment_id": "42"},
+			want:   map[string]any{"environment_id": int64(42)},
+		},
+		"url encoded project path is decoded": {
+			schema: map[string]any{"properties": map[string]any{"project_id": map[string]any{"type": "string"}}},
+			params: map[string]any{"project_id": "my-org%2Ftools%2Fgitlab-mcp-server"},
+			want:   map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"},
 		},
 		"alias is preserved when schema accepts alias": {
 			schema: map[string]any{"properties": map[string]any{"name": map[string]any{"type": "string"}, "emoji_name": map[string]any{"type": "string"}}},
@@ -1079,6 +1168,39 @@ func TestMakeMetaHandler_ActionAlias(t *testing.T) {
 	}
 }
 
+// TestMakeMetaHandler_EnvironmentGetByNameUsesProtectedGet verifies that a
+// named protected environment fetch is not routed to the numeric environment
+// get action when models send the generic get action.
+func TestMakeMetaHandler_EnvironmentGetByNameUsesProtectedGet(t *testing.T) {
+	routes := ActionMap{
+		"get": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return testOutput{Result: "environment-get"}, nil
+		}),
+		"protected_get": Route(func(_ context.Context, _ map[string]any) (any, error) {
+			return testOutput{Result: "protected-get"}, nil
+		}),
+	}
+	handler := MakeMetaHandler("gitlab_environment", routes, nil)
+
+	_, raw, err := handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "get", Params: map[string]any{"environment_id": "staging"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out, ok := raw.(testOutput)
+	if !ok || out.Result != "protected-get" {
+		t.Fatalf("raw = %#v, want protected-get output", raw)
+	}
+
+	_, raw, err = handler(context.Background(), &mcp.CallToolRequest{}, MetaToolInput{Action: "get", Params: map[string]any{"environment_id": "42"}})
+	if err != nil {
+		t.Fatalf("unexpected numeric get error: %v", err)
+	}
+	out, ok = raw.(testOutput)
+	if !ok || out.Result != "environment-get" {
+		t.Fatalf("numeric raw = %#v, want environment-get output", raw)
+	}
+}
+
 // TestNormalizeActionAlias_DynamicCompatibilityAliases verifies dynamic-surface
 // compatibility aliases map to canonical meta-tool action IDs.
 func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
@@ -1128,6 +1250,9 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 		"merge_request.spent_time_reset":     {},
 		"issue.note_create":                  {},
 		"interactive.issue_create":           {},
+		"epic_board_list":                    {},
+		"epic_discussion_update_note":        {},
+		"epic_discussion_delete_note":        {},
 	}
 
 	tests := map[string]string{
@@ -1193,6 +1318,9 @@ func TestNormalizeActionAlias_DynamicCompatibilityAliases(t *testing.T) {
 		"issue_note.list":                            "issue.note_list",
 		"issue_note.update":                          "issue.note_update",
 		"gitlab_interactive_issue.create":            "interactive.issue_create",
+		"group_board_list":                           "epic_board_list",
+		"epic_discussion_note_update":                "epic_discussion_update_note",
+		"epic_discussion_note_delete":                "epic_discussion_delete_note",
 	}
 	for alias, want := range tests {
 		t.Run(alias, func(t *testing.T) {

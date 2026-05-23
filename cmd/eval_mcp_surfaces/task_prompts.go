@@ -392,6 +392,7 @@ func taskRetryGuidance(task evalTask, steps []evalStep) string {
 		appendMergeRequestGuidance,
 		appendFeatureFlagGuidance,
 		appendAccessGuidance,
+		appendEnterpriseGuidance,
 		appendGroupGuidance,
 		appendSingleOperationGuidance,
 	}
@@ -568,6 +569,81 @@ func appendAccessGuidance(_ evalTask, steps []evalStep, guidance string) string 
 		guidance += ` For project deploy key lifecycle, use gitlab_access actions deploy_key_add, deploy_key_get, deploy_key_update, and deploy_key_delete; do not use gitlab_project for deploy keys. deploy_key_add requires params.project_id, params.title, and params.key. Use the returned deploy_key_id for get, update, and delete.`
 	}
 	return guidance
+}
+
+func appendEnterpriseGuidance(task evalTask, steps []evalStep, guidance string) string {
+	if taskHasAnyActionOrStep(steps, []string{"project.security_settings_update"}, [][2]string{{"gitlab_project", "security_settings_update"}}) {
+		guidance += ` Secret push protection belongs to project.security_settings_update with params.secret_push_protection_enabled; do not use project.update for that setting.`
+	}
+	if taskHasAnyActionOrStep(steps, []string{"project.push_rule_add", "project.push_rule_edit"}, [][2]string{{"gitlab_project", "push_rule_add"}, {"gitlab_project", "push_rule_edit"}}) {
+		guidance += ` Project push rules are project-scoped singletons: get/add/edit/delete use params.project_id only, never push_rule_id. Use params.reject_unsigned_commits for unsigned commit rejection.`
+	}
+	if taskHasAnyActionOrStep(steps, []string{"group.protected_branch_protect"}, [][2]string{{"gitlab_group", "protected_branch_protect"}}) {
+		guidance += ` Group protected branch protect uses params.name for the branch or wildcard and numeric access levels: maintainer is 40 and developer is 30. Later get/update/unprotect steps use params.branch.`
+	}
+	if taskHasAnyActionOrStep(steps, []string{"group.protected_env_protect", "group.protected_env_update"}, [][2]string{{"gitlab_group", "protected_env_protect"}, {"gitlab_group", "protected_env_update"}}) {
+		guidance += ` Group protected environments use gitlab_group protected_env_* actions, not project protected environment actions. deploy_access_levels must be an array of objects such as [{"access_level":40}], not a number or string. To require one approval, use approval_rules:[{"access_level":40,"required_approvals":1}], not top-level required_approval_count.`
+	}
+	if taskHasAnyActionOrStep(steps, []string{"environment.protected_protect", "environment.protected_update"}, [][2]string{{"gitlab_environment", "protected_protect"}, {"gitlab_environment", "protected_update"}}) {
+		guidance += ` Project protected environments use gitlab_environment protected_* actions. protected_protect requires params.name for the environment name; protected_get and protected_unprotect use params.environment. deploy_access_levels must be an array of objects such as [{"access_level":40}], not a number or string. To require approvals, use approval_rules entries with required_approvals, not top-level required_approval_count. For temporary project cleanup, call project.delete with project_id and confirm only; omit permanently_remove and full_path unless the prompt explicitly asks for permanent deletion.`
+	}
+	if taskHasAnyActionOrStep(steps, groupServiceAccountActions(), groupServiceAccountToolActions()) {
+		guidance += ` Group service accounts use gitlab_group service_account_* actions; do not use enterprise_user, SCIM, group member, or generic access token actions. For PAT revoke, token_id is the personal access token ID returned by service_account_pat_list/create, not the service_account_id.`
+	}
+	if taskHasAnyActionOrStep(steps, []string{"project.service_account_list", "project.service_account_update", "project.service_account_delete", "project.service_account_pat_revoke"}, [][2]string{{"gitlab_project", "service_account_list"}, {"gitlab_project", "service_account_update"}, {"gitlab_project", "service_account_delete"}, {"gitlab_project", "service_account_pat_revoke"}}) {
+		guidance += ` Project service accounts use gitlab_project service_account_* actions with params.project_id; do not use gitlab_group service_account_* or params.group_id for project service accounts. For service_account_update, send one complete JSON object with params.project_id, params.service_account_id, and the requested name or username. For PAT revoke, token_id is the personal access token ID returned by service_account_pat_list/create, not the service_account_id.`
+	}
+	if taskHasAnyActionOrStep(steps, []string{"project.service_account_pat_create", "project.service_account_pat_rotate", "group.service_account_pat_create"}, [][2]string{{"gitlab_project", "service_account_pat_create"}, {"gitlab_project", "service_account_pat_rotate"}, {"gitlab_group", "service_account_pat_create"}}) {
+		guidance += ` For service-account PAT create or rotate, omit expires_at unless the task provides an explicit expiry date; if you do send it, use YYYY-MM-DD within the GitLab maximum token lifetime.`
+	}
+	if taskHasAnyActionOrStep(steps, []string{"group.epic_discussion_update_note", "group.epic_discussion_delete_note"}, [][2]string{{"gitlab_group", "epic_discussion_update_note"}, {"gitlab_group", "epic_discussion_delete_note"}}) {
+		guidance += ` Epic discussion note update/delete require params.note_id from a note entry in the discussion result; discussion_id identifies the thread and is not a replacement for note_id.`
+	}
+	if taskHasAnyActionOrStep(steps, []string{"group.epic_issue_remove"}, [][2]string{{"gitlab_group", "epic_issue_remove"}}) {
+		guidance += ` Epic issue workflows that say create issue then create epic must start with gitlab_issue/create, not gitlab_group/epic_create. Epic issue assign/list/remove require params.full_path for the epic group plus params.epic_iid copied from the epic_create result; assign/remove also require params.child_project_path and params.child_iid from the child issue project and IID. Epic issue removal is not the end of cleanup when the scenario also asks to delete the child issue and epic; continue with issue.delete and group.epic_delete after epic_issue_remove.`
+	}
+	if strings.Contains(strings.ToLower(task.Prompt), "delete the temporary group") {
+		guidance += ` For deleting a temporary top-level group, send group_id and confirm only; do not send permanently_remove or full_path unless permanently deleting a subgroup.`
+	}
+	return guidance
+}
+
+func taskHasAnyActionOrStep(steps []evalStep, actionIDs []string, toolActions [][2]string) bool {
+	for _, actionID := range actionIDs {
+		if taskHasAction(steps, actionID) {
+			return true
+		}
+	}
+	for _, pair := range toolActions {
+		if taskHasStep(steps, pair[0], pair[1]) {
+			return true
+		}
+	}
+	return false
+}
+
+func groupServiceAccountActions() []string {
+	return []string{
+		"group.service_account_list",
+		"group.service_account_create",
+		"group.service_account_update",
+		"group.service_account_delete",
+		"group.service_account_pat_list",
+		"group.service_account_pat_create",
+		"group.service_account_pat_revoke",
+	}
+}
+
+func groupServiceAccountToolActions() [][2]string {
+	return [][2]string{
+		{"gitlab_group", "service_account_list"},
+		{"gitlab_group", "service_account_create"},
+		{"gitlab_group", "service_account_update"},
+		{"gitlab_group", "service_account_delete"},
+		{"gitlab_group", "service_account_pat_list"},
+		{"gitlab_group", "service_account_pat_create"},
+		{"gitlab_group", "service_account_pat_revoke"},
+	}
 }
 
 func appendGroupGuidance(_ evalTask, steps []evalStep, guidance string) string {
@@ -1187,6 +1263,10 @@ func fallbackExampleParamValue(param string) any {
 		return "https://example.com/eval-crud-badge.svg"
 	case "scopes":
 		return []string{"read_api"}
+	case "deploy_access_levels":
+		return []map[string]any{{"access_level": 40}}
+	case "approval_rules":
+		return []map[string]any{{"access_level": 40, "required_approvals": 1}}
 	case "key":
 		return "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIq4vQEiXKlQSp6jT+AOHzGznV6ToZBap9i1dulyV8EX eval@example.com"
 	default:
@@ -1204,6 +1284,9 @@ func exampleOptionalParamValue(param, prompt string) (any, bool) {
 		return optionalEnvironmentScopeFromPrompt(prompt)
 	}
 	lowerPrompt := strings.ToLower(prompt)
+	if value, ok := optionalProtectedEnvironmentParamValue(param, lowerPrompt); ok {
+		return value, true
+	}
 	for _, resolver := range []func(string, string) (any, bool){
 		optionalStateParamValue,
 		optionalAccessParamValue,
@@ -1212,6 +1295,20 @@ func exampleOptionalParamValue(param, prompt string) (any, bool) {
 	} {
 		if value, ok := resolver(param, lowerPrompt); ok {
 			return value, true
+		}
+	}
+	return nil, false
+}
+
+func optionalProtectedEnvironmentParamValue(param, lowerPrompt string) (any, bool) {
+	switch param {
+	case "deploy_access_levels":
+		if strings.Contains(lowerPrompt, "protected environment") || strings.Contains(lowerPrompt, "protect environment") {
+			return []map[string]any{{"access_level": 40}}, true
+		}
+	case "approval_rules":
+		if strings.Contains(lowerPrompt, "approval") {
+			return []map[string]any{{"access_level": 40, "required_approvals": 1}}, true
 		}
 	}
 	return nil, false

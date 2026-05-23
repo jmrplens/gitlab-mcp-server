@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"net/url"
 	"reflect"
 	"slices"
 	"sort"
@@ -201,6 +202,9 @@ var commonActionAliases = map[string]string{
 	"issue_note.list":                            "issue.note_list",
 	"issue_note.update":                          "issue.note_update",
 	"gitlab_interactive_issue.create":            "interactive.issue_create",
+	"group_board_list":                           "epic_board_list",
+	"epic_discussion_note_update":                "epic_discussion_update_note",
+	"epic_discussion_note_delete":                "epic_discussion_delete_note",
 	"variable.create":                            "ci_variable.create",
 	"webhook.add":                                "project.hook_add",
 }
@@ -217,6 +221,31 @@ func NormalizeActionAlias(action string, routes ActionMap) string {
 		}
 	}
 	return action
+}
+
+func normalizeActionAliasForParams(toolName, action string, params map[string]any, routes ActionMap) string {
+	if toolName != "gitlab_environment" || action != "get" {
+		return action
+	}
+	if _, exists := routes["protected_get"]; !exists || !hasProtectedEnvironmentNameParam(params) {
+		return action
+	}
+	return "protected_get"
+}
+
+func hasProtectedEnvironmentNameParam(params map[string]any) bool {
+	if len(params) == 0 {
+		return false
+	}
+	if _, ok := params["environment"]; ok {
+		return true
+	}
+	value, ok := params["environment_id"].(string)
+	if !ok {
+		return false
+	}
+	_, err := integerFromString(strings.TrimSpace(value))
+	return err != nil
 }
 
 // ParamValidationError marks parameter decoding failures that should be
@@ -703,6 +732,12 @@ func explainSchemaParamAliases(params, schema map[string]any) []ParamAliasExplan
 	if explanation, ok := explainIDParamAlias(params, fields, accepts); ok {
 		explanations = append(explanations, explanation)
 	}
+	if explanation, ok := explainIIDParamAlias(params, fields, accepts); ok {
+		explanations = append(explanations, explanation)
+	}
+	if explanation, ok := explainEnvironmentIDParamAlias(params, accepts); ok {
+		explanations = append(explanations, explanation)
+	}
 	return explanations
 }
 
@@ -724,6 +759,33 @@ func explainIDParamAlias(params map[string]any, fields map[string]struct{}, acce
 		return ParamAliasExplanation{}, false
 	}
 	return ParamAliasExplanation{Alias: "id", Canonical: canonical, Source: "schema_common"}, true
+}
+
+func explainIIDParamAlias(params map[string]any, fields map[string]struct{}, accepts func(string) bool) (ParamAliasExplanation, bool) {
+	if _, hasIID := params["iid"]; !hasIID || accepts("iid") {
+		return ParamAliasExplanation{}, false
+	}
+	canonical := ""
+	for name := range fields {
+		if name == "iid" || !strings.HasSuffix(name, "_iid") {
+			continue
+		}
+		if canonical != "" {
+			return ParamAliasExplanation{}, false
+		}
+		canonical = name
+	}
+	if canonical == "" {
+		return ParamAliasExplanation{}, false
+	}
+	return ParamAliasExplanation{Alias: "iid", Canonical: canonical, Source: "schema_common"}, true
+}
+
+func explainEnvironmentIDParamAlias(params map[string]any, accepts func(string) bool) (ParamAliasExplanation, bool) {
+	if _, hasEnvironmentID := params["environment_id"]; !hasEnvironmentID || !accepts("environment") || accepts("environment_id") {
+		return ParamAliasExplanation{}, false
+	}
+	return ParamAliasExplanation{Alias: "environment_id", Canonical: "environment", Source: "schema_common"}, true
 }
 
 func normalizeParamAliasesWithFields(params map[string]any, fields map[string]struct{}) map[string]any {
@@ -753,10 +815,104 @@ func normalizeParamAliasesWithFields(params map[string]any, fields map[string]st
 		delete(updated, pair.Alias)
 	}
 	normalizeIDAlias(out, fields, accepts, clone)
+	normalizeIIDAlias(out, fields, accepts, clone)
 	normalizeActiveAlias(out, accepts, clone)
 	normalizeFilePathAlias(out, accepts, clone)
 	normalizeBranchAliases(out, accepts, clone)
+	normalizeEnvironmentNameAlias(out, accepts, clone)
+	normalizeEnvironmentIDAlias(out, accepts, clone)
+	normalizeEncodedPathIdentifiers(out, accepts, clone)
+	removeContextOnlyDiscussionID(out, accepts, clone)
 	return out
+}
+
+func normalizeEnvironmentNameAlias(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
+	value, hasEnvironment := out["environment"]
+	if !hasEnvironment || !accepts("name") || accepts("environment") || accepts("environment_scope") {
+		return
+	}
+	if _, hasName := out["name"]; hasName {
+		delete(clone(), "environment")
+		return
+	}
+	updated := clone()
+	updated["name"] = value
+	delete(updated, "environment")
+}
+
+func normalizeEnvironmentIDAlias(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
+	value, hasEnvironmentID := out["environment_id"]
+	if !hasEnvironmentID || !accepts("environment") || accepts("environment_id") {
+		return
+	}
+	updated := clone()
+	if _, hasEnvironment := out["environment"]; !hasEnvironment {
+		updated["environment"] = value
+	}
+	delete(updated, "environment_id")
+}
+
+func normalizeEncodedPathIdentifiers(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
+	for _, name := range []string{"project_id", "project_path", "group_id", "group_path", "full_path", "child_project_path"} {
+		if !accepts(name) {
+			continue
+		}
+		value, ok := out[name].(string)
+		if !ok {
+			continue
+		}
+		decoded, changed := decodeEncodedPathIdentifier(value)
+		if !changed {
+			continue
+		}
+		clone()[name] = decoded
+	}
+}
+
+func decodeEncodedPathIdentifier(value string) (string, bool) {
+	if !strings.Contains(strings.ToLower(value), "%2f") {
+		return "", false
+	}
+	decoded, err := url.PathUnescape(value)
+	if err != nil || decoded == value || !strings.Contains(decoded, "/") {
+		return "", false
+	}
+	return decoded, true
+}
+
+func normalizeIIDAlias(params map[string]any, fields map[string]struct{}, accepts func(string) bool, clone func() map[string]any) {
+	value, hasIID := params["iid"]
+	if !hasIID || accepts("iid") {
+		return
+	}
+	canonical := ""
+	for name := range fields {
+		if name == "iid" || !strings.HasSuffix(name, "_iid") {
+			continue
+		}
+		if canonical != "" {
+			return
+		}
+		canonical = name
+	}
+	if canonical == "" {
+		return
+	}
+	updated := clone()
+	if _, hasCanonical := params[canonical]; !hasCanonical {
+		updated[canonical] = value
+	}
+	delete(updated, "iid")
+}
+
+func removeContextOnlyDiscussionID(params map[string]any, accepts func(string) bool, clone func() map[string]any) {
+	if _, hasDiscussionID := params["discussion_id"]; !hasDiscussionID || accepts("discussion_id") || !accepts("note_id") {
+		return
+	}
+	if _, hasNoteID := params["note_id"]; !hasNoteID {
+		return
+	}
+	delete(clone(), "discussion_id")
 }
 
 func normalizeActiveAlias(out map[string]any, accepts func(string) bool, clone func() map[string]any) {
@@ -908,7 +1064,8 @@ func collectJSONFieldNames(target reflect.Type, fields map[string]struct{}) {
 func UnmarshalParams[T any](params map[string]any) (T, error) {
 	var input T
 	target := reflect.TypeFor[T]()
-	cleaned := coerceStringIDNumbers(coerceStringListParams(coerceSingleStringSlices(normalizeParamAliases(stripReservedKeys(params), target), target), target), target)
+	normalized := normalizeParamAliases(stripReservedKeys(params), target)
+	cleaned := coerceStringIDNumbers(coerceStringListParams(coerceSingleStringSlices(coerceStructuredParams(normalized, target), target), target), target)
 	cleaned, coerceErr := coerceNumericParams(cleaned, target)
 	if coerceErr != nil {
 		return input, newParamValidationError(invalidActionParamsError, coerceErr)
@@ -933,6 +1090,288 @@ func UnmarshalParams[T any](params map[string]any) (T, error) {
 		return input, nil
 	}
 	return input, nil
+}
+
+func coerceStructuredParams(params map[string]any, target reflect.Type) map[string]any {
+	if len(params) == 0 {
+		return params
+	}
+	fields := jsonFieldTypes(target)
+	if len(fields) == 0 {
+		return params
+	}
+	var out map[string]any
+	for name, value := range params {
+		fieldType, ok := fields[name]
+		if !ok {
+			continue
+		}
+		coerced, changed := coerceStructuredValue(name, value, fieldType)
+		if !changed {
+			continue
+		}
+		if out == nil {
+			out = maps.Clone(params)
+		}
+		out[name] = coerced
+	}
+	if out != nil {
+		return out
+	}
+	return params
+}
+
+func coerceStructuredValue(name string, value any, target reflect.Type) (any, bool) {
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+	if coerced, ok := coercePaginationBoolean(name, value, target); ok {
+		return coerced, true
+	}
+	if target.Kind() != reflect.Slice {
+		return normalizeAccessLevelScalar(name, value, target)
+	}
+	elem := target.Elem()
+	for elem.Kind() == reflect.Pointer {
+		elem = elem.Elem()
+	}
+	if elem.Kind() != reflect.Struct {
+		return value, false
+	}
+	if item, ok := value.(map[string]any); ok {
+		return []any{normalizeStructuredObjectFields(item, elem)}, true
+	}
+	if accessLevel, ok := gitLabRoleAccessLevel(value); ok && structHasJSONField(elem, "access_level") {
+		return []any{map[string]any{"access_level": accessLevel}}, true
+	}
+	items, ok := value.([]any)
+	if !ok {
+		return value, false
+	}
+	updatedItems := make([]any, len(items))
+	changed := false
+	for index, item := range items {
+		switch typed := item.(type) {
+		case map[string]any:
+			updatedItem := normalizeStructuredObjectFields(typed, elem)
+			updatedItems[index] = updatedItem
+			changed = changed || !reflect.DeepEqual(typed, updatedItem)
+		default:
+			accessLevel, accessLevelOK := gitLabRoleAccessLevel(typed)
+			if !accessLevelOK || !structHasJSONField(elem, "access_level") {
+				updatedItems[index] = item
+				continue
+			}
+			updatedItems[index] = map[string]any{"access_level": accessLevel}
+			changed = true
+		}
+	}
+	if !changed {
+		return value, false
+	}
+	return updatedItems, true
+}
+
+func normalizeStructuredObjectFields(value map[string]any, target reflect.Type) map[string]any {
+	fields := jsonFieldTypes(target)
+	if len(fields) == 0 {
+		return value
+	}
+	var out map[string]any
+	clone := func() map[string]any {
+		if out == nil {
+			out = maps.Clone(value)
+		}
+		return out
+	}
+	if acceptsJSONField(fields, "required_approvals") {
+		for _, alias := range []string{"required_approval_count", "approval_count", "approvals_required"} {
+			aliasValue, ok := value[alias]
+			if !ok {
+				continue
+			}
+			updated := clone()
+			if _, hasCanonical := updated["required_approvals"]; !hasCanonical {
+				updated["required_approvals"] = aliasValue
+			}
+			delete(updated, alias)
+		}
+	}
+	if acceptsJSONField(fields, "required_approvals") && acceptsJSONField(fields, "access_level") && hasStructuredApprovalCount(value) && !hasStructuredApprovalPrincipal(value) {
+		clone()["access_level"] = 40
+	}
+	if acceptsJSONField(fields, "access_level") {
+		updated := cloneAccessLevelAliases(value, clone)
+		if accessLevel, ok := gitLabRoleAccessLevel(updated["access_level"]); ok {
+			clone()["access_level"] = accessLevel
+		}
+	}
+	for fieldName, fieldType := range fields {
+		fieldValue, ok := value[fieldName]
+		if !ok {
+			continue
+		}
+		coerced, changed := coerceStructuredValue(fieldName, fieldValue, fieldType)
+		if changed {
+			clone()[fieldName] = coerced
+		}
+	}
+	if out != nil {
+		return out
+	}
+	return value
+}
+
+func hasStructuredApprovalCount(value map[string]any) bool {
+	_, ok := value["required_approvals"]
+	if ok {
+		return true
+	}
+	for _, alias := range []string{"required_approval_count", "approval_count", "approvals_required"} {
+		if _, aliasOK := value[alias]; aliasOK {
+			return true
+		}
+	}
+	return false
+}
+
+func hasStructuredApprovalPrincipal(value map[string]any) bool {
+	for _, name := range []string{"access_level", "user_id", "group_id"} {
+		if _, ok := value[name]; ok {
+			return true
+		}
+	}
+	for _, alias := range []string{"deploy_access_level", "group_access_level", "project_access_level", "machine_user_access_level"} {
+		if _, ok := value[alias]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func coercePaginationBoolean(name string, value any, target reflect.Type) (any, bool) {
+	if !isPaginationLimitParam(name) || !isNumericKind(target.Kind()) {
+		return value, false
+	}
+	boolValue, ok := value.(bool)
+	if !ok || !boolValue {
+		return value, false
+	}
+	if name == "page" {
+		return 1, true
+	}
+	return 100, true
+}
+
+func isPaginationLimitParam(name string) bool {
+	switch name {
+	case "first", "last", "per_page", "page":
+		return true
+	default:
+		return false
+	}
+}
+
+func cloneAccessLevelAliases(value map[string]any, clone func() map[string]any) map[string]any {
+	if _, hasAccessLevel := value["access_level"]; hasAccessLevel {
+		return value
+	}
+	for _, alias := range []string{"deploy_access_level", "group_access_level", "project_access_level", "machine_user_access_level"} {
+		aliasValue, ok := value[alias]
+		if !ok {
+			continue
+		}
+		updated := clone()
+		updated["access_level"] = aliasValue
+		delete(updated, alias)
+		return updated
+	}
+	return value
+}
+
+func normalizeAccessLevelScalar(name string, value any, target reflect.Type) (any, bool) {
+	if !isAccessLevelParamName(name) {
+		return value, false
+	}
+	for target.Kind() == reflect.Pointer {
+		target = target.Elem()
+	}
+	if !isNumericKind(target.Kind()) {
+		return value, false
+	}
+	accessLevel, ok := gitLabRoleAccessLevel(value)
+	if !ok {
+		return value, false
+	}
+	return accessLevel, true
+}
+
+func acceptsJSONField(fields map[string]reflect.Type, name string) bool {
+	_, ok := fields[name]
+	return ok
+}
+
+func structHasJSONField(target reflect.Type, name string) bool {
+	return acceptsJSONField(jsonFieldTypes(target), name)
+}
+
+func isAccessLevelParamName(name string) bool {
+	return name == "access_level" || strings.HasSuffix(name, "_access_level")
+}
+
+func gitLabRoleAccessLevel(value any) (int, bool) {
+	if text, ok := value.(string); ok {
+		normalized := strings.ToLower(strings.TrimSpace(strings.NewReplacer("_", " ", "-", " ").Replace(text)))
+		if integer, err := integerFromString(normalized); err == nil {
+			return validGitLabRoleAccessLevel(int(integer))
+		}
+		switch normalized {
+		case "no access", "no one", "nobody", "none":
+			return 0, true
+		case "guest", "guests":
+			return 10, true
+		case "reporter", "reporters":
+			return 20, true
+		case "developer", "developers":
+			return 30, true
+		case "maintainer", "maintainers":
+			return 40, true
+		case "owner", "owners":
+			return 50, true
+		case "admin", "admins", "administrator", "administrators":
+			return 60, true
+		default:
+			return 0, false
+		}
+	}
+	integer, ok := numericRoleAccessLevel(value)
+	if !ok {
+		return 0, false
+	}
+	return validGitLabRoleAccessLevel(integer)
+}
+
+func numericRoleAccessLevel(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int64:
+		return int(typed), true
+	case float64:
+		integer := int(typed)
+		return integer, typed == float64(integer)
+	default:
+		return 0, false
+	}
+}
+
+func validGitLabRoleAccessLevel(value int) (int, bool) {
+	switch value {
+	case 0, 10, 20, 30, 40, 50, 60:
+		return value, true
+	default:
+		return 0, false
+	}
 }
 
 func newParamValidationError(format string, args ...any) error {
@@ -1761,6 +2200,7 @@ func validateMetaToolInput(toolName string, routes ActionMap, input *MetaToolInp
 		return ActionRoute{}, ErrorResult(fmt.Sprintf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes)))
 	}
 	input.Action = NormalizeActionAlias(input.Action, routes)
+	input.Action = normalizeActionAliasForParams(toolName, input.Action, input.Params, routes)
 	route, ok := routes[input.Action]
 	if !ok {
 		return ActionRoute{}, ErrorResult(fmt.Sprintf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes)))

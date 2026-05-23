@@ -54,5 +54,11 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 			},
 		}
 	}
+	if actionName == "service_account_create" || actionName == "service_account_update" {
+		options.Usage += " Omit email unless the task gives an explicit valid email address."
+	}
+	if actionName == "service_account_pat_create" || actionName == "service_account_pat_rotate" {
+		options.Usage += " Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime."
+	}
 	return options
 }

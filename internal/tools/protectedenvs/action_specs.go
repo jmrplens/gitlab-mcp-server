@@ -45,6 +45,7 @@ func protectedEnvironmentDeleteSpec(name string, route toolutil.ActionRoute, ind
 func protectedEnvironmentOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Tags:           []string{"environment", "protected_environment"},
+		Usage:          "Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.",
 		RelatedActions: []string{"environment.list", "environment.get", "deployment.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "protectedenvs",

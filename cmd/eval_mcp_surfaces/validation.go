@@ -98,7 +98,8 @@ func normalizeRouteParamsInput(step evalStep, toolName string, input map[string]
 	if step.ExpectedTool == dynamicExecuteActionTool {
 		normalizedParams = dynamictools.NormalizeActionScopedParams(step.ExpectedAction, normalizedParams, route.InputSchema)
 	}
-	validationInput = cloneToolInputWithParams(input, mergeOriginalAndNormalizedParams(rawParams, normalizedParams))
+	validationParams := mergeRequiredOriginalParams(rawParams, normalizedParams, step.RequiredParams)
+	validationInput = cloneToolInputWithParams(input, validationParams)
 	return validationInput, cloneToolInputWithParams(input, normalizedParams)
 }
 
@@ -118,18 +119,27 @@ func cloneToolInputWithParams(input, params map[string]any) map[string]any {
 	return out
 }
 
-// mergeOriginalAndNormalizedParams merges original and normalized params for the main package.
-func mergeOriginalAndNormalizedParams(original, normalized map[string]any) map[string]any {
-	if len(original) == 0 {
+func mergeRequiredOriginalParams(original, normalized map[string]any, required []string) map[string]any {
+	if len(original) == 0 || len(required) == 0 {
 		return normalized
 	}
-	if len(normalized) == 0 {
-		return original
+	out := normalized
+	cloned := false
+	for _, name := range required {
+		if _, hasNormalized := out[name]; hasNormalized {
+			continue
+		}
+		value, hasOriginal := original[name]
+		if !hasOriginal {
+			continue
+		}
+		if !cloned {
+			out = maps.Clone(normalized)
+			cloned = true
+		}
+		out[name] = value
 	}
-	merged := make(map[string]any, len(original)+len(normalized))
-	maps.Copy(merged, original)
-	maps.Copy(merged, normalized)
-	return merged
+	return out
 }
 
 // schemaAllowsParam derives schema allows param from task and schema inputs.

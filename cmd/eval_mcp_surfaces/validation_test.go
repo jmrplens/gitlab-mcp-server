@@ -42,6 +42,43 @@ func TestValidateStepCallWithRoutes_ValidatesDynamicParamsAgainstSchema(t *testi
 	}
 }
 
+// TestValidateStepCallWithRoutes_UsesNormalizedParams verifies validation does
+// not reintroduce aliases that the execution layer canonicalizes or drops.
+func TestValidateStepCallWithRoutes_UsesNormalizedParams(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"full_path": map[string]any{"type": "string"},
+			"epic_iid":  map[string]any{"type": "integer"},
+			"note_id":   map[string]any{"type": "string"},
+			"body":      map[string]any{"type": "string"},
+		},
+		"required": []any{"full_path", "epic_iid", "note_id", "body"},
+	}
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_group": {"epic_discussion_update_note": toolutil.ActionRoute{InputSchema: schema}},
+	}
+	step := evalStep{
+		ExpectedTool:   "gitlab_group",
+		ExpectedAction: "epic_discussion_update_note",
+		RequiredParams: []string{"full_path", "epic_iid", "note_id", "body"},
+	}
+	input := map[string]any{
+		"action": "epic_discussion_note_update",
+		"params": map[string]any{
+			"full_path":     "my-org",
+			"epic_iid":      7,
+			"discussion_id": "gid://gitlab/Discussion/1",
+			"note_id":       "gid://gitlab/Note/2",
+			"body":          "updated",
+		},
+	}
+
+	result := validateStepCallWithRoutes(step, "gitlab_group", input, routes)
+	if !result.Valid || result.Action != "epic_discussion_update_note" {
+		t.Fatalf("validateStepCallWithRoutes() = %+v, want normalized valid call", result)
+	}
+}
+
 // TestValidateStandaloneToolCall_RejectsActionEnvelope verifies standalone tools
 // use top-level fields rather than meta-tool action envelopes.
 func TestValidateStandaloneToolCall_RejectsActionEnvelope(t *testing.T) {

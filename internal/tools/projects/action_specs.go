@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -205,10 +206,24 @@ func projectDestructiveUpdateSpec(name string, route toolutil.ActionRoute, indiv
 
 func projectOptions(individualTool string, extraTags ...string) toolutil.ActionSpecOptions {
 	tags := append([]string{"project"}, extraTags...)
-	return toolutil.ActionSpecOptions{
+	options := toolutil.ActionSpecOptions{
 		Tags:           tags,
 		OpenWorld:      true,
 		OwnerPackage:   "projects",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if slices.Contains(extraTags, "push_rule") {
+		options.Usage = "Use project push rule actions for the singleton project-level push rule. Do not pass push_rule_id; get/add/edit/delete operate by project_id only. Use reject_unsigned_commits, not deny_unsigned_commits."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:     "scope_project",
+				ValueSource:      "Project that owns the singleton push rule.",
+				CommonConfusions: []string{"Push rules are project-scoped singletons; there is no push_rule_id parameter."},
+			},
+		}
+	}
+	if individualTool == "gitlab_project_delete" {
+		options.Usage = "Use to delete a project. For ordinary cleanup, send project_id and confirm only. Set permanently_remove only when explicitly requested; when permanently_remove is true, full_path must exactly match the project's path_with_namespace from project create/get."
+	}
+	return options
 }

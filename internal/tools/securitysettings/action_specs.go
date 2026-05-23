@@ -31,6 +31,7 @@ func projectSecurityUpdateSpec(name string, route toolutil.ActionRoute, individu
 func projectSecurityOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Tags:           []string{"project", "security"},
+		Usage:          "Use project security settings for secret push protection and secret_push_protection_enabled changes. Do not use project.update for secret push protection.",
 		RelatedActions: []string{"project.get"},
 		OpenWorld:      true,
 		Edition:        "ultimate",
@@ -46,6 +47,7 @@ func groupSecuritySettingUpdateSpec(name string, route toolutil.ActionRoute, ind
 func groupSecuritySettingsOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Tags:           []string{"group", "security"},
+		Usage:          "Use group security settings for secret push protection and secret_push_protection_enabled changes inherited by projects. Do not use group.update for secret push protection.",
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",
 		OpenWorld:      true,
