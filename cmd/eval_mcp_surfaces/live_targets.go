@@ -1037,19 +1037,31 @@ func createLiveTemporaryProject(ctx context.Context, client *gitlabclient.Client
 	if err != nil {
 		return nil, fmt.Errorf("get tools group %s: %w", liveFixtureToolsPath, err)
 	}
-	path := fmt.Sprintf("eval-%s-%s", prefix, liveUniqueSuffix())
 	visibility := gl.PrivateVisibility
-	project, _, err := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{
-		Name:                 new(path),
-		Path:                 new(path),
-		NamespaceID:          new(toolsGroup.ID),
-		InitializeWithReadme: new(true),
-		Visibility:           &visibility,
-	}, gl.WithContext(ctx))
-	if err != nil {
-		return nil, fmt.Errorf("create project %s/%s: %w", liveFixtureToolsPath, path, err)
+	var lastErr error
+	for range 5 {
+		path := fmt.Sprintf("eval-%s-%s", prefix, liveUniqueSuffix())
+		project, _, createErr := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{
+			Name:                 new(path),
+			Path:                 new(path),
+			NamespaceID:          new(toolsGroup.ID),
+			InitializeWithReadme: new(true),
+			Visibility:           &visibility,
+		}, gl.WithContext(ctx))
+		if createErr == nil {
+			return project, nil
+		}
+		lastErr = fmt.Errorf("create project %s/%s: %w", liveFixtureToolsPath, path, createErr)
+		if !temporaryProjectNameTaken(createErr) {
+			return nil, lastErr
+		}
 	}
-	return project, nil
+	return nil, lastErr
+}
+
+func temporaryProjectNameTaken(err error) bool {
+	return (toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusConflict)) &&
+		toolutil.ContainsAny(err, "has already been taken")
 }
 
 // createLiveTemporaryGroup creates live temporary group and returns [string].

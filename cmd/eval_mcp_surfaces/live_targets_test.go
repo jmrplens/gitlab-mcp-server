@@ -98,6 +98,58 @@ func TestEnsureLiveIssueAwardDeleteTarget_CreatesDisposableIssue(t *testing.T) {
 	}
 }
 
+// TestCreateLiveTemporaryProject_RetriesNameCollision verifies transient GitLab
+// namespace collisions do not fail live evaluator fixture preparation.
+func TestCreateLiveTemporaryProject_RetriesNameCollision(t *testing.T) {
+	projectCreatePaths := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/groups/my-org%2Ftools":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 42, "full_path": liveFixtureToolsPath})
+		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects":
+			var request map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decode project request: %v", err)
+				http.Error(w, "decode project request", http.StatusBadRequest)
+				return
+			}
+			path, _ := request["path"].(string)
+			projectCreatePaths = append(projectCreatePaths, path)
+			if len(projectCreatePaths) == 1 {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"path": []string{"has already been taken"}}})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 501, "path": path, "path_with_namespace": liveFixtureToolsPath + "/" + path})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := gitlabclient.NewClient(&config.Config{
+		GitLabURL:       server.URL,
+		GitLabToken:     "eval-token",
+		MetaTools:       true,
+		MetaParamSchema: config.DefaultMetaParamSchema,
+	})
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+
+	project, err := createLiveTemporaryProject(t.Context(), client, "push-rule")
+	if err != nil {
+		t.Fatalf("createLiveTemporaryProject() error = %v", err)
+	}
+
+	if len(projectCreatePaths) != 2 {
+		t.Fatalf("project create attempts = %d, want 2", len(projectCreatePaths))
+	}
+	if project.PathWithNamespace != liveFixtureToolsPath+"/"+projectCreatePaths[1] {
+		t.Fatalf("PathWithNamespace = %q, want retried project path", project.PathWithNamespace)
+	}
+}
+
 // TestLiveAwardEmojiNames_ContainsFallbackCandidates verifies award fixture
 // creation has multiple deterministic names to try.
 func TestLiveAwardEmojiNames_ContainsFallbackCandidates(t *testing.T) {
