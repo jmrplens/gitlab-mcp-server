@@ -70,7 +70,7 @@ func normalizeRouteActionInput(step evalStep, toolName string, input map[string]
 	if !routesOK || !actionOK {
 		return input
 	}
-	if step.ExpectedTool == dynamicExecuteTool {
+	if step.ExpectedTool == dynamicExecuteActionTool {
 		if normalized, ok := dynamictools.NormalizeCompatibilityActionAlias(action); ok {
 			input = cloneToolInputWithAction(input, normalized)
 			action = normalized
@@ -91,11 +91,11 @@ func normalizeRouteParamsInput(step evalStep, toolName string, input map[string]
 		return input, input
 	}
 	rawParams := params
-	if step.ExpectedTool == dynamicExecuteTool {
+	if step.ExpectedTool == dynamicExecuteActionTool {
 		params = dynamictools.NormalizeActionScopedParams(step.ExpectedAction, params, route.InputSchema)
 	}
 	normalizedParams := toolutil.NormalizeParamAliasesForSchema(params, route.InputSchema)
-	if step.ExpectedTool == dynamicExecuteTool {
+	if step.ExpectedTool == dynamicExecuteActionTool {
 		normalizedParams = dynamictools.NormalizeActionScopedParams(step.ExpectedAction, normalizedParams, route.InputSchema)
 	}
 	validationInput = cloneToolInputWithParams(input, mergeOriginalAndNormalizedParams(rawParams, normalizedParams))
@@ -271,7 +271,7 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 		problems = append(problems, fmt.Sprintf("expected action %s, got %s", step.ExpectedAction, action))
 	}
 	for key := range input {
-		if key != "action" && key != "params" && (step.ExpectedTool != dynamicExecuteTool || key != "confirm") {
+		if key != "action" && key != "params" && (step.ExpectedTool != dynamicExecuteActionTool || key != "confirm") {
 			problems = append(problems, fmt.Sprintf("%s %s; put action-specific fields under params", diagnosticUnexpectedTopLevelParameter, key))
 		}
 	}
@@ -296,7 +296,7 @@ func validateDestructiveSafety(result *validationResult, step evalStep, input, p
 	if !step.Destructive || !result.ToolMatches || !result.ActionMatches {
 		return problems
 	}
-	if step.ExpectedTool == dynamicExecuteTool {
+	if step.ExpectedTool == dynamicExecuteActionTool {
 		result.DestructiveSafe = isTruthy(input["confirm"])
 	} else {
 		result.DestructiveSafe = isTruthy(params["confirm"])
@@ -304,7 +304,7 @@ func validateDestructiveSafety(result *validationResult, step evalStep, input, p
 	if result.DestructiveSafe {
 		return problems
 	}
-	if step.ExpectedTool == dynamicExecuteTool {
+	if step.ExpectedTool == dynamicExecuteActionTool {
 		return append(problems, "destructive dynamic task requires top-level confirm=true")
 	}
 	return append(problems, "destructive task requires params.confirm=true")
@@ -393,7 +393,7 @@ func validationRepairText(task evalTask, step evalStep, validation validationRes
 		return b.String()
 	}
 	fmt.Fprintf(&b, ". Retry with tool %s and action %s using the envelope %s", step.ExpectedTool, step.ExpectedAction, expectedActionCallExample(task, step, attemptedInput))
-	if step.ExpectedTool == dynamicExecuteTool {
+	if step.ExpectedTool == dynamicExecuteActionTool {
 		b.WriteString(". In dynamic mode, action IDs are canonical domain.action values without gitlab_ prefixes, and top-level params is required even when empty. Never send confirm:false; omit confirm unless the envelope above shows confirm:true")
 		if strings.Contains(validation.Message, diagnosticMissingRequiredParams) {
 			b.WriteString(". Your retry must include action and params together in the same tool input; do not send only action and confirm")
@@ -508,7 +508,7 @@ func attemptedParamValue(input map[string]any, param string) any {
 
 // roleSensitiveRepairHint builds role sensitive repair hint for retry and repair feedback.
 func roleSensitiveRepairHint(step evalStep) string {
-	if step.ExpectedTool != dynamicExecuteTool {
+	if step.ExpectedTool != dynamicExecuteActionTool {
 		return ""
 	}
 	switch step.ExpectedAction {
@@ -553,8 +553,8 @@ func expectedActionCallExample(task evalTask, step evalStep, attemptedInput map[
 		params[required] = resolveExactParamProvenance(step.ExpectedAction, required, task.Prompt, allParams).Value
 	}
 	arguments := map[string]any{"action": step.ExpectedAction, "params": params}
-	if step.ExpectedTool == dynamicExecuteTool && (step.Destructive || hasParam(step.OptionalParams, "confirm")) {
-		// gitlab_execute_tool expects confirm beside action and params, not inside
+	if step.ExpectedTool == dynamicExecuteActionTool && (step.Destructive || hasParam(step.OptionalParams, "confirm")) {
+		// gitlab_execute_action expects confirm beside action and params, not inside
 		// params, because the dynamic executor owns destructive confirmation.
 		arguments["confirm"] = true
 	} else if step.Destructive || hasParam(step.OptionalParams, "confirm") {

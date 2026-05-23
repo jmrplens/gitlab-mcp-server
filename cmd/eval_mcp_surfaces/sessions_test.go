@@ -104,13 +104,13 @@ func TestParseToolsSnapshot_AcceptsRawAndWrappedShapes(t *testing.T) {
 }
 
 // TestDynamicValidationRoutes_RewritesCatalogRoutes verifies dynamic mode routes
-// are represented as gitlab_execute_tool domain.action IDs.
+// are represented as gitlab_execute_action domain.action IDs.
 func TestDynamicValidationRoutes_RewritesCatalogRoutes(t *testing.T) {
 	routes := dynamicValidationRoutes(map[string]toolutil.ActionMap{
 		"gitlab_project": {"get": toolutil.ActionRoute{}},
 		"gitlab_issue":   {"create": toolutil.ActionRoute{Destructive: false}},
 	})
-	if _, ok := routes[dynamicExecuteTool]["project.get"]; !ok {
+	if _, ok := routes[dynamicExecuteActionTool]["project.get"]; !ok {
 		t.Fatalf("dynamicValidationRoutes() = %#v, want project.get", routes)
 	}
 	if got := dynamicActionID("gitlab_issue", "create"); got != "issue.create" {

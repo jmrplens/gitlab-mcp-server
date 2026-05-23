@@ -32,7 +32,7 @@ In meta-tool mode (`TOOL_SURFACE=meta`), related operations are consolidated int
 
 ### Dynamic toolset
 
-Dynamic mode (`TOOL_SURFACE=dynamic`) is the low-token alternative. It exposes only two public tools: `gitlab_find_action` and `gitlab_execute_tool` (the singular `gitlab_execute_tool` name is intentional). The same GitLab actions remain available in the canonical action catalog. The assistant finds an action with its exact schema, then executes the canonical `domain.action` ID.
+Dynamic mode (`TOOL_SURFACE=dynamic`) is the low-token alternative. It exposes only two public tools: `gitlab_find_action` and `gitlab_execute_action` (the singular `gitlab_execute_action` name is intentional). The same GitLab actions remain available in the canonical action catalog. The assistant finds an action with its exact schema, then executes the canonical `domain.action` ID.
 
 ```mermaid
 flowchart LR
@@ -48,7 +48,7 @@ All tools follow a consistent naming pattern:
 
 - **Individual tools**: `gitlab_{action}_{resource}` (e.g., `gitlab_create_issue`, `gitlab_list_projects`)
 - **Meta-tools**: `gitlab_{domain}` (e.g., `gitlab_issue`, `gitlab_project`)
-- **Dynamic actions**: canonical `domain.action` IDs executed through `gitlab_execute_tool` (e.g., `issue.create`, `merge_request.list`)
+- **Dynamic actions**: canonical `domain.action` IDs executed through `gitlab_execute_action` (e.g., `issue.create`, `merge_request.list`)
 
 ## Base meta-tools (33)
 

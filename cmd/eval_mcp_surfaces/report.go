@@ -749,7 +749,7 @@ func uncoveredHighRiskByDomain(routes []uncoveredRoute) []domainCount {
 
 // routeDomainName returns the domain portion of a legacy or unified catalog route.
 func routeDomainName(tool, action string) string {
-	if tool == dynamicExecuteTool && action != "" {
+	if tool == dynamicExecuteActionTool && action != "" {
 		if before, _, ok := strings.Cut(action, "."); ok {
 			return before
 		}

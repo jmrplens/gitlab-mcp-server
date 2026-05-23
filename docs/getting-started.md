@@ -97,7 +97,7 @@ Type a natural language request in the AI chat:
 
 > **"List my GitLab projects"**
 
-In the default dynamic mode, the AI assistant finds the project-list action with `gitlab_find_action`, executes it with `gitlab_execute_tool`, and returns a formatted list of your projects with names, URLs, and descriptions. In meta-tool mode it calls `gitlab_project`; in individual mode it calls `gitlab_project_list`.
+In the default dynamic mode, the AI assistant finds the project-list action with `gitlab_find_action`, executes it with `gitlab_execute_action`, and returns a formatted list of your projects with names, URLs, and descriptions. In meta-tool mode it calls `gitlab_project`; in individual mode it calls `gitlab_project_list`.
 
 ### Expected Output
 
@@ -144,7 +144,7 @@ The server handles all GitLab API calls. You do not need to know project IDs, en
 
 ## Tool Modes
 
-By default, the server registers the **dynamic find/execute surface**: `gitlab_find_action` and `gitlab_execute_tool`. The same canonical GitLab action catalog remains reachable, and `gitlab_find_action` returns exact schemas before execution. Set `TOOL_SURFACE=meta` to use **33 meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit).
+By default, the server registers the **dynamic find/execute surface**: `gitlab_find_action` and `gitlab_execute_action`. The same canonical GitLab action catalog remains reachable, and `gitlab_find_action` returns exact schemas before execution. Set `TOOL_SURFACE=meta` to use **33 meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit).
 
 To register the complete individual tool set instead (one tool per GitLab operation; up to 1031 on GitLab.com Enterprise/Premium), set:
 

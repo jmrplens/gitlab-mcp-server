@@ -98,7 +98,7 @@ func TestTaskRoutesAvailable_HandlesStandaloneBridgeAndMissingRoutes(t *testing.
 func TestCatalogHasEnterpriseRoutes_DetectsRouteMapShapes(t *testing.T) {
 	cases := []map[string]toolutil.ActionMap{
 		{"gitlab": {"merge_train.list_project": toolutil.ActionRoute{}}},
-		{dynamicExecuteTool: {"merge_train.list_project": toolutil.ActionRoute{}}},
+		{dynamicExecuteActionTool: {"merge_train.list_project": toolutil.ActionRoute{}}},
 		{"gitlab_merge_train": {"list_project": toolutil.ActionRoute{}}},
 	}
 	for _, routes := range cases {
@@ -115,7 +115,7 @@ func TestCatalogHasEnterpriseRoutes_DetectsRouteMapShapes(t *testing.T) {
 // Docker runs do not inherit Enterprise availability from a mixed route map.
 func TestFilterTasksByAvailableRoutes_RespectsExplicitEdition(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
-		dynamicExecuteTool: {
+		dynamicExecuteActionTool: {
 			"issue.list":                               toolutil.ActionRoute{},
 			"merge_train.list_project":                 toolutil.ActionRoute{},
 			"model_registry.download":                  toolutil.ActionRoute{},
@@ -123,9 +123,9 @@ func TestFilterTasksByAvailableRoutes_RespectsExplicitEdition(t *testing.T) {
 		},
 	}
 	tasks := []evalTask{
-		{ID: "base", ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.list"},
-		{ID: "model-registry", ExpectedTool: dynamicExecuteTool, ExpectedAction: "model_registry.download"},
-		{ID: "protected-deploy", ExpectedTool: dynamicExecuteTool, ExpectedAction: "environment.deployment_approve_or_reject"},
+		{ID: "base", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.list"},
+		{ID: "model-registry", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "model_registry.download"},
+		{ID: "protected-deploy", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "environment.deployment_approve_or_reject"},
 	}
 
 	if got := taskIDs(filterTasksByAvailableRoutes(tasks, routes, false)); got != "base" {
@@ -140,13 +140,13 @@ func TestFilterTasksByAvailableRoutes_RespectsExplicitEdition(t *testing.T) {
 // normalization maps unified and dynamic catalogs to the executable route shape.
 func TestNormalizeExpectedRoutes_RewritesMetaAndDynamicRoutes(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{
-		"gitlab":           {"project.get": toolutil.ActionRoute{}},
-		dynamicExecuteTool: {"project.get": toolutil.ActionRoute{}},
+		"gitlab":                 {"project.get": toolutil.ActionRoute{}},
+		dynamicExecuteActionTool: {"project.get": toolutil.ActionRoute{}},
 	}
 	if toolName, action := normalizeExpectedRoute("gitlab_project", "get", routes); toolName != "gitlab" || action != "project.get" {
 		t.Fatalf("normalizeExpectedRoute() = %s/%s, want gitlab/project.get", toolName, action)
 	}
-	if toolName, action := normalizeExpectedDynamicRoute("gitlab_project", "get", routes); toolName != dynamicExecuteTool || action != "project.get" {
+	if toolName, action := normalizeExpectedDynamicRoute("gitlab_project", "get", routes); toolName != dynamicExecuteActionTool || action != "project.get" {
 		t.Fatalf("normalizeExpectedDynamicRoute() = %s/%s, want execute/project.get", toolName, action)
 	}
 	if got := canonicalRouteID("gitlab_project", "get"); got != "project.get" {
@@ -164,9 +164,9 @@ func TestNormalizeTasksForCatalog_RewritesTopLevelAndStepRoutes(t *testing.T) {
 		ID: "MT-1", ExpectedTool: "gitlab_project", ExpectedAction: "get",
 		Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}, {ExpectedTool: "gitlab_discover_project"}},
 	}}
-	dynamicRoutes := map[string]toolutil.ActionMap{dynamicExecuteTool: {"project.get": toolutil.ActionRoute{}, actionDiscoverProjectResolve: toolutil.ActionRoute{}}}
+	dynamicRoutes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {"project.get": toolutil.ActionRoute{}, actionDiscoverProjectResolve: toolutil.ActionRoute{}}}
 	dynamic := normalizeTasksForCatalog(tasks, dynamicRoutes, "dynamic")
-	if dynamic[0].ExpectedTool != dynamicExecuteTool || dynamic[0].ExpectedAction != "project.get" || dynamic[0].Steps[1].ExpectedAction != actionDiscoverProjectResolve {
+	if dynamic[0].ExpectedTool != dynamicExecuteActionTool || dynamic[0].ExpectedAction != "project.get" || dynamic[0].Steps[1].ExpectedAction != actionDiscoverProjectResolve {
 		t.Fatalf("dynamic normalized = %+v", dynamic[0])
 	}
 	if tasks[0].Steps[0].ExpectedTool != "gitlab_project" {

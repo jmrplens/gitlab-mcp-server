@@ -468,7 +468,7 @@ func (r *modelRunner) canExecuteInvalidToolCall(step evalStep, validation valida
 	if strings.Contains(validation.Message, diagnosticUnknownParams) {
 		return false
 	}
-	if toolUse.Name == dynamicExecuteTool {
+	if toolUse.Name == dynamicExecuteActionTool {
 		if _, hasParams := toolUse.Input["params"]; !hasParams {
 			return false
 		}
@@ -556,7 +556,7 @@ func discoveryBudgetFeedback(task evalTask, step evalStep, toolUse modelContentB
 	if !exactDynamicCallAvailable(task, []evalStep{step}) {
 		return "", false
 	}
-	return fmt.Sprintf("The exact gitlab_execute_tool call is already complete: action %s has high-confidence values for all required params. Execute it directly now; no discovery or schema lookup is needed.", step.ExpectedAction), true
+	return fmt.Sprintf("The exact gitlab_execute_action call is already complete: action %s has high-confidence values for all required params. Execute it directly now; no discovery or schema lookup is needed.", step.ExpectedAction), true
 }
 
 // isRedundantDiscoveryTool reports whether a tool call repeats avoidable dynamic discovery.
@@ -575,7 +575,7 @@ func exactDynamicCallAvailable(task evalTask, steps []evalStep) bool {
 		return false
 	}
 	step := steps[0]
-	if step.ExpectedTool != dynamicExecuteTool || step.ExpectedAction == "" {
+	if step.ExpectedTool != dynamicExecuteActionTool || step.ExpectedAction == "" {
 		return false
 	}
 	_, provenances := exactCallParams(step, task.Prompt, false)
@@ -1250,7 +1250,7 @@ func dynamicFindResultWithRegistry(ctx context.Context, registry *dynamictools.R
 // dynamicCatalogRoutesFromValidationRoutes derives dynamic catalog routes from validation routes from catalog metadata.
 func dynamicCatalogRoutesFromValidationRoutes(routes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
 	catalogRoutes := make(map[string]toolutil.ActionMap)
-	for actionID, route := range routes[dynamicExecuteTool] {
+	for actionID, route := range routes[dynamicExecuteActionTool] {
 		domain, action, ok := strings.Cut(actionID, ".")
 		if !ok || domain == "" || action == "" {
 			continue

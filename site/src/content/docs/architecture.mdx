@@ -152,13 +152,13 @@ With `TOOL_SURFACE=individual`, all individual tools are exposed (e.g., `gitlab_
 
 ### Dynamic toolset
 
-With `TOOL_SURFACE=dynamic`, the server exposes only `gitlab_find_action` and `gitlab_execute_tool`. The same canonical action catalog remains available and is shared with meta-tools, so dynamic mode changes discovery rather than GitLab behavior.
+With `TOOL_SURFACE=dynamic`, the server exposes only `gitlab_find_action` and `gitlab_execute_action`. The same canonical action catalog remains available and is shared with meta-tools, so dynamic mode changes discovery rather than GitLab behavior.
 
 ```mermaid
 flowchart TD
     specs[Domain ActionSpecs] --> catalog[Canonical action catalog]
     catalog --> find[gitlab_find_action]
-    catalog --> execute[gitlab_execute_tool]
+    catalog --> execute[gitlab_execute_action]
     execute --> route[Shared ActionRoute]
     route --> handler[Existing typed handler]
     handler --> gitlab[GitLab API]

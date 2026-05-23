@@ -780,7 +780,7 @@ func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 	if _, ok := action.InputSchema["x_destructive"]; !ok {
 		t.Fatalf("InputSchema missing x_destructive: %+v", action.InputSchema)
 	}
-	if confirmation, ok := action.InputSchema["x_confirmation"].(map[string]any); !ok || confirmation["location"] != "gitlab_execute_tool.confirm" {
+	if confirmation, ok := action.InputSchema["x_confirmation"].(map[string]any); !ok || confirmation["location"] != "gitlab_execute_action.confirm" {
 		t.Fatalf("InputSchema x_confirmation = %+v, want dynamic top-level confirm guidance", action.InputSchema["x_confirmation"])
 	}
 	if _, hasConfirmParam := schemaProperties(action.InputSchema)["confirm"]; hasConfirmParam {
@@ -798,7 +798,7 @@ func TestDescribe_ReturnsSchemaAndExample(t *testing.T) {
 }
 
 // TestDynamicInputSchema_RemovesConfirmFromRequired verifies dynamic action
-// schemas keep destructive confirmation at gitlab_execute_tool.confirm only.
+// schemas keep destructive confirmation at gitlab_execute_action.confirm only.
 func TestDynamicInputSchema_RemovesConfirmFromRequired(t *testing.T) {
 	schema := dynamicInputSchema(actionEntry{
 		ID:          "project.delete",
@@ -1089,7 +1089,7 @@ func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {
 	if found.OutputSchema != nil {
 		t.Fatalf("found OutputSchema = %v, want nil for route without output schema", found.OutputSchema)
 	}
-	if found.Example.Tool != "gitlab_execute_tool" || found.Example.Arguments["confirm"] != true {
+	if found.Example.Tool != "gitlab_execute_action" || found.Example.Arguments["confirm"] != true {
 		t.Fatalf("example = %+v, want execute example with confirm", found.Example)
 	}
 }
@@ -1183,7 +1183,7 @@ func TestRegisterCatalogFindExecuteTools_ExposesTwoDynamicTools(t *testing.T) {
 		t.Fatalf("tool count = %d, want 2", len(tools.Tools))
 	}
 	names := []string{tools.Tools[0].Name, tools.Tools[1].Name}
-	if !slices.Contains(names, "gitlab_find_action") || !slices.Contains(names, "gitlab_execute_tool") {
+	if !slices.Contains(names, "gitlab_find_action") || !slices.Contains(names, "gitlab_execute_action") {
 		t.Fatalf("tools = %v, want find/execute", names)
 	}
 }
@@ -2430,25 +2430,25 @@ func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 	if description := schemaPropertyDescription(findSchema, "query"); !strings.Contains(description, "domain or resource with a verb") {
 		t.Fatalf("gitlab_find_action query description = %q, want semantic query guidance", description)
 	}
-	executeTool := listedTool(t, tools.Tools, executeToolName)
-	if executeTool.Description != executeToolDescription || !strings.Contains(executeTool.Description, "top-level confirm=true") || !strings.Contains(executeTool.Description, "Use find first only") {
-		t.Fatalf("gitlab_execute_tool description = %q, want compact confirmation guidance", executeTool.Description)
+	executeTool := listedTool(t, tools.Tools, executeActionToolName)
+	if executeTool.Description != executeActionToolDescription || !strings.Contains(executeTool.Description, "top-level confirm=true") || !strings.Contains(executeTool.Description, "Use find first only") {
+		t.Fatalf("gitlab_execute_action description = %q, want compact confirmation guidance", executeTool.Description)
 	}
-	executeSchema := listedToolInputSchema(t, tools.Tools, "gitlab_execute_tool")
+	executeSchema := listedToolInputSchema(t, tools.Tools, "gitlab_execute_action")
 	if !slices.Contains(schemaRequired(executeSchema), "params") {
-		t.Fatalf("gitlab_execute_tool required = %v, want params", schemaRequired(executeSchema))
+		t.Fatalf("gitlab_execute_action required = %v, want params", schemaRequired(executeSchema))
 	}
 	assertSchemaHasProperties(t, executeSchema, "action", "params", "confirm")
 	if description := schemaPropertyDescription(executeSchema, "action"); !strings.Contains(description, "returned by gitlab_find_action") {
-		t.Fatalf("gitlab_execute_tool action description = %q, want find linkage", description)
+		t.Fatalf("gitlab_execute_action action description = %q, want find linkage", description)
 	}
 	if description := schemaPropertyDescription(executeSchema, "confirm"); !strings.Contains(description, "top-level confirm=true") {
-		t.Fatalf("gitlab_execute_tool confirm description = %q, want top-level confirm guidance", description)
+		t.Fatalf("gitlab_execute_action confirm description = %q, want top-level confirm guidance", description)
 	}
 
-	executeOutputSchema := listedToolOutputSchema(t, tools.Tools, "gitlab_execute_tool")
+	executeOutputSchema := listedToolOutputSchema(t, tools.Tools, "gitlab_execute_action")
 	if executeOutputSchema["type"] != "object" || executeOutputSchema["additionalProperties"] != true {
-		t.Fatalf("gitlab_execute_tool output schema = %v, want open object schema", executeOutputSchema)
+		t.Fatalf("gitlab_execute_action output schema = %v, want open object schema", executeOutputSchema)
 	}
 	assertSchemaHasProperties(t, executeOutputSchema, "next_steps", "pagination")
 }
@@ -2510,8 +2510,8 @@ func TestRegisterCatalogFindExecuteTools_FindAcceptsNaturalLanguageAndReturnsSch
 		t.Fatalf("first input_schema = %+v, want schema object", first["input_schema"])
 	}
 	example, ok := first["example"].(map[string]any)
-	if !ok || example["tool"] != executeToolName {
-		t.Fatalf("first example = %+v, want gitlab_execute_tool", first["example"])
+	if !ok || example["tool"] != executeActionToolName {
+		t.Fatalf("first example = %+v, want gitlab_execute_action", first["example"])
 	}
 }
 
@@ -2537,20 +2537,20 @@ func TestRegisterCatalogFindExecuteTools_ExecuteOutputSchemaAcceptsActionOutput(
 	t.Cleanup(func() { session.Close() })
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "gitlab_execute_tool",
+		Name: "gitlab_execute_action",
 		Arguments: map[string]any{
 			"action": "project.list",
 			"params": map[string]any{"owned": true},
 		},
 	})
 	if err != nil {
-		t.Fatalf("CallTool(gitlab_execute_tool) error = %v", err)
+		t.Fatalf("CallTool(gitlab_execute_action) error = %v", err)
 	}
 	if result == nil || result.IsError {
-		t.Fatalf("CallTool(gitlab_execute_tool) result = %+v, want non-error", result)
+		t.Fatalf("CallTool(gitlab_execute_action) result = %+v, want non-error", result)
 	}
 	if result.StructuredContent == nil {
-		t.Fatal("CallTool(gitlab_execute_tool) StructuredContent is nil")
+		t.Fatal("CallTool(gitlab_execute_action) StructuredContent is nil")
 	}
 	data := unmarshalStructuredContentMap(t, result.StructuredContent)
 	if data["owned"] != true {
@@ -4362,7 +4362,7 @@ func TestCompatibilityAliasAndDescriptionBranches(t *testing.T) {
 		t.Fatalf("describeEntry(fallback) = %+v, want fallback input schema and cloned output schema", description)
 	}
 	registry := NewRegistry(testRoutes(t))
-	if got := describeEntry(registry.entries[0]); got.InputSchema["type"] == "" || got.Example.Tool != executeToolName {
+	if got := describeEntry(registry.entries[0]); got.InputSchema["type"] == "" || got.Example.Tool != executeActionToolName {
 		t.Fatalf("describeEntry(success) = %+v, want schema and dynamic execute example", got)
 	}
 	if got := compactSchemaJSON(nil); got != "" {

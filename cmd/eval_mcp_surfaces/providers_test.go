@@ -457,7 +457,7 @@ func assertOpenAIProviderResponse(t *testing.T, response modelResponse) {
 func TestOpenAITools_HardensExecuteSchema(t *testing.T) {
 	tools := openAITools([]modelTool{
 		{
-			Name:        dynamicExecuteTool,
+			Name:        dynamicExecuteActionTool,
 			Description: "Execute",
 			InputSchema: map[string]any{
 				"type": "object",
@@ -507,7 +507,7 @@ func TestOpenAITools_HardensExecuteSchema(t *testing.T) {
 // TestOpenAITools_QwenKeepsStrictDisabled verifies Qwen receives the hardened
 // execute schema without OpenAI-specific strict metadata.
 func TestOpenAITools_QwenKeepsStrictDisabled(t *testing.T) {
-	tools := openAITools([]modelTool{{Name: dynamicExecuteTool, InputSchema: map[string]any{"type": "object"}}})
+	tools := openAITools([]modelTool{{Name: dynamicExecuteActionTool, InputSchema: map[string]any{"type": "object"}}})
 
 	if len(tools) != 1 {
 		t.Fatalf("tools = %#v, want one tool", tools)
@@ -522,7 +522,7 @@ func TestOpenAITools_QwenKeepsStrictDisabled(t *testing.T) {
 }
 
 // TestOpenAITools_DoesNotMutateNonExecuteSchemas verifies hardening is limited
-// to gitlab_execute_tool.
+// to gitlab_execute_action.
 func TestOpenAITools_DoesNotMutateNonExecuteSchemas(t *testing.T) {
 	inputSchema := map[string]any{"type": "object", "required": []any{"query"}}
 	tools := openAITools([]modelTool{{Name: dynamicFindTool, InputSchema: inputSchema}})

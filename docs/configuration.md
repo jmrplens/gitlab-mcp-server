@@ -199,7 +199,7 @@ See [Auto-Update](auto-update.md) for detailed documentation on update modes, MC
 
 | Mode                          | Variable                  | Tools Exposed                                                      | Best For                                                                      |
 | ----------------------------- | ------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| **Dynamic toolset** (default) | `TOOL_SURFACE=dynamic`    | `gitlab_find_action`, `gitlab_execute_tool`                        | Most users — lowest startup context while retaining full catalog reachability |
+| **Dynamic toolset** (default) | `TOOL_SURFACE=dynamic`    | `gitlab_find_action`, `gitlab_execute_action`                      | Most users — lowest startup context while retaining full catalog reachability |
 | **Meta-tools**                | `TOOL_SURFACE=meta`       | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise    | Clients that prefer consolidated domain dispatchers with `action` parameters  |
 | **Individual tools**          | `TOOL_SURFACE=individual` | 866 CE / 1025 self-managed enterprise / 1031 GitLab.com Enterprise | Clients that need granular tool selection                                     |
 

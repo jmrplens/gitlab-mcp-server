@@ -162,14 +162,14 @@ Dynamic mode is the default. For concrete tool calls, the assistant first discov
 
 ```text
 gitlab_find_action → query: "list open merge requests"
-gitlab_execute_tool → action: "merge_request.list", params: { project_id: "42", state: "opened" }
+gitlab_execute_action → action: "merge_request.list", params: { project_id: "42", state: "opened" }
 ```
 
 For analysis tasks, the same flow discovers canonical `analyze.*` actions before execution:
 
 ```text
 gitlab_find_action → query: "analyze failed pipeline"
-gitlab_execute_tool → action: "analyze.pipeline_failure", params: { project_id: "42", pipeline_id: 12345 }
+gitlab_execute_action → action: "analyze.pipeline_failure", params: { project_id: "42", pipeline_id: 12345 }
 ```
 
 ---

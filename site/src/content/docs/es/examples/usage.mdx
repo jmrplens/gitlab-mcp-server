@@ -162,14 +162,14 @@ El modo dinámico es el predeterminado. Para llamadas concretas, el asistente de
 
 ```text
 gitlab_find_action → query: "listar merge requests abiertas"
-gitlab_execute_tool → action: "merge_request.list", params: { project_id: "42", state: "opened" }
+gitlab_execute_action → action: "merge_request.list", params: { project_id: "42", state: "opened" }
 ```
 
 Para tareas de análisis, el mismo flujo descubre acciones canónicas `analyze.*` antes de ejecutar:
 
 ```text
 gitlab_find_action → query: "analizar pipeline fallido"
-gitlab_execute_tool → action: "analyze.pipeline_failure", params: { project_id: "42", pipeline_id: 12345 }
+gitlab_execute_action → action: "analyze.pipeline_failure", params: { project_id: "42", pipeline_id: 12345 }
 ```
 
 ---

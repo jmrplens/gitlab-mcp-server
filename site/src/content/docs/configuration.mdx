@@ -44,13 +44,13 @@ This must be set for the server to start in stdio mode:
 | `LOG_LEVEL`              | `info`               | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                          |
 
 :::tip
-**Dynamic mode** (`TOOL_SURFACE=dynamic`) is the default and lowest-token catalog. It exposes `gitlab_find_action` and `gitlab_execute_tool`, while the same GitLab actions remain available through the canonical action catalog.
+**Dynamic mode** (`TOOL_SURFACE=dynamic`) is the default and lowest-token catalog. It exposes `gitlab_find_action` and `gitlab_execute_action`, while the same GitLab actions remain available through the canonical action catalog.
 
 Use `TOOL_SURFACE=meta` when a client or workflow prefers consolidated domain dispatchers with an `action` parameter.
 
 See [Dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) for the find/execute workflow.
 
-For deployments using the dynamic tool surface where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal`. It keeps `gitlab://workspace/roots` for project discovery plus `gitlab://tools` for action discovery, and omits optional resources, prompts, and workflow guides. This does not remove action schemas from dynamic discovery: use `gitlab_find_action` to retrieve exact schemas inline before calling `gitlab_execute_tool`, or read `gitlab://tools/{id}` for a manifest entry. The default remains `full`; no schemas-only capability mode is exposed today.
+For deployments using the dynamic tool surface where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal`. It keeps `gitlab://workspace/roots` for project discovery plus `gitlab://tools` for action discovery, and omits optional resources, prompts, and workflow guides. This does not remove action schemas from dynamic discovery: use `gitlab_find_action` to retrieve exact schemas inline before calling `gitlab_execute_action`, or read `gitlab://tools/{id}` for a manifest entry. The default remains `full`; no schemas-only capability mode is exposed today.
 :::
 
 ## Auto-update

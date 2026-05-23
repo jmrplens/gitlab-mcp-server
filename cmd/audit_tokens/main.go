@@ -172,7 +172,7 @@ func main() {
 
 	fmt.Println("## Minimal Capability Candidate")
 	fmt.Println()
-	fmt.Println("  Required for dynamic action use: `gitlab_find_action` returns exact schemas inline, and `gitlab_execute_tool` performs execution.")
+	fmt.Println("  Required for dynamic action use: `gitlab_find_action` returns exact schemas inline, and `gitlab_execute_action` performs execution.")
 	fmt.Println("  Retained minimal resources: `gitlab://workspace/roots` for local project discovery and `gitlab://tools` for action call shapes.")
 	fmt.Println("  Optional in minimal mode: static GitLab data resources, workflow guide resources, and prompt templates.")
 	if dynamicBaseResourceTokens+promptTokens > 0 {

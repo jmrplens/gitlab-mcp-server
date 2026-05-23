@@ -370,7 +370,7 @@ func openAITools(tools []modelTool) []openAITool {
 // openAIToolSchema derives OpenAI tool schema from tool schema metadata.
 func openAIToolSchema(tool modelTool) any {
 	schema, ok := tool.InputSchema.(map[string]any)
-	if !ok || tool.Name != dynamicExecuteTool {
+	if !ok || tool.Name != dynamicExecuteActionTool {
 		return tool.InputSchema
 	}
 	updated := cloneOpenAISchema(schema)

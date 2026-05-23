@@ -28,7 +28,7 @@ func systemPromptForTask(task evalTask, toolSurface string) string {
 
 // dynamicSystemPrompt guides models through the low-token dynamic tool surface.
 func dynamicSystemPrompt(_ string) string {
-	return `You are evaluating GitLab MCP dynamic tool mode. Use the provided tools only. GitLab operations are executed through gitlab_find_action and gitlab_execute_tool; if MCP capability bridge tools are provided, they expose MCP resources, prompts, completions, and capability metadata for inspecting the configured server surface. Catalog GitLab operations are not directly visible as individual tools. Use gitlab_find_action before gitlab_execute_tool whenever the exact canonical action ID or exact params schema is not already known from a prior find result. Execute the requested GitLab operation with gitlab_execute_tool using {"action":"domain.action","params":{...}} and only parameter names shown in the input_schema. Destructive actions require top-level confirm:true on gitlab_execute_tool, not params.confirm. If the task gives all required values and the exact canonical action ID is clear from context, call gitlab_execute_tool directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
+	return `You are evaluating GitLab MCP dynamic tool mode. Use the provided tools only. GitLab operations are executed through gitlab_find_action and gitlab_execute_action; if MCP capability bridge tools are provided, they expose MCP resources, prompts, completions, and capability metadata for inspecting the configured server surface. Catalog GitLab operations are not directly visible as individual tools. Use gitlab_find_action before gitlab_execute_action whenever the exact canonical action ID or exact params schema is not already known from a prior find result. Execute the requested GitLab operation with gitlab_execute_action using {"action":"domain.action","params":{...}} and only parameter names shown in the input_schema. Destructive actions require top-level confirm:true on gitlab_execute_action, not params.confirm. If the task gives all required values and the exact canonical action ID is clear from context, call gitlab_execute_action directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
 }
 
 // taskPromptForSurface returns task guidance for the selected tool catalog.
@@ -42,7 +42,7 @@ func taskPromptForSurface(task evalTask, toolSurface string) string {
 		exactPreamble = strings.TrimSpace(dynamicFirstStepGuidance(task))
 	}
 	exactPreamble = joinNonEmpty("\n\n", exactPreamble, dynamicWorkflowPlanPreamble(task))
-	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_tool, and any MCP capability bridge tools provided for this run. Use bridge tools directly for capability, resource, prompt, and completion inspection steps. Treat any catalog route as a canonical action ID for gitlab_execute_tool. For multi-step tasks with a Dynamic workflow plan, follow that plan in order and use gitlab_find_action only if an action ID or params schema is absent from the plan. Otherwise, use gitlab_find_action before executing when an action ID or params schema is not exact. Any final GitLab operation must be a gitlab_execute_tool call with action set to the canonical domain.action ID and params limited to the selected action input_schema. For destructive operations, put confirm:true at the top level of gitlab_execute_tool arguments; do not put confirm inside params.")
+	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_action, and any MCP capability bridge tools provided for this run. Use bridge tools directly for capability, resource, prompt, and completion inspection steps. Treat any catalog route as a canonical action ID for gitlab_execute_action. For multi-step tasks with a Dynamic workflow plan, follow that plan in order and use gitlab_find_action only if an action ID or params schema is absent from the plan. Otherwise, use gitlab_find_action before executing when an action ID or params schema is not exact. Any final GitLab operation must be a gitlab_execute_action call with action set to the canonical domain.action ID and params limited to the selected action input_schema. For destructive operations, put confirm:true at the top level of gitlab_execute_action arguments; do not put confirm inside params.")
 }
 
 // joinNonEmpty joins non-blank prompt fragments with the requested separator.
@@ -65,7 +65,7 @@ func dynamicWorkflowPlanPreamble(task evalTask) string {
 	}
 	lines := []string{"Dynamic workflow plan:"}
 	for index, step := range steps {
-		if step.ExpectedTool != dynamicExecuteTool || step.ExpectedAction == "" {
+		if step.ExpectedTool != dynamicExecuteActionTool || step.ExpectedAction == "" {
 			return ""
 		}
 		required := "none"
@@ -84,7 +84,7 @@ func dynamicWorkflowPlanPreamble(task evalTask) string {
 		}
 		lines = append(lines, fmt.Sprintf("%d. %s", index+1, strings.Join(parts, "; ")))
 	}
-	lines = append(lines, "Use this order. The listed action IDs and params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions. Execute each action directly when its required values are present. Include optional params only when the task prompt asks for their behavior. Values named *_id that are produced by earlier steps must be copied from the preceding tool result. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_tool call.")
+	lines = append(lines, "Use this order. The listed action IDs and params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions. Execute each action directly when its required values are present. Include optional params only when the task prompt asks for their behavior. Values named *_id that are produced by earlier steps must be copied from the preceding tool result. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_action call.")
 	return strings.Join(lines, "\n")
 }
 
@@ -122,12 +122,12 @@ func dynamicExactCallPreamble(task evalTask) string {
 // dynamicConfirmPrompt builds dynamic confirm prompt for evaluator prompts.
 func dynamicConfirmPrompt(prompt string) string {
 	replacer := strings.NewReplacer(
-		"include confirm:true in params for each destructive tool call", "include top-level confirm:true on gitlab_execute_tool for each destructive tool call",
-		"Include confirm:true in params for every destructive tool call", "Include top-level confirm:true on gitlab_execute_tool for every destructive tool call",
+		"include confirm:true in params for each destructive tool call", "include top-level confirm:true on gitlab_execute_action for each destructive tool call",
+		"Include confirm:true in params for every destructive tool call", "Include top-level confirm:true on gitlab_execute_action for every destructive tool call",
 		"require params.confirm=true", "require top-level confirm:true",
 		"requires params.confirm=true", "requires top-level confirm:true",
 		"with params.confirm=true", "with top-level confirm:true",
-		"confirm must be inside params, never a top-level field", "confirm must be top-level on gitlab_execute_tool, never inside params",
+		"confirm must be inside params, never a top-level field", "confirm must be top-level on gitlab_execute_action, never inside params",
 	)
 	return replacer.Replace(prompt)
 }
@@ -135,7 +135,7 @@ func dynamicConfirmPrompt(prompt string) string {
 // dynamicFirstStepGuidance builds dynamic first step guidance for evaluator prompts.
 func dynamicFirstStepGuidance(task evalTask) string {
 	steps := taskSteps(task)
-	if len(steps) == 0 || steps[0].ExpectedTool != dynamicExecuteTool || steps[0].ExpectedAction == "" {
+	if len(steps) == 0 || steps[0].ExpectedTool != dynamicExecuteActionTool || steps[0].ExpectedAction == "" {
 		return ""
 	}
 	params, provenances := exactCallParams(steps[0], task.Prompt, false)
@@ -511,7 +511,7 @@ func appendProjectLifecycleGuidance(task evalTask, steps []evalStep, guidance st
 		guidance += ` For project badge CRUD, badge_add requires valid absolute params.link_url and params.image_url. If the task does not provide URLs, use https://example.com/eval-badge as link_url and https://example.com/eval-badge.svg as image_url. Use the returned badge_id for badge_get, badge_edit, and badge_delete. badge_edit uses params.name for a new badge name; never send new_name.`
 	}
 	if len(steps) > 1 && steps[0].ExpectedTool == "gitlab_branch" && steps[0].ExpectedAction == "create" && strings.Contains(strings.ToLower(task.Prompt), "protect") {
-		guidance += ` For branch protection lifecycle, follow exactly this order: create, protect, get_protected, update_protected, unprotect, delete. Protecting with Maintainer push and merge access means params.push_access_level=40 and params.merge_access_level=40 on the protect call. After protect succeeds, call get_protected next; do not call protect again. update_protected may use params.allow_force_push=true. unprotect only uses params.project_id, params.branch_name, and params.confirm=true; never send allow_force_push to unprotect. For direct gitlab_branch meta-tool calls, the unprotect envelope shape is {"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}} and the delete envelope shape is {"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. For dynamic mode with gitlab_execute_tool, keep unprotect/delete action params inside params and set top-level confirm:true on the gitlab_execute_tool invocation.`
+		guidance += ` For branch protection lifecycle, follow exactly this order: create, protect, get_protected, update_protected, unprotect, delete. Protecting with Maintainer push and merge access means params.push_access_level=40 and params.merge_access_level=40 on the protect call. After protect succeeds, call get_protected next; do not call protect again. update_protected may use params.allow_force_push=true. unprotect only uses params.project_id, params.branch_name, and params.confirm=true; never send allow_force_push to unprotect. For direct gitlab_branch meta-tool calls, the unprotect envelope shape is {"action":"unprotect","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}} and the delete envelope shape is {"action":"delete","params":{"project_id":"<project_id>","branch_name":"<branch_name>","confirm":true}}. For dynamic mode with gitlab_execute_action, keep unprotect/delete action params inside params and set top-level confirm:true on the gitlab_execute_action invocation.`
 	}
 	return guidance
 }
@@ -655,7 +655,7 @@ func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 	if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "list" && strings.Contains(lowerPrompt, promptPhraseFailedJobs) && strings.Contains(lowerPrompt, "pipeline") {
 		return true
 	}
-	if step.ExpectedTool == dynamicExecuteTool {
+	if step.ExpectedTool == dynamicExecuteActionTool {
 		switch step.ExpectedAction {
 		case "job.download_single_artifact", "runner.remove":
 			return true
@@ -680,8 +680,8 @@ func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 
 // exactToolTaskPrompt builds exact tool task prompt for evaluator prompts.
 func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) string {
-	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
-		destructive = "Yes; include top-level confirm:true on gitlab_execute_tool."
+	if step.ExpectedTool == dynamicExecuteActionTool && step.Destructive {
+		destructive = "Yes; include top-level confirm:true on gitlab_execute_action."
 	}
 	params, provenances := exactCallParams(step, task.Prompt, true)
 	if !exactCallParamsAreSafe(provenances) {
@@ -707,7 +707,7 @@ func exactToolTaskPrompt(task evalTask, destructive string, step evalStep) strin
 // actionGuidanceExample builds an action+params example for task prompts.
 func actionGuidanceExample(step evalStep, params map[string]any) map[string]any {
 	arguments := map[string]any{"action": step.ExpectedAction, "params": params}
-	if step.ExpectedTool == dynamicExecuteTool {
+	if step.ExpectedTool == dynamicExecuteActionTool {
 		if step.Destructive || isTruthy(params["confirm"]) {
 			delete(params, "confirm")
 			arguments["confirm"] = true
@@ -735,8 +735,8 @@ func usesCompactExactPrompt(step evalStep) bool {
 
 // compactExactTaskPrompt builds compact exact task prompt for evaluator prompts.
 func compactExactTaskPrompt(task evalTask, destructive string, step evalStep) string {
-	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
-		destructive = "Yes; include top-level confirm:true on gitlab_execute_tool."
+	if step.ExpectedTool == dynamicExecuteActionTool && step.Destructive {
+		destructive = "Yes; include top-level confirm:true on gitlab_execute_action."
 	}
 	params, provenances := exactCallParams(step, task.Prompt, false)
 	if !exactCallParamsAreSafe(provenances) {
@@ -763,8 +763,8 @@ func compactExactTaskPrompt(task evalTask, destructive string, step evalStep) st
 	if step.ExpectedAction == "group.epic_create" {
 		return fmt.Sprintf("Exact required call: %s. Call the %s tool once with this exact JSON object.\nDestructive: %s. The action value is group.epic_create and params.title is already complete. The final task call should perform the requested GitLab operation.", data, toolName, destructive)
 	}
-	if step.ExpectedTool == dynamicExecuteTool && step.Destructive {
-		return fmt.Sprintf("Task %s: %s\nDestructive: %s Exact required call: %s. A gitlab_execute_tool call with only action and confirm is invalid; copy the params object exactly, including every required ID.\nUse gitlab_execute_tool once with exactly that action envelope. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, data)
+	if step.ExpectedTool == dynamicExecuteActionTool && step.Destructive {
+		return fmt.Sprintf("Task %s: %s\nDestructive: %s Exact required call: %s. A gitlab_execute_action call with only action and confirm is invalid; copy the params object exactly, including every required ID.\nUse gitlab_execute_action once with exactly that action envelope. The final task call should perform the requested GitLab operation.", task.ID, task.Prompt, destructive, data)
 	}
 	mapping := "The supplied values map to the matching params in that JSON envelope."
 	if compactExactPromptUsesID(step.RequiredParams) {

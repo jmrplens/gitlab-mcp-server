@@ -4,7 +4,7 @@
 
 ## Dynamic Toolset
 
-Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.
+Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_action` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.
 
 ### gitlab_find_action
 
@@ -20,16 +20,16 @@ Search the local GitLab action catalog; read-only and no GitLab API call. Use wh
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### gitlab_execute_tool
+### gitlab_execute_action
 
-**GitLab Execute Tool**
+**GitLab Execute Action**
 
 Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear.
 
 **Parameters:**
 
 - `action` (string) (required): Canonical action ID returned by gitlab_find_action, or a supported compatibility alias, such as project.list, issue.update, or issue.close.
-- `confirm` (boolean): Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_tool.
+- `confirm` (boolean): Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_action.
 - `params` (object) (required): Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters.
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
@@ -15711,7 +15711,7 @@ Get a single group-level protected environment by name.
 
 **Parameters:**
 
-- `environment` (string) (required): Environment name
+- `environment` (string) (required): Environment tier (production, staging, testing, development, other)
 - `group_id` (string) (required): Group ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -15737,7 +15737,7 @@ Protect an environment at the group level.
 - `approval_rules` (array of objects): Approval rules
 - `deploy_access_levels` (array of objects): Deploy access levels
 - `group_id` (string) (required): Group ID or URL-encoded path
-- `name` (string) (required): Environment name to protect
+- `name` (string) (required): Environment tier to protect (production, staging, testing, development, other)
 - `required_approval_count` (integer): Required number of approvals
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -15749,7 +15749,7 @@ Remove protection from a group-level environment.
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `environment` (string) (required): Environment name to unprotect
+- `environment` (string) (required): Environment tier to unprotect (production, staging, testing, development, other)
 - `group_id` (string) (required): Group ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -15762,9 +15762,9 @@ Update a group-level protected environment.
 
 - `approval_rules` (array of objects): Updated approval rules
 - `deploy_access_levels` (array of objects): Updated deploy access levels
-- `environment` (string) (required): Environment name
+- `environment` (string) (required): Environment tier (production, staging, testing, development, other)
 - `group_id` (string) (required): Group ID or URL-encoded path
-- `name` (string): New environment name
+- `name` (string): New environment tier (production, staging, testing, development, other)
 - `required_approval_count` (integer): Required number of approvals
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true

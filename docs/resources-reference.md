@@ -100,7 +100,7 @@ The tool manifest is the public discovery layer for every tool surface. The norm
 2. Read `gitlab://tools/{id}` for the chosen entry. The response includes `call`, `input_schema`, destructive metadata, read-only metadata, and required params when they are known.
 3. Call the indicated MCP tool using the returned call shape.
 
-For example, `gitlab://tools/project.get` describes a dynamic action that calls `gitlab_execute_tool` with `action="project.get"` and params under `params`. `gitlab://tools/gitlab_project.get` describes a meta-tool action that calls `gitlab_project` with `action="get"` and params under `params`. `gitlab://tools/gitlab_get_project` describes an individual tool call where arguments are passed directly to the tool.
+For example, `gitlab://tools/project.get` describes a dynamic action that calls `gitlab_execute_action` with `action="project.get"` and params under `params`. `gitlab://tools/gitlab_project.get` describes a meta-tool action that calls `gitlab_project` with `action="get"` and params under `params`. `gitlab://tools/gitlab_get_project` describes an individual tool call where arguments are passed directly to the tool.
 
 ## Workflow Guide Resources (5)
 

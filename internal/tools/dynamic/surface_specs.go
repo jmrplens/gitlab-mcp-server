@@ -21,7 +21,7 @@ func ControllerSurfaceSpecs(registry *Registry) []actioncatalog.SurfaceToolSpec 
 			_, out, err := registry.Find(ctx, req, input)
 			return out, err
 		}), toolutil.IconSearch, true),
-		dynamicControllerSpec(executeToolName, "GitLab Execute Tool", executeToolDescription, "execute", dynamicExecuteRoute(registry), toolutil.IconServer, false),
+		dynamicControllerSpec(executeActionToolName, "GitLab Execute Action", executeActionToolDescription, "execute", dynamicExecuteRoute(registry), toolutil.IconServer, false),
 	}
 }
 

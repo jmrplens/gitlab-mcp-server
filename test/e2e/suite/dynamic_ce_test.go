@@ -26,7 +26,7 @@ import (
 // session exposes only the default public surface.
 //
 // The test lists tools from [sess.dynamic] and asserts that the visible MCP
-// catalog contains exactly gitlab_find_action and gitlab_execute_tool. It also
+// catalog contains exactly gitlab_find_action and gitlab_execute_action. It also
 // checks that regular individual or meta tools are not
 // exposed directly. This protects the low-token contract for TOOL_SURFACE=dynamic.
 func TestDynamicToolSurface_ExposesFindExecuteOnly(t *testing.T) {
@@ -47,7 +47,7 @@ func TestDynamicToolSurface_ExposesFindExecuteOnly(t *testing.T) {
 	}
 	sort.Strings(names)
 
-	want := []string{"gitlab_execute_tool", "gitlab_find_action"}
+	want := []string{"gitlab_execute_action", "gitlab_find_action"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("dynamic tool names = %v, want %v", names, want)
 	}
@@ -96,7 +96,7 @@ func TestDynamicToolSurface_FindExecuteReadOnlyWorkflow(t *testing.T) {
 	requireFindResult(t, multiIntent, "merge_request.list")
 
 	result, err := sess.dynamic.CallTool(ctx, &mcp.CallToolParams{
-		Name: "gitlab_execute_tool",
+		Name: "gitlab_execute_action",
 		Arguments: dynamictools.ExecuteInput{
 			Action: "project.delete",
 			Params: map[string]any{"project_id": proj.pidStr()},
@@ -119,7 +119,7 @@ func dynamicProjectGet(ctx context.Context, t *testing.T, proj ProjectFixture) p
 	requireFindParam(t, result, "project_id")
 	requireFindOutputParam(t, result, "id")
 
-	out, err := callToolOn[projects.Output](ctx, sess.dynamic, "gitlab_execute_tool", dynamictools.ExecuteInput{
+	out, err := callToolOn[projects.Output](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
 		Action: "project.get",
 		Params: map[string]any{"project_id": proj.pidStr()},
 	})
@@ -140,7 +140,7 @@ func dynamicRepositoryFileGet(ctx context.Context, t *testing.T, proj ProjectFix
 		requireFindParam(t, result, param)
 	}
 
-	out, err := callToolOn[files.Output](ctx, sess.dynamic, "gitlab_execute_tool", dynamictools.ExecuteInput{
+	out, err := callToolOn[files.Output](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
 		Action: "repository.file_get",
 		Params: map[string]any{
 			"project_id": proj.pidStr(),
@@ -162,7 +162,7 @@ func dynamicDiscoverProject(ctx context.Context, t *testing.T, remoteURL string)
 	result := dynamicFindAction(ctx, t, "discover project from remote url", "discover_project.resolve")
 	requireFindParam(t, result, "remote_url")
 
-	out, err := callToolOn[projectdiscovery.ResolveOutput](ctx, sess.dynamic, "gitlab_execute_tool", dynamictools.ExecuteInput{
+	out, err := callToolOn[projectdiscovery.ResolveOutput](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
 		Action: "discover_project.resolve",
 		Params: map[string]any{"remote_url": remoteURL},
 	})

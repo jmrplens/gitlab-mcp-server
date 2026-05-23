@@ -294,7 +294,7 @@ sequenceDiagram
 ### Dynamic Toolset (`internal/tools/dynamic`)
 
 The dynamic toolset is a progressive-disclosure layer over the canonical action catalog. Instead of exposing all domain
-meta-tools in `tools/list`, it exposes only `gitlab_find_action` and `gitlab_execute_tool`.
+meta-tools in `tools/list`, it exposes only `gitlab_find_action` and `gitlab_execute_action`.
 The current default is dynamic find/execute, while meta-tools remain available as the consolidated domain-dispatcher alternative.
 
 For developer guidance on shared catalog ownership, standalone dynamic actions, and registration rules, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
@@ -311,7 +311,7 @@ flowchart TD
 
     subgraph Public Dynamic Tools
         FIND[gitlab_find_action]
-        EXECUTE[gitlab_execute_tool]
+        EXECUTE[gitlab_execute_action]
     end
 
     REGISTRY --> FIND
@@ -333,7 +333,7 @@ sequenceDiagram
 
     LLM->>DYN: gitlab_find_action(query)
     DYN-->>LLM: Input schemas, examples, safety metadata
-    LLM->>DYN: gitlab_execute_tool(action, params)
+    LLM->>DYN: gitlab_execute_action(action, params)
     DYN->>TOOL: Existing handler through ActionRoute
     TOOL->>GL: REST or GraphQL request
     GL-->>TOOL: JSON response

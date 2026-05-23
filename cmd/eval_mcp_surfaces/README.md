@@ -9,7 +9,7 @@
 | `--tasks` | `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md` | Executable Markdown fixture with `MT-*`, `MS-*`, and `MF-*` rows. `MS-*` also includes MCP capability discovery rows that exercise evaluator bridge tools. |
 | `--model` | empty | Single `provider:model` string or legacy Anthropic model name. Overrides `--models` and `EVAL_MODELS`. |
 | `--models` | empty | Comma-separated `provider:model` list for local multi-model analysis. Defaults to `EVAL_MODELS` when `--model` is not set. |
-| `--tool-surface` | `dynamic` | Model-facing catalog surface to evaluate: `dynamic` or `meta`. `dynamic` evaluates `gitlab_find_action` plus `gitlab_execute_tool`. |
+| `--tool-surface` | `dynamic` | Model-facing catalog surface to evaluate: `dynamic` or `meta`. `dynamic` evaluates `gitlab_find_action` plus `gitlab_execute_action`. |
 | `--tools-file` | empty | Optional saved `tools/list` snapshot for schema/model comparison. |
 | `--preset` | empty | Optional batch preset: `docker-read`, `docker-mutating-safe`, `docker-destructive-safe`, `docker-enterprise-read`, `docker-enterprise-mutating-safe`, `docker-enterprise-destructive-safe`, `docker-capability-discovery`, or `schema-enterprise`. Explicit flags override preset defaults. |
 | `--partition` | empty | Optional fixture partition such as `base-read`, `enterprise-read`, or `error-recovery`. |

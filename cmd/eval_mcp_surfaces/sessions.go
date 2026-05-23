@@ -119,7 +119,7 @@ func runMCPSmoke(opts options) error {
 		"params": map[string]any{},
 	}
 	if isDynamicEvalSurface(opts.ToolSurface) {
-		toolName = dynamicExecuteTool
+		toolName = dynamicExecuteActionTool
 	}
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      toolName,
@@ -490,7 +490,7 @@ func registerEvalResources(server *mcp.Server, client *gitlabclient.Client, tool
 }
 
 // dynamicValidationRoutes converts action routes into the single
-// gitlab_execute_tool action namespace used by dynamic mode.
+// gitlab_execute_action action namespace used by dynamic mode.
 func dynamicValidationRoutes(catalogRoutes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
 	executeRoutes := make(toolutil.ActionMap)
 	for toolName, actions := range catalogRoutes {
@@ -498,7 +498,7 @@ func dynamicValidationRoutes(catalogRoutes map[string]toolutil.ActionMap) map[st
 			executeRoutes[dynamicActionID(toolName, action)] = route
 		}
 	}
-	return map[string]toolutil.ActionMap{dynamicExecuteTool: executeRoutes}
+	return map[string]toolutil.ActionMap{dynamicExecuteActionTool: executeRoutes}
 }
 
 // dynamicActionID returns the canonical dynamic action ID for a catalog route.

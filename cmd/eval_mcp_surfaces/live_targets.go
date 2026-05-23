@@ -2038,7 +2038,7 @@ func fixtureSetupToolEnvelope(toolSurface, toolName, action string, params map[s
 		"params": params,
 	}
 	if isDynamicEvalSurface(toolSurface) {
-		return dynamicExecuteTool, arguments
+		return dynamicExecuteActionTool, arguments
 	}
 	return toolName, arguments
 }

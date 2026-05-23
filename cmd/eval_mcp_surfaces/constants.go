@@ -31,8 +31,8 @@ const (
 	maxToolResultLen = 20_000
 	// dynamicFindTool identifies the dynamic find tool constant used by this package.
 	dynamicFindTool = "gitlab_find_action"
-	// dynamicExecuteTool identifies the dynamic execute tool constant used by this package.
-	dynamicExecuteTool = "gitlab_execute_tool"
+	// dynamicExecuteActionTool identifies the dynamic execute-action MCP tool name used by this package.
+	dynamicExecuteActionTool = "gitlab_execute_action"
 	// resourceListTool identifies the evaluator resource-list bridge tool.
 	resourceListTool = "gitlab_list_resources"
 	// resourceReadTool identifies the evaluator resource-read bridge tool.

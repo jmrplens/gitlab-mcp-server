@@ -16,7 +16,7 @@ type StandaloneOptions struct {
 
 // AddStandaloneRoutes adds non-meta standalone tools to the canonical dynamic
 // action catalog so dynamic mode can still execute them through
-// gitlab_execute_tool without increasing the visible tool count.
+// gitlab_execute_action without increasing the visible tool count.
 func AddStandaloneRoutes(routes map[string]toolutil.ActionMap, client *gitlabclient.Client, opts StandaloneOptions) (map[string]toolutil.ActionMap, error) {
 	catalog, err := AddStandaloneCatalog(actioncatalog.FromActionMaps(routes), client, opts)
 	if err != nil {

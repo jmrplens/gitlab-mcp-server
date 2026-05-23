@@ -11,14 +11,14 @@ import (
 // TestAppendCapabilityBridgeTools_AddsSupportedBridgeSchemas verifies bridge tools
 // are appended with strict object schemas and deterministic sorting.
 func TestAppendCapabilityBridgeTools_AddsSupportedBridgeSchemas(t *testing.T) {
-	catalog := []modelTool{modelToolFromParts("gitlab_execute_tool", "execute", map[string]any{"type": "object"})}
+	catalog := []modelTool{modelToolFromParts("gitlab_execute_action", "execute", map[string]any{"type": "object"})}
 	tools := appendCapabilityBridgeTools(catalog, mcpBridgeSupport{Capabilities: true, Resources: true, Prompts: true, Completion: true})
 
 	got := make(map[string]modelTool, len(tools))
 	for _, tool := range tools {
 		got[tool.Name] = tool
 	}
-	for _, name := range []string{capabilityListTool, resourceListTool, resourceReadTool, promptListTool, promptGetTool, completionTool, dynamicExecuteTool} {
+	for _, name := range []string{capabilityListTool, resourceListTool, resourceReadTool, promptListTool, promptGetTool, completionTool, dynamicExecuteActionTool} {
 		if _, ok := got[name]; !ok {
 			t.Fatalf("appendCapabilityBridgeTools() missing %s in %#v", name, got)
 		}

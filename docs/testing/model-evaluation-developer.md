@@ -267,7 +267,7 @@ timeout 1800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
 
 | Flag value               | Model-facing catalog                                                                           | Primary use                                                            |
 | ------------------------ | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `--tool-surface dynamic` | `gitlab_find_action`, `gitlab_execute_tool`, and optional MCP capability bridge tools.         | Default full Docker and schema runs for the current server experience. |
+| `--tool-surface dynamic` | `gitlab_find_action`, `gitlab_execute_action`, and optional MCP capability bridge tools.       | Default full Docker and schema runs for the current server experience. |
 | `--tool-surface meta`    | Consolidated domain meta-tools plus standalone tools and optional MCP capability bridge tools. | Compatibility baseline and comparison with the pre-dynamic default.    |
 
 Capability bridge tools are enabled by task and evaluator options, not by
@@ -301,7 +301,7 @@ output is only progress logging and stays in the log file by default.
    or MCP implementation bug.
 4. Check whether the trace used the intended tool surface. Dynamic traces should
   usually call `gitlab_find_action` only when the action or params schema was
-  ambiguous; exact dynamic tasks may go straight to `gitlab_execute_tool`.
+  ambiguous; exact dynamic tasks may go straight to `gitlab_execute_action`.
 5. Fix harness noise before judging model quality.
 6. Re-run the targeted task set.
 7. Re-run the affected preset.

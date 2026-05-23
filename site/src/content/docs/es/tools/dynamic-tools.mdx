@@ -12,7 +12,7 @@ El conjunto de herramientas dinámico es el modo de bajo consumo de tokens de Gi
 | Herramienta           | Qué hace                                                                                                |
 | --------------------- | ------------------------------------------------------------------------------------------------------- |
 | `gitlab_find_action`  | Encuentra la acción correcta de GitLab y devuelve parámetros exactos, ejemplos y metadatos de seguridad |
-| `gitlab_execute_tool` | Ejecuta la acción elegida tras validar el ID de acción y los parámetros                                 |
+| `gitlab_execute_action` | Ejecuta la acción elegida tras validar el ID de acción y los parámetros                                 |
 
 El modo dinámico de find/execute es la superficie predeterminada. Las meta-herramientas siguen disponibles con `TOOL_SURFACE=meta` para clientes que prefieren despachadores consolidados por dominio.
 
@@ -82,7 +82,7 @@ sequenceDiagram
     participant User as Usuario
     participant AI as Asistente IA
 	participant Find as gitlab_find_action
-    participant Execute as gitlab_execute_tool
+    participant Execute as gitlab_execute_action
     participant GitLab
 
     User->>AI: Lista merge requests abiertas creadas por mí
@@ -95,14 +95,14 @@ sequenceDiagram
     AI-->>User: Respuesta formateada
 ```
 
-Cada herramienta dinámica devuelve un resultado MCP normal: Markdown en `content`, datos JSON en `structuredContent` e `isError` en el envoltorio del resultado cuando el servidor devuelve una guía de reparación. `gitlab_execute_tool` no usa un camino especial hacia GitLab. Despacha al mismo handler de acción que usan las meta-herramientas, así que los schemas, las comprobaciones de política, las previsualizaciones de safe mode, las confirmaciones destructivas y el formato de resultados siguen siendo coherentes.
+Cada herramienta dinámica devuelve un resultado MCP normal: Markdown en `content`, datos JSON en `structuredContent` e `isError` en el envoltorio del resultado cuando el servidor devuelve una guía de reparación. `gitlab_execute_action` no usa un camino especial hacia GitLab. Despacha al mismo handler de acción que usan las meta-herramientas, así que los schemas, las comprobaciones de política, las previsualizaciones de safe mode, las confirmaciones destructivas y el formato de resultados siguen siendo coherentes.
 
 ## Qué devuelve cada llamada
 
 | Llamada               | Qué recibe el asistente                                                                                                                                                                                                          | Cómo debe usarlo el asistente                                                                     |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | `gitlab_find_action`  | IDs de acción canónicos ordenados con `input_schema` exacto, meta-herramienta base, dominio, acción, URI de schema, indicador destructivo, parámetros requeridos, pistas de uso, ejemplos, explicaciones opcionales y puntuación | Elegir el mejor candidato `domain.action` y construir `params` desde el schema                    |
-| `gitlab_execute_tool` | La respuesta existente de la acción desde el handler base, normalmente Markdown y JSON estructurado                                                                                                                              | Usar los datos devueltos para responder al usuario, o reparar a partir de errores `isError: true` |
+| `gitlab_execute_action` | La respuesta existente de la acción desde el handler base, normalmente Markdown y JSON estructurado                                                                                                                              | Usar los datos devueltos para responder al usuario, o reparar a partir de errores `isError: true` |
 
 Encontrar acciones es deliberadamente barato comparado con anunciar todas las operaciones de GitLab en `tools/list`. El modelo solo paga por schemas detallados cuando necesita una acción concreta.
 
@@ -157,7 +157,7 @@ Después, ejecútala:
 
 ```json
 {
-	"tool": "gitlab_execute_tool",
+	"tool": "gitlab_execute_action",
 	"arguments": {
 		"action": "merge_request.list",
 		"params": {
@@ -190,7 +190,7 @@ El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramient
 
 ```json
 {
-	"tool": "gitlab_execute_tool",
+	"tool": "gitlab_execute_action",
 	"arguments": {
 		"action": "project.delete",
 		"params": {
@@ -200,11 +200,11 @@ El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramient
 }
 ```
 
-Sin confirmación, el servidor devuelve un resultado de error en lugar de eliminar el proyecto. Para ejecutar la acción intencionadamente, pasa `confirm: true` a nivel superior en los argumentos de `gitlab_execute_tool`:
+Sin confirmación, el servidor devuelve un resultado de error en lugar de eliminar el proyecto. Para ejecutar la acción intencionadamente, pasa `confirm: true` a nivel superior en los argumentos de `gitlab_execute_action`:
 
 ```json
 {
-	"tool": "gitlab_execute_tool",
+	"tool": "gitlab_execute_action",
 	"arguments": {
 		"action": "project.delete",
 		"confirm": true,

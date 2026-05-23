@@ -12,7 +12,7 @@ import (
 func TestTaskPromptForSurface_DynamicBridgeGuidance(t *testing.T) {
 	task := evalTask{ID: "MS-039", Prompt: "Read `gitlab://tools`.", Steps: []evalStep{{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}}
 	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	for _, want := range []string{"visible tools include gitlab_find_action, gitlab_execute_tool", "Use bridge tools directly", "gitlab://tools"} {
+	for _, want := range []string{"visible tools include gitlab_find_action, gitlab_execute_action", "Use bridge tools directly", "gitlab://tools"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("dynamic prompt missing %q:\n%s", want, got)
 		}
@@ -31,8 +31,8 @@ func TestJoinNonEmpty_TrimAndSkipBlanks(t *testing.T) {
 // dynamic workflows become compact action plans when all steps use execute.
 func TestDynamicWorkflowPlanPreamble_RendersOnlyExecutablePlans(t *testing.T) {
 	task := evalTask{Steps: []evalStep{
-		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "project.get", RequiredParams: []string{"project_id"}},
-		{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.delete", RequiredParams: []string{"project_id", "issue_iid"}, OptionalParams: []string{"confirm"}, Destructive: true},
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.get", RequiredParams: []string{"project_id"}},
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.delete", RequiredParams: []string{"project_id", "issue_iid"}, OptionalParams: []string{"confirm"}, Destructive: true},
 	}}
 	got := dynamicWorkflowPlanPreamble(task)
 	for _, want := range []string{"Dynamic workflow plan:", "action=project.get", "action=issue.delete", "destructive_confirm=true"} {
@@ -78,7 +78,7 @@ func TestTaskPrompt_IssueLinkConfirmationStaysSurfaceSpecific(t *testing.T) {
 		{ExpectedTool: "gitlab_issue", ExpectedAction: "link_create"},
 	}}
 	metaPrompt := taskPromptForSurface(task, config.ToolSurfaceMeta)
-	if !strings.Contains(metaPrompt, "with params.confirm=true") || strings.Contains(metaPrompt, "gitlab_execute_tool") {
+	if !strings.Contains(metaPrompt, "with params.confirm=true") || strings.Contains(metaPrompt, "gitlab_execute_action") {
 		t.Fatalf("meta prompt = %s", metaPrompt)
 	}
 	dynamicPrompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)

@@ -303,7 +303,7 @@ func taskArchivesSharedProject(task evalTask) bool {
 		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "archive" {
 			return true
 		}
-		if step.ExpectedTool == dynamicExecuteTool && step.ExpectedAction == "project.archive" {
+		if step.ExpectedTool == dynamicExecuteActionTool && step.ExpectedAction == "project.archive" {
 			return true
 		}
 	}
@@ -317,7 +317,7 @@ func taskDeletesSharedJobArtifacts(task evalTask) bool {
 		if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "delete_artifacts" {
 			return true
 		}
-		if step.ExpectedTool == dynamicExecuteTool && step.ExpectedAction == "job.delete_artifacts" {
+		if step.ExpectedTool == dynamicExecuteActionTool && step.ExpectedAction == "job.delete_artifacts" {
 			return true
 		}
 	}
@@ -331,7 +331,7 @@ func taskDeletesProjectServiceAccount(task evalTask) bool {
 		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "service_account_delete" {
 			return true
 		}
-		if step.ExpectedTool == dynamicExecuteTool && step.ExpectedAction == "project.service_account_delete" {
+		if step.ExpectedTool == dynamicExecuteActionTool && step.ExpectedAction == "project.service_account_delete" {
 			return true
 		}
 		if step.ExpectedTool == "gitlab" && step.ExpectedAction == "project.service_account_delete" {
@@ -504,7 +504,7 @@ func catalogHasRoute(routes map[string]toolutil.ActionMap, tool, action string) 
 
 // canonicalRouteID returns the meta-tool route ID represented by a tool/action pair.
 func canonicalRouteID(tool, action string) string {
-	if tool != "gitlab" && tool != dynamicExecuteTool && action != "" {
+	if tool != "gitlab" && tool != dynamicExecuteActionTool && action != "" {
 		return strings.TrimPrefix(tool, "gitlab_") + "." + action
 	}
 	return action
@@ -713,7 +713,7 @@ func normalizeTasksForCatalog(tasks []evalTask, routes map[string]toolutil.Actio
 }
 
 // normalizeTasksForDynamicRoutes rewrites action-based expectations to the
-// gitlab_execute_tool envelope used by dynamic mode.
+// gitlab_execute_action envelope used by dynamic mode.
 func normalizeTasksForDynamicRoutes(tasks []evalTask, routes map[string]toolutil.ActionMap) []evalTask {
 	out := make([]evalTask, len(tasks))
 	copy(out, tasks)
@@ -731,21 +731,21 @@ func normalizeTasksForDynamicRoutes(tasks []evalTask, routes map[string]toolutil
 }
 
 // normalizeExpectedDynamicRoute maps a fixture's catalog route expectation to
-// gitlab_execute_tool when that route exists in the dynamic catalog.
+// gitlab_execute_action when that route exists in the dynamic catalog.
 func normalizeExpectedDynamicRoute(tool, action string, routes map[string]toolutil.ActionMap) (normalizedTool, normalizedAction string) {
 	if action == "" {
-		executeRoutes := routes[dynamicExecuteTool]
+		executeRoutes := routes[dynamicExecuteActionTool]
 		for _, candidate := range standaloneDynamicActionCandidates(tool) {
 			if _, ok := executeRoutes[candidate]; ok {
-				return dynamicExecuteTool, candidate
+				return dynamicExecuteActionTool, candidate
 			}
 		}
 		return tool, action
 	}
-	executeRoutes := routes[dynamicExecuteTool]
+	executeRoutes := routes[dynamicExecuteActionTool]
 	for _, candidate := range dynamicActionCandidates(tool, action) {
 		if _, ok := executeRoutes[candidate]; ok {
-			return dynamicExecuteTool, candidate
+			return dynamicExecuteActionTool, candidate
 		}
 	}
 	return tool, action

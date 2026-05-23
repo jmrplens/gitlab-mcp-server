@@ -450,7 +450,7 @@ func TestReadPublishReport_AllowsLargeTraceLines(t *testing.T) {
 		t.Fatalf("mkdir traces: %v", err)
 	}
 	largeBody := strings.Repeat("x", maxResponseBytes+1)
-	trace := fmt.Sprintf(`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"user.current"}],"events":[{"kind":"assistant_message","content":%q,"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`, largeBody) + "\n"
+	trace := fmt.Sprintf(`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","expected":[{"step":1,"tool":"gitlab_execute_action","action":"user.current"}],"events":[{"kind":"assistant_message","content":%q,"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_action","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`, largeBody) + "\n"
 	if err := os.WriteFile(filepath.Join(traceDir, "traces.jsonl"), []byte(trace), 0o600); err != nil {
 		t.Fatalf("write traces: %v", err)
 	}
@@ -927,16 +927,16 @@ func dynamicFullRunPublishReportNoPreset() string {
 		"\n## Task Results\n\n" +
 		"| Run | Task | Expected | First final call | Steps | Schema lookup | First pass | Repair | Final success | Calls | Tool calls | Notes |\n" +
 		"| ---: | --- | --- | --- | ---: | --- | --- | --- | --- | ---: | ---: | --- |\n" +
-		"| 1 | MT-001 | `gitlab_execute_tool` / `user.current` | `gitlab_execute_tool` / `user.current` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n" +
-		"| 1 | MT-010 | `gitlab_execute_tool` / `issue.create` | `gitlab_execute_tool` / `issue.create` | 1/1 | No | Yes | - | Yes | 2 | 2 | - |\n" +
-		"| 1 | MT-008 | `gitlab_execute_tool` / `group.delete` | `gitlab_execute_tool` / `group.delete` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n"
+		"| 1 | MT-001 | `gitlab_execute_action` / `user.current` | `gitlab_execute_action` / `user.current` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n" +
+		"| 1 | MT-010 | `gitlab_execute_action` / `issue.create` | `gitlab_execute_action` / `issue.create` | 1/1 | No | Yes | - | Yes | 2 | 2 | - |\n" +
+		"| 1 | MT-008 | `gitlab_execute_action` / `group.delete` | `gitlab_execute_action` / `group.delete` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n"
 }
 
 // fullRunTraceJSONL returns trace rows for all tasks in the publish report fixture.
 func fullRunTraceJSONL() string {
 	return strings.Join([]string{
-		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"user.current"}],"events":[{"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
-		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-010","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"issue.create"}],"events":[{"usage":{"input_tokens":15,"output_tokens":4}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"issue.create","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":2,"tool_calls":2}}`,
-		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-008","expected":[{"step":1,"tool":"gitlab_execute_tool","action":"group.delete","destructive":true}],"events":[{"usage":{"input_tokens":11,"output_tokens":3}}],"summary":{"first_tool":"gitlab_execute_tool","first_action":"group.delete","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","expected":[{"step":1,"tool":"gitlab_execute_action","action":"user.current"}],"events":[{"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_action","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-010","expected":[{"step":1,"tool":"gitlab_execute_action","action":"issue.create"}],"events":[{"usage":{"input_tokens":15,"output_tokens":4}}],"summary":{"first_tool":"gitlab_execute_action","first_action":"issue.create","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":2,"tool_calls":2}}`,
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-008","expected":[{"step":1,"tool":"gitlab_execute_action","action":"group.delete","destructive":true}],"events":[{"usage":{"input_tokens":11,"output_tokens":3}}],"summary":{"first_tool":"gitlab_execute_action","first_action":"group.delete","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
 	}, "\n") + "\n"
 }

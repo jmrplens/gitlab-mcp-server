@@ -1015,8 +1015,8 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 		t.Fatalf("ListTools() error = %v", err)
 	}
 	wantTools := map[string]bool{
-		"gitlab_find_action":  false,
-		"gitlab_execute_tool": false,
+		"gitlab_find_action":    false,
+		"gitlab_execute_action": false,
 	}
 	for _, tool := range toolsResult.Tools {
 		if _, ok := wantTools[tool.Name]; !ok {

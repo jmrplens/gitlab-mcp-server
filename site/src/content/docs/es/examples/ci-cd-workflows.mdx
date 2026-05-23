@@ -233,14 +233,14 @@ La superficie dinámica predeterminada descubre acciones CI/CD exactas antes de 
 
 ```text
 gitlab_find_action → query: "estado del último pipeline del proyecto"
-gitlab_execute_tool → action: "pipeline.latest", params: { project_id: "42" }
+gitlab_execute_action → action: "pipeline.latest", params: { project_id: "42" }
 ```
 
 Para jobs fallidos, descubre primero la acción de log o reintento y luego ejecuta con el schema devuelto:
 
 ```text
 gitlab_find_action → query: "obtener trace de job fallido"
-gitlab_execute_tool → action: "job.trace", params: { project_id: "42", job_id: 9876 }
+gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_id: 9876 }
 ```
 
 ---

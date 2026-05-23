@@ -23,20 +23,20 @@ func TestValidateStepCallWithRoutes_ValidatesDynamicParamsAgainstSchema(t *testi
 		},
 		"required": []any{"project_id"},
 	}
-	routes := map[string]toolutil.ActionMap{dynamicExecuteTool: {actionProjectGet: toolutil.ActionRoute{InputSchema: schema}}}
-	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}}
+	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: toolutil.ActionRoute{InputSchema: schema}}}
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}}
 
-	valid := validateStepCallWithRoutes(step, dynamicExecuteTool, map[string]any{"action": actionProjectGet, "params": map[string]any{"project_id": "my/project", "options": map[string]any{"ref": "main"}}}, routes)
+	valid := validateStepCallWithRoutes(step, dynamicExecuteActionTool, map[string]any{"action": actionProjectGet, "params": map[string]any{"project_id": "my/project", "options": map[string]any{"ref": "main"}}}, routes)
 	if !valid.Valid || valid.Message != "ok" {
 		t.Fatalf("valid call = %+v, want ok", valid)
 	}
 
-	invalid := validateStepCallWithRoutes(step, dynamicExecuteTool, map[string]any{"action": actionProjectGet, "params": map[string]any{"project_id": "my/project", "extra": true, "options": map[string]any{}}}, routes)
+	invalid := validateStepCallWithRoutes(step, dynamicExecuteActionTool, map[string]any{"action": actionProjectGet, "params": map[string]any{"project_id": "my/project", "extra": true, "options": map[string]any{}}}, routes)
 	if invalid.Valid || !strings.Contains(invalid.Message, "unknown params") || !strings.Contains(invalid.Message, "options.ref") {
 		t.Fatalf("invalid call = %+v, want unknown extra and missing options.ref", invalid)
 	}
 
-	missingRootRequired := validateStepCallWithRoutes(step, dynamicExecuteTool, map[string]any{"action": actionProjectGet, "params": map[string]any{"options": map[string]any{"ref": "main"}}}, routes)
+	missingRootRequired := validateStepCallWithRoutes(step, dynamicExecuteActionTool, map[string]any{"action": actionProjectGet, "params": map[string]any{"options": map[string]any{"ref": "main"}}}, routes)
 	if missingRootRequired.Valid || !strings.Contains(missingRootRequired.Message, "project_id") {
 		t.Fatalf("missing root required call = %+v, want missing project_id", missingRootRequired)
 	}
@@ -74,7 +74,7 @@ func TestRepairPayloadForValidation_ProvidesExecutableRetryEnvelope(t *testing.T
 // TestExpectedActionCallExample_DynamicDestructiveUsesTopLevelConfirm verifies
 // dynamic retry examples put confirmation at the execute envelope level.
 func TestExpectedActionCallExample_DynamicDestructiveUsesTopLevelConfirm(t *testing.T) {
-	step := evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "issue.delete", RequiredParams: []string{"project_id", "issue_iid"}, OptionalParams: []string{"confirm"}, Destructive: true}
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.delete", RequiredParams: []string{"project_id", "issue_iid"}, OptionalParams: []string{"confirm"}, Destructive: true}
 	got := expectedActionCallExample(evalTask{Prompt: "delete issue IID `7` in project `my/project`"}, step, map[string]any{"params": map[string]any{"project_id": "my/project", "issue_iid": 7}})
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
@@ -140,7 +140,7 @@ func TestValidationExampleValueExtractors_CoverBacktickAndPrefixBranches(t *test
 	if got := standaloneExpectedParamValue("ref_type", prompt); got != "ref/prompt" {
 		t.Fatalf("standaloneExpectedParamValue(ref_type) = %v, want ref/prompt", got)
 	}
-	if got := roleSensitiveRepairHint(evalStep{ExpectedTool: dynamicExecuteTool, ExpectedAction: "merge_request.create"}); !strings.Contains(got, "source_branch") {
+	if got := roleSensitiveRepairHint(evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.create"}); !strings.Contains(got, "source_branch") {
 		t.Fatalf("roleSensitiveRepairHint() = %q, want branch hint", got)
 	}
 }

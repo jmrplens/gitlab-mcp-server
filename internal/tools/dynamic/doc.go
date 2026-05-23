@@ -3,7 +3,7 @@
 //
 // Dynamic mode exposes a small discovery and execution interface instead of
 // advertising every GitLab operation as an MCP tool. It registers
-// gitlab_find_action and gitlab_execute_tool.
+// gitlab_find_action and gitlab_execute_action.
 //
 // The package builds a deterministic search index from actioncatalog.Catalog,
 // resolves canonical domain.action IDs and aliases, returns exact schemas on

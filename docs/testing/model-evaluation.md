@@ -43,7 +43,7 @@ operations:
 
 The evaluator runs against the same model-facing tool surfaces as the server.
 `dynamic` is the default surface and exposes `gitlab_find_action` plus
-`gitlab_execute_tool` over the canonical action catalog. `meta` exposes the
+`gitlab_execute_action` over the canonical action catalog. `meta` exposes the
 domain grouped meta-tools. The evaluator does not reduce the server to only the
 manifest resources; when capability bridge tools are enabled they let the model
 inspect the resources, prompts, completions, and capability metadata that a full
@@ -51,7 +51,7 @@ MCP session exposes.
 
 The surface-aware `gitlab://tools` manifest is available in both surfaces. In
 dynamic mode it lists canonical `domain.action` IDs accepted by
-`gitlab_execute_tool`; in meta mode it lists `gitlab_<domain>.<action>` entries
+`gitlab_execute_action`; in meta mode it lists `gitlab_<domain>.<action>` entries
 and their `{action, params}` call shapes. Reading this manifest is useful for
 capability-discovery tasks, but ordinary task success is measured by the final
 GitLab operation, not by whether the model read the manifest first.

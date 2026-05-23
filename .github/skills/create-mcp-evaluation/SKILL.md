@@ -70,7 +70,7 @@ For each question:
 
 ### Step 5: Project Evaluator Execution
 
-For this repository, use `cmd/eval_mcp_surfaces` to validate model-facing MCP behavior after creating or updating evaluation tasks. The default task file is `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md`, and the default tool surface is `dynamic` (`gitlab_find_action` plus `gitlab_execute_tool`). See `cmd/eval_mcp_surfaces/README.md` for the full option matrix.
+For this repository, use `cmd/eval_mcp_surfaces` to validate model-facing MCP behavior after creating or updating evaluation tasks. The default task file is `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md`, and the default tool surface is `dynamic` (`gitlab_find_action` plus `gitlab_execute_action`). See `cmd/eval_mcp_surfaces/README.md` for the full option matrix.
 
 Dry-run the current catalog without model calls:
 

@@ -71,7 +71,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 
 - `meta`: meta-herramientas por dominio, el catálogo consolidado por defecto.
 - `individual`: cada operación de GitLab se expone como una herramienta independiente.
-- `dynamic`: la superficie actual de bajo consumo con dos herramientas: `gitlab_find_action` y `gitlab_execute_tool`.
+- `dynamic`: la superficie actual de bajo consumo con dos herramientas: `gitlab_find_action` y `gitlab_execute_action`.
 
 `--capability-surface` controla recursos y prompts de forma independiente a las herramientas: `full` registra todos los recursos, guías de flujo, prompts y el manifiesto `gitlab://tools`, mientras que `minimal` conserva `gitlab://workspace/roots` y `gitlab://tools`, y omite prompts, guías y recursos opcionales de GitLab. El descubrimiento de schemas dinámicos sigue funcionando con `minimal` porque find devuelve schemas inline.
 

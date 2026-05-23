@@ -149,9 +149,9 @@ func TestWriteCoverageReportIfRequested_WritesOnlyWhenConfigured(t *testing.T) {
 }
 
 // TestRouteDomainName_UsesDynamicActionDomain verifies dynamic coverage reports
-// group execute_tool routes by their canonical action domain.
+// group execute_action routes by their canonical action domain.
 func TestRouteDomainName_UsesDynamicActionDomain(t *testing.T) {
-	if got := routeDomainName(dynamicExecuteTool, "repository.file_delete"); got != "repository" {
+	if got := routeDomainName(dynamicExecuteActionTool, "repository.file_delete"); got != "repository" {
 		t.Fatalf("routeDomainName(dynamic execute) = %q, want repository", got)
 	}
 	if got := routeDomainName("gitlab", "merge_request.create"); got != "merge_request" {
