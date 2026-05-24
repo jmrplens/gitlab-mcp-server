@@ -412,6 +412,14 @@ func TestAddLiveAttemptResourceSuffix_IsolatesCreatedResources(t *testing.T) {
 	assertContains(t, got.Prompt, "`my-org/tools/gitlab-mcp-server`")
 }
 
+func TestReplaceFixturePrompt_RewritesDetectedDefaultBranch(t *testing.T) {
+	state := &liveFixtureState{DefaultBranch: "master"}
+	got := replaceFixturePrompt("MS-028", "Create branch `eval-protect-branch` from `main`, then read `main`.", state)
+	if strings.Contains(got, "`main`") || !strings.Contains(got, "from `master`") || !strings.Contains(got, "read `master`") {
+		t.Fatalf("replaceFixturePrompt() = %q, want detected default branch", got)
+	}
+}
+
 // TestAddLiveAttemptResourceSuffix_LeavesLookupTasksAlone verifies AddLiveAttemptResourceSuffix leaves lookup tasks alone.
 func TestAddLiveAttemptResourceSuffix_LeavesLookupTasksAlone(t *testing.T) {
 	task := evalTask{

@@ -280,13 +280,16 @@ func ensureLiveMergeRequestMergeTarget(ctx context.Context, client *gitlabclient
 	if client == nil {
 		return task, nil
 	}
-	setupCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	setupCtx, cancel := context.WithTimeout(ctx, 8*time.Minute)
 	defer cancel()
 	project, err := createLiveTemporaryProject(setupCtx, client, "merge-mr")
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-017 fixture project: %w", err)
 	}
 	projectID := project.PathWithNamespace
+	if approvalErr := relaxLiveMergeRequestApprovals(setupCtx, client, projectID); approvalErr != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture approvals: %w", approvalErr)
+	}
 	targetBranch := project.DefaultBranch
 	if targetBranch == "" {
 		targetBranch = liveFixtureDefaultRef
@@ -323,6 +326,9 @@ func ensureLiveMergeRequestMergeTarget(ctx context.Context, client *gitlabclient
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-017 fixture merge request: %w", err)
 	}
+	if approvalErr := relaxLiveMergeRequestApprovalRequirements(setupCtx, client, projectID, mergeRequest.IID); approvalErr != nil {
+		return task, fmt.Errorf("prepare MT-017 fixture MR approvals: %w", approvalErr)
+	}
 	pipeline, _, err := client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: &sourceBranch}, gl.WithContext(setupCtx))
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-017 fixture pipeline: %w", err)
@@ -343,6 +349,50 @@ func ensureLiveMergeRequestMergeTarget(ctx context.Context, client *gitlabclient
 	}
 	task.Prompt = prompt
 	return task, nil
+}
+
+func relaxLiveMergeRequestApprovals(ctx context.Context, client *gitlabclient.Client, projectID string) error {
+	zero := int64(0)
+	authorApproval := true
+	committerApprovalDisabled := false
+	_, _, err := client.GL().Projects.ChangeApprovalConfiguration(projectID, &gl.ChangeApprovalConfigurationOptions{
+		ApprovalsBeforeMerge:                   &zero,
+		MergeRequestsAuthorApproval:            &authorApproval,
+		MergeRequestsDisableCommittersApproval: &committerApprovalDisabled,
+	}, gl.WithContext(ctx))
+	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusForbidden) && !toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+		return err
+	}
+	return nil
+}
+
+func relaxLiveMergeRequestApprovalRequirements(ctx context.Context, client *gitlabclient.Client, projectID string, mergeRequestIID int64) error {
+	zero := int64(0)
+	rules, _, err := client.GL().MergeRequestApprovals.GetApprovalRules(projectID, mergeRequestIID, gl.WithContext(ctx))
+	if err != nil {
+		if liveApprovalConfigurationUnavailable(err) {
+			return nil
+		}
+		return err
+	}
+	for _, rule := range rules {
+		if rule == nil || rule.ApprovalsRequired == 0 {
+			continue
+		}
+		_, _, updateErr := client.GL().MergeRequestApprovals.UpdateApprovalRule(projectID, mergeRequestIID, rule.ID, &gl.UpdateMergeRequestApprovalRuleOptions{
+			ApprovalsRequired: &zero,
+		}, gl.WithContext(ctx))
+		if updateErr != nil && !liveApprovalConfigurationUnavailable(updateErr) {
+			return updateErr
+		}
+	}
+	return nil
+}
+
+func liveApprovalConfigurationUnavailable(err error) bool {
+	return toolutil.IsHTTPStatus(err, http.StatusBadRequest) ||
+		toolutil.IsHTTPStatus(err, http.StatusForbidden) ||
+		toolutil.IsHTTPStatus(err, http.StatusNotFound)
 }
 
 // ensureLiveDraftNotePublishAllTarget creates an MR draft note and rewrites MT-063 to publish it.
@@ -1038,15 +1088,25 @@ func createLiveTemporaryProject(ctx context.Context, client *gitlabclient.Client
 		return nil, fmt.Errorf("get tools group %s: %w", liveFixtureToolsPath, err)
 	}
 	visibility := gl.PrivateVisibility
+	approvalsBeforeMerge := int64(0)
+	mergePipelinesEnabled := false
+	onlyAllowMergeIfAllDiscussionsAreResolved := false
+	onlyAllowMergeIfAllStatusChecksPassed := false
+	allowMergeOnSkippedPipeline := true
 	var lastErr error
 	for range 5 {
 		path := fmt.Sprintf("eval-%s-%s", prefix, liveUniqueSuffix())
 		project, _, createErr := client.GL().Projects.CreateProject(&gl.CreateProjectOptions{
-			Name:                 new(path),
-			Path:                 new(path),
-			NamespaceID:          new(toolsGroup.ID),
-			InitializeWithReadme: new(true),
-			Visibility:           &visibility,
+			Name:                  new(path),
+			Path:                  new(path),
+			NamespaceID:           new(toolsGroup.ID),
+			InitializeWithReadme:  new(true),
+			Visibility:            &visibility,
+			ApprovalsBeforeMerge:  &approvalsBeforeMerge,
+			MergePipelinesEnabled: &mergePipelinesEnabled,
+			OnlyAllowMergeIfAllDiscussionsAreResolved: &onlyAllowMergeIfAllDiscussionsAreResolved,
+			OnlyAllowMergeIfAllStatusChecksPassed:     &onlyAllowMergeIfAllStatusChecksPassed,
+			AllowMergeOnSkippedPipeline:               &allowMergeOnSkippedPipeline,
 		}, gl.WithContext(ctx))
 		if createErr == nil {
 			return project, nil
@@ -1122,10 +1182,10 @@ func isLivePipelineTerminal(status string) bool {
 
 // waitForLiveMergeRequestReady waits for for live merge request ready to become available.
 func waitForLiveMergeRequestReady(ctx context.Context, client *gitlabclient.Client, projectID string, mergeRequestIID int64) error {
-	deadline := time.Now().Add(90 * time.Second)
+	deadline := time.Now().Add(4 * time.Minute)
 	lastStatus := "unknown"
 	for time.Now().Before(deadline) {
-		mergeRequest, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, mergeRequestIID, nil, gl.WithContext(ctx))
+		mergeRequest, err := getLiveMergeRequestWithStatusRecheck(ctx, client, projectID, mergeRequestIID)
 		if err != nil {
 			return fmt.Errorf("prepare fixture MR !%d: %w", mergeRequestIID, err)
 		}
@@ -1133,11 +1193,40 @@ func waitForLiveMergeRequestReady(ctx context.Context, client *gitlabclient.Clie
 		if mergeRequest.DetailedMergeStatus == "mergeable" {
 			return nil
 		}
+		if !liveMergeStatusStillPreparing(mergeRequest.DetailedMergeStatus) {
+			return fmt.Errorf("prepare fixture MR !%d is not mergeable: %s", mergeRequestIID, mergeRequest.DetailedMergeStatus)
+		}
 		if waitErr := waitForContext(ctx, 2*time.Second); waitErr != nil {
 			return waitErr
 		}
 	}
 	return fmt.Errorf("prepare fixture MR !%d did not become mergeable before timeout; last status %s", mergeRequestIID, lastStatus)
+}
+
+func getLiveMergeRequestWithStatusRecheck(ctx context.Context, client *gitlabclient.Client, projectID string, mergeRequestIID int64) (*gl.BasicMergeRequest, error) {
+	recheck := true
+	iids := []int64{mergeRequestIID}
+	mergeRequests, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
+		IIDs:                   &iids,
+		WithMergeStatusRecheck: &recheck,
+		ListOptions:            gl.ListOptions{PerPage: 1},
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if len(mergeRequests) == 0 {
+		return nil, fmt.Errorf("merge request !%d not found", mergeRequestIID)
+	}
+	return mergeRequests[0], nil
+}
+
+func liveMergeStatusStillPreparing(status string) bool {
+	switch status {
+	case "", "checking", "unchecked", "preparing", "ci_still_running", "approvals_syncing":
+		return true
+	default:
+		return false
+	}
 }
 
 // createLiveTerraformStateLock creates live terraform state lock for the main package.
@@ -1289,12 +1378,14 @@ func ensureLiveRunnerRemoveTarget(ctx context.Context, client *gitlabclient.Clie
 	if client == nil {
 		return task, nil
 	}
-	setupCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
-	project, _, err := client.GL().Projects.GetProject(liveFixtureProjectPath, nil, gl.WithContext(setupCtx))
+	projectCtx, cancelProject := context.WithTimeout(ctx, 90*time.Second)
+	project, _, err := client.GL().Projects.GetProject(liveFixtureProjectPath, nil, gl.WithContext(projectCtx))
+	cancelProject()
 	if err != nil {
 		return task, fmt.Errorf("prepare MT-047 fixture project lookup: %w", err)
 	}
+	setupCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	defer cancel()
 	runner, _, err := client.GL().Users.CreateUserRunner(&gl.CreateUserRunnerOptions{
 		RunnerType:  new("project_type"),
 		ProjectID:   new(project.ID),

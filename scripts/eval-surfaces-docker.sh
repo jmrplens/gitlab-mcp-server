@@ -26,6 +26,9 @@ Preset values:
 Environment overrides:
   EVAL_SURFACE_MODELS       Comma-separated provider:model list.
   EVAL_SURFACE_ENTERPRISE   Set to true to use GitLab EE plus Enterprise-only presets.
+  EVAL_SURFACE_CASE_SET     Case set to run: ce, enterprise, or all. Defaults to ce for CE runtime and enterprise for Enterprise runtime.
+  EVAL_SURFACE_FIXTURE_SMOKE Set true to prepare and smoke-test fixtures for selected presets without model calls.
+  EVAL_SURFACE_PUBLISH_DOCS Set false to skip README/docs publication for full multi-preset runs.
   EVAL_SURFACE_OUT_ROOT     Artifact root (default: dist/evaluation/surfaces).
   EVAL_SURFACE_RUN_DIR      Exact artifact directory for this run.
   EVAL_SURFACE_TIMESTAMP    UTC-like timestamp used in names.
@@ -118,14 +121,15 @@ esac
 
 timestamp="${EVAL_SURFACE_TIMESTAMP:-$(date -u +%Y%m%d-%H%M%S)}"
 output_root="${EVAL_SURFACE_OUT_ROOT:-dist/evaluation/surfaces}"
-run_dir="${EVAL_SURFACE_RUN_DIR:-$output_root/${timestamp}-${surface}-docker}"
-log_dir="$run_dir/logs"
-fixtures="$run_dir/e2e-fixtures.json"
 gitlab_url="${EVAL_DOCKER_GITLAB_URL:-http://localhost:8929}"
 compose_file="${EVAL_DOCKER_COMPOSE_FILE:-test/e2e/docker-compose.yml}"
 go_bin="${GO_BIN:-go}"
 models="${EVAL_SURFACE_MODELS:-${EVAL_MODELS:-anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash}}"
 requested_preset="${2:-${EVAL_SURFACE_PRESET:-${PRESET:-}}}"
+fixture_smoke=false
+if bool_enabled "${EVAL_SURFACE_FIXTURE_SMOKE:-${FIXTURE_SMOKE:-}}"; then
+  fixture_smoke=true
+fi
 enterprise=false
 if bool_enabled "${EVAL_SURFACE_ENTERPRISE:-${ENTERPRISE:-}}"; then
   enterprise=true
@@ -133,30 +137,64 @@ fi
 if [[ "$requested_preset" == docker-enterprise-* ]]; then
   enterprise=true
 fi
-edition_label="CE"
-edition_arg="ce"
+case_set="${EVAL_SURFACE_CASE_SET:-${CASE_SET:-}}"
+if [[ -z "$case_set" ]]; then
+  if [[ -n "$requested_preset" && "$requested_preset" != docker-enterprise-* ]]; then
+    case_set="ce"
+  elif [[ "$enterprise" == "true" ]]; then
+    case_set="enterprise"
+  else
+    case_set="ce"
+  fi
+fi
+case "$case_set" in
+  ce|enterprise|all) ;;
+  *)
+    echo "ERROR: EVAL_SURFACE_CASE_SET must be ce, enterprise, or all (got: $case_set)" >&2
+    exit 1
+    ;;
+esac
+if [[ "$case_set" == "enterprise" || "$case_set" == "all" ]]; then
+  enterprise=true
+fi
+runtime_label="CE"
+case_label="CE"
 image_default="${GITLAB_IMAGE:-}"
 if [[ "$enterprise" == "true" ]]; then
-  edition_label="Enterprise"
-  edition_arg="enterprise"
+  runtime_label="Enterprise"
   image_default="${image_default:-gitlab/gitlab-ee:latest}"
 fi
 gitlab_image="${EVAL_DOCKER_GITLAB_IMAGE:-$image_default}"
-if [[ "$enterprise" == "true" ]]; then
-  all_presets=(docker-enterprise-read docker-enterprise-mutating-safe docker-enterprise-destructive-safe)
-else
-  all_presets=(docker-read docker-mutating-safe docker-destructive-safe docker-capability-discovery)
-fi
+case "$case_set" in
+  ce)
+    all_presets=(docker-read docker-mutating-safe docker-destructive-safe docker-capability-discovery)
+    if [[ "$enterprise" == "true" ]]; then
+      case_label="CE-on-Enterprise"
+    fi
+    ;;
+  enterprise)
+    all_presets=(docker-enterprise-read docker-enterprise-mutating-safe docker-enterprise-destructive-safe)
+    case_label="Enterprise"
+    ;;
+  all)
+    all_presets=(docker-read docker-mutating-safe docker-destructive-safe docker-capability-discovery docker-enterprise-read docker-enterprise-mutating-safe docker-enterprise-destructive-safe)
+    case_label="CE+Enterprise-on-Enterprise"
+    ;;
+esac
 presets=("${all_presets[@]}")
 run_all_presets=1
 
 if [[ -n "$requested_preset" ]]; then
-  if [[ "$enterprise" == "true" && "$requested_preset" != docker-enterprise-* ]]; then
-    echo "ERROR: Enterprise mode only accepts docker-enterprise-* presets (got: $requested_preset)" >&2
-    exit 1
-  fi
   case "$requested_preset" in
     docker-read|docker-mutating-safe|docker-destructive-safe|docker-enterprise-read|docker-enterprise-mutating-safe|docker-enterprise-destructive-safe|docker-capability-discovery)
+      if [[ "$case_set" == "ce" && "$requested_preset" == docker-enterprise-* ]]; then
+        echo "ERROR: ce case set does not accept Enterprise presets (got: $requested_preset)" >&2
+        exit 1
+      fi
+      if [[ "$case_set" == "enterprise" && "$requested_preset" != docker-enterprise-* ]]; then
+        echo "ERROR: enterprise case set only accepts docker-enterprise-* presets (got: $requested_preset)" >&2
+        exit 1
+      fi
       presets=("$requested_preset")
       run_all_presets=0
       ;;
@@ -166,6 +204,16 @@ if [[ -n "$requested_preset" ]]; then
       ;;
   esac
 fi
+
+run_name="${timestamp}-${surface}-docker"
+if [[ "$enterprise" == "true" && "$case_set" == "ce" ]]; then
+  run_name="${timestamp}-${surface}-docker-enterprise-ce"
+elif [[ "$enterprise" == "true" && "$case_set" == "all" ]]; then
+  run_name="${timestamp}-${surface}-docker-enterprise-all"
+fi
+run_dir="${EVAL_SURFACE_RUN_DIR:-$output_root/$run_name}"
+log_dir="$run_dir/logs"
+fixtures="$run_dir/e2e-fixtures.json"
 
 mkdir -p "$log_dir"
 
@@ -244,12 +292,39 @@ run_evaluator() {
   run_logged "$name" env "GITLAB_ENTERPRISE=$enterprise" "$go_bin" run ./cmd/eval_mcp_surfaces "$@"
 }
 
+run_fixture_smoke() {
+  local name="$1"
+  local preset="$2"
+  local report="$3"
+  run_evaluator "$name" \
+    --tool-surface "$surface" \
+    --edition "$(preset_edition_arg "$preset")" \
+    --preset "$preset" \
+    --backend gitlab \
+    --gitlab-env-file test/e2e/.env.docker \
+    --dry-run \
+    --fixture-smoke \
+    --fixtures "$fixtures" \
+    --use-fixtures \
+    --execute-tools \
+    --skip-unavailable \
+    --out "$report" \
+    --terminal-log "$log_dir/${name}.terminal.log"
+}
+
+preset_edition_arg() {
+  case "$1" in
+    docker-enterprise-*) printf '%s' enterprise ;;
+    *) printf '%s' ce ;;
+  esac
+}
+
 prepare_fixtures() {
   local name="$1"
   local preset="$2"
   run_evaluator "$name" \
     --tool-surface "$surface" \
-    --edition "$edition_arg" \
+    --edition "$(preset_edition_arg "$preset")" \
     --preset "$preset" \
     --backend gitlab \
     --gitlab-env-file test/e2e/.env.docker \
@@ -261,9 +336,25 @@ prepare_fixtures() {
     --terminal-log "$log_dir/${name}.terminal.log"
 }
 
+prepare_preset_fixtures() {
+  local name="$1"
+  local preset="$2"
+  for attempt in 1 2; do
+    if prepare_fixtures "$name" "$preset"; then
+      return 0
+    fi
+    if [[ "$attempt" == "2" ]]; then
+      break
+    fi
+    printf 'WARN: %s fixture preparation failed for %s (attempt %s/2), retrying...\n' "$name" "$preset" "$attempt" >&2
+  done
+  return 1
+}
+
 printf 'Evaluation artifacts: %s\n' "$run_dir"
 printf 'Surface: %s\n' "$surface"
-printf 'Edition: %s\n' "$edition_label"
+printf 'Runtime edition: %s\n' "$runtime_label"
+printf 'Case set: %s\n' "$case_label"
 if [[ -n "$gitlab_image" ]]; then
   printf 'GitLab image: %s\n' "$gitlab_image"
 fi
@@ -271,6 +362,9 @@ if [[ "$run_all_presets" == "1" ]]; then
   printf 'Presets: %s\n' "${presets[*]}"
 else
   printf 'Preset: %s\n' "${presets[0]}"
+fi
+if [[ "$fixture_smoke" == "true" ]]; then
+  printf 'Mode: fixture smoke only\n'
 fi
 printf 'Models: %s\n' "$models"
 
@@ -281,7 +375,10 @@ run_logged wait-for-gitlab ./test/e2e/scripts/wait-for-gitlab.sh "$gitlab_url" 6
 retry_setup_gitlab
 run_logged register-runner ./test/e2e/scripts/register-runner.sh "$gitlab_url"
 
-prepare_fixtures fixtures-prepare "${presets[0]}"
+if ! prepare_preset_fixtures fixtures-prepare "${presets[0]}"; then
+  echo "ERROR: initial fixture preparation failed for ${presets[0]}; see $log_dir/fixtures-prepare.log" >&2
+  exit 1
+fi
 
 preset_status=0
 status_file="$run_dir/full-run-status.txt"
@@ -289,16 +386,47 @@ if [[ "$run_all_presets" == "0" ]]; then
   status_file="$run_dir/preset-run-status.txt"
 fi
 : > "$status_file"
+if [[ "$fixture_smoke" == "true" ]]; then
+  status_file="$run_dir/fixture-smoke-status.txt"
+  : > "$status_file"
+  for preset in "${presets[@]}"; do
+    if [[ "$enterprise" == "true" && "$run_all_presets" == "1" && "$preset" != "${presets[0]}" ]]; then
+      if ! prepare_preset_fixtures "fixtures-prepare-${preset}" "$preset"; then
+        printf '%s: fixture-prepare-failed\n' "$preset" | tee -a "$status_file"
+        preset_status=1
+        continue
+      fi
+    fi
+    report="$run_dir/${timestamp}-${surface}-${preset}-fixture-smoke.md"
+    printf '=== fixture-smoke %s ===\n' "$preset" | tee -a "$status_file"
+    if run_fixture_smoke "fixture-smoke-${preset}" "$preset" "$report"; then
+      printf '%s: ok\n' "$preset" | tee -a "$status_file"
+    else
+      printf '%s: failed\n' "$preset" | tee -a "$status_file"
+      preset_status=1
+    fi
+  done
+  if [[ "$preset_status" -ne 0 ]]; then
+    echo "ERROR: one or more fixture smoke presets failed. See $status_file" >&2
+    exit "$preset_status"
+  fi
+  printf 'Fixture smoke complete: %s\n' "$run_dir"
+  exit 0
+fi
 for preset in "${presets[@]}"; do
   if [[ "$enterprise" == "true" && "$run_all_presets" == "1" && "$preset" != "${presets[0]}" ]]; then
-    prepare_fixtures "fixtures-prepare-${preset}" "$preset"
+    if ! prepare_preset_fixtures "fixtures-prepare-${preset}" "$preset"; then
+      printf '%s: fixture-prepare-failed\n' "$preset" | tee -a "$status_file"
+      preset_status=1
+      continue
+    fi
   fi
   report="$run_dir/${timestamp}-${surface}-${preset}-all-models.md"
   reports+=("$report")
   printf '=== %s ===\n' "$preset" | tee -a "$status_file"
   if run_evaluator "$preset" \
     --tool-surface "$surface" \
-    --edition "$edition_arg" \
+    --edition "$(preset_edition_arg "$preset")" \
     --preset "$preset" \
     --models "$models" \
     --backend gitlab \
@@ -328,9 +456,26 @@ if [[ "$run_all_presets" == "0" ]]; then
   exit 0
 fi
 
+publish_docs="true"
+if [[ "$enterprise" == "true" && "$case_set" != "enterprise" ]]; then
+  publish_docs="false"
+fi
+if [[ -n "${EVAL_SURFACE_PUBLISH_DOCS:-}" ]]; then
+  if bool_enabled "$EVAL_SURFACE_PUBLISH_DOCS"; then
+    publish_docs="true"
+  else
+    publish_docs="false"
+  fi
+fi
+if [[ "$publish_docs" != "true" ]]; then
+  printf 'Evaluation complete: %s\n' "$run_dir"
+  printf 'Docs publish skipped for %s case set on %s runtime.\n' "$case_label" "$runtime_label"
+  exit 0
+fi
+
 publish_args=(
   --publish-docs
-  --publish-label "Docker $edition_label $surface $timestamp"
+  --publish-label "Docker $case_label $surface $timestamp"
   --publish-mode replace-current
   --terminal-log "$log_dir/publish-docs.terminal.log"
 )

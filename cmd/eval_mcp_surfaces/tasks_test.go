@@ -29,6 +29,48 @@ func TestTaskRoutePredicates_ClassifyEnterpriseMutationAndDestruction(t *testing
 	if !routeLooksEnterprise("gitlab_merge_train", "list_project") || !routeLooksEnterprise("gitlab_environment", "protected_list") || !routeUnavailableOnCE("gitlab_environment", "deployment_approve_or_reject") {
 		t.Fatal("enterprise/CE route predicates missed known routes")
 	}
+	if !routeLooksEnterprise("gitlab_model_registry", "download") {
+		t.Fatal("routeLooksEnterprise() missed CE-unavailable model registry download route")
+	}
+}
+
+// TestLiveMergeStatusStillPreparing_CoversTransientStatuses verifies MR fixture
+// readiness waits only for statuses GitLab can still advance asynchronously.
+func TestLiveMergeStatusStillPreparing_CoversTransientStatuses(t *testing.T) {
+	for _, status := range []string{"", "checking", "unchecked", "preparing", "ci_still_running", "approvals_syncing"} {
+		if !liveMergeStatusStillPreparing(status) {
+			t.Fatalf("liveMergeStatusStillPreparing(%q) = false, want true", status)
+		}
+	}
+	for _, status := range []string{"cannot_be_merged", "not_open", "not_approved"} {
+		if liveMergeStatusStillPreparing(status) {
+			t.Fatalf("liveMergeStatusStillPreparing(%q) = true, want false", status)
+		}
+	}
+}
+
+// TestFilterTasksByEdition_ExcludesCEUnavailableRoutes verifies routes that are
+// only available when Enterprise features are present stay out of CE case sets.
+func TestFilterTasksByEdition_ExcludesCEUnavailableRoutes(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "base", ExpectedTool: "gitlab_project", ExpectedAction: "get"},
+		{ID: "ce-unavailable", ExpectedTool: "gitlab_model_registry", ExpectedAction: "download"},
+	}
+
+	ce, err := filterTasksByEdition(tasks, editionCE)
+	if err != nil {
+		t.Fatalf("filterTasksByEdition(ce) error = %v", err)
+	}
+	if got := taskIDs(ce); got != "base" {
+		t.Fatalf("CE filtered IDs = %q, want base", got)
+	}
+	enterprise, err := filterTasksByEdition(tasks, editionEnterprise)
+	if err != nil {
+		t.Fatalf("filterTasksByEdition(enterprise) error = %v", err)
+	}
+	if got := taskIDs(enterprise); got != "ce-unavailable" {
+		t.Fatalf("Enterprise filtered IDs = %q, want ce-unavailable", got)
+	}
 }
 
 // TestFilterTasksByPreset_EnterpriseDockerUsesLiveFixtureRows verifies Docker

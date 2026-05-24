@@ -73,14 +73,14 @@ func TestParseFlags_RecordsExplicitFlags(t *testing.T) {
 		os.Args = originalArgs
 		flag.CommandLine = originalFlagSet
 	})
-	os.Args = []string{"eval", "--model", "openai:gpt-4.1", "--task", "MT-001", "--repeat", "2", "--execute-tools=false"}
+	os.Args = []string{"eval", "--model", "openai:gpt-4.1", "--task", "MT-001", "--repeat", "2", "--execute-tools=false", "--fixture-smoke"}
 	flag.CommandLine = flag.NewFlagSet("eval", flag.ContinueOnError)
 
 	opts := parseFlags()
-	if opts.Model != "openai:gpt-4.1" || opts.OnlyIDs != "MT-001" || opts.Repeat != 2 || opts.Execute {
+	if opts.Model != "openai:gpt-4.1" || opts.OnlyIDs != "MT-001" || opts.Repeat != 2 || opts.Execute || !opts.FixtureSmoke {
 		t.Fatalf("parseFlags() = %+v, want parsed model/task/repeat/execute", opts)
 	}
-	for _, name := range []string{"model", "task", "repeat", "execute-tools"} {
+	for _, name := range []string{"model", "task", "repeat", "execute-tools", "fixture-smoke"} {
 		if !opts.explicitFlags[name] {
 			t.Fatalf("explicit flags = %#v, want %s", opts.explicitFlags, name)
 		}
@@ -96,6 +96,7 @@ func TestToolExecutionMode_ReflectsDryRunExecuteAndExternalModes(t *testing.T) {
 		want string
 	}{
 		{name: "dry run", opts: options{DryRun: true, Execute: true}, want: "none"},
+		{name: "fixture smoke", opts: options{DryRun: true, FixtureSmoke: true, Execute: true}, want: "fixture-smoke"},
 		{name: "simulated", opts: options{}, want: "simulated"},
 		{name: "in memory mcp", opts: options{Execute: true}, want: "mcp"},
 		{name: "external mcp", opts: options{Execute: true, MCPCommand: "gitlab-mcp-server"}, want: "mcp-external"},

@@ -51,6 +51,7 @@ func parseFlags() options {
 	flag.Float64Var(&opts.Pricing.CacheWritePerMTok, "cache-write-cost-per-mtok", 0, "Optional prompt-cache write price in USD per million tokens for cost estimates")
 	flag.Float64Var(&opts.Pricing.CacheReadPerMTok, "cache-read-cost-per-mtok", 0, "Optional prompt-cache read price in USD per million tokens for cost estimates")
 	flag.BoolVar(&opts.DryRun, "dry-run", false, "Validate fixture routes without calling model providers")
+	flag.BoolVar(&opts.FixtureSmoke, "fixture-smoke", false, "With --dry-run, exercise live per-task fixture preparation through MCP without calling model providers")
 	flag.BoolVar(&opts.PublishDocs, "publish-docs", false, "Publish reviewed evaluation reports into README and docs/testing/model-results.md")
 	flag.BoolVar(&opts.CheckDocs, "check-docs", false, "Verify published evaluation docs match the selected --publish-from reports without writing files")
 	flag.BoolVar(&opts.PublishAllowNoise, "publish-allow-harness-noise", false, "Allow publishing reports that explicitly mention unresolved harness noise")
@@ -216,6 +217,9 @@ func isDynamicEvalSurface(toolSurface string) bool {
 
 // toolExecutionMode converts the GitLab API response to the tool output format.
 func toolExecutionMode(opts options) string {
+	if opts.FixtureSmoke {
+		return "fixture-smoke"
+	}
 	if opts.DryRun {
 		return "none"
 	}

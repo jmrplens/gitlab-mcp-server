@@ -1627,7 +1627,15 @@ func replaceFixturePrompt(taskID, prompt string, state *liveFixtureState) string
 	prompt = replaceResourcePlaceholders(taskID, prompt, state)
 	prompt = replacePackageReleasePlaceholders(prompt, state)
 	prompt = replaceLifecyclePlaceholders(prompt, state)
+	prompt = replaceDefaultBranchPlaceholders(prompt, state)
 	return prompt
+}
+
+func replaceDefaultBranchPlaceholders(prompt string, state *liveFixtureState) string {
+	if state == nil || state.DefaultBranch == "" || state.DefaultBranch == liveFixtureDefaultRef {
+		return prompt
+	}
+	return strings.ReplaceAll(prompt, fmt.Sprintf("`%s`", liveFixtureDefaultRef), fmt.Sprintf("`%s`", state.DefaultBranch))
 }
 
 // replacePackageReleasePlaceholders replaces package release fixture placeholders in prompts.

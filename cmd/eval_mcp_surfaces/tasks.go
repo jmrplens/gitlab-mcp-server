@@ -441,6 +441,9 @@ func taskHasEnterpriseStep(task evalTask) bool {
 
 // routeLooksEnterprise reports whether route looks enterprise.
 func routeLooksEnterprise(tool, action string) bool {
+	if routeUnavailableOnCE(tool, action) {
+		return true
+	}
 	domain := canonicalRouteID(tool, action)
 	if domain == "" {
 		domain = strings.TrimPrefix(tool, "gitlab_")

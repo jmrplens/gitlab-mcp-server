@@ -920,7 +920,7 @@ func (r *modelRunner) validatedToolResult(ctx context.Context, step evalStep, to
 
 // mcpToolResult handles MCP tool result for modelRunner.
 func (r *modelRunner) mcpToolResult(ctx context.Context, toolUse modelContentBlock) simulationResult {
-	callCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	exchange := &traceMCPExchange{Request: traceMCPRequest{Name: toolUse.Name, Arguments: toolUse.Input}}
 	started := time.Now()

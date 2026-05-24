@@ -45,6 +45,7 @@ type options struct {
 	Pause                  time.Duration
 	Pricing                pricingOptions
 	DryRun                 bool
+	FixtureSmoke           bool
 	PublishDocs            bool
 	CheckDocs              bool
 	PublishAllowNoise      bool

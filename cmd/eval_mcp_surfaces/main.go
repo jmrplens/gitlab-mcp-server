@@ -82,7 +82,7 @@ func run() (runErr error) {
 		return err
 	}
 	if opts.DryRun {
-		if dryRunErr := runDryRunEvaluation(opts, tasks, catalog, routes); dryRunErr != nil {
+		if dryRunErr := runDryRunEvaluation(context.Background(), opts, tasks, catalog, routes); dryRunErr != nil {
 			return dryRunErr
 		}
 		finalReportWritten = true
@@ -353,7 +353,10 @@ func applyPresetFilter(tasks []evalTask, preset string) ([]evalTask, error) {
 	return filtered, nil
 }
 
-func runDryRunEvaluation(opts options, tasks []evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) error {
+func runDryRunEvaluation(ctx context.Context, opts options, tasks []evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) error {
+	if opts.FixtureSmoke {
+		return runFixtureSmokeEvaluation(ctx, opts, tasks, catalog, routes)
+	}
 	if opts.ExposeResources {
 		bridgeSupport := mcpBridgeSupport{Capabilities: true, Resources: true, Prompts: true, Completion: true}
 		catalog = appendCapabilityBridgeTools(catalog, bridgeSupport)
@@ -371,6 +374,71 @@ func runDryRunEvaluation(opts options, tasks []evalTask, catalog []modelTool, ro
 		return err
 	}
 	return writeCoverageReportIfRequested(opts, results, routes)
+}
+
+func runFixtureSmokeEvaluation(ctx context.Context, opts options, tasks []evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) error {
+	if !opts.Execute || !opts.UseFixtures {
+		return errors.New("--fixture-smoke requires --execute-tools and --use-fixtures")
+	}
+	runtime, err := newEvaluationRuntime(opts, catalog) //nolint:contextcheck // Runtime setup uses existing session APIs; per-task fixture preparation below receives ctx.
+	if err != nil {
+		return err
+	}
+	defer runtime.close()
+	results, err := runFixtureSmokeAttempts(ctx, modelEvaluationRun{
+		opts:                 runtime.opts,
+		tasks:                tasks,
+		catalog:              runtime.catalog,
+		routes:               routes,
+		runtime:              runtime,
+		liveAttemptRunSuffix: liveUniqueSuffix(),
+	}, modelSpec{Model: "fixture-smoke"})
+	if err != nil {
+		return err
+	}
+	if writeErr := writeReport(runtime.opts.Output, runtime.opts, results, runtime.catalog, routes, true); writeErr != nil {
+		return writeErr
+	}
+	return writeCoverageReportIfRequested(runtime.opts, results, routes)
+}
+
+func runFixtureSmokeAttempts(ctx context.Context, run modelEvaluationRun, spec modelSpec) ([]taskResult, error) {
+	results := make([]taskResult, 0, len(run.tasks)*run.opts.Repeat)
+	for runIndex := 1; runIndex <= run.opts.Repeat; runIndex++ {
+		if err := ensureLiveProjectActive(ctx, run.runtime.executionClient); err != nil {
+			return nil, err
+		}
+		for _, task := range run.tasks {
+			taskForAttempt, err := prepareTaskAttempt(ctx, run.opts, spec, runIndex, task, run.runtime, run.liveAttemptRunSuffix)
+			if err != nil {
+				return nil, fmt.Errorf("fixture smoke %s: %w", task.ID, err)
+			}
+			results = append(results, fixtureSmokeResult(taskForAttempt, spec, run.opts.ToolSurface, runIndex))
+			terminalPrintf("fixture-smoke model=%s run=%d %s: ok\n", spec.String(), runIndex, taskForAttempt.ID)
+		}
+	}
+	return results, nil
+}
+
+func fixtureSmokeResult(task evalTask, spec modelSpec, toolSurface string, runIndex int) taskResult {
+	steps := taskSteps(task)
+	first := steps[0]
+	last := steps[len(steps)-1]
+	return taskResult{
+		Task:            task,
+		Run:             runIndex,
+		Model:           spec.String(),
+		ToolSurface:     toolSurface,
+		FirstTool:       first.ExpectedTool,
+		FirstAction:     first.ExpectedAction,
+		FirstPass:       true,
+		FinalTool:       last.ExpectedTool,
+		FinalAction:     last.ExpectedAction,
+		FinalSuccess:    true,
+		DestructiveSafe: true,
+		CompletedSteps:  len(steps),
+		Notes:           []string{"live fixture smoke prepared resources"},
+	}
 }
 
 type evaluationRuntime struct {
@@ -497,19 +565,18 @@ func runModelEvaluationRound(ctx context.Context, run modelEvaluationRun, spec m
 	}
 	results := make([]taskResult, 0, len(run.tasks))
 	for _, task := range run.tasks {
-		result, err := evaluateModelTaskAttempt(ctx, run, spec, runIndex, task, runner)
-		if err != nil {
-			return nil, err
-		}
+		result := evaluateModelTaskAttempt(ctx, run, spec, runIndex, task, runner)
 		results = append(results, result)
 	}
 	return results, nil
 }
 
-func evaluateModelTaskAttempt(ctx context.Context, run modelEvaluationRun, spec modelSpec, runIndex int, task evalTask, runner *modelRunner) (taskResult, error) {
+func evaluateModelTaskAttempt(ctx context.Context, run modelEvaluationRun, spec modelSpec, runIndex int, task evalTask, runner *modelRunner) taskResult {
 	taskForAttempt, err := prepareTaskAttempt(ctx, run.opts, spec, runIndex, task, run.runtime, run.liveAttemptRunSuffix)
 	if err != nil {
-		return taskResult{}, err
+		result := taskAttemptPreparationErrorResult(task, spec, run.opts.ToolSurface, runIndex, err)
+		terminalPrintf("model=%s run=%d %s: fixture=false error=%v\n", spec.String(), runIndex, task.ID, err)
+		return result
 	}
 	result := runner.evaluateTask(ctx, taskForAttempt, run.catalog, run.routes)
 	result.Run = runIndex
@@ -521,7 +588,31 @@ func evaluateModelTaskAttempt(ctx context.Context, run modelEvaluationRun, spec 
 	if run.opts.Pause > 0 {
 		time.Sleep(run.opts.Pause)
 	}
-	return result, nil
+	return result
+}
+
+func taskAttemptPreparationErrorResult(task evalTask, spec modelSpec, toolSurface string, runIndex int, err error) taskResult {
+	steps := taskSteps(task)
+	first := steps[0]
+	last := steps[len(steps)-1]
+	result := taskResult{
+		Task:            task,
+		Run:             runIndex,
+		Model:           spec.String(),
+		ToolSurface:     toolSurface,
+		FirstTool:       first.ExpectedTool,
+		FirstAction:     first.ExpectedAction,
+		FinalTool:       last.ExpectedTool,
+		FinalAction:     last.ExpectedAction,
+		DestructiveSafe: true,
+		Notes:           []string{"fixture preparation failed: " + err.Error()},
+		Trace:           newTaskTrace(task, "", task.Prompt),
+	}
+	result.Trace.Run = runIndex
+	result.Trace.Model = spec.String()
+	result.Trace.Events = append(result.Trace.Events, traceEvent{Kind: "fixture_error", IsError: true, Content: err.Error()})
+	result.Trace.Summary = traceSummaryFromResult(result)
+	return result
 }
 
 func prepareTaskAttempt(ctx context.Context, opts options, spec modelSpec, runIndex int, task evalTask, runtime evaluationRuntime, liveAttemptRunSuffix string) (evalTask, error) {

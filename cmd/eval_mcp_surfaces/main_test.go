@@ -65,6 +65,26 @@ func TestGitLabSkipTLSVerify_ParsesEnvironment(t *testing.T) {
 	}
 }
 
+// TestTaskAttemptPreparationErrorResult_RecordsReportableFailure verifies
+// fixture setup failures become task rows instead of aborting a full preset.
+func TestTaskAttemptPreparationErrorResult_RecordsReportableFailure(t *testing.T) {
+	task := evalTask{ID: "MT-017", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.merge"}
+	result := taskAttemptPreparationErrorResult(task, modelSpec{Provider: providerOpenAI, Model: "gpt-test"}, "dynamic", 2, errors.New("fixture timed out"))
+
+	if result.FinalSuccess || result.FirstPass || !result.DestructiveSafe {
+		t.Fatalf("result = %+v, want failed but destructive-safe fixture preparation result", result)
+	}
+	if result.Model != "openai:gpt-test" || result.Run != 2 || result.FirstAction != "merge_request.merge" || result.FinalAction != "merge_request.merge" {
+		t.Fatalf("result = %+v, want model/run/action metadata preserved", result)
+	}
+	if len(result.Notes) != 1 || !strings.Contains(result.Notes[0], "fixture timed out") {
+		t.Fatalf("notes = %#v, want fixture error note", result.Notes)
+	}
+	if result.Trace.Summary.FinalSuccess || result.Trace.Events[len(result.Trace.Events)-1].Kind != "fixture_error" {
+		t.Fatalf("trace = %+v, want fixture_error trace summary", result.Trace)
+	}
+}
+
 // TestWaitForContext_CanceledContextReturnsError verifies WaitForContext when canceled context returns error.
 func TestWaitForContext_CanceledContextReturnsError(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())

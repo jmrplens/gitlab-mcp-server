@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker test-e2e-docker-enterprise eval-surfaces-docker eval-surfaces-docker-enterprise coverage \
+	run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker test-e2e-docker-enterprise eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
 	lint fmt clean version release release-check checksum \
 	golangci-lint govulncheck \
 	mdlint mdlint-fix audit-docs check-doc-links \
@@ -219,6 +219,33 @@ eval-surfaces-docker-enterprise:
 		EVAL_SURFACE_ENTERPRISE=true ./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
 	else \
 		EVAL_SURFACE_ENTERPRISE=true ./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
+	fi
+
+## eval-surfaces-docker-enterprise-ce: run CE evaluation cases against Docker Enterprise runtime (usage: make eval-surfaces-docker-enterprise-ce SURFACE=dynamic)
+eval-surfaces-docker-enterprise-ce:
+	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker-enterprise-ce SURFACE=dynamic|meta" >&2; exit 1; fi
+	@if [ -n "$(PRESET)" ]; then \
+		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=ce ./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
+	else \
+		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=ce ./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
+	fi
+
+## eval-surfaces-docker-enterprise-all: run CE and Enterprise evaluation cases against Docker Enterprise runtime (usage: make eval-surfaces-docker-enterprise-all SURFACE=dynamic)
+eval-surfaces-docker-enterprise-all:
+	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker-enterprise-all SURFACE=dynamic|meta" >&2; exit 1; fi
+	@if [ -n "$(PRESET)" ]; then \
+		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=all ./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
+	else \
+		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=all ./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
+	fi
+
+## eval-surfaces-docker-enterprise-all-fixtures: prepare and smoke-test CE+Enterprise fixtures against Docker Enterprise runtime without model calls (usage: make eval-surfaces-docker-enterprise-all-fixtures SURFACE=dynamic)
+eval-surfaces-docker-enterprise-all-fixtures:
+	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker-enterprise-all-fixtures SURFACE=dynamic|meta" >&2; exit 1; fi
+	@if [ -n "$(PRESET)" ]; then \
+		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=all EVAL_SURFACE_FIXTURE_SMOKE=true ./scripts/eval-surfaces-docker.sh "$(SURFACE)" "$(PRESET)"; \
+	else \
+		EVAL_SURFACE_ENTERPRISE=true EVAL_SURFACE_CASE_SET=all EVAL_SURFACE_FIXTURE_SMOKE=true ./scripts/eval-surfaces-docker.sh "$(SURFACE)"; \
 	fi
 
 ## coverage: run tests and generate HTML coverage report
