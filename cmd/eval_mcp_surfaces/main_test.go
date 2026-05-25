@@ -1042,7 +1042,7 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.link_list", RequiredParams: []string{"project_id", "issue_iid"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.link_delete", RequiredParams: []string{"project_id", "issue_iid", "issue_link_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{"issue.link_create, not issue.link", "issue.link_delete", "top-level confirm:true on gitlab_execute_action", "params.issue_iid set to the source issue IID"},
+			want: []string{"issue.link_create, not issue.link", "issue.link_delete", "top-level confirm:true on gitlab_execute_action", "params.issue_iid set to the source issue IID", "use params.link_type", "never send params.issue_link_type"},
 		},
 		{
 			name: "issue note workflow",
@@ -1075,7 +1075,18 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_update_note", RequiredParams: []string{"full_path", "epic_iid", "note_id", "body"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_delete_note", RequiredParams: []string{"full_path", "epic_iid", "note_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{"Copy the complete discussion_id string exactly", "do not shorten, reconstruct, or use note IDs as discussion IDs"},
+			want: []string{"Every group.epic_discussion_* call requires params.full_path and params.epic_iid", "do not drop full_path on note update/delete calls", "Copy the complete discussion_id string exactly", "do not shorten, reconstruct, or use note IDs as discussion IDs"},
+		},
+		{
+			name: "group protected environment workflow",
+			task: evalTask{ID: "MS-052", Prompt: "Exercise group protected environment lifecycle with a temporary group: create group `eval-enterprise-protected-env`, protect environment `staging`, list group protected environments, fetch environment `staging`, update it to require one approval, unprotect environment `staging`, then delete the temporary group.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.create", RequiredParams: []string{"name", "path"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.protected_env_protect", RequiredParams: []string{"group_id", "name", "deploy_access_levels"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.protected_env_update", RequiredParams: []string{"group_id", "environment"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.protected_env_unprotect", RequiredParams: []string{"group_id", "environment"}, OptionalParams: []string{"confirm"}, Destructive: true},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.delete", RequiredParams: []string{"group_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{"Group protected environments use gitlab_group protected_env_* actions", "approval_rules", "group.protected_env_unprotect is destructive", "top-level confirm:true on that gitlab_execute_action call"},
 		},
 		{
 			name: "project push rule add",
