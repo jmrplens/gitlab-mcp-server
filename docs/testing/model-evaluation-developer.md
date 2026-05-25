@@ -9,21 +9,50 @@ around `cmd/eval_mcp_surfaces`.
 
 ## Source Map
 
-| Path                                                            | Purpose                                                                               |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `cmd/eval_mcp_surfaces/main.go`                                 | Command entry point and high-level orchestration.                                     |
-| `cmd/eval_mcp_surfaces/options.go`                              | CLI flags, presets, and tool-surface normalization.                                   |
-| `cmd/eval_mcp_surfaces/runner.go`                               | Model loop, tool-call budgets, validation feedback, and simulated tool results.       |
-| `cmd/eval_mcp_surfaces/sessions.go`                             | Mock and live MCP server sessions, resource/prompt registration, and catalog routing. |
-| `cmd/eval_mcp_surfaces/bridge.go`                               | MCP capability bridge tools for resources, prompts, completions, and capabilities.    |
-| `cmd/eval_mcp_surfaces/live_targets.go`                         | Just-in-time Docker fixture resources for tasks that need fresh mutable targets.      |
-| `cmd/eval_mcp_surfaces/report.go`                               | Per-run Markdown reports, metrics, diagnostics, usage, and coverage output.           |
-| `cmd/eval_mcp_surfaces/comparison.go`                           | Cross-report comparison for model, token, diagnostic, usage, and coverage trends.     |
-| `cmd/eval_mcp_surfaces/providers.go`                            | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs.            |
-| `cmd/eval_mcp_surfaces/fixtures.go`                             | Docker GitLab fixture preparation and placeholder replacement.                        |
-| `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md` | Canonical task corpus.                                                                |
-| `dist/evaluation/mcp-surfaces/`                                 | Generated reports, traces, and fixture state; ignored by Git.                         |
-| `docs/testing/model-results.md`                                 | Current published benchmark result copied from generated reports.                     |
+| Path                                                     | Purpose                                                                               |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `cmd/eval_mcp_surfaces/main.go`                          | Thin command entry point that delegates to the internal evaluator package.            |
+| `cmd/eval_mcp_surfaces/internal/evaluator/run.go`        | High-level command workflow, environment setup, catalog preparation, and model runs.  |
+| `cmd/eval_mcp_surfaces/internal/evaluator/options.go`    | CLI flags, presets, and tool-surface normalization.                                   |
+| `cmd/eval_mcp_surfaces/internal/evaluator/runner.go`     | Model loop, tool-call budgets, validation feedback, and simulated tool results.       |
+| `cmd/eval_mcp_surfaces/internal/evaluator/sessions.go`   | Mock and live MCP server sessions, resource/prompt registration, and catalog routing. |
+| `cmd/eval_mcp_surfaces/internal/evaluator/bridge.go`     | MCP capability bridge tools for resources, prompts, completions, and capabilities.    |
+| `cmd/eval_mcp_surfaces/internal/evaluator/case_*.go`     | Typed case definitions, case registry, prompt rendering, and fixture engine.          |
+| `cmd/eval_mcp_surfaces/internal/evaluator/report.go`     | Per-run Markdown reports, metrics, diagnostics, usage, and coverage output.           |
+| `cmd/eval_mcp_surfaces/internal/evaluator/comparison.go` | Cross-report comparison for model, token, diagnostic, usage, and coverage trends.     |
+| `cmd/eval_mcp_surfaces/internal/evaluator/providers.go`  | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs.            |
+| `cmd/eval_mcp_surfaces/internal/evaluator/fixtures.go`   | Docker GitLab fixture preparation and placeholder replacement.                        |
+| `cmd/eval_mcp_surfaces/internal/evalrun/`                | Small run utilities shared by fixture and model execution code.                       |
+| `cmd/eval_mcp_surfaces/internal/termio/`                 | Terminal progress and log routing for long local runs and wrapper scripts.            |
+| `dist/evaluation/mcp-surfaces/`                          | Generated reports, traces, and fixture state; ignored by Git.                         |
+| `docs/testing/model-results.md`                          | Current published benchmark result copied from generated reports.                     |
+
+The evaluator implementation intentionally lives under `internal/evaluator` so
+the command can stay small while the implementation keeps package-private helper
+types. Prefer adding new evaluator logic inside that package unless the code has
+a clear standalone boundary like terminal I/O or generic run utilities.
+
+## Result Triage Policy
+
+Use live model traces to decide where a fix belongs before changing prompt text
+or MCP metadata:
+
+1. If the model cannot discover the right action, the dynamic ranker, aliases,
+  action descriptions, or `gitlab://tools` manifest metadata are the first
+  suspects.
+2. If the model chooses the right action but invents or omits schema-visible
+  parameters, inspect the canonical `ActionSpec`, JSON schema tags, parameter
+  guidance, and output `next_steps` before changing evaluator prompts.
+3. If the MCP response or Markdown output encourages the wrong follow-up action,
+  fix the tool output, hints, or formatter in the MCP implementation.
+4. If the MCP metadata is already precise and the failure comes from an
+  evaluator-only compact workflow plan, fixture placeholder, or assertion rule,
+  change the evaluator harness.
+
+When auditing full runs, treat a `report_clean` result as necessary but not
+sufficient. Also inspect repaired first-pass diagnostics, Docker live triage,
+and trace-level validation failures so hidden MCP guidance problems are not
+papered over by retries.
 
 ## Environment
 

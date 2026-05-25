@@ -34,6 +34,30 @@ Supported model providers are `anthropic`, `google`, `openai`, and `qwen`. The e
 
 By default, model-backed runs expose the same full MCP capability surface as a normal client for the selected tool surface. The evaluator adds bridge tools for `resources/list`, `resources/read`, `prompts/list`, `prompts/get`, `completion/complete`, and initialize capability metadata, then records which bridge tools and targets each model uses.
 
+## Implementation Layout
+
+The command root is intentionally thin:
+
+| Path | Purpose |
+| --- | --- |
+| `main.go` | CLI entry point that delegates to the evaluator package. |
+| `internal/evaluator/` | Typed cases, fixture orchestration, MCP sessions, provider calls, validation, reports, comparisons, and docs publishing. |
+| `internal/evalrun/` | Shared run utilities for unique live resource names and context-aware waits. |
+| `internal/termio/` | Terminal progress and log routing used by direct runs and Docker wrappers. |
+
+Keep model-facing evaluation behavior in `internal/evaluator`. Extract a helper into a sibling internal package only when it is independent of cases, tool schemas, provider prompts, and report semantics.
+
+## MCP-First Failure Triage
+
+Full Docker runs use real model calls against the selected MCP surface and, when `--execute-tools` is enabled, execute validated tool calls against GitLab. Use traces to decide where fixes belong:
+
+1. Discovery or route-selection failures point first to MCP action descriptions, aliases, dynamic ranking, or `gitlab://tools` metadata.
+2. Correct route with wrong parameters points first to canonical `ActionSpec` schemas, JSON schema tags, parameter guidance, and output `next_steps`.
+3. Wrong follow-up after a successful MCP call points first to tool output, Markdown hints, and response formatting.
+4. Only change evaluator prompts, compact workflow plans, fixtures, or assertions when the MCP metadata is already precise and the failure is harness-specific.
+
+`--check-report-clean` is a gate, not the whole audit. Also inspect repaired first-pass diagnostics and trace JSON when tuning model-facing MCP behavior.
+
 ## Common Commands
 
 Dry-run the current catalog without model calls:
