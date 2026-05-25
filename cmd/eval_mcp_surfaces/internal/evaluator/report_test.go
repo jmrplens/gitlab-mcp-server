@@ -81,6 +81,14 @@ func TestCheckReportCleanContent_DetectsFailedTaskRows(t *testing.T) {
 	}
 }
 
+func TestEscapeTable_NormalizesMultilineCells(t *testing.T) {
+	got := escapeTable("google status 404: {\n  \"error\": true\n} | retry")
+	want := "google status 404: {<br>  \"error\": true<br>} \\| retry"
+	if got != want {
+		t.Fatalf("escapeTable() = %q, want %q", got, want)
+	}
+}
+
 func TestCheckReportCleanContent_AllowsRepairedFirstPassWhenFinalSuccess(t *testing.T) {
 	content := "## Task Results\n\n" +
 		"| Model | Run | Task | First pass | Repair | Final success | Notes |\n" +

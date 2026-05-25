@@ -86,6 +86,7 @@ func TestExpectedStepTypedAssertionFields_ProjectIntoTaskSteps(t *testing.T) {
 			RequiredParams:  []string{"project_id"},
 			OptionalParams:  []string{"statistics"},
 			ForbiddenParams: []string{"token"},
+			OptionalStep:    true,
 			AllowedRepairs:  []string{"move project_id into params"},
 			ProducedValues:  []string{"project_id"},
 		}},
@@ -102,6 +103,9 @@ func TestExpectedStepTypedAssertionFields_ProjectIntoTaskSteps(t *testing.T) {
 	}
 	if got := joinStrings(step.ProducedValues); got != "project_id" {
 		t.Fatalf("produced values = %q, want project_id", got)
+	}
+	if !step.OptionalStep {
+		t.Fatal("optional step = false, want true")
 	}
 }
 

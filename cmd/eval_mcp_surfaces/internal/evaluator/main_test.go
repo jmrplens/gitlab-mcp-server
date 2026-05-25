@@ -903,19 +903,19 @@ func TestDynamicPrompt_RequiresFindBeforeUncertainExecute(t *testing.T) {
 
 	system := systemPromptForTask(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "systemPromptForTask()", system, []string{
-		"GitLab operations are executed through gitlab_find_action and gitlab_execute_action",
+		"GitLab catalog operations are executed through a find-then-execute workflow",
 		"MCP capability bridge tools",
-		"Use gitlab_find_action before gitlab_execute_action whenever the exact canonical action ID or exact params schema is not already known",
+		"expects gitlab_find_action before every gitlab_execute_action call",
 		"Destructive actions require top-level confirm:true on gitlab_execute_action",
 	})
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_action",
-		"Use bridge tools directly for capability, resource, prompt, and completion inspection steps",
-		"use gitlab_find_action before executing when an action ID or params schema is not exact",
-		"params limited to the selected action input_schema",
-		"put confirm:true at the top level of gitlab_execute_action arguments",
+		"Dynamic workflow:",
+		"first call gitlab_find_action",
+		"Do not use action IDs from memory",
+		"Use MCP capability bridge tools directly",
+		"Return tool calls only",
 	})
 }
 
@@ -925,8 +925,8 @@ func TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks(t *testing.T)
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 	}}
 	exactBudget := callBudgetForTask(exactTask, config.ToolSurfaceDynamic)
-	if exactBudget.ExpectedSteps != 1 || exactBudget.AllowedDiscoveryCalls != 0 || !exactBudget.SuppressDiscovery {
-		t.Fatalf("exact budget = %+v, want one-step direct execution with no discovery", exactBudget)
+	if exactBudget.ExpectedSteps != 1 || exactBudget.AllowedDiscoveryCalls != 0 || exactBudget.SuppressDiscovery {
+		t.Fatalf("exact budget = %+v, want no discovery suppression", exactBudget)
 	}
 
 	ambiguousTask := evalTask{ID: "MT-AMB", Prompt: "Find the right project cleanup action.", Steps: []evalStep{
@@ -938,8 +938,8 @@ func TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks(t *testing.T)
 	}
 }
 
-// TestDynamicWorkflowPlanPreamble_ListsActionsAndRequiredParams verifies DynamicWorkflowPlanPreamble lists actions and required params.
-func TestDynamicWorkflowPlanPreamble_ListsActionsAndRequiredParams(t *testing.T) {
+// TestDynamicTaskPrompt_MultiStepUsesFindFirst verifies multi-step Dynamic prompts require find before execute.
+func TestDynamicTaskPrompt_MultiStepUsesFindFirst(t *testing.T) {
 	task := evalTask{ID: "MS-PLAN", Prompt: "Create an issue and then list it.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.list", RequiredParams: []string{"project_id"}},
@@ -947,36 +947,37 @@ func TestDynamicWorkflowPlanPreamble_ListsActionsAndRequiredParams(t *testing.T)
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"Dynamic workflow plan:",
-		"1. action=issue.create; required_params=project_id, title",
-		"2. action=issue.list; required_params=project_id",
-		"do not call gitlab_find_action for these planned actions",
+		"For each of the 2 GitLab catalog operations",
+		"first call gitlab_find_action",
+		"Use the returned result ID, input_schema, required_params, and example",
+		"Do not use action IDs from memory",
 	})
-	if strings.Contains(prompt, "Dynamic call budget:") {
-		t.Fatal("Dynamic prompt unexpectedly received call budget")
+	for _, unwanted := range []string{"Dynamic workflow plan:", "action=issue.create", "do not call gitlab_find_action for these planned actions"} {
+		if strings.Contains(prompt, unwanted) {
+			t.Fatalf("taskPromptForSurface() = %q, want no exact dynamic plan content %q", prompt, unwanted)
+		}
 	}
 }
 
-// TestDiscoveryBudgetFeedback_BlocksRedundantDiscoveryForExactCall verifies DiscoveryBudgetFeedback blocks redundant discovery for exact call.
-func TestDiscoveryBudgetFeedback_BlocksRedundantDiscoveryForExactCall(t *testing.T) {
+// TestDiscoveryBudgetFeedback_AllowsFindFirstForExactDynamicCall verifies discovery is no longer suppressed for exact-looking Dynamic calls.
+func TestDiscoveryBudgetFeedback_AllowsFindFirstForExactDynamicCall(t *testing.T) {
 	task := evalTask{ID: "MT-066", Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 	}}
 	step := taskSteps(task)[0]
 	message, blocked := discoveryBudgetFeedback(task, step, modelContentBlock{Name: dynamicFindTool}, callBudgetForTask(task, config.ToolSurfaceDynamic))
-	if !blocked {
-		t.Fatal("discoveryBudgetFeedback() blocked = false, want true")
+	if blocked || message != "" {
+		t.Fatalf("discoveryBudgetFeedback() = %q, %t; want allowed find-first discovery", message, blocked)
 	}
-	requireContainsAll(t, "discoveryBudgetFeedback()", message, []string{"exact gitlab_execute_action call", "job.token_scope_remove_project", "no discovery or schema lookup is needed"})
 }
 
-// TestDynamicTaskPrompt_IncludesProviderConfusionGuidance verifies task-level
-// prompts give exact ordering hints for workflows confused by model providers.
-func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
+// TestDynamicTaskPrompt_ProviderConfusionCasesUseFindFirst verifies previously
+// brittle Dynamic workflows now receive generic find-first guidance without
+// leaking expected action IDs.
+func TestDynamicTaskPrompt_ProviderConfusionCasesUseFindFirst(t *testing.T) {
 	tests := []struct {
 		name   string
 		task   evalTask
-		want   []string
 		absent []string
 	}{
 		{
@@ -986,7 +987,6 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.get", RequiredParams: []string{"project_id", "pipeline_id"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.list", RequiredParams: []string{"project_id", "pipeline_id"}},
 			}},
-			want: []string{`"remote_url":"http://localhost:8929/my-org/tools/gitlab-mcp-server.git"`, "discover_project.resolve, pipeline.get, job.list, job.trace, analyze.pipeline_failure", "Inspecting one known pipeline ID means pipeline.get", "do not substitute pipeline.list"},
 		},
 		{
 			name: "settings broadcast workflow",
@@ -995,7 +995,6 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.broadcast_message_create"},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.broadcast_message_delete"},
 			}},
-			want: []string{"admin.settings_get, admin.broadcast_message_create, admin.broadcast_message_delete", "not list or create broadcast messages"},
 		},
 		{
 			name: "release cleanup workflow",
@@ -1006,7 +1005,6 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "release.delete"},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "tag.delete"},
 			}},
-			want: []string{"tag.get, release.get, release.link_list, release.delete, tag.delete", "Start with tag.get"},
 		},
 		{
 			name: "release notes workflow",
@@ -1015,7 +1013,6 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "repository.compare"},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "analyze.release_notes"},
 			}},
-			want: []string{"release.list, repository.compare, analyze.release_notes", "same from/to refs"},
 		},
 		{
 			name: "feature flag user list workflow",
@@ -1023,7 +1020,6 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "feature_flags.ff_user_list_create", RequiredParams: []string{"project_id", "name", "user_xids"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "feature_flags.ff_user_list_get", RequiredParams: []string{"project_id", "user_list_iid"}},
 			}},
-			want: []string{"Dynamic first-step exact call", `"name":"eval-feature-list"`, `"user_xids":"u1,u2"`, "Every step needs params.project_id", "Use the returned iid as params.user_list_iid", "After ff_user_list_update, create the feature flag next", "never feature_flag_name", "never include user_list_iid unless you are calling an ff_user_list_* action"},
 		},
 		{
 			name: "issue time tracking workflow",
@@ -1031,7 +1027,6 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.time_estimate_set", RequiredParams: []string{"project_id", "issue_iid", "duration"}},
 			}},
-			want: []string{"issue.create, issue.time_estimate_set, issue.spent_time_add, issue.spent_time_reset, issue.time_estimate_reset, issue.delete", "Set the estimate before adding spent time", "reset spent time before resetting the estimate"},
 		},
 		{
 			name: "issue link workflow",
@@ -1042,7 +1037,6 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.link_list", RequiredParams: []string{"project_id", "issue_iid"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.link_delete", RequiredParams: []string{"project_id", "issue_iid", "issue_link_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{"issue.link_create, not issue.link", "issue.link_delete", "top-level confirm:true on gitlab_execute_action", "params.issue_iid set to the source issue IID", "use params.link_type", "never send params.issue_link_type"},
 		},
 		{
 			name: "issue note workflow",
@@ -1053,7 +1047,6 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.note_update", RequiredParams: []string{"project_id", "issue_iid", "note_id", "body"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.note_delete", RequiredParams: []string{"project_id", "issue_iid", "note_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{"issue.note_create, issue.note_get, issue.note_update, issue.note_delete, issue.delete", "note_delete uses only params.project_id, params.issue_iid, and params.note_id", "never send params.body to note_delete"},
 		},
 		{
 			name: "merge request award workflow",
@@ -1062,7 +1055,6 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.spent_time_add", RequiredParams: []string{"project_id", "merge_request_iid", "duration"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.emoji_mr_create", RequiredParams: []string{"project_id", "merge_request_iid", "name"}},
 			}},
-			want: []string{"merge_request.emoji_mr_list before deleting", `"merge_request_iid":1`, `"duration":"1h"`},
 		},
 		{
 			name: "epic discussion workflow",
@@ -1075,7 +1067,6 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_update_note", RequiredParams: []string{"full_path", "epic_iid", "note_id", "body"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_delete_note", RequiredParams: []string{"full_path", "epic_iid", "note_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{"Every group.epic_discussion_* call requires params.full_path and params.epic_iid", "do not drop full_path on note update/delete calls", "Copy the complete discussion_id string exactly", "do not shorten, reconstruct, or use note IDs as discussion IDs"},
 		},
 		{
 			name: "group protected environment workflow",
@@ -1086,32 +1077,39 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.protected_env_unprotect", RequiredParams: []string{"group_id", "environment"}, OptionalParams: []string{"confirm"}, Destructive: true},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.delete", RequiredParams: []string{"group_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{"Group protected environments use gitlab_group protected_env_* actions", "approval_rules", "group.protected_env_unprotect is destructive", "top-level confirm:true on that gitlab_execute_action call"},
 		},
 		{
 			name: "project push rule add",
 			task: evalTask{ID: "MT-192", Prompt: "Add a project push rule to project `my-org/tools/eval-push-rule` with commit message regex `^EVAL-`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.push_rule_add", RequiredParams: []string{"project_id"}, OptionalParams: []string{"commit_message_regex", "reject_unsigned_commits"}},
 			}},
-			want: []string{"Project push rules are project-scoped singletons", "use params.commit_message_regex directly", "never send commit_message_regex_enabled"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic)
-			requireContainsAll(t, "taskPromptForSurface()", prompt, tt.want)
+			requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
+				"first call gitlab_find_action",
+				"Use the returned result ID, input_schema, required_params, and example",
+				"Do not use action IDs from memory",
+			})
+			for _, step := range taskSteps(tt.task) {
+				if step.ExpectedAction != "" && strings.Contains(prompt, step.ExpectedAction) {
+					t.Fatalf("taskPromptForSurface() leaked expected action %q in prompt %q", step.ExpectedAction, prompt)
+				}
+			}
 		})
 	}
 }
 
-// TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes verifies
-// single-step dynamic tasks with provider params-shape misses get exact calls.
-func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
+// TestDynamicSingleTaskPrompt_UsesFindFirstForHighRiskShapes verifies
+// single-step Dynamic tasks with historically brittle parameter shapes still use
+// generic find-first guidance without leaking exact call envelopes.
+func TestDynamicSingleTaskPrompt_UsesFindFirstForHighRiskShapes(t *testing.T) {
 	tests := []struct {
 		name   string
 		task   evalTask
-		want   []string
 		absent []string
 	}{
 		{
@@ -1119,63 +1117,54 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 			task: evalTask{ID: "MT-029", Prompt: "Get file `README.md` from branch `main` in project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "repository.file_get", RequiredParams: []string{"project_id", "file_path", "ref"}},
 			}},
-			want: []string{`"action":"repository.file_get"`, `"file_path":"README.md"`, `"ref":"main"`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
 		},
 		{
 			name: "repository file create",
 			task: evalTask{ID: "MT-030", Prompt: "Create file `tmp/eval.txt` with content `evaluation file` and commit_message `Create evaluation file` on branch `feature/eval` in project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "repository.file_create", RequiredParams: []string{"project_id", "file_path", "branch", "content", "commit_message"}},
 			}},
-			want: []string{`"action":"repository.file_create"`, `"file_path":"tmp/eval.txt"`, `"branch":"feature/eval"`, `"content":"evaluation file"`, `"commit_message":"Create evaluation file"`},
 		},
 		{
 			name: "single artifact download",
 			task: evalTask{ID: "MT-065", Prompt: "Download artifact `coverage/report.xml` from job `361` in project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.download_single_artifact", RequiredParams: []string{"project_id", "job_id", "artifact_path"}},
 			}},
-			want: []string{`"action":"job.download_single_artifact"`, `"artifact_path":"coverage/report.xml"`, `"job_id":361`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
 		},
 		{
 			name: "runner remove",
 			task: evalTask{ID: "MT-047", Prompt: "Remove runner ID `21`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "runner.remove", RequiredParams: []string{"runner_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{`"action":"runner.remove"`, `"confirm":true`, `"runner_id":21`, "include top-level confirm:true on gitlab_execute_action"},
 		},
 		{
 			name: "pipeline schedule delete",
 			task: evalTask{ID: "MT-103", Prompt: "Delete pipeline schedule ID `46` from project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.schedule_delete", RequiredParams: []string{"project_id", "schedule_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{`"action":"pipeline.schedule_delete"`, `"confirm":true`, `"params":{"project_id":"my-org/tools/gitlab-mcp-server","schedule_id":46}`, "include top-level confirm:true on gitlab_execute_action", "only action and confirm is invalid"},
 		},
 		{
 			name: "user block",
 			task: evalTask{ID: "MT-104", Prompt: "Block user ID `55`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "user.block", RequiredParams: []string{"user_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{`"action":"user.block"`, `"confirm":true`, `"user_id":55`, "include top-level confirm:true on gitlab_execute_action"},
 		},
 		{
 			name: "pipeline trigger delete",
 			task: evalTask{ID: "MT-102", Prompt: "Delete pipeline trigger token ID `53` from project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.trigger_delete", RequiredParams: []string{"project_id", "trigger_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{`"action":"pipeline.trigger_delete"`, `"confirm":true`, `"params":{"project_id":"my-org/tools/gitlab-mcp-server","trigger_id":53}`, "only action and confirm is invalid"},
 		},
 		{
 			name: "terraform state unlock",
 			task: evalTask{ID: "MT-114", Prompt: "Unlock Terraform state `production` in project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.terraform_state_unlock", RequiredParams: []string{"project_id", "name"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{`"action":"admin.terraform_state_unlock"`, `"confirm":true`, `"name":"production"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, "never use terraform_state.unlock or params.terraform_state_name"},
 		},
 		{
 			name: "broadcast message delete",
 			task: evalTask{ID: "MT-054", Prompt: "Delete broadcast message ID `9`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.broadcast_message_delete", RequiredParams: []string{"id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want:   []string{"Dynamic first-step exact call", `"action":"admin.broadcast_message_delete"`, `"confirm":true`, `"id":9`},
 			absent: []string{`"id":123`},
 		},
 		{
@@ -1183,7 +1172,6 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 			task: evalTask{ID: "MT-192", Prompt: "Add a project push rule to project `my-org/tools/eval-push-rule` with commit message regex `^EVAL-`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.push_rule_add", RequiredParams: []string{"project_id"}, OptionalParams: []string{"commit_message_regex", "reject_unsigned_commits"}},
 			}},
-			want:   []string{"Dynamic first-step exact call", `"action":"project.push_rule_add"`, `"commit_message_regex":"^EVAL-"`, `"project_id":"my-org/tools/eval-push-rule"`, "never send commit_message_regex_enabled"},
 			absent: []string{`"commit_message_regex_enabled":`},
 		},
 		{
@@ -1191,7 +1179,6 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 			task: evalTask{ID: "MT-197", Prompt: "Revoke group service account PAT ID `23` for service account user ID `39` in group `my-org`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.service_account_pat_revoke", RequiredParams: []string{"group_id", "service_account_id", "token_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want:   []string{"Dynamic first-step exact call", `"action":"group.service_account_pat_revoke"`, `"confirm":true`, `"group_id":"my-org"`, `"service_account_id":39`, `"token_id":23`},
 			absent: []string{`"action":"service_account_pat.revoke"`, `"personal_access_token_id":`, `"user_id":`},
 		},
 	}
@@ -1202,19 +1189,16 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 			if strings.Contains(prompt, "confirm:true in params") {
 				t.Fatalf("taskPromptForSurface() = %q, dynamic prompt must not tell models to put confirm in params", prompt)
 			}
-			exactIndex := strings.Index(prompt, tt.want[0])
-			taskIndex := strings.Index(prompt, "Task "+tt.task.ID)
-			overrideIndex := strings.Index(prompt, "Dynamic mode override:")
-			if exactIndex < 0 {
-				t.Fatalf("taskPromptForSurface() = %q, want exact call containing %q", prompt, tt.want[0])
+			requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
+				"first call gitlab_find_action",
+				"Use the returned result ID, input_schema, required_params, and example",
+				"Do not use action IDs from memory",
+			})
+			for _, step := range taskSteps(tt.task) {
+				if step.ExpectedAction != "" && strings.Contains(prompt, step.ExpectedAction) {
+					t.Fatalf("taskPromptForSurface() leaked expected action %q in prompt %q", step.ExpectedAction, prompt)
+				}
 			}
-			if taskIndex >= 0 && exactIndex > taskIndex {
-				t.Fatalf("taskPromptForSurface() = %q, exact call must appear before task prose", prompt)
-			}
-			if overrideIndex >= 0 && exactIndex > overrideIndex {
-				t.Fatalf("taskPromptForSurface() = %q, exact call must appear before dynamic override", prompt)
-			}
-			requireContainsAll(t, "taskPromptForSurface()", prompt, tt.want)
 			for _, unwanted := range tt.absent {
 				if strings.Contains(prompt, unwanted) {
 					t.Fatalf("taskPromptForSurface() = %q, want no %q", prompt, unwanted)
@@ -1231,55 +1215,55 @@ func TestDynamicSingleTaskPrompt_TerraformStateUnlockExactCallAvoidsLegacyEnvelo
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	required := []string{
-		"Dynamic first-step exact call",
-		`"action":"admin.terraform_state_unlock"`,
-		`"confirm":true`,
-		`"name":"production"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
+		"first call gitlab_find_action",
+		"Use the returned result ID, input_schema, required_params, and example",
+		"top-level confirm:true",
+		"Do not use action IDs from memory",
 	}
 	requireContainsAll(t, "taskPromptForSurface()", prompt, required)
-	for _, unwanted := range []string{`"action":"terraform_state.unlock"`, `"terraform_state_name":`} {
+	for _, unwanted := range []string{`"action":"terraform_state.unlock"`, `"terraform_state_name":`, `"action":"admin.terraform_state_unlock"`} {
 		if strings.Contains(prompt, unwanted) {
 			t.Fatalf("taskPromptForSurface() = %q, want no legacy terraform state envelope %q", prompt, unwanted)
 		}
 	}
 }
 
-// TestDynamicSingleTaskPrompt_UsesExactCallForOptionalOnlyList verifies DynamicSingleTaskPrompt uses exact call for optional only list.
-func TestDynamicSingleTaskPrompt_UsesExactCallForOptionalOnlyList(t *testing.T) {
+// TestDynamicSingleTaskPrompt_UsesFindFirstForOptionalOnlyList verifies optional-only list prompts stay find-first.
+func TestDynamicSingleTaskPrompt_UsesFindFirstForOptionalOnlyList(t *testing.T) {
 	task := evalTask{ID: "MT-003", Prompt: "List the 10 most recently updated projects I can access.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.list", OptionalParams: []string{"order_by", "sort", "per_page"}},
 	}}
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"Dynamic first-step exact call",
-		`"action":"project.list"`,
-		`"order_by":"updated_at"`,
-		`"sort":"desc"`,
-		`"per_page":10`,
-		"Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_action",
-		"gitlab_find_action, gitlab_execute_action",
+		"first call gitlab_find_action",
+		"Use the returned result ID, input_schema, required_params, and example",
+		"Do not use action IDs from memory",
 	})
+	if strings.Contains(prompt, `"action":"project.list"`) || strings.Contains(prompt, "project.list") {
+		t.Fatalf("taskPromptForSurface() = %q, want no exact project.list action", prompt)
+	}
 }
 
-// TestDynamicSingleTaskPrompt_UsesExactCallForSearchProjects verifies DynamicSingleTaskPrompt uses exact call for search projects.
-func TestDynamicSingleTaskPrompt_UsesExactCallForSearchProjects(t *testing.T) {
+// TestDynamicSingleTaskPrompt_UsesFindFirstForSearchProjects verifies search prompts stay find-first.
+func TestDynamicSingleTaskPrompt_UsesFindFirstForSearchProjects(t *testing.T) {
 	task := evalTask{ID: "MT-033", Prompt: "Search all projects for `gitlab-mcp-server`.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "search.projects", RequiredParams: []string{"query"}},
 	}}
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"Dynamic first-step exact call",
-		`"action":"search.projects"`,
-		`"query":"gitlab-mcp-server"`,
-		"Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_action",
+		"first call gitlab_find_action",
+		"Use the returned result ID, input_schema, required_params, and example",
+		"Do not use action IDs from memory",
 	})
+	if strings.Contains(prompt, `"action":"search.projects"`) || strings.Contains(prompt, "search.projects") {
+		t.Fatalf("taskPromptForSurface() = %q, want no exact search.projects action", prompt)
+	}
 }
 
-// TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionFind verifies DynamicWorkflowPlanPreamble suppresses planned action find.
-func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionFind(t *testing.T) {
+// TestDynamicTaskPrompt_MultiStepOmitsExactActionPlan verifies Dynamic prompts do not leak planned action IDs.
+func TestDynamicTaskPrompt_MultiStepOmitsExactActionPlan(t *testing.T) {
 	task := evalTask{ID: "MS-020", Prompt: "Exercise pipeline schedule CRUD in project `my-org/tools/gitlab-mcp-server`: create inactive schedule `eval-crud-schedule` on `main`, get it, update its cron, create variable `SCHEDULE_CRUD_TOKEN`, update that variable, delete the variable, then delete the schedule.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.schedule_create", RequiredParams: []string{"project_id", "description", "ref", "cron"}, OptionalParams: []string{"active"}},
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.schedule_get", RequiredParams: []string{"project_id", "schedule_id"}},
@@ -1289,20 +1273,21 @@ func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionFind(t *testing.T) {
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		"Dynamic first-step exact call",
-		`"action":"pipeline.schedule_create"`,
-		`"description":"eval-crud-schedule"`,
-		`"active":false`,
-		"optional_params=active",
-		"The listed action IDs and params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions.",
-		"Values named *_id that are produced by earlier steps must be copied exactly from the preceding tool result",
-		"action=pipeline.schedule_delete_variable; required_params=project_id, schedule_id, key; destructive_confirm=true",
-		"For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_action call.",
+		"For each of the 4 GitLab catalog operations",
+		"first call gitlab_find_action",
+		"Use the returned result ID, input_schema, required_params, and example",
+		"Do not use action IDs from memory",
 	})
+	for _, unwanted := range []string{"Dynamic first-step exact call", "pipeline.schedule_create", "do not call gitlab_find_action for these planned actions"} {
+		if strings.Contains(prompt, unwanted) {
+			t.Fatalf("taskPromptForSurface() = %q, want no exact dynamic plan content %q", prompt, unwanted)
+		}
+	}
 }
 
-// TestDynamicExactCallProvenance_BindsRoleSensitiveParams covers DynamicExactCallProvenance with table-driven subtests for binds role sensitive params.
-func TestDynamicExactCallProvenance_BindsRoleSensitiveParams(t *testing.T) {
+// TestDynamicTaskPrompt_OmitsRoleSensitiveExactCallContent verifies role-sensitive
+// examples are no longer injected into Dynamic prompts.
+func TestDynamicTaskPrompt_OmitsRoleSensitiveExactCallContent(t *testing.T) {
 	tests := []struct {
 		name string
 		task evalTask
@@ -1356,16 +1341,23 @@ func TestDynamicExactCallProvenance_BindsRoleSensitiveParams(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			prompt := taskPromptForSurface(tt.task, config.ToolSurfaceDynamic)
-			if !strings.Contains(prompt, "Dynamic first-step exact call") && !strings.Contains(prompt, "Dynamic exact call") {
-				t.Fatalf("taskPromptForSurface() = %q, want dynamic exact-call guidance", prompt)
+			requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
+				"first call gitlab_find_action",
+				"Use the returned result ID, input_schema, required_params, and example",
+				"Do not use action IDs from memory",
+			})
+			for _, unwanted := range tt.want {
+				if strings.Contains(prompt, unwanted) {
+					t.Fatalf("taskPromptForSurface() = %q, want no exact-call content %q", prompt, unwanted)
+				}
 			}
-			requireContainsAll(t, "taskPromptForSurface()", prompt, tt.want)
 		})
 	}
 }
 
-// TestDynamicExactCallProvenance_UnresolvedRoleSensitiveParamsSuppressExactCalls covers DynamicExactCallProvenance with table-driven subtests for unresolved role sensitive params suppress exact calls.
-func TestDynamicExactCallProvenance_UnresolvedRoleSensitiveParamsSuppressExactCalls(t *testing.T) {
+// TestDynamicTaskPrompt_UnresolvedRoleSensitiveParamsStayFindFirst verifies
+// unresolved role-sensitive values keep Dynamic prompts on the find-first path.
+func TestDynamicTaskPrompt_UnresolvedRoleSensitiveParamsStayFindFirst(t *testing.T) {
 	tests := []struct {
 		name   string
 		task   evalTask
@@ -1419,15 +1411,16 @@ func TestDynamicRepositoryFileCRUDPrompt_UsesFilePathFromOperation(t *testing.T)
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
-		`"action":"repository.file_create"`,
-		`"file_path":"tmp/eval-crud.txt"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"branch":"feature/eval"`,
-		`"content":"Initial content for repository file CRUD"`,
-		`"commit_message":"Evaluation create tmp/eval-crud.txt"`,
+		"first call gitlab_find_action",
+		"Use the returned result ID, input_schema, required_params, and example",
+		"tmp/eval-crud.txt",
+		"feature/eval",
+		"my-org/tools/gitlab-mcp-server",
 	})
-	if strings.Contains(prompt, `"file_path":"my-org/tools/gitlab-mcp-server"`) {
-		t.Fatalf("taskPromptForSurface() = %q, file_path must not use project path", prompt)
+	for _, unwanted := range []string{`"action":"repository.file_create"`, `"file_path":"my-org/tools/gitlab-mcp-server"`, "repository.file_create"} {
+		if strings.Contains(prompt, unwanted) {
+			t.Fatalf("taskPromptForSurface() = %q, want no exact file CRUD content %q", prompt, unwanted)
+		}
 	}
 }
 
@@ -1499,14 +1492,20 @@ func TestNormalizeTasksForDynamicRoutes_RewritesActionSteps(t *testing.T) {
 	}}
 
 	normalized := normalizeTasksForDynamicRoutes(tasks, routes)
-	if normalized[0].ExpectedTool != dynamicExecuteActionTool || normalized[0].ExpectedAction != "project.get" {
+	if normalized[0].ExpectedTool != dynamicFindTool || normalized[0].ExpectedAction != "" {
 		t.Fatalf("top-level expectation = %s/%s", normalized[0].ExpectedTool, normalized[0].ExpectedAction)
 	}
-	if normalized[0].Steps[0].ExpectedTool != dynamicExecuteActionTool || normalized[0].Steps[0].ExpectedAction != "server.health_check" {
+	if len(normalized[0].Steps) != 4 {
+		t.Fatalf("steps = %+v, want find/execute pairs", normalized[0].Steps)
+	}
+	if normalized[0].Steps[0].ExpectedTool != dynamicFindTool || normalized[0].Steps[0].ExpectedAction != "" {
 		t.Fatalf("first step = %+v", normalized[0].Steps[0])
 	}
-	if normalized[0].Steps[1].ExpectedTool != dynamicExecuteActionTool || normalized[0].Steps[1].ExpectedAction != "repository.file_get" {
+	if normalized[0].Steps[1].ExpectedTool != dynamicExecuteActionTool || normalized[0].Steps[1].ExpectedAction != "server.health_check" {
 		t.Fatalf("second step = %+v", normalized[0].Steps[1])
+	}
+	if normalized[0].Steps[2].ExpectedTool != dynamicFindTool || normalized[0].Steps[3].ExpectedAction != "repository.file_get" {
+		t.Fatalf("remaining steps = %+v", normalized[0].Steps[2:])
 	}
 }
 
@@ -1601,6 +1600,45 @@ func TestDynamicDiscoveryResult_Find(t *testing.T) {
 		if !strings.Contains(find, want) {
 			t.Fatalf("find result = %s, want %q", find, want)
 		}
+	}
+}
+
+// TestAppendLookupFollowup_DynamicFindUsesLiveMCPTool verifies live dynamic
+// discovery calls exercise the registered MCP tool instead of bypassing it.
+func TestAppendLookupFollowup_DynamicFindUsesLiveMCPTool(t *testing.T) {
+	client, cleanup, clientErr := newMockGitLabClient()
+	if clientErr != nil {
+		t.Fatalf("newMockGitLabClient() error = %v", clientErr)
+	}
+	defer cleanup()
+	session, closeSession, _, routes, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic)
+	if sessionErr != nil {
+		t.Fatalf("buildCatalogSession() error = %v", sessionErr)
+	}
+	defer closeSession()
+
+	runner := &modelRunner{mcpSession: session}
+	result := &taskResult{}
+	followups := []modelContentBlock{}
+	runner.appendLookupFollowup(t.Context(), lookupFollowupContext{
+		routes:    routes,
+		toolUse:   modelContentBlock{ID: "find-1", Name: dynamicFindTool, Input: map[string]any{"query": "project get", "limit": 1}},
+		result:    result,
+		followups: &followups,
+		dynamic:   true,
+	})
+
+	if len(followups) != 1 || followups[0].IsError {
+		t.Fatalf("followups = %#v, want one successful dynamic find result", followups)
+	}
+	if !strings.Contains(followups[0].Content, actionProjectGet) {
+		t.Fatalf("dynamic find content = %s, want %s", followups[0].Content, actionProjectGet)
+	}
+	if len(result.Trace.Events) != 1 || result.Trace.Events[0].MCP == nil {
+		t.Fatalf("trace events = %#v, want MCP exchange", result.Trace.Events)
+	}
+	if result.Trace.Events[0].MCP.Request.Name != dynamicFindTool {
+		t.Fatalf("MCP request = %#v, want %s", result.Trace.Events[0].MCP.Request, dynamicFindTool)
 	}
 }
 
@@ -2488,14 +2526,16 @@ func TestDynamicSingleTaskPrompt_ProjectPathUsesProjectID(t *testing.T) {
 
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	required := []string{
-		`"action":"issue.update"`,
-		`"project_id":"my-org/tools/gitlab-mcp-server"`,
-		`"issue_iid":10`,
-		`"state_event":"close"`,
-		"If the exact input object shows project_id",
-		"do not add params.full_path, params.path, or remote_url",
+		"first call gitlab_find_action",
+		"Use the returned result ID, input_schema, required_params, and example",
+		"my-org/tools/gitlab-mcp-server",
+		"params.project_id",
+		"not params.full_path, params.path, or remote_url",
 	}
 	requireContainsAll(t, "taskPromptForSurface()", prompt, required)
+	if strings.Contains(prompt, `"action":"issue.update"`) || strings.Contains(prompt, "issue.update") {
+		t.Fatalf("taskPromptForSurface() = %q, want no exact issue.update action", prompt)
+	}
 }
 
 func assertTaskPromptContains(t *testing.T, prompt string, snippets ...string) {
@@ -2639,12 +2679,16 @@ func TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic(t *testing.T) {
 
 	prompt := taskPromptForSurface(task, "dynamic")
 	requireContainsAll(t, "taskPromptForSurface(dynamic)", prompt, []string{
-		"Dynamic workflow plan:",
-		"action=package.publish_directory",
-		"Use the returned published[].url values as links[].url",
-		"set each links[].link_type to \"package\"",
-		"do not send direct_asset_path or filepath",
+		"For each of the 3 GitLab catalog operations",
+		"first call gitlab_find_action",
+		"Use the returned result ID, input_schema, required_params, and example",
+		"Do not use action IDs from memory",
 	})
+	for _, unwanted := range []string{"Dynamic workflow plan:", "package.publish_directory", "release.link_create_batch"} {
+		if strings.Contains(prompt, unwanted) {
+			t.Fatalf("taskPromptForSurface(dynamic) = %q, want no exact action guidance %q", prompt, unwanted)
+		}
+	}
 }
 
 // TestTaskPrompt_MergeRequestTimeEmojiUsesExactOrder verifies TaskPrompt when merge request time emoji uses exact order.

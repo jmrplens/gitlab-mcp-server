@@ -1201,11 +1201,28 @@ func effectiveFirstOutcome(result taskResult) (toolOK, actionOK, firstPassOK boo
 	if len(steps) == 0 {
 		return false, false, false
 	}
+	for _, step := range firstOutcomeCandidateSteps(steps) {
+		if result.FirstTool != step.ExpectedTool {
+			continue
+		}
+		return true, result.FirstAction == step.ExpectedAction, result.FirstPass
+	}
 	first := steps[0]
 	toolOK = result.FirstTool == first.ExpectedTool
 	actionOK = result.FirstAction == first.ExpectedAction
 	firstPassOK = result.FirstPass
 	return toolOK, actionOK, firstPassOK
+}
+
+func firstOutcomeCandidateSteps(steps []evalStep) []evalStep {
+	candidates := make([]evalStep, 0, len(steps))
+	for _, step := range steps {
+		candidates = append(candidates, step)
+		if !step.OptionalStep {
+			break
+		}
+	}
+	return candidates
 }
 
 // percent converts a count and total into a percentage, treating empty samples as complete.
@@ -1226,5 +1243,8 @@ func boolText(value bool) string {
 
 // escapeTable escapes Markdown table separators in report cells.
 func escapeTable(value string) string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.ReplaceAll(value, "\r", "\n")
+	value = strings.ReplaceAll(value, "\n", "<br>")
 	return strings.ReplaceAll(value, "|", "\\|")
 }

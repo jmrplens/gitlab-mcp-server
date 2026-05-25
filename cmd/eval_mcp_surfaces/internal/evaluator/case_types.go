@@ -83,6 +83,7 @@ type ExpectedStep struct {
 	RequiredParams  []string
 	OptionalParams  []string
 	ForbiddenParams []string
+	OptionalStep    bool
 	Destructive     bool
 	Simulation      string
 	AllowedRepairs  []string

@@ -624,11 +624,25 @@ func publishEffectiveTraceOutcome(trace taskTrace, _ string) (toolOK, actionOK, 
 	if len(trace.Expected) == 0 {
 		return false, false, false
 	}
+	for _, expected := range publishFirstOutcomeCandidateSteps(trace.Expected) {
+		if trace.Summary.FirstTool != expected.Tool {
+			continue
+		}
+		return true, trace.Summary.FirstAction == expected.Action, trace.Summary.FirstPass
+	}
 	first := trace.Expected[0]
-	toolOK = trace.Summary.FirstTool == first.Tool
-	actionOK = trace.Summary.FirstAction == first.Action
-	firstPassOK = trace.Summary.FirstPass
-	return toolOK, actionOK, firstPassOK
+	return trace.Summary.FirstTool == first.Tool, trace.Summary.FirstAction == first.Action, trace.Summary.FirstPass
+}
+
+func publishFirstOutcomeCandidateSteps(steps []traceExpectedStep) []traceExpectedStep {
+	candidates := make([]traceExpectedStep, 0, len(steps))
+	for _, step := range steps {
+		candidates = append(candidates, step)
+		if !step.OptionalStep {
+			break
+		}
+	}
+	return candidates
 }
 
 // metrics handles metrics for publishTraceAccumulator.

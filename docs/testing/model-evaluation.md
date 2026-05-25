@@ -56,6 +56,20 @@ and their `{action, params}` call shapes. Reading this manifest is useful for
 capability-discovery tasks, but ordinary task success is measured by the final
 GitLab operation, not by whether the model read the manifest first.
 
+Dynamic Docker results use the same typed cases and presets as meta mode, but
+ordinary GitLab operation steps are projected into a `find -> execute` sequence.
+For each expected `gitlab_execute_action` operation, the evaluator first expects
+`gitlab_find_action` with a natural-language query, validates that the find
+result includes the target action, and then validates the follow-up execute call.
+Capability bridge steps remain direct bridge-tool calls because they represent
+MCP client capability access rather than GitLab catalog operations.
+
+This means the aggregate Dynamic success rate now covers the discovery/ranker
+path, canonical action selection from find results, execute input shape,
+confirmation handling, MCP execution, and multi-step state transfer together.
+Use traces to separate a bad find query or missing finder result from a later
+execute-action parameter failure.
+
 ### Schema Evaluation
 
 Schema evaluation calls real model providers with the MCP tool catalog, but it
@@ -143,16 +157,18 @@ the CE wrapper.
 
 Artifacts are written under `dist/evaluation/surfaces/<timestamp>-<surface>-docker/`.
 The timestamp is captured once at startup and reused for every report, trace,
-fixture, and log file in that run. By default the wrapper uses the current
-four-model matrix:
+fixture, and log file in that run. By default the wrapper uses the stable
+economy matrix:
 
 ```text
-anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash
+anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash
 ```
 
-Set `EVAL_SURFACE_MODELS` to override the model matrix, `EVAL_SURFACE_OUT_ROOT`
-to change the artifact root, or `EVAL_SURFACE_KEEP_DOCKER=1` to leave the Docker
-GitLab instance running for inspection after the run.
+Set `EVAL_SURFACE_MODELS` to override the model matrix. `google:gemini-flash-latest`
+is an alias resolved by Google to the latest Gemini Flash model available to the
+API key; use ListModels before pinning a different Google model ID. Set
+`EVAL_SURFACE_OUT_ROOT` to change the artifact root, or `EVAL_SURFACE_KEEP_DOCKER=1`
+to leave the Docker GitLab instance running for inspection after the run.
 
 The Docker fixture base must contain all resources needed by successful tasks.
 If a task is not intentionally testing an error, missing GitLab state is treated
@@ -173,12 +189,12 @@ as harness noise and should be fixed in fixtures before judging the model.
 | Tool calls emitted              | Number of tool calls emitted by the model.                                                                                           |
 | MCP bridge calls                | Calls to evaluator bridge tools that represent MCP client capability access, such as reading resources or prompts.                   |
 
-For clear single-operation tasks, the target is `model_calls=1` and
-`tool_calls=1`. Extra calls are acceptable only when the prompt is genuinely
-ambiguous, the task is multi-step, or a real GitLab error requires recovery.
-For exact dynamic tasks, an extra `gitlab_find_action` or schema lookup usually
-means the tool descriptions are costing context or calls; for ambiguous dynamic
-tasks, using `gitlab_find_action` is expected.
+For clear single-operation meta tasks, the target is `model_calls=1` and
+`tool_calls=1`. For Dynamic tasks, one GitLab operation normally requires two
+tool calls: `gitlab_find_action` followed by `gitlab_execute_action`. Extra calls
+beyond the expected find/execute pair are acceptable only when the prompt is
+genuinely ambiguous, the task is multi-step, or a real GitLab error requires
+recovery.
 
 ## Failure Categories
 
@@ -201,14 +217,14 @@ The evaluator supports several provider families through adapters. A model is
 compatible when it can receive the tool catalog, emit tool calls, preserve tool
 call IDs across repair turns, and accept MCP-shaped JSON Schema.
 
-| Provider  | Example model                          | Compatibility expectation                                             |
-| --------- | -------------------------------------- | --------------------------------------------------------------------- |
-| Anthropic | `anthropic:claude-sonnet-4-6`          | Supported.                                                            |
-| Anthropic | `anthropic:claude-haiku-4-5-20251001`  | Supported.                                                            |
-| Google    | `google:gemini-3.1-flash-lite-preview` | Supported with validated function-calling mode.                       |
-| OpenAI    | `openai:gpt-5.4-mini`                  | Supported.                                                            |
-| OpenAI    | `openai:gpt-5.4-nano`                  | Supported.                                                            |
-| Qwen      | `qwen:qwen3.6-flash`                   | Supported through the OpenAI-compatible adapter using `QWEN_API_KEY`. |
+| Provider  | Example model                         | Compatibility expectation                                                 |
+| --------- | ------------------------------------- | ------------------------------------------------------------------------- |
+| Anthropic | `anthropic:claude-sonnet-4-6`         | Supported.                                                                |
+| Anthropic | `anthropic:claude-haiku-4-5-20251001` | Supported.                                                                |
+| Google    | `google:gemini-flash-latest`          | Supported with validated function-calling mode; resolves to latest Flash. |
+| OpenAI    | `openai:gpt-5.4-mini`                 | Supported.                                                                |
+| OpenAI    | `openai:gpt-5.4-nano`                 | Supported.                                                                |
+| Qwen      | `qwen:qwen3.6-flash`                  | Supported through the OpenAI-compatible adapter using `QWEN_API_KEY`.     |
 
 Published percentages belong in [AI Model Evaluation Results](model-results.md),
 not in this conceptual guide.
@@ -225,6 +241,11 @@ running broader destructive evaluations.
 For every failed model run, read the trace JSON in the report's `.traces/`
 directory. The trace records the system prompt, user prompt, emitted tool call,
 validation error, MCP result, and any repair attempt.
+
+In live Docker runs with `--execute-tools`, validated `gitlab_execute_action`
+calls and model-initiated `gitlab_find_action` calls are recorded as MCP
+`CallTool` exchanges in the trace. Simulated tool results should only appear for
+offline/schema runs or explicitly simulated failure scenarios.
 
 ## Why Docker Mode Is Valuable
 

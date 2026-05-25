@@ -311,7 +311,7 @@ func TestNormalizeTasksForCatalog_RewritesTopLevelAndStepRoutes(t *testing.T) {
 	}}
 	dynamicRoutes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {"project.get": toolutil.ActionRoute{}, actionDiscoverProjectResolve: toolutil.ActionRoute{}}}
 	dynamic := normalizeTasksForCatalog(tasks, dynamicRoutes, "dynamic")
-	if dynamic[0].ExpectedTool != dynamicExecuteActionTool || dynamic[0].ExpectedAction != "project.get" || dynamic[0].Steps[1].ExpectedAction != actionDiscoverProjectResolve {
+	if dynamic[0].ExpectedTool != dynamicFindTool || dynamic[0].ExpectedAction != "" || len(dynamic[0].Steps) != 4 || dynamic[0].Steps[1].ExpectedAction != "project.get" || dynamic[0].Steps[3].ExpectedAction != actionDiscoverProjectResolve {
 		t.Fatalf("dynamic normalized = %+v", dynamic[0])
 	}
 	if tasks[0].Steps[0].ExpectedTool != "gitlab_project" {

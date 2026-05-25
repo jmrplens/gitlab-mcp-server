@@ -184,7 +184,8 @@ func taskRoutesAvailable(task evalTask, routes map[string]toolutil.ActionMap, en
 // standaloneToolAvailableInLiveEvaluator reports whether standalone tool available in live evaluator.
 func standaloneToolAvailableInLiveEvaluator(tool string) bool {
 	switch tool {
-	case "gitlab_discover_project",
+	case dynamicFindTool,
+		"gitlab_discover_project",
 		"gitlab_interactive_issue_create",
 		"gitlab_interactive_mr_create",
 		"gitlab_interactive_project_create",
@@ -670,16 +671,45 @@ func normalizeTasksForDynamicRoutes(tasks []evalTask, routes map[string]toolutil
 	out := make([]evalTask, len(tasks))
 	copy(out, tasks)
 	for i := range out {
-		out[i].ExpectedTool, out[i].ExpectedAction = normalizeExpectedDynamicRoute(out[i].ExpectedTool, out[i].ExpectedAction, routes)
+		steps := taskSteps(out[i])
+		normalized := make([]evalStep, 0, len(steps))
+		for _, step := range steps {
+			step.ExpectedTool, step.ExpectedAction = normalizeExpectedDynamicRoute(step.ExpectedTool, step.ExpectedAction, routes)
+			normalized = append(normalized, step)
+		}
+		out[i].Steps = expandDynamicFindFirstSteps(normalized)
 		if len(out[i].Steps) == 0 {
+			out[i].ExpectedTool, out[i].ExpectedAction = "", ""
 			continue
 		}
-		out[i].Steps = slices.Clone(out[i].Steps)
-		for j := range out[i].Steps {
-			out[i].Steps[j].ExpectedTool, out[i].Steps[j].ExpectedAction = normalizeExpectedDynamicRoute(out[i].Steps[j].ExpectedTool, out[i].Steps[j].ExpectedAction, routes)
-		}
+		first := out[i].Steps[0]
+		out[i].ExpectedTool = first.ExpectedTool
+		out[i].ExpectedAction = first.ExpectedAction
+		out[i].RequiredParams = slices.Clone(first.RequiredParams)
+		out[i].OptionalParams = slices.Clone(first.OptionalParams)
+		out[i].Destructive = first.Destructive
+		out[i].Simulation = first.Simulation
 	}
 	return out
+}
+
+func expandDynamicFindFirstSteps(steps []evalStep) []evalStep {
+	expanded := make([]evalStep, 0, len(steps)*2)
+	for _, step := range steps {
+		if dynamicExecuteStep(step) {
+			expanded = append(expanded, dynamicFindStep())
+		}
+		expanded = append(expanded, step)
+	}
+	return expanded
+}
+
+func dynamicExecuteStep(step evalStep) bool {
+	return step.ExpectedTool == dynamicExecuteActionTool && step.ExpectedAction != ""
+}
+
+func dynamicFindStep() evalStep {
+	return evalStep{ExpectedTool: dynamicFindTool, RequiredParams: []string{"query"}}
 }
 
 // normalizeExpectedDynamicRoute maps a fixture's catalog route expectation to

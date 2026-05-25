@@ -28,7 +28,7 @@ func systemPromptForTask(task evalTask, toolSurface string) string {
 
 // dynamicSystemPrompt guides models through the low-token dynamic tool surface.
 func dynamicSystemPrompt(_ string) string {
-	return `You are evaluating GitLab MCP dynamic tool mode. Use the provided tools only. GitLab operations are executed through gitlab_find_action and gitlab_execute_action; if MCP capability bridge tools are provided, they expose MCP resources, prompts, completions, and capability metadata for inspecting the configured server surface. Catalog GitLab operations are not directly visible as individual tools. Use gitlab_find_action before gitlab_execute_action whenever the exact canonical action ID or exact params schema is not already known from a prior find result. Execute the requested GitLab operation with gitlab_execute_action using {"action":"domain.action","params":{...}} and only parameter names shown in the input_schema. When input_schema names project_id, GitLab namespace paths like group/project go in params.project_id; do not substitute params.full_path, params.path, or remote_url. Destructive actions require top-level confirm:true on gitlab_execute_action, not params.confirm. If the task gives all required values and the exact canonical action ID is clear from context, call gitlab_execute_action directly. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
+	return `You are evaluating GitLab MCP dynamic tool mode. Use the provided tools only. GitLab catalog operations are executed through a find-then-execute workflow: call gitlab_find_action first, then call gitlab_execute_action using the canonical action ID and input_schema returned by that find result. Catalog GitLab operations are not directly visible as individual tools, and this evaluation expects gitlab_find_action before every gitlab_execute_action call. MCP capability bridge tools expose resources, prompts, completions, and capability metadata; use those bridge tools directly for capability/resource/prompt/completion inspection steps. Execute GitLab operations with gitlab_execute_action using {"action":"domain.action","params":{...}} and only parameter names shown in the selected input_schema. When input_schema names project_id, GitLab namespace paths like group/project go in params.project_id; do not substitute params.full_path, params.path, or remote_url. Destructive actions require top-level confirm:true on gitlab_execute_action, not params.confirm. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. Do not invent tools, action IDs, or parameter names. Return tool calls only; do not answer with explanatory text.`
 }
 
 // taskPromptForSurface returns task guidance for the selected tool catalog.
@@ -37,13 +37,50 @@ func taskPromptForSurface(task evalTask, toolSurface string) string {
 	if !isDynamicEvalSurface(toolSurface) {
 		return taskPrompt(task)
 	}
-	prompt := dynamicConfirmPrompt(taskPrompt(task))
-	exactPreamble := dynamicExactCallPreamble(task)
-	if exactPreamble == "" {
-		exactPreamble = strings.TrimSpace(dynamicFirstStepGuidance(task))
+	return dynamicTaskPrompt(task)
+}
+
+func dynamicTaskPrompt(task evalTask) string {
+	destructive := "No"
+	if taskHasDestructiveStep(task) {
+		destructive = "Yes; when executing the destructive action, include top-level confirm:true on gitlab_execute_action."
 	}
-	exactPreamble = joinNonEmpty("\n\n", exactPreamble, dynamicWorkflowPlanPreamble(task))
-	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_action, and any MCP capability bridge tools provided for this run. Use bridge tools directly for capability, resource, prompt, and completion inspection steps. Treat any catalog route as a canonical action ID for gitlab_execute_action. For multi-step tasks with a Dynamic workflow plan, follow that plan in order and use gitlab_find_action only if an action ID or params schema is absent from the plan. Otherwise, use gitlab_find_action before executing when an action ID or params schema is not exact. Any final GitLab operation must be a gitlab_execute_action call with action set to the canonical domain.action ID and params limited to the selected action input_schema. For destructive operations, put confirm:true at the top level of gitlab_execute_action arguments; do not put confirm inside params.")
+	steps := taskSteps(task)
+	catalogOperations := countDynamicExecuteSteps(steps)
+	workflow := "For the next GitLab catalog operation in this task, first call gitlab_find_action with a natural-language query for the requested operation. Use the returned result ID, input_schema, required_params, and example to build the following gitlab_execute_action call. Do not call gitlab_execute_action before a successful gitlab_find_action result for that operation."
+	if catalogOperations == 0 && dynamicBridgeOnlyTask(steps) {
+		workflow = "Use MCP capability bridge tools directly when the task is only about MCP capabilities, resources, prompts, or completions."
+	}
+	if catalogOperations > 0 {
+		operationWord := "operation"
+		if catalogOperations > 1 {
+			operationWord = "operations"
+		}
+		workflow = fmt.Sprintf("For each of the %d GitLab catalog %s in this task, first call gitlab_find_action with a natural-language query for the next requested operation. Use the returned result ID, input_schema, required_params, and example to build the following gitlab_execute_action call. Do not call gitlab_execute_action before a successful gitlab_find_action result for that operation.", catalogOperations, operationWord)
+	}
+	return fmt.Sprintf("Task %s: %s\nDestructive: %s\nDynamic workflow: %s Emit one MCP tool call at a time, wait for its result, then continue with the next requested step in order. If gitlab_find_action returns multiple candidates, choose the result whose ID and required_params match the user's requested GitLab operation. Use MCP capability bridge tools directly for capability, resource, prompt, and completion inspection steps; do not use gitlab_find_action for those bridge-only steps. When a selected schema requires project_id, put a GitLab namespace path like group/project in params.project_id, not params.full_path, params.path, or remote_url. If a task gives a git remote URL, find and execute the project discovery action before using the resolved project values. Include only parameters requested by the task or required by the selected input_schema, and omit optional filters unless the task explicitly asks for them. Do not use action IDs from memory; use the action ID returned by the immediately preceding gitlab_find_action result. Return tool calls only; do not answer with explanatory text.", task.ID, task.Prompt, destructive, workflow)
+}
+
+func dynamicBridgeOnlyTask(steps []evalStep) bool {
+	if len(steps) == 0 {
+		return false
+	}
+	for _, step := range steps {
+		if !expectedCapabilityBridgeStep(step) {
+			return false
+		}
+	}
+	return true
+}
+
+func countDynamicExecuteSteps(steps []evalStep) int {
+	count := 0
+	for _, step := range steps {
+		if step.ExpectedAction != "" {
+			count++
+		}
+	}
+	return count
 }
 
 func taskWithRenderedCasePrompt(task evalTask) evalTask {
@@ -75,99 +112,6 @@ func joinNonEmpty(separator string, values ...string) string {
 		}
 	}
 	return strings.Join(parts, separator)
-}
-
-// dynamicWorkflowPlanPreamble builds dynamic workflow plan preamble for evaluator prompts.
-func dynamicWorkflowPlanPreamble(task evalTask) string {
-	steps := taskSteps(task)
-	if len(steps) <= 1 {
-		return ""
-	}
-	lines := []string{"Dynamic workflow plan:"}
-	for index, step := range steps {
-		if step.ExpectedTool != dynamicExecuteActionTool || step.ExpectedAction == "" {
-			return ""
-		}
-		required := "none"
-		if len(step.RequiredParams) > 0 {
-			required = strings.Join(step.RequiredParams, ", ")
-		}
-		parts := []string{
-			"action=" + step.ExpectedAction,
-			"required_params=" + required,
-		}
-		if optional := dynamicWorkflowOptionalParams(step.OptionalParams); len(optional) > 0 {
-			parts = append(parts, "optional_params="+strings.Join(optional, ", "))
-		}
-		if step.Destructive {
-			parts = append(parts, "destructive_confirm=true")
-		}
-		lines = append(lines, fmt.Sprintf("%d. %s", index+1, strings.Join(parts, "; ")))
-	}
-	lines = append(lines, "Use this order. The listed action IDs and params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions. Execute each action directly when its required values are present. Include optional params only when the task prompt asks for their behavior. Values named *_id that are produced by earlier steps must be copied exactly from the preceding tool result; do not shorten, reconstruct, or edit opaque ID strings such as discussion_id. For plan lines requiring project_id, a GitLab namespace path like group/project goes in params.project_id, not params.full_path, params.path, or remote_url. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_action call.")
-	return strings.Join(lines, "\n")
-}
-
-func dynamicWorkflowOptionalParams(params []string) []string {
-	optional := make([]string, 0, len(params))
-	for _, param := range params {
-		if param == "confirm" {
-			continue
-		}
-		optional = append(optional, param)
-	}
-	return optional
-}
-
-// joinDynamicPrompt builds join dynamic prompt for evaluator prompts.
-func joinDynamicPrompt(preamble, prompt, override string) string {
-	parts := make([]string, 0, 3)
-	if preamble != "" {
-		parts = append(parts, preamble)
-	}
-	parts = append(parts, prompt, override)
-	return strings.Join(parts, "\n\n")
-}
-
-// dynamicExactCallPreamble builds dynamic exact call preamble for evaluator prompts.
-func dynamicExactCallPreamble(task evalTask) string {
-	steps := taskSteps(task)
-	if len(steps) != 1 || (!usesExactSingleToolPrompt(task, steps[0]) && !usesCompactExactPrompt(steps[0])) {
-		return ""
-	}
-	guidance := strings.TrimSpace(dynamicFirstStepGuidance(task))
-	return strings.Replace(guidance, "Dynamic first-step exact call:", "Dynamic exact call:", 1)
-}
-
-// dynamicConfirmPrompt builds dynamic confirm prompt for evaluator prompts.
-func dynamicConfirmPrompt(prompt string) string {
-	replacer := strings.NewReplacer(
-		"include confirm:true in params for each destructive tool call", "include top-level confirm:true on gitlab_execute_action for each destructive tool call",
-		"Include confirm:true in params for every destructive tool call", "Include top-level confirm:true on gitlab_execute_action for every destructive tool call",
-		"require params.confirm=true", "require top-level confirm:true",
-		"requires params.confirm=true", "requires top-level confirm:true",
-		"with params.confirm=true", "with top-level confirm:true",
-		"confirm must be inside params, never a top-level field", "confirm must be top-level on gitlab_execute_action, never inside params",
-	)
-	return replacer.Replace(prompt)
-}
-
-// dynamicFirstStepGuidance builds dynamic first step guidance for evaluator prompts.
-func dynamicFirstStepGuidance(task evalTask) string {
-	steps := taskSteps(task)
-	if len(steps) == 0 || steps[0].ExpectedTool != dynamicExecuteActionTool || steps[0].ExpectedAction == "" {
-		return ""
-	}
-	params, provenances := exactCallParams(steps[0], task.Prompt, false)
-	if !exactCallParamsAreSafe(provenances) {
-		return ""
-	}
-	arguments := actionGuidanceExample(steps[0], params)
-	data, err := marshalGuidanceExample(arguments)
-	if err != nil {
-		return ""
-	}
-	return "\n\nDynamic first-step exact call: " + data + ". Use this as the first GitLab operation before any later workflow step; action without params is invalid."
 }
 
 // dynamicExampleParamValue derives dynamic example param value from task and schema inputs.

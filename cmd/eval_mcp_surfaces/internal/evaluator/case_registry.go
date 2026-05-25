@@ -107,6 +107,7 @@ func validateEvalCaseSteps(evalCase EvalCase, routes map[string]toolutil.ActionM
 		if step.Destructive && !hasParam(step.OptionalParams, "confirm") && !hasParam(step.RequiredParams, "confirm") {
 			problems = append(problems, stepLabel+" is destructive but does not list confirm as a parameter")
 		}
+		problems = append(problems, validateOptionalStepScope(evalCase, stepIndex, stepLabel)...)
 		if routes == nil || step.ExpectedAction == "" {
 			continue
 		}
@@ -115,6 +116,21 @@ func validateEvalCaseSteps(evalCase EvalCase, routes map[string]toolutil.ActionM
 		}
 	}
 	return problems
+}
+
+func validateOptionalStepScope(evalCase EvalCase, stepIndex int, stepLabel string) []string {
+	step := evalCase.Steps[stepIndex]
+	if !step.OptionalStep {
+		return nil
+	}
+	if !expectedCapabilityBridgeStep(step) {
+		return []string{stepLabel + " marks a non-capability bridge step as optional"}
+	}
+	nextIndex := stepIndex + 1
+	if nextIndex >= len(evalCase.Steps) || !expectedCapabilityBridgeStep(evalCase.Steps[nextIndex]) {
+		return []string{stepLabel + " optional capability bridge step must be followed by another capability bridge step"}
+	}
+	return nil
 }
 
 func evalCaseMatchesPreset(evalCase EvalCase, preset string) bool {

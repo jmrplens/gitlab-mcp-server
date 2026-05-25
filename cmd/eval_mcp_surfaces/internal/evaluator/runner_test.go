@@ -111,6 +111,38 @@ func TestEvaluatePreparedCase_UsesRenderedPromptAndTypedSteps(t *testing.T) {
 	}
 }
 
+func TestEvaluateTask_AcceptsOptionalCapabilityBridgePreludeSkip(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("resources", resourceListTool, map[string]any{}),
+		toolUseResponse("tools", resourceReadTool, map[string]any{"uri": "gitlab://tools"}),
+	)
+	runner.mcpSession = newResourceLookupSessionForTest(t)
+	task := evalTask{ID: "MS-039", Steps: []evalStep{
+		{ExpectedTool: capabilityListTool, OptionalStep: true},
+		{ExpectedTool: resourceListTool},
+		{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}},
+	}}
+
+	result := runner.evaluateTask(t.Context(), task, nil, nil)
+
+	if !result.FinalSuccess || !result.FirstPass || result.RepairAttempted {
+		t.Fatalf("result = %+v, want first-pass success without repair", result)
+	}
+	toolOK, actionOK, firstPassOK := effectiveFirstOutcome(result)
+	if !toolOK || !actionOK || !firstPassOK {
+		t.Fatalf("effective first outcome = %t/%t/%t, want all true", toolOK, actionOK, firstPassOK)
+	}
+	if result.CompletedSteps != 3 || result.FirstTool != resourceListTool {
+		t.Fatalf("completed/first = %d/%s, want 3/%s", result.CompletedSteps, result.FirstTool, resourceListTool)
+	}
+	if !result.ResourceLookupUsed || result.ResourceCalls != 2 || result.CapabilityCalls != 2 {
+		t.Fatalf("bridge metrics = resource:%t resource_calls:%d capability_calls:%d, want two resource bridge calls", result.ResourceLookupUsed, result.ResourceCalls, result.CapabilityCalls)
+	}
+	if !strings.Contains(strings.Join(result.Notes, "; "), "accepted optional") {
+		t.Fatalf("notes = %v, want accepted optional note", result.Notes)
+	}
+}
+
 func hasPassedAssertion(results []CaseAssertionResult, assertionType CaseAssertionType) bool {
 	for _, result := range results {
 		if result.Type == assertionType && result.Passed {

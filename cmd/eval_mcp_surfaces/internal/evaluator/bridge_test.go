@@ -26,6 +26,12 @@ func TestAppendCapabilityBridgeTools_AddsSupportedBridgeSchemas(t *testing.T) {
 	if schema := got[capabilityListTool].InputSchema.(map[string]any); schema["additionalProperties"] != false {
 		t.Fatalf("capability schema = %#v, want strict object", schema)
 	}
+	if !strings.Contains(got[capabilityListTool].Description, "MCP server capability metadata") {
+		t.Fatalf("capability description = %q, want metadata guidance", got[capabilityListTool].Description)
+	}
+	if !strings.Contains(got[resourceListTool].Description, "valid first step for resource-manifest discovery") {
+		t.Fatalf("resource list description = %q, want resource-manifest guidance", got[resourceListTool].Description)
+	}
 	if required := strings.Join(stringSliceFromAny(t, got[completionTool].InputSchema.(map[string]any)["required"]), ","); required != "ref_type,argument_name" {
 		t.Fatalf("completion required = %q, want ref_type,argument_name", required)
 	}

@@ -560,11 +560,36 @@ func runModelEvaluationRound(ctx context.Context, run modelEvaluationRun, spec m
 		}
 	}
 	results := make([]taskResult, 0, len(run.tasks))
-	for _, task := range run.tasks {
+	for taskIndex, task := range run.tasks {
 		result := evaluateModelTaskAttempt(ctx, run, spec, runIndex, task, runner)
+		if taskIndex == 0 {
+			if err := fatalInitialProviderError(result); err != nil {
+				return nil, err
+			}
+		}
 		results = append(results, result)
 	}
 	return results, nil
+}
+
+func fatalInitialProviderError(result taskResult) error {
+	if result.FinalSuccess || result.ToolCalls > 0 || result.CompletedSteps > 0 {
+		return nil
+	}
+	for _, event := range result.Trace.Events {
+		if event.Kind != "model_error" || event.Provider == nil {
+			continue
+		}
+		switch event.Provider.ResponseStatus {
+		case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+			note := strings.TrimSpace(strings.Join(result.Notes, "; "))
+			if note == "" {
+				note = fmt.Sprintf("%s returned HTTP %d", event.Provider.Provider, event.Provider.ResponseStatus)
+			}
+			return fmt.Errorf("model provider %s failed before tool execution with HTTP %d: %s; verify --models/EVAL_MODELS and provider credentials before running the full corpus", result.Model, event.Provider.ResponseStatus, note)
+		}
+	}
+	return nil
 }
 
 func evaluateModelTaskAttempt(ctx context.Context, run modelEvaluationRun, spec modelSpec, runIndex int, task evalTask, runner *modelRunner) taskResult {

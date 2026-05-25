@@ -3,7 +3,7 @@ package evaluator
 func capabilityDiscoveryEvalCases() []EvalCase {
 	return []EvalCase{
 		capabilityEvalCase("MS-039", "Inspect the MCP capability bridge for this GitLab MCP server, list MCP resources, then read the unified tools manifest resource `gitlab://tools`.",
-			readStep(capabilityListTool, "", nil, nil),
+			optionalStep(readStep(capabilityListTool, "", nil, nil)),
 			readStep(resourceListTool, "", nil, nil),
 			readStep(resourceReadTool, "", params("uri"), nil),
 		),
@@ -21,6 +21,11 @@ func capabilityDiscoveryEvalCases() []EvalCase {
 			readStep(promptGetTool, "", params("name", "arguments"), nil),
 		),
 	}
+}
+
+func optionalStep(step ExpectedStep) ExpectedStep {
+	step.OptionalStep = true
+	return step
 }
 
 func capabilityEvalCase(id, prompt string, steps ...ExpectedStep) EvalCase {

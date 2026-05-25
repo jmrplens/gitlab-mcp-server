@@ -14,9 +14,11 @@ func TestValidateEvalCaseRegistry_DetectsInvalidDefinitions(t *testing.T) {
 		{ID: "EMPTY-STEPS", Prompt: "no steps"},
 		{ID: "BAD-DESTRUCTIVE", Prompt: "delete without confirm", Steps: []ExpectedStep{{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", Destructive: true}}},
 		{ID: "BAD-PRESET", Prompt: "bad preset", Presets: []EvalPreset{"unknown"}, Steps: []ExpectedStep{{ExpectedTool: "gitlab_user", ExpectedAction: "current"}}},
+		{ID: "BAD-OPTIONAL-ACTION", Prompt: "optional action", Steps: []ExpectedStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, OptionalStep: true}, {ExpectedTool: resourceListTool}}},
+		{ID: "BAD-OPTIONAL-TERMINAL", Prompt: "optional terminal", Steps: []ExpectedStep{{ExpectedTool: capabilityListTool, OptionalStep: true}}},
 	}
 	problems := strings.Join(validateEvalCaseRegistry(cases, nil), "\n")
-	for _, want := range []string{"duplicate ID", "empty prompt", "no expected steps", "does not list confirm", "unknown preset"} {
+	for _, want := range []string{"duplicate ID", "empty prompt", "no expected steps", "does not list confirm", "unknown preset", "non-capability bridge step as optional", "must be followed by another capability bridge step"} {
 		if !strings.Contains(problems, want) {
 			t.Fatalf("problems missing %q:\n%s", want, problems)
 		}

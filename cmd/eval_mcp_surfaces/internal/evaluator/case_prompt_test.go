@@ -44,16 +44,15 @@ func TestTaskPromptForSurface_DynamicDestructiveConfirmUsesTopLevel(t *testing.T
 	}
 }
 
-func TestTaskPromptForSurface_DynamicExactCallPreambleUsesRenderedPrompt(t *testing.T) {
+func TestTaskPromptForSurface_DynamicFindFirstPromptUsesRenderedPrompt(t *testing.T) {
 	evalCase := EvalCase{ID: "MT-PROMPT-005", PromptTemplate: CasePromptTemplate{Text: "Find project `{{ .Project.Path }}`."}}
 	task := taskFromCase(evalCase)
 	task.Prompt = ""
 	task.Steps = []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}}
 	task.Case.Prompt = "Find project `my-org/rendered`."
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	hasAction := strings.Contains(prompt, "project.get")
 	hasRenderedValue := strings.Contains(prompt, "rendered")
-	if !hasAction || !hasRenderedValue {
-		t.Fatalf("dynamic exact prompt hasAction=%t hasRenderedValue=%t prompt=%q", hasAction, hasRenderedValue, prompt)
+	if !hasRenderedValue || !strings.Contains(prompt, "first call gitlab_find_action") || strings.Contains(prompt, "project.get") {
+		t.Fatalf("dynamic find-first prompt rendered=%t prompt=%q", hasRenderedValue, prompt)
 	}
 }

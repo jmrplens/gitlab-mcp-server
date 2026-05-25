@@ -296,6 +296,7 @@ type traceExpectedStep struct {
 	Action         string   `json:"action,omitempty"`
 	RequiredParams []string `json:"required_params,omitempty"`
 	OptionalParams []string `json:"optional_params,omitempty"`
+	OptionalStep   bool     `json:"optional_step,omitempty"`
 	Destructive    bool     `json:"destructive"`
 	Simulation     string   `json:"simulation,omitempty"`
 }

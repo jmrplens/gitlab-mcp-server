@@ -339,6 +339,9 @@ func (r *modelRunner) handleAuxiliaryToolUse(ctx context.Context, auxCtx auxilia
 		r.appendLookupFollowup(ctx, lookupFollowupContext{task: auxCtx.task, steps: auxCtx.steps, stepIndex: stepIndex, toolUse: auxCtx.toolUse, budget: auxCtx.callBudget, routes: auxCtx.routes, result: auxCtx.result, followups: auxCtx.followups})
 		return true, false
 	}
+	if stepIndex < len(auxCtx.steps) && expectedDynamicFindStep(auxCtx.steps[stepIndex]) && isDynamicDiscovery(auxCtx.toolUse) {
+		return true, r.handleExpectedDynamicFindStep(ctx, auxCtx)
+	}
 	if isDynamicDiscovery(auxCtx.toolUse) {
 		r.appendLookupFollowup(ctx, lookupFollowupContext{task: auxCtx.task, steps: auxCtx.steps, stepIndex: stepIndex, toolUse: auxCtx.toolUse, budget: auxCtx.callBudget, routes: auxCtx.routes, result: auxCtx.result, followups: auxCtx.followups, dynamic: true})
 		return true, false
@@ -350,6 +353,99 @@ func (r *modelRunner) handleAuxiliaryToolUse(ctx context.Context, auxCtx auxilia
 		return true, false
 	}
 	return false, false
+}
+
+func (r *modelRunner) handleExpectedDynamicFindStep(ctx context.Context, auxCtx auxiliaryToolUseContext) bool {
+	stepIndex := auxCtx.state.stepIndex
+	step := auxCtx.steps[stepIndex]
+	validation := validateStepCallWithRoutes(step, auxCtx.toolUse.Name, auxCtx.toolUse.Input, auxCtx.routes)
+	recordStepAssertionResults(auxCtx.result, step, validation, stepIndex+1)
+	auxCtx.result.Trace.Events = append(auxCtx.result.Trace.Events, traceValidationEvent(auxCtx.result.ModelCalls, validation))
+	recordValidationAttempt(auxCtx.result, auxCtx.toolUse, validation, auxCtx.state)
+	if !validation.Valid {
+		return handleInvalidExpectedDynamicFindCall(auxCtx, step, validation)
+	}
+	auxCtx.state.lastInvalidFingerprint = ""
+	auxCtx.result.SchemaLookupUsed = true
+	payload, exchange, lookupErr := r.lookupToolResult(ctx, auxCtx.routes, auxCtx.toolUse, true)
+	if lookupErr == nil {
+		lookupErr = validateDynamicFindResult(auxCtx.steps, stepIndex, payload)
+	}
+	block := toolResultBlock(auxCtx.toolUse.ID, payload, lookupErr)
+	*auxCtx.followups = append(*auxCtx.followups, block)
+	if exchange != nil {
+		auxCtx.result.Trace.Events = append(auxCtx.result.Trace.Events, traceToolResultEventWithMCP(auxCtx.result.ModelCalls, block, exchange))
+	} else {
+		auxCtx.result.Trace.Events = append(auxCtx.result.Trace.Events, traceToolResultEvent(auxCtx.result.ModelCalls, block))
+	}
+	if lookupErr != nil {
+		auxCtx.result.Notes = append(auxCtx.result.Notes, lookupErr.Error())
+		return false
+	}
+	auxCtx.state.stepIndex++
+	auxCtx.result.CompletedSteps = auxCtx.state.stepIndex
+	if auxCtx.state.repairCount > 0 {
+		auxCtx.result.RepairSuccess = true
+	}
+	if auxCtx.state.stepIndex == len(auxCtx.steps) {
+		auxCtx.result.FinalSuccess = true
+		return true
+	}
+	return false
+}
+
+func handleInvalidExpectedDynamicFindCall(auxCtx auxiliaryToolUseContext, step evalStep, validation validationResult) bool {
+	if recordInvalidToolUse(auxCtx.result, auxCtx.state.stepIndex, validation, auxCtx.toolUse, auxCtx.state) {
+		return true
+	}
+	if auxCtx.repairAlreadySent {
+		return true
+	}
+	auxCtx.result.RepairAttempted = true
+	auxCtx.state.repairCount++
+	repairMessage := validationRepairMessage(auxCtx.task, step, validation, auxCtx.toolUse.Input)
+	block := toolResultBlock(auxCtx.toolUse.ID, repairMessage, errors.New(repairMessage))
+	*auxCtx.followups = append(*auxCtx.followups, block)
+	auxCtx.result.Trace.Events = append(auxCtx.result.Trace.Events, traceToolResultEvent(auxCtx.result.ModelCalls, block))
+	return false
+}
+
+func expectedDynamicFindStep(step evalStep) bool {
+	return step.ExpectedTool == dynamicFindTool && step.ExpectedAction == ""
+}
+
+func validateDynamicFindResult(steps []evalStep, stepIndex int, payload string) error {
+	expectedAction := nextDynamicExecuteAction(steps, stepIndex)
+	if expectedAction == "" || dynamicFindPayloadIncludesAction(payload, expectedAction) {
+		return nil
+	}
+	return fmt.Errorf("gitlab_find_action results did not include expected action %s; retry with a query that describes the requested GitLab operation", expectedAction)
+}
+
+func nextDynamicExecuteAction(steps []evalStep, stepIndex int) string {
+	if stepIndex+1 >= len(steps) {
+		return ""
+	}
+	next := steps[stepIndex+1]
+	if dynamicExecuteStep(next) {
+		return next.ExpectedAction
+	}
+	return ""
+}
+
+func dynamicFindPayloadIncludesAction(payload, expectedAction string) bool {
+	type dynamicFindResult struct {
+		ID string `json:"id"`
+	}
+	var output struct {
+		Results []dynamicFindResult `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(payload), &output); err == nil && len(output.Results) > 0 {
+		return slices.ContainsFunc(output.Results, func(result dynamicFindResult) bool {
+			return result.ID == expectedAction
+		})
+	}
+	return strings.Contains(payload, "`"+expectedAction+"`") || strings.Contains(payload, `"id":"`+expectedAction+`"`)
 }
 
 func handleNoToolUseResult(result *taskResult, state *modelEvaluationState, repairLimit int, steps []evalStep) bool {
@@ -372,6 +468,13 @@ func handleNoToolUseResult(result *taskResult, state *modelEvaluationState, repa
 func (r *modelRunner) handleExpectedCapabilityBridgeStep(ctx context.Context, bridgeCtx capabilityBridgeStepContext) bool {
 	step := bridgeCtx.steps[bridgeCtx.state.stepIndex]
 	validation := validateStepCallWithRoutes(step, bridgeCtx.toolUse.Name, bridgeCtx.toolUse.Input, bridgeCtx.routes)
+	if !validation.Valid {
+		var ok bool
+		step, validation, ok = bridgeCtx.acceptOptionalBridgeStep(step, validation)
+		if ok {
+			bridgeCtx.result.Notes = append(bridgeCtx.result.Notes, fmt.Sprintf("accepted optional %s skip before %s", bridgeCtx.steps[bridgeCtx.state.stepIndex-1].ExpectedTool, bridgeCtx.toolUse.Name))
+		}
+	}
 	recordStepAssertionResults(bridgeCtx.result, step, validation, bridgeCtx.state.stepIndex+1)
 	bridgeCtx.result.Trace.Events = append(bridgeCtx.result.Trace.Events, traceValidationEvent(bridgeCtx.result.ModelCalls, validation))
 	recordValidationAttempt(bridgeCtx.result, bridgeCtx.toolUse, validation, bridgeCtx.state)
@@ -398,6 +501,24 @@ func (r *modelRunner) handleExpectedCapabilityBridgeStep(ctx context.Context, br
 		return true
 	}
 	return false
+}
+
+func (bridgeCtx capabilityBridgeStepContext) acceptOptionalBridgeStep(step evalStep, validation validationResult) (evalStep, validationResult, bool) {
+	if !step.OptionalStep || validation.Valid {
+		return step, validation, false
+	}
+	nextIndex := bridgeCtx.state.stepIndex + 1
+	if nextIndex >= len(bridgeCtx.steps) || !expectedCapabilityBridgeStep(bridgeCtx.steps[nextIndex]) {
+		return step, validation, false
+	}
+	nextStep := bridgeCtx.steps[nextIndex]
+	nextValidation := validateStepCallWithRoutes(nextStep, bridgeCtx.toolUse.Name, bridgeCtx.toolUse.Input, bridgeCtx.routes)
+	if !nextValidation.Valid {
+		return step, validation, false
+	}
+	bridgeCtx.state.stepIndex = nextIndex
+	bridgeCtx.result.CompletedSteps = bridgeCtx.state.stepIndex
+	return nextStep, nextValidation, true
 }
 
 func handleInvalidCapabilityBridgeCall(bridgeCtx capabilityBridgeStepContext, step evalStep, validation validationResult) bool {
@@ -463,13 +584,26 @@ func (r *modelRunner) appendLookupFollowup(ctx context.Context, lookupCtx lookup
 			return
 		}
 	}
-	payload, lookupErr := lookupToolResult(ctx, lookupCtx.routes, lookupCtx.toolUse, lookupCtx.dynamic)
+	payload, exchange, lookupErr := r.lookupToolResult(ctx, lookupCtx.routes, lookupCtx.toolUse, lookupCtx.dynamic)
 	block := toolResultBlock(lookupCtx.toolUse.ID, payload, lookupErr)
 	*lookupCtx.followups = append(*lookupCtx.followups, block)
-	lookupCtx.result.Trace.Events = append(lookupCtx.result.Trace.Events, traceToolResultEvent(lookupCtx.result.ModelCalls, block))
+	if exchange != nil {
+		lookupCtx.result.Trace.Events = append(lookupCtx.result.Trace.Events, traceToolResultEventWithMCP(lookupCtx.result.ModelCalls, block, exchange))
+	} else {
+		lookupCtx.result.Trace.Events = append(lookupCtx.result.Trace.Events, traceToolResultEvent(lookupCtx.result.ModelCalls, block))
+	}
 	if lookupErr != nil {
 		lookupCtx.result.Notes = append(lookupCtx.result.Notes, lookupErr.Error())
 	}
+}
+
+func (r *modelRunner) lookupToolResult(ctx context.Context, routes map[string]toolutil.ActionMap, toolUse modelContentBlock, dynamic bool) (string, *traceMCPExchange, error) {
+	if dynamic && toolUse.Name == dynamicFindTool && r.mcpSession != nil {
+		result := r.mcpToolResult(ctx, toolUse)
+		return result.Content, result.MCP, result.Err
+	}
+	payload, err := lookupToolResult(ctx, routes, toolUse, dynamic)
+	return payload, nil, err
 }
 
 func lookupToolResult(ctx context.Context, routes map[string]toolutil.ActionMap, toolUse modelContentBlock, dynamic bool) (string, error) {
@@ -589,9 +723,6 @@ func callBudgetForTask(task evalTask, toolSurface string) taskCallBudget {
 		ExpectedSteps:         len(steps),
 		AllowedDiscoveryCalls: 0,
 		AllowedRepairCalls:    repairAttemptLimitForTask(toolSurface, len(steps)),
-	}
-	if isDynamicEvalSurface(toolSurface) && exactDynamicCallAvailable(task, steps) {
-		budget.SuppressDiscovery = true
 	}
 	budget.MaxCalls = max(budget.ExpectedSteps, budget.ExpectedSteps+budget.AllowedDiscoveryCalls+budget.AllowedRepairCalls)
 	return budget
@@ -1109,6 +1240,7 @@ func newTaskTrace(task evalTask, systemPrompt, userPrompt string) taskTrace {
 			Action:         step.ExpectedAction,
 			RequiredParams: slices.Clone(step.RequiredParams),
 			OptionalParams: slices.Clone(step.OptionalParams),
+			OptionalStep:   step.OptionalStep,
 			Destructive:    step.Destructive,
 			Simulation:     step.Simulation,
 		})

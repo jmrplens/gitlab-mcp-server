@@ -28,11 +28,11 @@ func appendCapabilityBridgeTools(catalog []modelTool, support mcpBridgeSupport) 
 	out := make([]modelTool, 0, len(catalog)+extra)
 	out = append(out, catalog...)
 	if support.Capabilities {
-		out = append(out, modelToolFromParts(capabilityListTool, "List the MCP server capabilities, server info, instructions, and evaluator bridge tools active for this run.", emptyObjectSchema()))
+		out = append(out, modelToolFromParts(capabilityListTool, "Inspect MCP server capability metadata, including server info, instructions, and evaluator bridge tools active for this run. Use this when the task asks about MCP capabilities or the bridge itself; use gitlab_list_resources directly when the task only needs resource URIs.", emptyObjectSchema()))
 	}
 	if support.Resources {
 		out = append(out,
-			modelToolFromParts(resourceListTool, "List MCP resources and resource templates exposed by this GitLab MCP server instance. Use this to discover resource URIs and URI templates before reading them.", emptyObjectSchema()),
+			modelToolFromParts(resourceListTool, "List MCP resources and resource templates exposed by this GitLab MCP server instance. Use this to discover resource URIs such as gitlab://tools and URI templates before reading them; it is a valid first step for resource-manifest discovery.", emptyObjectSchema()),
 			modelToolFromParts(resourceReadTool, "Read one MCP resource URI exposed by this GitLab MCP server instance. Use URIs returned by gitlab_list_resources, including gitlab://tools and concrete gitlab://tools/{id} values.", resourceReadSchema()),
 		)
 	}

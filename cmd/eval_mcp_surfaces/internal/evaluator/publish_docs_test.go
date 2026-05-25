@@ -115,6 +115,23 @@ func TestAggregatePublishRows_RepairSuccessUsesRepairAttempts(t *testing.T) {
 	}
 }
 
+func TestPublishEffectiveTraceOutcome_AcceptsOptionalCapabilityPreludeSkip(t *testing.T) {
+	trace := taskTrace{
+		Expected: []traceExpectedStep{
+			{Tool: capabilityListTool, OptionalStep: true},
+			{Tool: resourceListTool},
+			{Tool: resourceReadTool},
+		},
+		Summary: traceSummary{FirstTool: resourceListTool, FirstPass: true},
+	}
+
+	toolOK, actionOK, firstPassOK := publishEffectiveTraceOutcome(trace, config.ToolSurfaceDynamic)
+
+	if !toolOK || !actionOK || !firstPassOK {
+		t.Fatalf("publishEffectiveTraceOutcome() = %t/%t/%t, want all true", toolOK, actionOK, firstPassOK)
+	}
+}
+
 // TestCurrentGitReportMetadata_ReadsGitMetadata verifies optional Git metadata
 // collection reads .git files directly and returns branch plus short commit
 // information without invoking an external git binary.

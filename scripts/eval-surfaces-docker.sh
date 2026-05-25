@@ -124,7 +124,8 @@ output_root="${EVAL_SURFACE_OUT_ROOT:-dist/evaluation/surfaces}"
 gitlab_url="${EVAL_DOCKER_GITLAB_URL:-http://localhost:8929}"
 compose_file="${EVAL_DOCKER_COMPOSE_FILE:-test/e2e/docker-compose.yml}"
 go_bin="${GO_BIN:-go}"
-models="${EVAL_SURFACE_MODELS:-${EVAL_MODELS:-anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash}}"
+default_models="${EVAL_SURFACE_DEFAULT_MODELS:-anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash}"
+models="${EVAL_SURFACE_MODELS:-${EVAL_MODELS:-$default_models}}"
 requested_preset="${2:-${EVAL_SURFACE_PRESET:-${PRESET:-}}}"
 fixture_smoke=false
 if bool_enabled "${EVAL_SURFACE_FIXTURE_SMOKE:-${FIXTURE_SMOKE:-}}"; then

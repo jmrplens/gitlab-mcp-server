@@ -27,6 +27,11 @@ around `cmd/eval_mcp_surfaces`.
 | `dist/evaluation/mcp-surfaces/`                          | Generated reports, traces, and fixture state; ignored by Git.                         |
 | `docs/testing/model-results.md`                          | Current published benchmark result copied from generated reports.                     |
 
+Case definitions are grouped in `case_registry_*.go` files by partition:
+`case_registry_read.go`, `case_registry_mutating.go`,
+`case_registry_destructive.go`, `case_registry_capabilities.go`, and the
+Enterprise/Premium variants. Add new cases there rather than in testdata files.
+
 The evaluator implementation intentionally lives under `internal/evaluator` so
 the command can stay small while the implementation keeps package-private helper
 types. Prefer adding new evaluator logic inside that package unless the code has
@@ -84,8 +89,13 @@ Use this economy-oriented model set for the standard compatibility matrix unless
 a focused run requires different models:
 
 ```bash
-EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
+EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 ```
+
+`google:gemini-flash-latest` resolves to the latest Gemini Flash model available
+to the API key. If you pin a concrete Google model ID instead, verify it with
+Google ListModels first; Gemini preview IDs can retire without code changes in
+this repository.
 
 ## Surfaces And Capability Access
 
@@ -120,7 +130,7 @@ set -euo pipefail
 
 export PATH="/usr/local/go/bin:$HOME/go/bin:/snap/bin:$PATH"
 GO_BIN="${GO_BIN:-$(command -v go)}"
-EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
+EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 
 timeout 10800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
   --preset schema-enterprise \
@@ -206,7 +216,7 @@ set -euo pipefail
 
 export PATH="/usr/local/go/bin:$HOME/go/bin:/snap/bin:$PATH"
 GO_BIN="${GO_BIN:-$(command -v go)}"
-EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
+EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 
 for preset in docker-read docker-mutating-safe docker-destructive-safe; do
   timeout 7200s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
@@ -328,9 +338,10 @@ output is only progress logging and stays in the log file by default.
 3. Classify the failure as model route miss, parameter shape miss, provider
    adapter issue, fixture gap, GitLab edition limitation, sampling support gap,
    or MCP implementation bug.
-4. Check whether the trace used the intended tool surface. Dynamic traces should
-  usually call `gitlab_find_action` only when the action or params schema was
-  ambiguous; exact dynamic tasks may go straight to `gitlab_execute_action`.
+4. Check whether the trace used the intended tool surface. Dynamic traces for
+  ordinary GitLab operations should call `gitlab_find_action` before each
+  `gitlab_execute_action`. Capability bridge traces may call bridge tools such
+  as `gitlab_list_resources` or `gitlab_read_resource` directly.
 5. Fix harness noise before judging model quality.
 6. Re-run the targeted task set.
 7. Re-run the affected preset.
@@ -347,9 +358,15 @@ committed docs.
 
 ## Adding Or Updating Cases
 
-Edit `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md`. Preserve the
-existing table format and update the summary counts at the bottom. Use the
-following guidance:
+Edit the typed registry files in `cmd/eval_mcp_surfaces/internal/evaluator/`:
+
+- `case_registry_read.go` for CE read-only operations.
+- `case_registry_mutating.go` for CE safe mutations.
+- `case_registry_destructive.go` for CE destructive operations.
+- `case_registry_capabilities.go` for MCP capability bridge scenarios.
+- `case_registry_enterprise_*.go` for Enterprise/Premium scenarios.
+
+Use the following guidance:
 
 - Include `MT-` cases for one clear operation.
 - Define `MS-` cases for real workflows where sequencing matters.
