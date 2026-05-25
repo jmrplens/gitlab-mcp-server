@@ -974,9 +974,10 @@ func TestDiscoveryBudgetFeedback_BlocksRedundantDiscoveryForExactCall(t *testing
 // prompts give exact ordering hints for workflows confused by model providers.
 func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 	tests := []struct {
-		name string
-		task evalTask
-		want []string
+		name   string
+		task   evalTask
+		want   []string
+		absent []string
 	}{
 		{
 			name: "failed pipeline investigation workflow",
@@ -1044,6 +1045,17 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 			want: []string{"issue.link_create, not issue.link", "issue.link_delete", "top-level confirm:true on gitlab_execute_action", "params.issue_iid set to the source issue IID"},
 		},
 		{
+			name: "issue note workflow",
+			task: evalTask{ID: "MS-015", Prompt: "Exercise issue note CRUD in project `my-org/tools/gitlab-mcp-server`: create issue `eval-note-issue`, add a note saying `first note`, fetch that note with note get using the returned note ID, update the note to `updated note`, delete the note, then delete the issue.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", RequiredParams: []string{"project_id", "title"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.note_create", RequiredParams: []string{"project_id", "issue_iid", "body"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.note_get", RequiredParams: []string{"project_id", "issue_iid", "note_id"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.note_update", RequiredParams: []string{"project_id", "issue_iid", "note_id", "body"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.note_delete", RequiredParams: []string{"project_id", "issue_iid", "note_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{"issue.note_create, issue.note_get, issue.note_update, issue.note_delete, issue.delete", "note_delete uses only params.project_id, params.issue_iid, and params.note_id", "never send params.body to note_delete"},
+		},
+		{
 			name: "merge request award workflow",
 			task: evalTask{ID: "MS-033", Prompt: "Exercise merge request time tracking and emoji in project `my-org/tools/gitlab-mcp-server`: set estimate `1h` on merge request `1`, add spent time `15m`, add award emoji `eyes`, list MR awards, delete the returned award emoji, reset spent time, then reset the estimate.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.time_estimate_set", RequiredParams: []string{"project_id", "merge_request_iid", "duration"}},
@@ -1051,6 +1063,26 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.emoji_mr_create", RequiredParams: []string{"project_id", "merge_request_iid", "name"}},
 			}},
 			want: []string{"merge_request.emoji_mr_list before deleting", `"merge_request_iid":1`, `"duration":"1h"`},
+		},
+		{
+			name: "epic discussion workflow",
+			task: evalTask{ID: "MS-049", Prompt: "Exercise epic discussion lifecycle in group full path `my-org`: create epic `Evaluation Enterprise Discussion Epic`, create discussion `first enterprise discussion`, list discussions, fetch the created discussion, add reply note `enterprise reply`, update that reply to `enterprise reply updated`, delete the reply note, then delete the epic.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_create", RequiredParams: []string{"full_path", "title"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_create", RequiredParams: []string{"full_path", "epic_iid", "body"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_list", RequiredParams: []string{"full_path", "epic_iid"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_get", RequiredParams: []string{"full_path", "epic_iid", "discussion_id"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_add_note", RequiredParams: []string{"full_path", "epic_iid", "discussion_id", "body"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_update_note", RequiredParams: []string{"full_path", "epic_iid", "note_id", "body"}},
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_discussion_delete_note", RequiredParams: []string{"full_path", "epic_iid", "note_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{"Copy the complete discussion_id string exactly", "do not shorten, reconstruct, or use note IDs as discussion IDs"},
+		},
+		{
+			name: "project push rule add",
+			task: evalTask{ID: "MT-192", Prompt: "Add a project push rule to project `my-org/tools/eval-push-rule` with commit message regex `^EVAL-`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.push_rule_add", RequiredParams: []string{"project_id"}, OptionalParams: []string{"commit_message_regex", "reject_unsigned_commits"}},
+			}},
+			want: []string{"Project push rules are project-scoped singletons", "use params.commit_message_regex directly", "never send commit_message_regex_enabled"},
 		},
 	}
 
@@ -1066,9 +1098,10 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 // single-step dynamic tasks with provider params-shape misses get exact calls.
 func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 	tests := []struct {
-		name string
-		task evalTask
-		want []string
+		name   string
+		task   evalTask
+		want   []string
+		absent []string
 	}{
 		{
 			name: "repository file get",
@@ -1126,6 +1159,30 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 			}},
 			want: []string{`"action":"admin.terraform_state_unlock"`, `"confirm":true`, `"name":"production"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, "never use terraform_state.unlock or params.terraform_state_name"},
 		},
+		{
+			name: "broadcast message delete",
+			task: evalTask{ID: "MT-054", Prompt: "Delete broadcast message ID `9`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.broadcast_message_delete", RequiredParams: []string{"id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want:   []string{"Dynamic first-step exact call", `"action":"admin.broadcast_message_delete"`, `"confirm":true`, `"id":9`},
+			absent: []string{`"id":123`},
+		},
+		{
+			name: "project push rule add regex",
+			task: evalTask{ID: "MT-192", Prompt: "Add a project push rule to project `my-org/tools/eval-push-rule` with commit message regex `^EVAL-`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.push_rule_add", RequiredParams: []string{"project_id"}, OptionalParams: []string{"commit_message_regex", "reject_unsigned_commits"}},
+			}},
+			want:   []string{"Dynamic first-step exact call", `"action":"project.push_rule_add"`, `"commit_message_regex":"^EVAL-"`, `"project_id":"my-org/tools/eval-push-rule"`, "never send commit_message_regex_enabled"},
+			absent: []string{`"commit_message_regex_enabled":`},
+		},
+		{
+			name: "group service account PAT revoke",
+			task: evalTask{ID: "MT-197", Prompt: "Revoke group service account PAT ID `23` for service account user ID `39` in group `my-org`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.service_account_pat_revoke", RequiredParams: []string{"group_id", "service_account_id", "token_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want:   []string{"Dynamic first-step exact call", `"action":"group.service_account_pat_revoke"`, `"confirm":true`, `"group_id":"my-org"`, `"service_account_id":39`, `"token_id":23`},
+			absent: []string{`"action":"service_account_pat.revoke"`, `"personal_access_token_id":`, `"user_id":`},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1147,6 +1204,11 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 				t.Fatalf("taskPromptForSurface() = %q, exact call must appear before dynamic override", prompt)
 			}
 			requireContainsAll(t, "taskPromptForSurface()", prompt, tt.want)
+			for _, unwanted := range tt.absent {
+				if strings.Contains(prompt, unwanted) {
+					t.Fatalf("taskPromptForSurface() = %q, want no %q", prompt, unwanted)
+				}
+			}
 		})
 	}
 }
@@ -1222,7 +1284,7 @@ func TestDynamicWorkflowPlanPreamble_SuppressesPlannedActionFind(t *testing.T) {
 		`"active":false`,
 		"optional_params=active",
 		"The listed action IDs and params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions.",
-		"Values named *_id that are produced by earlier steps must be copied from the preceding tool result.",
+		"Values named *_id that are produced by earlier steps must be copied exactly from the preceding tool result",
 		"action=pipeline.schedule_delete_variable; required_params=project_id, schedule_id, key; destructive_confirm=true",
 		"For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_action call.",
 	})

@@ -104,7 +104,7 @@ func dynamicWorkflowPlanPreamble(task evalTask) string {
 		}
 		lines = append(lines, fmt.Sprintf("%d. %s", index+1, strings.Join(parts, "; ")))
 	}
-	lines = append(lines, "Use this order. The listed action IDs and params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions. Execute each action directly when its required values are present. Include optional params only when the task prompt asks for their behavior. Values named *_id that are produced by earlier steps must be copied from the preceding tool result. For plan lines requiring project_id, a GitLab namespace path like group/project goes in params.project_id, not params.full_path, params.path, or remote_url. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_action call.")
+	lines = append(lines, "Use this order. The listed action IDs and params are the compact schema for this scenario; do not call gitlab_find_action for these planned actions. Execute each action directly when its required values are present. Include optional params only when the task prompt asks for their behavior. Values named *_id that are produced by earlier steps must be copied exactly from the preceding tool result; do not shorten, reconstruct, or edit opaque ID strings such as discussion_id. For plan lines requiring project_id, a GitLab namespace path like group/project goes in params.project_id, not params.full_path, params.path, or remote_url. For every plan line with destructive_confirm=true, include top-level confirm:true on that same gitlab_execute_action call.")
 	return strings.Join(lines, "\n")
 }
 
@@ -352,6 +352,11 @@ func pipelineDynamicExample(action, param, prompt string) (any, bool) {
 }
 
 func adminDynamicExample(action, param, prompt string) (any, bool) {
+	if action == "admin.broadcast_message_delete" && param == "id" {
+		if value, ok := numericBacktickValueAfter(prompt, "broadcast message ID "); ok {
+			return value, true
+		}
+	}
 	if action == "admin.terraform_state_unlock" && param == "name" {
 		return backtickValueAfter(prompt, "Terraform state ")
 	}
@@ -525,6 +530,9 @@ func appendAdminGuidance(_ evalTask, steps []evalStep, guidance string) string {
 func appendIssueGuidance(task evalTask, steps []evalStep, guidance string) string {
 	lowerPrompt := strings.ToLower(task.Prompt)
 	firstCreatesIssue := len(steps) > 1 && (steps[0].ExpectedAction == actionIssueCreate || steps[0].ExpectedTool == "gitlab_issue" && steps[0].ExpectedAction == "create")
+	if firstCreatesIssue && taskHasAnyActionOrStep(steps, []string{"issue.note_create", "issue.note_get", "issue.note_update", "issue.note_delete"}, [][2]string{{"gitlab_issue", "note_create"}, {"gitlab_issue", "note_get"}, {"gitlab_issue", "note_update"}, {"gitlab_issue", "note_delete"}}) {
+		guidance += ` For issue note CRUD, follow exactly this order: issue.create, issue.note_create, issue.note_get, issue.note_update, issue.note_delete, issue.delete. After note_create, use the returned issue_iid and note_id for note_get, note_update, and note_delete. note_delete uses only params.project_id, params.issue_iid, and params.note_id plus the destructive confirm required by the current surface; never send params.body to note_delete.`
+	}
 	if firstCreatesIssue && strings.Contains(lowerPrompt, "issue link crud") {
 		guidance += ` For issue link CRUD, keep the source issue IID from the first create call. Create the link with issue.link_create, not issue.link. After link_list, call issue.link_delete with params.project_id, params.issue_iid set to the source issue IID, params.issue_link_id from the returned link, with params.confirm=true.`
 	}
@@ -603,7 +611,7 @@ func appendEnterpriseGuidance(task evalTask, steps []evalStep, guidance string) 
 		guidance += ` Secret push protection belongs to project.security_settings_update with params.secret_push_protection_enabled; do not use project.update for that setting.`
 	}
 	if taskHasAnyActionOrStep(steps, []string{"project.push_rule_add", "project.push_rule_edit"}, [][2]string{{"gitlab_project", "push_rule_add"}, {"gitlab_project", "push_rule_edit"}}) {
-		guidance += ` Project push rules are project-scoped singletons: get/add/edit/delete use params.project_id only, never push_rule_id. Use params.reject_unsigned_commits for unsigned commit rejection.`
+		guidance += ` Project push rules are project-scoped singletons: get/add/edit/delete use params.project_id only, never push_rule_id. Use params.reject_unsigned_commits for unsigned commit rejection. For commit message regex, use params.commit_message_regex directly; never send commit_message_regex_enabled, empty regex fields, or empty string placeholders.`
 	}
 	if taskHasAnyActionOrStep(steps, []string{"group.protected_branch_protect"}, [][2]string{{"gitlab_group", "protected_branch_protect"}}) {
 		guidance += ` Group protected branch protect uses params.name for the branch or wildcard and numeric access levels: maintainer is 40 and developer is 30. Later get/update/unprotect steps use params.branch.`
@@ -624,7 +632,7 @@ func appendEnterpriseGuidance(task evalTask, steps []evalStep, guidance string) 
 		guidance += ` For service-account PAT create or rotate, omit expires_at unless the task provides an explicit expiry date; if you do send it, use YYYY-MM-DD within the GitLab maximum token lifetime.`
 	}
 	if taskHasAnyActionOrStep(steps, []string{"group.epic_discussion_update_note", "group.epic_discussion_delete_note"}, [][2]string{{"gitlab_group", "epic_discussion_update_note"}, {"gitlab_group", "epic_discussion_delete_note"}}) {
-		guidance += ` Epic discussion note update/delete require params.note_id from a note entry in the discussion result; discussion_id identifies the thread and is not a replacement for note_id.`
+		guidance += ` Epic discussion note update/delete require params.note_id from a note entry in the discussion result; discussion_id identifies the thread and is not a replacement for note_id. Copy the complete discussion_id string exactly from the discussion create or list result; do not shorten, reconstruct, or use note IDs as discussion IDs.`
 	}
 	if taskHasAnyActionOrStep(steps, []string{"group.epic_issue_remove"}, [][2]string{{"gitlab_group", "epic_issue_remove"}}) {
 		guidance += ` Epic issue workflows that say create issue then create epic must start with gitlab_issue/create, not gitlab_group/epic_create. Epic issue assign/list/remove require params.full_path for the epic group plus params.epic_iid copied from the epic_create result; assign/remove also require params.child_project_path and params.child_iid from the child issue project and IID. Epic issue removal is not the end of cleanup when the scenario also asks to delete the child issue and epic; continue with issue.delete and group.epic_delete after epic_issue_remove.`
@@ -1136,7 +1144,8 @@ var numericExampleParamMarkers = map[string][]string{
 	"export_id":                {"export ID "},
 	"epic_iid":                 {"epic IID "},
 	"child_iid":                {promptMarkerIssueIID},
-	"token_id":                 {"personal access token ID ", "token ID "},
+	"token_id":                 {"personal access token ID ", "service account PAT ID ", "PAT ID ", "token ID "},
+	"service_account_id":       {"service account user ID ", "service account ID "},
 	"issue_iid":                {promptMarkerIssue},
 	"merge_request_iid":        {"merge_request_iid ", promptMarkerMergeRequest, "MR "},
 	"note_id":                  {"note ", "discussion note "},
@@ -1331,6 +1340,9 @@ func fallbackExampleParamValue(param string) any {
 
 // exampleOptionalParamValue handles example optional param value and returns [any].
 func exampleOptionalParamValue(param, prompt string) (any, bool) {
+	if value, ok := optionalStringParamValue(param, prompt); ok {
+		return value, true
+	}
 	start, end, hasMonth := monthRangeFromPrompt(prompt)
 	if value, ok := optionalDateParamValue(param, prompt, start, end, hasMonth); ok {
 		return value, true
@@ -1353,6 +1365,15 @@ func exampleOptionalParamValue(param, prompt string) (any, bool) {
 		}
 	}
 	return nil, false
+}
+
+func optionalStringParamValue(param, prompt string) (any, bool) {
+	switch param {
+	case "commit_message_regex":
+		return backtickValueAfter(prompt, "commit message regex ")
+	default:
+		return nil, false
+	}
 }
 
 func optionalProtectedEnvironmentParamValue(param, lowerPrompt string) (any, bool) {
