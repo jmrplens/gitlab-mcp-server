@@ -55,6 +55,9 @@ func run() (runErr error) {
 	if handled {
 		return immediateErr
 	}
+	if envErr := prepareRunEnvironment(opts); envErr != nil {
+		return envErr
+	}
 	opts, modelSpecs, err := resolveRunModels(opts)
 	if err != nil {
 		return err
@@ -158,12 +161,19 @@ func prepareRunOptions() (options, func() error, error) {
 	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return options{}, nil, fmt.Errorf("load .env: %w", err)
 	}
+	return opts, closeTerminalOutput, nil
+}
+
+func prepareRunEnvironment(opts options) error {
+	if err := ensureDockerRuntimeIfNeeded(context.Background(), opts); err != nil {
+		return err
+	}
 	if opts.GitLabEnv != "" {
 		if err := godotenv.Overload(opts.GitLabEnv); err != nil {
-			return options{}, nil, fmt.Errorf("load gitlab env file %s: %w", opts.GitLabEnv, err)
+			return fmt.Errorf("load gitlab env file %s: %w", opts.GitLabEnv, err)
 		}
 	}
-	return opts, closeTerminalOutput, nil
+	return nil
 }
 
 func noopCloseTerminalOutput() error {
@@ -176,6 +186,9 @@ func runImmediateMode(opts options) (bool, error) {
 	}
 	if len(opts.CheckEfficiency) > 0 {
 		return true, runEfficiencyCheck(opts)
+	}
+	if len(opts.CheckReportClean) > 0 {
+		return true, runReportCleanCheck(opts)
 	}
 	if len(opts.CompareTraces) > 0 {
 		return true, runTraceComparison(opts)
@@ -226,10 +239,11 @@ func prepareRunTasks(opts options) ([]evalTask, *liveFixtureState, error) {
 			return nil, fixtures, nil
 		}
 	}
-	tasks, parseErr := parseTasksFile(opts.TasksPath)
+	evalCases, parseErr := loadEvalCases(opts)
 	if parseErr != nil {
 		return nil, nil, parseErr
 	}
+	tasks := evalTasksFromCases(evalCases)
 	if opts.UseFixtures || opts.PrepareFixtures {
 		if fixtures == nil {
 			var readErr error
@@ -572,23 +586,37 @@ func runModelEvaluationRound(ctx context.Context, run modelEvaluationRun, spec m
 }
 
 func evaluateModelTaskAttempt(ctx context.Context, run modelEvaluationRun, spec modelSpec, runIndex int, task evalTask, runner *modelRunner) taskResult {
-	taskForAttempt, err := prepareTaskAttempt(ctx, run.opts, spec, runIndex, task, run.runtime, run.liveAttemptRunSuffix)
+	attempt, err := prepareTaskAttemptValue(ctx, run.opts, spec, runIndex, task, run.runtime, run.liveAttemptRunSuffix)
 	if err != nil {
 		result := taskAttemptPreparationErrorResult(task, spec, run.opts.ToolSurface, runIndex, err)
 		terminalPrintf("model=%s run=%d %s: fixture=false error=%v\n", spec.String(), runIndex, task.ID, err)
 		return result
 	}
-	result := runner.evaluateTask(ctx, taskForAttempt, run.catalog, run.routes)
+	prepared := attempt.PreparedCase()
+	configureEvalElicitationFromOutput(prepared.FixtureOutputs)
+	result := runner.evaluatePreparedCase(ctx, prepared, run.catalog, run.routes)
 	result.Run = runIndex
 	result.Model = spec.String()
 	result.Trace.Run = runIndex
 	result.Trace.Model = spec.String()
 	result.Trace.Summary = traceSummaryFromResult(result)
-	terminalPrintf("model=%s run=%d %s: final=%t first=%s/%s final_call=%s/%s calls=%d tools=%d\n", spec.String(), runIndex, taskForAttempt.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction, result.ModelCalls, result.ToolCalls)
+	terminalPrintf("model=%s run=%d %s: final=%t first=%s/%s final_call=%s/%s calls=%d tools=%d\n", spec.String(), runIndex, attempt.Task.ID, result.FinalSuccess, result.FirstTool, result.FirstAction, result.FinalTool, result.FinalAction, result.ModelCalls, result.ToolCalls)
 	if run.opts.Pause > 0 {
 		time.Sleep(run.opts.Pause)
 	}
 	return result
+}
+
+type preparedTaskAttempt struct {
+	Task     evalTask
+	Prepared *PreparedCase
+}
+
+func (attempt preparedTaskAttempt) PreparedCase() PreparedCase {
+	if attempt.Prepared != nil {
+		return *attempt.Prepared
+	}
+	return preparedCaseFromTask(attempt.Task)
 }
 
 func taskAttemptPreparationErrorResult(task evalTask, spec modelSpec, toolSurface string, runIndex int, err error) taskResult {
@@ -616,11 +644,33 @@ func taskAttemptPreparationErrorResult(task evalTask, spec modelSpec, toolSurfac
 }
 
 func prepareTaskAttempt(ctx context.Context, opts options, spec modelSpec, runIndex int, task evalTask, runtime evaluationRuntime, liveAttemptRunSuffix string) (evalTask, error) {
-	if !opts.Execute || !opts.UseFixtures {
-		return task, nil
+	attempt, err := prepareTaskAttemptValue(ctx, opts, spec, runIndex, task, runtime, liveAttemptRunSuffix)
+	if err != nil {
+		return task, err
 	}
-	task = addLiveAttemptResourceSuffix(task, spec.String(), runIndex, liveAttemptRunSuffix)
-	return ensureLiveAttemptResources(ctx, runtime.executionClient, runtime.mcpSession, task, opts.ToolSurface)
+	return attempt.Task, nil
+}
+
+func prepareTaskAttemptValue(ctx context.Context, opts options, spec modelSpec, runIndex int, task evalTask, runtime evaluationRuntime, liveAttemptRunSuffix string) (preparedTaskAttempt, error) {
+	if !opts.Execute || !opts.UseFixtures {
+		return preparedTaskAttempt{Task: task}, nil
+	}
+	if caseUsesTypedFixtureEngine(task) {
+		prepared, err := PrepareCaseAttempt(ctx, FixtureContext{
+			Client:         runtime.executionClient,
+			MCPSession:     runtime.mcpSession,
+			RuntimeEdition: EvalCaseEdition(opts.Edition),
+			ToolSurface:    opts.ToolSurface,
+			RunSuffix:      liveAttemptRunSuffix,
+		}, *task.Case, spec.String(), runIndex)
+		if err != nil {
+			return preparedTaskAttempt{Task: task}, err
+		}
+		prepared.Steps = cloneExpectedSteps(stepsFromTask(task))
+		task = taskFromPreparedCase(prepared)
+		return preparedTaskAttempt{Task: task, Prepared: &prepared}, nil
+	}
+	return preparedTaskAttempt{Task: task}, nil
 }
 
 // parseFlags parses flags from evaluator input.

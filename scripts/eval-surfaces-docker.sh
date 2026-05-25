@@ -289,7 +289,7 @@ retry_setup_gitlab() {
 run_evaluator() {
   local name="$1"
   shift
-  run_logged "$name" env "GITLAB_ENTERPRISE=$enterprise" "$go_bin" run ./cmd/eval_mcp_surfaces "$@"
+  run_logged "$name" env "GITLAB_ENTERPRISE=$enterprise" "$go_bin" run ./cmd/eval_mcp_surfaces --docker-auto-start=false "$@"
 }
 
 run_fixture_smoke() {
@@ -310,6 +310,12 @@ run_fixture_smoke() {
     --skip-unavailable \
     --out "$report" \
     --terminal-log "$log_dir/${name}.terminal.log"
+}
+
+check_report_clean() {
+  local name="$1"
+  local report="$2"
+  run_logged "$name" env "GITLAB_ENTERPRISE=$enterprise" "$go_bin" run ./cmd/eval_mcp_surfaces --docker-auto-start=false --check-report-clean "$report"
 }
 
 preset_edition_arg() {
@@ -400,9 +406,14 @@ if [[ "$fixture_smoke" == "true" ]]; then
     report="$run_dir/${timestamp}-${surface}-${preset}-fixture-smoke.md"
     printf '=== fixture-smoke %s ===\n' "$preset" | tee -a "$status_file"
     if run_fixture_smoke "fixture-smoke-${preset}" "$preset" "$report"; then
-      printf '%s: ok\n' "$preset" | tee -a "$status_file"
+      if check_report_clean "report-clean-fixture-smoke-${preset}" "$report"; then
+        printf '%s: process_ok report_clean\n' "$preset" | tee -a "$status_file"
+      else
+        printf '%s: process_ok report_failed\n' "$preset" | tee -a "$status_file"
+        preset_status=1
+      fi
     else
-      printf '%s: failed\n' "$preset" | tee -a "$status_file"
+      printf '%s: process_failed report_unknown\n' "$preset" | tee -a "$status_file"
       preset_status=1
     fi
   done
@@ -437,9 +448,14 @@ for preset in "${presets[@]}"; do
     --skip-unavailable \
     --out "$report" \
     --terminal-log "$log_dir/${preset}.terminal.log"; then
-    printf '%s: ok\n' "$preset" | tee -a "$status_file"
+    if check_report_clean "report-clean-${preset}" "$report"; then
+      printf '%s: process_ok report_clean\n' "$preset" | tee -a "$status_file"
+    else
+      printf '%s: process_ok report_failed\n' "$preset" | tee -a "$status_file"
+      preset_status=1
+    fi
   else
-    printf '%s: failed\n' "$preset" | tee -a "$status_file"
+    printf '%s: process_failed report_unknown\n' "$preset" | tee -a "$status_file"
     preset_status=1
   fi
 done

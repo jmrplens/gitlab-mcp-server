@@ -3,9 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -78,6 +76,9 @@ func filterTasksByDestructive(tasks []evalTask, skipDestructive, onlyDestructive
 
 // taskHasDestructiveStep reports whether task has destructive step.
 func taskHasDestructiveStep(task evalTask) bool {
+	if task.Case != nil {
+		return task.Case.Destructive
+	}
 	if task.Destructive {
 		return true
 	}
@@ -160,7 +161,7 @@ func routeSignalsEnterpriseCatalog(tool, action string) bool {
 
 // taskRoutesAvailable reports whether task routes available.
 func taskRoutesAvailable(task evalTask, routes map[string]toolutil.ActionMap, enterprise bool) bool {
-	if taskUnavailableInLiveEvaluator(task.ID) {
+	if taskUnavailableInLiveEvaluator(task) {
 		return false
 	}
 	for _, step := range taskSteps(task) {
@@ -230,22 +231,36 @@ func validPartition(partition string) bool {
 
 // taskMatchesPartition reports whether task matches partition.
 func taskMatchesPartition(task evalTask, partition string) bool {
+	if task.Case != nil && task.Case.Partition != "" {
+		return string(task.Case.Partition) == partition
+	}
+	return string(inferTaskPartition(task)) == partition
+}
+
+func inferTaskPartition(task evalTask) EvalPartition {
+	if taskUsesCapabilityFallback(task) {
+		return EvalPartition(partitionCapabilityFallback)
+	}
+	if strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) {
+		return EvalPartition(partitionErrorRecovery)
+	}
 	enterprise := taskHasEnterpriseStep(task)
 	destructive := taskHasDestructiveStep(task)
 	mutating := taskHasMutatingStep(task)
-	readOnly := !mutating && !destructive
-	special := strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task) || taskUsesCapabilityFallback(task)
-	checks := map[string]bool{
-		partitionBaseRead:              !enterprise && readOnly && !special,
-		partitionBaseMutating:          !enterprise && mutating && !destructive && !special,
-		partitionBaseDestructive:       !enterprise && destructive && !special,
-		partitionEnterpriseRead:        enterprise && readOnly && !special,
-		partitionEnterpriseMutating:    enterprise && mutating && !destructive && !special,
-		partitionEnterpriseDestructive: enterprise && destructive && !special,
-		partitionErrorRecovery:         strings.HasPrefix(task.ID, "MF-") || taskHasSimulation(task),
-		partitionCapabilityFallback:    taskUsesCapabilityFallback(task),
+	switch {
+	case enterprise && destructive:
+		return EvalPartition(partitionEnterpriseDestructive)
+	case enterprise && mutating:
+		return EvalPartition(partitionEnterpriseMutating)
+	case enterprise:
+		return EvalPartition(partitionEnterpriseRead)
+	case destructive:
+		return EvalPartition(partitionBaseDestructive)
+	case mutating:
+		return EvalPartition(partitionBaseMutating)
+	default:
+		return EvalPartition(partitionBaseRead)
 	}
-	return checks[partition]
 }
 
 // filterTasksByPreset handles filter tasks by preset and returns [[]evalTask].
@@ -313,6 +328,9 @@ func taskArchivesSharedProject(task evalTask) bool {
 // taskDeletesSharedJobArtifacts reports whether a task removes artifacts from
 // the shared failed-job fixture used by artifact download/read scenarios.
 func taskDeletesSharedJobArtifacts(task evalTask) bool {
+	if taskHasAttemptScopedFixture(task, "failed_job_artifact") {
+		return false
+	}
 	for _, step := range taskSteps(task) {
 		if step.ExpectedTool == "gitlab_job" && step.ExpectedAction == "delete_artifacts" {
 			return true
@@ -327,6 +345,9 @@ func taskDeletesSharedJobArtifacts(task evalTask) bool {
 // taskDeletesProjectServiceAccount reports whether a task removes the shared
 // project service-account fixture used by Enterprise PAT scenarios.
 func taskDeletesProjectServiceAccount(task evalTask) bool {
+	if taskCreatesProjectServiceAccount(task) {
+		return false
+	}
 	for _, step := range taskSteps(task) {
 		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "service_account_delete" {
 			return true
@@ -341,8 +362,38 @@ func taskDeletesProjectServiceAccount(task evalTask) bool {
 	return false
 }
 
+func taskHasAttemptScopedFixture(task evalTask, fixtureName string) bool {
+	if task.Case == nil {
+		return false
+	}
+	for _, fixture := range task.Case.Fixtures {
+		if fixture.Name == fixtureName && fixture.Scope == FixtureScopeAttempt {
+			return true
+		}
+	}
+	return false
+}
+
+func taskCreatesProjectServiceAccount(task evalTask) bool {
+	for _, step := range taskSteps(task) {
+		if step.ExpectedTool == "gitlab_project" && step.ExpectedAction == "service_account_create" {
+			return true
+		}
+		if step.ExpectedTool == dynamicExecuteActionTool && step.ExpectedAction == "project.service_account_create" {
+			return true
+		}
+		if step.ExpectedTool == "gitlab" && step.ExpectedAction == "project.service_account_create" {
+			return true
+		}
+	}
+	return false
+}
+
 // taskMatchesPreset reports whether task matches preset.
 func taskMatchesPreset(task evalTask, preset string) bool {
+	if task.Case != nil && len(task.Case.Presets) > 0 {
+		return evalCaseMatchesPreset(*task.Case, preset)
+	}
 	capabilityFallback := taskUsesCapabilityFallback(task)
 	traits := taskPresetTraits{
 		Enterprise:              taskHasEnterpriseStep(task),
@@ -398,39 +449,20 @@ func taskPresetMatchesTraits(traits taskPresetTraits, preset string) bool {
 	return ok && predicate(traits)
 }
 
-var enterpriseDockerFixtureTasks = map[string]struct{}{
-	"MT-188": {},
-	"MT-189": {},
-	"MT-190": {},
-	"MT-191": {},
-	"MT-192": {},
-	"MT-193": {},
-	"MT-194": {},
-	"MT-195": {},
-	"MT-196": {},
-	"MT-197": {},
-	"MT-198": {},
-	"MS-043": {},
-	"MS-044": {},
-	"MS-045": {},
-	"MS-046": {},
-	"MS-047": {},
-	"MS-048": {},
-	"MS-049": {},
-	"MS-050": {},
-	"MS-051": {},
-	"MS-052": {},
-	"MS-053": {},
-	"MS-054": {},
-}
-
 func taskIsEnterpriseDockerFixture(task evalTask) bool {
-	_, ok := enterpriseDockerFixtureTasks[task.ID]
-	return ok
+	if task.Case != nil {
+		return evalCaseMatchesPreset(*task.Case, presetDockerEnterpriseRead) ||
+			evalCaseMatchesPreset(*task.Case, presetDockerEnterpriseMutatingSafe) ||
+			evalCaseMatchesPreset(*task.Case, presetDockerEnterpriseDestructiveSafe)
+	}
+	return false
 }
 
 // taskHasEnterpriseStep reports whether task has enterprise step.
 func taskHasEnterpriseStep(task evalTask) bool {
+	if task.Case != nil && task.Case.Edition != "" {
+		return task.Case.Edition == EvalCaseEdition(editionEnterprise)
+	}
 	for _, step := range taskSteps(task) {
 		if routeLooksEnterprise(step.ExpectedTool, step.ExpectedAction) {
 			return true
@@ -525,8 +557,11 @@ func routeUnavailableOnCE(tool, action string) bool {
 }
 
 // taskUnavailableInLiveEvaluator reports whether task unavailable in live evaluator.
-func taskUnavailableInLiveEvaluator(id string) bool {
-	switch id {
+func taskUnavailableInLiveEvaluator(task evalTask) bool {
+	if task.Case != nil {
+		return len(task.Case.SkipReasons) > 0
+	}
+	switch task.ID {
 	case "MT-105", "MT-115":
 		return true
 	default:
@@ -536,6 +571,9 @@ func taskUnavailableInLiveEvaluator(id string) bool {
 
 // taskHasMutatingStep reports whether task has mutating step.
 func taskHasMutatingStep(task evalTask) bool {
+	if task.Case != nil {
+		return task.Case.Mutating
+	}
 	for _, step := range taskSteps(task) {
 		if step.Destructive || routeLooksMutating(step.ExpectedTool, step.ExpectedAction) {
 			return true
@@ -560,95 +598,6 @@ func routeLooksMutating(tool, action string) bool {
 		}
 	}
 	return false
-}
-
-// parseTasksFile keeps file I/O separate from markdown normalization so tests
-// can exercise parser invariants without touching the filesystem.
-func parseTasksFile(path string) ([]evalTask, error) {
-	data, err := os.ReadFile(path) // #nosec G304 -- task corpus path is an explicit evaluator input.
-	if err != nil {
-		return nil, fmt.Errorf("read tasks: %w", err)
-	}
-	return parseTasksMarkdown(string(data))
-}
-
-// parseTasksMarkdown handles parse tasks markdown and returns [[]evalTask].
-func parseTasksMarkdown(markdown string) ([]evalTask, error) {
-	var tasks []evalTask
-	for line := range strings.SplitSeq(markdown, "\n") {
-		line = strings.TrimSpace(line)
-		if !isTaskRow(line) {
-			continue
-		}
-		cols := splitMarkdownRow(line)
-		if len(cols) < 7 {
-			return nil, fmt.Errorf("task row has %d columns, want at least 7: %s", len(cols), line)
-		}
-		task, err := parseTaskRow(cols)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", cols[0], err)
-		}
-		tasks = append(tasks, task)
-	}
-	if len(tasks) == 0 {
-		return nil, errors.New("no MT-* or MS-* task rows found")
-	}
-	return tasks, nil
-}
-
-// isTaskRow reports whether a Markdown table row describes an evaluation task.
-func isTaskRow(line string) bool {
-	return strings.HasPrefix(line, "| MT-") || strings.HasPrefix(line, "| MS-") || strings.HasPrefix(line, "| MF-")
-}
-
-// parseTaskRow handles parse task row and returns [evalTask].
-func parseTaskRow(cols []string) (evalTask, error) {
-	steps, err := parseExpectedSteps(cols[2])
-	if err != nil {
-		return evalTask{}, err
-	}
-	requiredGroups, err := parseParamGroups(cols[3], len(steps))
-	if err != nil {
-		return evalTask{}, fmt.Errorf("required params: %w", err)
-	}
-	optionalGroups, err := parseParamGroups(cols[4], len(steps))
-	if err != nil {
-		return evalTask{}, fmt.Errorf("optional params: %w", err)
-	}
-	destructiveFlags, err := parseDestructiveSteps(cols[5], len(steps))
-	if err != nil {
-		return evalTask{}, fmt.Errorf("destructive steps: %w", err)
-	}
-	simulations, err := parseSimulationGroups(simulationColumn(cols), len(steps))
-	if err != nil {
-		return evalTask{}, fmt.Errorf("simulation: %w", err)
-	}
-	for i := range steps {
-		steps[i].RequiredParams = requiredGroups[i]
-		steps[i].OptionalParams = optionalGroups[i]
-		steps[i].Destructive = destructiveFlags[i]
-		steps[i].Simulation = simulations[i]
-	}
-	first := steps[0]
-	return evalTask{
-		ID:             cols[0],
-		Prompt:         cols[1],
-		ExpectedTool:   first.ExpectedTool,
-		ExpectedAction: first.ExpectedAction,
-		RequiredParams: first.RequiredParams,
-		OptionalParams: first.OptionalParams,
-		Destructive:    first.Destructive,
-		Simulation:     first.Simulation,
-		Steps:          steps,
-	}, nil
-}
-
-// simulationColumn formats simulation column for report output.
-func simulationColumn(cols []string) string {
-	if len(cols) < 8 {
-		return ""
-	}
-	return cols[6]
 }
 
 // validateTaskFixture validates task fixture for the main package.
@@ -928,138 +877,6 @@ func splitMarkdownRow(line string) []string {
 		out = append(out, strings.TrimSpace(part))
 	}
 	return out
-}
-
-// parseExpectedToolAction handles parse expected tool action and returns [string].
-func parseExpectedToolAction(value string) (tool, action string, err error) {
-	parts := strings.Split(value, "/")
-	if len(parts) == 1 {
-		tool = strings.Trim(strings.TrimSpace(parts[0]), "`")
-		if tool == "" {
-			return "", "", fmt.Errorf("empty tool in %q", value)
-		}
-		return tool, "", nil
-	}
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("expected tool/action pair or standalone tool, got %q", value)
-	}
-	tool = strings.Trim(strings.TrimSpace(parts[0]), "`")
-	action = strings.Trim(strings.TrimSpace(parts[1]), "`")
-	if strings.EqualFold(action, "none") || action == "-" {
-		action = ""
-	}
-	if tool == "" {
-		return "", "", fmt.Errorf("empty tool/action in %q", value)
-	}
-	return tool, action, nil
-}
-
-// parseExpectedSteps handles parse expected steps and returns [[]evalStep].
-func parseExpectedSteps(value string) ([]evalStep, error) {
-	parts := strings.Split(value, "->")
-	steps := make([]evalStep, 0, len(parts))
-	for _, part := range parts {
-		tool, action, err := parseExpectedToolAction(strings.TrimSpace(part))
-		if err != nil {
-			return nil, err
-		}
-		steps = append(steps, evalStep{ExpectedTool: tool, ExpectedAction: action})
-	}
-	if len(steps) == 0 {
-		return nil, errors.New("empty expected sequence")
-	}
-	return steps, nil
-}
-
-// parseParamGroups handles parse param groups and returns [[][]string].
-func parseParamGroups(value string, stepCount int) ([][]string, error) {
-	if stepCount == 1 {
-		return [][]string{parseParamList(value)}, nil
-	}
-	groups := strings.Split(value, ";")
-	if len(groups) != stepCount {
-		return nil, fmt.Errorf("got %d groups, want %d semicolon-separated groups", len(groups), stepCount)
-	}
-	out := make([][]string, 0, len(groups))
-	for _, group := range groups {
-		out = append(out, parseParamList(group))
-	}
-	return out, nil
-}
-
-// parseDestructiveSteps handles parse destructive steps and returns [[]bool].
-func parseDestructiveSteps(value string, stepCount int) ([]bool, error) {
-	value = strings.TrimSpace(strings.ToLower(value))
-	flags := make([]bool, stepCount)
-	if value == "" || value == "none" || value == "no" {
-		return flags, nil
-	}
-	if value == "yes" {
-		if stepCount != 1 {
-			return nil, errors.New("use 1-based step numbers or all for multi-step destructive scenarios")
-		}
-		flags[0] = true
-		return flags, nil
-	}
-	if value == "all" {
-		for i := range flags {
-			flags[i] = true
-		}
-		return flags, nil
-	}
-	for rawPart := range strings.SplitSeq(value, ",") {
-		part := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(rawPart), "step "))
-		stepNumber, err := strconv.Atoi(part)
-		if err != nil || stepNumber < 1 || stepNumber > stepCount {
-			return nil, fmt.Errorf("invalid step number %q", rawPart)
-		}
-		flags[stepNumber-1] = true
-	}
-	return flags, nil
-}
-
-// parseSimulationGroups handles parse simulation groups and returns [[]string].
-func parseSimulationGroups(value string, stepCount int) ([]string, error) {
-	if strings.TrimSpace(value) == "" || strings.EqualFold(strings.TrimSpace(value), "none") {
-		return make([]string, stepCount), nil
-	}
-	if stepCount == 1 {
-		return []string{normalizeSimulation(value)}, nil
-	}
-	groups := strings.Split(value, ";")
-	if len(groups) != stepCount {
-		return nil, fmt.Errorf("got %d groups, want %d semicolon-separated groups", len(groups), stepCount)
-	}
-	out := make([]string, 0, len(groups))
-	for _, group := range groups {
-		out = append(out, normalizeSimulation(group))
-	}
-	return out, nil
-}
-
-// normalizeSimulation normalizes simulation for stable comparisons.
-func normalizeSimulation(value string) string {
-	value = strings.Trim(strings.TrimSpace(value), "`")
-	if strings.EqualFold(value, "none") {
-		return ""
-	}
-	return value
-}
-
-// parseParamList parses param list from evaluator input.
-func parseParamList(value string) []string {
-	value = strings.TrimSpace(value)
-	if value == "" || strings.EqualFold(value, "none") {
-		return nil
-	}
-	params := make([]string, 0)
-	for part := range strings.SplitSeq(value, ",") {
-		name := strings.Trim(strings.TrimSpace(part), "`")
-		if name != "" {
-			params = append(params, name)
-		}
-	}
-	return params
 }
 
 // newMockGitLabClient constructs mock GitLab client.

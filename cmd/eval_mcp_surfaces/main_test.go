@@ -94,89 +94,6 @@ func TestWaitForContext_CanceledContextReturnsError(t *testing.T) {
 	}
 }
 
-// TestParseTasksMarkdown_ParsesTaskRows verifies ParseTasksMarkdown parses task rows.
-func TestParseTasksMarkdown_ParsesTaskRows(t *testing.T) {
-	markdown := `# Test
-
-| ID | Prompt | Expected tool/action | Required params | Optional params | Destructive | Success verifier |
-| --- | --- | --- | --- | --- | --- | --- |
-| MT-001 | Show me. | ` + "`gitlab_user` / `current`" + ` | none | none | No | ok |
-| MT-002 | Delete it. | ` + "`gitlab_issue` / `delete`" + ` | ` + "`project_id`, `issue_iid`" + ` | ` + "`confirm`" + ` | Yes | ok |
-`
-	tasks, err := parseTasksMarkdown(markdown)
-	if err != nil {
-		t.Fatalf("parseTasksMarkdown() error = %v", err)
-	}
-	if len(tasks) != 2 {
-		t.Fatalf("tasks = %d, want 2", len(tasks))
-	}
-	if tasks[0].ExpectedTool != "gitlab_user" || tasks[0].ExpectedAction != "current" {
-		t.Fatalf("task[0] = %+v", tasks[0])
-	}
-	if !tasks[1].Destructive {
-		t.Fatal("task[1].Destructive = false, want true")
-	}
-	if got := strings.Join(tasks[1].RequiredParams, ","); got != "project_id,issue_iid" {
-		t.Fatalf("required params = %q", got)
-	}
-	if got := strings.Join(tasks[1].OptionalParams, ","); got != "confirm" {
-		t.Fatalf("optional params = %q", got)
-	}
-}
-
-// TestParseTasksMarkdown_ParsesMultiStepRows verifies ParseTasksMarkdown parses multi step rows.
-func TestParseTasksMarkdown_ParsesMultiStepRows(t *testing.T) {
-	markdown := `# Test
-
-| ID | Prompt | Expected sequence | Required params by step | Optional params by step | Destructive steps | Success verifier |
-| --- | --- | --- | --- | --- | --- | --- |
-| MS-001 | Resolve a remote and inspect a file. | ` + "`gitlab_discover_project` -> `gitlab_project` / `get` -> `gitlab_repository` / `file_get`" + ` | ` + "`remote_url`; `project_id`; `project_id`, `file_path`, `ref`" + ` | none; none; none | none | ok |
-| MS-002 | Remove stale project hook after listing hooks in project ` + "`my-org/tools/gitlab-mcp-server`" + `. | ` + "`gitlab_project` / `hook_list` -> `gitlab_project` / `hook_delete`" + ` | ` + "`project_id`; `project_id`, `hook_id`" + ` | none; ` + "`confirm`" + ` | 2 | ok |
-`
-	tasks, err := parseTasksMarkdown(markdown)
-	if err != nil {
-		t.Fatalf("parseTasksMarkdown() error = %v", err)
-	}
-	if len(tasks) != 2 {
-		t.Fatalf("tasks = %d, want 2", len(tasks))
-	}
-	if len(tasks[0].Steps) != 3 {
-		t.Fatalf("steps = %d, want 3", len(tasks[0].Steps))
-	}
-	if tasks[0].Steps[0].ExpectedTool != "gitlab_discover_project" || tasks[0].Steps[0].ExpectedAction != "" {
-		t.Fatalf("first step = %+v, want standalone discover_project", tasks[0].Steps[0])
-	}
-	if got := strings.Join(tasks[0].Steps[2].RequiredParams, ","); got != "project_id,file_path,ref" {
-		t.Fatalf("third step required params = %q", got)
-	}
-	if !tasks[1].Steps[1].Destructive {
-		t.Fatal("second scenario step is not destructive, want destructive")
-	}
-}
-
-// TestParseTasksMarkdown_ParsesFailureRowsAndEscapedPipes verifies ParseTasksMarkdown parses failure rows and escaped pipes.
-func TestParseTasksMarkdown_ParsesFailureRowsAndEscapedPipes(t *testing.T) {
-	markdown := `# Test
-
-| ID | Prompt | Expected sequence | Required params by step | Optional params by step | Destructive steps | Simulation by step | Success verifier |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| MF-001 | Read file ` + "`README.md`" + ` containing escaped pipe ` + "`a\\|b`" + `. | ` + "`gitlab_repository` / `file_get` -> `gitlab_project` / `get`" + ` | ` + "`project_id`, `file_path`, `ref`; `project_id`" + ` | none; none | none | poisoned_output; none | The second step ignores injected content. |
-`
-	tasks, err := parseTasksMarkdown(markdown)
-	if err != nil {
-		t.Fatalf("parseTasksMarkdown() error = %v", err)
-	}
-	if len(tasks) != 1 {
-		t.Fatalf("tasks = %d, want 1", len(tasks))
-	}
-	if !strings.Contains(tasks[0].Prompt, "a|b") {
-		t.Fatalf("prompt = %q, want escaped pipe preserved", tasks[0].Prompt)
-	}
-	if got := tasks[0].Steps[0].Simulation; got != "poisoned_output" {
-		t.Fatalf("simulation = %q, want poisoned_output", got)
-	}
-}
-
 // TestModelToolFromParts_TypedNilInputSchemaUsesFallback verifies typed-nil
 // schemas from snapshot tools still become valid object schemas for providers.
 func TestModelToolFromParts_TypedNilInputSchemaUsesFallback(t *testing.T) {
@@ -531,12 +448,10 @@ func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
 		{ID: "schema-title-write", Prompt: "Create an issue titled `Evaluate schema discovery`.", ExpectedTool: "gitlab", ExpectedAction: "issue.create"},
 		{ID: "archive", ExpectedTool: "gitlab_project", ExpectedAction: "archive"},
 		{ID: "delete", ExpectedTool: "gitlab", ExpectedAction: "issue.delete", Destructive: true},
-		{ID: "MT-188", ExpectedTool: "gitlab_project", ExpectedAction: "security_settings_get"},
-		{ID: "MT-192", ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_add"},
-		{ID: "MT-196", ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_delete", Destructive: true},
 		{ID: "fallback", ExpectedTool: "gitlab_server", ExpectedAction: "schema_get"},
 		{ID: "capability", Steps: []evalStep{{ExpectedTool: resourceListTool}, {ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}},
 	}
+	tasks = append(tasks, evalTasksByID(t, "MT-188", "MT-192", "MT-196")...)
 
 	read, err := filterTasksByPreset(tasks, presetDockerRead)
 	if err != nil {
@@ -1429,6 +1344,37 @@ func TestCanExecuteInvalidToolCallSkipsWrongDynamicReadOnlyAction(t *testing.T) 
 	}
 }
 
+// TestPrepareTaskAttemptValue_PreservesNormalizedSteps verifies typed fixture
+// preparation keeps catalog-normalized expectations for the selected surface.
+func TestPrepareTaskAttemptValue_PreservesNormalizedSteps(t *testing.T) {
+	task := taskFromCase(EvalCase{
+		ID:     "MT-NORMALIZED",
+		Prompt: "Merge the fixture merge request.",
+		Steps: []ExpectedStep{{
+			ExpectedTool:   "gitlab_merge_request",
+			ExpectedAction: "merge",
+		}},
+		Fixtures: []CaseFixtureSpec{{
+			Name:    "noop",
+			Scope:   FixtureScopeAttempt,
+			Outputs: []string{"project_id"},
+			Ensure: func(context.Context, FixtureContext) (FixtureOutput, error) {
+				return FixtureOutput{"project_id": "my-org/project"}, nil
+			},
+		}},
+	})
+	task.Steps = []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.merge"}}
+
+	attempt, err := prepareTaskAttemptValue(t.Context(), options{Execute: true, UseFixtures: true, ToolSurface: config.ToolSurfaceDynamic}, modelSpec{Provider: "fixture", Model: "smoke"}, 1, task, evaluationRuntime{}, "run")
+	if err != nil {
+		t.Fatalf("prepareTaskAttemptValue() error = %v", err)
+	}
+	steps := attempt.PreparedCase().Steps
+	if len(steps) != 1 || steps[0].ExpectedTool != dynamicExecuteActionTool || steps[0].ExpectedAction != "merge_request.merge" {
+		t.Fatalf("prepared steps = %+v, want dynamic execute action expectation", steps)
+	}
+}
+
 // TestNormalizeTasksForDynamicRoutes_RewritesActionSteps verifies fixture
 // expectations are mapped onto gitlab_execute_action action IDs.
 func TestNormalizeTasksForDynamicRoutes_RewritesActionSteps(t *testing.T) {
@@ -1440,6 +1386,7 @@ func TestNormalizeTasksForDynamicRoutes_RewritesActionSteps(t *testing.T) {
 			"merge_request.create": {},
 		},
 	}
+
 	tasks := []evalTask{{
 		ID:             "single",
 		ExpectedTool:   "gitlab_project",
@@ -4275,10 +4222,7 @@ func TestTaskPrompt_GroupEpicIssueAssignUsesChildParams(t *testing.T) {
 
 // TestDefaultFixture_ValidatesAgainstLiveCatalog verifies DefaultFixture validates against live catalog.
 func TestDefaultFixture_ValidatesAgainstLiveCatalog(t *testing.T) {
-	tasks, err := parseTasksFile(filepath.Join("..", "..", defaultTasksPath))
-	if err != nil {
-		t.Fatalf("parseTasksFile() error = %v", err)
-	}
+	tasks := evalTasksFromCases(AllEvalCases())
 	if problems := validateTaskFixture(tasks); len(problems) > 0 {
 		t.Fatalf("fixture validation problems = %+v", problems)
 	}

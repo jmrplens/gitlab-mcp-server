@@ -18,7 +18,7 @@ func validateToolCall(task evalTask, toolName string, input map[string]any) vali
 }
 
 // validateStepCall validates step call for the main package.
-func validateStepCall(step evalStep, toolName string, input map[string]any) validationResult {
+func validateStepCall(step ExpectedStep, toolName string, input map[string]any) validationResult {
 	if step.ExpectedAction == "" {
 		return validateStandaloneToolCall(step, toolName, input)
 	}
@@ -26,7 +26,7 @@ func validateStepCall(step evalStep, toolName string, input map[string]any) vali
 }
 
 // validateStepCallWithRoutes validates step call with routes for the main package.
-func validateStepCallWithRoutes(step evalStep, toolName string, input map[string]any, routes map[string]toolutil.ActionMap) validationResult {
+func validateStepCallWithRoutes(step ExpectedStep, toolName string, input map[string]any, routes map[string]toolutil.ActionMap) validationResult {
 	input = normalizeRouteActionInput(step, toolName, input, routes)
 	route, ok := routes[step.ExpectedTool][step.ExpectedAction]
 	validationInput, schemaInput := normalizeRouteParamsInput(step, toolName, input, route, ok)
@@ -61,7 +61,7 @@ func validateStepCallWithRoutes(step evalStep, toolName string, input map[string
 	return result
 }
 
-func normalizeRouteActionInput(step evalStep, toolName string, input map[string]any, routes map[string]toolutil.ActionMap) map[string]any {
+func normalizeRouteActionInput(step ExpectedStep, toolName string, input map[string]any, routes map[string]toolutil.ActionMap) map[string]any {
 	if step.ExpectedAction == "" || toolName != step.ExpectedTool {
 		return input
 	}
@@ -82,7 +82,7 @@ func normalizeRouteActionInput(step evalStep, toolName string, input map[string]
 	return input
 }
 
-func normalizeRouteParamsInput(step evalStep, toolName string, input map[string]any, route toolutil.ActionRoute, routeOK bool) (validationInput, schemaInput map[string]any) {
+func normalizeRouteParamsInput(step ExpectedStep, toolName string, input map[string]any, route toolutil.ActionRoute, routeOK bool) (validationInput, schemaInput map[string]any) {
 	if step.ExpectedAction == "" || toolName != step.ExpectedTool || !routeOK || route.InputSchema == nil {
 		return input, input
 	}
@@ -291,6 +291,7 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 			problems = append(problems, fmt.Sprintf("%s: %s", diagnosticMissingRequiredParams, required))
 		}
 	}
+	problems = appendForbiddenParamProblems(params, step.ForbiddenParams, problems)
 	problems = validateDestructiveSafety(&result, step, input, params, problems)
 	result.Valid = len(problems) == 0
 	if result.Valid {
@@ -299,6 +300,20 @@ func validateActionToolCall(step evalStep, toolName string, input map[string]any
 		result.Message = strings.Join(problems, "; ")
 	}
 	return result
+}
+
+func appendForbiddenParamProblems(params map[string]any, forbidden, problems []string) []string {
+	var present []string
+	for _, param := range forbidden {
+		if _, ok := params[param]; ok {
+			present = append(present, param)
+		}
+	}
+	if len(present) == 0 {
+		return problems
+	}
+	sort.Strings(present)
+	return append(problems, "forbidden params present: "+strings.Join(present, ", "))
 }
 
 func validateDestructiveSafety(result *validationResult, step evalStep, input, params map[string]any, problems []string) []string {
@@ -318,6 +333,25 @@ func validateDestructiveSafety(result *validationResult, step evalStep, input, p
 		return append(problems, "destructive dynamic task requires top-level confirm=true")
 	}
 	return append(problems, "destructive task requires params.confirm=true")
+}
+
+func recordStepAssertionResults(result *taskResult, step ExpectedStep, validation validationResult, stepNumber int) {
+	result.AssertionResults = append(result.AssertionResults,
+		CaseAssertionResult{Type: CaseAssertionExpectedAction, Step: stepNumber, Name: "expected action", Passed: validation.ToolMatches && validation.ActionMatches, Message: validation.Message},
+		CaseAssertionResult{Type: CaseAssertionRequiredParams, Step: stepNumber, Name: "required params", Passed: validation.RequiredPresent, Message: validation.Message},
+	)
+	if len(step.OptionalParams) > 0 {
+		result.AssertionResults = append(result.AssertionResults, CaseAssertionResult{Type: CaseAssertionOptionalParams, Step: stepNumber, Name: "optional params", Passed: true, Message: strings.Join(step.OptionalParams, ", ")})
+	}
+	if len(step.ForbiddenParams) > 0 {
+		result.AssertionResults = append(result.AssertionResults, CaseAssertionResult{Type: CaseAssertionForbiddenParams, Step: stepNumber, Name: "forbidden params", Passed: !strings.Contains(validation.Message, "forbidden params present"), Message: validation.Message})
+	}
+	if step.Destructive {
+		result.AssertionResults = append(result.AssertionResults, CaseAssertionResult{Type: CaseAssertionDestructiveConfirm, Step: stepNumber, Name: "destructive confirm", Passed: validation.DestructiveSafe, Message: validation.Message})
+	}
+	if len(step.AllowedRepairs) > 0 {
+		result.AssertionResults = append(result.AssertionResults, CaseAssertionResult{Type: CaseAssertionAllowRepair, Step: stepNumber, Name: "allowed repair", Passed: true, Message: strings.Join(step.AllowedRepairs, "; ")})
+	}
 }
 
 // requiredParamPresent returns required param present names for provider schemas.
@@ -415,6 +449,9 @@ func validationRepairText(task evalTask, step evalStep, validation validationRes
 	if strings.Contains(validation.Message, diagnosticUnknownParams) {
 		b.WriteString(". Remove every unknown param from the retry; do not carry IDs from a previous action into an unrelated action unless the envelope above includes that param")
 	}
+	if len(step.AllowedRepairs) > 0 {
+		fmt.Fprintf(&b, ". Allowed repair paths: %s", strings.Join(step.AllowedRepairs, "; "))
+	}
 	if hasParam(step.RequiredParams, "project_id") {
 		b.WriteString(". If a previous tool result included id, project_id, path_with_namespace, or a GitLab project path, put that value in params.project_id")
 	}
@@ -429,6 +466,8 @@ func validationErrorKind(message string, validation validationResult) string {
 		return "missing_required_param"
 	case strings.Contains(message, diagnosticUnknownParams):
 		return "unknown_param"
+	case strings.Contains(message, "forbidden params present"):
+		return "forbidden_param"
 	case strings.Contains(message, "integer") || strings.Contains(message, "expected type"):
 		return "wrong_type"
 	case strings.Contains(message, "destructive") && strings.Contains(message, "confirm"):
@@ -468,6 +507,9 @@ func validationBadParam(message string) string {
 		if _, params, hasColon := strings.Cut(after, ":"); hasColon {
 			return firstRepairParam(params)
 		}
+	}
+	if _, params, ok := strings.Cut(message, "forbidden params present:"); ok {
+		return firstRepairParam(params)
 	}
 	if _, after, ok := strings.Cut(message, "params."); ok {
 		return firstRepairParam(after)
@@ -661,6 +703,7 @@ func validateStandaloneToolCall(step evalStep, toolName string, input map[string
 			problems = append(problems, fmt.Sprintf("%s%s", diagnosticMissingRequiredStandalone, required))
 		}
 	}
+	problems = appendForbiddenParamProblems(input, step.ForbiddenParams, problems)
 	result.DestructiveSafe = true
 	if step.Destructive && result.ToolMatches {
 		result.DestructiveSafe = isTruthy(input["confirm"])

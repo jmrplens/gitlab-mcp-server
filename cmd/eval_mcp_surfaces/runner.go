@@ -17,6 +17,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	mcpToolTransientAttempts  = 5
+	mcpToolTransientRetryWait = 750 * time.Millisecond
+)
+
 type modelRunner struct {
 	apiKey      string
 	provider    string
@@ -104,7 +109,12 @@ type stepToolUseContext struct {
 
 // evaluateTask handles evaluate task for modelRunner.
 func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog []modelTool, routes map[string]toolutil.ActionMap) taskResult {
-	steps := taskSteps(task)
+	return r.evaluatePreparedCase(ctx, preparedCaseFromTask(task), catalog, routes)
+}
+
+func (r *modelRunner) evaluatePreparedCase(ctx context.Context, prepared PreparedCase, catalog []modelTool, routes map[string]toolutil.ActionMap) taskResult {
+	task := taskFromPreparedCase(prepared)
+	steps := prepared.Steps
 	userPrompt := taskPromptForSurface(task, r.toolSurface)
 	systemPrompt := systemPromptForTask(task, r.toolSurface)
 	callBudget := callBudgetForTask(task, r.toolSurface)
@@ -133,6 +143,39 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 
 	result.Notes = append(result.Notes, fmt.Sprintf("tool-call step limit reached after %d/%d scenario steps", result.CompletedSteps, len(steps)))
 	return result
+}
+
+func preparedCaseFromTask(task evalTask) PreparedCase {
+	evalCase := EvalCase{ID: EvalCaseID(task.ID), Prompt: task.Prompt, Steps: stepsFromTask(task)}
+	if task.Case != nil {
+		evalCase = *task.Case
+	}
+	if task.Prompt != "" {
+		evalCase.Prompt = task.Prompt
+	}
+	steps := stepsFromTask(task)
+	if len(steps) == 0 {
+		steps = cloneExpectedSteps(evalCase.Steps)
+	}
+	return PreparedCase{Case: evalCase, Prompt: firstNonEmpty(task.Prompt, casePrompt(evalCase)), Steps: steps}
+}
+
+func taskFromPreparedCase(prepared PreparedCase) evalTask {
+	evalCase := prepared.Case
+	if prepared.Prompt != "" {
+		evalCase.Prompt = prepared.Prompt
+	}
+	if len(prepared.Steps) > 0 {
+		evalCase.Steps = cloneExpectedSteps(prepared.Steps)
+	}
+	task := taskFromCase(evalCase)
+	if prepared.Prompt != "" {
+		task.Prompt = prepared.Prompt
+	}
+	if len(prepared.Steps) > 0 {
+		task.Steps = cloneExpectedSteps(prepared.Steps)
+	}
+	return task
 }
 
 func recordModelCallError(result *taskResult, err error) {
@@ -180,6 +223,7 @@ func (r *modelRunner) handleStepToolUse(ctx context.Context, stepCtx stepToolUse
 
 	stepIndex := turnCtx.state.stepIndex
 	validation := validateStepCallWithRoutes(turnCtx.steps[stepIndex], toolUse.Name, toolUse.Input, turnCtx.routes)
+	recordStepAssertionResults(turnCtx.result, turnCtx.steps[stepIndex], validation, stepIndex+1)
 	turnCtx.result.Trace.Events = append(turnCtx.result.Trace.Events, traceValidationEvent(turnCtx.result.ModelCalls, validation))
 	if acceptsDynamicPreludeCall(r.toolSurface, turnCtx.steps[stepIndex], validation) {
 		appendDynamicPreludeFollowup(turnCtx.steps, stepIndex, toolUse, validation, turnCtx.result, turnCtx.state, stepCtx.followups)
@@ -327,6 +371,7 @@ func handleNoToolUseResult(result *taskResult, state *modelEvaluationState, repa
 func (r *modelRunner) handleExpectedCapabilityBridgeStep(ctx context.Context, bridgeCtx capabilityBridgeStepContext) bool {
 	step := bridgeCtx.steps[bridgeCtx.state.stepIndex]
 	validation := validateStepCallWithRoutes(step, bridgeCtx.toolUse.Name, bridgeCtx.toolUse.Input, bridgeCtx.routes)
+	recordStepAssertionResults(bridgeCtx.result, step, validation, bridgeCtx.state.stepIndex+1)
 	bridgeCtx.result.Trace.Events = append(bridgeCtx.result.Trace.Events, traceValidationEvent(bridgeCtx.result.ModelCalls, validation))
 	recordValidationAttempt(bridgeCtx.result, bridgeCtx.toolUse, validation, bridgeCtx.state)
 	if !validation.Valid {
@@ -610,11 +655,31 @@ func successfulSimulatedToolContent(step evalStep, toolUse modelContentBlock, ne
 	params, _ := toolUse.Input["params"].(map[string]any)
 	addSimulatedResourceIDs(result, action, params)
 	populateSimulatedToolResult(result, step, toolUse, action, params)
+	addProducedValues(result, step, params)
 	data, err := json.Marshal(result)
 	if err != nil {
 		return fmt.Sprintf("ok; continue with step %d of %d", nextStep, totalSteps)
 	}
 	return string(data)
+}
+
+func addProducedValues(result map[string]any, step evalStep, params map[string]any) {
+	if len(step.ProducedValues) == 0 {
+		return
+	}
+	produced := map[string]any{}
+	for _, key := range step.ProducedValues {
+		if value, ok := result[key]; ok {
+			produced[key] = value
+			continue
+		}
+		if value, ok := params[key]; ok {
+			produced[key] = value
+		}
+	}
+	if len(produced) > 0 {
+		result["produced_values"] = produced
+	}
 }
 
 func populateSimulatedToolResult(result map[string]any, step evalStep, toolUse modelContentBlock, action string, params map[string]any) {
@@ -920,6 +985,23 @@ func (r *modelRunner) validatedToolResult(ctx context.Context, step evalStep, to
 
 // mcpToolResult handles MCP tool result for modelRunner.
 func (r *modelRunner) mcpToolResult(ctx context.Context, toolUse modelContentBlock) simulationResult {
+	var last simulationResult
+	for attempt := range mcpToolTransientAttempts {
+		last = r.mcpToolResultOnce(ctx, toolUse)
+		if !isTransientMCPToolResult(last) {
+			return last
+		}
+		if attempt == mcpToolTransientAttempts-1 {
+			return last
+		}
+		if err := waitForContext(ctx, mcpToolTransientRetryWait); err != nil {
+			return simulationResult{Content: fmt.Sprintf("MCP tool call retry interrupted: %s", err), Injected: true, Err: err}
+		}
+	}
+	return last
+}
+
+func (r *modelRunner) mcpToolResultOnce(ctx context.Context, toolUse modelContentBlock) simulationResult {
 	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	exchange := &traceMCPExchange{Request: traceMCPRequest{Name: toolUse.Name, Arguments: toolUse.Input}}
@@ -943,6 +1025,14 @@ func (r *modelRunner) mcpToolResult(ctx context.Context, toolUse modelContentBlo
 		return simulationResult{Content: content, Injected: true, Err: errors.New(content), MCP: exchange}
 	}
 	return simulationResult{Content: content, Advance: true, Injected: true, MCP: exchange}
+}
+
+func isTransientMCPToolResult(result simulationResult) bool {
+	if result.Err == nil {
+		return false
+	}
+	text := strings.ToLower(result.Content + " " + result.Err.Error())
+	return strings.Contains(text, "packed-refs locked") || strings.Contains(text, "reference update failed") || strings.Contains(text, "failed to remove tag")
 }
 
 // capabilityBridgeResult handles evaluator MCP client capability bridge calls.

@@ -79,6 +79,89 @@ func TestValidateStepCallWithRoutes_UsesNormalizedParams(t *testing.T) {
 	}
 }
 
+func TestValidateStepCallWithRoutes_RejectsForbiddenParams(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: toolutil.ActionRoute{}}}
+	step := evalStep{
+		ExpectedTool:    dynamicExecuteActionTool,
+		ExpectedAction:  actionProjectGet,
+		RequiredParams:  []string{"project_id"},
+		ForbiddenParams: []string{"token"},
+		AllowedRepairs:  []string{"remove token and retry with project_id only"},
+	}
+	input := map[string]any{"action": actionProjectGet, "params": map[string]any{"project_id": "my/project", "token": "secret"}}
+
+	result := validateStepCallWithRoutes(step, dynamicExecuteActionTool, input, routes)
+
+	if result.Valid || !strings.Contains(result.Message, "forbidden params present: token") {
+		t.Fatalf("result = %+v, want forbidden token", result)
+	}
+	var assertionTarget taskResult
+	recordStepAssertionResults(&assertionTarget, step, result, 1)
+	if !hasFailedAssertion(assertionTarget.AssertionResults, CaseAssertionForbiddenParams) {
+		t.Fatalf("assertion results = %+v, want forbidden param failure", assertionTarget.AssertionResults)
+	}
+	payload := repairPayloadForValidation(evalTask{Prompt: "Get project."}, step, result, input, validationRepairText(evalTask{Prompt: "Get project."}, step, result, input))
+	if payload.ErrorKind != "forbidden_param" || payload.BadParam != "token" || !strings.Contains(payload.LikelyFix, "remove token") {
+		t.Fatalf("payload = %+v, want forbidden_param repair with allowed path", payload)
+	}
+}
+
+func hasFailedAssertion(results []CaseAssertionResult, assertionType CaseAssertionType) bool {
+	for _, result := range results {
+		if result.Type == assertionType && !result.Passed {
+			return true
+		}
+	}
+	return false
+}
+
+func TestValidateStepCallWithRoutes_ReportsWrongAction(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: toolutil.ActionRoute{}}}
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}}
+	input := map[string]any{"action": actionProjectList, "params": map[string]any{"project_id": "my/project"}}
+
+	result := validateStepCallWithRoutes(step, dynamicExecuteActionTool, input, routes)
+
+	if result.Valid || result.ActionMatches || !strings.Contains(result.Message, "expected action project.get") {
+		t.Fatalf("result = %+v, want wrong action diagnostic", result)
+	}
+	payload := repairPayloadForValidation(evalTask{Prompt: "Get project."}, step, result, input, validationRepairText(evalTask{Prompt: "Get project."}, step, result, input))
+	if payload.ErrorKind != "wrong_action" || payload.FailedAction != actionProjectList {
+		t.Fatalf("payload = %+v, want wrong_action for attempted project.list", payload)
+	}
+}
+
+func TestValidateStepCallWithRoutes_PreservesDestructiveConfirmSemantics(t *testing.T) {
+	dynamicStep := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.delete", RequiredParams: []string{"project_id", "issue_iid"}, Destructive: true}
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteActionTool: {"issue.delete": toolutil.ActionRoute{}},
+		"gitlab_issue":           {"delete": toolutil.ActionRoute{}},
+	}
+	params := map[string]any{"project_id": "my/project", "issue_iid": 7}
+	missingDynamicConfirm := validateStepCallWithRoutes(dynamicStep, dynamicExecuteActionTool, map[string]any{"action": "issue.delete", "params": params}, routes)
+	if missingDynamicConfirm.Valid || missingDynamicConfirm.DestructiveSafe || !strings.Contains(missingDynamicConfirm.Message, "top-level confirm=true") {
+		t.Fatalf("missing dynamic confirm = %+v, want top-level confirm requirement", missingDynamicConfirm)
+	}
+	paramsConfirmOnly := validateStepCallWithRoutes(dynamicStep, dynamicExecuteActionTool, map[string]any{"action": "issue.delete", "params": map[string]any{"project_id": "my/project", "issue_iid": 7, "confirm": true}}, routes)
+	if paramsConfirmOnly.Valid || paramsConfirmOnly.DestructiveSafe {
+		t.Fatalf("params confirm only = %+v, want dynamic top-level confirm requirement", paramsConfirmOnly)
+	}
+	validDynamic := validateStepCallWithRoutes(dynamicStep, dynamicExecuteActionTool, map[string]any{"action": "issue.delete", "params": params, "confirm": true}, routes)
+	if !validDynamic.Valid || !validDynamic.DestructiveSafe {
+		t.Fatalf("valid dynamic = %+v, want destructive-safe", validDynamic)
+	}
+
+	metaStep := evalStep{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", RequiredParams: []string{"project_id", "issue_iid"}, Destructive: true}
+	metaTopLevelConfirm := validateStepCallWithRoutes(metaStep, "gitlab_issue", map[string]any{"action": "delete", "params": params, "confirm": true}, routes)
+	if metaTopLevelConfirm.Valid || metaTopLevelConfirm.DestructiveSafe {
+		t.Fatalf("meta top-level confirm = %+v, want params.confirm requirement", metaTopLevelConfirm)
+	}
+	validMeta := validateStepCallWithRoutes(metaStep, "gitlab_issue", map[string]any{"action": "delete", "params": map[string]any{"project_id": "my/project", "issue_iid": 7, "confirm": true}}, routes)
+	if !validMeta.Valid || !validMeta.DestructiveSafe {
+		t.Fatalf("valid meta = %+v, want destructive-safe", validMeta)
+	}
+}
+
 // TestValidateStandaloneToolCall_RejectsActionEnvelope verifies standalone tools
 // use top-level fields rather than meta-tool action envelopes.
 func TestValidateStandaloneToolCall_RejectsActionEnvelope(t *testing.T) {
@@ -139,6 +222,21 @@ func TestSimulatedToolResult_OnlyInjectsFirstAttempt(t *testing.T) {
 	unsupported := simulatedToolResult(evalStep{Simulation: "unknown"}, 0, 1, 1)
 	if unsupported.Err == nil || !unsupported.Injected {
 		t.Fatalf("unsupported simulation = %+v, want injected error", unsupported)
+	}
+}
+
+func TestSuccessfulSimulatedToolContent_EmitsProducedValues(t *testing.T) {
+	content := successfulSimulatedToolContent(evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", ProducedValues: []string{"issue_iid", "project_id"}}, modelContentBlock{
+		Name:  dynamicExecuteActionTool,
+		Input: map[string]any{"action": "issue.create", "params": map[string]any{"project_id": "my/project", "title": "eval"}},
+	}, 2, 3)
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(content), &decoded); err != nil {
+		t.Fatalf("successfulSimulatedToolContent() invalid JSON %q: %v", content, err)
+	}
+	produced := decoded["produced_values"].(map[string]any)
+	if produced["project_id"] != "my/project" || produced["issue_iid"] == nil {
+		t.Fatalf("produced values = %#v, want project_id and generated issue_iid", produced)
 	}
 }
 

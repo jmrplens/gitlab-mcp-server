@@ -33,6 +33,7 @@ func dynamicSystemPrompt(_ string) string {
 
 // taskPromptForSurface returns task guidance for the selected tool catalog.
 func taskPromptForSurface(task evalTask, toolSurface string) string {
+	task = taskWithRenderedCasePrompt(task)
 	if !isDynamicEvalSurface(toolSurface) {
 		return taskPrompt(task)
 	}
@@ -43,6 +44,25 @@ func taskPromptForSurface(task evalTask, toolSurface string) string {
 	}
 	exactPreamble = joinNonEmpty("\n\n", exactPreamble, dynamicWorkflowPlanPreamble(task))
 	return joinDynamicPrompt(exactPreamble, prompt, "Dynamic mode override: visible tools include gitlab_find_action, gitlab_execute_action, and any MCP capability bridge tools provided for this run. Use bridge tools directly for capability, resource, prompt, and completion inspection steps. Treat any catalog route as a canonical action ID for gitlab_execute_action. For multi-step tasks with a Dynamic workflow plan, follow that plan in order and use gitlab_find_action only if an action ID or params schema is absent from the plan. Otherwise, use gitlab_find_action before executing when an action ID or params schema is not exact. Any final GitLab operation must be a gitlab_execute_action call with action set to the canonical domain.action ID and params limited to the selected action input_schema. For destructive operations, put confirm:true at the top level of gitlab_execute_action arguments; do not put confirm inside params.")
+}
+
+func taskWithRenderedCasePrompt(task evalTask) evalTask {
+	if task.Case == nil || task.Prompt != "" {
+		return task
+	}
+	if task.Case.Prompt != "" {
+		task.Prompt = task.Case.Prompt
+		return task
+	}
+	if task.Case.PromptTemplate.Text == "" {
+		return task
+	}
+	prompt, err := RenderCasePrompt(*task.Case, nil)
+	if err != nil {
+		return task
+	}
+	task.Prompt = prompt
+	return task
 }
 
 // joinNonEmpty joins non-blank prompt fragments with the requested separator.

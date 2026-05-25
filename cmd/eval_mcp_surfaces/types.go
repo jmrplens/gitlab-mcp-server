@@ -18,6 +18,7 @@ type options struct {
 	ToolsFile              string
 	CompareReports         stringList
 	CheckEfficiency        stringList
+	CheckReportClean       stringList
 	CompareTraces          stringList
 	EfficiencyAllowTask    stringList
 	PublishFrom            stringList
@@ -32,6 +33,11 @@ type options struct {
 	CoverageReport         string
 	Backend                string
 	GitLabEnv              string
+	DockerCompose          string
+	DockerComposeFile      string
+	DockerGitLabURL        string
+	DockerAutoStart        bool
+	DockerWaitTimeout      time.Duration
 	MCPCommand             string
 	MCPArgs                stringList
 	MCPEnv                 string
@@ -94,17 +100,11 @@ type evalTask struct {
 	Destructive    bool
 	Simulation     string
 	Steps          []evalStep
+	Case           *EvalCase
 }
 
-// evalStep holds eval step data for the main package.
-type evalStep struct {
-	ExpectedTool   string
-	ExpectedAction string
-	RequiredParams []string
-	OptionalParams []string
-	Destructive    bool
-	Simulation     string
-}
+// evalStep keeps existing result and trace code aligned with typed expected steps.
+type evalStep = ExpectedStep
 
 // pricingOptions captures pricing options data for evaluation summaries.
 type pricingOptions struct {
@@ -272,6 +272,7 @@ type taskResult struct {
 	CapabilityCalls      int
 	Usage                modelUsage
 	Notes                []string
+	AssertionResults     []CaseAssertionResult
 	Trace                taskTrace
 }
 

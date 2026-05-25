@@ -11,7 +11,10 @@ import (
 	"time"
 )
 
-var evalElicitationReleaseTag atomic.Value
+var (
+	evalElicitationReleaseTag   atomic.Value
+	evalElicitationSourceBranch atomic.Value
+)
 
 // liveResourceSequence stores the package-level live resource sequence state.
 var liveResourceSequence atomic.Uint64

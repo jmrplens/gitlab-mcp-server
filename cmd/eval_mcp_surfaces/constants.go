@@ -1,8 +1,6 @@
 package main
 
 const (
-	// defaultTasksPath identifies the default tasks path constant used by this package.
-	defaultTasksPath = "cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md"
 	// defaultEvalDir identifies the default eval dir constant used by this package.
 	defaultEvalDir = "dist/evaluation/mcp-surfaces"
 	// defaultFixtures identifies the default fixtures constant used by this package.
@@ -45,6 +43,12 @@ const (
 	promptGetTool = "gitlab_get_prompt"
 	// completionTool identifies the evaluator completion bridge tool.
 	completionTool = "gitlab_complete"
+	// defaultDockerComposeFile identifies the default Docker Compose file for GitLab evaluator runs.
+	defaultDockerComposeFile = "test/e2e/docker-compose.yml"
+	// defaultDockerGitLabURL identifies the default host URL exposed by the Docker GitLab fixture stack.
+	defaultDockerGitLabURL = "http://localhost:8929"
+	// defaultDockerGitLabEEImage identifies the default GitLab EE image used for Enterprise Docker runtimes.
+	defaultDockerGitLabEEImage = "gitlab/gitlab-ee:latest"
 )
 
 const (
@@ -158,8 +162,6 @@ const (
 	diagnosticExpectedAction = "expected action"
 	// diagnosticUnexpectedTopLevelParameter identifies invalid dynamic envelopes.
 	diagnosticUnexpectedTopLevelParameter = "unexpected top-level parameter"
-	// liveDeleteFixtureNameFormat identifies temporary fixture names for destructive live tests.
-	liveDeleteFixtureNameFormat = "delete-fixture-%s"
 )
 
 // evalElicitationReleaseTag stores the package-level eval elicitation release tag state.

@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+)
 
 // TestCapabilityBridgePredicates_ClassifyBridgeTools verifies runner bridge
 // detection is shared by generic and expected-step paths.
@@ -73,4 +78,44 @@ func TestRunnerTraceSummaryAndResourceHelpers(t *testing.T) {
 	if summary.ExpectedSteps != 2 || summary.Notes != "a; b" || !summary.FinalSuccess {
 		t.Fatalf("traceSummaryFromResult() = %+v, want expected steps and notes", summary)
 	}
+}
+
+func TestEvaluatePreparedCase_UsesRenderedPromptAndTypedSteps(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "fixture/project"}}),
+	)
+	prepared := PreparedCase{
+		Case: EvalCase{
+			ID:     "MT-PREPARED-001",
+			Prompt: "Get project `placeholder/project`.",
+			Steps:  []ExpectedStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}},
+		},
+		Prompt: "Get project `fixture/project`.",
+		Steps:  []ExpectedStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}, ProducedValues: []string{"project_id"}}},
+	}
+	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": projectGetRoute()}}
+
+	result := runner.evaluatePreparedCase(t.Context(), prepared, nil, routes)
+
+	if !result.FinalSuccess || result.CompletedSteps != 1 {
+		t.Fatalf("result = %+v, want prepared case success", result)
+	}
+	if result.Task.Prompt != "Get project `fixture/project`." || !strings.Contains(result.Trace.UserPrompt, "fixture/project") {
+		t.Fatalf("prompt task=%q trace=%q, want rendered fixture prompt", result.Task.Prompt, result.Trace.UserPrompt)
+	}
+	if got := strings.Join(result.Task.Steps[0].ProducedValues, ","); got != "project_id" {
+		t.Fatalf("produced values = %q, want project_id", got)
+	}
+	if !hasPassedAssertion(result.AssertionResults, CaseAssertionExpectedAction) || !hasPassedAssertion(result.AssertionResults, CaseAssertionRequiredParams) {
+		t.Fatalf("assertion results = %+v, want expected action and required params pass", result.AssertionResults)
+	}
+}
+
+func hasPassedAssertion(results []CaseAssertionResult, assertionType CaseAssertionType) bool {
+	for _, result := range results {
+		if result.Type == assertionType && result.Passed {
+			return true
+		}
+	}
+	return false
 }

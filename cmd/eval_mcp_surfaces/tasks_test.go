@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -55,14 +54,15 @@ func TestFilterTasksByEdition_ExcludesCEUnavailableRoutes(t *testing.T) {
 	tasks := []evalTask{
 		{ID: "base", ExpectedTool: "gitlab_project", ExpectedAction: "get"},
 		{ID: "ce-unavailable", ExpectedTool: "gitlab_model_registry", ExpectedAction: "download"},
+		{ID: "typed-ce-route", ExpectedTool: "gitlab_model_registry", ExpectedAction: "download", Case: &EvalCase{Edition: EvalCaseEdition(editionCE)}},
 	}
 
 	ce, err := filterTasksByEdition(tasks, editionCE)
 	if err != nil {
 		t.Fatalf("filterTasksByEdition(ce) error = %v", err)
 	}
-	if got := taskIDs(ce); got != "base" {
-		t.Fatalf("CE filtered IDs = %q, want base", got)
+	if got := taskIDs(ce); got != "base,typed-ce-route" {
+		t.Fatalf("CE filtered IDs = %q, want base,typed-ce-route", got)
 	}
 	enterprise, err := filterTasksByEdition(tasks, editionEnterprise)
 	if err != nil {
@@ -76,12 +76,7 @@ func TestFilterTasksByEdition_ExcludesCEUnavailableRoutes(t *testing.T) {
 // TestFilterTasksByPreset_EnterpriseDockerUsesLiveFixtureRows verifies Docker
 // Enterprise presets avoid schema-only Enterprise rows that do not have live fixtures.
 func TestFilterTasksByPreset_EnterpriseDockerUsesLiveFixtureRows(t *testing.T) {
-	tasks := []evalTask{
-		{ID: "MT-137", ExpectedTool: "gitlab", ExpectedAction: "group.epic_create"},
-		{ID: "MT-192", ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_add"},
-		{ID: "MT-196", ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_delete", Destructive: true},
-		{ID: "MS-045", Steps: []evalStep{{ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_add"}, {ExpectedTool: "gitlab_project", ExpectedAction: "push_rule_delete", Destructive: true}}},
-	}
+	tasks := evalTasksByID(t, "MT-137", "MT-192", "MT-196", "MS-045")
 
 	mutating, err := filterTasksByPreset(tasks, presetDockerEnterpriseMutatingSafe)
 	if err != nil {
@@ -106,6 +101,69 @@ func TestFilterTasksByPreset_EnterpriseDockerUsesLiveFixtureRows(t *testing.T) {
 	}
 }
 
+func evalTasksByID(t *testing.T, ids ...string) []evalTask {
+	t.Helper()
+	tasks := make([]evalTask, 0, len(ids))
+	for _, id := range ids {
+		evalCase, ok := CaseByID(id)
+		if !ok {
+			t.Fatalf("CaseByID(%s) = false", id)
+		}
+		tasks = append(tasks, taskFromCase(evalCase))
+	}
+	return tasks
+}
+
+// TestFilterTasksByPreset_UsesTypedCaseMetadata verifies typed registry
+// metadata, not ID heuristics, is the source of truth when present.
+func TestFilterTasksByPreset_UsesTypedCaseMetadata(t *testing.T) {
+	custom := evalTask{
+		ID:             "typed-custom-enterprise",
+		ExpectedTool:   "gitlab_project",
+		ExpectedAction: "archive",
+		Case: &EvalCase{
+			ID:          "typed-custom-enterprise",
+			Edition:     EvalCaseEdition(editionEnterprise),
+			Partition:   EvalPartition(partitionEnterpriseRead),
+			Presets:     []EvalPreset{EvalPreset(presetDockerEnterpriseRead)},
+			Mutating:    false,
+			Destructive: false,
+		},
+	}
+
+	read, err := filterTasksByPreset([]evalTask{custom}, presetDockerEnterpriseRead)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-enterprise-read) error = %v", err)
+	}
+	if got := taskIDs(read); got != "typed-custom-enterprise" {
+		t.Fatalf("docker-enterprise-read IDs = %q, want typed-custom-enterprise", got)
+	}
+	if !taskIsEnterpriseDockerFixture(custom) {
+		t.Fatal("taskIsEnterpriseDockerFixture(typed custom) = false, want true from typed presets")
+	}
+	partitioned, err := filterTasksByPartition([]evalTask{custom}, partitionEnterpriseRead)
+	if err != nil {
+		t.Fatalf("filterTasksByPartition(enterprise-read) error = %v", err)
+	}
+	if got := taskIDs(partitioned); got != "typed-custom-enterprise" {
+		t.Fatalf("enterprise-read IDs = %q, want typed-custom-enterprise", got)
+	}
+	readOnly, err := filterTasksByMutation([]evalTask{custom}, true, false)
+	if err != nil {
+		t.Fatalf("filterTasksByMutation(skip) error = %v", err)
+	}
+	if got := taskIDs(readOnly); got != "typed-custom-enterprise" {
+		t.Fatalf("skip-mutating IDs = %q, want typed-custom-enterprise", got)
+	}
+	nonDestructive, err := filterTasksByDestructive([]evalTask{custom}, true, false)
+	if err != nil {
+		t.Fatalf("filterTasksByDestructive(skip) error = %v", err)
+	}
+	if got := taskIDs(nonDestructive); got != "typed-custom-enterprise" {
+		t.Fatalf("skip-destructive IDs = %q, want typed-custom-enterprise", got)
+	}
+}
+
 // TestTaskUsesCapabilityFallback_DetectsBridgeAndPromptOnlyTasks verifies the
 // capability fallback partition only selects tasks that need MCP capability access.
 func TestTaskUsesCapabilityFallback_DetectsBridgeAndPromptOnlyTasks(t *testing.T) {
@@ -124,14 +182,59 @@ func TestTaskUsesCapabilityFallback_DetectsBridgeAndPromptOnlyTasks(t *testing.T
 // availability accepts evaluator bridge tools and rejects unknown catalog routes.
 func TestTaskRoutesAvailable_HandlesStandaloneBridgeAndMissingRoutes(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{"gitlab_project": {"get": toolutil.ActionRoute{}}}
+	enterpriseRoutes := map[string]toolutil.ActionMap{
+		"gitlab_environment": {"deployment_approve_or_reject": toolutil.ActionRoute{}},
+	}
 	if !taskRoutesAvailable(evalTask{Steps: []evalStep{{ExpectedTool: resourceListTool}}}, routes, false) {
 		t.Fatal("taskRoutesAvailable(resourceListTool) = false, want true")
+	}
+	if taskRoutesAvailable(evalTask{ExpectedTool: "gitlab_environment", ExpectedAction: "deployment_approve_or_reject"}, enterpriseRoutes, false) {
+		t.Fatal("taskRoutesAvailable(enterprise route on CE catalog) = true, want false")
+	}
+	if !taskRoutesAvailable(evalTask{ExpectedTool: "gitlab_environment", ExpectedAction: "deployment_approve_or_reject"}, enterpriseRoutes, true) {
+		t.Fatal("taskRoutesAvailable(enterprise route on Enterprise catalog) = false, want true")
 	}
 	if taskRoutesAvailable(evalTask{ExpectedTool: "gitlab_project", ExpectedAction: "missing"}, routes, false) {
 		t.Fatal("taskRoutesAvailable(missing route) = true, want false")
 	}
 	if taskRoutesAvailable(evalTask{ID: "MT-105", ExpectedTool: "gitlab_project", ExpectedAction: "get"}, routes, false) {
 		t.Fatal("taskRoutesAvailable(unavailable task) = true, want false")
+	}
+	if taskRoutesAvailable(evalTask{ID: "typed-skip", ExpectedTool: "gitlab_project", ExpectedAction: "get", Case: &EvalCase{SkipReasons: []string{"not available"}}}, routes, false) {
+		t.Fatal("taskRoutesAvailable(typed skip) = true, want false")
+	}
+}
+
+// TestOrderSharedFixtureDestructiveLast_UsesTypedFixtureDependencies verifies
+// typed attempt-scoped fixtures and self-contained create/delete workflows are
+// not delayed by shared-resource ordering.
+func TestOrderSharedFixtureDestructiveLast_UsesTypedFixtureDependencies(t *testing.T) {
+	tasks := []evalTask{
+		{
+			ID:             "MT-024",
+			ExpectedTool:   dynamicExecuteActionTool,
+			ExpectedAction: "job.delete_artifacts",
+			Case: &EvalCase{
+				Fixtures: []CaseFixtureSpec{FailedJobArtifactFixture},
+			},
+		},
+		{
+			ID:             "MS-043",
+			ExpectedTool:   "gitlab_project",
+			ExpectedAction: "service_account_delete",
+			Steps: []evalStep{
+				{ExpectedTool: "gitlab_project", ExpectedAction: "service_account_create"},
+				{ExpectedTool: "gitlab_project", ExpectedAction: "service_account_delete"},
+			},
+			Case: &EvalCase{ID: "MS-043"},
+		},
+		{ID: "MT-065", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.download_single_artifact"},
+	}
+
+	ordered := orderSharedFixtureDestructiveLast(tasks)
+
+	if got := taskIDs(ordered); got != "MT-024,MS-043,MT-065" {
+		t.Fatalf("ordered IDs = %q, want MT-024,MS-043,MT-065", got)
 	}
 }
 
@@ -218,49 +321,5 @@ func TestNormalizeTasksForCatalog_RewritesTopLevelAndStepRoutes(t *testing.T) {
 	meta := normalizeTasksForCatalog(tasks, metaRoutes, "meta")
 	if meta[0].ExpectedTool != "gitlab" || meta[0].ExpectedAction != "project.get" {
 		t.Fatalf("meta normalized = %+v", meta[0])
-	}
-}
-
-// TestParseTaskRow_ReportsColumnErrors verifies malformed task rows produce
-// actionable parse errors instead of silently building partial scenarios.
-func TestParseTaskRow_ReportsColumnErrors(t *testing.T) {
-	_, err := parseTaskRow([]string{"MT-1", "Prompt", "`gitlab_project` / `get` -> `gitlab_issue` / `create`", "`project_id`", "none; none", "none", "ok"})
-	if err == nil || !strings.Contains(err.Error(), "required params") {
-		t.Fatalf("parseTaskRow() error = %v, want required params error", err)
-	}
-}
-
-// TestParseExpectedToolAction_CoversStandaloneAndErrorForms verifies expected tool/action parsing edge cases.
-func TestParseExpectedToolAction_CoversStandaloneAndErrorForms(t *testing.T) {
-	tests := []struct {
-		name       string
-		value      string
-		wantTool   string
-		wantAction string
-		wantErr    string
-	}{
-		{name: "standalone", value: "`resource_list`", wantTool: "resource_list"},
-		{name: "none action", value: "`gitlab_project` / `none`", wantTool: "gitlab_project"},
-		{name: "dash action", value: "`gitlab_project` / `-`", wantTool: "gitlab_project"},
-		{name: "empty standalone", value: "   ", wantErr: "empty tool"},
-		{name: "too many separators", value: "gitlab / project / get", wantErr: "expected tool/action pair"},
-		{name: "empty tool action", value: " / get", wantErr: "empty tool/action"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tool, action, err := parseExpectedToolAction(tt.value)
-			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("parseExpectedToolAction(%q) error = %v, want substring %q", tt.value, err, tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("parseExpectedToolAction(%q) error = %v", tt.value, err)
-			}
-			if tool != tt.wantTool || action != tt.wantAction {
-				t.Fatalf("parseExpectedToolAction(%q) = %q/%q, want %q/%q", tt.value, tool, action, tt.wantTool, tt.wantAction)
-			}
-		})
 	}
 }

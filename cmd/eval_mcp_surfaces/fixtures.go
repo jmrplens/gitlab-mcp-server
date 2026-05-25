@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -36,8 +35,6 @@ const (
 	liveFixtureFeatureRef = "feature/eval"
 	// liveFixtureObsoleteRef identifies the live fixture obsolete ref constant used by this package.
 	liveFixtureObsoleteRef = "obsolete/eval"
-	// liveFixtureFailureTag identifies the live fixture failure tag constant used by this package.
-	liveFixtureFailureTag = "v0.0.0-eval"
 	// liveFixtureCleanupTag identifies the live fixture cleanup tag constant used by this package.
 	liveFixtureCleanupTag = "v0.0.0-eval-ms"
 	// liveFixtureReleaseSummaryTag identifies the live fixture release summary tag constant used by this package.
@@ -78,10 +75,6 @@ const (
 	liveDeleteFixtureFormat = "delete-fixture-%d"
 	// taskFileCreateID identifies the task file create ID constant used by this package.
 	taskFileCreateID = "MT-030"
-	// taskPipelineScheduleID identifies the task pipeline schedule ID constant used by this package.
-	taskPipelineScheduleID = "MT-103"
-	// taskMergeRequestAwardID identifies the task merge request award ID constant used by this package.
-	taskMergeRequestAwardID = "MS-033"
 	// taskPackageReleaseID identifies the package publish plus release workflow task.
 	taskPackageReleaseID  = "MS-038"
 	resourceLabelRunnerID = "runner ID"
@@ -254,7 +247,7 @@ func readLiveFixtures(path string) (*liveFixtureState, error) {
 	if state.CleanupReleaseTag == "" {
 		state.CleanupReleaseTag = liveFixtureCleanupTag
 	}
-	// Legacy fixture snapshots sometimes persisted CleanupReleaseTag into
+	// Older fixture snapshots sometimes persisted CleanupReleaseTag into
 	// ReleaseSummaryTag; treat that value as unset so summary checks migrate to
 	// the dedicated release-summary tag.
 	if state.ReleaseSummaryTag == "" || state.ReleaseSummaryTag == liveFixtureCleanupTag {
@@ -1420,10 +1413,21 @@ func (p *liveFixturePreparer) waitForPipelineJobs(ctx context.Context, pipelineI
 
 // applyLiveFixtureState applies live fixture state transformations.
 func applyLiveFixtureState(tasks []evalTask, state *liveFixtureState) []evalTask {
+	if state == nil {
+		return tasks
+	}
+	fixtureOutput := fixtureOutputFromLiveState(state)
 	out := make([]evalTask, len(tasks))
 	for i, task := range tasks {
 		out[i] = task
-		out[i].Prompt = replaceFixturePrompt(task.ID, task.Prompt, state)
+		if task.Case == nil || task.Case.PromptTemplate.Text == "" {
+			continue
+		}
+		renderedPrompt, err := RenderCasePrompt(*task.Case, fixtureOutput)
+		if err != nil {
+			continue
+		}
+		out[i].Prompt = renderedPrompt
 	}
 	return out
 }
@@ -1464,66 +1468,6 @@ func taskLiveFixtureStateAvailable(task evalTask, state *liveFixtureState) bool 
 	}
 }
 
-// addLiveAttemptResourceSuffix adds live attempt resource suffix for the main package.
-func addLiveAttemptResourceSuffix(task evalTask, modelLabel string, runIndex int, runSuffix string) evalTask {
-	if !taskNeedsAttemptResourceSuffix(task.ID) {
-		return task
-	}
-	suffix := liveAttemptResourceSuffix(modelLabel, runIndex, runSuffix)
-	if suffix == "" {
-		return task
-	}
-	if task.ID == taskFileCreateID || task.ID == "MS-017" {
-		task.Prompt = suffixEvaluationFileCreatePath(task.Prompt, suffix)
-		return task
-	}
-	task.Prompt = suffixEvaluationBacktickValues(task.Prompt, suffix)
-	return task
-}
-
-// suffixEvaluationFileCreatePath appends evaluation file create path to isolate live evaluation resources.
-func suffixEvaluationFileCreatePath(prompt, suffix string) string {
-	return suffixEvaluationBacktickValuesMatching(prompt, suffix, func(value string) bool {
-		return strings.HasPrefix(value, "tmp/eval")
-	})
-}
-
-// suffixEvaluationBacktickValuesMatching appends evaluation backtick values matching to isolate live evaluation resources.
-func suffixEvaluationBacktickValuesMatching(prompt, suffix string, shouldSuffix func(string) bool) string {
-	var out strings.Builder
-	for {
-		before, remaining, ok := strings.Cut(prompt, "`")
-		if !ok {
-			out.WriteString(prompt)
-			return out.String()
-		}
-		out.WriteString(before)
-		out.WriteByte('`')
-		value, after, ok := strings.Cut(remaining, "`")
-		if !ok {
-			out.WriteString(remaining)
-			return out.String()
-		}
-		if shouldSuffix(value) {
-			value = suffixEvaluationValue(value, suffix)
-		}
-		out.WriteString(value)
-		out.WriteByte('`')
-		prompt = after
-	}
-}
-
-// taskNeedsAttemptResourceSuffix reports whether task needs attempt resource suffix.
-func taskNeedsAttemptResourceSuffix(taskID string) bool {
-	switch taskID {
-	case "MT-007", "MT-015", "MT-026", taskFileCreateID, "MT-034", "MT-036", "MT-056", "MT-058", "MT-067", "MT-068",
-		"MT-069", "MT-181", "MT-182", "MT-185", "MT-195", "MS-004", "MS-014", "MS-015", "MS-016", "MS-017", "MS-018", "MS-019", "MS-020", "MS-021", "MS-022", "MS-023", "MS-024", "MS-025", "MS-026", "MS-027", "MS-028", "MS-029", "MS-030", "MS-031", "MS-032", taskMergeRequestAwardID, "MS-035", "MS-036", taskPackageReleaseID, "MS-043", "MS-045", "MS-046", "MS-047", "MS-048", "MS-049", "MS-050", "MS-051", "MS-052", "MS-053", "MS-054":
-		return true
-	default:
-		return false
-	}
-}
-
 // liveAttemptResourceSuffix returns attempt resource suffix for live evaluation runs.
 func liveAttemptResourceSuffix(modelLabel string, runIndex int, runSuffix string) string {
 	modelPart := modelLabel
@@ -1544,28 +1488,6 @@ func liveAttemptResourceSuffix(modelLabel string, runIndex int, runSuffix string
 		text = text[:12]
 	}
 	return fmt.Sprintf("%s-r%d-%s", text, runIndex, runSuffix)
-}
-
-// suffixEvaluationBacktickValues appends evaluation backtick values to isolate live evaluation resources.
-func suffixEvaluationBacktickValues(prompt, suffix string) string {
-	var out strings.Builder
-	for {
-		before, remaining, ok := strings.Cut(prompt, "`")
-		if !ok {
-			out.WriteString(prompt)
-			return out.String()
-		}
-		out.WriteString(before)
-		out.WriteByte('`')
-		value, after, ok := strings.Cut(remaining, "`")
-		if !ok {
-			out.WriteString(remaining)
-			return out.String()
-		}
-		out.WriteString(suffixEvaluationValue(value, suffix))
-		out.WriteByte('`')
-		prompt = after
-	}
 }
 
 // suffixEvaluationValue appends evaluation value to isolate live evaluation resources.
@@ -1607,303 +1529,6 @@ func shouldSuffixEvaluationValue(value string) bool {
 	default:
 		return false
 	}
-}
-
-// replaceFixturePrompt replaces fixture prompt placeholders in evaluation prompts.
-func replaceFixturePrompt(taskID, prompt string, state *liveFixtureState) string {
-	replacements := map[string]string{
-		"https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git": state.RemoteURL,
-		"project ID `123`": fmt.Sprintf("project ID `%d`", state.ProjectID),
-		"project path `my-org/tools/gitlab-mcp-server`": fmt.Sprintf("project path `%s`", state.ProjectPath),
-	}
-	for old, newValue := range replacements {
-		if newValue != "" {
-			prompt = strings.ReplaceAll(prompt, old, newValue)
-		}
-	}
-	prompt = replaceIssuePlaceholders(taskID, prompt, state)
-	prompt = replaceMergeRequestPlaceholders(taskID, prompt, state)
-	prompt = replacePipelinePlaceholders(taskID, prompt, state)
-	prompt = replaceResourcePlaceholders(taskID, prompt, state)
-	prompt = replacePackageReleasePlaceholders(prompt, state)
-	prompt = replaceLifecyclePlaceholders(prompt, state)
-	prompt = replaceDefaultBranchPlaceholders(prompt, state)
-	return prompt
-}
-
-func replaceDefaultBranchPlaceholders(prompt string, state *liveFixtureState) string {
-	if state == nil || state.DefaultBranch == "" || state.DefaultBranch == liveFixtureDefaultRef {
-		return prompt
-	}
-	return strings.ReplaceAll(prompt, fmt.Sprintf("`%s`", liveFixtureDefaultRef), fmt.Sprintf("`%s`", state.DefaultBranch))
-}
-
-// replacePackageReleasePlaceholders replaces package release fixture placeholders in prompts.
-func replacePackageReleasePlaceholders(prompt string, state *liveFixtureState) string {
-	if state == nil {
-		return prompt
-	}
-	files := strings.Join(state.PackageReleaseFiles, ", ")
-	replacements := map[string]string{
-		"__PACKAGE_RELEASE_DIR__":     state.PackageReleaseDir,
-		"__PACKAGE_RELEASE_PACKAGE__": state.PackageReleaseName,
-		"__PACKAGE_RELEASE_VERSION__": state.PackageReleaseVersion,
-		"__PACKAGE_RELEASE_TAG__":     state.PackageReleaseTag,
-		"__PACKAGE_RELEASE_FILES__":   files,
-	}
-	for old, newValue := range replacements {
-		if newValue != "" {
-			prompt = strings.ReplaceAll(prompt, old, newValue)
-		}
-	}
-	return prompt
-}
-
-// replaceLifecyclePlaceholders replaces lifecycle placeholders placeholders in evaluation prompts.
-func replaceLifecyclePlaceholders(prompt string, state *liveFixtureState) string {
-	suffix := fixtureUniqueSuffix(state)
-	if suffix == "" {
-		return prompt
-	}
-	replacements := map[string]string{
-		"`eval-crud-issue`":                    fmt.Sprintf("`eval-crud-issue-%s`", suffix),
-		"`eval-crud-issue-updated`":            fmt.Sprintf("`eval-crud-issue-updated-%s`", suffix),
-		"`eval-note-issue`":                    fmt.Sprintf("`eval-note-issue-%s`", suffix),
-		"`eval-link-source`":                   fmt.Sprintf("`eval-link-source-%s`", suffix),
-		"`eval-link-target`":                   fmt.Sprintf("`eval-link-target-%s`", suffix),
-		"`eval-protect-branch`":                fmt.Sprintf("`eval-protect-branch-%s`", suffix),
-		"`eval-feature-list`":                  fmt.Sprintf("`eval-feature-list-%s`", suffix),
-		"`eval-feature-flag-crud`":             fmt.Sprintf("`eval-feature-flag-crud-%s`", suffix),
-		"`eval-deploy-token`":                  fmt.Sprintf("`eval-deploy-token-%s`", suffix),
-		"`eval-deploy-key`":                    fmt.Sprintf("`eval-deploy-key-%s`", suffix),
-		"`eval-deploy-key-updated`":            fmt.Sprintf("`eval-deploy-key-updated-%s`", suffix),
-		"`eval-time-issue`":                    fmt.Sprintf("`eval-time-issue-%s`", suffix),
-		"`eval-group-label`":                   fmt.Sprintf("`eval-group-label-%s`", suffix),
-		"`eval-group-label-v2`":                fmt.Sprintf("`eval-group-label-v2-%s`", suffix),
-		"`tmp/eval-crud.txt`":                  fmt.Sprintf("`tmp/eval-crud-%s.txt`", suffix),
-		"`v0.0.0-crud`":                        fmt.Sprintf("`v0.0.0-crud-%s`", suffix),
-		"`eval-crud-link`":                     fmt.Sprintf("`eval-crud-link-%s`", suffix),
-		"`eval-crud-trigger`":                  fmt.Sprintf("`eval-crud-trigger-%s`", suffix),
-		"`eval-crud-schedule`":                 fmt.Sprintf("`eval-crud-schedule-%s`", suffix),
-		"`SCHEDULE_CRUD_TOKEN`":                fmt.Sprintf("`SCHEDULE_CRUD_TOKEN_%s`", suffix),
-		"`https://example.com/eval-crud-hook`": fmt.Sprintf("`https://example.com/eval-crud-hook-%s`", suffix),
-		"`eval-crud-badge`":                    fmt.Sprintf("`eval-crud-badge-%s`", suffix),
-		"`eval-crud-wiki`":                     fmt.Sprintf("`eval-crud-wiki-%s`", suffix),
-		"`eval-crud-snippet`":                  fmt.Sprintf("`eval-crud-snippet-%s`", suffix),
-		"`EVAL_CRUD_TOKEN`":                    fmt.Sprintf("`EVAL_CRUD_TOKEN_%s`", suffix),
-		"`GROUP_EVAL_CRUD_TOKEN`":              fmt.Sprintf("`GROUP_EVAL_CRUD_TOKEN_%s`", suffix),
-		"`eval-mr-note`":                       fmt.Sprintf("`eval-mr-note-%s`", suffix),
-		"`eval-mr-note-updated`":               fmt.Sprintf("`eval-mr-note-updated-%s`", suffix),
-		"`Evaluation CRUD release`":            fmt.Sprintf("`Evaluation CRUD release %s`", suffix),
-		"`Evaluation CRUD schedule`":           fmt.Sprintf("`Evaluation CRUD schedule %s`", suffix),
-		"`Evaluation CRUD snippet`":            fmt.Sprintf("`Evaluation CRUD snippet %s`", suffix),
-		"`Evaluation CRUD wiki`":               fmt.Sprintf("`Evaluation CRUD wiki %s`", suffix),
-		"`Evaluation CRUD wiki v2`":            fmt.Sprintf("`Evaluation CRUD wiki v2 %s`", suffix),
-		"`Evaluation CRUD badge link`":         fmt.Sprintf("`Evaluation CRUD badge link %s`", suffix),
-		"`Evaluation Group Milestone`":         fmt.Sprintf("`Evaluation Group Milestone %s`", suffix),
-		"`Evaluation Group Milestone v2`":      fmt.Sprintf("`Evaluation Group Milestone v2 %s`", suffix),
-	}
-	if state.DeployKeyCreateKey != "" {
-		replacements["`ssh-rsa AAAAevalcrud`"] = fmt.Sprintf("`%s`", state.DeployKeyCreateKey)
-	}
-	for old, newValue := range replacements {
-		prompt = strings.ReplaceAll(prompt, old, newValue)
-	}
-	return prompt
-}
-
-// replaceIssuePlaceholders replaces issue placeholders placeholders in evaluation prompts.
-func replaceIssuePlaceholders(taskID, prompt string, state *liveFixtureState) string {
-	issueIID := state.IssueIID
-	if taskID == "MT-013" && state.IssueDeleteIID > 0 {
-		issueIID = state.IssueDeleteIID
-	}
-	if issueIID > 0 {
-		prompt = strings.ReplaceAll(prompt, "issue `42`", fmt.Sprintf("issue `%d`", issueIID))
-	}
-	if taskID == "MT-110" && state.IssueAwardID > 0 {
-		prompt = strings.ReplaceAll(prompt, "award emoji ID `12`", fmt.Sprintf("award emoji ID `%d`", state.IssueAwardID))
-	}
-	return prompt
-}
-
-// replaceMergeRequestPlaceholders replaces merge request placeholders placeholders in evaluation prompts.
-func replaceMergeRequestPlaceholders(taskID, prompt string, state *liveFixtureState) string {
-	mrIID := state.MergeRequestIID
-	if taskID == "MT-017" && state.MergeRequestMergeIID > 0 {
-		mrIID = state.MergeRequestMergeIID
-	}
-	if taskID == taskMergeRequestAwardID && state.MergeRequestAwardIID > 0 {
-		mrIID = state.MergeRequestAwardIID
-	}
-	if mrIID > 0 {
-		prompt = strings.ReplaceAll(prompt, "merge request `7`", fmt.Sprintf("merge request `%d`", mrIID))
-		prompt = strings.ReplaceAll(prompt, "merge request IID `7`", fmt.Sprintf("merge request IID `%d`", mrIID))
-		prompt = strings.ReplaceAll(prompt, "merge_request_iid `7`", fmt.Sprintf("merge_request_iid `%d`", mrIID))
-		prompt = strings.ReplaceAll(prompt, "MR `7`", fmt.Sprintf("MR `%d`", mrIID))
-		if taskID == taskMergeRequestAwardID {
-			prompt = strings.ReplaceAll(prompt, "MR `1`", fmt.Sprintf("MR `%d`", mrIID))
-		}
-	}
-	if taskID == "MT-061" && state.MergeRequestThreadID != "" {
-		prompt = strings.ReplaceAll(prompt, "discussion `abc123`", fmt.Sprintf("discussion `%s`", state.MergeRequestThreadID))
-		prompt = strings.ReplaceAll(prompt, "discussion_id `abc123`", fmt.Sprintf("discussion_id `%s`", state.MergeRequestThreadID))
-	}
-	if taskID == "MT-109" && state.MergeRequestAwardID > 0 {
-		prompt = strings.ReplaceAll(prompt, "award emoji ID `12`", fmt.Sprintf("award emoji ID `%d`", state.MergeRequestAwardID))
-	}
-	return prompt
-}
-
-// replacePipelinePlaceholders replaces pipeline placeholders placeholders in evaluation prompts.
-func replacePipelinePlaceholders(taskID, prompt string, state *liveFixtureState) string {
-	if state.PipelineID > 0 {
-		pipelineID := state.PipelineID
-		if taskID == "MT-088" && state.PipelineIID > 0 {
-			pipelineID = state.PipelineIID
-		}
-		prompt = strings.ReplaceAll(prompt, "pipeline `12345`", fmt.Sprintf("pipeline `%d`", pipelineID))
-		prompt = strings.ReplaceAll(prompt, "pipeline IID `12345`", fmt.Sprintf("pipeline IID `%d`", pipelineID))
-	}
-	jobID := state.FailedJobID
-	if taskID == "MT-064" && state.ManualJobID > 0 {
-		jobID = state.ManualJobID
-	}
-	if jobID > 0 {
-		prompt = strings.ReplaceAll(prompt, "job `999`", fmt.Sprintf("job `%d`", jobID))
-	}
-	return prompt
-}
-
-type resourceIDReplacement struct {
-	label string
-	oldID int64
-	value func(*liveFixtureState) int64
-}
-
-var resourceIDReplacements = map[string]resourceIDReplacement{
-	"MT-035": {label: "milestone IID", oldID: 7, value: func(state *liveFixtureState) int64 { return state.MilestoneDeleteIID }},
-	"MT-042": {label: "project access token ID", oldID: 77, value: func(state *liveFixtureState) int64 { return state.ProjectTokenID }},
-	"MT-044": {label: "package ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.PackageID }},
-	"MS-007": {label: "package ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.PackageID }},
-	"MT-046": {label: resourceLabelRunnerID, oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
-	"MT-047": {label: resourceLabelRunnerID, oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
-	"MS-008": {label: resourceLabelRunnerID, oldID: 99, value: func(state *liveFixtureState) int64 { return state.RunnerID }},
-	"MT-049": {label: "environment ID", oldID: 7, value: func(state *liveFixtureState) int64 { return state.EnvironmentID }},
-	"MT-050": {label: "personal snippet ID", oldID: 33, value: func(state *liveFixtureState) int64 { return state.SnippetID }},
-	"MT-051": {label: "personal snippet ID", oldID: 33, value: func(state *liveFixtureState) int64 { return state.SnippetID }},
-	"MT-174": {label: "numeric snippet ID", oldID: 44, value: func(state *liveFixtureState) int64 { return state.SnippetID }},
-	"MT-057": {label: "webhook ID", oldID: 5, value: func(state *liveFixtureState) int64 { return state.HookDeleteID }},
-	"MT-059": {label: "badge ID", oldID: 8, value: func(state *liveFixtureState) int64 { return state.BadgeDeleteID }},
-	"MT-102": {label: "pipeline trigger token ID", oldID: 77, value: func(state *liveFixtureState) int64 { return state.PipelineTriggerID }},
-	"MT-104": {label: resourceLabelUserID, oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
-	"MT-105": {label: resourceLabelUserID, oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
-	"MS-034": {label: resourceLabelUserID, oldID: 55, value: func(state *liveFixtureState) int64 { return state.UserID }},
-	"MT-111": {label: "deploy key ID", oldID: 88, value: func(state *liveFixtureState) int64 { return state.DeployKeyID }},
-	"MT-112": {label: "project deploy token ID", oldID: 66, value: func(state *liveFixtureState) int64 { return state.DeployTokenID }},
-	"MT-182": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
-	"MT-183": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
-	"MT-184": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
-	"MT-185": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
-	"MT-186": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
-	"MT-187": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
-	"MT-195": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
-	"MS-054": {label: "project service account user ID", oldID: 55, value: func(state *liveFixtureState) int64 { return state.ProjectServiceAccountID }},
-}
-
-func replaceSimpleResourceIDPlaceholder(taskID, prompt string, state *liveFixtureState) string {
-	replacement, ok := resourceIDReplacements[taskID]
-	if !ok {
-		return prompt
-	}
-	return replaceID(prompt, replacement.label, replacement.oldID, replacement.value(state))
-}
-
-// replaceResourcePlaceholders replaces resource placeholders placeholders in evaluation prompts.
-func replaceResourcePlaceholders(taskID, prompt string, state *liveFixtureState) string {
-	prompt = replaceSimpleResourceIDPlaceholder(taskID, prompt, state)
-	prompt = replaceTaskSpecificResourcePlaceholders(taskID, prompt, state)
-	prompt = replaceSuffixResourcePlaceholders(taskID, prompt, state)
-	if taskID == taskPipelineScheduleID && state.PipelineTriggerRunID > 0 && strings.Contains(prompt, "run trigger") {
-		prompt = replaceID(prompt, "pipeline trigger token ID", 77, state.PipelineTriggerRunID)
-	}
-	return prompt
-}
-
-func replaceTaskSpecificResourcePlaceholders(taskID, prompt string, state *liveFixtureState) string {
-	switch taskID {
-	case "MT-007":
-		prompt = replaceID(prompt, "group ID", 123, state.GroupID)
-		if suffix := fixtureUniqueSuffix(state); suffix != "" {
-			prompt = strings.ReplaceAll(prompt, "`eval-temp`", fmt.Sprintf("`eval-temp-%s`", suffix))
-		}
-	case "MT-054", "MS-009":
-		return prompt
-	case taskPipelineScheduleID:
-		scheduleID := state.PipelineScheduleID
-		if state.PipelineSchedulePlayID > 0 && strings.Contains(prompt, "play") {
-			scheduleID = state.PipelineSchedulePlayID
-		}
-		prompt = replaceID(prompt, "pipeline schedule ID", 12, scheduleID)
-	case "MT-113":
-		prompt = replaceID(prompt, "commit discussion note", 999, state.CommitDiscussionNoteID)
-		if state.CommitDiscussionID != "" {
-			prompt = strings.ReplaceAll(prompt, "discussion `abc123`", fmt.Sprintf("discussion `%s`", state.CommitDiscussionID))
-		}
-		if state.CommitSHA != "" {
-			prompt = strings.ReplaceAll(prompt, "commit `abc1234`", fmt.Sprintf("commit `%s`", state.CommitSHA))
-		}
-	case "MT-037", "MT-100", "MS-004":
-		if state.CleanupReleaseTag != "" {
-			prompt = strings.ReplaceAll(prompt, liveFixtureFailureTag, state.CleanupReleaseTag)
-		}
-	case "MT-095", "MS-012":
-		if state.ReleaseSummaryTag != "" {
-			prompt = strings.ReplaceAll(prompt, "`v0.0.0-eval-ms`", fmt.Sprintf("`%s`", state.ReleaseSummaryTag))
-		}
-	case "MS-006":
-		prompt = replaceID(prompt, "deployment ID", 77, 0)
-	case "MS-013":
-		if state.FeatureFlagName != "" {
-			prompt = strings.ReplaceAll(prompt, "`eval_flag`", fmt.Sprintf("`%s`", state.FeatureFlagName))
-		}
-	case "MT-186", "MT-187":
-		prompt = replaceID(prompt, "project service account PAT ID", 66, state.ProjectServiceAccountTokenID)
-	}
-	return prompt
-}
-
-func replaceSuffixResourcePlaceholders(taskID, prompt string, state *liveFixtureState) string {
-	if suffix := fixtureUniqueSuffix(state); suffix != "" {
-		switch taskID {
-		case taskFileCreateID:
-			prompt = strings.ReplaceAll(prompt, "`tmp/eval.txt`", fmt.Sprintf("`tmp/eval-%s.txt`", suffix))
-		case "MT-034":
-			prompt = strings.ReplaceAll(prompt, "`Evaluation Sprint`", fmt.Sprintf("`Evaluation Sprint %s`", suffix))
-		case "MT-036":
-			prompt = strings.ReplaceAll(prompt, "`v0.0.0-eval`", fmt.Sprintf("`v0.0.0-eval-%s`", suffix))
-		}
-	}
-	return prompt
-}
-
-// fixtureUniqueSuffix returns unique suffix fixture content.
-func fixtureUniqueSuffix(state *liveFixtureState) string {
-	if state.PipelineID > 0 {
-		return strconv.FormatInt(state.PipelineID, 10)
-	}
-	if state.ProjectID > 0 {
-		return strconv.FormatInt(state.ProjectID, 10)
-	}
-	return ""
-}
-
-// replaceID replaces ID placeholders in evaluation prompts.
-func replaceID(prompt, label string, oldID, newID int64) string {
-	if newID <= 0 {
-		return prompt
-	}
-	return strings.ReplaceAll(prompt, fmt.Sprintf("%s `%d`", label, oldID), fmt.Sprintf("%s `%d`", label, newID))
 }
 
 // fixtureRemoteURL returns remote URL fixture content.

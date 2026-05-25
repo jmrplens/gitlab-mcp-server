@@ -12,7 +12,7 @@ import (
 
 func parseFlags() options {
 	var opts options
-	flag.StringVar(&opts.TasksPath, "tasks", defaultTasksPath, "Markdown file containing the evaluation task fixture")
+	flag.StringVar(&opts.TasksPath, "tasks", "", "Deprecated; evaluation cases are loaded from typed EvalCase definitions")
 	flag.StringVar(&opts.Output, "out", "", "Markdown report path; defaults under dist/evaluation/mcp-surfaces")
 	flag.StringVar(&opts.TraceDir, "trace-dir", "", "Directory for per-task model trace artifacts; defaults to <report>.traces in model-backed mode")
 	flag.StringVar(&opts.TerminalLog, "terminal-log", "", "File receiving command progress and terminal output; defaults under dist/evaluation/mcp-surfaces/terminal or beside --out")
@@ -21,6 +21,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.ToolsFile, "tools-file", "", "Optional tools/list JSON snapshot to evaluate instead of the live catalog")
 	flag.Var(&opts.CompareReports, "compare", "Evaluation or token report file to include in a comparison summary; repeat for multiple reports")
 	flag.Var(&opts.CheckEfficiency, "check-efficiency", "Trace JSONL path to validate against model-call efficiency gates; repeat for multiple trace files")
+	flag.Var(&opts.CheckReportClean, "check-report-clean", "Evaluation report file that must have no failed task rows; repeat for multiple reports")
 	flag.Var(&opts.CompareTraces, "compare-traces", "Trace JSONL path for direct dynamic versus meta comparison; provide dynamic trace first and meta trace second")
 	flag.Var(&opts.EfficiencyAllowTask, "efficiency-allow-task", "Task ID allowed to exceed the per-attempt call budget in --check-efficiency; repeat or comma-separate values")
 	flag.Var(&opts.PublishFrom, "publish-from", "Reviewed evaluation report to publish into docs; repeat for multiple reports")
@@ -35,6 +36,9 @@ func parseFlags() options {
 	flag.StringVar(&opts.CoverageReport, "coverage-report", "", "Optional Markdown report listing uncovered high-risk routes after the selected evaluation")
 	flag.StringVar(&opts.Backend, "backend", backendMock, "Live catalog backend: mock or gitlab. gitlab uses GITLAB_URL/GITLAB_TOKEN, optionally loaded from --gitlab-env-file")
 	flag.StringVar(&opts.GitLabEnv, "gitlab-env-file", "", "Optional env file loaded after .env for --backend=gitlab, for example test/e2e/.env.docker")
+	flag.StringVar(&opts.DockerCompose, "docker-compose", "", "Docker Compose command used when Docker presets auto-start GitLab; defaults to DOCKER_COMPOSE or 'docker compose'")
+	flag.StringVar(&opts.DockerComposeFile, "docker-compose-file", "", "Docker Compose file used when Docker presets auto-start GitLab; defaults to EVAL_DOCKER_COMPOSE_FILE or test/e2e/docker-compose.yml")
+	flag.StringVar(&opts.DockerGitLabURL, "docker-gitlab-url", "", "GitLab URL exposed by the Docker fixture stack; defaults to EVAL_DOCKER_GITLAB_URL or http://localhost:8929")
 	flag.StringVar(&opts.MCPCommand, "mcp-command", "", "External stdio MCP server command for --execute-tools instead of the current in-memory server")
 	flag.Var(&opts.MCPArgs, "mcp-arg", "External MCP server command argument; repeat for multiple args")
 	flag.StringVar(&opts.MCPEnv, "mcp-env-file", "", "Optional env file applied only to --mcp-command")
@@ -62,6 +66,8 @@ func parseFlags() options {
 	flag.BoolVar(&opts.PrepareFixtures, "prepare-fixtures", false, "Create or refresh Docker GitLab resources referenced by the evaluation fixture")
 	flag.BoolVar(&opts.FixturesOnly, "fixtures-only", false, "Exit after --prepare-fixtures writes fixture state")
 	flag.BoolVar(&opts.UseFixtures, "use-fixtures", false, "Replace fixture placeholder IDs in task prompts with IDs from --fixtures")
+	flag.BoolVar(&opts.DockerAutoStart, "docker-auto-start", false, "For Docker presets, start and provision the Docker GitLab fixture stack before connecting to --backend=gitlab")
+	flag.DurationVar(&opts.DockerWaitTimeout, "docker-wait-timeout", 10*time.Minute, "Maximum time to wait for Docker GitLab readiness when --docker-auto-start is enabled")
 	flag.BoolVar(&opts.SkipDestructive, flagSkipDestructive, false, "Skip tasks with destructive calls or destructive workflow steps")
 	flag.BoolVar(&opts.OnlyDestructive, "only-destructive", false, "Run only tasks with destructive calls or destructive workflow steps")
 	flag.BoolVar(&opts.SkipMutating, flagSkipMutating, false, "Skip tasks whose expected calls mutate GitLab state")
@@ -133,6 +139,7 @@ func applyPresetDefaults(opts options) (options, error) {
 func applyDockerPresetDefaults(opts *options, partition string) {
 	setStringDefault(&opts.Backend, *opts, "backend", backendGitLab)
 	setStringDefault(&opts.GitLabEnv, *opts, "gitlab-env-file", "test/e2e/.env.docker")
+	setBoolDefault(&opts.DockerAutoStart, *opts, "docker-auto-start")
 	setStringDefault(&opts.Partition, *opts, "partition", partition)
 	setBoolDefault(&opts.Execute, *opts, "execute-tools")
 	setBoolDefault(&opts.UseFixtures, *opts, "use-fixtures")
@@ -268,5 +275,3 @@ func defaultTerminalLogPath(outputPath string) string {
 	}
 	return strings.TrimSuffix(outputPath, ext) + ".log"
 }
-
-// parseTasksFile handles parse tasks file and returns [[]evalTask].

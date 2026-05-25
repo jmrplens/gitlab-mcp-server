@@ -13,88 +13,26 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
-// TestApplyLiveFixtureState_ReplacesPromptPlaceholders verifies ApplyLiveFixtureState when replaces prompt placeholders.
-func TestApplyLiveFixtureState_ReplacesPromptPlaceholders(t *testing.T) {
-	state := &liveFixtureState{
-		ProjectPath:                  liveFixtureProjectPath,
-		ProjectID:                    101,
-		RemoteURL:                    "http://localhost:8929/my-org/tools/gitlab-mcp-server.git",
-		IssueIID:                     12,
-		IssueDeleteIID:               13,
-		MergeRequestIID:              14,
-		MergeRequestMergeIID:         15,
-		MergeRequestAwardIID:         25,
-		PipelineID:                   16,
-		PipelineIID:                  17,
-		FailedJobID:                  18,
-		ManualJobID:                  19,
-		RunnerID:                     20,
-		IssueAwardID:                 21,
-		MergeRequestAwardID:          22,
-		MergeRequestThreadID:         "thread-123",
-		PipelineScheduleID:           23,
-		PipelineSchedulePlayID:       24,
-		SnippetID:                    26,
-		CleanupReleaseTag:            "v0.0.0-eval-delete",
-		ReleaseSummaryTag:            "v0.0.0-eval-summary",
-		PackageReleaseName:           liveFixturePackageReleaseName,
-		PackageReleaseVersion:        liveFixturePackageReleaseVersion,
-		PackageReleaseTag:            liveFixturePackageReleaseTag,
-		PackageReleaseDir:            "/tmp/package-release-files",
-		PackageReleaseFiles:          []string{"app-linux.txt", "checksums.txt"},
-		ProjectServiceAccountID:      27,
-		ProjectServiceAccountTokenID: 28,
+// TestApplyLiveFixtureState_RendersTypedPromptTemplates verifies fixture state
+// values feed typed prompt templates without global string replacement.
+func TestApplyLiveFixtureState_RendersTypedPromptTemplates(t *testing.T) {
+	evalCase := EvalCase{
+		ID:             "MT-TYPED-FIXTURE",
+		Prompt:         "Get project `my-org/tools/gitlab-mcp-server`.",
+		PromptTemplate: CasePromptTemplate{Text: "Get project {{.Values.project_path}} on {{.Values.default_branch}}."},
+		Steps:          []ExpectedStep{{ExpectedTool: "gitlab_project", ExpectedAction: "get"}},
 	}
-	tasks := []evalTask{
-		{ID: "MT-013", Prompt: "Delete issue `42` from project `my-org/tools/gitlab-mcp-server`."},
-		{ID: "MT-017", Prompt: "Merge merge request `7` when ready."},
-		{ID: "MT-021", Prompt: "List failed jobs in pipeline `12345` for project `my-org/tools/gitlab-mcp-server`."},
-		{ID: "MT-064", Prompt: "Play manual job `999` with variable."},
-		{ID: "MT-109", Prompt: "Remove award emoji ID `12` from merge request `7`."},
-		{ID: "MS-008", Prompt: "Troubleshoot runner ID `99` and fetch trace for job `999`."},
-		{ID: "MS-017", Prompt: "Create file `tmp/eval-crud.txt` on branch `feature/eval`."},
-		{ID: "MS-025", Prompt: "Create scoped CI variable `EVAL_CRUD_TOKEN`."},
-		{ID: "MT-061", Prompt: "Resolve merge request discussion with discussion_id `abc123` on merge request IID `7`."},
-		{ID: "MT-061", Prompt: "Resolve merge request discussion with discussion_id `abc123` on merge_request_iid `7`."},
-		{ID: taskPipelineScheduleID, Prompt: "Delete pipeline schedule ID `12`."},
-		{ID: taskPipelineScheduleID, Prompt: "play pipeline schedule ID `12`."},
-		{ID: "MS-004", Prompt: "Clean up release `v0.0.0-eval` in project `my-org/tools/gitlab-mcp-server`."},
-		{ID: "MS-012", Prompt: "Compare refs `main` and `v0.0.0-eval-ms` in project `my-org/tools/gitlab-mcp-server`."},
-		{ID: "MS-033", Prompt: "Set estimate `1h` on MR `1`, add spent time `15m`, add award emoji `eyes`."},
-		{ID: "MT-174", Prompt: "Schedule a storage move for numeric snippet ID `44` to shard `default`."},
-		{ID: taskPackageReleaseID, Prompt: "Publish files `__PACKAGE_RELEASE_FILES__` from `__PACKAGE_RELEASE_DIR__` as package `__PACKAGE_RELEASE_PACKAGE__` version `__PACKAGE_RELEASE_VERSION__`, then create release `__PACKAGE_RELEASE_TAG__`."},
-		{ID: "MT-186", Prompt: "Rotate project service account PAT ID `66` for project service account user ID `55`."},
-	}
+	tasks := []evalTask{taskFromCase(evalCase), {ID: "MT-STATIC", Prompt: "Keep this prompt."}}
+	state := &liveFixtureState{ProjectPath: "my-org/project", DefaultBranch: "master"}
 
 	got := applyLiveFixtureState(tasks, state)
 
-	assertContains(t, got[0].Prompt, "issue `13`")
-	assertContains(t, got[1].Prompt, "merge request `15`")
-	assertContains(t, got[2].Prompt, "pipeline `16`")
-	assertContains(t, got[3].Prompt, "job `19`")
-	assertContains(t, got[4].Prompt, "award emoji ID `22`")
-	assertContains(t, got[5].Prompt, "runner ID `20`")
-	assertContains(t, got[5].Prompt, "job `18`")
-	assertContains(t, got[6].Prompt, "`tmp/eval-crud-16.txt`")
-	assertContains(t, got[6].Prompt, "branch `feature/eval`")
-	assertContains(t, got[7].Prompt, "`EVAL_CRUD_TOKEN_16`")
-	assertContains(t, got[8].Prompt, "discussion_id `thread-123`")
-	assertContains(t, got[8].Prompt, "merge request IID `14`")
-	assertContains(t, got[9].Prompt, "discussion_id `thread-123`")
-	assertContains(t, got[9].Prompt, "merge_request_iid `14`")
-	assertContains(t, got[10].Prompt, "pipeline schedule ID `23`")
-	assertContains(t, got[11].Prompt, "pipeline schedule ID `24`")
-	assertContains(t, got[12].Prompt, "release `v0.0.0-eval-delete`")
-	assertContains(t, got[13].Prompt, "`v0.0.0-eval-summary`")
-	assertContains(t, got[14].Prompt, "MR `25`")
-	assertContains(t, got[15].Prompt, "numeric snippet ID `26`")
-	assertContains(t, got[16].Prompt, "`app-linux.txt, checksums.txt`")
-	assertContains(t, got[16].Prompt, "`/tmp/package-release-files`")
-	assertContains(t, got[16].Prompt, "`eval-release-package`")
-	assertContains(t, got[16].Prompt, "`0.1.0`")
-	assertContains(t, got[16].Prompt, "`v0.0.0-eval-packages`")
-	assertContains(t, got[17].Prompt, "project service account user ID `27`")
-	assertContains(t, got[17].Prompt, "project service account PAT ID `28`")
+	if got[0].Prompt != "Get project my-org/project on master." {
+		t.Fatalf("typed prompt = %q, want rendered fixture values", got[0].Prompt)
+	}
+	if got[1].Prompt != "Keep this prompt." {
+		t.Fatalf("static prompt = %q, want unchanged", got[1].Prompt)
+	}
 }
 
 // TestEnsurePackageReleaseFixtureFiles_WritesLocalFiles verifies package release fixture file creation.
@@ -191,73 +129,9 @@ func TestFixtureRemoteURL(t *testing.T) {
 	}
 }
 
-// TestFixturePlaceholderHelpers_CoverIDPathAndContentBranches verifies pure
-// fixture helpers rewrite prompts and derive deterministic path/content values.
-func TestFixturePlaceholderHelpers_CoverIDPathAndContentBranches(t *testing.T) {
-	state := &liveFixtureState{
-		ProjectID:                    101,
-		PipelineID:                   202,
-		GroupID:                      303,
-		MilestoneDeleteIID:           404,
-		PipelineScheduleID:           505,
-		PipelineSchedulePlayID:       506,
-		PipelineTriggerRunID:         507,
-		CommitDiscussionNoteID:       608,
-		CommitDiscussionID:           "discussion-1",
-		CommitSHA:                    "deadbeef",
-		FeatureFlagName:              "eval_flag_202",
-		ReleaseSummaryTag:            "v1.2.3-summary",
-		CleanupReleaseTag:            "v1.2.3-cleanup",
-		ProjectTokenID:               707,
-		DeployKeyID:                  808,
-		DeployTokenID:                909,
-		PackageID:                    1001,
-		RunnerID:                     1002,
-		EnvironmentID:                1003,
-		SnippetID:                    1004,
-		HookDeleteID:                 1005,
-		BadgeDeleteID:                1006,
-		PipelineTriggerID:            1007,
-		UserID:                       1008,
-		ProjectServiceAccountID:      1009,
-		ProjectServiceAccountTokenID: 1010,
-	}
-	cases := map[string]string{
-		"MT-007":               "group ID `303`",
-		"MT-035":               "milestone IID `404`",
-		"MT-042":               "project access token ID `707`",
-		"MT-044":               "package ID `1001`",
-		"MT-049":               "environment ID `1003`",
-		"MT-057":               "webhook ID `1005`",
-		"MT-059":               "badge ID `1006`",
-		taskPipelineScheduleID: "pipeline schedule ID `505`",
-		"MT-104":               "user ID `1008`",
-		"MT-111":               "deploy key ID `808`",
-		"MT-112":               "project deploy token ID `909`",
-		"MT-182":               "project service account user ID `1009`",
-		"MT-186":               "project service account PAT ID `1010`",
-		"MT-113":               "commit discussion note `608`",
-		"MT-095":               "`v1.2.3-summary`",
-		"MS-013":               "`eval_flag_202`",
-		"MS-006":               "deployment ID `77`",
-		taskFileCreateID:       "`tmp/eval-202.txt`",
-	}
-	prompt := "group ID `123` milestone IID `7` project access token ID `77` package ID `55` runner ID `99` environment ID `7` personal snippet ID `33` numeric snippet ID `44` webhook ID `5` badge ID `8` pipeline trigger token ID `77` pipeline schedule ID `12` user ID `55` deploy key ID `88` project deploy token ID `66` project service account user ID `55` project service account PAT ID `66` commit discussion note `999` discussion `abc123` commit `abc1234` `v0.0.0-eval-ms` `eval_flag` deployment ID `77` `tmp/eval.txt`"
-	for taskID, want := range cases {
-		got := replaceResourcePlaceholders(taskID, prompt, state)
-		if !strings.Contains(got, want) {
-			t.Fatalf("replaceResourcePlaceholders(%s) = %q, want %q", taskID, got, want)
-		}
-	}
-	if got := replaceResourcePlaceholders(taskPipelineScheduleID, "run trigger pipeline trigger token ID `77`", state); !strings.Contains(got, "`507`") {
-		t.Fatalf("trigger run prompt = %q, want run trigger ID", got)
-	}
-	if fixtureUniqueSuffix(&liveFixtureState{ProjectID: 11}) != "11" || fixtureUniqueSuffix(&liveFixtureState{}) != "" {
-		t.Fatal("fixtureUniqueSuffix project/empty branches failed")
-	}
-	if got := replaceID("issue `1`", "issue", 1, 0); got != "issue `1`" {
-		t.Fatalf("replaceID(newID zero) = %q, want unchanged", got)
-	}
+// TestFixtureFileHelpers_CoverPathAndContentBranches verifies pure fixture
+// helpers derive deterministic path/content values.
+func TestFixtureFileHelpers_CoverPathAndContentBranches(t *testing.T) {
 	if pathBase("dir/file.txt") != "file.txt" || pathBase("file.txt") != "file.txt" {
 		t.Fatal("pathBase failed for nested or flat path")
 	}
@@ -270,7 +144,7 @@ func TestFixturePlaceholderHelpers_CoverIDPathAndContentBranches(t *testing.T) {
 }
 
 // TestLiveFixtureStateReadWriteAndValidation_CoverFileHelpers verifies fixture
-// state persistence fills legacy defaults and validates safe live-prep options.
+// state persistence fills defaults and validates safe live-prep options.
 func TestLiveFixtureStateReadWriteAndValidation_CoverFileHelpers(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "fixtures", "state.json")
 	state := &liveFixtureState{ProjectPath: liveFixtureProjectPath, ProjectID: 101, CleanupReleaseTag: liveFixtureCleanupTag, ReleaseSummaryTag: liveFixtureCleanupTag}
@@ -347,172 +221,6 @@ func TestEnsureLiveProjectActive_UnarchivesArchivedFixtureProject(t *testing.T) 
 	}
 }
 
-// TestEnsureLiveProjectVariableDeleteTarget_SeedsProductionScopedVariable verifies EnsureLiveProjectVariableDeleteTarget when seeds production scoped variable.
-func TestEnsureLiveProjectVariableDeleteTarget_SeedsProductionScopedVariable(t *testing.T) {
-	calls := make([]string, 0, 3)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls = append(calls, r.Method+" "+r.URL.EscapedPath())
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.Method == http.MethodDelete && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables/EVAL_TOKEN":
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte(`{"message":"404 Variable Not Found"}`))
-		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables":
-			var request map[string]any
-			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-				t.Errorf("decode request: %v", err)
-				http.Error(w, "decode request", http.StatusBadRequest)
-				return
-			}
-			if request["key"] != "EVAL_TOKEN" || request["environment_scope"] != "production" {
-				t.Errorf("request = %+v, want EVAL_TOKEN production", request)
-				http.Error(w, "unexpected variable request", http.StatusBadRequest)
-				return
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"key":               "EVAL_TOKEN",
-				"environment_scope": "production",
-			})
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-	client, err := gitlabclient.NewClient(&config.Config{
-		GitLabURL:       server.URL,
-		GitLabToken:     "eval-token",
-		MetaTools:       true,
-		MetaParamSchema: config.DefaultMetaParamSchema,
-	})
-	if err != nil {
-		t.Fatalf("NewClient() error = %v", err)
-	}
-
-	err = ensureLiveProjectVariableDeleteTarget(t.Context(), client, "Delete CI variable `EVAL_TOKEN` from production scope in project `my-org/tools/gitlab-mcp-server`.")
-	if err != nil {
-		t.Fatalf("ensureLiveProjectVariableDeleteTarget() error = %v", err)
-	}
-
-	if got := strings.Join(calls, ","); got != "DELETE /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables/EVAL_TOKEN,DELETE /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables/EVAL_TOKEN,POST /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/variables" {
-		t.Fatalf("calls = %q", got)
-	}
-}
-
-// TestAddLiveAttemptResourceSuffix_IsolatesCreatedResources verifies AddLiveAttemptResourceSuffix isolates created resources.
-func TestAddLiveAttemptResourceSuffix_IsolatesCreatedResources(t *testing.T) {
-	task := evalTask{
-		ID:     "MT-036",
-		Prompt: "Create release `v0.0.0-eval-248` for tag `v0.0.0-eval-248` from ref `main` in project `my-org/tools/gitlab-mcp-server`.",
-	}
-
-	got := addLiveAttemptResourceSuffix(task, "google:gemini-3-flash-preview", 2, "abc123")
-
-	assertContains(t, got.Prompt, "`v0.0.0-eval-248-gemini3flash-r2-abc123`")
-	assertContains(t, got.Prompt, "`main`")
-	assertContains(t, got.Prompt, "`my-org/tools/gitlab-mcp-server`")
-}
-
-func TestReplaceFixturePrompt_RewritesDetectedDefaultBranch(t *testing.T) {
-	state := &liveFixtureState{DefaultBranch: "master"}
-	got := replaceFixturePrompt("MS-028", "Create branch `eval-protect-branch` from `main`, then read `main`.", state)
-	if strings.Contains(got, "`main`") || !strings.Contains(got, "from `master`") || !strings.Contains(got, "read `master`") {
-		t.Fatalf("replaceFixturePrompt() = %q, want detected default branch", got)
-	}
-}
-
-// TestAddLiveAttemptResourceSuffix_LeavesLookupTasksAlone verifies AddLiveAttemptResourceSuffix leaves lookup tasks alone.
-func TestAddLiveAttemptResourceSuffix_LeavesLookupTasksAlone(t *testing.T) {
-	task := evalTask{
-		ID:     "MT-027",
-		Prompt: "Update CI variable `EVAL_TOKEN` for production scope in project `my-org/tools/gitlab-mcp-server`.",
-	}
-
-	got := addLiveAttemptResourceSuffix(task, "openai:gpt-5.4-mini", 1, "abc123")
-
-	if got.Prompt != task.Prompt {
-		t.Fatalf("Prompt = %q, want unchanged %q", got.Prompt, task.Prompt)
-	}
-}
-
-// TestAddLiveAttemptResourceSuffix_UsesUnderscoresForCIVariableKeys verifies AddLiveAttemptResourceSuffix uses underscores for CI variable keys.
-func TestAddLiveAttemptResourceSuffix_UsesUnderscoresForCIVariableKeys(t *testing.T) {
-	task := evalTask{
-		ID:     "MT-026",
-		Prompt: "Create masked CI variable `EVAL_TOKEN` with value `masked-value-123` in project `my-org/tools/gitlab-mcp-server`.",
-	}
-
-	got := addLiveAttemptResourceSuffix(task, "qwen:qwen3.6-flash", 3, "abc123")
-
-	assertContains(t, got.Prompt, "`EVAL_TOKEN_qwen36flash_r3_abc123`")
-}
-
-// TestAddLiveAttemptResourceSuffix_IsolatesInstanceVariableDelete verifies that MT-069 deletes the instance variable created for the same model attempt.
-func TestAddLiveAttemptResourceSuffix_IsolatesInstanceVariableDelete(t *testing.T) {
-	task := evalTask{
-		ID:     "MT-069",
-		Prompt: "Delete instance CI variable `INSTANCE_EVAL_TOKEN`.",
-	}
-
-	got := addLiveAttemptResourceSuffix(task, "openai:gpt-5.4-nano", 1, "abc123")
-
-	assertContains(t, got.Prompt, "`INSTANCE_EVAL_TOKEN_gpt54nano_r1_abc123`")
-}
-
-// TestAddLiveAttemptResourceSuffix_IsolatesWorkflowResources verifies AddLiveAttemptResourceSuffix isolates workflow resources.
-func TestAddLiveAttemptResourceSuffix_IsolatesWorkflowResources(t *testing.T) {
-	task := evalTask{
-		ID:     "MS-018",
-		Prompt: "Create release `v0.0.0-crud-248` named `Evaluation CRUD release 248`, add asset link `eval-crud-link-248`, then delete the release and tag.",
-	}
-
-	got := addLiveAttemptResourceSuffix(task, "google:gemini-3.1-flash-lite-preview", 2, "abc123")
-
-	assertContains(t, got.Prompt, "`v0.0.0-crud-248-gemini31flas-r2-abc123`")
-	assertContains(t, got.Prompt, "`Evaluation CRUD release 248 gemini31flas-r2-abc123`")
-	assertContains(t, got.Prompt, "`eval-crud-link-248-gemini31flas-r2-abc123`")
-}
-
-// TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranch verifies AddLiveAttemptResourceSuffix when file create keeps fixture branch.
-func TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranch(t *testing.T) {
-	task := evalTask{
-		ID:     "MT-030",
-		Prompt: "Create file `tmp/eval.txt` on branch `feature/eval` in project `my-org/tools/gitlab-mcp-server`.",
-	}
-
-	got := addLiveAttemptResourceSuffix(task, "openai:gpt-5.4-mini", 1, "abc123")
-
-	assertContains(t, got.Prompt, "`tmp/eval.txt-gpt54mini-r1-abc123`")
-	assertContains(t, got.Prompt, "`feature/eval`")
-}
-
-// TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranchAfterFixtureReplacement verifies AddLiveAttemptResourceSuffix when file create keeps fixture branch after fixture replacement.
-func TestAddLiveAttemptResourceSuffix_FileCreateKeepsFixtureBranchAfterFixtureReplacement(t *testing.T) {
-	task := evalTask{
-		ID:     "MT-030",
-		Prompt: "Create file `tmp/eval-248.txt` on branch `feature/eval` in project `my-org/tools/gitlab-mcp-server`.",
-	}
-
-	got := addLiveAttemptResourceSuffix(task, "anthropic:claude-haiku-4-5-20251001", 1, "abc123")
-
-	assertContains(t, got.Prompt, "`tmp/eval-248.txt-claudehaiku4-r1-abc123`")
-	assertContains(t, got.Prompt, "`feature/eval`")
-}
-
-// TestAddLiveAttemptResourceSuffix_MRCreateIsolatesSourceBranch verifies AddLiveAttemptResourceSuffix isolates source branch for MR create.
-func TestAddLiveAttemptResourceSuffix_MRCreateIsolatesSourceBranch(t *testing.T) {
-	task := evalTask{
-		ID:     "MT-015",
-		Prompt: "Create a merge request in project `my-org/tools/gitlab-mcp-server` from `feature/eval` into `main` titled `Evaluation MR`.",
-	}
-
-	got := addLiveAttemptResourceSuffix(task, "openai:gpt-5.4-mini", 1, "abc123")
-
-	assertContains(t, got.Prompt, "`feature/eval-gpt54mini-r1-abc123`")
-	assertContains(t, got.Prompt, "`Evaluation MR gpt54mini-r1-abc123`")
-	assertContains(t, got.Prompt, "`main`")
-	assertContains(t, got.Prompt, "`my-org/tools/gitlab-mcp-server`")
-}
-
 // TestBacktickValueAfter verifies BacktickValueAfter.
 func TestBacktickValueAfter(t *testing.T) {
 	prompt := "Create a merge request in project `my-org/tools/gitlab-mcp-server` from `feature/eval-x` into `main`."
@@ -521,172 +229,6 @@ func TestBacktickValueAfter(t *testing.T) {
 
 	if !ok || got != "feature/eval-x" {
 		t.Fatalf("backtickValueAfter() = %q, %t; want feature/eval-x, true", got, ok)
-	}
-}
-
-// TestReplacePromptJobID verifies ReplacePromptJobID.
-func TestReplacePromptJobID(t *testing.T) {
-	prompt := "Play manual job `496` in project `my-org/tools/gitlab-mcp-server` with variable `DEPLOY_ENV=staging`."
-
-	got, err := replacePromptJobID(prompt, 1234)
-	if err != nil {
-		t.Fatalf("replacePromptJobID() error = %v", err)
-	}
-	assertContains(t, got, "manual job `1234`")
-	if strings.Contains(got, "job `496`") {
-		t.Fatalf("replacePromptJobID() = %q, still contains old job ID", got)
-	}
-}
-
-// TestEnsureLiveFailedJobTarget_CreatesAttemptLocalFailedJob verifies retry tasks do not reuse the shared failed-job fixture.
-func TestEnsureLiveFailedJobTarget_CreatesAttemptLocalFailedJob(t *testing.T) {
-	calls := make([]string, 0, 2)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls = append(calls, r.Method+" "+r.URL.EscapedPath())
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/pipeline":
-			_, _ = w.Write([]byte(`{"id":700,"iid":7,"ref":"main","status":"created"}`))
-		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/pipelines/700/jobs":
-			_, _ = w.Write([]byte(`[{"id":4321,"name":"failing_fixture","status":"failed"}]`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-	client := newFixtureTestClient(t, server.URL)
-	task := evalTask{
-		ID:     "MT-023",
-		Prompt: "Retry job `999` in project `my-org/tools/gitlab-mcp-server`.",
-	}
-
-	got, err := ensureLiveFailedJobTarget(t.Context(), client, task)
-	if err != nil {
-		t.Fatalf("ensureLiveFailedJobTarget() error = %v", err)
-	}
-
-	assertContains(t, got.Prompt, "job `4321`")
-	if strings.Contains(got.Prompt, "job `999`") {
-		t.Fatalf("Prompt = %q, still contains old job ID", got.Prompt)
-	}
-	if gotCalls := strings.Join(calls, ","); gotCalls != "POST /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/pipeline,GET /api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/pipelines/700/jobs" {
-		t.Fatalf("calls = %q", gotCalls)
-	}
-}
-
-// TestEnsureLiveSubgroupDeleteTarget_CreatesAttemptLocalSubgroup verifies destructive group deletes target an evaluator-owned subgroup.
-func TestEnsureLiveSubgroupDeleteTarget_CreatesAttemptLocalSubgroup(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/groups/my-org":
-			_, _ = w.Write([]byte(`{"id":123,"name":"my-org","full_path":"my-org"}`))
-		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/groups":
-			_, _ = w.Write([]byte(`{"id":456,"name":"eval-temp-test","full_path":"my-org/eval-temp-test"}`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-	client := newFixtureTestClient(t, server.URL)
-	task := evalTask{ID: "MT-008", Prompt: "Delete subgroup `my-org/eval-temp`."}
-
-	got, err := ensureLiveSubgroupDeleteTarget(t.Context(), client, task)
-	if err != nil {
-		t.Fatalf("ensureLiveSubgroupDeleteTarget() error = %v", err)
-	}
-
-	assertContains(t, got.Prompt, "`my-org/eval-temp-test`")
-}
-
-// TestEnsureLiveEnvironmentStopTarget_CreatesAttemptLocalEnvironment verifies environment stop does not reuse the shared fixture environment.
-func TestEnsureLiveEnvironmentStopTarget_CreatesAttemptLocalEnvironment(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if r.Method != http.MethodPost || r.URL.EscapedPath() != "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server/environments" {
-			http.NotFound(w, r)
-			return
-		}
-		_, _ = w.Write([]byte(`{"id":77,"name":"eval-stop-test","state":"available"}`))
-	}))
-	defer server.Close()
-	client := newFixtureTestClient(t, server.URL)
-	task := evalTask{ID: "MT-049", Prompt: "Stop environment ID `7` in project `my-org/tools/gitlab-mcp-server`."}
-
-	got, err := ensureLiveEnvironmentStopTarget(t.Context(), client, task)
-	if err != nil {
-		t.Fatalf("ensureLiveEnvironmentStopTarget() error = %v", err)
-	}
-
-	assertContains(t, got.Prompt, "environment ID `77`")
-}
-
-// TestEnsureLiveBroadcastMessageDeleteTarget_CreatesAttemptLocalMessage verifies broadcast delete targets a freshly created message.
-func TestEnsureLiveBroadcastMessageDeleteTarget_CreatesAttemptLocalMessage(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if r.Method != http.MethodPost || r.URL.EscapedPath() != "/api/v4/broadcast_messages" {
-			http.NotFound(w, r)
-			return
-		}
-		_, _ = w.Write([]byte(`{"id":98,"message":"Evaluation broadcast safe to delete"}`))
-	}))
-	defer server.Close()
-	client := newFixtureTestClient(t, server.URL)
-	task := evalTask{ID: "MT-054", Prompt: "Delete broadcast message ID `12`."}
-
-	got, err := ensureLiveBroadcastMessageDeleteTarget(t.Context(), client, task)
-	if err != nil {
-		t.Fatalf("ensureLiveBroadcastMessageDeleteTarget() error = %v", err)
-	}
-
-	assertContains(t, got.Prompt, "broadcast message ID `98`")
-}
-
-// TestEnsureLiveJobTokenScopeRemoveProjectTarget_SeedsAllowlist verifies token-scope removal has a target project to remove.
-func TestEnsureLiveJobTokenScopeRemoveProjectTarget_SeedsAllowlist(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/groups/my-org%2Ftools":
-			_, _ = w.Write([]byte(`{"id":321,"name":"tools","full_path":"my-org/tools"}`))
-		case r.Method == http.MethodGet && r.URL.EscapedPath() == "/api/v4/projects/my-org%2Ftools%2Fgitlab-mcp-server":
-			_, _ = w.Write([]byte(`{"id":42,"path_with_namespace":"my-org/tools/gitlab-mcp-server"}`))
-		case r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects":
-			_, _ = w.Write([]byte(`{"id":99,"name":"eval-token-scope-test","path_with_namespace":"my-org/tools/eval-token-scope-test"}`))
-		case r.Method == http.MethodPatch && strings.Contains(r.URL.EscapedPath(), "/job_token_scope"):
-			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodPost && strings.Contains(r.URL.EscapedPath(), "/job_token_scope/allowlist"):
-			_, _ = w.Write([]byte(`{"source_project_id":42,"target_project_id":99}`))
-		default:
-			t.Logf("unexpected fixture request: %s %s", r.Method, r.URL.EscapedPath())
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-	client := newFixtureTestClient(t, server.URL)
-	task := evalTask{ID: "MT-066", Prompt: "Remove project ID `123` from the CI job token allowlist of project `my-org/tools/gitlab-mcp-server`."}
-
-	got, err := ensureLiveJobTokenScopeRemoveProjectTarget(t.Context(), client, task)
-	if err != nil {
-		t.Fatalf("ensureLiveJobTokenScopeRemoveProjectTarget() error = %v", err)
-	}
-
-	assertContains(t, got.Prompt, "project ID `99`")
-	assertContains(t, got.Prompt, "project `42`")
-}
-
-// TestReplacePromptBacktickValueAfter verifies ReplacePromptBacktickValueAfter.
-func TestReplacePromptBacktickValueAfter(t *testing.T) {
-	prompt := "Delete pipeline trigger token ID `77` from project `my-org/tools/gitlab-mcp-server`."
-
-	got, err := replacePromptBacktickValueAfter(prompt, "pipeline trigger token ID ", 1234)
-	if err != nil {
-		t.Fatalf("replacePromptBacktickValueAfter() error = %v", err)
-	}
-	assertContains(t, got, "pipeline trigger token ID `1234`")
-	if strings.Contains(got, "`77`") {
-		t.Fatalf("replacePromptBacktickValueAfter() = %q, still contains old trigger ID", got)
 	}
 }
 

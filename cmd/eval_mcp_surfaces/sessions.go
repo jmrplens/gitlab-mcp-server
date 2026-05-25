@@ -249,8 +249,6 @@ func newExternalExecutionSession(opts options) (*mcp.ClientSession, func(), erro
 	return session, func() { _ = session.Close() }, nil
 }
 
-// ensureLiveAttemptResources handles ensure live attempt resources and returns [evalTask].
-
 func externalMCPEnv(opts options) ([]string, error) {
 	env := os.Environ()
 	if strings.TrimSpace(opts.MCPEnv) == "" {

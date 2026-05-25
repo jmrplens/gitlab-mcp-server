@@ -6,7 +6,7 @@
 
 | Input | Default | Purpose |
 | --- | --- | --- |
-| `--tasks` | `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md` | Executable Markdown fixture with `MT-*`, `MS-*`, and `MF-*` rows. `MS-*` also includes MCP capability discovery rows that exercise evaluator bridge tools. |
+| `--tasks` | empty | Deprecated. Evaluation cases are loaded from typed `EvalCase` definitions compiled into this package. Passing a custom Markdown task file is rejected. |
 | `--model` | empty | Single `provider:model` string or legacy Anthropic model name. Overrides `--models` and `EVAL_MODELS`. |
 | `--models` | empty | Comma-separated `provider:model` list for local multi-model analysis. Defaults to `EVAL_MODELS` when `--model` is not set. |
 | `--tool-surface` | `dynamic` | Model-facing catalog surface to evaluate: `dynamic` or `meta`. `dynamic` evaluates `gitlab_find_action` plus `gitlab_execute_action`. |

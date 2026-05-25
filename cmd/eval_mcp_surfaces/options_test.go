@@ -142,7 +142,23 @@ func TestApplyDockerPresetDefaults_RespectsExplicitValues(t *testing.T) {
 	if opts.Backend != "custom" || opts.Partition != "custom-partition" {
 		t.Fatalf("opts = %+v, want explicit backend and partition preserved", opts)
 	}
-	if opts.Edition != editionCE || !opts.Execute || !opts.UseFixtures || !opts.SkipUnavailable || !opts.SkipMutating || !opts.SkipDestructive {
+	if opts.Edition != editionCE || !opts.Execute || !opts.UseFixtures || !opts.DockerAutoStart || !opts.SkipUnavailable || !opts.SkipMutating || !opts.SkipDestructive {
 		t.Fatalf("opts = %+v, want Docker capability defaults enabled", opts)
+	}
+}
+
+// TestApplyDockerPresetDefaults_RespectsExplicitDockerAutoStart verifies callers
+// can disable evaluator-level Docker startup when another wrapper owns it.
+func TestApplyDockerPresetDefaults_RespectsExplicitDockerAutoStart(t *testing.T) {
+	opts, err := applyPresetDefaults(options{
+		Preset:          presetDockerRead,
+		DockerAutoStart: false,
+		explicitFlags:   map[string]bool{"docker-auto-start": true},
+	})
+	if err != nil {
+		t.Fatalf("applyPresetDefaults() error = %v", err)
+	}
+	if opts.DockerAutoStart {
+		t.Fatalf("DockerAutoStart = true, want explicit false preserved: %+v", opts)
 	}
 }

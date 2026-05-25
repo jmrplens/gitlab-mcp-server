@@ -112,7 +112,7 @@ func evalElicitationTextValue(fieldName string) string {
 	case "name":
 		return "eval-elicit-resource-" + liveUniqueSuffix()
 	case "source_branch":
-		return liveFixtureFeatureRef
+		return evalElicitationSourceBranchName()
 	case "target_branch", "default_branch":
 		return liveFixtureDefaultRef
 	case "tag_name":
@@ -129,12 +129,28 @@ func setEvalElicitationReleaseTag(tagName string) {
 	evalElicitationReleaseTag.Store(tagName)
 }
 
+func setEvalElicitationSourceBranch(branchName string) {
+	evalElicitationSourceBranch.Store(branchName)
+}
+
+func configureEvalElicitationFromOutput(output FixtureOutput) {
+	setEvalElicitationReleaseTag(firstNonEmpty(output["release_tag_name"], liveFixtureElicitationTag))
+	setEvalElicitationSourceBranch(firstNonEmpty(output["mr_source_branch"], liveFixtureFeatureRef))
+}
+
 // evalElicitationReleaseTagName returns the currently prepared release tag.
 func evalElicitationReleaseTagName() string {
 	if tagName, ok := evalElicitationReleaseTag.Load().(string); ok && tagName != "" {
 		return tagName
 	}
 	return liveFixtureElicitationTag
+}
+
+func evalElicitationSourceBranchName() string {
+	if branchName, ok := evalElicitationSourceBranch.Load().(string); ok && branchName != "" {
+		return branchName
+	}
+	return liveFixtureFeatureRef
 }
 
 // convertTools resolves convert tools for evaluator execution.

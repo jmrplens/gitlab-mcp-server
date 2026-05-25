@@ -524,10 +524,7 @@ func publishRowsByPresetFromTraces(report publishReport, content string) ([]publ
 	if tracePath == "" {
 		return nil, fmt.Errorf("publish input %s has no preset and no trace artifacts; publish full runs with trace artifacts or publish separate preset reports", report.Path)
 	}
-	tasks, err := parseTasksFile(publishTasksPath())
-	if err != nil {
-		return nil, fmt.Errorf("read publish task presets: %w", err)
-	}
+	tasks := evalTasksFromCases(AllEvalCases())
 	tasksByID := make(map[string]evalTask, len(tasks))
 	for _, task := range tasks {
 		tasksByID[task.ID] = task
@@ -576,18 +573,6 @@ func publishRowsByPresetFromTraces(report publishReport, content string) ([]publ
 		rows = append(rows, newPublishRow(report, model, preset, acc.Stats, acc.metrics(), acc.usage()))
 	}
 	return rows, nil
-}
-
-// publishTasksPath publishes tasks path for the main package.
-func publishTasksPath() string {
-	if _, err := os.Stat(defaultTasksPath); err == nil {
-		return defaultTasksPath
-	}
-	packageRelative := filepath.Join("testdata", filepath.Base(defaultTasksPath))
-	if _, err := os.Stat(packageRelative); err == nil {
-		return packageRelative
-	}
-	return defaultTasksPath
 }
 
 // addTrace handles add trace for publishTraceAccumulator.

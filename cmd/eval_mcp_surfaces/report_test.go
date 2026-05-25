@@ -59,6 +59,48 @@ func TestWriteReport_WritesFullEvaluationMarkdown(t *testing.T) {
 	}
 }
 
+func TestCheckReportCleanContent_DetectsFailedTaskRows(t *testing.T) {
+	content := "## Task Results\n\n" +
+		"| Model | Run | Task | Final success | Notes |\n" +
+		"| --- | ---: | --- | --- | --- |\n" +
+		"| `anthropic:test` | 1 | MT-001 | Yes | - |\n" +
+		"| `google:test` | 1 | MT-002 | No | fixture preparation failed |\n"
+	status, err := checkReportCleanContent(content)
+	if err != nil {
+		t.Fatalf("checkReportCleanContent() error = %v", err)
+	}
+	if status.TotalRows != 2 || status.clean() || len(status.FailedRows) != 1 {
+		t.Fatalf("status = %+v, want one failed row", status)
+	}
+	failed := status.FailedRows[0]
+	if failed.Model != "google:test" {
+		t.Fatalf("failed model = %q, want cleaned model value", failed.Model)
+	}
+	if failed.Task != "MT-002" || failed.Notes != "fixture preparation failed" {
+		t.Fatalf("failed row = %+v, want MT-002 fixture failure", failed)
+	}
+}
+
+func TestCheckReportCleanContent_AllowsRepairedFirstPassWhenFinalSuccess(t *testing.T) {
+	content := "## Task Results\n\n" +
+		"| Model | Run | Task | First pass | Repair | Final success | Notes |\n" +
+		"| --- | ---: | --- | --- | --- | --- | --- |\n" +
+		"| `openai:test` | 1 | MT-003 | No | Yes | Yes | repaired invalid params |\n"
+	status, err := checkReportCleanContent(content)
+	if err != nil {
+		t.Fatalf("checkReportCleanContent() error = %v", err)
+	}
+	if !status.clean() || status.TotalRows != 1 {
+		t.Fatalf("status = %+v, want clean repaired final success", status)
+	}
+}
+
+func TestCheckReportCleanContent_RequiresTaskResultsTable(t *testing.T) {
+	if _, err := checkReportCleanContent("# Startup failure\n\nStatus: `failed`\n"); err == nil {
+		t.Fatal("checkReportCleanContent() error = nil, want missing task results error")
+	}
+}
+
 // TestReportHeaderHelpers_RenderModeAndTitle verifies report labels remain
 // stable across dynamic, meta, and dry-run modes.
 func TestReportHeaderHelpers_RenderModeAndTitle(t *testing.T) {
