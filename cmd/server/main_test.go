@@ -1036,6 +1036,39 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	}
 }
 
+// TestCreateServer_DynamicToolSurfaceWithUpdaterIncludesUpdateSchema verifies
+// the default dynamic startup path can expose updater-backed maintenance actions
+// without falling back to legacy schema-less routes.
+func TestCreateServer_DynamicToolSurfaceWithUpdaterIncludesUpdateSchema(t *testing.T) {
+	client := newMockGitLabClient(t)
+	updater := autoupdate.NewUpdaterWithSource(autoupdate.Config{
+		Mode:           autoupdate.ModeCheck,
+		Repository:     "owner/repo",
+		CurrentVersion: "1.0.0",
+	}, autoupdate.EmptySource{})
+	server, err := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic}, updater)
+	if err != nil {
+		t.Fatalf("createServer(dynamic with updater) error = %v", err)
+	}
+	session := newInMemorySession(t, server)
+
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/server.apply_update"})
+	if err != nil {
+		t.Fatalf("dynamic surface should expose server.apply_update detail resource: %v", err)
+	}
+	var detail resources.ToolSurfaceDetail
+	if unmarshalErr := json.Unmarshal([]byte(result.Contents[0].Text), &detail); unmarshalErr != nil {
+		t.Fatalf("unmarshal server.apply_update detail: %v", unmarshalErr)
+	}
+	schema, ok := detail.InputSchema.(map[string]any)
+	if !ok {
+		t.Fatalf("server.apply_update input schema = %T, want map[string]any", detail.InputSchema)
+	}
+	if got := schema["type"]; got != "object" {
+		t.Fatalf("server.apply_update input schema type = %v, want object", got)
+	}
+}
+
 // TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities verifies the
 // catalog-backed meta surface keeps standalone helper tools available.
 func TestCreateServer_MetaToolSurfaceIncludesStandaloneUtilities(t *testing.T) {
