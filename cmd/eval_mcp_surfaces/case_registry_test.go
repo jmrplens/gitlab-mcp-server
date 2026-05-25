@@ -134,6 +134,45 @@ func TestDestructiveMergeRequestLiveCasesUseFixtures(t *testing.T) {
 	}
 }
 
+func TestReleaseAssetLinkCRUDCaseUsesAttemptScopedURLs(t *testing.T) {
+	evalCase, ok := CaseByID("MS-018")
+	if !ok {
+		t.Fatal("CaseByID(MS-018) = false")
+	}
+	fixtures := requireFixtureNames(evalCase.Fixtures)
+	fixture, ok := fixtures["attempt_names"]
+	if !ok {
+		t.Fatalf("MS-018 fixtures = %s, want attempt_names", fixtureNames(evalCase.Fixtures))
+	}
+	if fixture.Scope != FixtureScopeAttempt {
+		t.Fatalf("MS-018 attempt_names scope = %q, want %q", fixture.Scope, FixtureScopeAttempt)
+	}
+	for _, want := range []string{"{{ .Values.release_link_url }}", "{{ .Values.release_link_updated_url }}"} {
+		if !strings.Contains(evalCase.PromptTemplate.Text, want) {
+			t.Fatalf("MS-018 prompt template = %q, want %q", evalCase.PromptTemplate.Text, want)
+		}
+	}
+	if strings.Contains(evalCase.PromptTemplate.Text, "only after the release exists, add asset link `eval-crud-link`") {
+		t.Fatalf("MS-018 prompt template keeps legacy static release link text: %q", evalCase.PromptTemplate.Text)
+	}
+}
+
+func TestInteractiveMergeRequestCaseUsesGuidedOnlyParams(t *testing.T) {
+	evalCase, ok := CaseByID("MT-081")
+	if !ok {
+		t.Fatal("CaseByID(MT-081) = false")
+	}
+	fixtures := requireFixtureNames(evalCase.Fixtures)
+	if _, hasFixture := fixtures["merge_request_source"]; !hasFixture {
+		t.Fatalf("MT-081 fixtures = %s, want merge_request_source", fixtureNames(evalCase.Fixtures))
+	}
+	for _, want := range []string{"Do not pass `source_branch`", "guided prompts will use source branch"} {
+		if !strings.Contains(evalCase.PromptTemplate.Text, want) {
+			t.Fatalf("MT-081 prompt template = %q, want %q", evalCase.PromptTemplate.Text, want)
+		}
+	}
+}
+
 func TestEnterpriseDockerCases_AttachTypedFixtures(t *testing.T) {
 	checks := map[string]string{
 		"MT-192": "enterprise_push_rule_project",

@@ -290,8 +290,6 @@ func baseDestructiveEarlySinglePromptTemplateAndFixtures(id string) (string, []C
 		return "Delete subgroup `{{ .Group.Path }}`.", []CaseFixtureSpec{GroupDeleteFixture}
 	case "MT-013":
 		return "Delete issue `{{ .Issue.IID }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{IssueDeleteFixture}
-	case "MS-018":
-		return "Exercise release asset-link CRUD in project `{{ .Project.Path }}`: use release create directly to create release `{{ .Release.TagName }}` from ref `{{ .Branch.Default }}` named `{{ .Release.Name }}` without creating a tag separately and without passing `assets`; after the release exists, add asset link `{{ .Values.release_link_name }}` with URL `{{ .Values.release_link_url }}`, fetch the returned link with link get, update the link URL to `{{ .Values.release_link_updated_url }}`, delete the link, delete the release, then delete the tag.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
 	case "MT-017":
 		return "Enable auto-merge for merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` by calling merge with `auto_merge=true`.", []CaseFixtureSpec{MergeableMergeRequestFixture}
 	case "MT-024":
@@ -376,6 +374,8 @@ func baseDestructiveWorkflowPromptTemplateAndFixtures(id string) (string, []Case
 		return "Clean up release `{{ .Release.TagName }}` in project `{{ .Project.Path }}`: verify the tag, verify the release, list release links, delete the release, then delete the tag.", []CaseFixtureSpec{ReleaseDeleteFixture}
 	case "MS-007":
 		return "Clean up an obsolete package in project `{{ .Project.Path }}`: list generic packages, list files for package ID `{{ .Package.ID }}`, then delete package ID `{{ .Package.ID }}`.", []CaseFixtureSpec{PackageDeleteFixture}
+	case "MS-018":
+		return "Exercise release asset-link CRUD in project `{{ .Project.Path }}`: use release create directly to create release `{{ .Release.TagName }}` from ref `{{ .Branch.Default }}` named `{{ .Release.Name }}` without creating a tag separately and without passing `assets`; after the release exists, add asset link `{{ .Values.release_link_name }}` with URL `{{ .Values.release_link_url }}`, fetch the returned link with link get, update the link URL to `{{ .Values.release_link_updated_url }}`, delete the link, delete the release, then delete the tag.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
 	case "MS-027":
 		return "Exercise merge request note CRUD in project `{{ .Project.Path }}`: add note `eval-mr-note` to merge request `{{ .MergeRequest.IID }}`, fetch the created note using the returned note ID, update it to `eval-mr-note-updated`, then delete it.", []CaseFixtureSpec{MergeRequestFixture}
 	case "MS-028":

@@ -108,7 +108,7 @@ func baseMutatingPromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec
 	case "MT-068":
 		return "Create instance CI variable `{{ .Values.instance_ci_variable_key }}` with value `masked-value-123`.", []CaseFixtureSpec{AttemptNamesFixture}
 	case "MT-081":
-		return "Start the guided merge request creation flow for project `{{ .Project.Path }}` using source branch `{{ .Values.mr_source_branch }}`, target branch `{{ .Branch.Default }}`, and title `{{ .Values.mr_title }}`.", []CaseFixtureSpec{MergeRequestSourceFixture}
+		return "Start the guided merge request creation flow for project `{{ .Project.Path }}`. Do not pass `source_branch`, `target_branch`, or `title` as tool parameters; the guided prompts will use source branch `{{ .Values.mr_source_branch }}`, target branch `{{ .Branch.Default }}`, and title `{{ .Values.mr_title }}`.", []CaseFixtureSpec{MergeRequestSourceFixture}
 	case "MT-083":
 		return "Start the guided release creation flow for project `{{ .Project.Path }}`. Do not pass `tag_name` or `name` as tool parameters; the guided prompts will use tag `{{ .Release.TagName }}` and release name `{{ .Release.Name }}`.", []CaseFixtureSpec{ReleaseCreateSourceFixture}
 	case "MS-008":
