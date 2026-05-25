@@ -2380,7 +2380,7 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 		"Do not look up schemas for ordinary parameter names already supplied by the task prompt",
 		"do not add any params that the task did not ask for",
 		"Use gitlab_interactive_* only if this task explicitly asks for a guided interactive flow",
-		"A value like group/project is params.project_id, not remote_url",
+		"When the selected action requires project_id, a value like group/project is params.project_id, not params.full_path, params.path, or remote_url",
 		"never call gitlab without an input object containing action and params",
 		"server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check",
 		"For subgroup creation with group.create, use params.name, params.path, and params.parent_id",
@@ -2406,6 +2406,23 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 		"do not send empty arrays or objects",
 		"call the selected action with params:{}",
 	)
+}
+
+func TestDynamicSingleTaskPrompt_ProjectPathUsesProjectID(t *testing.T) {
+	task := evalTask{ID: "MT-012", Prompt: "Close issue `10` in project `my-org/tools/gitlab-mcp-server` by setting `state_event` to `close`.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.update", RequiredParams: []string{"project_id", "issue_iid", "state_event"}},
+	}}
+
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
+	required := []string{
+		`"action":"issue.update"`,
+		`"project_id":"my-org/tools/gitlab-mcp-server"`,
+		`"issue_iid":10`,
+		`"state_event":"close"`,
+		"If the exact input object shows project_id",
+		"do not add params.full_path, params.path, or remote_url",
+	}
+	requireContainsAll(t, "taskPromptForSurface()", prompt, required)
 }
 
 func assertTaskPromptContains(t *testing.T, prompt string, snippets ...string) {
