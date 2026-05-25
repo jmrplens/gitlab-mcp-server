@@ -383,7 +383,7 @@ func ensureMergeableMergeRequestFixture(ctx context.Context, env FixtureContext)
 		if branchErr := ensureLiveBranchExists(setupCtx, env.Client, projectID, sourceBranch, targetBranch); branchErr != nil {
 			return nil, fmt.Errorf("prepare mergeable MR branch: %w", branchErr)
 		}
-		if seedErr := seedPassingMergeRequestFixture(setupCtx, env.Client, projectID, sourceBranch); seedErr != nil {
+		if seedErr := seedMergeRequestFixture(setupCtx, env.Client, projectID, sourceBranch); seedErr != nil {
 			return nil, seedErr
 		}
 		removeSource := false
@@ -400,13 +400,6 @@ func ensureMergeableMergeRequestFixture(ctx context.Context, env FixtureContext)
 		if approvalsErr := ensureLiveMergeRequestApprovalless(setupCtx, env.Client, projectID, mergeRequest.IID); approvalsErr != nil {
 			return nil, approvalsErr
 		}
-		pipeline, _, err := env.Client.GL().Pipelines.CreatePipeline(projectID, &gl.CreatePipelineOptions{Ref: &sourceBranch}, gl.WithContext(setupCtx))
-		if err != nil {
-			return nil, fmt.Errorf("prepare mergeable MR pipeline: %w", err)
-		}
-		if waitErr := waitForLivePipelineStatus(setupCtx, env.Client, projectID, pipeline.ID, "success"); waitErr != nil {
-			return nil, waitErr
-		}
 		if waitErr := waitForLiveMergeRequestReady(setupCtx, env.Client, projectID, mergeRequest.IID); waitErr != nil {
 			return nil, waitErr
 		}
@@ -417,7 +410,6 @@ func ensureMergeableMergeRequestFixture(ctx context.Context, env FixtureContext)
 			"source_branch":     sourceBranch,
 			"target_branch":     targetBranch,
 			"merge_request_iid": strconv.FormatInt(mergeRequest.IID, 10),
-			"pipeline_id":       strconv.FormatInt(pipeline.ID, 10),
 		}, nil
 	})
 }
@@ -490,21 +482,11 @@ func createMergeableMRTemporaryProject(ctx context.Context, client *gitlabclient
 	return nil, lastErr
 }
 
-func seedPassingMergeRequestFixture(ctx context.Context, client *gitlabclient.Client, projectID, sourceBranch string) error {
-	ciContent := "stages:\n  - test\n\nvariables:\n  GIT_STRATEGY: none\n\neval-pass:\n  stage: test\n  script:\n    - echo evaluation merge fixture\n"
-	ciCommitMessage := "Seed passing CI for merge evaluation"
-	_, _, err := client.GL().RepositoryFiles.CreateFile(projectID, ".gitlab-ci.yml", &gl.CreateFileOptions{
-		Branch:        &sourceBranch,
-		Content:       &ciContent,
-		CommitMessage: &ciCommitMessage,
-	}, gl.WithContext(ctx))
-	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusBadRequest) && !toolutil.IsHTTPStatus(err, http.StatusConflict) {
-		return fmt.Errorf("prepare mergeable MR CI: %w", err)
-	}
+func seedMergeRequestFixture(ctx context.Context, client *gitlabclient.Client, projectID, sourceBranch string) error {
 	filePath := fmt.Sprintf("tmp/eval-merge-%s.txt", safeFixturePathPart(sourceBranch))
 	fileContent := "evaluation merge request fixture\n"
 	fileCommitMessage := "Seed merge request evaluation fixture"
-	_, _, err = client.GL().RepositoryFiles.CreateFile(projectID, filePath, &gl.CreateFileOptions{
+	_, _, err := client.GL().RepositoryFiles.CreateFile(projectID, filePath, &gl.CreateFileOptions{
 		Branch:        &sourceBranch,
 		Content:       &fileContent,
 		CommitMessage: &fileCommitMessage,

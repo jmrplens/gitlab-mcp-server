@@ -1355,10 +1355,15 @@ func (p *liveFixturePreparer) createFile(ctx context.Context, path, branch, cont
 		Content:       new(content),
 		CommitMessage: new(message),
 	}, gl.WithContext(ctx))
-	if err != nil && !toolutil.IsHTTPStatus(err, http.StatusBadRequest) && !toolutil.IsHTTPStatus(err, http.StatusConflict) {
+	if err != nil && !isFileAlreadyExistsError(err) {
 		return fmt.Errorf("create file %s on %s: %w", path, branch, err)
 	}
 	return nil
+}
+
+func isFileAlreadyExistsError(err error) bool {
+	return (toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusConflict)) &&
+		toolutil.ContainsAny(err, "already exists", "file already exists")
 }
 
 // ensureTag ensures tag exists for liveFixturePreparer.

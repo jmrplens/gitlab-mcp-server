@@ -349,6 +349,28 @@ func TestEnsureFile_UpdateMissingFile_CreatesFile(t *testing.T) {
 	}
 }
 
+// TestCreateFile_BadRequestWithoutAlreadyExists_ReturnsError verifies fixture
+// setup does not hide GitLab create-file failures that leave no file behind.
+func TestCreateFile_BadRequestWithoutAlreadyExists_ReturnsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && r.URL.EscapedPath() == "/api/v4/projects/101/repository/files/README.md" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"message":"Branch does not exist"}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+	client := newFixtureTestClient(t, server.URL)
+	preparer := &liveFixturePreparer{client: client, state: &liveFixtureState{ProjectID: 101}}
+
+	err := preparer.createFile(t.Context(), "README.md", "missing-branch", "content\n", "Seed README")
+	if err == nil || !strings.Contains(err.Error(), "Branch does not exist") {
+		t.Fatalf("createFile() error = %v, want Branch does not exist", err)
+	}
+}
+
 // TestFindProjectServiceAccount verifies fixture reuse finds existing service accounts by stable identity.
 func TestFindProjectServiceAccount(t *testing.T) {
 	tests := []struct {

@@ -1045,7 +1045,7 @@ func TestDynamicTaskPrompt_IncludesProviderConfusionGuidance(t *testing.T) {
 		},
 		{
 			name: "merge request award workflow",
-			task: evalTask{ID: "MS-033", Prompt: "Exercise merge request time tracking and emoji in project `my-org/tools/gitlab-mcp-server`: set estimate `1h` on MR `1`, add spent time `15m`, add award emoji `eyes`, list MR awards, delete the returned award emoji, reset spent time, then reset the estimate.", Steps: []evalStep{
+			task: evalTask{ID: "MS-033", Prompt: "Exercise merge request time tracking and emoji in project `my-org/tools/gitlab-mcp-server`: set estimate `1h` on merge request `1`, add spent time `15m`, add award emoji `eyes`, list MR awards, delete the returned award emoji, reset spent time, then reset the estimate.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.time_estimate_set", RequiredParams: []string{"project_id", "merge_request_iid", "duration"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.spent_time_add", RequiredParams: []string{"project_id", "merge_request_iid", "duration"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.emoji_mr_create", RequiredParams: []string{"project_id", "merge_request_iid", "name"}},
@@ -1119,6 +1119,13 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 			}},
 			want: []string{`"action":"pipeline.trigger_delete"`, `"confirm":true`, `"params":{"project_id":"my-org/tools/gitlab-mcp-server","trigger_id":53}`, "only action and confirm is invalid"},
 		},
+		{
+			name: "terraform state unlock",
+			task: evalTask{ID: "MT-114", Prompt: "Unlock Terraform state `production` in project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
+				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.terraform_state_unlock", RequiredParams: []string{"project_id", "name"}, OptionalParams: []string{"confirm"}, Destructive: true},
+			}},
+			want: []string{`"action":"admin.terraform_state_unlock"`, `"confirm":true`, `"name":"production"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, "never use terraform_state.unlock or params.terraform_state_name"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1141,6 +1148,27 @@ func TestDynamicSingleTaskPrompt_UsesExactCallForHighRiskShapes(t *testing.T) {
 			}
 			requireContainsAll(t, "taskPromptForSurface()", prompt, tt.want)
 		})
+	}
+}
+
+func TestDynamicSingleTaskPrompt_TerraformStateUnlockExactCallAvoidsLegacyEnvelope(t *testing.T) {
+	task := evalTask{ID: "MT-114", Prompt: "Unlock Terraform state `production` in project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.terraform_state_unlock", RequiredParams: []string{"project_id", "name"}, OptionalParams: []string{"confirm"}, Destructive: true},
+	}}
+
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
+	required := []string{
+		"Dynamic first-step exact call",
+		`"action":"admin.terraform_state_unlock"`,
+		`"confirm":true`,
+		`"name":"production"`,
+		`"project_id":"my-org/tools/gitlab-mcp-server"`,
+	}
+	requireContainsAll(t, "taskPromptForSurface()", prompt, required)
+	for _, unwanted := range []string{`"action":"terraform_state.unlock"`, `"terraform_state_name":`} {
+		if strings.Contains(prompt, unwanted) {
+			t.Fatalf("taskPromptForSurface() = %q, want no legacy terraform state envelope %q", prompt, unwanted)
+		}
 	}
 }
 

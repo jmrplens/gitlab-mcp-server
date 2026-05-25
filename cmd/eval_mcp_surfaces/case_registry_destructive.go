@@ -272,8 +272,19 @@ func destructiveStep(tool, action string, requiredParams, optionalParams []strin
 	return step
 }
 
-//nolint:gocyclo // Keeping the ID-to-fixture mapping in one switch makes the migration table auditable.
 func baseDestructivePromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec) {
+	switch {
+	case len(id) >= 3 && id[:3] == "MS-":
+		return baseDestructiveWorkflowPromptTemplateAndFixtures(id)
+	case id >= "MT-099":
+		return baseDestructiveLateSinglePromptTemplateAndFixtures(id)
+	default:
+		return baseDestructiveEarlySinglePromptTemplateAndFixtures(id)
+	}
+}
+
+//nolint:gocyclo // Keeping this ID-to-fixture mapping in one switch makes the migration table auditable.
+func baseDestructiveEarlySinglePromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec) {
 	switch id {
 	case "MT-008":
 		return "Delete subgroup `{{ .Group.Path }}`.", []CaseFixtureSpec{GroupDeleteFixture}
@@ -288,7 +299,7 @@ func baseDestructivePromptTemplateAndFixtures(id string) (string, []CaseFixtureS
 	case "MT-028":
 		return "Delete CI variable `{{ .Values.ci_variable_key }}` from production scope in project `{{ .Project.Path }}`.", []CaseFixtureSpec{ProjectCIVariableDeleteFixture}
 	case "MT-031":
-		return "Delete file `{{ .Values.file_path }}` with commit_message `Delete evaluation file` from branch `{{ .Branch.Name }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{RepositoryFileDeleteFixture}
+		return "Delete file `{{ .Values.file_path }}` with commit_message `Delete evaluation file` from branch `{{ .Branch.Name }}` in project `{{ .Project.Path }}`. Call repository.file_delete directly with exactly that file_path and branch; do not call repository.tree or switch to a different file path.", []CaseFixtureSpec{RepositoryFileDeleteFixture}
 	case "MT-035":
 		return "Delete milestone IID `{{ .Values.milestone_iid }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{MilestoneDeleteFixture}
 	case "MT-037":
@@ -317,6 +328,13 @@ func baseDestructivePromptTemplateAndFixtures(id string) (string, []CaseFixtureS
 		return "Remove project ID `{{ .Values.target_project_id }}` from the CI job token allowlist of project `{{ .Project.ID }}`.", []CaseFixtureSpec{JobTokenScopeProjectFixture}
 	case "MT-069":
 		return "Delete instance CI variable `{{ .Values.instance_ci_variable_key }}`.", []CaseFixtureSpec{InstanceCIVariableDeleteFixture}
+	default:
+		return "", nil
+	}
+}
+
+func baseDestructiveLateSinglePromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec) {
+	switch id {
 	case "MT-099":
 		return "Delete branch `{{ .Branch.Name }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{BranchDeleteFixture}
 	case "MT-100":
@@ -343,6 +361,13 @@ func baseDestructivePromptTemplateAndFixtures(id string) (string, []CaseFixtureS
 		return "Delete project deploy token ID `{{ .Values.deploy_token_id }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{DeployTokenDeleteFixture}
 	case "MT-113":
 		return "Delete commit discussion note `{{ .Values.note_id }}` from discussion `{{ .Values.discussion_id }}` on commit `{{ .Values.commit_sha }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{CommitDiscussionDeleteNoteFixture}
+	default:
+		return "", nil
+	}
+}
+
+func baseDestructiveWorkflowPromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec) {
+	switch id {
 	case "MS-013":
 		return "Remove a temporary feature rollout from project `{{ .Project.Path }}`: inspect feature flag `{{ .Values.feature_flag_name }}`, list feature flag user lists, then delete the flag.", []CaseFixtureSpec{FeatureFlagDeleteFixture}
 	case "MS-003":
@@ -351,10 +376,14 @@ func baseDestructivePromptTemplateAndFixtures(id string) (string, []CaseFixtureS
 		return "Clean up release `{{ .Release.TagName }}` in project `{{ .Project.Path }}`: verify the tag, verify the release, list release links, delete the release, then delete the tag.", []CaseFixtureSpec{ReleaseDeleteFixture}
 	case "MS-007":
 		return "Clean up an obsolete package in project `{{ .Project.Path }}`: list generic packages, list files for package ID `{{ .Package.ID }}`, then delete package ID `{{ .Package.ID }}`.", []CaseFixtureSpec{PackageDeleteFixture}
+	case "MS-027":
+		return "Exercise merge request note CRUD in project `{{ .Project.Path }}`: add note `eval-mr-note` to merge request `{{ .MergeRequest.IID }}`, fetch the created note using the returned note ID, update it to `eval-mr-note-updated`, then delete it.", []CaseFixtureSpec{MergeRequestFixture}
 	case "MS-028":
 		return "Exercise branch protection lifecycle in project `{{ .Project.Path }}`: create branch `{{ .Branch.Name }}` from `{{ .Branch.Default }}`, protect it with Maintainer push and merge access, fetch the protected branch, update it to allow force push, unprotect it, then delete the branch.", []CaseFixtureSpec{BranchProtectionLifecycleFixture}
 	case "MS-031":
 		return "Exercise project deploy key lifecycle in project `{{ .Project.Path }}`: add deploy key `{{ .Values.deploy_key_title }}` with public key `{{ .Values.deploy_key_key }}`, fetch it with deploy key get using the returned deploy key ID, update the title to `{{ .Values.deploy_key_updated_title }}`, then delete it.", []CaseFixtureSpec{DeployKeyLifecycleFixture}
+	case "MS-033":
+		return "Exercise merge request time tracking and emoji in project `{{ .Project.Path }}`: set estimate `1h` on merge request `{{ .MergeRequest.IID }}`, add spent time `15m`, add award emoji `eyes`, list MR awards, delete the returned award emoji, reset spent time, then reset the estimate.", []CaseFixtureSpec{MergeRequestFixture}
 	case "MS-034":
 		return "Exercise project member lifecycle in project `{{ .Project.Path }}`: add user ID `{{ .Values.user_id }}` as Reporter, fetch that project member, edit access level to Developer, then remove the member.", []CaseFixtureSpec{UserBlockFixture}
 	default:

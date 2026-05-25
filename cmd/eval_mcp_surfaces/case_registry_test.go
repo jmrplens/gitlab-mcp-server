@@ -113,6 +113,27 @@ func TestDestructiveTypedFixtures_AttemptScopedForLiveTargets(t *testing.T) {
 	}
 }
 
+func TestDestructiveMergeRequestLiveCasesUseFixtures(t *testing.T) {
+	for _, id := range []string{"MS-027", "MS-033"} {
+		t.Run(id, func(t *testing.T) {
+			evalCase, ok := CaseByID(id)
+			if !ok {
+				t.Fatalf("CaseByID(%s) = false", id)
+			}
+			fixtures := requireFixtureNames(evalCase.Fixtures)
+			if _, hasFixture := fixtures["merge_request"]; !hasFixture {
+				t.Fatalf("%s fixtures = %s, want merge_request", id, fixtureNames(evalCase.Fixtures))
+			}
+			if !strings.Contains(evalCase.PromptTemplate.Text, "{{ .MergeRequest.IID }}") {
+				t.Fatalf("%s prompt template = %q, want merge request fixture IID", id, evalCase.PromptTemplate.Text)
+			}
+			if strings.Contains(evalCase.PromptTemplate.Text, "MR `7`") {
+				t.Fatalf("%s prompt template keeps legacy static MR: %q", id, evalCase.PromptTemplate.Text)
+			}
+		})
+	}
+}
+
 func TestEnterpriseDockerCases_AttachTypedFixtures(t *testing.T) {
 	checks := map[string]string{
 		"MT-192": "enterprise_push_rule_project",

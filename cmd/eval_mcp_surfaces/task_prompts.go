@@ -216,11 +216,10 @@ func repositoryFileDynamicExample(action, param, prompt string) (any, bool) {
 
 func mergeRequestIIDDynamicExample(action, param, prompt string) (any, bool) {
 	if strings.HasPrefix(action, "merge_request.") && param == "merge_request_iid" {
-		if value, ok := backtickValueAfter(prompt, "MR "); ok {
-			return numericExampleValue(value), true
-		}
-		if value, ok := backtickValueAfter(prompt, promptMarkerMergeRequest); ok {
-			return numericExampleValue(value), true
+		for _, marker := range []string{"merge_request_iid ", "merge request IID ", "MR ", "on merge request ", "for merge request ", promptMarkerMergeRequest} {
+			if value, ok := numericBacktickValueAfter(prompt, marker); ok {
+				return value, true
+			}
 		}
 	}
 	return nil, false
@@ -234,6 +233,7 @@ func actionSpecificDynamicExample(action, param, prompt string) (any, bool) {
 		featureFlagDynamicExample,
 		issueDynamicExample,
 		pipelineDynamicExample,
+		adminDynamicExample,
 	} {
 		if value, ok := resolver(action, param, prompt); ok {
 			return value, true
@@ -347,6 +347,13 @@ func pipelineDynamicExample(action, param, prompt string) (any, bool) {
 				return false, true
 			}
 		}
+	}
+	return nil, false
+}
+
+func adminDynamicExample(action, param, prompt string) (any, bool) {
+	if action == "admin.terraform_state_unlock" && param == "name" {
+		return backtickValueAfter(prompt, "Terraform state ")
 	}
 	return nil, false
 }
@@ -688,6 +695,8 @@ func appendSingleOperationGuidance(_ evalTask, steps []evalStep, guidance string
 		return guidance + ` For instance application settings, call gitlab_admin with {"action":"settings_get","params":{}}; do not call metadata_get, gitlab_server, or schema lookup.`
 	case steps[0].ExpectedTool == "gitlab_job" && steps[0].ExpectedAction == "download_single_artifact":
 		return guidance + ` For a prompt like "Download artifact <artifact_path> from job <numeric job_id>", call gitlab_job with {"action":"download_single_artifact","params":{"project_id":"<project_id>","job_id":<job_id>,"artifact_path":"<artifact_path>"}}; do not use download_artifacts, artifacts, or download_single_artifact_by_ref.`
+	case steps[0].ExpectedAction == "admin.terraform_state_unlock" || steps[0].ExpectedTool == "gitlab_admin" && steps[0].ExpectedAction == "terraform_state_unlock":
+		return guidance + ` For Terraform state unlock, use the admin Terraform state unlock action with params.project_id and params.name. The Terraform state name from the prompt maps to params.name; never use terraform_state.unlock or params.terraform_state_name.`
 	default:
 		return guidance
 	}
@@ -1249,8 +1258,8 @@ func examplePausedValue(lowerPrompt string) any {
 func examplePromptMarkerValue(param, prompt string) (any, bool) {
 	if markers, ok := numericExampleParamMarkers[param]; ok {
 		for _, marker := range markers {
-			if value, found := backtickValueAfter(prompt, marker); found {
-				return numericExampleValue(value), true
+			if value, found := numericBacktickValueAfter(prompt, marker); found {
+				return value, true
 			}
 		}
 	}
@@ -1262,6 +1271,28 @@ func examplePromptMarkerValue(param, prompt string) (any, bool) {
 		}
 	}
 	return nil, false
+}
+
+func numericBacktickValueAfter(text, marker string) (int, bool) {
+	remaining := text
+	for {
+		_, afterMarker, found := strings.Cut(remaining, marker)
+		if !found {
+			return 0, false
+		}
+		_, afterOpenTick, found := strings.Cut(afterMarker, "`")
+		if !found {
+			return 0, false
+		}
+		value, afterCloseTick, found := strings.Cut(afterOpenTick, "`")
+		if !found {
+			return 0, false
+		}
+		if number, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+			return number, true
+		}
+		remaining = afterCloseTick
+	}
 }
 
 // fallbackExampleParamValue derives fallback example param value from task and schema inputs.

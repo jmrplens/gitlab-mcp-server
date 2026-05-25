@@ -19,6 +19,7 @@ import (
 
 const (
 	mcpToolTransientAttempts  = 5
+	mcpToolCallTimeout        = 3 * time.Minute
 	mcpToolTransientRetryWait = 750 * time.Millisecond
 )
 
@@ -1002,7 +1003,7 @@ func (r *modelRunner) mcpToolResult(ctx context.Context, toolUse modelContentBlo
 }
 
 func (r *modelRunner) mcpToolResultOnce(ctx context.Context, toolUse modelContentBlock) simulationResult {
-	callCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	callCtx, cancel := context.WithTimeout(ctx, mcpToolCallTimeout)
 	defer cancel()
 	exchange := &traceMCPExchange{Request: traceMCPRequest{Name: toolUse.Name, Arguments: toolUse.Input}}
 	started := time.Now()

@@ -117,37 +117,6 @@ func temporaryProjectNameTaken(err error) bool {
 		toolutil.ContainsAny(err, "has already been taken")
 }
 
-func waitForLivePipelineStatus(ctx context.Context, client *gitlabclient.Client, projectID string, pipelineID int64, wantedStatus string) error {
-	deadline := time.Now().Add(4 * time.Minute)
-	lastStatus := "unknown"
-	for time.Now().Before(deadline) {
-		pipeline, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(ctx))
-		if err != nil {
-			return fmt.Errorf("prepare fixture pipeline %d: %w", pipelineID, err)
-		}
-		lastStatus = pipeline.Status
-		if pipeline.Status == wantedStatus {
-			return nil
-		}
-		if isLivePipelineTerminal(pipeline.Status) {
-			return fmt.Errorf("prepare fixture pipeline %d ended with status %s", pipelineID, pipeline.Status)
-		}
-		if waitErr := waitForContext(ctx, 5*time.Second); waitErr != nil {
-			return waitErr
-		}
-	}
-	return fmt.Errorf("prepare fixture pipeline %d did not reach %s before timeout; last status %s", pipelineID, wantedStatus, lastStatus)
-}
-
-func isLivePipelineTerminal(status string) bool {
-	switch status {
-	case "success", "failed", "canceled", "skipped", "manual":
-		return true
-	default:
-		return false
-	}
-}
-
 func waitForLiveMergeRequestReady(ctx context.Context, client *gitlabclient.Client, projectID string, mergeRequestIID int64) error {
 	deadline := time.Now().Add(4 * time.Minute)
 	lastStatus := "unknown"
