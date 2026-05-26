@@ -151,6 +151,10 @@ func enterpriseDestructivePromptTemplateAndFixtures(id, prompt string) (CaseProm
 		return CasePromptTemplate{Text: "Delete group service account user ID `{{.Values.service_account_id}}` in group `my-org`."}, []CaseFixtureSpec{EnterpriseGroupServiceAccountFixture(false)}
 	case "MS-045":
 		return CasePromptTemplate{Text: "Exercise project push rule lifecycle: add a push rule to project `{{.Project.Path}}` with commit message regex `^EVAL-`, fetch the project push rule, edit it to reject unsigned commits, then delete the project push rule."}, []CaseFixtureSpec{EnterprisePushRuleProjectFixture(false)}
+	case "MS-052":
+		return CasePromptTemplate{Text: "Exercise group protected environment lifecycle with a temporary group: create group `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}`, protect environment `staging`, list group protected environments, fetch environment `staging`, update it to require one approval, unprotect environment `staging`, then delete the temporary group."}, []CaseFixtureSpec{AttemptNamesFixture}
+	case "MS-053":
+		return CasePromptTemplate{Text: "Exercise project protected environment lifecycle with a temporary project: create project `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}`, protect environment `staging`, list protected environments, fetch environment `staging`, unprotect environment `staging`, then delete the temporary project."}, []CaseFixtureSpec{AttemptNamesFixture}
 	default:
 		return CasePromptTemplate{Text: prompt}, nil
 	}

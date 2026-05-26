@@ -159,6 +159,30 @@ func TestReleaseAssetLinkCRUDCaseUsesAttemptScopedURLs(t *testing.T) {
 	}
 }
 
+func TestEnterpriseProtectedEnvironmentCasesUseAttemptScopedNames(t *testing.T) {
+	for _, id := range []string{"MS-052", "MS-053"} {
+		t.Run(id, func(t *testing.T) {
+			evalCase, ok := CaseByID(id)
+			if !ok {
+				t.Fatalf("CaseByID(%s) = false", id)
+			}
+			fixtures := requireFixtureNames(evalCase.Fixtures)
+			fixture, ok := fixtures["attempt_names"]
+			if !ok {
+				t.Fatalf("%s fixtures = %s, want attempt_names", id, fixtureNames(evalCase.Fixtures))
+			}
+			if fixture.Scope != FixtureScopeAttempt {
+				t.Fatalf("%s attempt_names scope = %q, want %q", id, fixture.Scope, FixtureScopeAttempt)
+			}
+			for _, want := range []string{"{{ .Values.subgroup_name }}", "{{ .Values.subgroup_path }}"} {
+				if !strings.Contains(evalCase.PromptTemplate.Text, want) {
+					t.Fatalf("%s prompt template = %q, want %q", id, evalCase.PromptTemplate.Text, want)
+				}
+			}
+		})
+	}
+}
+
 func TestInteractiveMergeRequestCaseUsesGuidedOnlyParams(t *testing.T) {
 	evalCase, ok := CaseByID("MT-081")
 	if !ok {
