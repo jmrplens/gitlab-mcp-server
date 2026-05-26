@@ -120,6 +120,15 @@
         "notes": "Observed Dynamic eval wording should resolve to the elicitation workflow for MR creation."
     },
     {
+        "category": "interactive_mr_generic_create_visible",
+        "query": "merge request create",
+        "want_top_n": [
+            "interactive.mr_create"
+        ],
+        "limit": 20,
+        "notes": "Observed Gemini eval query omitted guided wording; the elicitation workflow should still be visible alongside scripted MR creation."
+    },
+    {
         "category": "interactive_release_flow",
         "query": "guided release creation flow",
         "want_top": "interactive.release_create",

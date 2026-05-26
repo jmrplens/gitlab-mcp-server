@@ -1184,7 +1184,7 @@ func addInteractiveActionTags(add tagCollector, action string) {
 	case "issue_create":
 		add("issue", "create", "creation", "flow", "start", "guided issue creation", "guided issue creation flow", "issue creation flow", "issue wizard", "start guided issue creation")
 	case "mr_create":
-		add("merge request", "mr", "create", "creation", "flow", "start", "guided merge request creation", "guided mr creation", "merge request creation flow", "mr wizard", "start guided merge request creation")
+		add("merge request", "mr", "create", "creation", "flow", "start", "merge request create", "create merge request", "mr create", "create mr", "guided merge request creation", "guided mr creation", "merge request creation flow", "mr wizard", "start guided merge request creation")
 	case "release_create":
 		add("release", "create", "creation", "flow", "start", "guided release creation", "guided release creation flow", "release creation flow", "release wizard", "start guided release creation")
 	}
