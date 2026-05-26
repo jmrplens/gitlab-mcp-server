@@ -93,6 +93,19 @@ func TestAttemptNameFixtureOutput_UsesModelRunSuffix(t *testing.T) {
 	}
 }
 
+func TestAttemptNameFixtureOutput_IsolatesCaseResources(t *testing.T) {
+	output := attemptNameFixtureOutput(FixtureContext{ModelName: "qwen:qwen3.6-flash", RunIndex: 1, RunSuffix: "abc123", CaseID: "MS-018"})
+	for key, want := range map[string]string{
+		"attempt_suffix":    "qwen36flash-r1-abc123-ms018",
+		"release_tag_name":  "v0.0.0-eval-qwen36flash-r1-abc123-ms018",
+		"release_link_name": "eval-crud-link-qwen36flash-r1-abc123-ms018",
+	} {
+		if got := output[key]; got != want {
+			t.Fatalf("output[%s] = %q, want %q", key, got, want)
+		}
+	}
+}
+
 func TestBaseMutatingPromptTemplate_RendersAttemptNamesWithoutChangingStoredPrompt(t *testing.T) {
 	evalCase, ok := CaseByID("MT-036")
 	if !ok {

@@ -203,6 +203,9 @@ var (
 
 func attemptNameFixtureOutput(env FixtureContext) FixtureOutput {
 	suffix := liveAttemptResourceSuffix(env.ModelName, firstPositiveInt(env.RunIndex, 1), env.RunSuffix)
+	if casePart := attemptCaseSuffix(env.CaseID); suffix != "" && casePart != "" {
+		suffix += "-" + casePart
+	}
 	return FixtureOutput{
 		"attempt_suffix":           suffix,
 		"subgroup_name":            suffixEvaluationValue("eval-temp", suffix),
@@ -222,6 +225,16 @@ func attemptNameFixtureOutput(env FixtureContext) FixtureOutput {
 		"package_release_name":     suffixEvaluationValue(liveFixturePackageReleaseName, suffix),
 		"package_release_tag":      suffixEvaluationValue(liveFixturePackageReleaseTag, suffix),
 	}
+}
+
+func attemptCaseSuffix(caseID EvalCaseID) string {
+	var slug strings.Builder
+	for _, r := range strings.ToLower(string(caseID)) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			slug.WriteRune(r)
+		}
+	}
+	return slug.String()
 }
 
 func validateAttemptNameFixtureOutput(_ context.Context, _ FixtureContext, output FixtureOutput) error {
