@@ -4624,6 +4624,22 @@ func TestNormalization_FormattingBranches(t *testing.T) {
 			t.Fatalf("formatFindOutput(empty) = %q, want no-match message", findText)
 		}
 	})
+
+	t.Run("format find output explains execute params envelope", func(t *testing.T) {
+		findText := formatFindOutput(FindOutput{
+			Query: "release link create package asset",
+			Count: 1,
+			Results: []FindResult{{
+				ID:             "release.link_create_batch",
+				RequiredParams: []string{"project_id", "tag_name", "links"},
+			}},
+		})
+		for _, want := range []string{"top-level `action`", "one `params` object", "Required Params key below belongs inside `params`"} {
+			if !strings.Contains(findText, want) {
+				t.Fatalf("formatFindOutput() = %q, want %q", findText, want)
+			}
+		}
+	})
 }
 
 // TestAnnotationsWithTitle_CopiesBase verifies that annotation updates do not

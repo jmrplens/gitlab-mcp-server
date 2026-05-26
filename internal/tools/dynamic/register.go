@@ -28,6 +28,7 @@ const (
 
 	findToolDescription          = "Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples."
 	executeActionToolDescription = "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear."
+	dynamicExecuteEnvelopeHint   = "Execute matches with top-level `action` and one `params` object; every Required Params key below belongs inside `params`, not beside it. Use top-level `confirm` only for destructive actions."
 
 	defaultLimit                 = 20
 	maxLimit                     = 50
@@ -74,7 +75,7 @@ type SearchResult struct {
 	Action         string              `json:"action" jsonschema:"Action name inside the catalog group."`
 	SchemaURI      string              `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool                `json:"destructive" jsonschema:"Whether this action is marked destructive and requires explicit confirmation."`
-	RequiredParams []string            `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the action input schema."`
+	RequiredParams []string            `json:"required_params,omitempty" jsonschema:"Required action-specific parameter names to place inside gitlab_execute_action params."`
 	Usage          string              `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	WhyThisAction  string              `json:"why_this_action,omitempty" jsonschema:"Compact reason included only for close or ambiguous alternatives."`
 	RelatedActions []string            `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
@@ -113,7 +114,7 @@ type ActionDescription struct {
 	Action         string                                `json:"action" jsonschema:"Action name inside the catalog group."`
 	SchemaURI      string                                `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool                                  `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
-	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
+	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required action-specific parameter names to place inside gitlab_execute_action params."`
 	Usage          string                                `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	RelatedActions []string                              `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
 	ParamGuidance  map[string]toolutil.ParameterGuidance `json:"parameter_guidance,omitempty" jsonschema:"Parameter binding guidance for commonly confused params."`
@@ -143,7 +144,7 @@ type FindResult struct {
 	Action         string                                `json:"action" jsonschema:"Action name inside the catalog group."`
 	SchemaURI      string                                `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool                                  `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
-	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
+	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required action-specific parameter names to place inside gitlab_execute_action params."`
 	Usage          string                                `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	RelatedActions []string                              `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
 	ParamGuidance  map[string]toolutil.ParameterGuidance `json:"parameter_guidance,omitempty" jsonschema:"Parameter binding guidance for commonly confused params."`
@@ -3058,6 +3059,7 @@ func formatSearchOutput(output SearchOutput) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
+	fmt.Fprintf(&b, "%s\n\n", dynamicExecuteEnvelopeHint)
 	if targets := ambiguousTargetsFromSearchResults(output.Results); len(targets) > 0 {
 		fmt.Fprintf(&b, "Use one canonical action ID explicitly: %s.\n\n", strings.Join(backtickStrings(targets), ", "))
 	}
@@ -3134,6 +3136,7 @@ func formatFindOutput(output FindOutput) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
+	fmt.Fprintf(&b, "%s\n\n", dynamicExecuteEnvelopeHint)
 	withExplanations := hasFindExplanations(output.Results)
 	withGuidance := hasFindGuidance(output.Results)
 	switch {
