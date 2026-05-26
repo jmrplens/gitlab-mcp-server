@@ -331,6 +331,13 @@
         "notes": "Observed Enterprise Dynamic eval wording should prefer project protected environment protection over deploy tokens or keys."
     },
     {
+        "category": "group_protected_branch_maintainer_access_phrase",
+        "query": "group protect branch pattern eval-enterprise/* with Maintainer push and merge access for group my-org",
+        "want_top": "group.protected_branch_protect",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer group protected branch protection over generic access token actions."
+    },
+    {
         "category": "no_match",
         "query": "zzzzzzzz",
         "expect_zero": true,

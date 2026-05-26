@@ -1474,6 +1474,9 @@ func addIssueActionTags(add tagCollector, action string) {
 
 func addProtectionTags(add tagCollector, id, domain, action string) bool {
 	switch {
+	case domain == "group" && strings.Contains(id, "protected_branch"):
+		add("group protected branch", "group branch protection", "protected branch rule", "branch pattern")
+		addGroupProtectedBranchActionTags(add, action)
 	case domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect"):
 		add("protected branch", "branch protection")
 	case strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment"):
@@ -1484,6 +1487,21 @@ func addProtectionTags(add tagCollector, id, domain, action string) bool {
 		return false
 	}
 	return true
+}
+
+func addGroupProtectedBranchActionTags(add tagCollector, action string) {
+	switch action {
+	case "protected_branch_protect":
+		add("protect group branch", "group protected branch protect", "create group protected branch", "protect branch pattern", "maintainer push access", "maintainer merge access", "maintainer push and merge access")
+	case "protected_branch_list":
+		add("list group protected branches", "group protected branch list")
+	case "protected_branch_get":
+		add("get group protected branch", "fetch group protected branch", "group protected branch get")
+	case "protected_branch_update":
+		add("update group protected branch", "group protected branch update", "allow force push", "force push")
+	case "protected_branch_unprotect":
+		add("unprotect group branch", "remove group protected branch", "group protected branch unprotect")
+	}
 }
 
 func addSchemaPropertyTags(add tagCollector, schema map[string]any) {
