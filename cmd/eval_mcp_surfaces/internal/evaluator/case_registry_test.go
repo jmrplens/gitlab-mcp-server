@@ -179,6 +179,9 @@ func TestEnterpriseProtectedEnvironmentCasesUseAttemptScopedNames(t *testing.T) 
 					t.Fatalf("%s prompt template = %q, want %q", id, evalCase.PromptTemplate.Text, want)
 				}
 			}
+			if !strings.Contains(evalCase.PromptTemplate.Text, "Maintainer deploy access") {
+				t.Fatalf("%s prompt template = %q, want Maintainer deploy access guidance", id, evalCase.PromptTemplate.Text)
+			}
 		})
 	}
 }

@@ -170,6 +170,14 @@ func TestNormalizeParamsWithExplanation_CompatibilityBranches(t *testing.T) {
 			wantAliases:      []string{"release_tag_name->tag_name"},
 		},
 		{
+			name:             "release create message maps to description",
+			actionID:         "release.create",
+			params:           map[string]any{"tag_name": "v1.0.0", "name": "v1.0.0", "message": "Release notes"},
+			schemaProperties: []string{"tag_name", "name", "description"},
+			wantParams:       map[string]any{"tag_name": "v1.0.0", "name": "v1.0.0", "description": "Release notes"},
+			wantAliases:      []string{"message->description"},
+		},
+		{
 			name:     "release link batch normalizes link entries",
 			actionID: "release.link_create_batch",
 			params: map[string]any{"links": []any{

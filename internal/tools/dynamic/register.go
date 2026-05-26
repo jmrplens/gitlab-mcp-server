@@ -1133,6 +1133,10 @@ func addIDPatternTags(add tagCollector, id, domain, action string) bool {
 		add("project member", "project membership")
 	case strings.Contains(id, "member_") && domain == "group":
 		add("group member", "group membership")
+	case strings.Contains(id, "service_account_pat"):
+		addServiceAccountPATActionTags(add, domain, action)
+	case strings.Contains(id, "service_account") && (domain == "project" || domain == "group"):
+		addServiceAccountActionTags(add, domain, action)
 	case domain == "discover_project":
 		add("discover", "project", "remote", "url", "lookup", "resolve", "project discovery", "git remote", "remote url", "resolve project")
 	case domain == "interactive":
@@ -1144,6 +1148,33 @@ func addIDPatternTags(add tagCollector, id, domain, action string) bool {
 		return false
 	}
 	return true
+}
+
+func addServiceAccountActionTags(add tagCollector, domain, action string) {
+	scope := strings.TrimSpace(domain)
+	resource := scope + " service account"
+	add(resource, resource+"s")
+	switch action {
+	case "service_account_list":
+		add(resource+" list", "list "+resource+"s")
+	case "service_account_create":
+		add(resource+" create", "create "+resource)
+	case "service_account_update":
+		add(resource+" update", "update "+resource)
+	case "service_account_delete":
+		add(resource+" delete", "delete "+resource)
+	}
+}
+
+func addServiceAccountPATActionTags(add tagCollector, domain, action string) {
+	scope := strings.TrimSpace(domain)
+	resource := scope + " service account personal access token"
+	add(resource, resource+"s", scope+" service account pat", scope+" service account token")
+	verb := strings.TrimPrefix(action, "service_account_pat_")
+	if verb == action || verb == "" {
+		return
+	}
+	add(resource+" "+verb, verb+" "+resource, verb+" "+resource+"s", scope+" service account pat "+verb, verb+" token for "+scope+" service account")
 }
 
 func addInteractiveActionTags(add tagCollector, action string) {
@@ -1480,6 +1511,7 @@ func (r *Registry) searchMatches(query string, limit int, explain bool) []scored
 	if segmented := r.segmentedSearchMatchesWithScorer(terms, limit, searchScorer); len(segmented) > 0 {
 		matches = mergeBestMatches(matches, segmented)
 	}
+	matches = adjustServiceAccountVerbScores(matches, terms)
 	matches = sortAndLimitMatches(matches, limit)
 	matches = computeConfidence(matches)
 	lowConfidence := len(matches) > 0 && matches[0].lowConfidence
@@ -1618,6 +1650,47 @@ func (r *Registry) segmentedSearchMatchesWithScorer(terms []searchTerm, limit in
 		matches = append(matches, match)
 	}
 	return matches
+}
+
+func adjustServiceAccountVerbScores(matches []scoredActionEntry, terms []searchTerm) []scoredActionEntry {
+	if !queryHasSearchWords(terms, "service", "account") {
+		return matches
+	}
+	queryVerb := serviceAccountQueryVerb(terms)
+	if queryVerb == "" {
+		return matches
+	}
+	for index := range matches {
+		document := documentForEntry(matches[index].entry)
+		if !strings.Contains(document.CanonicalID, "service_account") {
+			continue
+		}
+		actionVerb := serviceAccountActionVerb(document.Action)
+		if actionVerb == "" {
+			continue
+		}
+		if actionVerb == queryVerb {
+			matches[index].score += scoreServiceAccountBoost
+		} else {
+			matches[index].score -= scoreServiceAccountBoost * 2
+			if matches[index].score < 0 {
+				matches[index].score = 0
+			}
+		}
+		if matches[index].explanation.TotalScore != 0 {
+			matches[index].explanation.TotalScore = matches[index].score
+		}
+	}
+	return matches
+}
+
+func serviceAccountQueryVerb(terms []searchTerm) string {
+	for _, verb := range []string{"create", "list", "update", "delete", "rotate", "revoke"} {
+		if searchTermsContainWord(terms, verb) {
+			return verb
+		}
+	}
+	return ""
 }
 
 func shouldRunSegmentedSearch(terms []searchTerm, limit int) bool {
@@ -2197,6 +2270,7 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	score += scoreVerbIntentValue(entry, terms)
 	score += scoreRequiredParamSignalValue(entry, terms)
 	score += scoreCompoundTagSignalValue(entry, terms)
+	score += scoreServiceAccountIntentValue(entry, terms)
 	score += scoreActionSpecificityValue(entry, terms)
 	if score <= 0 {
 		return 0
@@ -2248,6 +2322,10 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 	if adjustment, tagReasons := scoreCompoundTagSignals(entry, terms); adjustment != 0 {
 		score += adjustment
 		reasons = append(reasons, tagReasons...)
+	}
+	if adjustment, reason := scoreServiceAccountIntent(entry, terms); adjustment != 0 {
+		score += adjustment
+		reasons = append(reasons, reason)
 	}
 	if adjustment, reason := scoreActionSpecificity(entry, terms); adjustment != 0 {
 		score += adjustment
@@ -2446,6 +2524,61 @@ func scoreCompoundTagSignalValue(entry actionEntry, terms []searchTerm) int {
 		}
 	}
 	return matches * scoreCompoundTagBoost
+}
+
+func scoreServiceAccountIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreServiceAccountIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldServiceAccount, QueryTerm: "service account", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreServiceAccountIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if !strings.Contains(document.CanonicalID, "service_account") || !queryHasSearchWords(terms, "service", "account") {
+		return 0
+	}
+	score := scoreServiceAccountBoost
+	if document.Domain != "" && searchTermsContainWord(terms, document.Domain) {
+		score += scoreServiceAccountScope
+	}
+	if strings.Contains(document.CanonicalID, "service_account_pat") && (queryHasSearchWords(terms, "personal", "access", "token") || searchTermsContainWord(terms, "pat")) {
+		score += scoreServiceAccountBoost
+	}
+	if verb := serviceAccountActionVerb(document.Action); verb != "" && searchTermsContainWord(terms, verb) {
+		score += scoreServiceAccountBoost
+	}
+	return score
+}
+
+func queryHasSearchWords(terms []searchTerm, words ...string) bool {
+	for _, word := range words {
+		if !searchTermsContainWord(terms, word) {
+			return false
+		}
+	}
+	return true
+}
+
+func serviceAccountActionVerb(action string) string {
+	switch {
+	case strings.HasSuffix(action, "_list"):
+		return "list"
+	case strings.HasSuffix(action, "_create"):
+		return "create"
+	case strings.HasSuffix(action, "_update"):
+		return "update"
+	case strings.HasSuffix(action, "_delete"):
+		return "delete"
+	case strings.HasSuffix(action, "_rotate"):
+		return "rotate"
+	case strings.HasSuffix(action, "_revoke"):
+		return "revoke"
+	default:
+		return ""
+	}
 }
 
 func scoreActionSpecificity(entry actionEntry, terms []searchTerm) (int, MatchReason) {

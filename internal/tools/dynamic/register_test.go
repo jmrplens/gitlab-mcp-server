@@ -27,6 +27,7 @@ type dynamicSearchCorpusCase struct {
 	WantTop              string                     `json:"want_top"`
 	WantTopN             []string                   `json:"want_top_n"`
 	Limit                int                        `json:"limit"`
+	Enterprise           bool                       `json:"enterprise"`
 	CustomAliases        []dynamicSearchCorpusAlias `json:"custom_aliases"`
 	ExpectZero           bool                       `json:"expect_zero"`
 	ExpectAmbiguous      bool                       `json:"expect_ambiguous"`
@@ -388,10 +389,19 @@ func TestDynamicSearchCorpus(t *testing.T) {
 		t.Fatalf("AddStandaloneCatalog() error = %v", err)
 	}
 	baseRegistry := NewRegistryFromCatalog(baseCatalog)
+	enterpriseCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog(enterprise) error = %v", err)
+	}
+	enterpriseCatalog, err = AddStandaloneCatalog(enterpriseCatalog, nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneCatalog(enterprise) error = %v", err)
+	}
+	enterpriseRegistry := NewRegistryFromCatalog(enterpriseCatalog)
 
 	for _, tc := range cases {
 		t.Run(tc.Category, func(t *testing.T) {
-			registry := registryForCorpusCase(baseRegistry, baseCatalog, tc)
+			registry := registryForCorpusCase(baseRegistry, baseCatalog, enterpriseRegistry, enterpriseCatalog, tc)
 
 			_, output, searchErr := registry.Search(t.Context(), nil, SearchInput{Query: tc.Query, Limit: tc.Limit})
 			if searchErr != nil {
@@ -402,15 +412,21 @@ func TestDynamicSearchCorpus(t *testing.T) {
 	}
 }
 
-func registryForCorpusCase(baseRegistry *Registry, baseCatalog *actioncatalog.Catalog, tc dynamicSearchCorpusCase) *Registry {
+func registryForCorpusCase(baseRegistry *Registry, baseCatalog *actioncatalog.Catalog, enterpriseRegistry *Registry, enterpriseCatalog *actioncatalog.Catalog, tc dynamicSearchCorpusCase) *Registry {
+	registry := baseRegistry
+	catalog := baseCatalog
+	if tc.Enterprise {
+		registry = enterpriseRegistry
+		catalog = enterpriseCatalog
+	}
 	if len(tc.CustomAliases) == 0 {
-		return baseRegistry
+		return registry
 	}
 	aliases := append([]actionAlias(nil), actionAliases()...)
 	for _, customAlias := range tc.CustomAliases {
 		aliases = append(aliases, actionAlias{Alias: customAlias.Alias, Canonical: customAlias.Canonical, Source: aliasSourceCompatibility, Searchable: true})
 	}
-	return newRegistryFromCatalog(baseCatalog, aliases)
+	return newRegistryFromCatalog(catalog, aliases)
 }
 
 func assertDynamicSearchCorpusCase(t *testing.T, tc dynamicSearchCorpusCase, output SearchOutput) {

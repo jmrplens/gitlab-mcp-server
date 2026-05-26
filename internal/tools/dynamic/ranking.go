@@ -17,6 +17,7 @@ const (
 	searchFieldSchemaEnum     = "schema_enum"
 	searchFieldSchemaDesc     = "schema_description"
 	searchFieldSpecificity    = "action_specificity"
+	searchFieldServiceAccount = "service_account_intent"
 	searchFieldTool           = "tool"
 	searchFieldVerbIntent     = "verb_intent"
 	searchFieldIDContains     = "id_contains"
@@ -57,6 +58,8 @@ const (
 	scoreVerbIntentPenalty      = -24
 	scoreRequiredParamBoost     = 10
 	scoreCompoundTagBoost       = 50
+	scoreServiceAccountBoost    = 80
+	scoreServiceAccountScope    = 30
 )
 
 type verbIntent string

@@ -37,7 +37,8 @@ func projectServiceAccountDeleteSpec(name string, route toolutil.ActionRoute, in
 
 func projectServiceAccountOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"project", "service-account"},
+		Aliases:        projectServiceAccountAliases(actionName),
+		Tags:           projectServiceAccountTags(actionName),
 		Usage:          "Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.",
 		RelatedActions: []string{"project.get", "project.members"},
 		Edition:        "premium",
@@ -61,4 +62,46 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 		options.Usage += " Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime."
 	}
 	return options
+}
+
+func projectServiceAccountTags(actionName string) []string {
+	tags := []string{"project", "service-account"}
+	switch actionName {
+	case "service_account_pat_list", "service_account_pat_create", "service_account_pat_rotate", "service_account_pat_revoke":
+		tags = append(tags, "service-account-pat")
+	}
+	return tags
+}
+
+func projectServiceAccountAliases(actionName string) []string {
+	var aliases []string
+	switch actionName {
+	case "service_account_list":
+		aliases = append(aliases, "project service account list", "list project service accounts")
+	case "service_account_create":
+		aliases = append(aliases, "project service account create", "create project service account")
+	case "service_account_update":
+		aliases = append(aliases, "project service account update", "update project service account")
+	case "service_account_delete":
+		aliases = append(aliases, "project service account delete", "delete project service account")
+	case "service_account_pat_list":
+		aliases = append(aliases, projectServiceAccountPATAliases("list")...)
+	case "service_account_pat_create":
+		aliases = append(aliases, projectServiceAccountPATAliases("create")...)
+	case "service_account_pat_rotate":
+		aliases = append(aliases, projectServiceAccountPATAliases("rotate")...)
+	case "service_account_pat_revoke":
+		aliases = append(aliases, projectServiceAccountPATAliases("revoke")...)
+	}
+	return aliases
+}
+
+func projectServiceAccountPATAliases(verb string) []string {
+	return []string{
+		"project service account personal access token " + verb,
+		verb + " project service account personal access tokens",
+		verb + " project service account personal access token",
+		"project service account pat " + verb,
+		verb + " token for project service account",
+	}
 }

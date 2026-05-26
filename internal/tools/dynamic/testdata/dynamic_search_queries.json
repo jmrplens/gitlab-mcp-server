@@ -274,6 +274,47 @@
         "notes": "Issue lifecycle shorthand should resolve to issue.update; execute injects the state_event."
     },
     {
+        "category": "project_service_account_pat_create_phrase",
+        "query": "project service account personal access token create",
+        "want_top": "project.service_account_pat_create",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval query should prefer project service account PAT creation over generic project access tokens."
+    },
+    {
+        "category": "project_service_account_pat_list_phrase",
+        "query": "project service account personal access token list",
+        "want_top": "project.service_account_pat_list",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval query should prefer project service account PAT listing over generic access token actions."
+    },
+    {
+        "category": "group_service_accounts_list_phrase",
+        "query": "group service accounts list",
+        "want_top": "group.service_account_list",
+        "enterprise": true,
+        "notes": "Group service account inventory wording should prefer group-scoped service accounts over instance user service account listing."
+    },
+    {
+        "category": "group_service_account_pat_create_phrase",
+        "query": "group service account personal access token create",
+        "want_top": "group.service_account_pat_create",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval query should prefer group service account PAT creation over generic group access tokens."
+    },
+    {
+        "category": "group_service_account_pat_list_phrase",
+        "query": "group service account personal access token list",
+        "want_top": "group.service_account_pat_list",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval query should prefer group service account PAT listing over generic access token actions."
+    },
+    {
+        "category": "package_publish_directory_files_phrase",
+        "query": "generic package publish files from directory",
+        "want_top": "package.publish_directory",
+        "notes": "Directory-based multi-file publish wording should select publish_directory rather than single-file publish."
+    },
+    {
         "category": "no_match",
         "query": "zzzzzzzz",
         "expect_zero": true,

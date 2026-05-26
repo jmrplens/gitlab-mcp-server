@@ -20,6 +20,7 @@ const (
 	reasonProtectedBranchName            = "group protected branch protect uses name for the branch or wildcard to protect"
 	reasonProjectPushRuleUnsigned        = "project push rules use reject_unsigned_commits for unsigned commit rejection"
 	reasonPipelineScheduleDescription    = "pipeline schedules use description as the display name"
+	reasonReleaseCreateMessage           = "release creation uses description for release notes"
 	reasonReleaseLinkParentTagName       = "release link actions use tag_name for the parent release"
 	reasonReleaseLinkBatchURL            = "batch release link entries use url for the link target"
 	reasonReleaseLinkBatchUnsupported    = "batch release link entries do not accept direct asset path fields"
@@ -92,6 +93,7 @@ var actionParamNormalizers = map[string]paramNormalizer{
 	actionGroupLabelUpdate:          normalizeGroupLabelUpdateParams,
 	actionProjectMemberAdd:          normalizeProjectMemberAccessLevelParams,
 	actionProjectMemberEdit:         normalizeProjectMemberAccessLevelParams,
+	actionReleaseCreate:             func(state *paramNormalization) { state.moveParam("message", "description", reasonReleaseCreateMessage) },
 	actionReleaseLinkCreate:         normalizeReleaseLinkTagNameParams,
 	actionReleaseLinkDelete:         normalizeReleaseLinkTagNameParams,
 	actionReleaseLinkGet:            normalizeReleaseLinkTagNameParams,
@@ -217,6 +219,7 @@ func defaultParameterAliases() []ParameterAlias {
 		parameterAlias(actionGroupLabelUpdate, "name", "new_name", "group label update renames labels with new_name"),
 		parameterAlias(actionProjectMemberAdd, "access_level", "access_level", reasonNormalizeAccessLevel),
 		parameterAlias(actionProjectMemberEdit, "access_level", "access_level", reasonNormalizeAccessLevel),
+		parameterAlias(actionReleaseCreate, "message", "description", reasonReleaseCreateMessage),
 		parameterAlias(actionReleaseLinkCreate, "release_tag_name", "tag_name", reasonReleaseLinkParentTagName),
 		parameterAlias(actionReleaseLinkCreateBatch, "links.link_url", "links.url", reasonReleaseLinkBatchURL),
 		normalizerOnlyParameterAlias(actionReleaseLinkCreateBatch, "links.filepath", "links", reasonReleaseLinkBatchUnsupported),
