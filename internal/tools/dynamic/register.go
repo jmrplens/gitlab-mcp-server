@@ -1152,6 +1152,10 @@ func addInteractiveActionTags(add tagCollector, action string) {
 		add("project", "create", "creation", "flow", "start", "guided project creation", "guided project creation flow", "project creation flow", "project wizard", "start guided project creation")
 	case "issue_create":
 		add("issue", "create", "creation", "flow", "start", "guided issue creation", "guided issue creation flow", "issue creation flow", "issue wizard", "start guided issue creation")
+	case "mr_create":
+		add("merge request", "mr", "create", "creation", "flow", "start", "guided merge request creation", "guided mr creation", "merge request creation flow", "mr wizard", "start guided merge request creation")
+	case "release_create":
+		add("release", "create", "creation", "flow", "start", "guided release creation", "guided release creation flow", "release creation flow", "release wizard", "start guided release creation")
 	}
 }
 
@@ -1159,18 +1163,76 @@ func addCoreDomainTags(add tagCollector, _, domain, action string) bool {
 	switch {
 	case domain == "user" && action == "current":
 		add("current", "authenticated", "me", "whoami", "profile", "current user", "authenticated user", "current authenticated user", "show current user", "my profile")
+	case domain == "project":
+		addProjectActionTags(add, action)
 	case domain == "repository" && strings.HasPrefix(action, "file_"):
 		add("repository file", "repo file", "file content")
 	case domain == "repository" && action == "tree":
 		add("repository tree", "repository tree list", "repo tree", "list repository tree", "browse repository tree", "repository_tree", "tree list", "ref", "main")
+	case domain == "search":
+		addSearchActionTags(add, action)
+	case domain == "server":
+		addServerActionTags(add, action)
+	case domain == "ci_catalog":
+		addCICatalogActionTags(add, action)
 	case domain == "merge_request":
 		add("mr", "merge request")
+	case domain == "mr_review":
+		addMRReviewActionTags(add, action)
 	case domain == "ci_variable":
 		add("ci variable", "ci secret", "secret", "environment variable")
+		addCIVariableActionTags(add, action)
 	default:
 		return false
 	}
 	return true
+}
+
+func addProjectActionTags(add tagCollector, action string) {
+	switch action {
+	case "star":
+		add("star project", "add star", "favorite project", "mark project starred", "project favorite")
+	case "unstar":
+		add("unstar project", "remove star", "unfavorite project", "remove project favorite")
+	}
+}
+
+func addSearchActionTags(add tagCollector, action string) {
+	if action == "projects" {
+		add("search projects", "project search", "find projects", "find repositories", "search repositories", "project name search", "repository name search")
+	}
+}
+
+func addServerActionTags(add tagCollector, action string) {
+	switch action {
+	case "health_check":
+		add("health check", "server health check", "server diagnostics", "connectivity check", "diagnostics connectivity check", "gitlab server health", "mcp server health")
+	case "status":
+		add("server status", "gitlab status", "mcp status")
+	}
+}
+
+func addCICatalogActionTags(add tagCollector, action string) {
+	if action == "list" {
+		add("ci catalog", "ci/cd catalog", "catalog resources", "catalog components", "ci catalog resources", "ci catalog components", "list catalog resources", "list catalog components")
+	}
+}
+
+func addMRReviewActionTags(add tagCollector, action string) {
+	if action == "changes_get" {
+		add("merge request changes", "mr changes", "merge request diff", "mr diff", "review changes", "get merge request changes", "merge request changes analyzer")
+	}
+}
+
+func addCIVariableActionTags(add tagCollector, action string) {
+	switch action {
+	case "instance_create":
+		add("instance ci variable", "system ci variable", "global ci variable", "admin ci variable", "create instance ci variable", "create global ci variable")
+	case "create":
+		add("project ci variable", "create project ci variable")
+	case "group_create":
+		add("group ci variable", "create group ci variable")
+	}
 }
 
 func addEnvironmentAndCITags(add tagCollector, _, domain, action string) bool {
@@ -1238,12 +1300,31 @@ func addAdminReleaseTags(add tagCollector, _, domain, action string) bool {
 		addReleaseActionTags(add, action)
 	case domain == "repository" && action == "compare":
 		add("compare refs", "compare branches", "compare tags", "diff between refs", "from ref", "to ref", "from", "to", tagReleaseNotes, "release compare")
-	case domain == "analyze" && action == "release_notes":
-		add(tagReleaseNotes, "generate release notes", "from ref", "to ref", "from", "to")
+	case domain == "analyze":
+		addAnalyzeActionTags(add, action)
 	default:
 		return false
 	}
 	return true
+}
+
+func addAnalyzeActionTags(add tagCollector, action string) {
+	switch action {
+	case "release_notes":
+		add(tagReleaseNotes, "generate release notes", "from ref", "to ref", "from", "to")
+	case "pipeline_failure":
+		add("pipeline failure", "failed pipeline", "pipeline failed", "why pipeline failed", "root cause", "failed jobs", "job trace", "failure analysis")
+	case "ci_config":
+		add("ci configuration", "ci configuration analysis", "ci config analysis", "analyze .gitlab-ci.yml", "gitlab ci yaml", "pipeline config", "best practices", "maintainability")
+	case "mr_changes":
+		add("merge request changes", "merge request changes analyzer", "analyze merge request changes", "mr changes analysis", "code review", "diff analysis", "review merge request diff")
+	case "issue_summary":
+		add("issue summary", "summarize issue", "issue discussion summary", "key decisions", "issue recap")
+	case "mr_security":
+		add("merge request security", "security review", "mr security review", "owasp", "vulnerabilities", "review security")
+	case "technical_debt":
+		add("technical debt", "technical debt markers", "todo", "fixme", "hack", "debt markers")
+	}
 }
 
 func addAdminActionTags(add tagCollector, action string) {
@@ -1270,7 +1351,7 @@ func addReleaseActionTags(add tagCollector, action string) {
 	case "delete":
 		add("delete release", "remove release", "preserve tag")
 	case "list":
-		add("releases", "list releases", "release inventory", tagReleaseNotes)
+		add("releases", "list releases", "release list", "list release", "release inventory", tagReleaseNotes)
 	}
 }
 
@@ -1301,6 +1382,8 @@ func addPackageActionTags(add tagCollector, action string) {
 
 func addRunnerActionTags(add tagCollector, action string) {
 	switch action {
+	case "jobs":
+		add("runner jobs", "runner jobs list", "runner job list", "jobs for runner", "list runner jobs", "inspect runner jobs", "runner job history", "runner_id")
 	case "remove":
 		add("remove runner", "delete runner by id", "runner_id")
 	case "delete_registered":
@@ -1310,6 +1393,12 @@ func addRunnerActionTags(add tagCollector, action string) {
 
 func addIssueActionTags(add tagCollector, action string) {
 	switch action {
+	case "create":
+		add("create issue", "new issue", "open issue", "issue create")
+	case "delete":
+		add("delete issue", "remove issue", "destroy issue", "issue delete")
+	case "link_list":
+		add("issue links", "linked issues", "list issue links", "issue relationship", "issue link list")
 	case "note_create":
 		add(tagIssueNote, tagIssueComment, "create note", "create comment")
 	case "note_get":
@@ -2096,10 +2185,7 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	if matchedCount == 0 {
 		return 0
 	}
-	minRequired := len(terms)
-	if len(terms) > 2 {
-		minRequired = len(terms) - 1
-	}
+	minRequired := minimumMatchedTermCount(entry, terms)
 	if matchedCount < minRequired {
 		return 0
 	}
@@ -2140,13 +2226,7 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 	if matchedCount == 0 {
 		return 0, ScoringExplanation{}
 	}
-	// For short queries (1–2 terms) all terms must match.
-	// For longer queries allow at most one unmatched term so that incidental
-	// words like state values ("open") or prepositions don't suppress results.
-	minRequired := len(terms)
-	if len(terms) > 2 {
-		minRequired = len(terms) - 1
-	}
+	minRequired := minimumMatchedTermCount(entry, terms)
 	if matchedCount < minRequired {
 		return 0, ScoringExplanation{}
 	}
@@ -2178,6 +2258,43 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 		RequiredTerms: minRequired,
 		Reasons:       reasons,
 	}
+}
+
+func minimumMatchedTermCount(entry actionEntry, terms []searchTerm) int {
+	minRequired := len(terms)
+	if len(terms) > 2 {
+		minRequired = len(terms) - 1
+	}
+	if len(terms) > 3 && matchedCompoundTagCount(entry, terms) > 0 && minRequired > len(terms)-2 {
+		minRequired = len(terms) - 2
+	}
+	if minRequired < 1 {
+		return 1
+	}
+	return minRequired
+}
+
+func matchedCompoundTagCount(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	termSet := searchTermAlternativeSet(terms)
+	matches := 0
+	for _, tag := range document.Tags {
+		words := splitSearchFieldWords(tag)
+		if len(words) < 2 {
+			continue
+		}
+		matched := true
+		for _, word := range words {
+			if _, ok := termSet[word]; !ok {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			matches++
+		}
+	}
+	return matches
 }
 
 func scoreVerbIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {

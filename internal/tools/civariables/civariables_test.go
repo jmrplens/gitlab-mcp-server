@@ -5,6 +5,7 @@ package civariables
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -580,6 +581,17 @@ func TestCIVariableUpdate_NotFound(t *testing.T) {
 func TestCIVariableUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/variables/DB_HOST" && r.Method == http.MethodPut {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			filter, hasFilter := body["filter"].(map[string]any)
+			if !hasFilter || filter["environment_scope"] != "staging" {
+				t.Fatalf("filter.environment_scope = %#v, want staging", body["filter"])
+			}
+			if _, hasEnvironmentScope := body["environment_scope"]; hasEnvironmentScope {
+				t.Fatalf("request body contains environment_scope update field: %#v", body)
+			}
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"key":"DB_HOST","value":"db.prod","variable_type":"file",
 				"protected":true,"masked":true,"hidden":false,"raw":true,

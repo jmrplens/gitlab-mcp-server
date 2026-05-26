@@ -376,6 +376,10 @@ func baseDestructiveWorkflowPromptTemplateAndFixtures(id string) (string, []Case
 		return "Clean up an obsolete package in project `{{ .Project.Path }}`: list generic packages, list files for package ID `{{ .Package.ID }}`, then delete package ID `{{ .Package.ID }}`.", []CaseFixtureSpec{PackageDeleteFixture}
 	case "MS-018":
 		return "Exercise release asset-link CRUD in project `{{ .Project.Path }}`: use release create directly to create release `{{ .Release.TagName }}` from ref `{{ .Branch.Default }}` named `{{ .Release.Name }}` without creating a tag separately and without passing `assets`; after the release exists, add asset link `{{ .Values.release_link_name }}` with URL `{{ .Values.release_link_url }}`, fetch the returned link with link get, update the link URL to `{{ .Values.release_link_updated_url }}`, delete the link, delete the release, then delete the tag.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
+	case "MS-025":
+		return "Exercise scoped project CI variable CRUD in project `{{ .Project.Path }}`: create variable `{{ .Values.ci_variable_key }}` with value `crud-value-1` and environment scope `review/eval`, list variables, update the scoped variable to value `crud-value-2`, then delete that same scoped variable.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
+	case "MS-026":
+		return "Exercise scoped group CI variable CRUD in group `{{ .Group.Path }}`: create variable `{{ .Values.group_ci_variable_key }}` with value `group-crud-value-1` and environment scope `review/eval`, get it using top-level `environment_scope`, update it to value `group-crud-value-2`, then delete that same scoped variable.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
 	case "MS-027":
 		return "Exercise merge request note CRUD in project `{{ .Project.Path }}`: add note `eval-mr-note` to merge request `{{ .MergeRequest.IID }}`, fetch the created note using the returned note ID, update it to `eval-mr-note-updated`, then delete it.", []CaseFixtureSpec{MergeRequestFixture}
 	case "MS-028":

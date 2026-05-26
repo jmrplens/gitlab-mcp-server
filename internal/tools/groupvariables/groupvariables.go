@@ -252,7 +252,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Raw = input.Raw
 	}
 	if input.EnvironmentScope != "" {
-		opts.EnvironmentScope = &input.EnvironmentScope
+		opts.Filter = &gl.VariableFilter{EnvironmentScope: input.EnvironmentScope}
 	}
 
 	v, _, err := client.GL().GroupVariables.UpdateVariable(string(input.GroupID), input.Key, opts, gl.WithContext(ctx))

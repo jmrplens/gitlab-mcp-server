@@ -312,6 +312,20 @@ func toolResultContent(result *mcp.CallToolResult) string {
 			return truncateToolResult(string(data))
 		}
 	}
+	return toolResultTextContent(result)
+}
+
+func toolResultContentForTool(toolName string, result *mcp.CallToolResult) string {
+	if toolName == dynamicFindTool {
+		return toolResultTextContent(result)
+	}
+	return toolResultContent(result)
+}
+
+func toolResultTextContent(result *mcp.CallToolResult) string {
+	if result == nil {
+		return "empty result"
+	}
 	var parts []string
 	for _, content := range result.Content {
 		if text, ok := content.(*mcp.TextContent); ok && strings.TrimSpace(text.Text) != "" {

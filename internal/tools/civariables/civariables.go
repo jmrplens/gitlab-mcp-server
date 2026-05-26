@@ -267,7 +267,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		opts.Raw = input.Raw
 	}
 	if input.EnvironmentScope != "" {
-		opts.EnvironmentScope = &input.EnvironmentScope
+		opts.Filter = &gitlab.VariableFilter{EnvironmentScope: input.EnvironmentScope}
 	}
 
 	v, _, err := client.GL().ProjectVariables.UpdateVariable(string(input.ProjectID), input.Key, opts, gitlab.WithContext(ctx))

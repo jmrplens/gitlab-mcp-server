@@ -47,6 +47,21 @@ func TestToolUseBlocks_FiltersNonToolContent(t *testing.T) {
 	}
 }
 
+func TestValidateDynamicFindResult_UsesFullMCPResponse(t *testing.T) {
+	steps := []evalStep{
+		{ExpectedTool: dynamicFindTool, RequiredParams: []string{"query"}},
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.get"},
+	}
+	exchange := &traceMCPExchange{Response: []byte(`{"structuredContent":{"results":[{"id":"project.get"}]}}`)}
+	if err := validateDynamicFindResult(steps, 0, "truncated payload without the action", exchange); err != nil {
+		t.Fatalf("validateDynamicFindResult() error = %v, want full MCP response match", err)
+	}
+	missing := &traceMCPExchange{Response: []byte(`{"structuredContent":{"results":[{"id":"project.list"}]}}`)}
+	if err := validateDynamicFindResult(steps, 0, "truncated payload without the action", missing); err == nil {
+		t.Fatal("validateDynamicFindResult() error = nil, want missing expected action error")
+	}
+}
+
 // TestRedactResponse_TruncatesLargeProviderBodies verifies provider trace errors
 // stay compact in terminal and report diagnostics.
 func TestRedactResponse_TruncatesLargeProviderBodies(t *testing.T) {

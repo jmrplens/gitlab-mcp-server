@@ -74,9 +74,19 @@ func TestToolResultContent_HandlesStructuredTextAndEmptyResults(t *testing.T) {
 	if got := toolResultContent(structured); got != `{"ok":true}` {
 		t.Fatalf("toolResultContent(structured) = %q", got)
 	}
+	if got := toolResultContentForTool("gitlab_project", structured); got != `{"ok":true}` {
+		t.Fatalf("toolResultContentForTool(non-find) = %q", got)
+	}
 	text := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: " one "}, &mcp.TextContent{Text: "two"}}}
 	if got := toolResultContent(text); got != " one \ntwo" {
 		t.Fatalf("toolResultContent(text) = %q", got)
+	}
+	find := &mcp.CallToolResult{
+		StructuredContent: map[string]any{"results": []any{map[string]any{"id": "project.get", "schema": strings.Repeat("x", maxToolResultLen)}}},
+		Content:           []mcp.Content{&mcp.TextContent{Text: "compact result for `project.get`"}},
+	}
+	if got := toolResultContentForTool(dynamicFindTool, find); got != "compact result for `project.get`" {
+		t.Fatalf("toolResultContentForTool(dynamic find) = %q", got)
 	}
 	if got := truncateToolResult(strings.Repeat("x", maxToolResultLen+1)); !strings.HasSuffix(got, "\n...[truncated]") {
 		t.Fatalf("truncateToolResult() suffix = %q, want truncated marker", got[len(got)-20:])

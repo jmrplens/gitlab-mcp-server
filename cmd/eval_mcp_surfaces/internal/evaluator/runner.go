@@ -369,7 +369,7 @@ func (r *modelRunner) handleExpectedDynamicFindStep(ctx context.Context, auxCtx 
 	auxCtx.result.SchemaLookupUsed = true
 	payload, exchange, lookupErr := r.lookupToolResult(ctx, auxCtx.routes, auxCtx.toolUse, true)
 	if lookupErr == nil {
-		lookupErr = validateDynamicFindResult(auxCtx.steps, stepIndex, payload)
+		lookupErr = validateDynamicFindResult(auxCtx.steps, stepIndex, payload, exchange)
 	}
 	block := toolResultBlock(auxCtx.toolUse.ID, payload, lookupErr)
 	*auxCtx.followups = append(*auxCtx.followups, block)
@@ -414,9 +414,9 @@ func expectedDynamicFindStep(step evalStep) bool {
 	return step.ExpectedTool == dynamicFindTool && step.ExpectedAction == ""
 }
 
-func validateDynamicFindResult(steps []evalStep, stepIndex int, payload string) error {
+func validateDynamicFindResult(steps []evalStep, stepIndex int, payload string, exchange *traceMCPExchange) error {
 	expectedAction := nextDynamicExecuteAction(steps, stepIndex)
-	if expectedAction == "" || dynamicFindPayloadIncludesAction(payload, expectedAction) {
+	if expectedAction == "" || dynamicFindPayloadIncludesAction(payload, expectedAction) || dynamicFindExchangeIncludesAction(exchange, expectedAction) {
 		return nil
 	}
 	return fmt.Errorf("gitlab_find_action results did not include expected action %s; retry with a query that describes the requested GitLab operation", expectedAction)
@@ -446,6 +446,26 @@ func dynamicFindPayloadIncludesAction(payload, expectedAction string) bool {
 		})
 	}
 	return strings.Contains(payload, "`"+expectedAction+"`") || strings.Contains(payload, `"id":"`+expectedAction+`"`)
+}
+
+func dynamicFindExchangeIncludesAction(exchange *traceMCPExchange, expectedAction string) bool {
+	if exchange == nil || len(exchange.Response) == 0 {
+		return false
+	}
+	type dynamicFindResult struct {
+		ID string `json:"id"`
+	}
+	var output struct {
+		StructuredContent struct {
+			Results []dynamicFindResult `json:"results"`
+		} `json:"structuredContent"`
+	}
+	if err := json.Unmarshal(exchange.Response, &output); err != nil {
+		return false
+	}
+	return slices.ContainsFunc(output.StructuredContent.Results, func(result dynamicFindResult) bool {
+		return result.ID == expectedAction
+	})
 }
 
 func handleNoToolUseResult(result *taskResult, state *modelEvaluationState, repairLimit int, steps []evalStep) bool {
@@ -1147,7 +1167,7 @@ func (r *modelRunner) mcpToolResultOnce(ctx context.Context, toolUse modelConten
 		exchange.ProtocolError = err.Error()
 		return simulationResult{Content: fmt.Sprintf("MCP tool call failed: %s", err), Injected: true, Err: err, MCP: exchange}
 	}
-	content := toolResultContent(result)
+	content := toolResultContentForTool(toolUse.Name, result)
 	exchange.setResponse(result)
 	if result == nil {
 		emptyResultErr := errors.New("MCP tool call returned an empty result")
