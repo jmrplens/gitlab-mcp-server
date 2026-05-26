@@ -1315,15 +1315,15 @@ func addAnalyzeActionTags(add tagCollector, action string) {
 	case "pipeline_failure":
 		add("pipeline failure", "failed pipeline", "pipeline failed", "why pipeline failed", "root cause", "failed jobs", "job trace", "failure analysis")
 	case "ci_config":
-		add("ci configuration", "ci configuration analysis", "ci config analysis", "analyze .gitlab-ci.yml", "gitlab ci yaml", "pipeline config", "best practices", "maintainability")
+		add("configuration", "config", "ci configuration", "project ci configuration", "ci configuration analysis", "project ci configuration analysis", "ci config analysis", "project ci config", "analyze .gitlab-ci.yml", "gitlab ci yaml", "pipeline config", "branch ci configuration", "best practices", "maintainability")
 	case "mr_changes":
-		add("merge request changes", "merge request changes analyzer", "analyze merge request changes", "mr changes analysis", "code review", "diff analysis", "review merge request diff")
+		add("merge request changes", "merge request changes analyzer", "analyze merge request changes", "mr changes analysis", "code review", "diff analysis", "review merge request changes", "review merge request diff", "llm assisted analyzer", "llm-assisted analyzer")
 	case "issue_summary":
 		add("issue summary", "summarize issue", "issue discussion summary", "key decisions", "issue recap")
 	case "mr_security":
 		add("merge request security", "security review", "mr security review", "owasp", "vulnerabilities", "review security")
 	case "technical_debt":
-		add("technical debt", "technical debt markers", "todo", "fixme", "hack", "debt markers")
+		add("technical debt", "technical debt markers", "technical-debt markers", "find technical debt markers", "todo", "fixme", "hack", "todo fixme hack", "debt markers", "branch technical debt")
 	}
 }
 
@@ -1342,6 +1342,8 @@ func addAdminActionTags(add tagCollector, action string) {
 
 func addReleaseActionTags(add tagCollector, action string) {
 	switch action {
+	case "create":
+		add("create release", "release create", "create release from ref", "release create from ref", "generate release", "new release", "tag release", "ref")
 	case "get":
 		add("verify release", "release exists", "release by tag", "tag_name")
 	case "link_list":
@@ -1382,6 +1384,8 @@ func addPackageActionTags(add tagCollector, action string) {
 
 func addRunnerActionTags(add tagCollector, action string) {
 	switch action {
+	case "update":
+		add("update runner", "runner update", "pause runner", "paused runner", "set paused", "set paused true", "runner paused true", "paused=true", "runner_id")
 	case "jobs":
 		add("runner jobs", "runner jobs list", "runner job list", "jobs for runner", "list runner jobs", "inspect runner jobs", "runner job history", "runner_id")
 	case "remove":

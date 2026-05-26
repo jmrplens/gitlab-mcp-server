@@ -156,6 +156,12 @@
         "notes": "CI configuration analysis should select the analyzer, not a template lint action."
     },
     {
+        "category": "analyze_ci_config_project_phrase",
+        "query": "project ci configuration",
+        "want_top": "analyze.ci_config",
+        "notes": "Observed Dynamic eval query should select the CI configuration analyzer over job, variable, or lint helpers."
+    },
+    {
         "category": "analyze_mr_changes_phrase",
         "query": "analyze merge request changes",
         "want_top": "analyze.mr_changes",
@@ -178,6 +184,12 @@
         "query": "technical debt markers",
         "want_top": "analyze.technical_debt",
         "notes": "Technical debt marker wording should select the analyzer instead of raw code search."
+    },
+    {
+        "category": "analyze_technical_debt_find_phrase",
+        "query": "find technical-debt markers on branch main",
+        "want_top": "analyze.technical_debt",
+        "notes": "Observed Dynamic eval wording with a branch should still select the technical-debt analyzer."
     },
     {
         "category": "search_projects_phrase",
@@ -208,6 +220,18 @@
         "query": "compare refs",
         "want_top": "repository.compare",
         "notes": "Ref comparison wording should select repository.compare."
+    },
+    {
+        "category": "release_create_from_ref_phrase",
+        "query": "release create from ref",
+        "want_top": "release.create",
+        "notes": "Release creation from a ref should prefer release.create over release asset-link creation."
+    },
+    {
+        "category": "runner_update_paused_phrase",
+        "query": "set paused=true on runner id 9 for project my-org/tools/gitlab-mcp-server",
+        "want_top": "runner.update",
+        "notes": "Runner pause/update wording should resolve to runner.update instead of job or pipeline listing."
     },
     {
         "category": "mr_review_changes_phrase",
