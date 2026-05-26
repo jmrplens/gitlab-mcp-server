@@ -1289,9 +1289,25 @@ func addEnvironmentAndCITags(add tagCollector, _, domain, action string) bool {
 func addEnvironmentActionTags(add tagCollector, action string) {
 	switch {
 	case strings.HasPrefix(action, "protected_"):
-		add("protected environment", "environment protection", "protected environment get", "protected environment list")
+		add("protected environment", "environment protection")
+		addProtectedEnvironmentActionTags(add, action)
 	case strings.HasPrefix(action, "deployment_"):
 		add("environment deployment", "deployment list", "deployment approval", "deployment approve", "deployment reject")
+	}
+}
+
+func addProtectedEnvironmentActionTags(add tagCollector, action string) {
+	switch action {
+	case "protected_protect":
+		add("protect environment", "protect project environment", "project environment protect", "project deploy access", "maintainer deploy access")
+	case "protected_list":
+		add("protected environment list", "list protected environments")
+	case "protected_get":
+		add("protected environment get", "get protected environment")
+	case "protected_update":
+		add("protected environment update", "update protected environment")
+	case "protected_unprotect":
+		add("unprotect environment", "unprotect protected environment")
 	}
 }
 

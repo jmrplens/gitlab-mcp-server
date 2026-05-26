@@ -143,7 +143,7 @@ type GetInput struct {
 type ProtectInput struct {
 	GroupID               toolutil.StringOrInt     `json:"group_id"                          jsonschema:"Group ID or URL-encoded path,required"`
 	Name                  string                   `json:"name"                              jsonschema:"Environment tier to protect (production, staging, testing, development, other),required"`
-	DeployAccessLevels    []DeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Deploy access levels"`
+	DeployAccessLevels    []DeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Deploy access levels,required"`
 	RequiredApprovalCount *int64                   `json:"required_approval_count,omitempty" jsonschema:"Required number of approvals"`
 	ApprovalRules         []ApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Approval rules"`
 }

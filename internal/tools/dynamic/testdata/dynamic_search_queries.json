@@ -324,6 +324,13 @@
         "notes": "Directory-based multi-file publish wording should select publish_directory rather than single-file publish."
     },
     {
+        "category": "project_protected_environment_deploy_access_phrase",
+        "query": "protect environment staging with Maintainer deploy access for the project",
+        "want_top": "environment.protected_protect",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer project protected environment protection over deploy tokens or keys."
+    },
+    {
         "category": "no_match",
         "query": "zzzzzzzz",
         "expect_zero": true,

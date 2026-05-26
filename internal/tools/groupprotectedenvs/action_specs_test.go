@@ -2,6 +2,7 @@ package groupprotectedenvs
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -45,6 +46,19 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 	if !spec.Idempotent {
 		t.Error("unprotect action should be idempotent")
+	}
+}
+
+// TestActionSpecs_ProtectRequiresDeployAccessLevels verifies discovery schemas
+// advertise the access rule required to create a group protected environment.
+func TestActionSpecs_ProtectRequiresDeployAccessLevels(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	byTool := groupProtectedEnvSpecsByTool(t, ActionSpecs(client))
+	schema := byTool["gitlab_group_protected_environment_protect"].Route.InputSchema
+	if !schemaRequiredIncludes(schema, "deploy_access_levels") {
+		t.Fatalf("protect required fields = %v, want deploy_access_levels", schema["required"])
 	}
 }
 
@@ -101,4 +115,18 @@ func groupProtectedEnvSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+func schemaRequiredIncludes(schema map[string]any, name string) bool {
+	switch required := schema["required"].(type) {
+	case []any:
+		for _, raw := range required {
+			if field, ok := raw.(string); ok && field == name {
+				return true
+			}
+		}
+	case []string:
+		return slices.Contains(required, name)
+	}
+	return false
 }
