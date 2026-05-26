@@ -2498,6 +2498,25 @@ func TestEditPushRule_EmptyProjectID(t *testing.T) {
 	}
 }
 
+// TestAddPushRule_RequiresRuleSetting verifies AddPushRule rejects calls that
+// GitLab would reject because they contain no actual push rule setting.
+func TestAddPushRule_RequiresRuleSetting(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("API should not be called for missing push rule settings: %s %s", r.Method, r.URL.Path)
+	}))
+
+	_, err := AddPushRule(context.Background(), client, AddPushRuleInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	message := err.Error()
+	for _, want := range []string{"at least one push rule setting", "params.commit_message_regex", "reject_unsigned_commits"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("error = %q, want %q", message, want)
+		}
+	}
+}
+
 // TestDeletePushRule_Success verifies DeletePushRule when success.
 func TestDeletePushRule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -5150,7 +5169,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 
 		// Push rules.
 		{"gitlab_project_get_push_rules", map[string]any{"project_id": "42"}},
-		{"gitlab_project_add_push_rule", map[string]any{"project_id": "42"}},
+		{"gitlab_project_add_push_rule", map[string]any{"project_id": "42", "commit_message_regex": "^EVAL-"}},
 		{"gitlab_project_edit_push_rule", map[string]any{"project_id": "42"}},
 		{"gitlab_project_delete_push_rule", map[string]any{"project_id": "42"}},
 

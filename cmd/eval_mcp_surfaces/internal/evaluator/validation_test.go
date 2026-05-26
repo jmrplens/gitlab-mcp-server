@@ -209,6 +209,21 @@ func TestExpectedActionCallExample_DynamicDestructiveUsesTopLevelConfirm(t *test
 	}
 }
 
+// TestExpectedActionCallExample_DynamicIncludesPromptOptionalParams verifies
+// repair envelopes keep optional parameters explicitly requested by the task.
+func TestExpectedActionCallExample_DynamicIncludesPromptOptionalParams(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.push_rule_add", RequiredParams: []string{"project_id"}, OptionalParams: []string{"commit_message_regex", "reject_unsigned_commits"}}
+	got := expectedActionCallExample(evalTask{Prompt: "Add a project push rule to project `my-org/tools/eval-push-rule` with commit message regex `^EVAL-` that rejects unsigned commits."}, step, map[string]any{"params": map[string]any{"project_id": "my-org/tools/eval-push-rule"}})
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(got), &decoded); err != nil {
+		t.Fatalf("expectedActionCallExample() invalid JSON %q: %v", got, err)
+	}
+	params := decoded["params"].(map[string]any)
+	if params["commit_message_regex"] != "^EVAL-" || params["reject_unsigned_commits"] != true {
+		t.Fatalf("params = %#v, want requested optional push rule params", params)
+	}
+}
+
 // TestSimulatedToolResult_OnlyInjectsFirstAttempt verifies simulation modes
 // advance or retry exactly once.
 func TestSimulatedToolResult_OnlyInjectsFirstAttempt(t *testing.T) {

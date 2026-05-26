@@ -594,16 +594,9 @@ func expectedActionCallExample(task evalTask, step evalStep, attemptedInput map[
 		}
 		return string(data)
 	}
-	params := map[string]any{}
 	attemptedParams, _ := attemptedInput["params"].(map[string]any)
 	allParams := exactCallParamSet(step)
-	for _, required := range step.RequiredParams {
-		if value, ok := attemptedParams[required]; ok {
-			params[required] = value
-			continue
-		}
-		params[required] = resolveExactParamProvenance(step.ExpectedAction, required, task.Prompt, allParams).Value
-	}
+	params := expectedActionParams(task.Prompt, step, attemptedParams, allParams)
 	arguments := map[string]any{"action": step.ExpectedAction, "params": params}
 	if step.ExpectedTool == dynamicExecuteActionTool && (step.Destructive || hasParam(step.OptionalParams, "confirm")) {
 		// gitlab_execute_action expects confirm beside action and params, not inside
@@ -618,6 +611,37 @@ func expectedActionCallExample(task evalTask, step evalStep, attemptedInput map[
 		return fmt.Sprintf("{\"action\":%q,\"params\":{...}}", step.ExpectedAction)
 	}
 	return string(data)
+}
+
+func expectedActionParams(prompt string, step evalStep, attemptedParams map[string]any, allParams map[string]bool) map[string]any {
+	params := map[string]any{}
+	for _, required := range step.RequiredParams {
+		params[required] = expectedRequiredActionParam(prompt, step.ExpectedAction, required, attemptedParams, allParams)
+	}
+	addExpectedOptionalActionParams(params, prompt, step.OptionalParams, attemptedParams)
+	return params
+}
+
+func expectedRequiredActionParam(prompt, action, param string, attemptedParams map[string]any, allParams map[string]bool) any {
+	if value, ok := attemptedParams[param]; ok {
+		return value
+	}
+	return resolveExactParamProvenance(action, param, prompt, allParams).Value
+}
+
+func addExpectedOptionalActionParams(params map[string]any, prompt string, optionalParams []string, attemptedParams map[string]any) {
+	for _, optional := range optionalParams {
+		if optional == "confirm" {
+			continue
+		}
+		if value, ok := exampleOptionalParamValue(optional, prompt); ok {
+			params[optional] = value
+			continue
+		}
+		if value, ok := attemptedParams[optional]; ok {
+			params[optional] = value
+		}
+	}
 }
 
 func standaloneExpectedParamValue(param, prompt string) any {

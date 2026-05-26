@@ -1110,6 +1110,35 @@ func TestFind_ReturnsSchemaAndExecuteExample(t *testing.T) {
 	}
 }
 
+// TestFind_MarkdownGuidesImmediateExecuteAndConfirm verifies the visible finder
+// output discourages batching future searches and keeps destructive confirmation
+// in the table text for models that ignore structured examples.
+func TestFind_MarkdownGuidesImmediateExecuteAndConfirm(t *testing.T) {
+	registry := NewRegistry(testRoutes(t))
+
+	result, output, err := registry.Find(t.Context(), nil, FindInput{Query: "project delete", Limit: 1})
+	if err != nil {
+		t.Fatalf("Find() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Find() result = %+v, want non-error", result)
+	}
+	if output.Count == 0 || output.Results[0].ID != "project.delete" {
+		t.Fatalf("top result = %+v, want project.delete", output.Results)
+	}
+	markdown := textContent(result)
+	for _, want := range []string{
+		"Immediate next step: choose one row and call `gitlab_execute_action` now",
+		"Next step: choose one row and call `gitlab_execute_action`",
+		"before starting another catalog operation",
+		"top-level `confirm:true`",
+	} {
+		if !strings.Contains(markdown, want) {
+			t.Fatalf("Find() markdown = %q, want %q", markdown, want)
+		}
+	}
+}
+
 // TestFind_ExplainIsOptIn verifies that find keeps its default payload compact
 // and exposes scoring reasons only when explicitly requested.
 func TestFind_ExplainIsOptIn(t *testing.T) {

@@ -1391,6 +1391,10 @@ func optionalAccessParamValue(param, lowerPrompt string) (any, bool) {
 
 func optionalBooleanParamValue(param, lowerPrompt string) (any, bool) {
 	switch param {
+	case "reject_unsigned_commits":
+		if strings.Contains(lowerPrompt, "reject unsigned commit") || strings.Contains(lowerPrompt, "rejects unsigned commit") || strings.Contains(lowerPrompt, "unsigned commit rejection") {
+			return true, true
+		}
 	case "include_descendants":
 		if strings.Contains(lowerPrompt, "descendant") {
 			return true, true

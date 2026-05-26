@@ -221,6 +221,21 @@ func projectOptions(individualTool string, extraTags ...string) toolutil.ActionS
 				CommonConfusions: []string{"Push rules are project-scoped singletons; there is no push_rule_id parameter."},
 			},
 		}
+		if individualTool == "gitlab_project_add_push_rule" || individualTool == "gitlab_project_edit_push_rule" {
+			options.ParameterGuidance["commit_message_regex"] = toolutil.ParameterGuidance{
+				ValueSource:      "Commit message regex requested by the user.",
+				ExampleBinding:   `params.commit_message_regex:"^EVAL-"`,
+				CommonConfusions: []string{"Use commit_message_regex directly; do not send commit_message_regex_enabled or empty regex placeholders."},
+			}
+			options.ParameterGuidance["reject_unsigned_commits"] = toolutil.ParameterGuidance{
+				ValueSource:      "Boolean that enables unsigned commit rejection.",
+				ExampleBinding:   "params.reject_unsigned_commits:true",
+				CommonConfusions: []string{"Use reject_unsigned_commits, not deny_unsigned_commits."},
+			}
+		}
+		if individualTool == "gitlab_project_add_push_rule" {
+			options.Usage += " For add, include at least one rule-setting parameter such as commit_message_regex, reject_unsigned_commits, prevent_secrets, branch_name_regex, or deny_delete_tag; do not call add with project_id alone."
+		}
 	}
 	if individualTool == "gitlab_project_delete" {
 		options.Usage = "Use to delete a project. For ordinary cleanup, send project_id and confirm only. Set permanently_remove only when explicitly requested; when permanently_remove is true, full_path must exactly match the project's path_with_namespace from project create/get."

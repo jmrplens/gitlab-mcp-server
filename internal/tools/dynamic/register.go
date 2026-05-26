@@ -1477,6 +1477,9 @@ func addProtectionTags(add tagCollector, id, domain, action string) bool {
 	case domain == "group" && strings.Contains(id, "protected_branch"):
 		add("group protected branch", "group branch protection", "protected branch rule", "branch pattern")
 		addGroupProtectedBranchActionTags(add, action)
+	case domain == "group" && (strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment")):
+		add("group protected environment", "group environment protection", "group deployment gate", "protected environment", "environment protection")
+		addGroupProtectedEnvironmentActionTags(add, action)
 	case domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect"):
 		add("protected branch", "branch protection")
 	case strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment"):
@@ -1501,6 +1504,21 @@ func addGroupProtectedBranchActionTags(add tagCollector, action string) {
 		add("update group protected branch", "group protected branch update", "allow force push", "force push")
 	case "protected_branch_unprotect":
 		add("unprotect group branch", "remove group protected branch", "group protected branch unprotect")
+	}
+}
+
+func addGroupProtectedEnvironmentActionTags(add tagCollector, action string) {
+	switch action {
+	case "protected_env_protect":
+		add("protect group environment", "group protected environment protect", "create group protected environment", "maintainer deploy access")
+	case "protected_env_list":
+		add("list group protected environments", "group protected environment list")
+	case "protected_env_get":
+		add("get group protected environment", "fetch group protected environment", "group protected environment get")
+	case "protected_env_update":
+		add("update group protected environment", "group protected environment update", "require approval", "approval rules")
+	case "protected_env_unprotect":
+		add("unprotect group environment", "remove group protected environment", "delete group protected environment", "group protected environment unprotect")
 	}
 }
 
@@ -2306,6 +2324,7 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	score += scoreRequiredParamSignalValue(entry, terms)
 	score += scoreCompoundTagSignalValue(entry, terms)
 	score += scoreServiceAccountIntentValue(entry, terms)
+	score += scoreScopeIntentValue(entry, terms)
 	score += scoreActionSpecificityValue(entry, terms)
 	if score <= 0 {
 		return 0
@@ -2359,6 +2378,10 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 		reasons = append(reasons, tagReasons...)
 	}
 	if adjustment, reason := scoreServiceAccountIntent(entry, terms); adjustment != 0 {
+		score += adjustment
+		reasons = append(reasons, reason)
+	}
+	if adjustment, reason := scoreScopeIntent(entry, terms); adjustment != 0 {
 		score += adjustment
 		reasons = append(reasons, reason)
 	}
@@ -2611,6 +2634,39 @@ func serviceAccountActionVerb(action string) string {
 		return "rotate"
 	case strings.HasSuffix(action, "_revoke"):
 		return "revoke"
+	default:
+		return ""
+	}
+}
+
+func scoreScopeIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreScopeIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	scope := matchingQueryScope(terms)
+	return score, MatchReason{Field: searchFieldScopeIntent, QueryTerm: scope, MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreScopeIntentValue(entry actionEntry, terms []searchTerm) int {
+	scope := matchingQueryScope(terms)
+	if scope == "" {
+		return 0
+	}
+	document := documentForEntry(entry)
+	if document.Domain == scope || document.Scope == scope {
+		return scoreScopeIntentBoost
+	}
+	return 0
+}
+
+func matchingQueryScope(terms []searchTerm) string {
+	switch {
+	case searchTermsContainWord(terms, "group"):
+		return "group"
+	case searchTermsContainWord(terms, "project"):
+		return "project"
 	default:
 		return ""
 	}
@@ -3170,6 +3226,7 @@ func formatFindOutput(output FindOutput) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
+	b.WriteString("Immediate next step: choose one row and call `gitlab_execute_action` now; do not call `gitlab_find_action` again until that execute call returns.\n\n")
 	fmt.Fprintf(&b, "%s\n\n", dynamicExecuteEnvelopeHint)
 	withExplanations := hasFindExplanations(output.Results)
 	withGuidance := hasFindGuidance(output.Results)
@@ -3203,23 +3260,27 @@ func formatFindOutput(output FindOutput) string {
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s |\n", result.ID, result.Score, result.Destructive, required)
 		}
 	}
-	b.WriteString("\nStructured results include exact `input_schema` values and `gitlab_execute_action` examples for each action.\n")
+	b.WriteString("\nNext step: choose one row and call `gitlab_execute_action` with that row's schema/example before starting another catalog operation.\n")
+	b.WriteString("Structured results include exact `input_schema` values and `gitlab_execute_action` examples for each action.\n")
 	return b.String()
 }
 
 func hasFindGuidance(results []FindResult) bool {
 	return slices.ContainsFunc(results, func(result FindResult) bool {
-		return strings.TrimSpace(result.Usage) != "" || len(result.ParamGuidance) > 0
+		return result.Destructive || strings.TrimSpace(result.Usage) != "" || len(result.ParamGuidance) > 0
 	})
 }
 
 func compactFindGuidance(result FindResult) string {
-	parts := make([]string, 0, 2)
+	parts := make([]string, 0, 3)
 	if usage := strings.TrimSpace(result.Usage); usage != "" {
 		parts = append(parts, usage)
 	}
 	if guidance := compactParameterGuidance(result.ParamGuidance, defaultMaxParamGuidanceItems, result.RequiredParams...); guidance != "" {
 		parts = append(parts, guidance)
+	}
+	if result.Destructive {
+		parts = append(parts, "Execute destructive actions with top-level `confirm:true`.")
 	}
 	if len(parts) == 0 {
 		return "-"

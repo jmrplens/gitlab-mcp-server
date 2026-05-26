@@ -331,6 +331,42 @@
         "notes": "Observed Enterprise Dynamic eval wording should prefer project protected environment protection over deploy tokens or keys."
     },
     {
+        "category": "group_protected_environment_protect_phrase",
+        "query": "group protected environment create with Maintainer deploy access",
+        "want_top": "group.protected_env_protect",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer group protected environment protection over project protected environments or CI variables."
+    },
+    {
+        "category": "group_protected_environment_list_phrase",
+        "query": "group protected environment list",
+        "want_top": "group.protected_env_list",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer group protected environment listing over project protected environments."
+    },
+    {
+        "category": "group_protected_environment_get_phrase",
+        "query": "group protected environment get staging",
+        "want_top": "group.protected_env_get",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer group protected environment fetch over project protected environments."
+    },
+    {
+        "category": "group_protected_environment_update_phrase",
+        "query": "group protected environment update require one approval",
+        "want_top": "group.protected_env_update",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer group protected environment updates over project protected environments."
+    },
+    {
+        "category": "group_protected_environment_unprotect_phrase",
+        "query": "group protected environment unprotect",
+        "want_top": "group.protected_env_unprotect",
+        "enterprise": true,
+        "expect_destructive_top": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer destructive group protected environment unprotect and remind callers to use top-level confirm=true."
+    },
+    {
         "category": "group_protected_branch_maintainer_access_phrase",
         "query": "group protect branch pattern eval-enterprise/* with Maintainer push and merge access for group my-org",
         "want_top": "group.protected_branch_protect",

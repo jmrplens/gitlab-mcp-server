@@ -252,3 +252,17 @@ func TestLegacyOutputWrappers_ReturnMessages(t *testing.T) {
 		})
 	}
 }
+
+// TestProjectOptions_PushRuleAddGuidance verifies catalog guidance tells dynamic
+// callers that creating a push rule needs a rule setting, not only project_id.
+func TestProjectOptions_PushRuleAddGuidance(t *testing.T) {
+	options := projectOptions("gitlab_project_add_push_rule", "push_rule")
+	for _, want := range []string{"at least one rule-setting parameter", "commit_message_regex", "project_id alone"} {
+		if !strings.Contains(options.Usage, want) {
+			t.Fatalf("Usage = %q, want %q", options.Usage, want)
+		}
+	}
+	if _, ok := options.ParameterGuidance["commit_message_regex"]; !ok {
+		t.Fatalf("ParameterGuidance = %#v, want commit_message_regex guidance", options.ParameterGuidance)
+	}
+}
