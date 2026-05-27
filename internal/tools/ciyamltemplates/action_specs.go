@@ -15,7 +15,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func ciYMLTemplateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Tags:           []string{"template", "ci"},
+		Aliases: []string{individualTool}, Usage: "Use to execute ciyamltemplates domain action.", Tags: []string{"template", "ci"},
 		RelatedActions: []string{"template.lint", "repository.file_create"},
 		OpenWorld:      true,
 		OwnerPackage:   "ciyamltemplates",

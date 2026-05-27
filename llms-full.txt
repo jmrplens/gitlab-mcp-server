@@ -68,8 +68,10 @@ Action guidance:
 - deploy_token_list_all: Manage deploy tokens across instance, project, and group scopes.
 - deploy_token_list_group: Manage group deploy tokens (list/get/create/delete).
 - deploy_token_list_project: Manage project deploy tokens (list/get/create/delete).
+- request_group: Use to execute accessrequests domain action.
 - request_list_group: List pending group access requests. Use before approving or denying user access requests at group scope.
 - request_list_project: List pending project access requests. Use before approving or denying user access requests at project scope.
+- request_project: Use to execute accessrequests domain action.
 - token_group_create: Use for GitLab group access tokens; this action creates a group-scoped API token.
 - token_group_get: Use for GitLab group access tokens; this action gets a group-scoped API token.
 - token_group_list: Use for GitLab group access tokens; this action lists group-scoped API tokens.
@@ -569,12 +571,97 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"alert_metric_image_delete","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_admin.<action>.
 Action guidance:
+- alert_metric_image_delete: Use to execute adminspecs domain action.
+- alert_metric_image_list: Use to execute adminspecs domain action.
+- alert_metric_image_update: Use to execute adminspecs domain action.
+- alert_metric_image_upload: Use to execute adminspecs domain action.
 - app_statistics_get: Read GitLab instance-wide application statistics such as totals for users, groups, projects, issues, and merge requests. Requires administrator access.
 - appearance_get: Read the current GitLab application appearance and branding settings. Use this for logos, banners, PWA labels, and instance message colors rather than general application settings or version metadata.
 - appearance_update: Update GitLab application appearance and branding settings such as title, messages, colors, PWA labels, and profile guidance text. Requires administrator access and changes the instance UI immediately.
+- application_create: Use to execute adminspecs domain action.
+- application_delete: Use to execute adminspecs domain action.
+- application_list: Use to execute adminspecs domain action.
+- broadcast_message_create: Use to execute adminspecs domain action.
+- broadcast_message_delete: Use to execute adminspecs domain action.
+- broadcast_message_get: Use to execute adminspecs domain action.
+- broadcast_message_list: Use to execute adminspecs domain action.
+- broadcast_message_update: Use to execute adminspecs domain action.
+- bulk_import_cancel: Use to execute adminspecs domain action.
+- bulk_import_entity_failures: Use to execute adminspecs domain action.
+- bulk_import_entity_get: Use to execute adminspecs domain action.
+- bulk_import_entity_list: Use to execute adminspecs domain action.
+- bulk_import_get: Use to execute adminspecs domain action.
+- bulk_import_list: Use to execute adminspecs domain action.
+- bulk_import_start: Use to execute adminspecs domain action.
+- cluster_agent_delete: Use to execute adminspecs domain action.
+- cluster_agent_get: Use to execute adminspecs domain action.
+- cluster_agent_list: Use to execute adminspecs domain action.
+- cluster_agent_register: Use to execute adminspecs domain action.
+- cluster_agent_token_create: Use to execute adminspecs domain action.
+- cluster_agent_token_get: Use to execute adminspecs domain action.
+- cluster_agent_token_list: Use to execute adminspecs domain action.
+- cluster_agent_token_revoke: Use to execute adminspecs domain action.
+- custom_attr_delete: Use to execute adminspecs domain action.
+- custom_attr_get: Use to execute adminspecs domain action.
+- custom_attr_list: Use to execute adminspecs domain action.
+- custom_attr_set: Use to execute adminspecs domain action.
+- db_migration_mark: Use to execute adminspecs domain action.
+- dependency_proxy_delete: Use to execute adminspecs domain action.
+- error_tracking_create: Use to execute adminspecs domain action.
+- error_tracking_delete: Use to execute adminspecs domain action.
+- error_tracking_get_settings: Use to execute adminspecs domain action.
+- error_tracking_list: Use to execute adminspecs domain action.
+- error_tracking_update_settings: Use to execute adminspecs domain action.
+- feature_delete: Use to execute adminspecs domain action.
+- feature_list: Use to execute adminspecs domain action.
+- feature_list_definitions: Use to execute adminspecs domain action.
+- feature_set: Use to execute adminspecs domain action.
+- import_bitbucket: Use to execute adminspecs domain action.
+- import_bitbucket_server: Use to execute adminspecs domain action.
+- import_cancel_github: Use to execute adminspecs domain action.
+- import_gists: Use to execute adminspecs domain action.
+- import_github: Use to execute adminspecs domain action.
+- license_add: Use to execute adminspecs domain action.
+- license_delete: Use to execute adminspecs domain action.
+- license_get: Use to execute adminspecs domain action.
 - metadata_get: Read GitLab instance metadata such as version and revision. Do not use this for application settings.
+- plan_limits_change: Use to execute adminspecs domain action.
+- plan_limits_get: Use to execute adminspecs domain action.
+- secure_file_create: Use to execute adminspecs domain action.
+- secure_file_delete: Use to execute adminspecs domain action.
+- secure_file_get: Use to execute adminspecs domain action.
+- secure_file_list: Use to execute adminspecs domain action.
 - settings_get: Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information.
+- settings_update: Use to execute adminspecs domain action.
+- sidekiq_compound_metrics: Use to execute adminspecs domain action.
+- sidekiq_job_stats: Use to execute adminspecs domain action.
+- sidekiq_process_metrics: Use to execute adminspecs domain action.
+- sidekiq_queue_metrics: Use to execute adminspecs domain action.
+- system_hook_add: Use to execute adminspecs domain action.
+- system_hook_delete: Use to execute adminspecs domain action.
+- system_hook_delete_url_variable: Use to execute adminspecs domain action.
+- system_hook_edit: Use to execute adminspecs domain action.
+- system_hook_get: Use to execute adminspecs domain action.
+- system_hook_list: Use to execute adminspecs domain action.
+- system_hook_set_url_variable: Use to execute adminspecs domain action.
+- system_hook_test: Use to execute adminspecs domain action.
+- terraform_state_delete: Use to execute adminspecs domain action.
+- terraform_state_get: Use to execute adminspecs domain action.
+- terraform_state_list: Use to execute adminspecs domain action.
+- terraform_state_lock: Use to execute adminspecs domain action.
 - terraform_state_unlock: Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name; do not send the state name as id.
+- terraform_version_delete: Use to execute adminspecs domain action.
+- topic_create: Use to execute adminspecs domain action.
+- topic_delete: Use to execute adminspecs domain action.
+- topic_get: Use to execute adminspecs domain action.
+- topic_list: Use to execute adminspecs domain action.
+- topic_update: Use to execute adminspecs domain action.
+- usage_data_metric_definitions: Use to execute adminspecs domain action.
+- usage_data_non_sql_metrics: Use to execute adminspecs domain action.
+- usage_data_queries: Use to execute adminspecs domain action.
+- usage_data_service_ping: Use to execute adminspecs domain action.
+- usage_data_track_event: Use to execute adminspecs domain action.
+- usage_data_track_events: Use to execute adminspecs domain action.
 Parameter guidance:
 - appearance_update.message_background_color: hex_color; source: Hex color string such as #e75e40 for the appearance banner background.; avoid: Provide a CSS-style hex color such as #ffffff; do not send color names or RGB tuples.
 - appearance_update.message_font_color: hex_color; source: Hex color string such as #ffffff for the appearance banner text.; avoid: Provide a CSS-style hex color such as #000000; do not send color names or RGB tuples.
@@ -1594,9 +1681,13 @@ Action guidance:
 - delete: Delete one branch by name. Use only for confirmed cleanup tasks when the branch is no longer needed.
 - delete_merged: Delete merged branches in a project. Use with caution for branch hygiene after confirming merge status requirements.
 - get: Get one branch by project_id and branch_name. Use when a specific branch is referenced and exact branch protection/default metadata is needed.
+- get_protected: Use to execute branches domain action.
 - list: List repository branches for one project with optional search and pagination. Use this before branch-level operations and when selecting refs for compare/MR flows.
+- list_protected: Use to execute branches domain action.
 - protect: Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer.
 - rule_list: Use to audit aggregated branch rules, including protections and approval-related state, for a project path.
+- unprotect: Use to execute branches domain action.
+- update_protected: Use to execute branches domain action.
 Parameter guidance:
 - create.branch_name: git_branch; source: Name for the new branch to create.
 - create.ref: git_ref; source: Existing branch/tag/commit used as creation source.
@@ -1730,6 +1821,9 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_ci_catalog.<action>.
+Action guidance:
+- get: Use to execute cicatalog domain action.
+- list: Use to execute cicatalog domain action.
 
 Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml). Read-only; GraphQL endpoint. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
 When to use: browse the Catalog to find reusable components, inspect a component's versions before pinning it in `include:component`, or audit which Catalog resources a publisher group exposes.
@@ -1775,8 +1869,10 @@ Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_ci_variable.<action>.
 Action guidance:
 - create: Create a CI/CD variable in a project. Use for pipeline/runtime configuration that should not be stored in repository files.
+- delete: Use to execute civariables domain action.
 - get: Get one CI/CD variable by key (and optional environment scope). Use when exact variable settings are needed.
 - list: List project CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions.
+- update: Use to execute civariables domain action.
 Parameter guidance:
 - create.key: ci_variable_key; source: Variable key name to create.
 - create.value: ci_variable_value; source: Variable value text (secret or plain based on masked/protected settings).
@@ -2030,8 +2126,11 @@ Action guidance:
 - create: Create an environment in a project. Use when introducing new runtime targets such as review, staging, or production environments.
 - deployment_approve_or_reject: Approve or reject a blocked deployment. Use only when approval workflows require explicit deployment approvals/rejections.
 - deployment_create: Create a deployment for an environment/ref/sha. Use when orchestrating manual or API-driven deployment entries.
+- deployment_delete: Use to execute deployments domain action.
 - deployment_get: Get one deployment by deployment_id for a project. Use when investigating a specific deployment state, environment, or actor metadata.
 - deployment_list: List deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions.
+- deployment_merge_requests: Use to execute deployment_merge_requests action.
+- deployment_update: Use to execute deployments domain action.
 - freeze_create: Create a deploy freeze period for a project.
 - freeze_delete: Delete a deploy freeze period.
 - freeze_get: Get a specific deploy freeze period.
@@ -6191,6 +6290,16 @@ Action guidance:
 - badge_get: Get a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
 - badge_list: List project badges. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
 - badge_preview: Preview a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
+- board_create: Use to execute boards domain action.
+- board_delete: Use to execute boards domain action.
+- board_get: Use to execute boards domain action.
+- board_list: Use to execute boards domain action.
+- board_list_create: Use to execute boards domain action.
+- board_list_delete: Use to execute boards domain action.
+- board_list_get: Use to execute boards domain action.
+- board_list_list: Use to execute boards domain action.
+- board_list_update: Use to execute boards domain action.
+- board_update: Use to execute boards domain action.
 - delete: Use to delete a project. For ordinary cleanup, send project_id and confirm only. Set permanently_remove only when explicitly requested; when permanently_remove is true, full_path must exactly match the project's path_with_namespace from project create/get.
 - export_download: Download the generated project export archive when ready.
 - export_schedule: Schedule an export archive for a project.
@@ -7598,7 +7707,11 @@ Action params schema: gitlab://tools/gitlab_repository.<action>.
 Action guidance:
 - blob: Get blob metadata/content for a specific file path and ref. Use when you need one file's content or metadata after locating its path.
 - changelog_add: Create or append changelog entries in the repository for a version. Use in release workflows when structured changelog updates are requested.
+- commit_cherry_pick: Use to execute commits domain action.
+- commit_comment_create: Use to execute commits domain action.
+- commit_comments: Use to execute commits domain action.
 - commit_create: Create a commit by applying file actions to a branch. Use for multi-file changes where repository file APIs are not enough.
+- commit_diff: Use to execute commits domain action.
 - commit_discussion_add_note: Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.
 - commit_discussion_create: Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.
 - commit_discussion_delete_note: Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.
@@ -7607,7 +7720,12 @@ Action guidance:
 - commit_discussion_update_note: Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.
 - commit_get: Get detailed commit information by sha. Use this when a specific commit is referenced and full metadata/message/stats are needed.
 - commit_list: List commits for a project/ref with pagination. Use this to inspect history before selecting a commit for diff, comments, statuses, or revert/cherry-pick workflows.
+- commit_merge_requests: Use to execute commits domain action.
+- commit_refs: Use to execute commits domain action.
+- commit_revert: Use to execute commits domain action.
+- commit_signature: Use to execute commits domain action.
 - commit_status_set: Set commit status/check state for a SHA. Use this for external CI/reporting integrations that need to update pipeline-like status checks.
+- commit_statuses: Use to execute commits domain action.
 - compare: Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff.
 - file_history: List commit history for repository content context. This action projects to the same individual tool as commit_list and should preserve the same discovery guidance.
 - tree: List repository tree entries for a project/ref/path. Use this to browse directories and locate files before file/blob operations.
@@ -9172,12 +9290,16 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"ci_yml_get","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_template.<action>.
 Action guidance:
+- ci_yml_get: Use to execute ciyamltemplates domain action.
+- ci_yml_list: Use to execute ciyamltemplates domain action.
 - dockerfile_get: Get one Dockerfile template by key for scaffold/bootstrap workflows.
 - dockerfile_list: List available Dockerfile templates.
 - gitignore_get: Get one .gitignore template by key for repository bootstrap workflows.
 - gitignore_list: List available .gitignore templates.
 - license_get: Get one license template by key for project README/LICENSE scaffolding.
 - license_list: List available license templates.
+- lint: Use to execute cilint domain action.
+- lint_project: Use to execute cilint domain action.
 - project_template_get: Get one project-scoped template by template_type and key.
 - project_template_list: List project-scoped templates by template_type.
 Parameter guidance:
@@ -10166,6 +10288,13 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Use {"action":"get_group","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_audit_event.<action>.
+Action guidance:
+- get_group: Use to execute auditevents domain action.
+- get_instance: Use to execute auditevents domain action.
+- get_project: Use to execute auditevents domain action.
+- list_group: Use to execute auditevents domain action.
+- list_instance: Use to execute auditevents domain action.
+- list_project: Use to execute auditevents domain action.
 
 List and get GitLab audit events at instance, group, and project levels for compliance tracking.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -10342,6 +10471,9 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 Use {"action":"group","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_dora_metrics.<action>.
+Action guidance:
+- group: Use to execute dorametrics domain action.
+- project: Use to execute dorametrics domain action.
 
 Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate.
 	Returns: JSON with metric data. Errors: 404 not found, 403 forbidden — with actionable hints.

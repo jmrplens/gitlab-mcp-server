@@ -23,7 +23,7 @@ func appearanceUpdateSpec(name string, route toolutil.ActionRoute, individualToo
 
 func appearanceOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:         []string{"admin", "appearance", "branding"},
+		Aliases: []string{individualTool}, Usage: "Use to execute appearance domain action.", Tags: []string{"admin", "appearance", "branding"},
 		OpenWorld:    true,
 		OwnerPackage: "appearance",
 		IndividualTool: toolutil.IndividualToolSpec{

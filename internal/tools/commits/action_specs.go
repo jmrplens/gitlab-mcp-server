@@ -39,7 +39,7 @@ func commitUpdateSpec(name string, route toolutil.ActionRoute, individualTool st
 
 func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"repository", "commit"},
+		Aliases: []string{individualTool}, Usage: "Use to execute commits domain action.", Tags: []string{"repository", "commit"},
 		RelatedActions: []string{"repository.tree", "branch.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "commits",

@@ -28,7 +28,7 @@ func applicationDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 
 func applicationOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"admin", "application"},
+		Aliases: []string{individualTool}, Usage: "Use to execute applications domain action.", Tags: []string{"admin", "application"},
 		RelatedActions: []string{"admin.settings_get", "admin.metadata_get"},
 		OpenWorld:      true,
 		OwnerPackage:   "applications",

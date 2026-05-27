@@ -39,7 +39,7 @@ func boardDeleteSpec(name string, route toolutil.ActionRoute, individualTool str
 
 func boardOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"project", "board"},
+		Aliases: []string{individualTool}, Usage: "Use to execute boards domain action.", Tags: []string{"project", "board"},
 		RelatedActions: []string{"project.label_list", "issue.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "boards",

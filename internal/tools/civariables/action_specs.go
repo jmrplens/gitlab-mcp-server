@@ -36,7 +36,7 @@ func ciVariableDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 
 func ciVariableOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"ci", "variable"},
+		Aliases: []string{individualTool}, Usage: "Use to execute civariables domain action.", Tags: []string{"ci", "variable"},
 		OpenWorld:      true,
 		OwnerPackage:   "civariables",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

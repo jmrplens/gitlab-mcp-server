@@ -42,7 +42,7 @@ func branchGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 
 func branchSpec(name string, route toolutil.ActionRoute, individualTool string, readOnly, idempotent bool) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"branch"},
+		Aliases: []string{individualTool}, Usage: "Use to execute branches domain action.", Tags: []string{"branch"},
 		RelatedActions: []string{"branch.list", "branch.get", "repository.tree", "merge_request.create"},
 		OpenWorld:      true,
 		OwnerPackage:   "branches",

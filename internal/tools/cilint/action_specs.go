@@ -15,7 +15,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func ciLintSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Tags:           []string{"template", "ci", "lint"},
+		Aliases: []string{individualTool}, Usage: "Use to execute cilint domain action.", Tags: []string{"template", "ci", "lint"},
 		RelatedActions: []string{"template.ci_yml_get", "pipeline.create", "repository.file_get"},
 		OpenWorld:      true,
 		OwnerPackage:   "cilint",

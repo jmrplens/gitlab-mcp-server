@@ -267,7 +267,7 @@ func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionS
 
 func adminOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"admin"},
+		Aliases: []string{individualTool}, Usage: "Use to execute adminspecs domain action.", Tags: []string{"admin"},
 		OpenWorld:      true,
 		OwnerPackage:   "adminspecs",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

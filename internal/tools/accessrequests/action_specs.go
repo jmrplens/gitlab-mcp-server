@@ -55,7 +55,7 @@ func accessRequestDeleteSpec(name string, route toolutil.ActionRoute, individual
 
 func accessRequestOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"access", "request"},
+		Aliases: []string{individualTool}, Usage: "Use to execute accessrequests domain action.", Tags: []string{"access", "request"},
 		RelatedActions: []string{"project.member_list", "group.member_list"},
 		OpenWorld:      true,
 		OwnerPackage:   "accessrequests",

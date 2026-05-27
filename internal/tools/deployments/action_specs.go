@@ -52,7 +52,7 @@ func deploymentDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 
 func deploymentOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"environment", "deployment"},
+		Aliases: []string{individualTool}, Usage: "Use to execute deployments domain action.", Tags: []string{"environment", "deployment"},
 		RelatedActions: []string{"environment.get", "pipeline.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "deployments",

@@ -34,7 +34,7 @@ func customAttributeDeleteSpec(name string, route toolutil.ActionRoute, individu
 
 func customAttributeOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"admin", "custom-attribute"},
+		Aliases: []string{individualTool}, Usage: "Use to execute customattributes domain action.", Tags: []string{"admin", "custom-attribute"},
 		OpenWorld:      true,
 		OwnerPackage:   "customattributes",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

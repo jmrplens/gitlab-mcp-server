@@ -15,7 +15,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func catalogSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Tags:           []string{"ci_catalog", "component", "graphql"},
+		Aliases: []string{individualTool}, Usage: "Use to execute cicatalog domain action.", Tags: []string{"ci_catalog", "component", "graphql"},
 		RelatedActions: []string{"template.lint", "pipeline.create", "project.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "cicatalog",
