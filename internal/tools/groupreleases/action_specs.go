@@ -18,7 +18,7 @@ func groupReleaseReadSpec(name string, route toolutil.ActionRoute, individualToo
 
 func groupReleaseOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "release"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupreleases domain action.", Tags: []string{"group", "release"},
 		RelatedActions: []string{"group.get", "project.release_list"},
 		OpenWorld:      true,
 		OwnerPackage:   "groupreleases",

@@ -27,7 +27,7 @@ func groupStorageMoveCreateSpec(name string, route toolutil.ActionRoute, individ
 
 func groupStorageMoveOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"storage_move", "group"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupstoragemoves domain action.", Tags: []string{"storage_move", "group"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "groupstoragemoves",

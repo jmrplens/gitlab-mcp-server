@@ -37,7 +37,7 @@ func groupMilestoneDeleteSpec(name string, route toolutil.ActionRoute, individua
 
 func groupMilestoneOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "milestone"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupmilestones domain action.", Tags: []string{"group", "milestone"},
 		RelatedActions: []string{"group.get", "group.issues"},
 		OpenWorld:      true,
 		OwnerPackage:   "groupmilestones",

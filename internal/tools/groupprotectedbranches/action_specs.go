@@ -34,7 +34,7 @@ func groupProtectedBranchDeleteSpec(name string, route toolutil.ActionRoute, ind
 
 func groupProtectedBranchOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "protected-branch"},
+		Aliases: []string{individualTool}, Tags: []string{"group", "protected-branch"},
 		Usage:          "Use group protected branch actions for group-level branch rules inherited by subgroup projects. protect uses params.name for the branch or wildcard; get/update/unprotect use params.branch. Access levels are numeric: 0 no access, 30 developer, 40 maintainer.",
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",

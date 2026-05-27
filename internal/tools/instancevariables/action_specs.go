@@ -43,7 +43,7 @@ func instanceVariableDeleteSpec(name string, route toolutil.ActionRoute, individ
 
 func instanceVariableOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"ci", "instance", "variable"},
+		Aliases: []string{individualTool}, Usage: "Use to execute instancevariables domain action.", Tags: []string{"ci", "instance", "variable"},
 		OpenWorld:      true,
 		OwnerPackage:   "instancevariables",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

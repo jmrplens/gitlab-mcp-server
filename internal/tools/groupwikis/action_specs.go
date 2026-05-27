@@ -34,7 +34,7 @@ func groupWikiDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 func groupWikiOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "wiki"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupwikis domain action.", Tags: []string{"group", "wiki"},
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",
 		OpenWorld:      true,

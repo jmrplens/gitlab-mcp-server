@@ -68,6 +68,10 @@ Action guidance:
 - deploy_token_list_all: Manage deploy tokens across instance, project, and group scopes.
 - deploy_token_list_group: Manage group deploy tokens (list/get/create/delete).
 - deploy_token_list_project: Manage project deploy tokens (list/get/create/delete).
+- invite_group: Use to execute invites domain action.
+- invite_list_group: Use to execute invites domain action.
+- invite_list_project: Use to execute invites domain action.
+- invite_project: Use to execute invites domain action.
 - request_group: Use to execute accessrequests domain action.
 - request_list_group: List pending group access requests. Use before approving or denying user access requests at group scope.
 - request_list_project: List pending project access requests. Use before approving or denying user access requests at project scope.
@@ -1871,6 +1875,16 @@ Action guidance:
 - create: Create a CI/CD variable in a project. Use for pipeline/runtime configuration that should not be stored in repository files.
 - delete: Use to execute civariables domain action.
 - get: Get one CI/CD variable by key (and optional environment scope). Use when exact variable settings are needed.
+- group_create: Use to execute groupvariables domain action.
+- group_delete: Use to execute groupvariables domain action.
+- group_get: Use to execute groupvariables domain action.
+- group_list: Use to execute groupvariables domain action.
+- group_update: Use to execute groupvariables domain action.
+- instance_create: Use to execute instancevariables domain action.
+- instance_delete: Use to execute instancevariables domain action.
+- instance_get: Use to execute instancevariables domain action.
+- instance_list: Use to execute instancevariables domain action.
+- instance_update: Use to execute instancevariables domain action.
 - list: List project CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions.
 - update: Use to execute civariables domain action.
 Parameter guidance:
@@ -2531,6 +2545,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_group.<action>.
 Action guidance:
+- archive: Use to execute groups domain action.
 - badge_add: Add a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
 - badge_delete: Delete a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
 - badge_edit: Edit a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project. Use the parameter name name for a new badge name; new_name is not supported.
@@ -2538,6 +2553,7 @@ Action guidance:
 - badge_list: List group badges. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
 - badge_preview: Preview a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
 - create: Create a group with name and path. Optionally set parent_id, description, visibility, and project creation permissions when requested.
+- delete: Use to execute groups domain action.
 - get: Get one exact group by group_id (numeric ID or full path). Use this when the prompt already targets a specific group and needs metadata such as visibility, parent, web URL, or statistics.
 - group_board_create: Use to execute groupboards domain action.
 - group_board_create_list: Use to execute groupboards domain action.
@@ -2559,8 +2575,42 @@ Action guidance:
 - group_label_subscribe: Use to execute grouplabels domain action.
 - group_label_unsubscribe: Use to execute grouplabels domain action.
 - group_label_update: Use to execute grouplabels domain action.
+- group_member_add: Use to execute groupmembers domain action.
+- group_member_edit: Use to execute groupmembers domain action.
+- group_member_get: Use to execute groupmembers domain action.
+- group_member_get_inherited: Use to execute groupmembers domain action.
+- group_member_remove: Use to execute groupmembers domain action.
+- group_member_share: Use to execute groupmembers domain action.
+- group_member_unshare: Use to execute groupmembers domain action.
+- group_milestone_burndown: Use to execute groupmilestones domain action.
+- group_milestone_create: Use to execute groupmilestones domain action.
+- group_milestone_delete: Use to execute groupmilestones domain action.
+- group_milestone_get: Use to execute groupmilestones domain action.
+- group_milestone_issues: Use to execute groupmilestones domain action.
+- group_milestone_list: Use to execute groupmilestones domain action.
+- group_milestone_merge_requests: Use to execute groupmilestones domain action.
+- group_milestone_update: Use to execute groupmilestones domain action.
+- group_relations_list_status: Use to execute grouprelationsexport domain action.
+- group_relations_schedule: Use to execute grouprelationsexport domain action.
+- group_upload_delete_by_id: Use to execute groupmarkdownuploads domain action.
+- group_upload_delete_by_secret: Use to execute groupmarkdownuploads domain action.
+- group_upload_list: Use to execute groupmarkdownuploads domain action.
+- hook_add: Use to execute groups domain action.
+- hook_delete: Use to execute groups domain action.
+- hook_edit: Use to execute groups domain action.
+- hook_get: Use to execute groups domain action.
+- hook_list: Use to execute groups domain action.
 - issues: List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project.
 - list: List groups visible to the authenticated user. Use search, owned, min_access_level, and pagination when the user asks for matching or accessible groups.
+- members: Use to execute groups domain action.
+- projects: Use to execute groups domain action.
+- release_list: Use to execute groupreleases domain action.
+- restore: Use to execute groups domain action.
+- search: Use to execute groups domain action.
+- subgroups: Use to execute groups domain action.
+- transfer_project: Use to execute groups domain action.
+- unarchive: Use to execute groups domain action.
+- update: Use to execute groups domain action.
 Parameter guidance:
 - badge_add.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
 - badge_delete.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
@@ -6336,6 +6386,10 @@ Action guidance:
 - get: Get one exact project by numeric ID or full namespace path. Use this when the prompt gives a concrete path like group/project and asks to find, show, verify, or read project metadata such as id or default_branch; do not use search.projects for an exact path lookup.
 - import_from_file: Import a project from an uploaded archive file payload.
 - import_status: Get import status for a project import operation.
+- integration_delete: Use to execute integrations domain action.
+- integration_get: Use to execute integrations domain action.
+- integration_list: Use to execute integrations domain action.
+- integration_set_jira: Use to execute integrations domain action.
 - label_create: Create a label in a project with required name and color, plus optional description and priority.
 - label_get: Get one label by project_id and label_id (label name/ID route parameter). Use when exact label metadata is needed.
 - label_list: List labels for a project with optional search and pagination. Use to discover taxonomy before issue/MR filtering or label maintenance.
@@ -9486,16 +9540,21 @@ Action params schema: gitlab://tools/gitlab_user.<action>.
 Action guidance:
 - avatar_get: Resolve the avatar URL for a known email address. Use this when the task already provides an email; do not use it to search for users by name or username.
 - create: Create a new user account with required fields email, name, and username. Add optional admin/external flags only when explicitly requested.
+- create_impersonation_token: Use to execute impersonationtokens domain action.
+- create_personal_access_token: Use to execute impersonationtokens domain action.
 - current: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
 - event_list_contributions: List current-user contribution events across visible resources.
 - event_list_project: List events for one specific project with optional filters and pagination.
 - get: Get a single user by numeric user_id. Use this when the prompt already references a concrete user account and needs detailed profile fields.
+- get_impersonation_token: Use to execute impersonationtokens domain action.
 - list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
+- list_impersonation_tokens: Use to execute impersonationtokens domain action.
 - me: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
 - namespace_exists: List namespaces visible to the authenticated user.
 - namespace_get: List namespaces visible to the authenticated user.
 - namespace_list: List namespaces visible to the authenticated user.
 - namespace_search: Search namespaces by query string.
+- revoke_impersonation_token: Use to execute impersonationtokens domain action.
 Parameter guidance:
 - avatar_get.email: email_address; source: Email address supplied by the task or returned by another GitLab user lookup.; avoid: Do not send a username or display name as email.
 - avatar_get.size: image_size_pixels; source: Optional avatar size in pixels; omit it to let GitLab choose the default size.; avoid: Send a numeric pixel size such as 64 or 128, not CSS strings like 64px.
@@ -10804,6 +10863,11 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_group_scim.<action>.
+Action guidance:
+- delete: Use to execute groupscim domain action.
+- get: Use to execute groupscim domain action.
+- list: Use to execute groupscim domain action.
+- update: Use to execute groupscim domain action.
 
 Manage SCIM identities for GitLab group provisioning.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.

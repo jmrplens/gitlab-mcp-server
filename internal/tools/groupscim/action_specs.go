@@ -49,7 +49,7 @@ func groupSCIMDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 func groupSCIMOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"scim", "identity"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupscim domain action.", Tags: []string{"scim", "identity"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "groupscim",

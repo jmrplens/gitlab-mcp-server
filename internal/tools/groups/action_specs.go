@@ -78,15 +78,11 @@ func groupDeleteSpec(name string, route toolutil.ActionRoute, individualTool str
 	return toolutil.NewDeleteActionSpec(name, route, groupOptionsForAction(name, individualTool))
 }
 
-func groupOptions(individualTool string) toolutil.ActionSpecOptions {
-	return groupOptionsForAction("", individualTool)
-}
-
 func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	_ = actionName
 
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"group"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groups domain action.", Tags: []string{"group"},
 		OpenWorld:      true,
 		OwnerPackage:   "groups",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

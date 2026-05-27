@@ -41,7 +41,7 @@ func groupSSHCertDeleteSpec(name string, route toolutil.ActionRoute, individualT
 
 func groupSSHCertOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "ssh-certificate"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupsshcerts domain action.", Tags: []string{"group", "ssh-certificate"},
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",
 		OpenWorld:      true,

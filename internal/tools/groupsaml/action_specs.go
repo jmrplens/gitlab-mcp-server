@@ -29,7 +29,7 @@ func groupSAMLDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "saml"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupsaml domain action.", Tags: []string{"group", "saml"},
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",
 		OpenWorld:      true,

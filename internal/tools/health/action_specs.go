@@ -19,7 +19,7 @@ func healthSpec(name string, client *gitlabclient.Client, individualTool string)
 
 func healthOptions(name, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"server", "health", "diagnostics", "connectivity"},
+		Aliases: []string{individualTool}, Tags: []string{"server", "health", "diagnostics", "connectivity"},
 		Usage:          "Verify MCP server connectivity to GitLab, authenticated identity, and response health before troubleshooting other tool failures.",
 		RelatedActions: []string{"admin.metadata_get", "user.me"},
 		OpenWorld:      true,

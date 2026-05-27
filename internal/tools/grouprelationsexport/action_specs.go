@@ -23,7 +23,7 @@ func groupRelationsCreateSpec(name string, route toolutil.ActionRoute, individua
 
 func groupRelationsOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "export"},
+		Aliases: []string{individualTool}, Usage: "Use to execute grouprelationsexport domain action.", Tags: []string{"group", "export"},
 		RelatedActions: []string{"group.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "grouprelationsexport",
