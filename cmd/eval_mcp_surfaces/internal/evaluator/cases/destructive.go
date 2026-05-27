@@ -272,7 +272,7 @@ func destructiveStep(tool, action string, requiredParams, optionalParams []strin
 	return step
 }
 
-func baseDestructivePromptTemplateAndFixtures(id string) (string, []string) {
+func baseDestructivePromptTemplateAndFixtures(id string) (template string, fixtures []string) {
 	switch {
 	case len(id) >= 3 && id[:3] == "MS-":
 		return baseDestructiveWorkflowPromptTemplateAndFixtures(id)
@@ -284,7 +284,7 @@ func baseDestructivePromptTemplateAndFixtures(id string) (string, []string) {
 }
 
 //nolint:gocyclo // Keeping this ID-to-fixture mapping in one switch makes the migration table auditable.
-func baseDestructiveEarlySinglePromptTemplateAndFixtures(id string) (string, []string) {
+func baseDestructiveEarlySinglePromptTemplateAndFixtures(id string) (template string, fixtures []string) {
 	switch id {
 	case "MT-008":
 		return "Delete subgroup `{{ .Group.Path }}`.", []string{fixtureGroupDelete}
@@ -331,7 +331,7 @@ func baseDestructiveEarlySinglePromptTemplateAndFixtures(id string) (string, []s
 	}
 }
 
-func baseDestructiveLateSinglePromptTemplateAndFixtures(id string) (string, []string) {
+func baseDestructiveLateSinglePromptTemplateAndFixtures(id string) (template string, fixtures []string) {
 	switch id {
 	case "MT-099":
 		return "Delete branch `{{ .Branch.Name }}` from project `{{ .Project.Path }}`.", []string{fixtureBranchDelete}
@@ -364,7 +364,7 @@ func baseDestructiveLateSinglePromptTemplateAndFixtures(id string) (string, []st
 	}
 }
 
-func baseDestructiveWorkflowPromptTemplateAndFixtures(id string) (string, []string) {
+func baseDestructiveWorkflowPromptTemplateAndFixtures(id string) (template string, fixtures []string) {
 	switch id {
 	case "MS-013":
 		return "Remove a temporary feature rollout from project `{{ .Project.Path }}`: inspect feature flag `{{ .Values.feature_flag_name }}`, list feature flag user lists, then delete the flag.", []string{fixtureFeatureFlagDelete}

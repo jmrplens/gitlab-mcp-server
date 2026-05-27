@@ -20,13 +20,13 @@ func avatarOptions() toolutil.ActionSpecOptions {
 		RelatedActions: []string{"user.me", "user.emails", "user.current_user_status"},
 		ParameterGuidance: map[string]toolutil.ParameterGuidance{
 			"email": {
-				SemanticRole: "email_address",
-				ValueSource:  "Email address supplied by the task or returned by another GitLab user lookup.",
+				SemanticRole:     "email_address",
+				ValueSource:      "Email address supplied by the task or returned by another GitLab user lookup.",
 				CommonConfusions: []string{"Do not send a username or display name as email."},
 			},
 			"size": {
-				SemanticRole: "image_size_pixels",
-				ValueSource:  "Optional avatar size in pixels; omit it to let GitLab choose the default size.",
+				SemanticRole:     "image_size_pixels",
+				ValueSource:      "Optional avatar size in pixels; omit it to let GitLab choose the default size.",
 				CommonConfusions: []string{"Send a numeric pixel size such as 64 or 128, not CSS strings like 64px."},
 			},
 		},

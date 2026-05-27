@@ -43,13 +43,13 @@ func appearanceOptions(actionName, individualTool string) toolutil.ActionSpecOpt
 		options.RelatedActions = []string{"admin.appearance_get", "admin.settings_get", "admin.metadata_get"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"message_background_color": {
-				SemanticRole: "hex_color",
-				ValueSource:  "Hex color string such as #e75e40 for the appearance banner background.",
+				SemanticRole:     "hex_color",
+				ValueSource:      "Hex color string such as #e75e40 for the appearance banner background.",
 				CommonConfusions: []string{"Provide a CSS-style hex color such as #ffffff; do not send color names or RGB tuples."},
 			},
 			"message_font_color": {
-				SemanticRole: "hex_color",
-				ValueSource:  "Hex color string such as #ffffff for the appearance banner text.",
+				SemanticRole:     "hex_color",
+				ValueSource:      "Hex color string such as #ffffff for the appearance banner text.",
 				CommonConfusions: []string{"Provide a CSS-style hex color such as #000000; do not send color names or RGB tuples."},
 			},
 		}

@@ -69,7 +69,7 @@ func baseMutatingEvalCase(id, prompt string, steps ...Step) Case {
 }
 
 //nolint:gocyclo // Keeping the ID-to-fixture mapping in one switch makes the migration table auditable.
-func baseMutatingPromptTemplateAndFixtures(id string) (string, []string) {
+func baseMutatingPromptTemplateAndFixtures(id string) (template string, fixtures []string) {
 	switch id {
 	case "MT-007":
 		return "Create a subgroup named `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}` under group ID `{{ .Group.ID }}` (`my-org`).", []string{fixtureBootstrapProject, fixtureAttemptNames}

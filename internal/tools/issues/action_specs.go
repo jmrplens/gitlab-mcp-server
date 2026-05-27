@@ -60,11 +60,93 @@ func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func issueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, issueOptions(individualTool))
+	options := issueOptions(individualTool)
+	switch individualTool {
+	case "gitlab_issue_get":
+		options.Usage = "Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number; prefer issue.get over issue.list when the target issue is already known."
+		options.RelatedActions = []string{"issue.list", "issue.update", "issue.delete", "issue.notes_list"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:     "scope_project",
+				ValueSource:      "Project ID or full namespace path that owns the issue.",
+				ExampleBinding:   `params.project_id:"group/project"`,
+				CommonConfusions: []string{"Use the issue's parent project here, not a group path or global issue ID."},
+			},
+			"issue_iid": {
+				SemanticRole:     "issue_iid",
+				ValueSource:      "Issue number visible in the project, usually from the URL or prior issue list output.",
+				ExampleBinding:   "params.issue_iid:42",
+				CommonConfusions: []string{"Use issue_iid for project-scoped issue numbers; issue_id is only for the global issue ID action."},
+			},
+		}
+		options.IndividualTool.Description = "Get a single issue from a project by issue IID. Returns: issue metadata, state, labels, assignees, author, due date, task completion, and web URL. See also: gitlab_issue_list, gitlab_issue_update, gitlab_issue_delete, gitlab_issue_notes_list."
+	case "gitlab_issue_list":
+		options.Usage = "List issues in one project. Use filters such as state, labels, search, assignee_username, milestone, order_by, sort, and pagination when the prompt asks for matching or recent issues in a known project."
+		options.Aliases = []string{"list project issues", "find issues in project", "show project issues"}
+		options.RelatedActions = []string{"issue.get", "issue.create", "search.issues"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:     "scope_project",
+				ValueSource:      "Project ID or namespace path whose issues should be listed.",
+				ExampleBinding:   `params.project_id:"group/project"`,
+				CommonConfusions: []string{"Use project_id for the project scope; use group_id only with issue.list_group."},
+			},
+			"search": {
+				ValueSource:      "Keywords from the user's issue title or description request.",
+				ExampleBinding:   `params.search:"oauth timeout"`,
+				CommonConfusions: []string{"search narrows within the selected project; it does not replace project_id."},
+			},
+			"order_by": {
+				SemanticRole:     "issue_list_sort_field",
+				ValueSource:      "Field requested for sorting recent or oldest issues, such as created_at or updated_at.",
+				ExampleBinding:   `params.order_by:"updated_at"`,
+				CommonConfusions: []string{"Combine order_by with sort; do not pass natural-language phrases like newest first as the field value."},
+			},
+		}
+		options.IndividualTool.Description = "List issues in one project with filtering and pagination. Returns: matching issues with state, labels, assignees, author, and pagination metadata. See also: gitlab_issue_get, gitlab_issue_create, gitlab_search_issues."
+	case "gitlab_issue_list_all":
+		options.Usage = "List issues visible to the authenticated user across all accessible projects. Use this when the user asks for their open issues, assigned issues, or a cross-project issue overview."
+		options.Aliases = []string{"list all issues", "show my issues across projects", "list visible issues"}
+		options.RelatedActions = []string{"issue.list", "issue.list_group", "search.issues"}
+		options.IndividualTool.Description = "List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
+	case "gitlab_issue_time_stats_get":
+		options.RelatedActions = []string{"issue.time_estimate_set", "issue.time_estimate_reset", "issue.spent_time_add", "issue.spent_time_reset"}
+	case "gitlab_issue_participants":
+		options.RelatedActions = []string{"issue.get", "issue.notes_list"}
+	case "gitlab_issue_mrs_closing", "gitlab_issue_mrs_related":
+		options.RelatedActions = []string{"issue.get", "issue.list", "merge_request.get"}
+	}
+	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, issueOptions(individualTool))
+	options := issueOptions(individualTool)
+	if individualTool == "gitlab_issue_create" {
+		options.Usage = "Create a new issue in a known project. Provide project_id and a clear title, then add description, labels, assignee_ids, milestone_id, due_date, confidential, or task metadata only when requested."
+		options.Aliases = []string{"open issue", "create bug report", "file issue"}
+		options.RelatedActions = []string{"issue.get", "issue.list", "issue.update"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:     "scope_project",
+				ValueSource:      "Project where the issue should be created.",
+				ExampleBinding:   `params.project_id:"group/project"`,
+				CommonConfusions: []string{"Use the target project path or numeric ID; do not substitute group_id or repository URL."},
+			},
+			"title": {
+				SemanticRole:   "issue_title",
+				ValueSource:    "Short issue summary from the user's request.",
+				ExampleBinding: `params.title:"OAuth login fails after redirect"`,
+			},
+			"due_date": {
+				SemanticRole:     "calendar_date",
+				ValueSource:      "Requested due date in ISO format when the user specifies one.",
+				ExampleBinding:   `params.due_date:"2026-06-01"`,
+				CommonConfusions: []string{"Use YYYY-MM-DD; natural-language dates must be normalized before calling the tool."},
+			},
+		}
+		options.IndividualTool.Description = "Create a new issue in a project. Returns: the created issue with IID, state, labels, assignees, milestone, due date, and web URL. See also: gitlab_issue_get, gitlab_issue_list, gitlab_issue_update."
+	}
+	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
 func issueUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -110,7 +192,22 @@ func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 }
 
 func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, groupIssueOptions(individualTool))
+	options := groupIssueOptions(individualTool)
+	if individualTool == "gitlab_issue_list_group" {
+		options.Usage = "List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project."
+		options.Aliases = []string{"list group issues", "show issues in group", "find issues across group"}
+		options.RelatedActions = []string{"issue.list", "group.get", "search.issues"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:     "scope_group",
+				ValueSource:      "Group ID or full group path from the user's request.",
+				ExampleBinding:   `params.group_id:"platform/backend"`,
+				CommonConfusions: []string{"Use group_id for group paths or IDs; use project_id only with issue.list for a single project."},
+			},
+		}
+		options.IndividualTool.Description = "List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues."
+	}
+	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 func groupIssueOptions(individualTool string) toolutil.ActionSpecOptions {

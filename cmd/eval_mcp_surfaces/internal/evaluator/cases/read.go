@@ -93,7 +93,7 @@ func baseReadEvalCase(id, prompt string, steps ...Step) Case {
 	return evalCase
 }
 
-func baseReadPromptTemplateAndFixtures(id string) (string, []string) {
+func baseReadPromptTemplateAndFixtures(id string) (template string, fixtures []string) {
 	switch id {
 	case "MT-021":
 		return "List failed jobs in pipeline `{{ .Pipeline.ID }}` for project `{{ .Project.Path }}`.", []string{fixtureFailedJobArtifact}

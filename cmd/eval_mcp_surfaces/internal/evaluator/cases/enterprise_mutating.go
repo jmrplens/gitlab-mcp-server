@@ -70,7 +70,7 @@ func baseEnterpriseMutatingEvalCase(id, prompt string, steps ...Step) Case {
 	}
 }
 
-func enterpriseMutatingPromptTemplateAndFixtures(id, prompt string) (PromptTemplate, []string) {
+func enterpriseMutatingPromptTemplateAndFixtures(id, prompt string) (promptTemplate PromptTemplate, fixtures []string) {
 	switch id {
 	case "MT-192":
 		return PromptTemplate{Text: "Add a project push rule to project `{{.Project.Path}}` with commit message regex `^EVAL-`. Only add the rule; do not edit or delete it."}, []string{fixtureEnterprisePushRuleProject}

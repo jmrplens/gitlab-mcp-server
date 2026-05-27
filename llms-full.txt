@@ -2350,6 +2350,7 @@ Action guidance:
 - badge_get: Get a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
 - badge_list: List group badges. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
 - badge_preview: Preview a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
+- issues: List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project.
 Parameter guidance:
 - badge_add.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
 - badge_delete.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
@@ -2358,6 +2359,7 @@ Parameter guidance:
 - badge_get.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
 - badge_list.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
 - badge_preview.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
+- issues.group_id: scope_group; source: Group ID or full group path from the user's request.; avoid: Use group_id for group paths or IDs; use project_id only with issue.list for a single project.
 
 Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
 When to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).
@@ -3700,13 +3702,25 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_issue.<action>.
 Action guidance:
+- create: Create a new issue in a known project. Provide project_id and a clear title, then add description, labels, assignee_ids, milestone_id, due_date, confidential, or task metadata only when requested.
+- get: Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number; prefer issue.get over issue.list when the target issue is already known.
 - link_create: Use to create a relationship from a source issue to a target issue, optionally across projects.
+- list: List issues in one project. Use filters such as state, labels, search, assignee_username, milestone, order_by, sort, and pagination when the prompt asks for matching or recent issues in a known project.
+- list_all: List issues visible to the authenticated user across all accessible projects. Use this when the user asks for their open issues, assigned issues, or a cross-project issue overview.
 - update: Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen; dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically.
 Parameter guidance:
+- create.due_date: calendar_date; source: Requested due date in ISO format when the user specifies one.; avoid: Use YYYY-MM-DD; natural-language dates must be normalized before calling the tool.
+- create.project_id: scope_project; source: Project where the issue should be created.; avoid: Use the target project path or numeric ID; do not substitute group_id or repository URL.
+- create.title: issue_title; source: Short issue summary from the user's request.
+- get.issue_iid: issue_iid; source: Issue number visible in the project, usually from the URL or prior issue list output.; avoid: Use issue_iid for project-scoped issue numbers; issue_id is only for the global issue ID action.
+- get.project_id: scope_project; source: Project ID or full namespace path that owns the issue.; avoid: Use the issue's parent project here, not a group path or global issue ID.
 - link_create.issue_iid: source_issue; source: IID of the source issue receiving the link.; avoid: Do not use the target issue IID here.
 - link_create.project_id: source_project; source: Project that owns the source issue.; avoid: Use target_project_id for the linked issue's project when it differs.
 - link_create.target_issue_iid: target_issue; source: IID of the issue being linked to.; avoid: Do not use the source issue IID here.
 - link_create.target_project_id: target_project; source: Project that owns the target issue.; avoid: For same-project links this may equal project_id; otherwise keep it distinct.
+- list.order_by: issue_list_sort_field; source: Field requested for sorting recent or oldest issues, such as created_at or updated_at.; avoid: Combine order_by with sort; do not pass natural-language phrases like newest first as the field value.
+- list.project_id: scope_project; source: Project ID or namespace path whose issues should be listed.; avoid: Use project_id for the project scope; use group_id only with issue.list_group.
+- list.search; source: Keywords from the user's issue title or description request.; avoid: search narrows within the selected project; it does not replace project_id.
 - update.state_event: issue_state_transition; source: task intent when closing or reopening an issue; avoid: Do not use state=closed/opened for transitions; use state_event=close or state_event=reopen.
 
 Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events.
@@ -16359,7 +16373,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_issue_create
 
-Create a new issue in a GitLab project. Supports title, description (Markdown), assignees, labels, milestone, due date, confidential flag, issue_type (issue/incident/test_case/task), weight, and epic_id. Returns the created issue with ID, IID, state, and web URL. See also: gitlab_issue_list, gitlab_issue_note_create.
+Create a new issue in a project. Returns: the created issue with IID, state, labels, assignees, milestone, due date, and web URL. See also: gitlab_issue_get, gitlab_issue_list, gitlab_issue_update.
 
 **Parameters:**
 
@@ -16456,7 +16470,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_get
 
-Retrieve a single GitLab issue by its project-scoped IID (the '#N' number shown in URLs and UI, NOT the global numeric ID). For global IDs, use gitlab_issue_get_by_id instead. Returns title, description, state, labels, assignees, milestone, author, timestamps, and web URL. See also: gitlab_issue_note_list, gitlab_issue_mrs_closing.
+Get a single issue from a project by issue IID. Returns: issue metadata, state, labels, assignees, author, due date, task completion, and web URL. See also: gitlab_issue_list, gitlab_issue_update, gitlab_issue_delete, gitlab_issue_notes_list.
 
 **Parameters:**
 
@@ -16577,7 +16591,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_list
 
-List issues for a GitLab project with filters for state, labels, milestone, assignee, author, and search. Returns paginated results with issue details. See also: gitlab_issue_get, gitlab_issue_create.
+List issues in one project with filtering and pagination. Returns: matching issues with state, labels, assignees, author, and pagination metadata. See also: gitlab_issue_get, gitlab_issue_create, gitlab_search_issues.
 
 **Parameters:**
 
@@ -16606,7 +16620,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_list_all
 
-List issues visible to the authenticated user across all projects (global scope). Supports filtering by state, labels, milestone, scope, search, assignee, author, time range, confidential flag, and ordering. Returns paginated results. See also: gitlab_issue_list, gitlab_issue_get.
+List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.
 
 **Parameters:**
 
@@ -16631,7 +16645,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_list_group
 
-List issues across all projects in a GitLab group. Supports filtering by state, labels, milestone, scope, time range, assignee, author, and search. Returns paginated issue details including project reference. See also: gitlab_issue_list, gitlab_issue_get.
+List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues.
 
 **Parameters:**
 

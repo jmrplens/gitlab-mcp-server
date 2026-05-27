@@ -54,10 +54,3 @@ func cloneAssertions(assertions []Assertion) []Assertion {
 	}
 	return out
 }
-
-func fixtures(names ...string) []string {
-	if len(names) == 0 {
-		return nil
-	}
-	return slices.Clone(names)
-}

@@ -73,8 +73,6 @@ const (
 	liveFixtureAwardBranchPrefix = "feature/eval-award-fixture-"
 	// liveDeleteFixtureFormat identifies the live delete fixture format constant used by this package.
 	liveDeleteFixtureFormat = "delete-fixture-%d"
-	// taskFileCreateID identifies the task file create ID constant used by this package.
-	taskFileCreateID = "MT-030"
 	// taskPackageReleaseID identifies the package publish plus release workflow task.
 	taskPackageReleaseID  = "MS-038"
 	resourceLabelRunnerID = "runner ID"

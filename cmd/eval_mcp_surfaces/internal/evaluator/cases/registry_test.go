@@ -1,5 +1,4 @@
 package cases
-package cases
 
 import "testing"
 

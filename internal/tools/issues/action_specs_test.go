@@ -4,6 +4,7 @@ package issues
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -103,6 +104,59 @@ func TestActionSpecs_UpdateStateEventGuidance(t *testing.T) {
 	values, ok := stateEventSchema["enum"].([]any)
 	if !ok || len(values) != 2 || values[0] != "close" || values[1] != "reopen" {
 		t.Fatalf("state_event enum = %#v, want close/reopen", stateEventSchema["enum"])
+	}
+}
+
+// TestActionSpecs_PrimaryMetadata verifies richer catalog metadata for the
+// primary issue actions surfaced most often in meta and dynamic workflows.
+func TestActionSpecs_PrimaryMetadata(t *testing.T) {
+	byTool := issueSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))))
+
+	createSpec := byTool["gitlab_issue_create"]
+	if !strings.Contains(createSpec.Usage, "Create a new issue in a known project") {
+		t.Fatalf("create Usage = %q", createSpec.Usage)
+	}
+	if !slices.Contains(createSpec.Aliases, "file issue") {
+		t.Fatalf("create Aliases = %v, want file issue", createSpec.Aliases)
+	}
+	if guidance := createSpec.ParameterGuidance["title"]; guidance.SemanticRole != "issue_title" {
+		t.Fatalf("create title guidance = %+v, want issue_title", guidance)
+	}
+	if !strings.Contains(createSpec.IndividualTool.Description, "Returns:") || !strings.Contains(createSpec.IndividualTool.Description, "See also:") {
+		t.Fatalf("create description = %q, want Returns/See also sections", createSpec.IndividualTool.Description)
+	}
+
+	getSpec := byTool["gitlab_issue_get"]
+	if !strings.Contains(getSpec.Usage, "project_id plus issue_iid") {
+		t.Fatalf("get Usage = %q", getSpec.Usage)
+	}
+	if guidance := getSpec.ParameterGuidance["issue_iid"]; guidance.SemanticRole != "issue_iid" {
+		t.Fatalf("get issue_iid guidance = %+v, want issue_iid", guidance)
+	}
+	if !slices.Contains(getSpec.RelatedActions, "issue.notes_list") {
+		t.Fatalf("get RelatedActions = %v, want issue.notes_list", getSpec.RelatedActions)
+	}
+
+	listSpec := byTool["gitlab_issue_list"]
+	if !slices.Contains(listSpec.Aliases, "list project issues") {
+		t.Fatalf("list Aliases = %v, want list project issues", listSpec.Aliases)
+	}
+	if guidance := listSpec.ParameterGuidance["order_by"]; guidance.SemanticRole != "issue_list_sort_field" {
+		t.Fatalf("list order_by guidance = %+v, want issue_list_sort_field", guidance)
+	}
+
+	allSpec := byTool["gitlab_issue_list_all"]
+	if !strings.Contains(allSpec.Usage, "across all accessible projects") {
+		t.Fatalf("list_all Usage = %q", allSpec.Usage)
+	}
+
+	groupSpecs := issueSpecsByTool(t, GroupActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))))
+	groupSpec := groupSpecs["gitlab_issue_list_group"]
+	if !slices.Contains(groupSpec.Aliases, "list group issues") {
+		t.Fatalf("group list Aliases = %v, want list group issues", groupSpec.Aliases)
+	}
+	if guidance := groupSpec.ParameterGuidance["group_id"]; guidance.SemanticRole != "scope_group" {
+		t.Fatalf("group_id guidance = %+v, want scope_group", guidance)
 	}
 }
 

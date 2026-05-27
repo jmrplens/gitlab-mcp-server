@@ -42875,7 +42875,7 @@
   },
   {
     "name": "gitlab_issue_create",
-    "description": "Create a new issue in a GitLab project. Supports title, description (Markdown), assignees, labels, milestone, due date, confidential flag, issue_type (issue/incident/test_case/task), weight, and epic_id. Returns the created issue with ID, IID, state, and web URL. See also: gitlab_issue_list, gitlab_issue_note_create.",
+    "description": "Create a new issue in a project. Returns: the created issue with IID, state, labels, assignees, milestone, due date, and web URL. See also: gitlab_issue_get, gitlab_issue_list, gitlab_issue_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -43602,7 +43602,7 @@
   },
   {
     "name": "gitlab_issue_get",
-    "description": "Retrieve a single GitLab issue by its project-scoped IID (the '#N' number shown in URLs and UI, NOT the global numeric ID). For global IDs, use gitlab_issue_get_by_id instead. Returns title, description, state, labels, assignees, milestone, author, timestamps, and web URL. See also: gitlab_issue_note_list, gitlab_issue_mrs_closing.",
+    "description": "Get a single issue from a project by issue IID. Returns: issue metadata, state, labels, assignees, author, due date, task completion, and web URL. See also: gitlab_issue_list, gitlab_issue_update, gitlab_issue_delete, gitlab_issue_notes_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -44837,7 +44837,7 @@
   },
   {
     "name": "gitlab_issue_list",
-    "description": "List issues for a GitLab project with filters for state, labels, milestone, assignee, author, and search. Returns paginated results with issue details. See also: gitlab_issue_get, gitlab_issue_create.",
+    "description": "List issues in one project with filtering and pagination. Returns: matching issues with state, labels, assignees, author, and pagination metadata. See also: gitlab_issue_get, gitlab_issue_create, gitlab_search_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -45152,7 +45152,7 @@
   },
   {
     "name": "gitlab_issue_list_all",
-    "description": "List issues visible to the authenticated user across all projects (global scope). Supports filtering by state, labels, milestone, scope, search, assignee, author, time range, confidential flag, and ordering. Returns paginated results. See also: gitlab_issue_list, gitlab_issue_get.",
+    "description": "List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -45442,7 +45442,7 @@
   },
   {
     "name": "gitlab_issue_list_group",
-    "description": "List issues across all projects in a GitLab group. Supports filtering by state, labels, milestone, scope, time range, assignee, author, and search. Returns paginated issue details including project reference. See also: gitlab_issue_list, gitlab_issue_get.",
+    "description": "List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
