@@ -903,6 +903,21 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("OwnerPackage for %s = %q, want deployments", spec.Name, spec.OwnerPackage)
 		}
 	}
+
+	list := byTool["gitlab_deployment_list"]
+	if list.Usage == "" || len(list.Aliases) == 0 {
+		t.Fatalf("gitlab_deployment_list metadata incomplete: usage=%q aliases=%d", list.Usage, len(list.Aliases))
+	}
+
+	get := byTool["gitlab_deployment_get"]
+	if get.Usage == "" || len(get.Aliases) == 0 || get.ParameterGuidance["deployment_id"].SemanticRole == "" {
+		t.Fatalf("gitlab_deployment_get metadata incomplete: usage=%q aliases=%d guidance(deployment_id)=%q", get.Usage, len(get.Aliases), get.ParameterGuidance["deployment_id"].SemanticRole)
+	}
+
+	approveReject := byTool["gitlab_deployment_approve_or_reject"]
+	if approveReject.Usage == "" || len(approveReject.Aliases) == 0 {
+		t.Fatalf("gitlab_deployment_approve_or_reject metadata incomplete: usage=%q aliases=%d", approveReject.Usage, len(approveReject.Aliases))
+	}
 }
 
 // ---------------------------------------------------------------------------

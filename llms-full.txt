@@ -1562,9 +1562,18 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_branch.<action>.
 Action guidance:
+- create: Create a branch from a source ref (branch/tag/commit). Use when preparing feature branches or release branches.
+- delete: Delete one branch by name. Use only for confirmed cleanup tasks when the branch is no longer needed.
+- delete_merged: Delete merged branches in a project. Use with caution for branch hygiene after confirming merge status requirements.
+- get: Get one branch by project_id and branch_name. Use when a specific branch is referenced and exact branch protection/default metadata is needed.
+- list: List repository branches for one project with optional search and pagination. Use this before branch-level operations and when selecting refs for compare/MR flows.
 - protect: Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer.
 - rule_list: Use to audit aggregated branch rules, including protections and approval-related state, for a project path.
 Parameter guidance:
+- create.branch_name: git_branch; source: Name for the new branch to create.
+- create.ref: git_ref; source: Existing branch/tag/commit used as creation source.
+- get.branch_name: git_branch; source: Branch name from task context or branch list output.
+- list.project_id: scope_project; source: Project numeric ID or full path containing branches.
 - protect.merge_access_level: branch_protection_merge_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
 - protect.push_access_level: branch_protection_push_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
 
@@ -1735,6 +1744,15 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_ci_variable.<action>.
+Action guidance:
+- create: Create a CI/CD variable in a project. Use for pipeline/runtime configuration that should not be stored in repository files.
+- get: Get one CI/CD variable by key (and optional environment scope). Use when exact variable settings are needed.
+- list: List project CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions.
+Parameter guidance:
+- create.key: ci_variable_key; source: Variable key name to create.
+- create.value: ci_variable_value; source: Variable value text (secret or plain based on masked/protected settings).
+- get.environment_scope: environment_scope; source: Optional environment scope string; use * for global variable scope.
+- get.key: ci_variable_key; source: Variable key from list output or task context.
 
 Manage GitLab CI/CD variables at instance, group, and project scope. Delete actions are irreversible.
 When to use: define / rotate / unmask / scope CI/CD variables at project, group, or instance level, both regular and secret (masked / masked_and_hidden), with environment scoping for per-env values.
@@ -1972,11 +1990,22 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_environment.<action>.
 Action guidance:
+- create: Create an environment in a project. Use when introducing new runtime targets such as review, staging, or production environments.
+- deployment_approve_or_reject: Approve or reject a blocked deployment. Use only when approval workflows require explicit deployment approvals/rejections.
+- deployment_create: Create a deployment for an environment/ref/sha. Use when orchestrating manual or API-driven deployment entries.
+- deployment_get: Get one deployment by deployment_id for a project. Use when investigating a specific deployment state, environment, or actor metadata.
+- deployment_list: List deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions.
+- get: Get one environment by environment_id. Use when inspecting state, tier, external URL, and stop behavior of a specific environment.
+- list: List environments in one project with filters and pagination. Use this to discover environment IDs before get/update/stop/delete operations.
 - protected_get: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
 - protected_list: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
 - protected_protect: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
 - protected_unprotect: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
 - protected_update: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
+- stop: Stop an active environment. This is modeled as a delete-style action but intentionally marked non-destructive because it changes runtime state without deleting the environment resource.
+Parameter guidance:
+- deployment_get.deployment_id: deployment_id; source: Deployment numeric ID from deployment list output.
+- get.environment_id: environment_id; source: Environment numeric ID from environment list output.
 
 Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. Delete and stop are destructive (stop terminates the running env; force=true skips on-stop jobs).
 When to use: define/update environments (production, staging, review/*), restrict who can deploy via protected environments, schedule deploy freezes, audit deployment history, approve/reject deployments awaiting manual gate.
@@ -7408,9 +7437,19 @@ Action params schema: gitlab://tools/gitlab_repository.<action>.
 Action guidance:
 - blob: Get blob metadata/content for a specific file path and ref. Use when you need one file's content or metadata after locating its path.
 - changelog_add: Create or append changelog entries in the repository for a version. Use in release workflows when structured changelog updates are requested.
+- commit_create: Create a commit by applying file actions to a branch. Use for multi-file changes where repository file APIs are not enough.
+- commit_get: Get detailed commit information by sha. Use this when a specific commit is referenced and full metadata/message/stats are needed.
+- commit_list: List commits for a project/ref with pagination. Use this to inspect history before selecting a commit for diff, comments, statuses, or revert/cherry-pick workflows.
+- commit_status_set: Set commit status/check state for a SHA. Use this for external CI/reporting integrations that need to update pipeline-like status checks.
 - compare: Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff.
+- file_history: List commit history for repository content context. This action projects to the same individual tool as commit_list and should preserve the same discovery guidance.
 - tree: List repository tree entries for a project/ref/path. Use this to browse directories and locate files before file/blob operations.
 Parameter guidance:
+- commit_create.actions: commit_actions; source: Array of commit actions (create/update/delete/move/chmod) with file paths and content.
+- commit_create.branch: git_branch; source: Target branch receiving commit actions.
+- commit_get.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
+- commit_list.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
+- file_history.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
 - tree.project_id: scope_project; source: Project ID or path containing the repository.
 - tree.ref: git_ref; source: Branch/tag/commit to inspect; default branch when omitted.
 

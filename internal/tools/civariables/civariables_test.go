@@ -846,6 +846,21 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if !byTool["gitlab_ci_variable_delete"].Route.Destructive {
 		t.Fatal("gitlab_ci_variable_delete should be destructive")
 	}
+
+	list := byTool["gitlab_ci_variable_list"]
+	if list.Usage == "" || len(list.Aliases) == 0 {
+		t.Fatalf("gitlab_ci_variable_list metadata incomplete: usage=%q aliases=%d", list.Usage, len(list.Aliases))
+	}
+
+	get := byTool["gitlab_ci_variable_get"]
+	if get.Usage == "" || len(get.Aliases) == 0 || get.ParameterGuidance["key"].SemanticRole == "" {
+		t.Fatalf("gitlab_ci_variable_get metadata incomplete: usage=%q aliases=%d guidance(key)=%q", get.Usage, len(get.Aliases), get.ParameterGuidance["key"].SemanticRole)
+	}
+
+	create := byTool["gitlab_ci_variable_create"]
+	if create.Usage == "" || len(create.Aliases) == 0 || create.ParameterGuidance["value"].SemanticRole == "" {
+		t.Fatalf("gitlab_ci_variable_create metadata incomplete: usage=%q aliases=%d guidance(value)=%q", create.Usage, len(create.Aliases), create.ParameterGuidance["value"].SemanticRole)
+	}
 }
 
 // ---------------------------------------------------------------------------

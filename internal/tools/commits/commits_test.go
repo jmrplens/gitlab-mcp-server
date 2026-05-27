@@ -1885,6 +1885,21 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Errorf("OwnerPackage for %s = %q, want commits", spec.Name, spec.OwnerPackage)
 		}
 	}
+
+	list := byTool["gitlab_commit_list"]
+	if list.Usage == "" || len(list.Aliases) == 0 || len(list.ParameterGuidance) == 0 {
+		t.Fatalf("gitlab_commit_list metadata incomplete: usage=%q aliases=%d guidance=%d", list.Usage, len(list.Aliases), len(list.ParameterGuidance))
+	}
+
+	get := byTool["gitlab_commit_get"]
+	if get.Usage == "" || len(get.Aliases) == 0 || get.ParameterGuidance["sha"].SemanticRole == "" {
+		t.Fatalf("gitlab_commit_get metadata incomplete: usage=%q aliases=%d guidance(sha)=%q", get.Usage, len(get.Aliases), get.ParameterGuidance["sha"].SemanticRole)
+	}
+
+	create := byTool["gitlab_commit_create"]
+	if create.Usage == "" || len(create.Aliases) == 0 || create.ParameterGuidance["actions"].SemanticRole == "" {
+		t.Fatalf("gitlab_commit_create metadata incomplete: usage=%q aliases=%d guidance(actions)=%q", create.Usage, len(create.Aliases), create.ParameterGuidance["actions"].SemanticRole)
+	}
 }
 
 // commitMockResp holds a canned response for a mock commit endpoint.
