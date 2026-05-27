@@ -105,13 +105,9 @@ func userEnterpriseCreateSpec(name string, route toolutil.ActionRoute, individua
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
-func userOptions(individualTool string) toolutil.ActionSpecOptions {
-	return userOptionsForAction("", individualTool)
-}
-
 func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"user"},
+		Aliases: []string{individualTool}, Usage: "Use to execute users domain action.", Tags: []string{"user"},
 		OpenWorld:      true,
 		OwnerPackage:   "users",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

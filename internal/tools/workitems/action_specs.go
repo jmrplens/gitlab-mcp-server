@@ -45,7 +45,7 @@ func workItemDeleteSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func workItemOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"issue", "work_item"},
+		Aliases: []string{individualTool}, Usage: "Use to execute workitems domain action.", Tags: []string{"issue", "work_item"},
 		OpenWorld:      true,
 		OwnerPackage:   "workitems",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

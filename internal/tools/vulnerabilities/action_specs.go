@@ -29,7 +29,7 @@ func vulnerabilityUpdateSpec(name string, route toolutil.ActionRoute, individual
 
 func vulnerabilityOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"vulnerability", "security"},
+		Aliases: []string{individualTool}, Usage: "Use to execute vulnerabilities domain action.", Tags: []string{"vulnerability", "security"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "vulnerabilities",

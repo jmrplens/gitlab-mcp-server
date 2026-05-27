@@ -4034,6 +4034,11 @@ Action guidance:
 - time_stats_get: Use to execute issues domain action.
 - unsubscribe: Use to execute issues domain action.
 - update: Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen; dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically.
+- work_item_create: Use to execute workitems domain action.
+- work_item_delete: Use to execute workitems domain action.
+- work_item_get: Use to execute workitems domain action.
+- work_item_list: Use to execute workitems domain action.
+- work_item_update: Use to execute workitems domain action.
 Parameter guidance:
 - create.due_date: calendar_date; source: Requested due date in ISO format when the user specifies one.; avoid: Use YYYY-MM-DD; natural-language dates must be normalized before calling the tool.
 - create.project_id: scope_project; source: Project where the issue should be created.; avoid: Use the target project path or numeric ID; do not substitute group_id or repository URL.
@@ -9886,20 +9891,58 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_user.<action>.
 Action guidance:
+- activate: Use to execute users domain action.
+- activities: Use to execute users domain action.
+- add_email: Use to execute useremails domain action.
+- add_email_for_user: Use to execute useremails domain action.
+- add_gpg_key: Use to execute usergpgkeys domain action.
+- add_gpg_key_for_user: Use to execute usergpgkeys domain action.
+- add_ssh_key: Use to execute users domain action.
+- add_ssh_key_for_user: Use to execute users domain action.
+- approve: Use to execute users domain action.
+- associations_count: Use to execute users domain action.
 - avatar_get: Resolve the avatar URL for a known email address. Use this when the task already provides an email; do not use it to search for users by name or username.
+- ban: Use to execute users domain action.
+- block: Use to execute users domain action.
+- contribution_events: Use to execute users domain action.
 - create: Create a new user account with required fields email, name, and username. Add optional admin/external flags only when explicitly requested.
+- create_current_user_pat: Use to execute users domain action.
 - create_impersonation_token: Use to execute impersonationtokens domain action.
 - create_personal_access_token: Use to execute impersonationtokens domain action.
+- create_runner: Use to execute users domain action.
 - current: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
+- current_user_status: Use to execute users domain action.
+- deactivate: Use to execute users domain action.
+- delete: Use to execute users domain action.
+- delete_email: Use to execute useremails domain action.
+- delete_email_for_user: Use to execute useremails domain action.
+- delete_gpg_key: Use to execute usergpgkeys domain action.
+- delete_gpg_key_for_user: Use to execute usergpgkeys domain action.
+- delete_identity: Use to execute users domain action.
+- delete_ssh_key: Use to execute users domain action.
+- delete_ssh_key_for_user: Use to execute users domain action.
+- disable_two_factor: Use to execute users domain action.
+- emails: Use to execute users domain action.
+- emails_for_user: Use to execute useremails domain action.
 - event_list_contributions: List current-user contribution events across visible resources.
 - event_list_project: List events for one specific project with optional filters and pagination.
 - get: Get a single user by numeric user_id. Use this when the prompt already references a concrete user account and needs detailed profile fields.
+- get_email: Use to execute useremails domain action.
+- get_gpg_key: Use to execute usergpgkeys domain action.
+- get_gpg_key_for_user: Use to execute usergpgkeys domain action.
 - get_impersonation_token: Use to execute impersonationtokens domain action.
+- get_ssh_key: Use to execute users domain action.
+- get_ssh_key_for_user: Use to execute users domain action.
+- get_status: Use to execute users domain action.
+- gpg_keys: Use to execute usergpgkeys domain action.
+- gpg_keys_for_user: Use to execute usergpgkeys domain action.
 - key_get_by_fingerprint: Use to execute keys domain action.
 - key_get_with_user: Use to execute keys domain action.
 - list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
 - list_impersonation_tokens: Use to execute impersonationtokens domain action.
 - me: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
+- memberships: Use to execute users domain action.
+- modify: Use to execute users domain action.
 - namespace_exists: List namespaces visible to the authenticated user.
 - namespace_get: List namespaces visible to the authenticated user.
 - namespace_list: List namespaces visible to the authenticated user.
@@ -9910,10 +9953,16 @@ Action guidance:
 - notification_group_update: Use to execute notifications domain action.
 - notification_project_get: Use to execute notifications domain action.
 - notification_project_update: Use to execute notifications domain action.
+- reject: Use to execute users domain action.
 - revoke_impersonation_token: Use to execute impersonationtokens domain action.
+- set_status: Use to execute users domain action.
+- ssh_keys: Use to execute users domain action.
+- ssh_keys_for_user: Use to execute users domain action.
 - todo_list: Use to execute todos domain action.
 - todo_mark_all_done: Use to execute todos domain action.
 - todo_mark_done: Use to execute todos domain action.
+- unban: Use to execute users domain action.
+- unblock: Use to execute users domain action.
 Parameter guidance:
 - avatar_get.email: email_address; source: Email address supplied by the task or returned by another GitLab user lookup.; avoid: Do not send a username or display name as email.
 - avatar_get.size: image_size_pixels; source: Optional avatar size in pixels; omit it to let GitLab choose the default size.; avoid: Send a numeric pixel size such as 64 or 128, not CSS strings like 64px.
@@ -10615,6 +10664,13 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_wiki.<action>.
+Action guidance:
+- create: Use to execute wikis domain action.
+- delete: Use to execute wikis domain action.
+- get: Use to execute wikis domain action.
+- list: Use to execute wikis domain action.
+- update: Use to execute wikis domain action.
+- upload_attachment: Use to execute wikis domain action.
 
 CRUD project wiki pages and upload attachments to wikis. Delete is destructive and irreversible.
 When to use: read, write, or delete wiki pages of a project; attach images or files referenced from wiki content.
@@ -11695,6 +11751,15 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_vulnerability.<action>.
+Action guidance:
+- confirm: Use to execute vulnerabilities domain action.
+- dismiss: Use to execute vulnerabilities domain action.
+- get: Use to execute vulnerabilities domain action.
+- list: Use to execute vulnerabilities domain action.
+- pipeline_security_summary: Use to execute vulnerabilities domain action.
+- resolve: Use to execute vulnerabilities domain action.
+- revert: Use to execute vulnerabilities domain action.
+- severity_count: Use to execute vulnerabilities domain action.
 
 List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL). Actions: list, get, dismiss, confirm, resolve, revert, severity_count, pipeline_security_summary.
 Returns: JSON with resource data. The list action accepts first/after cursor pagination and returns action-specific pagination metadata. Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
