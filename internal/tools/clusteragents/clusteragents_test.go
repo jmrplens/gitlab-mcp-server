@@ -521,6 +521,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("%s should be destructive", toolName)
 		}
 	}
+	if byTool["gitlab_list_cluster_agents"].Usage == "" {
+		t.Fatal("gitlab_list_cluster_agents should define usage")
+	}
+	if len(byTool["gitlab_get_cluster_agent"].Aliases) == 0 {
+		t.Fatal("gitlab_get_cluster_agent should define aliases")
+	}
+	if byTool["gitlab_create_cluster_agent_token"].ParameterGuidance["agent_id"].SemanticRole == "" {
+		t.Fatal("gitlab_create_cluster_agent_token should define agent_id parameter guidance")
+	}
 }
 
 // ---------------------------------------------------------------------------

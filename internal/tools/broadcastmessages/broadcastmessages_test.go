@@ -536,6 +536,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if !byTool["gitlab_delete_broadcast_message"].Route.Destructive {
 		t.Fatal("gitlab_delete_broadcast_message should be destructive")
 	}
+	if byTool["gitlab_list_broadcast_messages"].Usage == "" {
+		t.Fatal("gitlab_list_broadcast_messages should define usage")
+	}
+	if len(byTool["gitlab_get_broadcast_message"].Aliases) == 0 {
+		t.Fatal("gitlab_get_broadcast_message should define aliases")
+	}
+	if byTool["gitlab_update_broadcast_message"].ParameterGuidance["id"].SemanticRole == "" {
+		t.Fatal("gitlab_update_broadcast_message should define id parameter guidance")
+	}
 }
 
 // ---------------------------------------------------------------------------

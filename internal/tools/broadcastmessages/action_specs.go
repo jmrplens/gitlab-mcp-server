@@ -36,7 +36,17 @@ func broadcastMessageDeleteSpec(name string, route toolutil.ActionRoute, individ
 
 func broadcastMessageOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"admin", "broadcast"},
+		Usage:          "Manage instance broadcast messages (list/get/create/update/delete). Use for admin-visible announcements and scheduled banners.",
+		RelatedActions: []string{"admin.settings_get", "appearance.appearance_get"},
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{
+			"id": {
+				SemanticRole:   "broadcast_message_id",
+				ValueSource:    "Broadcast message numeric ID from list/get outputs.",
+				ExampleBinding: "params.id:1",
+			},
+		},
 		OpenWorld:      true,
 		OwnerPackage:   "broadcastmessages",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

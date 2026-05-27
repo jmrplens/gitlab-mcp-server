@@ -35,7 +35,22 @@ func clusterAgentDeleteSpec(name string, route toolutil.ActionRoute, individualT
 
 func clusterAgentOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"cluster-agent"},
+		Usage:          "Manage GitLab Kubernetes agents and agent tokens (list/get/register/delete/list tokens/get token/create token/revoke token).",
+		RelatedActions: []string{"environment.list", "deployment.list"},
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project ID or path that owns the agent.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+			"agent_id": {
+				SemanticRole:   "cluster_agent_id",
+				ValueSource:    "Agent numeric ID from list/get results.",
+				ExampleBinding: "params.agent_id:5",
+			},
+		},
 		OpenWorld:      true,
 		OwnerPackage:   "clusteragents",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

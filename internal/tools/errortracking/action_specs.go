@@ -34,9 +34,27 @@ func errorTrackingDeleteSpec(name string, route toolutil.ActionRoute, individual
 
 func errorTrackingOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"error-tracking"},
-		OpenWorld:      true,
-		OwnerPackage:   "errortracking",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Usage:          "Manage project error tracking settings and client keys (get/update settings, list/create/delete keys).",
+		RelatedActions: []string{"project.get", "environment.list"},
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project ID or path where error tracking is configured.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+			"key_id": {
+				SemanticRole:   "error_tracking_key_id",
+				ValueSource:    "Client key numeric ID from list keys output.",
+				ExampleBinding: "params.key_id:10",
+			},
+		},
+		OpenWorld:    true,
+		OwnerPackage: "errortracking",
+		IndividualTool: toolutil.IndividualToolSpec{
+			Name:  individualTool,
+			Title: toolutil.TitleFromName(individualTool),
+		},
 	}
 }

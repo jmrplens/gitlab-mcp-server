@@ -104,6 +104,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if specs[0].OwnerPackage != "dbmigrations" || specs[0].IndividualTool.Name != "gitlab_mark_migration" {
 		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
 	}
+	if specs[0].Usage == "" {
+		t.Fatal("db migration ActionSpec should define usage")
+	}
+	if len(specs[0].Aliases) == 0 {
+		t.Fatal("db migration ActionSpec should define aliases")
+	}
+	if specs[0].ParameterGuidance["version"].SemanticRole == "" {
+		t.Fatal("db migration ActionSpec should define version parameter guidance")
+	}
 }
 
 // TestActionSpecs_CallRoute verifies the database migration canonical route.

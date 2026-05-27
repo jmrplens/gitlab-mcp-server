@@ -29,6 +29,22 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "dependencies" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
+	if byTool["gitlab_list_project_dependencies"].ParameterGuidance["project_id"].SemanticRole == "" {
+		t.Fatal("gitlab_list_project_dependencies should define project_id parameter guidance")
+	}
+	if byTool["gitlab_download_dependency_list_export"].ParameterGuidance["export_id"].SemanticRole == "" {
+		t.Fatal("gitlab_download_dependency_list_export should define export_id parameter guidance")
 	}
 }
 

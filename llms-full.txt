@@ -1926,6 +1926,14 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_custom_emoji.<action>.
+Action guidance:
+- create: Create group-level custom emoji using GraphQL-backed routes.
+- delete: Delete group-level custom emoji using GraphQL-backed routes.
+- list: List group-level custom emoji using GraphQL-backed routes.
+Parameter guidance:
+- create.group_path: scope_group; source: GitLab full group path.
+- delete.id: custom_emoji_gid; source: Global ID returned by list/create operations for delete.
+- list.group_path: scope_group; source: GitLab full group path.
 
 Manage group-level custom emoji via GraphQL. Delete is destructive: existing reactions using the emoji remain in the database but render as :name: text. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
 When to use: list, add, or remove the custom emoji available to a group's projects (e.g. company logos, team mascots) used as reactions on issues/MRs/notes.
@@ -2005,6 +2013,11 @@ Action guidance:
 - deployment_create: Create a deployment for an environment/ref/sha. Use when orchestrating manual or API-driven deployment entries.
 - deployment_get: Get one deployment by deployment_id for a project. Use when investigating a specific deployment state, environment, or actor metadata.
 - deployment_list: List deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions.
+- freeze_create: Create a deploy freeze period for a project.
+- freeze_delete: Delete a deploy freeze period.
+- freeze_get: Get a specific deploy freeze period.
+- freeze_list: List deploy freeze periods for a project.
+- freeze_update: Update an existing deploy freeze period.
 - get: Get one environment by environment_id. Use when inspecting state, tier, external URL, and stop behavior of a specific environment.
 - list: List environments in one project with filters and pagination. Use this to discover environment IDs before get/update/stop/delete operations.
 - protected_get: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
@@ -2015,6 +2028,14 @@ Action guidance:
 - stop: Stop an active environment. This is modeled as a delete-style action but intentionally marked non-destructive because it changes runtime state without deleting the environment resource.
 Parameter guidance:
 - deployment_get.deployment_id: deployment_id; source: Deployment numeric ID from deployment list output.
+- freeze_create.project_id: scope_project; source: Project ID or path where the freeze window is configured.
+- freeze_delete.freeze_period_id: freeze_period_id; source: Freeze period numeric ID from list/get outputs.
+- freeze_delete.project_id: scope_project; source: Project ID or path where the freeze window is configured.
+- freeze_get.freeze_period_id: freeze_period_id; source: Freeze period numeric ID from list/get outputs.
+- freeze_get.project_id: scope_project; source: Project ID or path where the freeze window is configured.
+- freeze_list.project_id: scope_project; source: Project ID or path where the freeze window is configured.
+- freeze_update.freeze_period_id: freeze_period_id; source: Freeze period numeric ID from list/get outputs.
+- freeze_update.project_id: scope_project; source: Project ID or path where the freeze window is configured.
 - get.environment_id: environment_id; source: Environment numeric ID from environment list output.
 
 Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. Delete and stop are destructive (stop terminates the running env; force=true skips on-stop jobs).
@@ -3749,6 +3770,14 @@ Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_issue.<action>.
 Action guidance:
 - create: Create a new issue in a known project. Provide project_id and a clear title, then add description, labels, assignee_ids, milestone_id, due_date, confidential, or task metadata only when requested.
+- emoji_issue_create: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
+- emoji_issue_delete: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
+- emoji_issue_get: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
+- emoji_issue_list: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
+- emoji_issue_note_create: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
+- emoji_issue_note_delete: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
+- emoji_issue_note_get: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
+- emoji_issue_note_list: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - get: Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number; prefer issue.get over issue.list when the target issue is already known.
 - link_create: Use to create a relationship from a source issue to a target issue, optionally across projects.
 - list: List issues in one project. Use filters such as state, labels, search, assignee_username, milestone, order_by, sort, and pagination when the prompt asks for matching or recent issues in a known project.
@@ -3758,6 +3787,22 @@ Parameter guidance:
 - create.due_date: calendar_date; source: Requested due date in ISO format when the user specifies one.; avoid: Use YYYY-MM-DD; natural-language dates must be normalized before calling the tool.
 - create.project_id: scope_project; source: Project where the issue should be created.; avoid: Use the target project path or numeric ID; do not substitute group_id or repository URL.
 - create.title: issue_title; source: Short issue summary from the user's request.
+- emoji_issue_create.issue_iid: issue_iid; source: Issue IID from issue list/get outputs.
+- emoji_issue_create.project_id: scope_project; source: Project ID or path that owns the issue.
+- emoji_issue_delete.issue_iid: issue_iid; source: Issue IID from issue list/get outputs.
+- emoji_issue_delete.project_id: scope_project; source: Project ID or path that owns the issue.
+- emoji_issue_get.issue_iid: issue_iid; source: Issue IID from issue list/get outputs.
+- emoji_issue_get.project_id: scope_project; source: Project ID or path that owns the issue.
+- emoji_issue_list.issue_iid: issue_iid; source: Issue IID from issue list/get outputs.
+- emoji_issue_list.project_id: scope_project; source: Project ID or path that owns the issue.
+- emoji_issue_note_create.issue_iid: issue_iid; source: Issue IID from issue list/get outputs.
+- emoji_issue_note_create.project_id: scope_project; source: Project ID or path that owns the issue.
+- emoji_issue_note_delete.issue_iid: issue_iid; source: Issue IID from issue list/get outputs.
+- emoji_issue_note_delete.project_id: scope_project; source: Project ID or path that owns the issue.
+- emoji_issue_note_get.issue_iid: issue_iid; source: Issue IID from issue list/get outputs.
+- emoji_issue_note_get.project_id: scope_project; source: Project ID or path that owns the issue.
+- emoji_issue_note_list.issue_iid: issue_iid; source: Issue IID from issue list/get outputs.
+- emoji_issue_note_list.project_id: scope_project; source: Project ID or path that owns the issue.
 - get.issue_iid: issue_iid; source: Issue number visible in the project, usually from the URL or prior issue list output.; avoid: Use issue_iid for project-scoped issue numbers; issue_id is only for the global issue ID action.
 - get.project_id: scope_project; source: Project ID or full namespace path that owns the issue.; avoid: Use the issue's parent project here, not a group path or global issue ID.
 - link_create.issue_iid: source_issue; source: IID of the source issue receiving the link.; avoid: Do not use the target issue IID here.
@@ -4633,11 +4678,35 @@ Action guidance:
 - cancel_auto_merge: Cancels auto-merge on a merge request; it does not cancel a running pipeline.
 - create: Use to open a merge request from a source branch into the target branch in a project.
 - create_pipeline: Creates a new pipeline for a merge request; use pipeline.wait after receiving pipeline_id if the task asks to wait for completion.
+- emoji_mr_create: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
+- emoji_mr_delete: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
+- emoji_mr_get: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
+- emoji_mr_list: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
+- emoji_mr_note_create: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
+- emoji_mr_note_delete: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
+- emoji_mr_note_get: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
+- emoji_mr_note_list: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
 - merge: Use to merge a merge request now, or set params.auto_merge=true when the task asks to merge when pipeline succeeds. Do not use pipeline.wait unless the task only asks to wait for an existing pipeline.
 - pipelines: Lists pipelines attached to a merge request; use pipeline.wait with the returned pipeline_id only when the task asks to wait for CI completion.
 Parameter guidance:
 - create.source_branch: source_branch; source: Branch named after 'from'.; avoid: Do not use ref, tag_name, target_branch, or value for the source branch.
 - create.target_branch: target_branch; source: Branch named after 'into' or the merge target.; avoid: Do not use source_branch, ref, tag_name, or to for the target branch.
+- emoji_mr_create.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
+- emoji_mr_create.project_id: scope_project; source: Project ID or path that owns the merge request.
+- emoji_mr_delete.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
+- emoji_mr_delete.project_id: scope_project; source: Project ID or path that owns the merge request.
+- emoji_mr_get.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
+- emoji_mr_get.project_id: scope_project; source: Project ID or path that owns the merge request.
+- emoji_mr_list.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
+- emoji_mr_list.project_id: scope_project; source: Project ID or path that owns the merge request.
+- emoji_mr_note_create.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
+- emoji_mr_note_create.project_id: scope_project; source: Project ID or path that owns the merge request.
+- emoji_mr_note_delete.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
+- emoji_mr_note_delete.project_id: scope_project; source: Project ID or path that owns the merge request.
+- emoji_mr_note_get.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
+- emoji_mr_note_get.project_id: scope_project; source: Project ID or path that owns the merge request.
+- emoji_mr_note_list.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
+- emoji_mr_note_list.project_id: scope_project; source: Project ID or path that owns the merge request.
 - merge.auto_merge: merge_scheduling; source: Set true only when the user asks to merge when the pipeline succeeds or enable auto-merge.; avoid: Do not call pipeline.wait for merge-when-pipeline-succeeds requests; use merge_request.merge with auto_merge=true.
 - merge.merge_request_iid: merge_request_iid; source: Project-scoped MR IID from merge_request.list or merge_request.get.; avoid: Do not use pipeline_id; merge_request.merge requires merge_request_iid.
 
@@ -7448,6 +7517,12 @@ Action guidance:
 - blob: Get blob metadata/content for a specific file path and ref. Use when you need one file's content or metadata after locating its path.
 - changelog_add: Create or append changelog entries in the repository for a version. Use in release workflows when structured changelog updates are requested.
 - commit_create: Create a commit by applying file actions to a branch. Use for multi-file changes where repository file APIs are not enough.
+- commit_discussion_add_note: Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.
+- commit_discussion_create: Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.
+- commit_discussion_delete_note: Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.
+- commit_discussion_get: Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.
+- commit_discussion_list: Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.
+- commit_discussion_update_note: Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.
 - commit_get: Get detailed commit information by sha. Use this when a specific commit is referenced and full metadata/message/stats are needed.
 - commit_list: List commits for a project/ref with pagination. Use this to inspect history before selecting a commit for diff, comments, statuses, or revert/cherry-pick workflows.
 - commit_status_set: Set commit status/check state for a SHA. Use this for external CI/reporting integrations that need to update pipeline-like status checks.
@@ -7457,6 +7532,18 @@ Action guidance:
 Parameter guidance:
 - commit_create.actions: commit_actions; source: Array of commit actions (create/update/delete/move/chmod) with file paths and content.
 - commit_create.branch: git_branch; source: Target branch receiving commit actions.
+- commit_discussion_add_note.commit_sha: commit_sha; source: Commit SHA where the discussion lives.
+- commit_discussion_add_note.project_id: scope_project; source: Project ID or path containing the commit.
+- commit_discussion_create.commit_sha: commit_sha; source: Commit SHA where the discussion lives.
+- commit_discussion_create.project_id: scope_project; source: Project ID or path containing the commit.
+- commit_discussion_delete_note.commit_sha: commit_sha; source: Commit SHA where the discussion lives.
+- commit_discussion_delete_note.project_id: scope_project; source: Project ID or path containing the commit.
+- commit_discussion_get.commit_sha: commit_sha; source: Commit SHA where the discussion lives.
+- commit_discussion_get.project_id: scope_project; source: Project ID or path containing the commit.
+- commit_discussion_list.commit_sha: commit_sha; source: Commit SHA where the discussion lives.
+- commit_discussion_list.project_id: scope_project; source: Project ID or path containing the commit.
+- commit_discussion_update_note.commit_sha: commit_sha; source: Commit SHA where the discussion lives.
+- commit_discussion_update_note.project_id: scope_project; source: Project ID or path containing the commit.
 - commit_get.sha: commit_sha; source: Commit SHA from list output, branch HEAD, or task context.
 - commit_list.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
 - file_history.project_id: scope_project; source: Project numeric ID or full path that owns the repository.
@@ -8339,6 +8426,32 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_snippet.<action>.
+Action guidance:
+- emoji_snippet_create: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
+- emoji_snippet_delete: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
+- emoji_snippet_get: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
+- emoji_snippet_list: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
+- emoji_snippet_note_create: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
+- emoji_snippet_note_delete: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
+- emoji_snippet_note_get: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
+- emoji_snippet_note_list: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
+Parameter guidance:
+- emoji_snippet_create.project_id: scope_project; source: Project ID or path that owns the snippet.
+- emoji_snippet_create.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
+- emoji_snippet_delete.project_id: scope_project; source: Project ID or path that owns the snippet.
+- emoji_snippet_delete.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
+- emoji_snippet_get.project_id: scope_project; source: Project ID or path that owns the snippet.
+- emoji_snippet_get.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
+- emoji_snippet_list.project_id: scope_project; source: Project ID or path that owns the snippet.
+- emoji_snippet_list.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
+- emoji_snippet_note_create.project_id: scope_project; source: Project ID or path that owns the snippet.
+- emoji_snippet_note_create.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
+- emoji_snippet_note_delete.project_id: scope_project; source: Project ID or path that owns the snippet.
+- emoji_snippet_note_delete.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
+- emoji_snippet_note_get.project_id: scope_project; source: Project ID or path that owns the snippet.
+- emoji_snippet_note_get.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
+- emoji_snippet_note_list.project_id: scope_project; source: Project ID or path that owns the snippet.
+- emoji_snippet_note_list.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
 
 Manage GitLab snippets (personal, project-scoped, and explore feed): CRUD snippet metadata and content, threaded discussions, notes (project snippets only), and award emoji on snippets and snippet notes. Delete is destructive and irreversible.
 When to use: store/share standalone code or text outside a repo, comment on existing snippets, react with emoji on a snippet or snippet note, browse public snippets via explore.
@@ -10043,6 +10156,16 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_dependency.<action>.
+Action guidance:
+- export_create: Create a dependency list export from a pipeline.
+- export_download: Download generated dependency list export content.
+- export_get: Get dependency list export status and metadata.
+- list: List project dependency inventory.
+Parameter guidance:
+- export_create.pipeline_id: pipeline_id; source: Pipeline numeric ID to export dependencies from.
+- export_download.export_id: dependency_export_id; source: Export numeric ID returned by create/get export operations.
+- export_get.export_id: dependency_export_id; source: Export numeric ID returned by create/get export operations.
+- list.project_id: scope_project; source: Project ID or path containing dependencies.
 
 List project dependencies and create/download SBOM exports (CycloneDX).
 Returns: JSON with resource data. The list action includes pagination (page, per_page, total, next_page). export_create/export_get return export metadata, and export_download returns the CycloneDX payload. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.

@@ -58,7 +58,22 @@ func issueEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 
 func issueEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"issue", "emoji"},
+		Usage:          "Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.",
+		RelatedActions: []string{"issue.get", "issue_note.list"},
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project ID or path that owns the issue.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+			"issue_iid": {
+				SemanticRole:   "issue_iid",
+				ValueSource:    "Issue IID from issue list/get outputs.",
+				ExampleBinding: "params.issue_iid:123",
+			},
+		},
 		OpenWorld:      true,
 		OwnerPackage:   "awardemoji",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -93,7 +108,22 @@ func mergeRequestEmojiDeleteSpec(name string, route toolutil.ActionRoute, indivi
 
 func mergeRequestEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"merge_request", "emoji"},
+		Usage:          "Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.",
+		RelatedActions: []string{"merge_request.get", "mr_note.list"},
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project ID or path that owns the merge request.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+			"merge_request_iid": {
+				SemanticRole:   "merge_request_iid",
+				ValueSource:    "Merge request IID from MR list/get outputs.",
+				ExampleBinding: "params.merge_request_iid:77",
+			},
+		},
 		OpenWorld:      true,
 		OwnerPackage:   "awardemoji",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -114,7 +144,22 @@ func snippetEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualT
 
 func snippetEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"snippet", "emoji"},
+		Usage:          "Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.",
+		RelatedActions: []string{"snippet.get", "snippet_note.list"},
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project ID or path that owns the snippet.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+			"snippet_id": {
+				SemanticRole:   "snippet_iid",
+				ValueSource:    "Snippet IID from snippet list/get outputs.",
+				ExampleBinding: "params.snippet_id:12",
+			},
+		},
 		OpenWorld:      true,
 		OwnerPackage:   "awardemoji",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

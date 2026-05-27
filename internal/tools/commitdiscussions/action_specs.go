@@ -37,8 +37,22 @@ func commitDiscussionDeleteSpec(name string, route toolutil.ActionRoute, individ
 
 func commitDiscussionOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"repository", "commit", "discussion"},
+		Usage:          "Manage commit discussions and discussion notes (list/get/create/add/update/delete). Use this for threaded review context tied to a commit SHA.",
 		RelatedActions: []string{"repository.commit_get", "repository.commit_diff"},
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project ID or path containing the commit.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+			"commit_sha": {
+				SemanticRole:   "commit_sha",
+				ValueSource:    "Commit SHA where the discussion lives.",
+				ExampleBinding: `params.commit_sha:"abc123def"`,
+			},
+		},
 		OpenWorld:      true,
 		OwnerPackage:   "commitdiscussions",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
