@@ -445,19 +445,19 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       907 |     151,254 |
-| Unit tests (`_test.go`)  |       486 |     252,608 |
+| Source (`.go`, non-test) |       907 |     151,279 |
+| Unit tests (`_test.go`)  |       486 |     252,675 |
 | End-to-end tests         |       122 |      28,546 |
-| **Total**                | **1,515** | **432,408** |
+| **Total**                | **1,515** | **432,500** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  6,435 |
+| Source functions                |  6,439 |
 | — exported (public)             |  2,462 |
-| — unexported (private)          |  3,973 |
-| Unit test functions (`TestXxx`) | 10,253 |
+| — unexported (private)          |  3,977 |
+| Unit test functions (`TestXxx`) | 10,257 |
 | Subtests (`t.Run(...)`)         |  2,386 |
 | End-to-end test functions       |    256 |
 
@@ -488,7 +488,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   218 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   216 |
+| Git commits                    |   217 |
 | Unique contributors            |     2 |
 
 ### Hall of fame
@@ -503,7 +503,7 @@ Numbers nobody asked for, but here they are anyway.
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | Source code printed at 55 lines/page | ~2,750 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 9,089 (impossible to avoid)                                                                          |
+| Source lines mentioning `"gitlab"`   | 9,093 (impossible to avoid)                                                                          |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

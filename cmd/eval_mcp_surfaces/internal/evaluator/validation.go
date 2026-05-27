@@ -140,6 +140,9 @@ func mergeRequiredOriginalParams(original, normalized map[string]any, required [
 		}
 		if !cloned {
 			out = maps.Clone(normalized)
+			if out == nil {
+				out = make(map[string]any)
+			}
 			cloned = true
 		}
 		out[name] = value

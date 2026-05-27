@@ -81,6 +81,35 @@ func TestPrepareCaseAttempt_FailsAfterRetryExhaustion(t *testing.T) {
 	}
 }
 
+func TestPrepareCaseAttempt_CleansPreparedFixturesWhenLaterFixtureFails(t *testing.T) {
+	var cleaned []string
+	evalCase := EvalCase{ID: "MT-FIXTURE-CLEANUP", Prompt: "cleanup", Steps: []ExpectedStep{{ExpectedTool: "gitlab_user"}}, Fixtures: []CaseFixtureSpec{
+		{
+			Name: "prepared",
+			Ensure: func(context.Context, FixtureContext) (FixtureOutput, error) {
+				return FixtureOutput{"resource_id": "created-resource"}, nil
+			},
+			Cleanup: func(_ context.Context, _ FixtureContext, output FixtureOutput) error {
+				cleaned = append(cleaned, output["resource_id"])
+				return nil
+			},
+		},
+		{
+			Name:   "failing",
+			Ensure: func(context.Context, FixtureContext) (FixtureOutput, error) { return nil, errors.New("boom") },
+		},
+	}}
+
+	prepared, err := PrepareCaseAttempt(context.Background(), FixtureContext{}, evalCase, "model", 1)
+
+	if err == nil || !strings.Contains(err.Error(), "fixture failing failed") {
+		t.Fatalf("PrepareCaseAttempt() error = %v, want failing fixture error", err)
+	}
+	if len(prepared.Cleanup) != 1 || len(cleaned) != 1 || cleaned[0] != "created-resource" {
+		t.Fatalf("prepared cleanup len=%d cleaned=%v, want prepared fixture cleanup", len(prepared.Cleanup), cleaned)
+	}
+}
+
 func TestPrepareCaseAttempt_FailsValidationAndMissingOutput(t *testing.T) {
 	evalCase := EvalCase{ID: "MT-FIXTURE-004", Prompt: "missing", Steps: []ExpectedStep{{ExpectedTool: "gitlab_user"}}, Fixtures: []CaseFixtureSpec{{
 		Name:    "project",

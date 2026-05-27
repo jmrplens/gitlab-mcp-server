@@ -112,6 +112,14 @@ func TestValidateStepCallWithRoutes_UsesParamSensitiveActionAlias(t *testing.T) 
 	}
 }
 
+func TestMergeRequiredOriginalParams_InitializesNilNormalizedMap(t *testing.T) {
+	got := mergeRequiredOriginalParams(map[string]any{"project_id": "my-org/project"}, nil, []string{"project_id"})
+
+	if got["project_id"] != "my-org/project" {
+		t.Fatalf("mergeRequiredOriginalParams() = %#v, want project_id restored", got)
+	}
+}
+
 func TestValidateStepCallWithRoutes_RejectsForbiddenParams(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: toolutil.ActionRoute{}}}
 	step := evalStep{

@@ -36,6 +36,24 @@ func TestRenderCasePrompt_MissingTemplateValueFails(t *testing.T) {
 	}
 }
 
+func TestAddPromptData_HandlesPointersAndNonStructValues(t *testing.T) {
+	out := map[string]any{}
+	addPromptData(out, "Project", &PromptProjectData{Path: "my-org/project"})
+	addPromptData(out, "NilPointer", (*PromptProjectData)(nil))
+	addPromptData(out, "Text", "not-a-struct")
+	addPromptData(out, "Nil", nil)
+
+	project, ok := out["Project"].(map[string]string)
+	if !ok || project["Path"] != "my-org/project" {
+		t.Fatalf("Project data = %#v, want pointer struct fields", out["Project"])
+	}
+	for _, name := range []string{"NilPointer", "Text", "Nil"} {
+		if _, exists := out[name]; exists {
+			t.Fatalf("out[%q] exists in %#v, want skipped", name, out)
+		}
+	}
+}
+
 func TestTaskPromptForSurface_DynamicDestructiveConfirmUsesTopLevel(t *testing.T) {
 	task := evalTask{ID: "MT-PROMPT-004", Prompt: "Delete issue `42` from project `my-org/project`.", Steps: []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.delete", RequiredParams: []string{"project_id", "issue_iid"}, OptionalParams: []string{"confirm"}, Destructive: true}}}
 	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)

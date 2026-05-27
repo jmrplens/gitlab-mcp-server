@@ -290,6 +290,18 @@ func TestUnmarshalParams_CoercesStructuredAccessLevelShapes(t *testing.T) {
 	}
 }
 
+func TestGitLabRoleAccessLevel_RejectsOutOfRangeIntegers(t *testing.T) {
+	for _, value := range []any{"9223372036854775807", int64(1 << 62), float64(1e20)} {
+		if got, ok := gitLabRoleAccessLevel(value); ok {
+			t.Fatalf("gitLabRoleAccessLevel(%v) = %d, true; want rejected", value, got)
+		}
+	}
+
+	if got, ok := gitLabRoleAccessLevel("60"); !ok || got != 60 {
+		t.Fatalf("gitLabRoleAccessLevel(60) = %d, %t; want 60, true", got, ok)
+	}
+}
+
 func TestUnmarshalParams_CoercesPaginationBoolean(t *testing.T) {
 	got, err := UnmarshalParams[testPaginationInput](map[string]any{"first": true})
 	if err != nil {

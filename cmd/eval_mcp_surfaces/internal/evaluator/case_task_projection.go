@@ -29,22 +29,7 @@ func cloneEvalCasePtr(evalCase EvalCase) *EvalCase {
 }
 
 func stepsFromCase(evalCase EvalCase) []evalStep {
-	steps := make([]evalStep, 0, len(evalCase.Steps))
-	for _, step := range evalCase.Steps {
-		steps = append(steps, evalStep{
-			ExpectedTool:    step.ExpectedTool,
-			ExpectedAction:  step.ExpectedAction,
-			RequiredParams:  slices.Clone(step.RequiredParams),
-			OptionalParams:  slices.Clone(step.OptionalParams),
-			ForbiddenParams: slices.Clone(step.ForbiddenParams),
-			OptionalStep:    step.OptionalStep,
-			Destructive:     step.Destructive,
-			Simulation:      step.Simulation,
-			AllowedRepairs:  slices.Clone(step.AllowedRepairs),
-			ProducedValues:  slices.Clone(step.ProducedValues),
-		})
-	}
-	return steps
+	return cloneExpectedSteps(evalCase.Steps)
 }
 
 func casePrompt(evalCase EvalCase) string {
@@ -55,21 +40,5 @@ func casePrompt(evalCase EvalCase) string {
 }
 
 func stepsFromTask(task evalTask) []ExpectedStep {
-	steps := taskSteps(task)
-	out := make([]ExpectedStep, 0, len(steps))
-	for _, step := range steps {
-		out = append(out, ExpectedStep{
-			ExpectedTool:    step.ExpectedTool,
-			ExpectedAction:  step.ExpectedAction,
-			RequiredParams:  slices.Clone(step.RequiredParams),
-			OptionalParams:  slices.Clone(step.OptionalParams),
-			ForbiddenParams: slices.Clone(step.ForbiddenParams),
-			OptionalStep:    step.OptionalStep,
-			Destructive:     step.Destructive,
-			Simulation:      step.Simulation,
-			AllowedRepairs:  slices.Clone(step.AllowedRepairs),
-			ProducedValues:  slices.Clone(step.ProducedValues),
-		})
-	}
-	return out
+	return cloneExpectedSteps(taskSteps(task))
 }

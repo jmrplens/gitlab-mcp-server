@@ -198,8 +198,20 @@ func promptTemplateDataMap(data PromptData) map[string]any {
 }
 
 func addPromptData(out map[string]any, name string, value any) {
-	fields := map[string]string{}
 	reflected := reflect.ValueOf(value)
+	if !reflected.IsValid() {
+		return
+	}
+	for reflected.Kind() == reflect.Pointer {
+		if reflected.IsNil() {
+			return
+		}
+		reflected = reflected.Elem()
+	}
+	if reflected.Kind() != reflect.Struct {
+		return
+	}
+	fields := map[string]string{}
 	reflectedType := reflected.Type()
 	for i := range reflected.NumField() {
 		field := reflected.Field(i)

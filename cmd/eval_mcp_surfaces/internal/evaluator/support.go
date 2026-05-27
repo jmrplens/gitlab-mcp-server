@@ -18,7 +18,7 @@ func liveUniqueSuffix() string {
 	return evalrun.UniqueSuffix()
 }
 
-// waitForContext waits for for context to become available.
+// waitForContext waits for context to become available.
 func waitForContext(ctx context.Context, interval time.Duration) error {
 	return evalrun.WaitForContext(ctx, interval)
 }

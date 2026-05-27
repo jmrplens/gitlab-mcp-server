@@ -1966,6 +1966,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_environment.<action>.
+Action guidance:
+- protected_get: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
+- protected_list: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
+- protected_protect: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
+- protected_unprotect: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
+- protected_update: Use project protected environment actions for project deployment gates. deploy_access_levels must be an array of objects such as [{"access_level":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.
 
 Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail. Delete and stop are destructive (stop terminates the running env; force=true skips on-stop jobs).
 When to use: define/update environments (production, staging, review/*), restrict who can deploy via protected environments, schedule deploy freezes, audit deployment history, approve/reject deployments awaiting manual gate.
@@ -5982,6 +5988,9 @@ Action guidance:
 - badge_get: Get a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
 - badge_list: List project badges. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
 - badge_preview: Preview a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
+- delete: Use to delete a project. For ordinary cleanup, send project_id and confirm only. Set permanently_remove only when explicitly requested; when permanently_remove is true, full_path must exactly match the project's path_with_namespace from project create/get.
+- get: Get one exact project by numeric ID or full namespace path. Use this when the prompt gives a concrete path like group/project and asks to find, show, verify, or read project metadata such as id or default_branch; do not use search.projects for an exact path lookup.
+- list: List projects accessible to the authenticated user. For most recently updated projects, use order_by last_activity_at with sort desc and per_page for the requested count; do not use last_activity_after as an order_by value.
 Parameter guidance:
 - badge_add.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_delete.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
@@ -5990,6 +5999,8 @@ Parameter guidance:
 - badge_get.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_list.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_preview.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
+- get.project_id: scope_project; source: Concrete numeric project ID or full namespace path from the prompt or a prior project result.; avoid: Use project_id for a namespace path; do not substitute full_path, path, remote_url, search, or query.
+- list.order_by: project_list_sort_field; source: Use only GitLab project list ordering fields accepted by the projects API.; avoid: Use last_activity_at to sort by recent activity; last_activity_after is a date filter, not an order_by value.
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). Delete, unpublish, force-push and *_delete actions are destructive.
 When to use: project-level configuration and metadata. NOT for: file content/commits (use gitlab_repository), branches (gitlab_branch), wiki pages (gitlab_wiki), issues (gitlab_issue), MRs (gitlab_merge_request).
@@ -8101,7 +8112,7 @@ Use {"action":"code","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_search.<action>.
 Action guidance:
 - code: Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories; do not use for project or repository name discovery.
-- projects: Search project records by project name, path, namespace, or description. Use when the task asks to find projects or repositories; do not use for code contents.
+- projects: Search project records by fuzzy project name, path fragment, namespace, or description. Use for broad discovery across many projects; if the prompt gives one exact namespace path like group/project and asks for metadata, use project.get instead. Do not use for code contents.
 
 Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
 When to use: full-text search across the supplied scope. Use action code for prompts like "search code for ..." or "find occurrences of ...". Most actions accept project_id and / or group_id; if both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).
@@ -20997,7 +21008,7 @@ List GitLab projects accessible to the authenticated user. Supports filtering by
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where current user is a member
 - `min_access_level` (integer): Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)
-- `order_by` (string): Order by field (id, name, path, created_at, updated_at, last_activity_at)
+- `order_by` (string): Order projects by id, name, path, created_at, updated_at, or last_activity_at.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.

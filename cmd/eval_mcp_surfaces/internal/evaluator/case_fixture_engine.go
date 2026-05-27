@@ -2,7 +2,9 @@ package evaluator
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -37,7 +39,7 @@ func PrepareCaseAttempt(ctx context.Context, env FixtureContext, evalCase EvalCa
 		output, health, cleanup, err := prepareCaseFixture(ctx, env, evalCase, fixture)
 		prepared.FixtureHealth = append(prepared.FixtureHealth, health...)
 		if err != nil {
-			return prepared, err
+			return prepared, errWithPreparedFixtureCleanup(ctx, err, prepared.Cleanup)
 		}
 		copyNonEmptyFixtureOutput(prepared.FixtureOutputs, output)
 		if cleanup != nil {
@@ -46,10 +48,32 @@ func PrepareCaseAttempt(ctx context.Context, env FixtureContext, evalCase EvalCa
 	}
 	prompt, err := RenderCasePrompt(evalCase, prepared.FixtureOutputs)
 	if err != nil {
-		return prepared, err
+		return prepared, errWithPreparedFixtureCleanup(ctx, err, prepared.Cleanup)
 	}
 	prepared.Prompt = prompt
 	return prepared, nil
+}
+
+func errWithPreparedFixtureCleanup(ctx context.Context, err error, cleanups []PreparedFixtureCleanup) error {
+	if cleanupErr := cleanupPreparedFixtures(ctx, cleanups); cleanupErr != nil {
+		return fmt.Errorf("%w; cleanup prepared fixtures: %w", err, cleanupErr)
+	}
+	return err
+}
+
+func cleanupPreparedFixtures(ctx context.Context, cleanups []PreparedFixtureCleanup) error {
+	ctx = context.WithoutCancel(ctx)
+	var cleanupErrs []error
+	for _, v := range slices.Backward(cleanups) {
+		cleanup := v
+		if cleanup == nil {
+			continue
+		}
+		if err := cleanup(ctx); err != nil {
+			cleanupErrs = append(cleanupErrs, err)
+		}
+	}
+	return errors.Join(cleanupErrs...)
 }
 
 func copyNonEmptyFixtureOutput(dst, src FixtureOutput) {

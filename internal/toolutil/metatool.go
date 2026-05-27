@@ -1329,7 +1329,7 @@ func gitLabRoleAccessLevel(value any) (int, bool) {
 	if text, ok := value.(string); ok {
 		normalized := strings.ToLower(strings.TrimSpace(strings.NewReplacer("_", " ", "-", " ").Replace(text)))
 		if integer, err := integerFromString(normalized); err == nil {
-			return validGitLabRoleAccessLevel(int(integer))
+			return validGitLabRoleAccessLevelInt64(integer)
 		}
 		switch normalized {
 		case "no access", "no one", "nobody", "none":
@@ -1362,10 +1362,27 @@ func numericRoleAccessLevel(value any) (int, bool) {
 	case int:
 		return typed, true
 	case int64:
-		return int(typed), true
+		return validGitLabRoleAccessLevelInt64(typed)
 	case float64:
-		integer := int(typed)
-		return integer, typed == float64(integer)
+		return validGitLabRoleAccessLevelFloat64(typed)
+	default:
+		return 0, false
+	}
+}
+
+func validGitLabRoleAccessLevelInt64(value int64) (int, bool) {
+	switch value {
+	case 0, 10, 20, 30, 40, 50, 60:
+		return int(value), true
+	default:
+		return 0, false
+	}
+}
+
+func validGitLabRoleAccessLevelFloat64(value float64) (int, bool) {
+	switch value {
+	case 0, 10, 20, 30, 40, 50, 60:
+		return int(value), true
 	default:
 		return 0, false
 	}
