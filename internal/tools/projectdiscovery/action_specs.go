@@ -25,7 +25,7 @@ const discoverProjectDescription = "Resolve a full git remote URL to a GitLab pr
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		toolutil.NewReadActionSpec("resolve", toolutil.RouteAction(client, Resolve), toolutil.ActionSpecOptions{
-			Tags:           []string{"discovery", "project"},
+			Aliases: []string{"gitlab_discover_project"}, Tags: []string{"discovery", "project"},
 			Usage:          "Resolve a complete git remote URL from .git/config or git remote -v to GitLab project metadata.",
 			OpenWorld:      true,
 			OwnerPackage:   "projectdiscovery",

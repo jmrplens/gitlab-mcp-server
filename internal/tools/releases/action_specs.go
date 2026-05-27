@@ -53,7 +53,7 @@ func releaseDeleteSpec(name string, route toolutil.ActionRoute, individualTool s
 
 func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"release", "tag", "asset"},
+		Aliases: []string{individualTool}, Usage: "Use to execute releases domain action.", Tags: []string{"release", "tag", "asset"},
 		RelatedActions: []string{"tag.get", "package.list", "project.milestone_list"},
 		OpenWorld:      true,
 		OwnerPackage:   "releases",

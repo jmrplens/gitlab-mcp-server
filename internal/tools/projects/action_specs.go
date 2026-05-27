@@ -220,7 +220,7 @@ func projectOptions(individualTool string, extraTags ...string) toolutil.ActionS
 func projectOptionsForAction(actionName, individualTool string, extraTags ...string) toolutil.ActionSpecOptions {
 	tags := append([]string{"project"}, extraTags...)
 	options := toolutil.ActionSpecOptions{
-		Tags:           tags,
+		Aliases: []string{individualTool}, Usage: "Use to execute projects domain action.", Tags: tags,
 		OpenWorld:      true,
 		OwnerPackage:   "projects",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

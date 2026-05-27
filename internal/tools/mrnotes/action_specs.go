@@ -45,7 +45,7 @@ func mrNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTool st
 
 func mrNoteOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"merge_request", "review", "note"},
+		Aliases: []string{individualTool}, Usage: "Use to execute mrnotes domain action.", Tags: []string{"merge_request", "review", "note"},
 		OpenWorld:      true,
 		OwnerPackage:   "mrnotes",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

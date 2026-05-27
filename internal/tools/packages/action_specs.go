@@ -54,7 +54,7 @@ func packageDeleteSpec(name string, route toolutil.ActionRoute, individualTool s
 
 func packageOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"package"},
+		Aliases: []string{individualTool}, Usage: "Use to execute packages domain action.", Tags: []string{"package"},
 		OpenWorld:      true,
 		OwnerPackage:   "packages",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

@@ -39,7 +39,7 @@ func repositoryOptionsForAction(actionName, individualTool string) toolutil.Acti
 	_ = actionName
 
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"repository", "git"},
+		Aliases: []string{individualTool}, Usage: "Use to execute repository domain action.", Tags: []string{"repository", "git"},
 		RelatedActions: []string{"branch.list", "tag.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "repository",

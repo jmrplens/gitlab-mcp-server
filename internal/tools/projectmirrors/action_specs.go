@@ -61,7 +61,7 @@ func mirrorForcePushSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 
 func mirrorOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"project", "mirror"},
+		Aliases: []string{individualTool}, Usage: "Use to execute projectmirrors domain action.", Tags: []string{"project", "mirror"},
 		RelatedActions: []string{"project.pull_mirror_get", "repository.commit_list"},
 		OpenWorld:      true,
 		OwnerPackage:   "projectmirrors",

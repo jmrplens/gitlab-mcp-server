@@ -3983,6 +3983,15 @@ Action guidance:
 - emoji_issue_note_delete: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - emoji_issue_note_get: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - emoji_issue_note_list: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
+- event_issue_iteration_get: Use to execute resourceevents domain action.
+- event_issue_iteration_list: Use to execute resourceevents domain action.
+- event_issue_label_get: Use to execute resourceevents domain action.
+- event_issue_label_list: Use to execute resourceevents domain action.
+- event_issue_milestone_get: Use to execute resourceevents domain action.
+- event_issue_milestone_list: Use to execute resourceevents domain action.
+- event_issue_state_get: Use to execute resourceevents domain action.
+- event_issue_state_list: Use to execute resourceevents domain action.
+- event_issue_weight_list: Use to execute resourceevents domain action.
 - get: Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number; prefer issue.get over issue.list when the target issue is already known.
 - get_by_id: Use to execute issues domain action.
 - link_create: Use to create a relationship from a source issue to a target issue, optionally across projects.
@@ -4958,6 +4967,12 @@ Action guidance:
 - emoji_mr_note_delete: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
 - emoji_mr_note_get: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
 - emoji_mr_note_list: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
+- event_mr_label_get: Use to execute resourceevents domain action.
+- event_mr_label_list: Use to execute resourceevents domain action.
+- event_mr_milestone_get: Use to execute resourceevents domain action.
+- event_mr_milestone_list: Use to execute resourceevents domain action.
+- event_mr_state_get: Use to execute resourceevents domain action.
+- event_mr_state_list: Use to execute resourceevents domain action.
 - get: Use to execute mergerequests domain action.
 - issues_closed: Use to execute mergerequests domain action.
 - list: Use to execute mergerequests domain action.
@@ -5601,6 +5616,11 @@ Action guidance:
 - draft_note_publish: Use to execute mrdraftnotes domain action.
 - draft_note_publish_all: Use to execute mrdraftnotes domain action.
 - draft_note_update: Use to execute mrdraftnotes domain action.
+- note_create: Use to execute mrnotes domain action.
+- note_delete: Use to execute mrnotes domain action.
+- note_get: Use to execute mrnotes domain action.
+- note_list: Use to execute mrnotes domain action.
+- note_update: Use to execute mrnotes domain action.
 - raw_diffs: Use to execute mrchanges domain action.
 
 Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload.
@@ -5845,7 +5865,17 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_package.<action>.
 Action guidance:
+- delete: Use to execute packages domain action.
+- download: Use to execute packages domain action.
+- file_delete: Use to execute packages domain action.
+- file_list: Use to execute packages domain action.
 - list: List package registry packages. If ordering is requested, use order_by with one of created_at, name, version, or type; do not use updated_at, released_at, or downloaded_at.
+- protection_rule_create: Use to execute protectedpackages domain action.
+- protection_rule_delete: Use to execute protectedpackages domain action.
+- protection_rule_list: Use to execute protectedpackages domain action.
+- protection_rule_update: Use to execute protectedpackages domain action.
+- publish: Use to execute packages domain action.
+- publish_and_link: Use to execute packages domain action.
 - publish_directory: Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file; include_pattern is one glob, not a comma-separated file list.
 - registry_delete: Delete one container registry repository.
 - registry_get: Get details for one container registry repository.
@@ -6117,15 +6147,38 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_pipeline.<action>.
 Action guidance:
+- cancel: Use to execute pipelines domain action.
 - create: Create a pipeline for a project ref (branch or tag). Use variables only when the task explicitly requires runtime overrides.
+- delete: Use to execute pipelines domain action.
 - get: Get one pipeline by project_id and pipeline_id. Use this when the target pipeline is already known and you need detailed status, ref, source, and web URL fields.
+- latest: Use to execute pipelines domain action.
 - list: List pipelines for one project. Use filters and pagination when the task asks for recent, failed, running, or branch-specific pipelines.
 - resource_group_edit: Update one resource group process mode by key.
 - resource_group_get: Get one resource group by key.
 - resource_group_list: List CI resource groups configured for a project.
 - resource_group_upcoming_jobs: List upcoming jobs queued for a resource group by key.
+- retry: Use to execute pipelines domain action.
+- schedule_create: Use to execute pipelineschedules domain action.
 - schedule_create_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
+- schedule_delete: Use to execute pipelineschedules domain action.
+- schedule_delete_variable: Use to execute pipelineschedules domain action.
 - schedule_edit_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
+- schedule_get: Use to execute pipelineschedules domain action.
+- schedule_list: Use to execute pipelineschedules domain action.
+- schedule_list_triggered_pipelines: Use to execute pipelineschedules domain action.
+- schedule_run: Use to execute pipelineschedules domain action.
+- schedule_take_ownership: Use to execute pipelineschedules domain action.
+- schedule_update: Use to execute pipelineschedules domain action.
+- test_report: Use to execute pipelines domain action.
+- test_report_summary: Use to execute pipelines domain action.
+- trigger_create: Use to execute pipelinetriggers domain action.
+- trigger_delete: Use to execute pipelinetriggers domain action.
+- trigger_get: Use to execute pipelinetriggers domain action.
+- trigger_list: Use to execute pipelinetriggers domain action.
+- trigger_run: Use to execute pipelinetriggers domain action.
+- trigger_update: Use to execute pipelinetriggers domain action.
+- update_metadata: Use to execute pipelines domain action.
+- variables: Use to execute pipelines domain action.
 - wait: Use only to poll an existing pipeline_id until a terminal status. For merge when pipeline succeeds, use merge_request.merge with auto_merge=true instead.
 Parameter guidance:
 - create.project_id: scope_project; source: Project where the pipeline should be created.
@@ -6471,6 +6524,14 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_project.<action>.
 Action guidance:
+- approval_config_change: Use to execute projects domain action.
+- approval_config_get: Use to execute projects domain action.
+- approval_rule_create: Use to execute projects domain action.
+- approval_rule_delete: Use to execute projects domain action.
+- approval_rule_get: Use to execute projects domain action.
+- approval_rule_list: Use to execute projects domain action.
+- approval_rule_update: Use to execute projects domain action.
+- archive: Use to execute projects domain action.
 - badge_add: Add a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
 - badge_delete: Delete a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
 - badge_edit: Edit a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD. Use the parameter name name for a new badge name; new_name is not supported.
@@ -6487,11 +6548,28 @@ Action guidance:
 - board_list_list: Use to execute boards domain action.
 - board_list_update: Use to execute boards domain action.
 - board_update: Use to execute boards domain action.
+- create: Use to execute projects domain action.
+- create_for_user: Use to execute projects domain action.
+- create_fork_relation: Use to execute projects domain action.
 - delete: Use to delete a project. For ordinary cleanup, send project_id and confirm only. Set permanently_remove only when explicitly requested; when permanently_remove is true, full_path must exactly match the project's path_with_namespace from project create/get.
+- delete_fork_relation: Use to execute projects domain action.
+- delete_shared_group: Use to execute projects domain action.
+- download_avatar: Use to execute projects domain action.
 - export_download: Download the generated project export archive when ready.
 - export_schedule: Schedule an export archive for a project.
 - export_status: Get current export status for a project.
+- fork: Use to execute projects domain action.
 - get: Get one exact project by numeric ID or full namespace path. Use this when the prompt gives a concrete path like group/project and asks to find, show, verify, or read project metadata such as id or default_branch; do not use search.projects for an exact path lookup.
+- hook_add: Use to execute projects domain action.
+- hook_delete: Use to execute projects domain action.
+- hook_delete_custom_header: Use to execute projects domain action.
+- hook_delete_url_variable: Use to execute projects domain action.
+- hook_edit: Use to execute projects domain action.
+- hook_get: Use to execute projects domain action.
+- hook_list: Use to execute projects domain action.
+- hook_set_custom_header: Use to execute projects domain action.
+- hook_set_url_variable: Use to execute projects domain action.
+- hook_test: Use to execute projects domain action.
 - import_from_file: Import a project from an uploaded archive file payload.
 - import_status: Get import status for a project import operation.
 - integration_delete: Use to execute integrations domain action.
@@ -6506,7 +6584,16 @@ Action guidance:
 - label_subscribe: Use to execute labels domain action.
 - label_unsubscribe: Use to execute labels domain action.
 - label_update: Use to execute labels domain action.
+- languages: Use to execute projects domain action.
 - list: List projects accessible to the authenticated user. For most recently updated projects, use order_by last_activity_at with sort desc and per_page for the requested count; do not use last_activity_after as an order_by value.
+- list_forks: Use to execute projects domain action.
+- list_groups: Use to execute projects domain action.
+- list_invited_groups: Use to execute projects domain action.
+- list_starrers: Use to execute projects domain action.
+- list_user_contributed: Use to execute projects domain action.
+- list_user_projects: Use to execute projects domain action.
+- list_user_starred: Use to execute projects domain action.
+- list_users: Use to execute projects domain action.
 - member_add: Use to execute members domain action.
 - member_delete: Use to execute members domain action.
 - member_edit: Use to execute members domain action.
@@ -6520,6 +6607,13 @@ Action guidance:
 - milestone_list: List milestones in one project with optional state/search filters and pagination. Use for release planning and progress overviews.
 - milestone_merge_requests: Use to execute milestones domain action.
 - milestone_update: Use to execute milestones domain action.
+- mirror_add: Use to execute projectmirrors domain action.
+- mirror_delete: Use to execute projectmirrors domain action.
+- mirror_edit: Use to execute projectmirrors domain action.
+- mirror_force_push: Use to execute projectmirrors domain action.
+- mirror_get: Use to execute projectmirrors domain action.
+- mirror_get_public_key: Use to execute projectmirrors domain action.
+- mirror_list: Use to execute projectmirrors domain action.
 - pages_domain_create: Manage project Pages settings and custom domains.
 - pages_domain_delete: Manage project Pages settings and custom domains.
 - pages_domain_get: Manage project Pages settings and custom domains.
@@ -6529,7 +6623,20 @@ Action guidance:
 - pages_get: Manage project Pages settings and custom domains.
 - pages_unpublish: Manage project Pages settings and custom domains.
 - pages_update: Manage project Pages settings and custom domains.
+- pull_mirror_configure: Use to execute projects domain action.
+- pull_mirror_get: Use to execute projects domain action.
+- repository_storage_get: Use to execute projects domain action.
+- restore: Use to execute projects domain action.
+- share_with_group: Use to execute projects domain action.
+- star: Use to execute projects domain action.
+- start_housekeeping: Use to execute projects domain action.
+- start_mirroring: Use to execute projects domain action.
 - statistics_get: Get detailed storage and repository statistics for a project.
+- transfer: Use to execute projects domain action.
+- unarchive: Use to execute projects domain action.
+- unstar: Use to execute projects domain action.
+- update: Use to execute projects domain action.
+- upload_avatar: Use to execute projects domain action.
 Parameter guidance:
 - badge_add.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_delete.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
@@ -7757,11 +7864,17 @@ Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_release.<action>.
 Action guidance:
 - create: Create a release for a tag (and optionally ref when creating a new tag). Use this for publishing release notes and lifecycle artifacts.
+- delete: Use to execute releases domain action.
 - get: Get a release by project_id and tag_name. Use this when a specific tag is known and detailed release notes/assets are needed.
+- get_latest: Use to execute releases domain action.
 - link_create: Create a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url.
 - link_create_batch: Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets.
+- link_delete: Use to execute releaselinks domain action.
+- link_get: Use to execute releaselinks domain action.
+- link_list: Use to execute releaselinks domain action.
 - link_update: Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url.
 - list: List releases for one project. Use this when the task asks for recent releases, release history, or release notes discovery.
+- update: Use to execute releases domain action.
 Parameter guidance:
 - create.ref: git_ref; source: Branch/tag/commit used to create tag when tag_name does not exist.; avoid: ref is only needed when creating a new tag; omit it when releasing an existing tag.
 - create.tag_name: git_tag; source: Release tag to publish.
@@ -7911,8 +8024,10 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"archive","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_repository.<action>.
 Action guidance:
+- archive: Use to execute repository domain action.
 - blob: Get blob metadata/content for a specific file path and ref. Use when you need one file's content or metadata after locating its path.
 - changelog_add: Create or append changelog entries in the repository for a version. Use in release workflows when structured changelog updates are requested.
+- changelog_generate: Use to execute repository domain action.
 - commit_cherry_pick: Use to execute commits domain action.
 - commit_comment_create: Use to execute commits domain action.
 - commit_comments: Use to execute commits domain action.
@@ -7933,6 +8048,7 @@ Action guidance:
 - commit_status_set: Set commit status/check state for a SHA. Use this for external CI/reporting integrations that need to update pipeline-like status checks.
 - commit_statuses: Use to execute commits domain action.
 - compare: Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff.
+- contributors: Use to execute repository domain action.
 - file_blame: Use to execute files domain action.
 - file_create: Use to execute files domain action.
 - file_delete: Use to execute files domain action.
@@ -7942,8 +8058,13 @@ Action guidance:
 - file_raw: Use to execute files domain action.
 - file_raw_metadata: Use to execute files domain action.
 - file_update: Use to execute files domain action.
+- list_submodules: Use to execute repositorysubmodules domain action.
 - markdown_render: Use to execute markdown_render action.
+- merge_base: Use to execute repository domain action.
+- raw_blob: Use to execute repository domain action.
+- read_submodule_file: Use to execute repositorysubmodules domain action.
 - tree: List repository tree entries for a project/ref/path. Use this to browse directories and locate files before file/blob operations.
+- update_submodule: Use to execute repositorysubmodules domain action.
 Parameter guidance:
 - commit_create.actions: commit_actions; source: Array of commit actions (create/update/delete/move/chmod) with file paths and content.
 - commit_create.branch: git_branch; source: Target branch receiving commit actions.
@@ -8371,6 +8492,12 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_runner.<action>.
+Action guidance:
+- controller_create: Use to execute runnercontrollers domain action.
+- controller_delete: Use to execute runnercontrollers domain action.
+- controller_get: Use to execute runnercontrollers domain action.
+- controller_list: Use to execute runnercontrollers domain action.
+- controller_update: Use to execute runnercontrollers domain action.
 Parameter guidance:
 - delete_registered.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
 - disable_project.project_id: scope_owner_project; source: Use gitlab_project get/list outputs; accepts numeric ID or namespace/project path.; avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.
@@ -9203,6 +9330,13 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"get_project","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_storage_move.<action>.
+Action guidance:
+- get_project: Use to execute projectstoragemoves domain action.
+- get_project_for_project: Use to execute projectstoragemoves domain action.
+- retrieve_all_project: Use to execute projectstoragemoves domain action.
+- retrieve_project: Use to execute projectstoragemoves domain action.
+- schedule_all_project: Use to execute projectstoragemoves domain action.
+- schedule_project: Use to execute projectstoragemoves domain action.
 
 Manage repository storage moves for projects, groups, and snippets (admin only).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -9680,6 +9814,12 @@ Action guidance:
 - namespace_get: List namespaces visible to the authenticated user.
 - namespace_list: List namespaces visible to the authenticated user.
 - namespace_search: Search namespaces by query string.
+- notification_global_get: Use to execute notifications domain action.
+- notification_global_update: Use to execute notifications domain action.
+- notification_group_get: Use to execute notifications domain action.
+- notification_group_update: Use to execute notifications domain action.
+- notification_project_get: Use to execute notifications domain action.
+- notification_project_update: Use to execute notifications domain action.
 - revoke_impersonation_token: Use to execute impersonationtokens domain action.
 Parameter guidance:
 - avatar_get.email: email_address; source: Email address supplied by the task or returned by another GitLab user lookup.; avoid: Do not send a username or display name as email.

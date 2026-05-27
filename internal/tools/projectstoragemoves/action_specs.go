@@ -27,7 +27,7 @@ func projectStorageMoveCreateSpec(name string, route toolutil.ActionRoute, indiv
 
 func projectStorageMoveOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"storage_move", "project"},
+		Aliases: []string{individualTool}, Usage: "Use to execute projectstoragemoves domain action.", Tags: []string{"storage_move", "project"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "projectstoragemoves",

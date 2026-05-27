@@ -45,7 +45,7 @@ func pipelineTriggerDeleteSpec(name string, route toolutil.ActionRoute, individu
 
 func pipelineTriggerOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"ci", "pipeline", "trigger"},
+		Aliases: []string{individualTool}, Usage: "Use to execute pipelinetriggers domain action.", Tags: []string{"ci", "pipeline", "trigger"},
 		OpenWorld:      true,
 		OwnerPackage:   "pipelinetriggers",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

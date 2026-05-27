@@ -66,7 +66,7 @@ func pipelineDeleteSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"ci", "pipeline"},
+		Aliases: []string{individualTool}, Usage: "Use to execute pipelines domain action.", Tags: []string{"ci", "pipeline"},
 		OpenWorld:      true,
 		OwnerPackage:   "pipelines",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
