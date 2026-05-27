@@ -31730,7 +31730,7 @@
   },
   {
     "name": "gitlab_group_create",
-    "description": "Create a new GitLab group. Requires name; optionally set path, description, visibility, parent_id (for subgroups), request_access_enabled, lfs_enabled, and default_branch. Returns: id, name, path, full_path, visibility, web_url, parent_id. See also: gitlab_group_get, gitlab_group_list.",
+    "description": "Create a GitLab group or subgroup. Returns: created group metadata including ID, full path, and visibility. See also: gitlab_group_get, gitlab_group_update, gitlab_group_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32168,7 +32168,7 @@
   },
   {
     "name": "gitlab_group_get",
-    "description": "Retrieve detailed metadata for a GitLab group including name, path, full path, description, visibility, web URL, and parent group. Accepts numeric group ID or URL-encoded path (e.g. 'group/subgroup').\n\nReturns: id, name, path, full_path, description, visibility, web_url, and parent_id. See also: gitlab_group_update, gitlab_group_list.",
+    "description": "Get one GitLab group by ID or path. Returns: group metadata, visibility, parent information, and web URL. See also: gitlab_group_list, gitlab_group_members_list, gitlab_group_projects, gitlab_group_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34512,7 +34512,7 @@
   },
   {
     "name": "gitlab_group_list",
-    "description": "List GitLab groups accessible to the authenticated user. Supports filtering by search term, ownership, and top-level only. Returns paginated results including group name, path, visibility, and web URL.\n\nReturns: paginated list of groups with id, name, path, full_path, visibility, web_url, and parent_id. See also: gitlab_group_get, gitlab_project_list.",
+    "description": "List accessible GitLab groups with filtering and pagination. Returns: matching groups including path, name, and visibility metadata. See also: gitlab_group_get, gitlab_group_search, gitlab_group_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

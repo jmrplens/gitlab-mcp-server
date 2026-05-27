@@ -2350,7 +2350,10 @@ Action guidance:
 - badge_get: Get a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
 - badge_list: List group badges. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
 - badge_preview: Preview a group badge. Use group_id for group badge operations; do not use project_id. Use only when the task says group badge; project badge CRUD belongs to gitlab_project.
+- create: Create a group with name and path. Optionally set parent_id, description, visibility, and project creation permissions when requested.
+- get: Get one exact group by group_id (numeric ID or full path). Use this when the prompt already targets a specific group and needs metadata such as visibility, parent, web URL, or statistics.
 - issues: List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project.
+- list: List groups visible to the authenticated user. Use search, owned, min_access_level, and pagination when the user asks for matching or accessible groups.
 Parameter guidance:
 - badge_add.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
 - badge_delete.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
@@ -2359,7 +2362,11 @@ Parameter guidance:
 - badge_get.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
 - badge_list.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
 - badge_preview.group_id: scope_group; source: Group that owns the badge.; avoid: Do not use project_id for group badge actions.
+- create.name: group_name; source: Human-readable group display name from user intent.
+- create.path: group_path_segment; source: URL-safe group path segment.; avoid: path is a slug segment, not a full URL or namespace with slashes unless creating nested groups via parent_id.
+- get.group_id: scope_group; source: Group numeric ID or full path from the prompt or prior discovery step.; avoid: Use group_id for path or ID; do not send project_id for group lookups.
 - issues.group_id: scope_group; source: Group ID or full group path from the user's request.; avoid: Use group_id for group paths or IDs; use project_id only with issue.list for a single project.
+- list.search; source: Group name/path keywords from the user query.; avoid: search filters visible groups; it does not accept project paths.
 
 Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
 When to use: group-level operations (groups, subgroups, members, labels, milestones, boards, webhooks, badges, wikis, epics). NOT for: project-specific operations (use gitlab_project or gitlab_merge_request), user accounts (use gitlab_user), cross-project search (use gitlab_search).
@@ -15100,7 +15107,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_create
 
-Create a new GitLab group. Requires name; optionally set path, description, visibility, parent_id (for subgroups), request_access_enabled, lfs_enabled, and default_branch. Returns: id, name, path, full_path, visibility, web_url, parent_id. See also: gitlab_group_get, gitlab_group_list.
+Create a GitLab group or subgroup. Returns: created group metadata including ID, full path, and visibility. See also: gitlab_group_get, gitlab_group_update, gitlab_group_delete.
 
 **Parameters:**
 
@@ -15153,7 +15160,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_get
 
-Retrieve detailed metadata for a GitLab group including name, path, full path, description, visibility, web URL, and parent group. Accepts numeric group ID or URL-encoded path (e.g. 'group/subgroup').
+Get one GitLab group by ID or path. Returns: group metadata, visibility, parent information, and web URL. See also: gitlab_group_list, gitlab_group_members_list, gitlab_group_projects, gitlab_group_update.
 
 **Parameters:**
 
@@ -15437,7 +15444,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_list
 
-List GitLab groups accessible to the authenticated user. Supports filtering by search term, ownership, and top-level only. Returns paginated results including group name, path, visibility, and web URL.
+List accessible GitLab groups with filtering and pagination. Returns: matching groups including path, name, and visibility metadata. See also: gitlab_group_get, gitlab_group_search, gitlab_group_create.
 
 **Parameters:**
 

@@ -63,26 +63,82 @@ func UnarchiveOutput(ctx context.Context, client *gitlabclient.Client, input Arc
 }
 
 func groupReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, groupOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, groupOptionsForAction(name, individualTool))
 }
 
 func groupCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, groupOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, groupOptionsForAction(name, individualTool))
 }
 
 func groupUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, groupOptions(individualTool))
+	return toolutil.NewUpdateActionSpec(name, route, groupOptionsForAction(name, individualTool))
 }
 
 func groupDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, groupOptions(individualTool))
+	return toolutil.NewDeleteActionSpec(name, route, groupOptionsForAction(name, individualTool))
 }
 
 func groupOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+	return groupOptionsForAction("", individualTool)
+}
+
+func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
+	_ = actionName
+
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"group"},
 		OpenWorld:      true,
 		OwnerPackage:   "groups",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+
+	switch individualTool {
+	case "gitlab_group_get":
+		options.Usage = "Get one exact group by group_id (numeric ID or full path). Use this when the prompt already targets a specific group and needs metadata such as visibility, parent, web URL, or statistics."
+		options.Aliases = []string{"get group", "show group details", "lookup group by path"}
+		options.RelatedActions = []string{"group.list", "group.members", "group.projects", "group.update"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"group_id": {
+				SemanticRole:     "scope_group",
+				ValueSource:      "Group numeric ID or full path from the prompt or prior discovery step.",
+				ExampleBinding:   `params.group_id:"my-org/platform"`,
+				CommonConfusions: []string{"Use group_id for path or ID; do not send project_id for group lookups."},
+			},
+		}
+		options.IndividualTool.Description = "Get one GitLab group by ID or path. Returns: group metadata, visibility, parent information, and web URL. See also: gitlab_group_list, gitlab_group_members_list, gitlab_group_projects, gitlab_group_update."
+	case "gitlab_group_list":
+		options.Usage = "List groups visible to the authenticated user. Use search, owned, min_access_level, and pagination when the user asks for matching or accessible groups."
+		options.Aliases = []string{"list groups", "show visible groups", "find groups"}
+		options.RelatedActions = []string{"group.get", "group.search", "group.create"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"search": {
+				ValueSource:      "Group name/path keywords from the user query.",
+				ExampleBinding:   `params.search:"platform"`,
+				CommonConfusions: []string{"search filters visible groups; it does not accept project paths."},
+			},
+		}
+		options.IndividualTool.Description = "List accessible GitLab groups with filtering and pagination. Returns: matching groups including path, name, and visibility metadata. See also: gitlab_group_get, gitlab_group_search, gitlab_group_create."
+	case "gitlab_group_create":
+		options.Usage = "Create a group with name and path. Optionally set parent_id, description, visibility, and project creation permissions when requested."
+		options.Aliases = []string{"create group", "create subgroup", "new group"}
+		options.RelatedActions = []string{"group.get", "group.update", "group.delete"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"name": {
+				SemanticRole:   "group_name",
+				ValueSource:    "Human-readable group display name from user intent.",
+				ExampleBinding: `params.name:"Platform Team"`,
+			},
+			"path": {
+				SemanticRole:     "group_path_segment",
+				ValueSource:      "URL-safe group path segment.",
+				ExampleBinding:   `params.path:"platform-team"`,
+				CommonConfusions: []string{"path is a slug segment, not a full URL or namespace with slashes unless creating nested groups via parent_id."},
+			},
+		}
+		options.IndividualTool.Description = "Create a GitLab group or subgroup. Returns: created group metadata including ID, full path, and visibility. See also: gitlab_group_get, gitlab_group_update, gitlab_group_delete."
+	case "gitlab_group_members_list":
+		options.RelatedActions = []string{"group.get", "group.projects", "group.member_add"}
+	}
+
+	return options
 }
