@@ -10797,7 +10797,7 @@
   },
   {
     "name": "gitlab_create_user",
-    "description": "Create a new GitLab user account (admin only). Requires email, name, and username. Supports setting password, admin status, and profile details.\n\nSee also: gitlab_modify_user, gitlab_delete_user\n\nReturns: JSON with created user profile.",
+    "description": "Create a user account. Returns: created user identity and profile summary fields. See also: gitlab_get_user, gitlab_modify_user, gitlab_block_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -29130,7 +29130,7 @@
   },
   {
     "name": "gitlab_get_user",
-    "description": "Retrieve detailed information about a specific GitLab user by their ID. Returns profile details including username, email, state, bio, and admin status.\n\nSee also: gitlab_list_users, gitlab_get_user_status\n\nReturns: JSON with user profile details.",
+    "description": "Get one user by ID. Returns: detailed account profile metadata and status fields. See also: gitlab_list_users, gitlab_modify_user, gitlab_delete_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -61443,7 +61443,7 @@
   },
   {
     "name": "gitlab_list_users",
-    "description": "List GitLab users with optional filters. Supports search by name/username/email, filtering by active/blocked/external status, ordering, and pagination. Useful for finding users or auditing accounts.\n\nSee also: gitlab_get_user, gitlab_user_current\n\nReturns: JSON array of users with pagination.",
+    "description": "List users with filtering and pagination support. Returns: user summaries including ID, username, name, state, and profile URLs. See also: gitlab_get_user, gitlab_user_current, gitlab_create_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -115270,7 +115270,7 @@
   },
   {
     "name": "gitlab_user_current",
-    "description": "Retrieve information about the currently authenticated GitLab user. Returns user ID, username, name, email, state, avatar URL, web URL, and admin status. Useful for confirming identity and permissions.\n\nSee also: gitlab_get_user, gitlab_list_users\n\nReturns: JSON with current user profile details.",
+    "description": "Get the current authenticated user. Returns: account ID, username, name, state, avatar URL, and profile metadata. See also: gitlab_list_users, gitlab_current_user_status, gitlab_list_emails.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},

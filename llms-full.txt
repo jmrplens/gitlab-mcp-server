@@ -9018,9 +9018,18 @@ Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_user.<action>.
 Action guidance:
 - avatar_get: Resolve the avatar URL for a known email address. Use this when the task already provides an email; do not use it to search for users by name or username.
+- create: Create a new user account with required fields email, name, and username. Add optional admin/external flags only when explicitly requested.
+- current: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
+- get: Get a single user by numeric user_id. Use this when the prompt already references a concrete user account and needs detailed profile fields.
+- list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
+- me: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
 Parameter guidance:
 - avatar_get.email: email_address; source: Email address supplied by the task or returned by another GitLab user lookup.; avoid: Do not send a username or display name as email.
 - avatar_get.size: image_size_pixels; source: Optional avatar size in pixels; omit it to let GitLab choose the default size.; avoid: Send a numeric pixel size such as 64 or 128, not CSS strings like 64px.
+- create.email: email_address; source: New account email address from task requirements.; avoid: Provide a real email address; do not pass usernames in the email field.
+- create.username: username; source: GitLab username slug for the new account.; avoid: Use username without spaces; it is different from display name.
+- get.user_id: scope_user; source: Numeric GitLab user ID from prior list/get output or explicit task input.; avoid: Use numeric user_id; do not pass username where an ID is required.
+- list.search; source: Name, username, or email fragment from the user's request.; avoid: search narrows users globally; it is not a project/group membership filter.
 
 User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars. This is the canonical user management tool — covers the entire /users API surface. Delete / block / ban / reject actions are destructive.
 When to use: any user-management workflow — user CRUD (create / modify / delete / block / unblock / ban / unban / approve / reject / activate / deactivate), SSH/GPG key management, personal access token (PAT) management, impersonation tokens (admin), todos, contribution events, notification settings, namespaces, avatars, current-user status. NOT for: deploy tokens or project/group access tokens (use gitlab_access), instance-wide admin operations (use gitlab_admin), project/group memberships (use gitlab_project / gitlab_group).
@@ -12216,7 +12225,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_user
 
-Create a new GitLab user account (admin only). Requires email, name, and username. Supports setting password, admin status, and profile details.
+Create a user account. Returns: created user identity and profile summary fields. See also: gitlab_get_user, gitlab_modify_user, gitlab_block_user.
 
 **Parameters:**
 
@@ -14820,7 +14829,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_user
 
-Retrieve detailed information about a specific GitLab user by their ID. Returns profile details including username, email, state, bio, and admin status.
+Get one user by ID. Returns: detailed account profile metadata and status fields. See also: gitlab_list_users, gitlab_modify_user, gitlab_delete_user.
 
 **Parameters:**
 
@@ -18235,7 +18244,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_users
 
-List GitLab users with optional filters. Supports search by name/username/email, filtering by active/blocked/external status, ordering, and pagination. Useful for finding users or auditing accounts.
+List users with filtering and pagination support. Returns: user summaries including ID, username, name, state, and profile URLs. See also: gitlab_get_user, gitlab_user_current, gitlab_create_user.
 
 **Parameters:**
 
@@ -24204,7 +24213,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_user_current
 
-Retrieve information about the currently authenticated GitLab user. Returns user ID, username, name, email, state, avatar URL, web URL, and admin status. Useful for confirming identity and permissions.
+Get the current authenticated user. Returns: account ID, username, name, state, avatar URL, and profile metadata. See also: gitlab_list_users, gitlab_current_user_status, gitlab_list_emails.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
