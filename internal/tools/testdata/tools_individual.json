@@ -78191,7 +78191,7 @@
   },
   {
     "name": "gitlab_pipeline_create",
-    "description": "Create a new pipeline for a branch or tag. Optionally pass variables (key/value pairs with type env_var or file). Returns: id, iid, status, source, ref, sha, web_url, duration, coverage, timestamps. See also: gitlab_pipeline_get, gitlab_job_list.",
+    "description": "Create a new pipeline. Returns: created pipeline metadata including ID, status, and target ref. See also: gitlab_pipeline_get, gitlab_pipeline_wait, gitlab_job_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -78438,7 +78438,7 @@
   },
   {
     "name": "gitlab_pipeline_get",
-    "description": "Retrieve detailed information about a specific pipeline in a GitLab project. Returns pipeline ID, status, source, ref, SHA, duration, coverage, user, timestamps, and YAML errors. See also: gitlab_job_list, gitlab_pipeline_test_report.\n\nReturns: id, iid, status, source, ref, sha, duration, coverage, user, timestamps, and yaml_errors.",
+    "description": "Get one pipeline by ID. Returns: full pipeline metadata, status lifecycle fields, and links. See also: gitlab_pipeline_list, gitlab_pipeline_variables, gitlab_job_list_project, gitlab_pipeline_retry.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -78763,7 +78763,7 @@
   },
   {
     "name": "gitlab_pipeline_list",
-    "description": "List pipelines for a GitLab project. Supports filtering by status (success, failed, running, pending, canceled), scope (running, pending, finished, branches, tags), source (push, web, schedule, merge_request_event), ref (branch/tag), SHA, and username. Returns pipeline ID, status, source, ref, web URL, and timestamps with pagination.\n\nReturns: paginated list of pipelines with id, status, source, ref, sha, web_url, and timestamps. See also: gitlab_pipeline_get, gitlab_job_list.",
+    "description": "List project pipelines with filters and pagination. Returns: pipeline IDs, refs, statuses, source, and timing metadata. See also: gitlab_pipeline_get, gitlab_pipeline_latest, gitlab_job_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

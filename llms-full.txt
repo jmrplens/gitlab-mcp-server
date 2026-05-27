@@ -5681,10 +5681,18 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_pipeline.<action>.
 Action guidance:
+- create: Create a pipeline for a project ref (branch or tag). Use variables only when the task explicitly requires runtime overrides.
+- get: Get one pipeline by project_id and pipeline_id. Use this when the target pipeline is already known and you need detailed status, ref, source, and web URL fields.
+- list: List pipelines for one project. Use filters and pagination when the task asks for recent, failed, running, or branch-specific pipelines.
 - schedule_create_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
 - schedule_edit_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
 - wait: Use only to poll an existing pipeline_id until a terminal status. For merge when pipeline succeeds, use merge_request.merge with auto_merge=true instead.
 Parameter guidance:
+- create.project_id: scope_project; source: Project where the pipeline should be created.
+- create.ref: git_ref; source: Branch or tag to run the pipeline against.; avoid: Use ref for branch/tag names; do not send commit SHA when branch intent is requested.
+- get.pipeline_id: pipeline_identifier; source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.; avoid: Use pipeline_id, not job_id or merge_request_iid.
+- list.project_id: scope_project; source: Project ID or full path that owns the pipeline history.
+- list.status: pipeline_status_filter; source: Pipeline status requested by the task, such as failed, running, or success.
 - schedule_create_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
 - schedule_edit_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
 - wait.pipeline_id: pipeline_identifier; source: Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines.; avoid: Do not use merge_request_iid; pipeline.wait requires pipeline_id.
@@ -20016,7 +20024,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_create
 
-Create a new pipeline for a branch or tag. Optionally pass variables (key/value pairs with type env_var or file). Returns: id, iid, status, source, ref, sha, web_url, duration, coverage, timestamps. See also: gitlab_pipeline_get, gitlab_job_list.
+Create a new pipeline. Returns: created pipeline metadata including ID, status, and target ref. See also: gitlab_pipeline_get, gitlab_pipeline_wait, gitlab_job_list_project.
 
 **Parameters:**
 
@@ -20040,7 +20048,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_get
 
-Retrieve detailed information about a specific pipeline in a GitLab project. Returns pipeline ID, status, source, ref, SHA, duration, coverage, user, timestamps, and YAML errors. See also: gitlab_job_list, gitlab_pipeline_test_report.
+Get one pipeline by ID. Returns: full pipeline metadata, status lifecycle fields, and links. See also: gitlab_pipeline_list, gitlab_pipeline_variables, gitlab_job_list_project, gitlab_pipeline_retry.
 
 **Parameters:**
 
@@ -20062,7 +20070,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_pipeline_list
 
-List pipelines for a GitLab project. Supports filtering by status (success, failed, running, pending, canceled), scope (running, pending, finished, branches, tags), source (push, web, schedule, merge_request_event), ref (branch/tag), SHA, and username. Returns pipeline ID, status, source, ref, web URL, and timestamps with pagination.
+List project pipelines with filters and pagination. Returns: pipeline IDs, refs, statuses, source, and timing metadata. See also: gitlab_pipeline_get, gitlab_pipeline_latest, gitlab_job_list_project.
 
 **Parameters:**
 

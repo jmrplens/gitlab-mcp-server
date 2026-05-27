@@ -31,3 +31,35 @@ func TestActionSpecs_WaitGuidance(t *testing.T) {
 		t.Fatalf("gitlab_pipeline_wait pipeline_id guidance = %+v, want pipeline source hint", guidance)
 	}
 }
+
+// TestActionSpecs_PrimaryMetadata verifies richer metadata for core pipeline actions.
+func TestActionSpecs_PrimaryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	}))
+	byTool := pipelineSpecsByTool(t, ActionSpecs(client))
+
+	list := byTool["gitlab_pipeline_list"]
+	if !slices.Contains(list.Aliases, "list pipelines") {
+		t.Fatalf("gitlab_pipeline_list Aliases = %v, want list pipelines", list.Aliases)
+	}
+	if guidance := list.ParameterGuidance["status"]; guidance.SemanticRole != "pipeline_status_filter" {
+		t.Fatalf("gitlab_pipeline_list status guidance = %+v, want pipeline_status_filter", guidance)
+	}
+
+	get := byTool["gitlab_pipeline_get"]
+	if !strings.Contains(get.Usage, "project_id and pipeline_id") {
+		t.Fatalf("gitlab_pipeline_get Usage = %q", get.Usage)
+	}
+	if guidance := get.ParameterGuidance["pipeline_id"]; guidance.SemanticRole != "pipeline_identifier" {
+		t.Fatalf("gitlab_pipeline_get pipeline_id guidance = %+v, want pipeline_identifier", guidance)
+	}
+
+	create := byTool["gitlab_pipeline_create"]
+	if !slices.Contains(create.Aliases, "run pipeline") {
+		t.Fatalf("gitlab_pipeline_create Aliases = %v, want run pipeline", create.Aliases)
+	}
+	if guidance := create.ParameterGuidance["ref"]; guidance.SemanticRole != "git_ref" {
+		t.Fatalf("gitlab_pipeline_create ref guidance = %+v, want git_ref", guidance)
+	}
+}
