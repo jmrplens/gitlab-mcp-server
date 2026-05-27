@@ -59,7 +59,7 @@ func environmentStopSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 
 func environmentOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"environment", "deployment"},
+		Aliases: []string{individualTool}, Usage: "Use to execute environments domain action.", Tags: []string{"environment", "deployment"},
 		RelatedActions: []string{"deployment.list", "ci_variable.list", "feature_flags.strategy_list"},
 		OpenWorld:      true,
 		OwnerPackage:   "environments",

@@ -55,7 +55,7 @@ func groupBoardDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 
 func groupBoardOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "board"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupboards domain action.", Tags: []string{"group", "board"},
 		RelatedActions: []string{"group.group_label_list", "group.issues"},
 		OpenWorld:      true,
 		OwnerPackage:   "groupboards",

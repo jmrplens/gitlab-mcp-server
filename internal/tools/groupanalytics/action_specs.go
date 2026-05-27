@@ -20,7 +20,7 @@ func groupAnalyticsReadSpec(name string, route toolutil.ActionRoute, individualT
 
 func groupAnalyticsOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "analytics"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupanalytics domain action.", Tags: []string{"group", "analytics"},
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",
 		OpenWorld:      true,

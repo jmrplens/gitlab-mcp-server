@@ -48,7 +48,7 @@ func groupCredentialDeleteSpec(name string, route toolutil.ActionRoute, individu
 
 func groupCredentialOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "credential"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupcredentials domain action.", Tags: []string{"group", "credential"},
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",
 		OpenWorld:      true,

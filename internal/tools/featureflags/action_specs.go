@@ -34,7 +34,7 @@ func featureFlagDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 
 func featureFlagOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"feature_flags", "rollout"},
+		Aliases: []string{individualTool}, Usage: "Use to execute featureflags domain action.", Tags: []string{"feature_flags", "rollout"},
 		RelatedActions: []string{"environment.list", "ci_variable.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "featureflags",

@@ -12,7 +12,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		toolutil.NewCreateActionSpec("epic_issue_assign",
 			toolutil.RouteAction(client, Assign),
 			toolutil.ActionSpecOptions{
-				Tags:           []string{"group", "epic", "issue"},
+				Aliases: []string{"gitlab_epic_issue_assign"}, Tags: []string{"group", "epic", "issue"},
 				Usage:          "Use to assign a project issue as a child of an epic owned by a group path. Send full_path for the epic group. Copy epic_iid from the epic_create or epic_get result and child_iid from the child issue result; do not omit full_path or epic_iid after creating the epic.",
 				RelatedActions: []string{"group.epic_issue_list", "group.epic_issue_remove", "group.epic_get", "issue.get"},
 				ParameterGuidance: map[string]toolutil.ParameterGuidance{
@@ -56,7 +56,7 @@ func epicIssueDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 func epicIssueOptions(individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "epic", "issue"},
+		Aliases: []string{individualTool}, Usage: "Use to execute epicissues domain action.", Tags: []string{"group", "epic", "issue"},
 		RelatedActions: []string{"group.epic_get", "issue.get"},
 		Edition:        "premium",
 		OpenWorld:      true,

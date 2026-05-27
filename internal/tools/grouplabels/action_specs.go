@@ -36,7 +36,7 @@ func groupLabelDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 
 func groupLabelOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "label"},
+		Aliases: []string{individualTool}, Usage: "Use to execute grouplabels domain action.", Tags: []string{"group", "label"},
 		RelatedActions: []string{"group.get", "group.issues"},
 		OpenWorld:      true,
 		OwnerPackage:   "grouplabels",

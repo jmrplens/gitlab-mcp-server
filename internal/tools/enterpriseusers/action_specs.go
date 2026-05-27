@@ -51,7 +51,7 @@ func enterpriseUserDisable2FASpec(client *gitlabclient.Client) toolutil.ActionSp
 
 func enterpriseUserOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"enterprise_user"},
+		Aliases: []string{individualTool}, Usage: "Use to execute enterpriseusers domain action.", Tags: []string{"enterprise_user"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "enterpriseusers",

@@ -45,7 +45,7 @@ func epicDiscussionDeleteSpec(name string, route toolutil.ActionRoute, individua
 
 func epicDiscussionOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "epic", "discussion"},
+		Aliases: []string{individualTool}, Usage: "Use to execute epicdiscussions domain action.", Tags: []string{"group", "epic", "discussion"},
 		RelatedActions: []string{"group.epic_get"},
 		Edition:        "premium",
 		OpenWorld:      true,

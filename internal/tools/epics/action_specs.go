@@ -49,7 +49,7 @@ func epicDeleteSpec(name string, route toolutil.ActionRoute, individualTool stri
 
 func epicOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "epic"},
+		Aliases: []string{individualTool}, Usage: "Use to execute epics domain action.", Tags: []string{"group", "epic"},
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",
 		OpenWorld:      true,

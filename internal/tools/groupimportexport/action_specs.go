@@ -24,7 +24,7 @@ func groupImportExportCreateSpec(name string, route toolutil.ActionRoute, indivi
 
 func groupImportExportOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "import", "export"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupimportexport domain action.", Tags: []string{"group", "import", "export"},
 		RelatedActions: []string{"group.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "groupimportexport",

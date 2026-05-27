@@ -37,7 +37,7 @@ func externalStatusCheckDeleteSpec(name string, route toolutil.ActionRoute, indi
 
 func externalStatusCheckOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"external_status_check", "status_check"},
+		Aliases: []string{individualTool}, Usage: "Use to execute externalstatuschecks domain action.", Tags: []string{"external_status_check", "status_check"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "externalstatuschecks",
