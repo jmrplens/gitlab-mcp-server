@@ -49534,7 +49534,7 @@
   },
   {
     "name": "gitlab_job_get",
-    "description": "Retrieve detailed information about a specific CI/CD job in a GitLab project. Returns job ID, name, status, stage, pipeline, runner, duration, coverage, timestamps, and web URL.\n\nReturns: JSON with job details. See also: gitlab_job_cancel, gitlab_job_trace.",
+    "description": "Get one CI job. Returns: status, stage, ref, pipeline ID, timing fields, runner/user details, and failure metadata. See also: gitlab_job_trace, gitlab_job_cancel, gitlab_job_retry.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50180,7 +50180,7 @@
   },
   {
     "name": "gitlab_job_list_project",
-    "description": "List all jobs across a GitLab project (not limited to a single pipeline). Supports filtering by scope and pagination. Returns job ID, name, status, stage, duration.\n\nReturns: JSON array of jobs with pagination.\n\nSee also: gitlab_job_get.",
+    "description": "List CI jobs in one project with filters and pagination. Returns: job summaries, status, stage, ref, and pipeline associations. See also: gitlab_job_get, gitlab_job_trace, gitlab_pipeline_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50672,7 +50672,7 @@
   },
   {
     "name": "gitlab_job_trace",
-    "description": "Retrieve the log (trace) output of a CI/CD job. Returns the raw log text, truncated to the last 100KB if larger. There is no pagination — if the log is truncated, the beginning is lost. Useful for debugging failed jobs by examining the most recent output.\n\nReturns: job trace log content. See also: gitlab_job_get.",
+    "description": "Get CI job trace output. Returns: text log with truncation metadata when logs exceed limits. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_cancel.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

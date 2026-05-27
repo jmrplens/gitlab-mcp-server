@@ -4330,8 +4330,15 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_job.<action>.
 Action guidance:
+- get: Get one CI job by project_id and job_id. Use this when the task already references a specific job and needs state, stage, runner, failure reason, or timing details.
+- list_project: List jobs in one project. Use this when the prompt asks for recent, failed, manual, or retried jobs in a known project; combine filters and pagination as needed.
 - token_scope_remove_project: Use when removing a target project from another project's CI job token inbound allowlist.
+- trace: Get job log output (trace) for troubleshooting and diagnostics. Use with a known job_id after selecting a relevant job from list/get calls.
 Parameter guidance:
+- get.job_id: job_identifier; source: Numeric CI job ID from pipeline/job list output or user-provided context.; avoid: Use job_id from GitLab job records; do not pass pipeline ID as job ID.
+- get.project_id: scope_project; source: Project ID or path that owns the job.; avoid: Use project_id for project scope; pipeline_id is not a substitute for project_id.
+- list_project.project_id: scope_project; source: Project identifier where jobs are listed.
+- list_project.scope: job_status_filter; source: Status filter requested by task, for example failed, success, running, pending, or manual.; avoid: scope is an array of status strings; avoid using natural language values.
 - token_scope_remove_project.project_id: scope_owner_project; source: Owning project whose CI job token allowlist is being changed.; avoid: Do not use the project being removed as project_id.
 - token_scope_remove_project.target_project_id: target_project; source: Project being removed from or added to the allowlist.; avoid: Do not put the allowlist owner project here.
 
@@ -17130,7 +17137,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_job_get
 
-Retrieve detailed information about a specific CI/CD job in a GitLab project. Returns job ID, name, status, stage, pipeline, runner, duration, coverage, timestamps, and web URL.
+Get one CI job. Returns: status, stage, ref, pipeline ID, timing fields, runner/user details, and failure metadata. See also: gitlab_job_trace, gitlab_job_cancel, gitlab_job_retry.
 
 **Parameters:**
 
@@ -17181,7 +17188,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_job_list_project
 
-List all jobs across a GitLab project (not limited to a single pipeline). Supports filtering by scope and pagination. Returns job ID, name, status, stage, duration.
+List CI jobs in one project with filters and pagination. Returns: job summaries, status, stage, ref, and pipeline associations. See also: gitlab_job_get, gitlab_job_trace, gitlab_pipeline_get.
 
 **Parameters:**
 
@@ -17218,7 +17225,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_job_trace
 
-Retrieve the log (trace) output of a CI/CD job. Returns the raw log text, truncated to the last 100KB if larger. There is no pagination — if the log is truncated, the beginning is lost. Useful for debugging failed jobs by examining the most recent output.
+Get CI job trace output. Returns: text log with truncation metadata when logs exceed limits. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_cancel.
 
 **Parameters:**
 

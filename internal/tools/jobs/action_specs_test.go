@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +70,35 @@ func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 				t.Fatal("expected non-nil result for declined confirmation")
 			}
 		})
+	}
+}
+
+// TestActionSpecs_PrimaryMetadata verifies richer metadata for core job actions.
+func TestActionSpecs_PrimaryMetadata(t *testing.T) {
+	byTool := newJobsRouteSpecs(t)
+
+	getSpec := byTool["gitlab_job_get"]
+	if !slices.Contains(getSpec.Aliases, "get job") {
+		t.Fatalf("job get Aliases = %v, want get job", getSpec.Aliases)
+	}
+	if guidance := getSpec.ParameterGuidance["job_id"]; guidance.SemanticRole != "job_identifier" {
+		t.Fatalf("job get job_id guidance = %+v, want job_identifier", guidance)
+	}
+
+	listSpec := byTool["gitlab_job_list_project"]
+	if !strings.Contains(listSpec.Usage, "List jobs in one project") {
+		t.Fatalf("job list_project Usage = %q", listSpec.Usage)
+	}
+	if guidance := listSpec.ParameterGuidance["scope"]; guidance.SemanticRole != "job_status_filter" {
+		t.Fatalf("job list_project scope guidance = %+v, want job_status_filter", guidance)
+	}
+
+	traceSpec := byTool["gitlab_job_trace"]
+	if !slices.Contains(traceSpec.Aliases, "get job log") {
+		t.Fatalf("job trace Aliases = %v, want get job log", traceSpec.Aliases)
+	}
+	if !strings.Contains(traceSpec.IndividualTool.Description, "Returns:") || !strings.Contains(traceSpec.IndividualTool.Description, "See also:") {
+		t.Fatalf("job trace description = %q, want Returns/See also", traceSpec.IndividualTool.Description)
 	}
 }
 
