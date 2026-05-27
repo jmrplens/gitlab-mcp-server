@@ -1,7 +1,7 @@
-package evaluator
+package cases
 
-func enterpriseDestructiveEvalCases() []EvalCase {
-	return []EvalCase{
+func enterpriseDestructiveEvalCases() []Case {
+	return []Case{
 		baseEnterpriseDestructiveEvalCase("MS-005", "Review external integration risk in project `my-org/tools/gitlab-mcp-server`: list project hooks, list project status checks, inspect CI job-token inbound allowlist, then remove target project ID `123` from that allowlist.",
 			readStep("gitlab_project", "hook_list", params("project_id"), nil),
 			readStep("gitlab_external_status_check", "list_project", params("project_id"), nil),
@@ -118,44 +118,44 @@ func enterpriseDestructiveEvalCases() []EvalCase {
 	}
 }
 
-func baseEnterpriseDestructiveEvalCase(id, prompt string, steps ...ExpectedStep) EvalCase {
-	presets := []EvalPreset{EvalPreset(presetSchemaEnterprise)}
+func baseEnterpriseDestructiveEvalCase(id, prompt string, steps ...Step) Case {
+	presets := []string{presetSchemaEnterprise}
 	if (id >= "MT-196" && id <= "MT-198") || id == "MS-043" || (id >= "MS-045" && id <= "MS-053") {
-		presets = append(presets, EvalPreset(presetDockerEnterpriseDestructiveSafe))
+		presets = append(presets, presetDockerEnterpriseDestructiveSafe)
 	}
 	promptTemplate, fixtures := enterpriseDestructivePromptTemplateAndFixtures(id, prompt)
-	return EvalCase{
-		ID:             EvalCaseID(id),
+	return Case{
+		ID:             id,
 		Prompt:         prompt,
 		PromptTemplate: promptTemplate,
 		Steps:          steps,
 		Fixtures:       fixtures,
-		Edition:        EvalCaseEdition(editionEnterprise),
+		Edition:        editionEnterprise,
 		Presets:        presets,
-		Partition:      EvalPartition(partitionEnterpriseDestructive),
+		Partition:      partitionEnterpriseDestructive,
 		Mutating:       true,
 		Destructive:    true,
 		ReportGroup:    partitionEnterpriseDestructive,
 	}
 }
 
-func enterpriseDestructivePromptTemplateAndFixtures(id, prompt string) (CasePromptTemplate, []CaseFixtureSpec) {
+func enterpriseDestructivePromptTemplateAndFixtures(id, prompt string) (PromptTemplate, []string) {
 	switch id {
 	case "MS-005":
-		return CasePromptTemplate{Text: "Review external integration risk in project `{{.Project.Path}}`: list project hooks, list project status checks, inspect CI job-token inbound allowlist, then remove target project ID `{{.Values.target_project_id}}` from that allowlist."}, []CaseFixtureSpec{JobTokenScopeProjectFixture}
+		return PromptTemplate{Text: "Review external integration risk in project `{{.Project.Path}}`: list project hooks, list project status checks, inspect CI job-token inbound allowlist, then remove target project ID `{{.Values.target_project_id}}` from that allowlist."}, []string{fixtureJobTokenScopeProject}
 	case "MT-196":
-		return CasePromptTemplate{Text: "Delete the project push rule from project `{{.Project.Path}}`."}, []CaseFixtureSpec{EnterprisePushRuleProjectFixture(true)}
+		return PromptTemplate{Text: "Delete the project push rule from project `{{.Project.Path}}`."}, []string{fixtureEnterprisePushRuleProjectSeeded}
 	case "MT-197":
-		return CasePromptTemplate{Text: "Revoke group service account PAT ID `{{.Token.ID}}` for service account user ID `{{.Values.service_account_id}}` in group `my-org`."}, []CaseFixtureSpec{EnterpriseGroupServiceAccountFixture(true)}
+		return PromptTemplate{Text: "Revoke group service account PAT ID `{{.Token.ID}}` for service account user ID `{{.Values.service_account_id}}` in group `my-org`."}, []string{fixtureEnterpriseGroupServiceAccountPAT}
 	case "MT-198":
-		return CasePromptTemplate{Text: "Delete group service account user ID `{{.Values.service_account_id}}` in group `my-org`."}, []CaseFixtureSpec{EnterpriseGroupServiceAccountFixture(false)}
+		return PromptTemplate{Text: "Delete group service account user ID `{{.Values.service_account_id}}` in group `my-org`."}, []string{fixtureEnterpriseGroupServiceAccount}
 	case "MS-045":
-		return CasePromptTemplate{Text: "Exercise project push rule lifecycle: add a push rule to project `{{.Project.Path}}` with commit message regex `^EVAL-`, fetch the project push rule, edit it to reject unsigned commits, then delete the project push rule."}, []CaseFixtureSpec{EnterprisePushRuleProjectFixture(false)}
+		return PromptTemplate{Text: "Exercise project push rule lifecycle: add a push rule to project `{{.Project.Path}}` with commit message regex `^EVAL-`, fetch the project push rule, edit it to reject unsigned commits, then delete the project push rule."}, []string{fixtureEnterprisePushRuleProject}
 	case "MS-052":
-		return CasePromptTemplate{Text: "Exercise group protected environment lifecycle with a temporary group: create group `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}`, protect environment `staging` with Maintainer deploy access, list group protected environments, fetch environment `staging`, update it to require one approval, unprotect environment `staging`, then delete the temporary group."}, []CaseFixtureSpec{AttemptNamesFixture}
+		return PromptTemplate{Text: "Exercise group protected environment lifecycle with a temporary group: create group `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}`, protect environment `staging` with Maintainer deploy access, list group protected environments, fetch environment `staging`, update it to require one approval, unprotect environment `staging`, then delete the temporary group."}, []string{fixtureAttemptNames}
 	case "MS-053":
-		return CasePromptTemplate{Text: "Exercise project protected environment lifecycle with a temporary project: create project `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}`, protect environment `staging` with Maintainer deploy access, list protected environments, fetch environment `staging`, unprotect environment `staging`, then delete the temporary project."}, []CaseFixtureSpec{AttemptNamesFixture}
+		return PromptTemplate{Text: "Exercise project protected environment lifecycle with a temporary project: create project `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}`, protect environment `staging` with Maintainer deploy access, list protected environments, fetch environment `staging`, unprotect environment `staging`, then delete the temporary project."}, []string{fixtureAttemptNames}
 	default:
-		return CasePromptTemplate{Text: prompt}, nil
+		return PromptTemplate{Text: prompt}, nil
 	}
 }

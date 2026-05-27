@@ -1,7 +1,7 @@
-package evaluator
+package cases
 
-func capabilityDiscoveryEvalCases() []EvalCase {
-	return []EvalCase{
+func capabilityDiscoveryEvalCases() []Case {
+	return []Case{
 		capabilityEvalCase("MS-039", "Inspect the MCP capability bridge for this GitLab MCP server, list MCP resources, then read the unified tools manifest resource `gitlab://tools`.",
 			optionalStep(readStep(capabilityListTool, "", nil, nil)),
 			readStep(resourceListTool, "", nil, nil),
@@ -23,19 +23,19 @@ func capabilityDiscoveryEvalCases() []EvalCase {
 	}
 }
 
-func optionalStep(step ExpectedStep) ExpectedStep {
+func optionalStep(step Step) Step {
 	step.OptionalStep = true
 	return step
 }
 
-func capabilityEvalCase(id, prompt string, steps ...ExpectedStep) EvalCase {
-	return EvalCase{
-		ID:               EvalCaseID(id),
+func capabilityEvalCase(id, prompt string, steps ...Step) Case {
+	return Case{
+		ID:               id,
 		Prompt:           prompt,
 		Steps:            steps,
-		Edition:          EvalCaseEdition(editionCE),
-		Presets:          []EvalPreset{EvalPreset(presetDockerCapabilityDiscovery)},
-		Partition:        EvalPartition(partitionCapabilityFallback),
+		Edition:          editionCE,
+		Presets:          []string{presetDockerCapabilityDiscovery},
+		Partition:        partitionCapabilityFallback,
 		CapabilityBridge: true,
 		ReportGroup:      partitionCapabilityFallback,
 	}

@@ -2,22 +2,17 @@ package evaluator
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
+	casecatalog "github.com/jmrplens/gitlab-mcp-server/v2/cmd/eval_mcp_surfaces/internal/evaluator/cases"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // AllEvalCases returns the typed evaluation case registry.
 func AllEvalCases() []EvalCase {
-	cases := readEvalCases()
-	cases = append(cases, mutatingEvalCases()...)
-	cases = append(cases, destructiveEvalCases()...)
-	cases = append(cases, capabilityDiscoveryEvalCases()...)
-	cases = append(cases, enterpriseReadEvalCases()...)
-	cases = append(cases, enterpriseMutatingEvalCases()...)
-	cases = append(cases, enterpriseDestructiveEvalCases()...)
-	return cloneEvalCases(cases)
+	return cloneEvalCases(evalCasesFromDefinitions(casecatalog.All()))
 }
 
 // CaseByID looks up one typed evaluation case by ID.
@@ -59,6 +54,167 @@ func evalTasksFromCases(cases []EvalCase) []evalTask {
 		tasks = append(tasks, taskFromCase(evalCase))
 	}
 	return tasks
+}
+
+func evalCasesFromDefinitions(definitions []casecatalog.Case) []EvalCase {
+	cases := make([]EvalCase, 0, len(definitions))
+	for _, definition := range definitions {
+		cases = append(cases, evalCaseFromDefinition(definition))
+	}
+	return cases
+}
+
+func evalCaseFromDefinition(definition casecatalog.Case) EvalCase {
+	return EvalCase{
+		ID:               EvalCaseID(definition.ID),
+		Title:            definition.Title,
+		Prompt:           definition.Prompt,
+		PromptTemplate:   promptTemplateFromDefinition(definition.PromptTemplate),
+		Steps:            expectedStepsFromDefinitions(definition.Steps),
+		Fixtures:         caseFixturesFromNames(definition.Fixtures),
+		Assertions:       caseAssertionsFromDefinitions(definition.Assertions),
+		Metrics:          caseMetricsFromDefinition(definition.Metrics),
+		Edition:          EvalCaseEdition(definition.Edition),
+		Presets:          evalPresetsFromDefinitions(definition.Presets),
+		Partition:        EvalPartition(definition.Partition),
+		Tags:             slices.Clone(definition.Tags),
+		Mutating:         definition.Mutating,
+		Destructive:      definition.Destructive,
+		CapabilityBridge: definition.CapabilityBridge,
+		SkipReasons:      slices.Clone(definition.SkipReasons),
+		ReportGroup:      definition.ReportGroup,
+	}
+}
+
+func promptTemplateFromDefinition(definition casecatalog.PromptTemplate) CasePromptTemplate {
+	return CasePromptTemplate{
+		Text:      definition.Text,
+		Variables: slices.Clone(definition.Variables),
+	}
+}
+
+func expectedStepsFromDefinitions(definitions []casecatalog.Step) []ExpectedStep {
+	steps := make([]ExpectedStep, 0, len(definitions))
+	for _, definition := range definitions {
+		steps = append(steps, ExpectedStep{
+			ExpectedTool:    definition.ExpectedTool,
+			ExpectedAction:  definition.ExpectedAction,
+			RequiredParams:  slices.Clone(definition.RequiredParams),
+			OptionalParams:  slices.Clone(definition.OptionalParams),
+			ForbiddenParams: slices.Clone(definition.ForbiddenParams),
+			OptionalStep:    definition.OptionalStep,
+			Destructive:     definition.Destructive,
+			Simulation:      definition.Simulation,
+			AllowedRepairs:  slices.Clone(definition.AllowedRepairs),
+			ProducedValues:  slices.Clone(definition.ProducedValues),
+		})
+	}
+	return steps
+}
+
+func caseAssertionsFromDefinitions(definitions []casecatalog.Assertion) []CaseAssertion {
+	assertions := make([]CaseAssertion, 0, len(definitions))
+	for _, definition := range definitions {
+		assertions = append(assertions, CaseAssertion{
+			Type:        CaseAssertionType(definition.Type),
+			Step:        definition.Step,
+			Name:        definition.Name,
+			Description: definition.Description,
+			Required:    definition.Required,
+			Inputs:      slices.Clone(definition.Inputs),
+			Expected:    maps.Clone(definition.Expected),
+		})
+	}
+	return assertions
+}
+
+func caseMetricsFromDefinition(definition casecatalog.MetricsSpec) CaseMetricsSpec {
+	return CaseMetricsSpec{
+		ExpectedModelCalls: definition.ExpectedModelCalls,
+		ExpectedToolCalls:  definition.ExpectedToolCalls,
+		FinalSuccess:       definition.FinalSuccess,
+	}
+}
+
+func evalPresetsFromDefinitions(definitions []string) []EvalPreset {
+	presets := make([]EvalPreset, 0, len(definitions))
+	for _, definition := range definitions {
+		presets = append(presets, EvalPreset(definition))
+	}
+	return presets
+}
+
+func caseFixturesFromNames(names []string) []CaseFixtureSpec {
+	if len(names) == 0 {
+		return nil
+	}
+	fixtures := make([]CaseFixtureSpec, 0, len(names))
+	for _, name := range names {
+		fixture, ok := caseFixtureSpecsByName[name]
+		if !ok {
+			panic(fmt.Sprintf("unknown evaluator case fixture %q", name))
+		}
+		fixtures = append(fixtures, fixture)
+	}
+	return fixtures
+}
+
+var caseFixtureSpecsByName = buildCaseFixtureSpecsByName()
+
+func buildCaseFixtureSpecsByName() map[string]CaseFixtureSpec {
+	fixtures := baseMutatingFixtureSpecs()
+	fixtures = append(fixtures,
+		PipelineJobFixture,
+		MergeRequestDiscussionFixture,
+		MergeRequestSourceFixture,
+		ReleaseCreateSourceFixture,
+		MergeableMergeRequestFixture,
+		JobTokenScopeProjectFixture,
+		FailedJobArtifactFixture,
+		MergeRequestAwardEmojiFixture,
+		IssueAwardEmojiFixture,
+		GroupDeleteFixture,
+		IssueDeleteFixture,
+		ProjectCIVariableDeleteFixture,
+		RepositoryFileDeleteFixture,
+		MilestoneDeleteFixture,
+		ReleaseDeleteFixture,
+		ProjectAccessTokenRevokeFixture,
+		ProjectArchiveFixture,
+		PackageDeleteFixture,
+		PipelineDeleteFixture,
+		PipelineTriggerDeleteFixture,
+		PipelineScheduleDeleteFixture,
+		RunnerRemoveFixture,
+		EnvironmentStopFixture,
+		SnippetDeleteFixture,
+		BroadcastMessageDeleteFixture,
+		ProjectHookDeleteFixture,
+		ProjectBadgeDeleteFixture,
+		DraftNotePublishAllFixture,
+		InstanceCIVariableDeleteFixture,
+		BranchDeleteFixture,
+		TagDeleteFixture,
+		UserBlockFixture,
+		FeatureFlagDeleteFixture,
+		WikiDeleteFixture,
+		DeployKeyLifecycleFixture,
+		DeployKeyDeleteFixture,
+		DeployTokenDeleteFixture,
+		CommitDiscussionDeleteNoteFixture,
+		BranchProtectionLifecycleFixture,
+		ProjectServiceAccountFixture,
+		EnterprisePushRuleProjectFixture(false),
+		EnterprisePushRuleProjectFixture(true),
+		EnterpriseGroupServiceAccountFixture(false),
+		EnterpriseGroupServiceAccountFixture(true),
+	)
+
+	byName := make(map[string]CaseFixtureSpec, len(fixtures))
+	for _, fixture := range fixtures {
+		byName[fixture.Name] = fixture
+	}
+	return byName
 }
 
 func validateEvalCaseRegistry(cases []EvalCase, routes map[string]toolutil.ActionMap) []string {
@@ -150,13 +306,24 @@ func customTasksPath(path string) bool {
 func cloneEvalCases(cases []EvalCase) []EvalCase {
 	out := make([]EvalCase, 0, len(cases))
 	for _, evalCase := range cases {
+		evalCase.PromptTemplate.Variables = slices.Clone(evalCase.PromptTemplate.Variables)
 		evalCase.Steps = cloneExpectedSteps(evalCase.Steps)
 		evalCase.Fixtures = slices.Clone(evalCase.Fixtures)
-		evalCase.Assertions = slices.Clone(evalCase.Assertions)
+		evalCase.Assertions = cloneCaseAssertions(evalCase.Assertions)
 		evalCase.Presets = slices.Clone(evalCase.Presets)
 		evalCase.Tags = slices.Clone(evalCase.Tags)
 		evalCase.SkipReasons = slices.Clone(evalCase.SkipReasons)
 		out = append(out, evalCase)
+	}
+	return out
+}
+
+func cloneCaseAssertions(assertions []CaseAssertion) []CaseAssertion {
+	out := make([]CaseAssertion, 0, len(assertions))
+	for _, assertion := range assertions {
+		assertion.Inputs = slices.Clone(assertion.Inputs)
+		assertion.Expected = maps.Clone(assertion.Expected)
+		out = append(out, assertion)
 	}
 	return out
 }

@@ -21280,7 +21280,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_service_account_create
 
-Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+Create a GitLab project service account. Returns: the created project service account object. See also: gitlab_project_service_account_list, gitlab_project_service_account_update, gitlab_project_service_account_pat_create.
 
 **Parameters:**
 
@@ -21293,7 +21293,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_service_account_delete
 
-Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+Delete a GitLab project service account. Returns: a success status confirming deletion. See also: gitlab_project_service_account_list, gitlab_project_service_account_update.
 
 **Parameters:**
 
@@ -21306,7 +21306,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_project_service_account_list
 
-Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+List GitLab project service accounts. Returns: paginated project service account records. See also: gitlab_get_project, gitlab_project_service_account_create, gitlab_project_service_account_pat_list.
 
 **Parameters:**
 
@@ -21320,7 +21320,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_service_account_pat_create
 
-Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+Create a personal access token for a GitLab project service account. Returns: the created token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_rotate.
 
 **Parameters:**
 
@@ -21335,7 +21335,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_service_account_pat_list
 
-Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+List personal access tokens for a GitLab project service account. Returns: paginated token records. See also: gitlab_project_service_account_list, gitlab_project_service_account_pat_create, gitlab_project_service_account_pat_revoke.
 
 **Parameters:**
 
@@ -21359,7 +21359,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_service_account_pat_revoke
 
-Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+Revoke a personal access token for a GitLab project service account. Returns: a success status confirming revocation. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_create.
 
 **Parameters:**
 
@@ -21372,7 +21372,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_project_service_account_pat_rotate
 
-Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+Rotate a personal access token for a GitLab project service account. Returns: the rotated token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_revoke.
 
 **Parameters:**
 
@@ -21385,7 +21385,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_service_account_update
 
-Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.
+Update a GitLab project service account. Returns: the updated project service account object. See also: gitlab_project_service_account_list, gitlab_project_service_account_delete.
 
 **Parameters:**
 

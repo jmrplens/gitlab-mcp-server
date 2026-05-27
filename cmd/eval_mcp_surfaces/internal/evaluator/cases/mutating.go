@@ -1,7 +1,7 @@
-package evaluator
+package cases
 
-func mutatingEvalCases() []EvalCase {
-	return []EvalCase{
+func mutatingEvalCases() []Case {
+	return []Case{
 		baseMutatingEvalCase("MT-004", "Star project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_project", "star", params("project_id"), nil)),
 		baseMutatingEvalCase("MT-007", "Create a subgroup named `eval-temp` with path `eval-temp` under group ID `123` (`my-org`).", readStep("gitlab_group", "create", params("name", "path", "parent_id"), params("visibility"))),
 		baseMutatingEvalCase("MT-010", "Create an issue titled `Evaluate schema discovery` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_issue", "create", params("project_id", "title"), params("description", "labels"))),
@@ -50,71 +50,71 @@ func mutatingEvalCases() []EvalCase {
 	}
 }
 
-func baseMutatingEvalCase(id, prompt string, steps ...ExpectedStep) EvalCase {
-	evalCase := EvalCase{
-		ID:          EvalCaseID(id),
+func baseMutatingEvalCase(id, prompt string, steps ...Step) Case {
+	evalCase := Case{
+		ID:          id,
 		Prompt:      prompt,
 		Steps:       steps,
-		Edition:     EvalCaseEdition(editionCE),
-		Presets:     []EvalPreset{EvalPreset(presetDockerMutatingSafe)},
-		Partition:   EvalPartition(partitionBaseMutating),
+		Edition:     editionCE,
+		Presets:     []string{presetDockerMutatingSafe},
+		Partition:   partitionBaseMutating,
 		Mutating:    true,
 		ReportGroup: partitionBaseMutating,
 	}
 	if template, fixtures := baseMutatingPromptTemplateAndFixtures(id); template != "" {
-		evalCase.PromptTemplate = CasePromptTemplate{Text: template}
+		evalCase.PromptTemplate = PromptTemplate{Text: template}
 		evalCase.Fixtures = fixtures
 	}
 	return evalCase
 }
 
 //nolint:gocyclo // Keeping the ID-to-fixture mapping in one switch makes the migration table auditable.
-func baseMutatingPromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec) {
+func baseMutatingPromptTemplateAndFixtures(id string) (string, []string) {
 	switch id {
 	case "MT-007":
-		return "Create a subgroup named `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}` under group ID `{{ .Group.ID }}` (`my-org`).", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
+		return "Create a subgroup named `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}` under group ID `{{ .Group.ID }}` (`my-org`).", []string{fixtureBootstrapProject, fixtureAttemptNames}
 	case "MT-011":
-		return "Update issue `{{ .Issue.IID }}` in project `{{ .Project.Path }}` to add label `evaluation`.", []CaseFixtureSpec{IssueFixture}
+		return "Update issue `{{ .Issue.IID }}` in project `{{ .Project.Path }}` to add label `evaluation`.", []string{fixtureIssue}
 	case "MT-012":
-		return "Close issue `{{ .Issue.IID }}` in project `{{ .Project.Path }}` by setting `state_event` to `close`.", []CaseFixtureSpec{IssueFixture}
+		return "Close issue `{{ .Issue.IID }}` in project `{{ .Project.Path }}` by setting `state_event` to `close`.", []string{fixtureIssue}
 	case "MT-015":
-		return "Create a merge request in project `{{ .Project.Path }}` from `{{ .Values.mr_source_branch }}` into `{{ .Branch.Default }}` titled `{{ .Values.mr_title }}`.", []CaseFixtureSpec{MergeRequestSourceFixture}
+		return "Create a merge request in project `{{ .Project.Path }}` from `{{ .Values.mr_source_branch }}` into `{{ .Branch.Default }}` titled `{{ .Values.mr_title }}`.", []string{fixtureMergeRequestSource}
 	case "MT-016":
-		return "Add a note saying `Can we add coverage?` to merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{MergeRequestFixture}
+		return "Add a note saying `Can we add coverage?` to merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`.", []string{fixtureMergeRequest}
 	case "MT-020":
-		return "Cancel pipeline `{{ .Pipeline.ID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{PipelineJobFixture}
+		return "Cancel pipeline `{{ .Pipeline.ID }}` in project `{{ .Project.Path }}`.", []string{fixturePipelineJob}
 	case "MT-023":
-		return "Retry job `{{ .Job.ID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{FailedJobArtifactFixture}
+		return "Retry job `{{ .Job.ID }}` in project `{{ .Project.Path }}`.", []string{fixtureFailedJobArtifact}
 	case "MT-026":
-		return "Create masked CI variable `{{ .Values.ci_variable_key }}` with value `masked-value-123` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
+		return "Create masked CI variable `{{ .Values.ci_variable_key }}` with value `masked-value-123` in project `{{ .Project.Path }}`.", []string{fixtureBootstrapProject, fixtureAttemptNames}
 	case taskFileCreateID:
-		return "Create file `{{ .Values.file_path }}` with content `evaluation file` and commit_message `Create evaluation file` on branch `{{ .Values.feature_branch }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{BranchFixture, AttemptNamesFixture}
+		return "Create file `{{ .Values.file_path }}` with content `evaluation file` and commit_message `Create evaluation file` on branch `{{ .Values.feature_branch }}` in project `{{ .Project.Path }}`.", []string{fixtureBranch, fixtureAttemptNames}
 	case "MT-034":
-		return "Create milestone with title `{{ .Values.milestone_title }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
+		return "Create milestone with title `{{ .Values.milestone_title }}` in project `{{ .Project.Path }}`.", []string{fixtureBootstrapProject, fixtureAttemptNames}
 	case "MT-036":
-		return "Create release with tag_name `{{ .Release.TagName }}`, ref `{{ .Branch.Default }}`, and name `{{ .Release.Name }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
+		return "Create release with tag_name `{{ .Release.TagName }}`, ref `{{ .Branch.Default }}`, and name `{{ .Release.Name }}` in project `{{ .Project.Path }}`.", []string{fixtureBootstrapProject, fixtureAttemptNames}
 	case "MT-046":
-		return "Set paused=true on runner ID `{{ .Runner.ID }}`.", []CaseFixtureSpec{RunnerRemoveFixture}
+		return "Set paused=true on runner ID `{{ .Runner.ID }}`.", []string{fixtureRunnerRemove}
 	case "MT-060":
-		return "Create a merge request discussion on MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` asking `Can we add coverage?`.", []CaseFixtureSpec{MergeRequestFixture}
+		return "Create a merge request discussion on MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` asking `Can we add coverage?`.", []string{fixtureMergeRequest}
 	case "MT-061":
-		return "Resolve merge request discussion with discussion_id `{{ .Values.discussion_id }}` on merge_request_iid `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` by setting `resolved` to true.", []CaseFixtureSpec{MergeRequestDiscussionFixture}
+		return "Resolve merge request discussion with discussion_id `{{ .Values.discussion_id }}` on merge_request_iid `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` by setting `resolved` to true.", []string{fixtureMergeRequestDiscussion}
 	case "MT-062":
-		return "Create a draft review note on MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` saying `Please add a regression test`.", []CaseFixtureSpec{MergeRequestFixture}
+		return "Create a draft review note on MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` saying `Please add a regression test`.", []string{fixtureMergeRequest}
 	case "MT-064":
-		return "Play manual job `{{ .Values.manual_job_id }}` in project `{{ .Project.Path }}` with variable `DEPLOY_ENV=staging`.", []CaseFixtureSpec{PipelineJobFixture}
+		return "Play manual job `{{ .Values.manual_job_id }}` in project `{{ .Project.Path }}` with variable `DEPLOY_ENV=staging`.", []string{fixturePipelineJob}
 	case "MT-067":
-		return "Create group CI variable `{{ .Values.group_ci_variable_key }}` in group `{{ .Group.Path }}` with value `masked-value-123`.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
+		return "Create group CI variable `{{ .Values.group_ci_variable_key }}` in group `{{ .Group.Path }}` with value `masked-value-123`.", []string{fixtureBootstrapProject, fixtureAttemptNames}
 	case "MT-068":
-		return "Create instance CI variable `{{ .Values.instance_ci_variable_key }}` with value `masked-value-123`.", []CaseFixtureSpec{AttemptNamesFixture}
+		return "Create instance CI variable `{{ .Values.instance_ci_variable_key }}` with value `masked-value-123`.", []string{fixtureAttemptNames}
 	case "MT-081":
-		return "Start the guided merge request creation flow for project `{{ .Project.Path }}`. Do not pass `source_branch`, `target_branch`, or `title` as tool parameters; the guided prompts will use source branch `{{ .Values.mr_source_branch }}`, target branch `{{ .Branch.Default }}`, and title `{{ .Values.mr_title }}`.", []CaseFixtureSpec{MergeRequestSourceFixture}
+		return "Start the guided merge request creation flow for project `{{ .Project.Path }}`. Do not pass `source_branch`, `target_branch`, or `title` as tool parameters; the guided prompts will use source branch `{{ .Values.mr_source_branch }}`, target branch `{{ .Branch.Default }}`, and title `{{ .Values.mr_title }}`.", []string{fixtureMergeRequestSource}
 	case "MT-083":
-		return "Start the guided release creation flow for project `{{ .Project.Path }}`. Do not pass `tag_name` or `name` as tool parameters; the guided prompts will use tag `{{ .Release.TagName }}` and release name `{{ .Release.Name }}`.", []CaseFixtureSpec{ReleaseCreateSourceFixture}
+		return "Start the guided release creation flow for project `{{ .Project.Path }}`. Do not pass `tag_name` or `name` as tool parameters; the guided prompts will use tag `{{ .Release.TagName }}` and release name `{{ .Release.Name }}`.", []string{fixtureReleaseCreateSource}
 	case "MS-008":
-		return "Troubleshoot runner ID `{{ .Runner.ID }}` for project `{{ .Project.Path }}`: list project runners, inspect runner jobs, fetch trace for job `{{ .Job.ID }}`, then set paused=true on the runner.", []CaseFixtureSpec{FailedJobArtifactFixture, RunnerRemoveFixture}
+		return "Troubleshoot runner ID `{{ .Runner.ID }}` for project `{{ .Project.Path }}`: list project runners, inspect runner jobs, fetch trace for job `{{ .Job.ID }}`, then set paused=true on the runner.", []string{fixtureFailedJobArtifact, fixtureRunnerRemove}
 	case taskPackageReleaseID:
-		return "Publish the local fixture files `{{ .Values.package_release_files_display }}` from directory `{{ .Values.package_release_dir }}` to GitLab Generic Packages in project `{{ .Project.Path }}` as package `{{ .Values.package_release_name }}` version `{{ .Values.package_release_version }}`, then create release `{{ .Values.package_release_tag }}` from ref `{{ .Branch.Default }}` named `Evaluation package release`, and link each uploaded package file to that release as a package asset. Upload the package files first, then generate the release, then link the returned package URLs; do not construct package URLs manually.", []CaseFixtureSpec{PackageReleaseFixture, AttemptNamesFixture}
+		return "Publish the local fixture files `{{ .Values.package_release_files_display }}` from directory `{{ .Values.package_release_dir }}` to GitLab Generic Packages in project `{{ .Project.Path }}` as package `{{ .Values.package_release_name }}` version `{{ .Values.package_release_version }}`, then create release `{{ .Values.package_release_tag }}` from ref `{{ .Branch.Default }}` named `Evaluation package release`, and link each uploaded package file to that release as a package asset. Upload the package files first, then generate the release, then link the returned package URLs; do not construct package URLs manually.", []string{fixturePackageRelease, fixtureAttemptNames}
 	default:
 		return "", nil
 	}

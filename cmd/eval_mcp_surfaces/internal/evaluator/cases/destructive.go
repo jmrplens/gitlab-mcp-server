@@ -1,8 +1,8 @@
-package evaluator
+package cases
 
 //nolint:maintidx // Static table keeps destructive case definitions close to their expected workflow order.
-func destructiveEvalCases() []EvalCase {
-	return []EvalCase{
+func destructiveEvalCases() []Case {
+	return []Case{
 		baseDestructiveEvalCase("MT-008", "Delete subgroup `my-org/eval-temp`.", destructiveStep("gitlab_group", "delete", params("group_id"), params("confirm"))),
 		baseDestructiveEvalCase("MT-013", "Delete issue `42` from project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab_issue", "delete", params("project_id", "issue_iid"), params("confirm"))),
 		baseDestructiveEvalCase("MT-017", "Merge merge request `7` in project `my-org/tools/gitlab-mcp-server` when the pipeline succeeds.", destructiveStep("gitlab_merge_request", "merge", params("project_id", "merge_request_iid"), params("auto_merge", "confirm"))),
@@ -233,20 +233,20 @@ func destructiveEvalCases() []EvalCase {
 	}
 }
 
-func baseDestructiveEvalCase(id, prompt string, steps ...ExpectedStep) EvalCase {
-	evalCase := EvalCase{
-		ID:          EvalCaseID(id),
+func baseDestructiveEvalCase(id, prompt string, steps ...Step) Case {
+	evalCase := Case{
+		ID:          id,
 		Prompt:      prompt,
 		Steps:       steps,
-		Edition:     EvalCaseEdition(editionCE),
-		Presets:     []EvalPreset{EvalPreset(presetDockerDestructiveSafe)},
-		Partition:   EvalPartition(partitionBaseDestructive),
+		Edition:     editionCE,
+		Presets:     []string{presetDockerDestructiveSafe},
+		Partition:   partitionBaseDestructive,
 		Mutating:    true,
 		Destructive: true,
 		ReportGroup: partitionBaseDestructive,
 	}
 	if template, fixtures := baseDestructivePromptTemplateAndFixtures(id); template != "" {
-		evalCase.PromptTemplate = CasePromptTemplate{Text: template}
+		evalCase.PromptTemplate = PromptTemplate{Text: template}
 		evalCase.Fixtures = fixtures
 	}
 	if reason := liveSkipReasonForCase(id); reason != "" {
@@ -266,13 +266,13 @@ func liveSkipReasonForCase(id string) string {
 	}
 }
 
-func destructiveStep(tool, action string, requiredParams, optionalParams []string) ExpectedStep {
+func destructiveStep(tool, action string, requiredParams, optionalParams []string) Step {
 	step := readStep(tool, action, requiredParams, optionalParams)
 	step.Destructive = true
 	return step
 }
 
-func baseDestructivePromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec) {
+func baseDestructivePromptTemplateAndFixtures(id string) (string, []string) {
 	switch {
 	case len(id) >= 3 && id[:3] == "MS-":
 		return baseDestructiveWorkflowPromptTemplateAndFixtures(id)
@@ -284,112 +284,112 @@ func baseDestructivePromptTemplateAndFixtures(id string) (string, []CaseFixtureS
 }
 
 //nolint:gocyclo // Keeping this ID-to-fixture mapping in one switch makes the migration table auditable.
-func baseDestructiveEarlySinglePromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec) {
+func baseDestructiveEarlySinglePromptTemplateAndFixtures(id string) (string, []string) {
 	switch id {
 	case "MT-008":
-		return "Delete subgroup `{{ .Group.Path }}`.", []CaseFixtureSpec{GroupDeleteFixture}
+		return "Delete subgroup `{{ .Group.Path }}`.", []string{fixtureGroupDelete}
 	case "MT-013":
-		return "Delete issue `{{ .Issue.IID }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{IssueDeleteFixture}
+		return "Delete issue `{{ .Issue.IID }}` from project `{{ .Project.Path }}`.", []string{fixtureIssueDelete}
 	case "MT-017":
-		return "Enable auto-merge for merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` by calling merge with `auto_merge=true`.", []CaseFixtureSpec{MergeableMergeRequestFixture}
+		return "Enable auto-merge for merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}` by calling merge with `auto_merge=true`.", []string{fixtureMergeableMergeRequest}
 	case "MT-024":
-		return "Delete artifacts for job `{{ .Job.ID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{FailedJobArtifactFixture}
+		return "Delete artifacts for job `{{ .Job.ID }}` in project `{{ .Project.Path }}`.", []string{fixtureFailedJobArtifact}
 	case "MT-028":
-		return "Delete CI variable `{{ .Values.ci_variable_key }}` from production scope in project `{{ .Project.Path }}`.", []CaseFixtureSpec{ProjectCIVariableDeleteFixture}
+		return "Delete CI variable `{{ .Values.ci_variable_key }}` from production scope in project `{{ .Project.Path }}`.", []string{fixtureProjectCIVariableDelete}
 	case "MT-031":
-		return "Delete file `{{ .Values.file_path }}` with commit_message `Delete evaluation file` from branch `{{ .Branch.Name }}` in project `{{ .Project.Path }}`. Call repository.file_delete directly with exactly that file_path and branch; do not call repository.tree or switch to a different file path.", []CaseFixtureSpec{RepositoryFileDeleteFixture}
+		return "Delete file `{{ .Values.file_path }}` with commit_message `Delete evaluation file` from branch `{{ .Branch.Name }}` in project `{{ .Project.Path }}`. Call repository.file_delete directly with exactly that file_path and branch; do not call repository.tree or switch to a different file path.", []string{fixtureRepositoryFileDelete}
 	case "MT-035":
-		return "Delete milestone IID `{{ .Values.milestone_iid }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{MilestoneDeleteFixture}
+		return "Delete milestone IID `{{ .Values.milestone_iid }}` from project `{{ .Project.Path }}`.", []string{fixtureMilestoneDelete}
 	case "MT-037":
-		return "Delete release `{{ .Release.TagName }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{ReleaseDeleteFixture}
+		return "Delete release `{{ .Release.TagName }}` from project `{{ .Project.Path }}`.", []string{fixtureReleaseDelete}
 	case "MT-042":
-		return "Revoke project access token ID `{{ .Token.ID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{ProjectAccessTokenRevokeFixture}
+		return "Revoke project access token ID `{{ .Token.ID }}` in project `{{ .Project.Path }}`.", []string{fixtureProjectAccessTokenRevoke}
 	case "MT-044":
-		return "Delete package ID `{{ .Package.ID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{PackageDeleteFixture}
+		return "Delete package ID `{{ .Package.ID }}` in project `{{ .Project.Path }}`.", []string{fixturePackageDelete}
 	case "MT-047":
-		return "Remove runner ID `{{ .Runner.ID }}`.", []CaseFixtureSpec{RunnerRemoveFixture}
+		return "Remove runner ID `{{ .Runner.ID }}`.", []string{fixtureRunnerRemove}
 	case "MT-049":
-		return "Stop environment ID `{{ .Environment.ID }}` named `{{ .Environment.Name }}` in project `{{ .Project.Path }}`, forcing the stop if needed.", []CaseFixtureSpec{EnvironmentStopFixture}
+		return "Stop environment ID `{{ .Environment.ID }}` named `{{ .Environment.Name }}` in project `{{ .Project.Path }}`, forcing the stop if needed.", []string{fixtureEnvironmentStop}
 	case "MT-051":
-		return "Delete personal snippet ID `{{ .Values.snippet_id }}`.", []CaseFixtureSpec{SnippetDeleteFixture}
+		return "Delete personal snippet ID `{{ .Values.snippet_id }}`.", []string{fixtureSnippetDelete}
 	case "MT-054":
-		return "Delete broadcast message ID `{{ .Values.id }}`.", []CaseFixtureSpec{BroadcastMessageDeleteFixture}
+		return "Delete broadcast message ID `{{ .Values.id }}`.", []string{fixtureBroadcastMessageDelete}
 	case "MT-055":
-		return "Archive project `{{ .Project.Path }}`.", []CaseFixtureSpec{ProjectArchiveFixture}
+		return "Archive project `{{ .Project.Path }}`.", []string{fixtureProjectArchive}
 	case "MT-057":
-		return "Delete webhook ID `{{ .Values.hook_id }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{ProjectHookDeleteFixture}
+		return "Delete webhook ID `{{ .Values.hook_id }}` from project `{{ .Project.Path }}`.", []string{fixtureProjectHookDelete}
 	case "MT-059":
-		return "Delete badge ID `{{ .Values.badge_id }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{ProjectBadgeDeleteFixture}
+		return "Delete badge ID `{{ .Values.badge_id }}` from project `{{ .Project.Path }}`.", []string{fixtureProjectBadgeDelete}
 	case "MT-063":
-		return "Publish all draft review notes for MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{DraftNotePublishAllFixture}
+		return "Publish all draft review notes for MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`.", []string{fixtureDraftNotePublishAll}
 	case "MT-066":
-		return "Remove project ID `{{ .Values.target_project_id }}` from the CI job token allowlist of project `{{ .Project.ID }}`.", []CaseFixtureSpec{JobTokenScopeProjectFixture}
+		return "Remove project ID `{{ .Values.target_project_id }}` from the CI job token allowlist of project `{{ .Project.ID }}`.", []string{fixtureJobTokenScopeProject}
 	case "MT-069":
-		return "Delete instance CI variable `{{ .Values.instance_ci_variable_key }}`.", []CaseFixtureSpec{InstanceCIVariableDeleteFixture}
+		return "Delete instance CI variable `{{ .Values.instance_ci_variable_key }}`.", []string{fixtureInstanceCIVariableDelete}
 	default:
 		return "", nil
 	}
 }
 
-func baseDestructiveLateSinglePromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec) {
+func baseDestructiveLateSinglePromptTemplateAndFixtures(id string) (string, []string) {
 	switch id {
 	case "MT-099":
-		return "Delete branch `{{ .Branch.Name }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{BranchDeleteFixture}
+		return "Delete branch `{{ .Branch.Name }}` from project `{{ .Project.Path }}`.", []string{fixtureBranchDelete}
 	case "MT-100":
-		return "Delete tag `{{ .Tag.Name }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{TagDeleteFixture}
+		return "Delete tag `{{ .Tag.Name }}` from project `{{ .Project.Path }}`.", []string{fixtureTagDelete}
 	case "MT-101":
-		return "Permanently delete pipeline `{{ .Pipeline.ID }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{PipelineDeleteFixture}
+		return "Permanently delete pipeline `{{ .Pipeline.ID }}` from project `{{ .Project.Path }}`.", []string{fixturePipelineDelete}
 	case "MT-102":
-		return "Delete pipeline trigger token ID `{{ .Values.pipeline_trigger_id }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{PipelineTriggerDeleteFixture}
+		return "Delete pipeline trigger token ID `{{ .Values.pipeline_trigger_id }}` from project `{{ .Project.Path }}`.", []string{fixturePipelineTriggerDelete}
 	case "MT-103":
-		return "Delete pipeline schedule ID `{{ .Values.pipeline_schedule_id }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{PipelineScheduleDeleteFixture}
+		return "Delete pipeline schedule ID `{{ .Values.pipeline_schedule_id }}` from project `{{ .Project.Path }}`.", []string{fixturePipelineScheduleDelete}
 	case "MT-104":
-		return "Block user ID `{{ .Values.user_id }}`.", []CaseFixtureSpec{UserBlockFixture}
+		return "Block user ID `{{ .Values.user_id }}`.", []string{fixtureUserBlock}
 	case "MT-106":
-		return "Delete feature flag `{{ .Values.feature_flag_name }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{FeatureFlagDeleteFixture}
+		return "Delete feature flag `{{ .Values.feature_flag_name }}` from project `{{ .Project.Path }}`.", []string{fixtureFeatureFlagDelete}
 	case "MT-108":
-		return "Delete wiki page `{{ .Values.wiki_slug }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{WikiDeleteFixture}
+		return "Delete wiki page `{{ .Values.wiki_slug }}` from project `{{ .Project.Path }}`.", []string{fixtureWikiDelete}
 	case "MT-109":
-		return "Remove award emoji ID `{{ .Award.ID }}` from merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{MergeRequestAwardEmojiFixture}
+		return "Remove award emoji ID `{{ .Award.ID }}` from merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`.", []string{fixtureMergeRequestAwardEmoji}
 	case "MT-110":
-		return "Remove award emoji ID `{{ .Award.ID }}` from issue `{{ .Issue.IID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{IssueAwardEmojiFixture}
+		return "Remove award emoji ID `{{ .Award.ID }}` from issue `{{ .Issue.IID }}` in project `{{ .Project.Path }}`.", []string{fixtureIssueAwardEmoji}
 	case "MT-111":
-		return "Delete deploy key ID `{{ .DeployKey.ID }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{DeployKeyDeleteFixture}
+		return "Delete deploy key ID `{{ .DeployKey.ID }}` from project `{{ .Project.Path }}`.", []string{fixtureDeployKeyDelete}
 	case "MT-112":
-		return "Delete project deploy token ID `{{ .Values.deploy_token_id }}` from project `{{ .Project.Path }}`.", []CaseFixtureSpec{DeployTokenDeleteFixture}
+		return "Delete project deploy token ID `{{ .Values.deploy_token_id }}` from project `{{ .Project.Path }}`.", []string{fixtureDeployTokenDelete}
 	case "MT-113":
-		return "Delete commit discussion note `{{ .Values.note_id }}` from discussion `{{ .Values.discussion_id }}` on commit `{{ .Values.commit_sha }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{CommitDiscussionDeleteNoteFixture}
+		return "Delete commit discussion note `{{ .Values.note_id }}` from discussion `{{ .Values.discussion_id }}` on commit `{{ .Values.commit_sha }}` in project `{{ .Project.Path }}`.", []string{fixtureCommitDiscussionDeleteNote}
 	default:
 		return "", nil
 	}
 }
 
-func baseDestructiveWorkflowPromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec) {
+func baseDestructiveWorkflowPromptTemplateAndFixtures(id string) (string, []string) {
 	switch id {
 	case "MS-013":
-		return "Remove a temporary feature rollout from project `{{ .Project.Path }}`: inspect feature flag `{{ .Values.feature_flag_name }}`, list feature flag user lists, then delete the flag.", []CaseFixtureSpec{FeatureFlagDeleteFixture}
+		return "Remove a temporary feature rollout from project `{{ .Project.Path }}`: inspect feature flag `{{ .Values.feature_flag_name }}`, list feature flag user lists, then delete the flag.", []string{fixtureFeatureFlagDelete}
 	case "MS-003":
-		return "Prepare a batch review for MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`: inspect the MR, inspect changes, create a draft note saying `Please add a regression test`, then publish all draft notes.", []CaseFixtureSpec{MergeRequestFixture}
+		return "Prepare a batch review for MR `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`: inspect the MR, inspect changes, create a draft note saying `Please add a regression test`, then publish all draft notes.", []string{fixtureMergeRequest}
 	case "MS-004":
-		return "Clean up release `{{ .Release.TagName }}` in project `{{ .Project.Path }}`: verify the tag, verify the release, list release links, delete the release, then delete the tag.", []CaseFixtureSpec{ReleaseDeleteFixture}
+		return "Clean up release `{{ .Release.TagName }}` in project `{{ .Project.Path }}`: verify the tag, verify the release, list release links, delete the release, then delete the tag.", []string{fixtureReleaseDelete}
 	case "MS-007":
-		return "Clean up an obsolete package in project `{{ .Project.Path }}`: list generic packages, list files for package ID `{{ .Package.ID }}`, then delete package ID `{{ .Package.ID }}`.", []CaseFixtureSpec{PackageDeleteFixture}
+		return "Clean up an obsolete package in project `{{ .Project.Path }}`: list generic packages, list files for package ID `{{ .Package.ID }}`, then delete package ID `{{ .Package.ID }}`.", []string{fixturePackageDelete}
 	case "MS-018":
-		return "Exercise release asset-link CRUD in project `{{ .Project.Path }}`: use release create directly to create release `{{ .Release.TagName }}` from ref `{{ .Branch.Default }}` named `{{ .Release.Name }}` without creating a tag separately and without passing `assets`; after the release exists, add asset link `{{ .Values.release_link_name }}` with URL `{{ .Values.release_link_url }}`, fetch the returned link with link get, update the link URL to `{{ .Values.release_link_updated_url }}`, delete the link, delete the release, then delete the tag.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
+		return "Exercise release asset-link CRUD in project `{{ .Project.Path }}`: use release create directly to create release `{{ .Release.TagName }}` from ref `{{ .Branch.Default }}` named `{{ .Release.Name }}` without creating a tag separately and without passing `assets`; after the release exists, add asset link `{{ .Values.release_link_name }}` with URL `{{ .Values.release_link_url }}`, fetch the returned link with link get, update the link URL to `{{ .Values.release_link_updated_url }}`, delete the link, delete the release, then delete the tag.", []string{fixtureBootstrapProject, fixtureAttemptNames}
 	case "MS-025":
-		return "Exercise scoped project CI variable CRUD in project `{{ .Project.Path }}`: create variable `{{ .Values.ci_variable_key }}` with value `crud-value-1` and environment scope `review/eval`, list variables, update the scoped variable to value `crud-value-2`, then delete that same scoped variable.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
+		return "Exercise scoped project CI variable CRUD in project `{{ .Project.Path }}`: create variable `{{ .Values.ci_variable_key }}` with value `crud-value-1` and environment scope `review/eval`, list variables, update the scoped variable to value `crud-value-2`, then delete that same scoped variable.", []string{fixtureBootstrapProject, fixtureAttemptNames}
 	case "MS-026":
-		return "Exercise scoped group CI variable CRUD in group `{{ .Group.Path }}`: create variable `{{ .Values.group_ci_variable_key }}` with value `group-crud-value-1` and environment scope `review/eval`, get it using top-level `environment_scope`, update it to value `group-crud-value-2`, then delete that same scoped variable.", []CaseFixtureSpec{BootstrapProjectFixture, AttemptNamesFixture}
+		return "Exercise scoped group CI variable CRUD in group `{{ .Group.Path }}`: create variable `{{ .Values.group_ci_variable_key }}` with value `group-crud-value-1` and environment scope `review/eval`, get it using top-level `environment_scope`, update it to value `group-crud-value-2`, then delete that same scoped variable.", []string{fixtureBootstrapProject, fixtureAttemptNames}
 	case "MS-027":
-		return "Exercise merge request note CRUD in project `{{ .Project.Path }}`: add note `eval-mr-note` to merge request `{{ .MergeRequest.IID }}`, fetch the created note using the returned note ID, update it to `eval-mr-note-updated`, then delete it.", []CaseFixtureSpec{MergeRequestFixture}
+		return "Exercise merge request note CRUD in project `{{ .Project.Path }}`: add note `eval-mr-note` to merge request `{{ .MergeRequest.IID }}`, fetch the created note using the returned note ID, update it to `eval-mr-note-updated`, then delete it.", []string{fixtureMergeRequest}
 	case "MS-028":
-		return "Exercise branch protection lifecycle in project `{{ .Project.Path }}`: create branch `{{ .Branch.Name }}` from `{{ .Branch.Default }}`, protect it with Maintainer push and merge access, fetch the protected branch, update it to allow force push, unprotect it, then delete the branch.", []CaseFixtureSpec{BranchProtectionLifecycleFixture}
+		return "Exercise branch protection lifecycle in project `{{ .Project.Path }}`: create branch `{{ .Branch.Name }}` from `{{ .Branch.Default }}`, protect it with Maintainer push and merge access, fetch the protected branch, update it to allow force push, unprotect it, then delete the branch.", []string{fixtureBranchProtectionLifecycle}
 	case "MS-031":
-		return "Exercise project deploy key lifecycle in project `{{ .Project.Path }}`: add deploy key `{{ .Values.deploy_key_title }}` with public key `{{ .Values.deploy_key_key }}`, fetch it with deploy key get using the returned deploy key ID, update the title to `{{ .Values.deploy_key_updated_title }}`, then delete it.", []CaseFixtureSpec{DeployKeyLifecycleFixture}
+		return "Exercise project deploy key lifecycle in project `{{ .Project.Path }}`: add deploy key `{{ .Values.deploy_key_title }}` with public key `{{ .Values.deploy_key_key }}`, fetch it with deploy key get using the returned deploy key ID, update the title to `{{ .Values.deploy_key_updated_title }}`, then delete it.", []string{fixtureDeployKeyLifecycle}
 	case "MS-033":
-		return "Exercise merge request time tracking and emoji in project `{{ .Project.Path }}`: set estimate `1h` on merge request `{{ .MergeRequest.IID }}`, add spent time `15m`, add award emoji `eyes`, list MR awards, delete the returned award emoji, reset spent time, then reset the estimate.", []CaseFixtureSpec{MergeRequestFixture}
+		return "Exercise merge request time tracking and emoji in project `{{ .Project.Path }}`: set estimate `1h` on merge request `{{ .MergeRequest.IID }}`, add spent time `15m`, add award emoji `eyes`, list MR awards, delete the returned award emoji, reset spent time, then reset the estimate.", []string{fixtureMergeRequest}
 	case "MS-034":
-		return "Exercise project member lifecycle in project `{{ .Project.Path }}`: add user ID `{{ .Values.user_id }}` as Reporter, fetch that project member, edit access level to Developer, then remove the member.", []CaseFixtureSpec{UserBlockFixture}
+		return "Exercise project member lifecycle in project `{{ .Project.Path }}`: add user ID `{{ .Values.user_id }}` as Reporter, fetch that project member, edit access level to Developer, then remove the member.", []string{fixtureUserBlock}
 	default:
 		return "", nil
 	}

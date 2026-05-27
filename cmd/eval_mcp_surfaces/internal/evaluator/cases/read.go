@@ -1,7 +1,7 @@
-package evaluator
+package cases
 
-func readEvalCases() []EvalCase {
-	return []EvalCase{
+func readEvalCases() []Case {
+	return []Case{
 		baseReadEvalCase("MT-001", "Show the current authenticated GitLab user.", readStep("gitlab_user", "current", nil, nil)),
 		baseReadEvalCase("MT-002", "Find project `my-org/tools/gitlab-mcp-server` and give me its ID and default branch.", readStep("gitlab_project", "get", params("project_id"), nil)),
 		baseReadEvalCase("MT-003", "List the 10 most recently updated projects I can access.", readStep("gitlab_project", "list", nil, params("order_by", "sort", "per_page"))),
@@ -69,57 +69,57 @@ func readEvalCases() []EvalCase {
 	}
 }
 
-func artifactDownloadEvalCase() EvalCase {
+func artifactDownloadEvalCase() Case {
 	evalCase := baseReadEvalCase("MT-065", "Download artifact `coverage/report.xml` from job `999` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_job", "download_single_artifact", params("project_id", "job_id", "artifact_path"), nil))
-	evalCase.PromptTemplate = CasePromptTemplate{Text: "Download artifact `{{ .Values.artifact_path }}` from job `{{ .Job.ID }}` in project `{{ .Project.Path }}`."}
-	evalCase.Fixtures = []CaseFixtureSpec{FailedJobArtifactFixture}
+	evalCase.PromptTemplate = PromptTemplate{Text: "Download artifact `{{ .Values.artifact_path }}` from job `{{ .Job.ID }}` in project `{{ .Project.Path }}`."}
+	evalCase.Fixtures = []string{fixtureFailedJobArtifact}
 	return evalCase
 }
 
-func baseReadEvalCase(id, prompt string, steps ...ExpectedStep) EvalCase {
-	evalCase := EvalCase{
-		ID:          EvalCaseID(id),
+func baseReadEvalCase(id, prompt string, steps ...Step) Case {
+	evalCase := Case{
+		ID:          id,
 		Prompt:      prompt,
 		Steps:       steps,
-		Edition:     EvalCaseEdition(editionCE),
-		Presets:     []EvalPreset{EvalPreset(presetDockerRead)},
-		Partition:   EvalPartition(partitionBaseRead),
+		Edition:     editionCE,
+		Presets:     []string{presetDockerRead},
+		Partition:   partitionBaseRead,
 		ReportGroup: partitionBaseRead,
 	}
 	if template, fixtures := baseReadPromptTemplateAndFixtures(id); template != "" {
-		evalCase.PromptTemplate = CasePromptTemplate{Text: template}
+		evalCase.PromptTemplate = PromptTemplate{Text: template}
 		evalCase.Fixtures = fixtures
 	}
 	return evalCase
 }
 
-func baseReadPromptTemplateAndFixtures(id string) (string, []CaseFixtureSpec) {
+func baseReadPromptTemplateAndFixtures(id string) (string, []string) {
 	switch id {
 	case "MT-021":
-		return "List failed jobs in pipeline `{{ .Pipeline.ID }}` for project `{{ .Project.Path }}`.", []CaseFixtureSpec{FailedJobArtifactFixture}
+		return "List failed jobs in pipeline `{{ .Pipeline.ID }}` for project `{{ .Project.Path }}`.", []string{fixtureFailedJobArtifact}
 	case "MT-022":
-		return "Get the trace for job `{{ .Job.ID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{FailedJobArtifactFixture}
+		return "Get the trace for job `{{ .Job.ID }}` in project `{{ .Project.Path }}`.", []string{fixtureFailedJobArtifact}
 	case "MT-039":
-		return "Analyze why pipeline `{{ .Pipeline.ID }}` failed in project `{{ .Project.Path }}`.", []CaseFixtureSpec{FailedJobArtifactFixture}
+		return "Analyze why pipeline `{{ .Pipeline.ID }}` failed in project `{{ .Project.Path }}`.", []string{fixtureFailedJobArtifact}
 	case "MT-050":
-		return "Get raw content of personal snippet ID `{{ .Values.snippet_id }}`.", []CaseFixtureSpec{SnippetFixture}
+		return "Get raw content of personal snippet ID `{{ .Values.snippet_id }}`.", []string{fixtureSnippet}
 	case "MT-093":
-		return "Review merge request `{{ .MergeRequest.IID }}` changes in project `{{ .Project.Path }}` with the LLM-assisted analyzer.", []CaseFixtureSpec{MergeRequestFixture}
+		return "Review merge request `{{ .MergeRequest.IID }}` changes in project `{{ .Project.Path }}` with the LLM-assisted analyzer.", []string{fixtureMergeRequest}
 	case "MT-094":
-		return "In project `{{ .Project.Path }}`, summarize issue `{{ .Issue.IID }}` with the LLM-assisted analyzer.", []CaseFixtureSpec{IssueFixture}
+		return "In project `{{ .Project.Path }}`, summarize issue `{{ .Issue.IID }}` with the LLM-assisted analyzer.", []string{fixtureIssue}
 	case "MT-096":
-		return "Run a security review of merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`.", []CaseFixtureSpec{MergeRequestFixture}
+		return "Run a security review of merge request `{{ .MergeRequest.IID }}` in project `{{ .Project.Path }}`.", []string{fixtureMergeRequest}
 	case "MT-179":
-		return "Inspect merge request `{{ .MergeRequest.IID }}` changes in project `{{ .Project.Path }}` without running an LLM analyzer.", []CaseFixtureSpec{MergeRequestFixture}
+		return "Inspect merge request `{{ .MergeRequest.IID }}` changes in project `{{ .Project.Path }}` without running an LLM analyzer.", []string{fixtureMergeRequest}
 	case "MS-002":
-		return "Investigate failed pipeline `{{ .Pipeline.ID }}` for project `{{ .Project.Path }}` and remote URL `{{ .Values.remote_url }}`: resolve the project, inspect the pipeline, list failed jobs, fetch job `{{ .Job.ID }}` trace, then call the pipeline failure analyzer for pipeline `{{ .Pipeline.ID }}`.", []CaseFixtureSpec{FailedJobArtifactFixture}
+		return "Investigate failed pipeline `{{ .Pipeline.ID }}` for project `{{ .Project.Path }}` and remote URL `{{ .Values.remote_url }}`: resolve the project, inspect the pipeline, list failed jobs, fetch job `{{ .Job.ID }}` trace, then call the pipeline failure analyzer for pipeline `{{ .Pipeline.ID }}`.", []string{fixtureFailedJobArtifact}
 	default:
 		return "", nil
 	}
 }
 
-func readStep(tool, action string, requiredParams, optionalParams []string) ExpectedStep {
-	return ExpectedStep{
+func readStep(tool, action string, requiredParams, optionalParams []string) Step {
+	return Step{
 		ExpectedTool:   tool,
 		ExpectedAction: action,
 		RequiredParams: requiredParams,

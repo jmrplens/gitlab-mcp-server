@@ -1,7 +1,7 @@
-package evaluator
+package cases
 
-func enterpriseMutatingEvalCases() []EvalCase {
-	return []EvalCase{
+func enterpriseMutatingEvalCases() []Case {
+	return []Case{
 		baseEnterpriseMutatingEvalCase("MS-006", "Check deployment gate state for project `my-org/tools/gitlab-mcp-server` and remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git`: resolve the project, list available environments, inspect protected environment `production`, list production deployments, then approve deployment ID `77`. Do not call deployment approval until after the deployment list step completes.",
 			readStep("gitlab_discover_project", "", params("remote_url"), nil),
 			readStep("gitlab_environment", "list", params("project_id"), params("states")),
@@ -50,37 +50,37 @@ func enterpriseMutatingEvalCases() []EvalCase {
 	}
 }
 
-func baseEnterpriseMutatingEvalCase(id, prompt string, steps ...ExpectedStep) EvalCase {
-	presets := []EvalPreset{EvalPreset(presetSchemaEnterprise)}
+func baseEnterpriseMutatingEvalCase(id, prompt string, steps ...Step) Case {
+	presets := []string{presetSchemaEnterprise}
 	if (id >= "MT-192" && id <= "MT-195") || id == "MS-054" {
-		presets = append(presets, EvalPreset(presetDockerEnterpriseMutatingSafe))
+		presets = append(presets, presetDockerEnterpriseMutatingSafe)
 	}
 	promptTemplate, fixtures := enterpriseMutatingPromptTemplateAndFixtures(id, prompt)
-	return EvalCase{
-		ID:             EvalCaseID(id),
+	return Case{
+		ID:             id,
 		Prompt:         prompt,
 		PromptTemplate: promptTemplate,
 		Steps:          steps,
 		Fixtures:       fixtures,
-		Edition:        EvalCaseEdition(editionEnterprise),
+		Edition:        editionEnterprise,
 		Presets:        presets,
-		Partition:      EvalPartition(partitionEnterpriseMutating),
+		Partition:      partitionEnterpriseMutating,
 		Mutating:       true,
 		ReportGroup:    partitionEnterpriseMutating,
 	}
 }
 
-func enterpriseMutatingPromptTemplateAndFixtures(id, prompt string) (CasePromptTemplate, []CaseFixtureSpec) {
+func enterpriseMutatingPromptTemplateAndFixtures(id, prompt string) (PromptTemplate, []string) {
 	switch id {
 	case "MT-192":
-		return CasePromptTemplate{Text: "Add a project push rule to project `{{.Project.Path}}` with commit message regex `^EVAL-`. Only add the rule; do not edit or delete it."}, []CaseFixtureSpec{EnterprisePushRuleProjectFixture(false)}
+		return PromptTemplate{Text: "Add a project push rule to project `{{.Project.Path}}` with commit message regex `^EVAL-`. Only add the rule; do not edit or delete it."}, []string{fixtureEnterprisePushRuleProject}
 	case "MT-193":
-		return CasePromptTemplate{Text: "Edit the project push rule in project `{{.Project.Path}}` to reject unsigned commits."}, []CaseFixtureSpec{EnterprisePushRuleProjectFixture(true)}
+		return PromptTemplate{Text: "Edit the project push rule in project `{{.Project.Path}}` to reject unsigned commits."}, []string{fixtureEnterprisePushRuleProjectSeeded}
 	case "MT-195":
-		return CasePromptTemplate{Text: "Update project service account user ID `{{.Values.project_service_account_id}}` in project `{{.Project.Path}}` to name `eval-project-bot-live`."}, []CaseFixtureSpec{ProjectServiceAccountFixture}
+		return PromptTemplate{Text: "Update project service account user ID `{{.Values.project_service_account_id}}` in project `{{.Project.Path}}` to name `eval-project-bot-live`."}, []string{fixtureProjectServiceAccount}
 	case "MS-054":
-		return CasePromptTemplate{Text: "Exercise Enterprise project mutating settings in project `{{.Project.Path}}`: get project security settings, update `secret_push_protection_enabled` to true, list project service accounts, then update project service account user ID `{{.Values.project_service_account_id}}` to name `eval-project-bot-workflow`."}, []CaseFixtureSpec{ProjectServiceAccountFixture}
+		return PromptTemplate{Text: "Exercise Enterprise project mutating settings in project `{{.Project.Path}}`: get project security settings, update `secret_push_protection_enabled` to true, list project service accounts, then update project service account user ID `{{.Values.project_service_account_id}}` to name `eval-project-bot-workflow`."}, []string{fixtureProjectServiceAccount}
 	default:
-		return CasePromptTemplate{Text: prompt}, nil
+		return PromptTemplate{Text: prompt}, nil
 	}
 }

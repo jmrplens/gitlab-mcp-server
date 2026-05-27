@@ -1,7 +1,7 @@
-package evaluator
+package cases
 
-func enterpriseReadEvalCases() []EvalCase {
-	return []EvalCase{
+func enterpriseReadEvalCases() []Case {
+	return []Case{
 		baseEnterpriseReadEvalCase("MT-070", "List attestations in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_attestation", "list", params("project_id"), params("subject_digest"))),
 		baseEnterpriseReadEvalCase("MT-074", "List dependency inventory for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_dependency", "list", params("project_id"), params("package_manager", "per_page"))),
 		baseEnterpriseReadEvalCase("MT-075", "Get deployment frequency DORA metrics for project `my-org/tools/gitlab-mcp-server` from `2026-01-01` to `2026-01-31`.", readStep("gitlab_dora_metrics", "project", params("project_id", "metric"), params("start_date", "end_date", "interval"))),
@@ -58,19 +58,19 @@ func enterpriseReadEvalCases() []EvalCase {
 	}
 }
 
-func baseEnterpriseReadEvalCase(id, prompt string, steps ...ExpectedStep) EvalCase {
+func baseEnterpriseReadEvalCase(id, prompt string, steps ...Step) Case {
 	// MT-188 through MT-198 are EnterpriseDockerFixture cases and need both presets
-	presets := []EvalPreset{EvalPreset(presetSchemaEnterprise)}
+	presets := []string{presetSchemaEnterprise}
 	if (id >= "MT-188" && id <= "MT-191") || id == "MS-044" {
-		presets = append(presets, EvalPreset(presetDockerEnterpriseRead))
+		presets = append(presets, presetDockerEnterpriseRead)
 	}
-	return EvalCase{
-		ID:          EvalCaseID(id),
+	return Case{
+		ID:          id,
 		Prompt:      prompt,
 		Steps:       steps,
-		Edition:     EvalCaseEdition(editionEnterprise),
+		Edition:     editionEnterprise,
 		Presets:     presets,
-		Partition:   EvalPartition(partitionEnterpriseRead),
+		Partition:   partitionEnterpriseRead,
 		ReportGroup: partitionEnterpriseRead,
 	}
 }

@@ -460,6 +460,14 @@ func TestActionSpecs(t *testing.T) {
 			t.Fatalf("%s should be destructive", toolName)
 		}
 	}
+	for _, spec := range specs {
+		description := spec.IndividualTool.Description
+		for _, want := range []string{"Returns:", "See also:"} {
+			if !strings.Contains(description, want) {
+				t.Fatalf("%s description = %q, want %q", spec.IndividualTool.Name, description, want)
+			}
+		}
+	}
 
 	tools := []struct {
 		name string
