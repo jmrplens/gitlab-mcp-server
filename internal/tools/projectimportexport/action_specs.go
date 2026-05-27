@@ -25,8 +25,24 @@ func projectImportExportCreateSpec(name string, route toolutil.ActionRoute, indi
 }
 
 func projectImportExportOptions(individualTool string) toolutil.ActionSpecOptions {
+	usage := "Manage project import and export operations."
+	switch individualTool {
+	case "gitlab_schedule_project_export":
+		usage = "Schedule an export archive for a project."
+	case "gitlab_get_project_export_status":
+		usage = "Get current export status for a project."
+	case "gitlab_download_project_export":
+		usage = "Download the generated project export archive when ready."
+	case "gitlab_import_project_from_file":
+		usage = "Import a project from an uploaded archive file payload."
+	case "gitlab_get_project_import_status":
+		usage = "Get import status for a project import operation."
+	}
+
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"project", "import", "export"},
+		Usage:          usage,
 		RelatedActions: []string{"project.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "projectimportexport",

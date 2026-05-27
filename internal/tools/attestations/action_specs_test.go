@@ -24,6 +24,12 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if !spec.ReadOnly || !spec.Idempotent || spec.OwnerPackage != "attestations" {
 			t.Fatalf("unexpected ActionSpec semantics: %+v", spec)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s is empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s are empty", spec.Name)
+		}
 	}
 }
 

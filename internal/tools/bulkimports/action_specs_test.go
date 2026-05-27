@@ -34,6 +34,12 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.IndividualTool.Name == "" {
 			t.Errorf("IndividualTool.Name for %s is empty", spec.Name)
 		}
+		if spec.Usage == "" {
+			t.Errorf("Usage for %s is empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Errorf("Aliases for %s are empty", spec.Name)
+		}
 	}
 	for _, name := range []string{
 		"gitlab_list_bulk_imports",

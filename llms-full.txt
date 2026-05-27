@@ -1604,6 +1604,7 @@ Parameter guidance:
 - list.project_id: scope_project; source: Project numeric ID or full path containing branches.
 - protect.merge_access_level: branch_protection_merge_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
 - protect.push_access_level: branch_protection_push_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
+- rule_list.project_path: scope_project; source: Full project path used by GraphQL branch rule query.
 
 Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). Delete and unprotect are destructive and irreversible.
 When to use: create/list/delete branches, protect or update protection on branches, audit aggregated branch rules (push/merge access, approval rules, status checks).
@@ -4693,6 +4694,10 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_merge_request.<action>.
 Action guidance:
+- approval_settings_group_get: Get merge request approval settings for a group or project.
+- approval_settings_group_update: Update merge request approval settings for a group or project.
+- approval_settings_project_get: Get merge request approval settings for a group or project.
+- approval_settings_project_update: Update merge request approval settings for a group or project.
 - cancel_auto_merge: Cancels auto-merge on a merge request; it does not cancel a running pipeline.
 - create: Use to open a merge request from a source branch into the target branch in a project.
 - create_pipeline: Creates a new pipeline for a merge request; use pipeline.wait after receiving pipeline_id if the task asks to wait for completion.
@@ -5268,6 +5273,13 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"download","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_model_registry.<action>.
+Action guidance:
+- download: Download a file from a model package version in the project model registry.
+Parameter guidance:
+- download.filename: model_artifact_filename; source: Artifact file name to download from the package.
+- download.model_version_id: model_version_id; source: Numeric model package version identifier.
+- download.path: model_artifact_path; source: Subdirectory path in the package where the artifact is stored.
+- download.project_id: scope_project; source: Project ID or path that owns the model registry package.
 
 Download ML model package files from the GitLab Model Registry. Read-only — cannot publish or delete model versions through this tool. The underlying GitLab API requires a Premium/Ultimate plan on the target instance (server enforces it with 403); the tool itself is always registered and is not gated by GITLAB_ENTERPRISE.
 When to use: pull a model artifact (.pkl, .onnx, .safetensors, .bin, .gguf, etc.) attached to a registered model version, e.g. for inference, evaluation or vendoring into a build pipeline.
@@ -5549,6 +5561,18 @@ Action params schema: gitlab://tools/gitlab_package.<action>.
 Action guidance:
 - list: List package registry packages. If ordering is requested, use order_by with one of created_at, name, version, or type; do not use updated_at, released_at, or downloaded_at.
 - publish_directory: Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file; include_pattern is one glob, not a comma-separated file list.
+- registry_delete: Delete one container registry repository.
+- registry_get: Get details for one container registry repository.
+- registry_list_group: List container registry repositories across a group.
+- registry_list_project: List container registry repositories for a project.
+- registry_rule_create: Create a container registry protection rule for a project.
+- registry_rule_delete: Delete a container registry protection rule from a project.
+- registry_rule_list: List container registry protection rules for a project.
+- registry_rule_update: Update a container registry protection rule in a project.
+- registry_tag_delete: Delete one container registry tag.
+- registry_tag_delete_bulk: Delete container registry tags in bulk by name patterns.
+- registry_tag_get: Get metadata for one container registry tag.
+- registry_tag_list: List tags in one container registry repository.
 Parameter guidance:
 - list.order_by: package_list_sort_field; source: Use only GitLab Package Registry ordering fields accepted by the packages API.; avoid: Do not use updated_at, released_at, downloaded_at, last_downloaded_at, or id as order_by values.
 - publish_directory.include_pattern: single_glob_filter; source: Optional single glob matched against file names inside directory_path; omit it to include all regular files.; avoid: Do not pass comma-separated filenames., Do not use include_pattern to enumerate exact files; omit it when all fixture files should be uploaded.
@@ -6168,7 +6192,12 @@ Action guidance:
 - badge_list: List project badges. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
 - badge_preview: Preview a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
 - delete: Use to delete a project. For ordinary cleanup, send project_id and confirm only. Set permanently_remove only when explicitly requested; when permanently_remove is true, full_path must exactly match the project's path_with_namespace from project create/get.
+- export_download: Download the generated project export archive when ready.
+- export_schedule: Schedule an export archive for a project.
+- export_status: Get current export status for a project.
 - get: Get one exact project by numeric ID or full namespace path. Use this when the prompt gives a concrete path like group/project and asks to find, show, verify, or read project metadata such as id or default_branch; do not use search.projects for an exact path lookup.
+- import_from_file: Import a project from an uploaded archive file payload.
+- import_status: Get import status for a project import operation.
 - label_create: Create a label in a project with required name and color, plus optional description and priority.
 - label_get: Get one label by project_id and label_id (label name/ID route parameter). Use when exact label metadata is needed.
 - label_list: List labels for a project with optional search and pagination. Use to discover taxonomy before issue/MR filtering or label maintenance.
@@ -10094,6 +10123,14 @@ These 17 tools require GITLAB_ENTERPRISE=true. GitLab.com-only tools, including 
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_attestation.<action>.
+Action guidance:
+- download: Download one attestation by IID from a project.
+- list: List attestations for a subject digest in a project.
+Parameter guidance:
+- download.attestation_iid: attestation_iid; source: Attestation IID returned by list action.
+- download.project_id: scope_project; source: Project ID or path owning the attestation.
+- list.project_id: scope_project; source: Project ID or path owning the artifact.
+- list.subject_digest: artifact_digest; source: OCI-style digest (for example sha256:...).
 
 List and download build attestations (SLSA provenance) for project artifacts.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -10202,6 +10239,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Use {"action":"get","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_compliance_policy.<action>.
+Action guidance:
+- get: Get current compliance policy settings.
+- update: Update compliance policy settings for the instance.
+Parameter guidance:
+- update.csp_namespace_id: compliance_namespace_id; source: Namespace ID that should host compliance policy project(s).
 
 Get and update admin compliance policy settings (CSP namespace configuration).
 Returns: JSON with resource data for get/update actions. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -10821,6 +10863,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_project_alias.<action>.
+Action guidance:
+- create: Create a new project alias that points to a target project ID.
+- delete: Delete a project alias by name.
+- get: Get details for one project alias by name.
+- list: List project aliases visible in the configured scope.
 
 CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.

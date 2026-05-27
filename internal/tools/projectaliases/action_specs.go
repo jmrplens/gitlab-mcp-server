@@ -39,8 +39,23 @@ func projectAliasDeleteSpec(name string, route toolutil.ActionRoute, individualT
 }
 
 func projectAliasOptions(individualTool string) toolutil.ActionSpecOptions {
+	usage := "Manage project aliases in a namespace."
+	switch individualTool {
+	case "gitlab_list_project_aliases":
+		usage = "List project aliases visible in the configured scope."
+	case "gitlab_get_project_alias":
+		usage = "Get details for one project alias by name."
+	case "gitlab_create_project_alias":
+		usage = "Create a new project alias that points to a target project ID."
+	case "gitlab_delete_project_alias":
+		usage = "Delete a project alias by name."
+	}
+
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"project", "alias"},
+		Usage:          usage,
+		RelatedActions: []string{"project.get", "project.search"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "projectaliases",

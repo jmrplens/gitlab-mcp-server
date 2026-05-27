@@ -549,6 +549,12 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "projectimportexport" {
 			t.Errorf("OwnerPackage for %s = %q, want projectimportexport", spec.Name, spec.OwnerPackage)
 		}
+		if spec.Usage == "" {
+			t.Errorf("Usage for %s is empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Errorf("Aliases for %s are empty", spec.Name)
+		}
 	}
 	for _, name := range []string{
 		"gitlab_get_project_export_status",

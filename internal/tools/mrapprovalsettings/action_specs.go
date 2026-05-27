@@ -16,16 +16,24 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func approvalSettingsReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, approvalSettingsOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, approvalSettingsOptions(name, individualTool))
 }
 
 func approvalSettingsUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, approvalSettingsOptions(individualTool))
+	return toolutil.NewUpdateActionSpec(name, route, approvalSettingsOptions(name, individualTool))
 }
 
-func approvalSettingsOptions(individualTool string) toolutil.ActionSpecOptions {
+func approvalSettingsOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "Get merge request approval settings for a group or project."
+	if actionName == "approval_settings_group_update" || actionName == "approval_settings_project_update" {
+		usage = "Update merge request approval settings for a group or project."
+	}
+
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"merge_request", "approval_settings"},
+		Usage:          usage,
+		RelatedActions: []string{"mrapprovals.get_state", "project.get", "group.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "mrapprovalsettings",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

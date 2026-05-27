@@ -12,9 +12,37 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const fmtUnexpErr = "unexpected error: %v"
+
+// TestActionSpecs_Metadata verifies canonical metadata for group iteration actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	specs := IssueActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(IssueActionSpecs) = %d, want 1", len(specs))
+	}
+	spec := specs[0]
+	if spec.OwnerPackage != "groupiterations" || !spec.ReadOnly || !spec.Idempotent {
+		t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+	}
+	if spec.Usage == "" {
+		t.Fatalf("Usage for %s is empty", spec.Name)
+	}
+	if len(spec.Aliases) == 0 {
+		t.Fatalf("Aliases for %s are empty", spec.Name)
+	}
+
+	byTool := map[string]toolutil.ActionSpec{}
+	for _, s := range specs {
+		byTool[s.IndividualTool.Name] = s
+	}
+	if _, ok := byTool["gitlab_list_group_iterations"]; !ok {
+		t.Fatal("missing individual tool mapping for gitlab_list_group_iterations")
+	}
+}
 
 // TestList_Success verifies List returns correct group iteration fields
 // including id, iid, title, state, and web_url from a well-formed API response.

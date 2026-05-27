@@ -48,6 +48,25 @@ const sampleUnprotectedRuleNode = `{
 	"externalStatusChecks": {"nodes": []}
 }`
 
+// TestActionSpecs_Metadata verifies canonical metadata for branch rule actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
+	specs := ActionSpecs(client)
+	if len(specs) != 1 {
+		t.Fatalf("len(ActionSpecs) = %d, want 1", len(specs))
+	}
+	spec := specs[0]
+	if spec.OwnerPackage != "branchrules" || !spec.ReadOnly || !spec.Idempotent {
+		t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+	}
+	if spec.Usage == "" {
+		t.Fatalf("Usage for %s is empty", spec.Name)
+	}
+	if len(spec.Aliases) == 0 {
+		t.Fatalf("Aliases for %s are empty", spec.Name)
+	}
+}
+
 // graphqlMux returns an [http.Handler] that routes GraphQL requests to the
 // appropriate handler based on the query operation name.
 func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {

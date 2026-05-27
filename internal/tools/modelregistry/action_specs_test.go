@@ -22,6 +22,12 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if specs[0].OwnerPackage != "modelregistry" || !specs[0].ReadOnly || !specs[0].Idempotent {
 		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
 	}
+	if specs[0].Usage == "" {
+		t.Fatalf("Usage for %s is empty", specs[0].Name)
+	}
+	if len(specs[0].Aliases) == 0 {
+		t.Fatalf("Aliases for %s are empty", specs[0].Name)
+	}
 }
 
 // TestActionSpecs_CallRoute verifies the model registry download route executes successfully.

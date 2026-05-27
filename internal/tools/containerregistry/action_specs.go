@@ -42,8 +42,39 @@ func registryDeleteSpec(name string, route toolutil.ActionRoute, individualTool 
 }
 
 func registryOptions(individualTool string) toolutil.ActionSpecOptions {
+	usage := "Manage container registry repositories, tags, and protection rules for projects or groups."
+	switch individualTool {
+	case "gitlab_registry_list_project":
+		usage = "List container registry repositories for a project."
+	case "gitlab_registry_list_group":
+		usage = "List container registry repositories across a group."
+	case "gitlab_registry_get_repository":
+		usage = "Get details for one container registry repository."
+	case "gitlab_registry_delete_repository":
+		usage = "Delete one container registry repository."
+	case "gitlab_registry_list_tags":
+		usage = "List tags in one container registry repository."
+	case "gitlab_registry_get_tag":
+		usage = "Get metadata for one container registry tag."
+	case "gitlab_registry_delete_tag":
+		usage = "Delete one container registry tag."
+	case "gitlab_registry_delete_tags_bulk":
+		usage = "Delete container registry tags in bulk by name patterns."
+	case "gitlab_registry_protection_list":
+		usage = "List container registry protection rules for a project."
+	case "gitlab_registry_protection_create":
+		usage = "Create a container registry protection rule for a project."
+	case "gitlab_registry_protection_update":
+		usage = "Update a container registry protection rule in a project."
+	case "gitlab_registry_protection_delete":
+		usage = "Delete a container registry protection rule from a project."
+	}
+
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"container", "package", "registry"},
+		Usage:          usage,
+		RelatedActions: []string{"project.get", "package.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "containerregistry",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

@@ -296,6 +296,12 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "compliancepolicy" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s is empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s are empty", spec.Name)
+		}
 	}
 }
 
