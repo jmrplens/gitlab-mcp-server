@@ -21,7 +21,7 @@ func mrChangeReadSpec(name string, route toolutil.ActionRoute, individualTool st
 
 func mrChangeOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"merge_request", "review", "diff"},
+		Aliases: []string{individualTool}, Usage: "Use to execute mrchanges domain action.", Tags: []string{"merge_request", "review", "diff"},
 		OpenWorld:      true,
 		OwnerPackage:   "mrchanges",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

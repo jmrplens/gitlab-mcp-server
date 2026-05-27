@@ -50,7 +50,7 @@ func memberRoleDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 
 func memberRoleOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"member_role"},
+		Aliases: []string{individualTool}, Usage: "Use to execute memberroles domain action.", Tags: []string{"member_role"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "memberroles",

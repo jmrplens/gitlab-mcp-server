@@ -36,7 +36,7 @@ func mrDiscussionDeleteSpec(name string, route toolutil.ActionRoute, individualT
 
 func mrDiscussionOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"merge_request", "review", "discussion"},
+		Aliases: []string{individualTool}, Usage: "Use to execute mrdiscussions domain action.", Tags: []string{"merge_request", "review", "discussion"},
 		OpenWorld:      true,
 		OwnerPackage:   "mrdiscussions",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

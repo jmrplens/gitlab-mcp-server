@@ -184,7 +184,7 @@ func issueDeleteSpec(name string, route toolutil.ActionRoute, individualTool str
 
 func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"issue"},
+		Aliases: []string{individualTool}, Usage: "Use to execute issues domain action.", Tags: []string{"issue"},
 		OpenWorld:      true,
 		OwnerPackage:   "issues",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -212,7 +212,7 @@ func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func groupIssueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "issue"},
+		Aliases: []string{individualTool}, Usage: "Use to execute issues domain action.", Tags: []string{"group", "issue"},
 		OpenWorld:      true,
 		OwnerPackage:   "issues",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

@@ -45,7 +45,7 @@ func issueDiscussionDeleteSpec(name string, route toolutil.ActionRoute, individu
 
 func issueDiscussionOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"issue", "discussion"},
+		Aliases: []string{individualTool}, Usage: "Use to execute issuediscussions domain action.", Tags: []string{"issue", "discussion"},
 		OpenWorld:      true,
 		OwnerPackage:   "issuediscussions",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

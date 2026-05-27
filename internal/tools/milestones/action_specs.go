@@ -54,7 +54,7 @@ func milestoneDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 func milestoneOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"project", "milestone"},
+		Aliases: []string{individualTool}, Usage: "Use to execute milestones domain action.", Tags: []string{"project", "milestone"},
 		RelatedActions: []string{"project.get", "issue.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "milestones",

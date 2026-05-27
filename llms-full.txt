@@ -3967,6 +3967,14 @@ Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_issue.<action>.
 Action guidance:
 - create: Create a new issue in a known project. Provide project_id and a clear title, then add description, labels, assignee_ids, milestone_id, due_date, confidential, or task metadata only when requested.
+- create_todo: Use to execute issues domain action.
+- delete: Use to execute issues domain action.
+- discussion_add_note: Use to execute issuediscussions domain action.
+- discussion_create: Use to execute issuediscussions domain action.
+- discussion_delete_note: Use to execute issuediscussions domain action.
+- discussion_get: Use to execute issuediscussions domain action.
+- discussion_list: Use to execute issuediscussions domain action.
+- discussion_update_note: Use to execute issuediscussions domain action.
 - emoji_issue_create: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - emoji_issue_delete: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - emoji_issue_get: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
@@ -3976,9 +3984,34 @@ Action guidance:
 - emoji_issue_note_get: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - emoji_issue_note_list: Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues.
 - get: Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number; prefer issue.get over issue.list when the target issue is already known.
+- get_by_id: Use to execute issues domain action.
 - link_create: Use to create a relationship from a source issue to a target issue, optionally across projects.
+- link_delete: Use to execute issuelinks domain action.
+- link_get: Use to execute issuelinks domain action.
+- link_list: Use to execute issuelinks domain action.
 - list: List issues in one project. Use filters such as state, labels, search, assignee_username, milestone, order_by, sort, and pagination when the prompt asks for matching or recent issues in a known project.
 - list_all: List issues visible to the authenticated user across all accessible projects. Use this when the user asks for their open issues, assigned issues, or a cross-project issue overview.
+- list_group: Use to execute issues domain action.
+- move: Use to execute issues domain action.
+- mrs_closing: Use to execute issues domain action.
+- mrs_related: Use to execute issues domain action.
+- note_create: Use to execute issuenotes domain action.
+- note_delete: Use to execute issuenotes domain action.
+- note_get: Use to execute issuenotes domain action.
+- note_list: Use to execute issuenotes domain action.
+- note_update: Use to execute issuenotes domain action.
+- participants: Use to execute issues domain action.
+- reorder: Use to execute issues domain action.
+- spent_time_add: Use to execute issues domain action.
+- spent_time_reset: Use to execute issues domain action.
+- statistics_get: Use to execute issuestatistics domain action.
+- statistics_get_group: Use to execute issuestatistics domain action.
+- statistics_get_project: Use to execute issuestatistics domain action.
+- subscribe: Use to execute issues domain action.
+- time_estimate_reset: Use to execute issues domain action.
+- time_estimate_set: Use to execute issues domain action.
+- time_stats_get: Use to execute issues domain action.
+- unsubscribe: Use to execute issues domain action.
 - update: Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen; dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically.
 Parameter guidance:
 - create.due_date: calendar_date; source: Requested due date in ISO format when the user specifies one.; avoid: Use YYYY-MM-DD; natural-language dates must be normalized before calling the tool.
@@ -4611,10 +4644,31 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_job.<action>.
 Action guidance:
+- artifacts: Use to execute jobs domain action.
+- cancel: Use to execute jobs domain action.
+- delete_artifacts: Use to execute jobs domain action.
+- delete_project_artifacts: Use to execute jobs domain action.
+- download_artifacts: Use to execute jobs domain action.
+- download_single_artifact: Use to execute jobs domain action.
+- download_single_artifact_by_ref: Use to execute jobs domain action.
+- erase: Use to execute jobs domain action.
 - get: Get one CI job by project_id and job_id. Use this when the task already references a specific job and needs state, stage, runner, failure reason, or timing details.
+- keep_artifacts: Use to execute jobs domain action.
+- list: Use to execute jobs domain action.
+- list_bridges: Use to execute jobs domain action.
 - list_project: List jobs in one project. Use this when the prompt asks for recent, failed, manual, or retried jobs in a known project; combine filters and pagination as needed.
+- play: Use to execute jobs domain action.
+- retry: Use to execute jobs domain action.
+- token_scope_add_group: Use to execute jobtokenscope domain action.
+- token_scope_add_project: Use to execute jobtokenscope domain action.
+- token_scope_get: Use to execute jobtokenscope domain action.
+- token_scope_list_groups: Use to execute jobtokenscope domain action.
+- token_scope_list_inbound: Use to execute jobtokenscope domain action.
+- token_scope_patch: Use to execute jobtokenscope domain action.
+- token_scope_remove_group: Use to execute jobtokenscope domain action.
 - token_scope_remove_project: Use when removing a target project from another project's CI job token inbound allowlist.
 - trace: Get job log output (trace) for troubleshooting and diagnostics. Use with a known job_id after selecting a relevant job from list/get calls.
+- wait: Use to execute jobs domain action.
 Parameter guidance:
 - get.job_id: job_identifier; source: Numeric CI job ID from pipeline/job list output or user-provided context.; avoid: Use job_id from GitLab job records; do not pass pipeline ID as job ID.
 - get.project_id: scope_project; source: Project ID or path that owns the job.; avoid: Use project_id for project scope; pipeline_id is not a substitute for project_id.
@@ -4872,13 +4926,30 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_merge_request.<action>.
 Action guidance:
+- approval_config: Use to execute mrapprovals domain action.
+- approval_reset: Use to execute mrapprovals domain action.
+- approval_rule_create: Use to execute mrapprovals domain action.
+- approval_rule_delete: Use to execute mrapprovals domain action.
+- approval_rule_update: Use to execute mrapprovals domain action.
+- approval_rules: Use to execute mrapprovals domain action.
 - approval_settings_group_get: Get merge request approval settings for a group or project.
 - approval_settings_group_update: Update merge request approval settings for a group or project.
 - approval_settings_project_get: Get merge request approval settings for a group or project.
 - approval_settings_project_update: Update merge request approval settings for a group or project.
+- approval_state: Use to execute mrapprovals domain action.
+- approve: Use to execute mergerequests domain action.
 - cancel_auto_merge: Cancels auto-merge on a merge request; it does not cancel a running pipeline.
+- commits: Use to execute mergerequests domain action.
+- context_commits_create: Use to execute mrcontextcommits domain action.
+- context_commits_delete: Use to execute mrcontextcommits domain action.
+- context_commits_list: Use to execute mrcontextcommits domain action.
 - create: Use to open a merge request from a source branch into the target branch in a project.
 - create_pipeline: Creates a new pipeline for a merge request; use pipeline.wait after receiving pipeline_id if the task asks to wait for completion.
+- create_todo: Use to execute mergerequests domain action.
+- delete: Use to execute mergerequests domain action.
+- dependencies_list: Use to execute mergerequests domain action.
+- dependency_create: Use to execute mergerequests domain action.
+- dependency_delete: Use to execute mergerequests domain action.
 - emoji_mr_create: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
 - emoji_mr_delete: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
 - emoji_mr_get: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
@@ -4887,8 +4958,26 @@ Action guidance:
 - emoji_mr_note_delete: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
 - emoji_mr_note_get: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
 - emoji_mr_note_list: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
+- get: Use to execute mergerequests domain action.
+- issues_closed: Use to execute mergerequests domain action.
+- list: Use to execute mergerequests domain action.
+- list_global: Use to execute mergerequests domain action.
+- list_group: Use to execute mergerequests domain action.
 - merge: Use to merge a merge request now, or set params.auto_merge=true when the task asks to merge when pipeline succeeds. Do not use pipeline.wait unless the task only asks to wait for an existing pipeline.
+- participants: Use to execute mergerequests domain action.
 - pipelines: Lists pipelines attached to a merge request; use pipeline.wait with the returned pipeline_id only when the task asks to wait for CI completion.
+- rebase: Use to execute mergerequests domain action.
+- related_issues: Use to execute mergerequests domain action.
+- reviewers: Use to execute mergerequests domain action.
+- spent_time_add: Use to execute mergerequests domain action.
+- spent_time_reset: Use to execute mergerequests domain action.
+- subscribe: Use to execute mergerequests domain action.
+- time_estimate_reset: Use to execute mergerequests domain action.
+- time_estimate_set: Use to execute mergerequests domain action.
+- time_stats: Use to execute mergerequests domain action.
+- unapprove: Use to execute mergerequests domain action.
+- unsubscribe: Use to execute mergerequests domain action.
+- update: Use to execute mergerequests domain action.
 Parameter guidance:
 - create.source_branch: source_branch; source: Branch named after 'from'.; avoid: Do not use ref, tag_name, target_branch, or value for the source branch.
 - create.target_branch: target_branch; source: Branch named after 'into' or the merge target.; avoid: Do not use source_branch, ref, tag_name, or to for the target branch.
@@ -5494,6 +5583,25 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Use {"action":"changes_get","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_mr_review.<action>.
+Action guidance:
+- changes_get: Use to execute mrchanges domain action.
+- diff_version_get: Use to execute mrchanges domain action.
+- diff_versions_list: Use to execute mrchanges domain action.
+- discussion_create: Use to execute mrdiscussions domain action.
+- discussion_get: Use to execute mrdiscussions domain action.
+- discussion_list: Use to execute mrdiscussions domain action.
+- discussion_note_delete: Use to execute mrdiscussions domain action.
+- discussion_note_update: Use to execute mrdiscussions domain action.
+- discussion_reply: Use to execute mrdiscussions domain action.
+- discussion_resolve: Use to execute mrdiscussions domain action.
+- draft_note_create: Use to execute mrdraftnotes domain action.
+- draft_note_delete: Use to execute mrdraftnotes domain action.
+- draft_note_get: Use to execute mrdraftnotes domain action.
+- draft_note_list: Use to execute mrdraftnotes domain action.
+- draft_note_publish: Use to execute mrdraftnotes domain action.
+- draft_note_publish_all: Use to execute mrdraftnotes domain action.
+- draft_note_update: Use to execute mrdraftnotes domain action.
+- raw_diffs: Use to execute mrchanges domain action.
 
 Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload.
 When to use: post review comments, open or resolve discussion threads, fetch the diff to comment inline, queue draft notes during a session and publish them as a single review. For prompts like "inspect/view MR changes/diffs" or "without running an LLM analyzer", choose changes_get first.
@@ -6391,12 +6499,27 @@ Action guidance:
 - integration_list: Use to execute integrations domain action.
 - integration_set_jira: Use to execute integrations domain action.
 - label_create: Create a label in a project with required name and color, plus optional description and priority.
+- label_delete: Use to execute labels domain action.
 - label_get: Get one label by project_id and label_id (label name/ID route parameter). Use when exact label metadata is needed.
 - label_list: List labels for a project with optional search and pagination. Use to discover taxonomy before issue/MR filtering or label maintenance.
+- label_promote: Use to execute labels domain action.
+- label_subscribe: Use to execute labels domain action.
+- label_unsubscribe: Use to execute labels domain action.
+- label_update: Use to execute labels domain action.
 - list: List projects accessible to the authenticated user. For most recently updated projects, use order_by last_activity_at with sort desc and per_page for the requested count; do not use last_activity_after as an order_by value.
+- member_add: Use to execute members domain action.
+- member_delete: Use to execute members domain action.
+- member_edit: Use to execute members domain action.
+- member_get: Use to execute members domain action.
+- member_inherited: Use to execute members domain action.
+- members: Use to execute members domain action.
 - milestone_create: Create a milestone in a project with title and optional description/start/due dates.
+- milestone_delete: Use to execute milestones domain action.
 - milestone_get: Get one milestone by project_id and milestone_iid. Use this when a specific milestone is referenced and detailed fields are required.
+- milestone_issues: Use to execute milestones domain action.
 - milestone_list: List milestones in one project with optional state/search filters and pagination. Use for release planning and progress overviews.
+- milestone_merge_requests: Use to execute milestones domain action.
+- milestone_update: Use to execute milestones domain action.
 - pages_domain_create: Manage project Pages settings and custom domains.
 - pages_domain_delete: Manage project Pages settings and custom domains.
 - pages_domain_get: Manage project Pages settings and custom domains.
@@ -7819,6 +7942,7 @@ Action guidance:
 - file_raw: Use to execute files domain action.
 - file_raw_metadata: Use to execute files domain action.
 - file_update: Use to execute files domain action.
+- markdown_render: Use to execute markdown_render action.
 - tree: List repository tree entries for a project/ref/path. Use this to browse directories and locate files before file/blob operations.
 Parameter guidance:
 - commit_create.actions: commit_actions; source: Array of commit actions (create/update/delete/move/chmod) with file paths and content.
@@ -9547,6 +9671,8 @@ Action guidance:
 - event_list_project: List events for one specific project with optional filters and pagination.
 - get: Get a single user by numeric user_id. Use this when the prompt already references a concrete user account and needs detailed profile fields.
 - get_impersonation_token: Use to execute impersonationtokens domain action.
+- key_get_by_fingerprint: Use to execute keys domain action.
+- key_get_with_user: Use to execute keys domain action.
 - list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
 - list_impersonation_tokens: Use to execute impersonationtokens domain action.
 - me: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
@@ -10922,6 +11048,13 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"create_group","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_member_role.<action>.
+Action guidance:
+- create_group: Use to execute memberroles domain action.
+- create_instance: Use to execute memberroles domain action.
+- delete_group: Use to execute memberroles domain action.
+- delete_instance: Use to execute memberroles domain action.
+- list_group: Use to execute memberroles domain action.
+- list_instance: Use to execute memberroles domain action.
 
 Manage custom member roles at instance or group level. Fine-grained permissions beyond standard access levels.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -10996,6 +11129,11 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"get","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_merge_train.<action>.
+Action guidance:
+- add: Use to execute mergetrains domain action.
+- get: Use to execute mergetrains domain action.
+- list_branch: Use to execute mergetrains domain action.
+- list_project: Use to execute mergetrains domain action.
 
 Manage GitLab merge trains (automated merge queues). List, get, and add MRs to merge trains.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.

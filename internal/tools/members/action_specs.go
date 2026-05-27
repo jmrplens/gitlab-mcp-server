@@ -45,7 +45,7 @@ func memberDeleteSpec(name string, route toolutil.ActionRoute, individualTool st
 
 func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"project", "member", "access"},
+		Aliases: []string{individualTool}, Usage: "Use to execute members domain action.", Tags: []string{"project", "member", "access"},
 		RelatedActions: []string{"project.get", "user.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "members",

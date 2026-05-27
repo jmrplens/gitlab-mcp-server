@@ -45,7 +45,7 @@ func issueNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 func issueNoteOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"issue", "note"},
+		Aliases: []string{individualTool}, Usage: "Use to execute issuenotes domain action.", Tags: []string{"issue", "note"},
 		OpenWorld:      true,
 		OwnerPackage:   "issuenotes",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

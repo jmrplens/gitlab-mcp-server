@@ -63,16 +63,12 @@ func jobDeleteSpec(name string, route toolutil.ActionRoute, individualTool strin
 	return toolutil.NewDeleteActionSpec(name, route, jobOptionsForAction(name, individualTool, extraTags...))
 }
 
-func jobOptions(individualTool string, extraTags ...string) toolutil.ActionSpecOptions {
-	return jobOptionsForAction("", individualTool, extraTags...)
-}
-
 func jobOptionsForAction(actionName, individualTool string, extraTags ...string) toolutil.ActionSpecOptions {
 	_ = actionName
 
 	tags := append([]string{"ci", "job"}, extraTags...)
 	options := toolutil.ActionSpecOptions{
-		Tags:           tags,
+		Aliases: []string{individualTool}, Usage: "Use to execute jobs domain action.", Tags: tags,
 		OpenWorld:      true,
 		OwnerPackage:   "jobs",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

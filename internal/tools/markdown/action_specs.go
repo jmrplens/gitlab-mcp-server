@@ -9,7 +9,7 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		toolutil.NewReadActionSpec("markdown_render", toolutil.RouteAction(client, Render), toolutil.ActionSpecOptions{
-			Tags:           []string{"markdown", "render"},
+			Aliases: []string{"gitlab_render_markdown"}, Usage: "Use to execute markdown_render action.", Tags: []string{"markdown", "render"},
 			RelatedActions: []string{"repository.file_get", "wiki.get"},
 			OpenWorld:      true,
 			OwnerPackage:   "markdown",

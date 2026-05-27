@@ -15,7 +15,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func keyReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"user", "ssh_key"},
+		Aliases: []string{individualTool}, Usage: "Use to execute keys domain action.", Tags: []string{"user", "ssh_key"},
 		OpenWorld:      true,
 		OwnerPackage:   "keys",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

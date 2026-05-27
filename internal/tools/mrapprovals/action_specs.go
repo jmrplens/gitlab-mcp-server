@@ -61,7 +61,7 @@ func approvalResetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 
 func approvalOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"merge_request", "approval"},
+		Aliases: []string{individualTool}, Usage: "Use to execute mrapprovals domain action.", Tags: []string{"merge_request", "approval"},
 		OpenWorld:      true,
 		OwnerPackage:   "mrapprovals",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

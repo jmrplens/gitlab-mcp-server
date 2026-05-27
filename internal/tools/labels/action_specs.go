@@ -56,7 +56,7 @@ func labelDeleteSpec(name string, route toolutil.ActionRoute, individualTool str
 
 func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"project", "label"},
+		Aliases: []string{individualTool}, Usage: "Use to execute labels domain action.", Tags: []string{"project", "label"},
 		RelatedActions: []string{"project.get", "issue.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "labels",
