@@ -105,6 +105,9 @@ func TestActionSpecs_Metadata_Coverage(t *testing.T) {
 	if guidance := specs[0].ParameterGuidance["email"]; guidance.SemanticRole != "email_address" {
 		t.Fatalf("email guidance = %+v, want email_address semantic role", guidance)
 	}
+	if guidance := specs[0].ParameterGuidance["email"]; guidance.ExampleBinding == "" {
+		t.Fatalf("email guidance missing ExampleBinding: %+v", guidance)
+	}
 	if !slices.Contains(specs[0].Aliases, "lookup avatar by email") {
 		t.Fatalf("Aliases = %v, want lookup avatar by email", specs[0].Aliases)
 	}

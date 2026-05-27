@@ -744,6 +744,21 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("OwnerPackage for %s = %q, want accessrequests", spec.Name, spec.OwnerPackage)
 		}
 	}
+
+	listProject := byTool["gitlab_access_request_list_project"]
+	if listProject.Usage == "" || len(listProject.Aliases) == 0 || listProject.ParameterGuidance["project_id"].SemanticRole == "" {
+		t.Fatalf("list project metadata incomplete: usage=%q aliases=%d project_id guidance=%q", listProject.Usage, len(listProject.Aliases), listProject.ParameterGuidance["project_id"].SemanticRole)
+	}
+
+	approveProject := byTool["gitlab_access_request_approve_project"]
+	if approveProject.Usage == "" || len(approveProject.Aliases) == 0 || approveProject.ParameterGuidance["user_id"].SemanticRole == "" {
+		t.Fatalf("approve project metadata incomplete: usage=%q aliases=%d user_id guidance=%q", approveProject.Usage, len(approveProject.Aliases), approveProject.ParameterGuidance["user_id"].SemanticRole)
+	}
+
+	denyGroup := byTool["gitlab_access_request_deny_group"]
+	if denyGroup.Usage == "" || len(denyGroup.Aliases) == 0 {
+		t.Fatalf("deny group metadata incomplete: usage=%q aliases=%d", denyGroup.Usage, len(denyGroup.Aliases))
+	}
 }
 
 // TestActionSpecs_CallAllRoutes validates all access request routes through the canonical specs.

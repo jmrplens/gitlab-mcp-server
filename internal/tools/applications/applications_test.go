@@ -267,10 +267,26 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if len(specs) != 3 {
 		t.Fatalf("len(ActionSpecs) = %d, want 3", len(specs))
 	}
+	byTool := applicationSpecsByTool(client)
 	for _, spec := range specs {
 		if spec.OwnerPackage != "applications" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+	}
+
+	list := byTool["gitlab_list_applications"]
+	if list.Usage == "" || len(list.Aliases) == 0 || list.IndividualTool.Description == "" {
+		t.Fatalf("list metadata incomplete: usage=%q aliases=%d description=%q", list.Usage, len(list.Aliases), list.IndividualTool.Description)
+	}
+
+	create := byTool["gitlab_create_application"]
+	if create.Usage == "" || len(create.Aliases) == 0 || create.ParameterGuidance["redirect_uri"].SemanticRole == "" {
+		t.Fatalf("create metadata incomplete: usage=%q aliases=%d redirect_uri guidance=%q", create.Usage, len(create.Aliases), create.ParameterGuidance["redirect_uri"].SemanticRole)
+	}
+
+	deleteSpec := byTool["gitlab_delete_application"]
+	if deleteSpec.Usage == "" || len(deleteSpec.Aliases) == 0 || deleteSpec.ParameterGuidance["id"].SemanticRole == "" {
+		t.Fatalf("delete metadata incomplete: usage=%q aliases=%d id guidance=%q", deleteSpec.Usage, len(deleteSpec.Aliases), deleteSpec.ParameterGuidance["id"].SemanticRole)
 	}
 }
 

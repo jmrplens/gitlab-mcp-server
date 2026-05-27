@@ -262,6 +262,9 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	if guidance := updateSpec.ParameterGuidance["message_background_color"]; guidance.SemanticRole != "hex_color" {
 		t.Fatalf("appearance_update guidance = %+v, want hex_color", guidance)
 	}
+	if guidance := updateSpec.ParameterGuidance["title"]; guidance.SemanticRole != "instance_brand_title" {
+		t.Fatalf("appearance_update title guidance = %+v, want instance_brand_title", guidance)
+	}
 	if !strings.Contains(updateSpec.IndividualTool.Description, "Returns:") || !strings.Contains(updateSpec.IndividualTool.Description, "See also:") {
 		t.Fatalf("appearance_update description = %q, want Returns/See also guidance", updateSpec.IndividualTool.Description)
 	}

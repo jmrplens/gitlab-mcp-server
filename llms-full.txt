@@ -46,6 +46,10 @@ operations under a single tool with an `action` parameter.
 Use {"action":"approve_group","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_access.<action>.
 Action guidance:
+- approve_group: Approve a user group access request. Use after listing pending group requests and selecting the user_id to approve.
+- approve_project: Approve a user project access request. Use after listing pending requests and selecting the user_id to approve.
+- deny_group: Deny a pending group access request. Use only after confirming the user and scope to avoid rejecting the wrong request.
+- deny_project: Deny a pending project access request. Use only after confirming the user and scope to avoid rejecting the wrong request.
 - deploy_key_add: Use for SSH deploy keys that grant repository access to projects.
 - deploy_key_add_instance: Use for SSH deploy keys that grant repository access to projects.
 - deploy_key_delete: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
@@ -56,6 +60,8 @@ Action guidance:
 - deploy_key_list_user_project: Use for SSH deploy keys that grant repository access to projects.
 - deploy_key_update: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
 - deploy_token_delete_project: Use to delete a deploy token owned by a project; pass the deploy token ID, not another token type.
+- request_list_group: List pending group access requests. Use before approving or denying user access requests at group scope.
+- request_list_project: List pending project access requests. Use before approving or denying user access requests at project scope.
 - token_group_create: Use for GitLab group access tokens; this action creates a group-scoped API token.
 - token_group_get: Use for GitLab group access tokens; this action gets a group-scoped API token.
 - token_group_list: Use for GitLab group access tokens; this action lists group-scoped API tokens.
@@ -75,12 +81,16 @@ Action guidance:
 - token_project_rotate: Use for GitLab project access tokens; this action rotates a project-scoped API token.
 - token_project_rotate_self: Use for GitLab project access tokens; this action rotates a project-scoped API token.
 Parameter guidance:
+- approve_group.user_id: user_id; source: User ID from request_list_group output.
+- approve_project.user_id: user_id; source: User ID from request_list_project output.
 - deploy_key_delete.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_key_enable.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_key_get.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_key_update.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_token_delete_project.deploy_token_id: deploy_token; source: Deploy token ID, not a project, deploy key, personal token, or runner ID.; avoid: Do not use deploy_key_id or token_id for project deploy token deletion.
 - deploy_token_delete_project.project_id: scope_owner_project; source: Project that owns the deploy token.
+- request_list_group.group_id: scope_group; source: Group numeric ID or full path where requests are pending.
+- request_list_project.project_id: scope_project; source: Project numeric ID or path where access requests are pending.
 - token_group_get.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
 - token_group_revoke.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
 - token_group_rotate.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.

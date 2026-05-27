@@ -42,6 +42,11 @@ func appearanceOptions(actionName, individualTool string) toolutil.ActionSpecOpt
 		options.Usage = "Update GitLab application appearance and branding settings such as title, messages, colors, PWA labels, and profile guidance text. Requires administrator access and changes the instance UI immediately."
 		options.RelatedActions = []string{"admin.appearance_get", "admin.settings_get", "admin.metadata_get"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"title": {
+				SemanticRole:   "instance_brand_title",
+				ValueSource:    "Instance branding title to display in the GitLab UI header and metadata surfaces.",
+				ExampleBinding: `params.title:"GitLab Engineering"`,
+			},
 			"message_background_color": {
 				SemanticRole:     "hex_color",
 				ValueSource:      "Hex color string such as #e75e40 for the appearance banner background.",
