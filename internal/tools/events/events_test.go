@@ -658,6 +658,10 @@ func TestUserActionSpecs_Metadata(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	specs := UserActionSpecs(client)
+	byTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		byTool[spec.IndividualTool.Name] = spec
+	}
 	if len(specs) != 2 {
 		t.Fatalf("len(UserActionSpecs) = %d, want 2", len(specs))
 	}
@@ -665,6 +669,15 @@ func TestUserActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "events" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	if byTool["gitlab_project_event_list"].ParameterGuidance["project_id"].SemanticRole == "" {
+		t.Fatal("gitlab_project_event_list should define project_id parameter guidance")
 	}
 }
 

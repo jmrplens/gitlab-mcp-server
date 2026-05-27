@@ -974,6 +974,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "deploykeys" {
 			t.Fatalf("OwnerPackage for %s = %q, want deploykeys", spec.Name, spec.OwnerPackage)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	if byTool["gitlab_deploy_key_get"].ParameterGuidance["deploy_key_id"].SemanticRole == "" {
+		t.Fatal("gitlab_deploy_key_get should define deploy_key_id parameter guidance")
 	}
 }
 

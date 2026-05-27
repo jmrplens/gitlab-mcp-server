@@ -12,6 +12,39 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// TestActionSpecs_Metadata verifies canonical metadata for deploy token actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client)
+	byTool := deployTokenSpecsByTool(t, specs)
+
+	if len(specs) != 9 {
+		t.Fatalf("len(ActionSpecs) = %d, want 9", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "deploytokens" {
+			t.Fatalf("OwnerPackage for %s = %q, want deploytokens", spec.Name, spec.OwnerPackage)
+		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	if !byTool["gitlab_deploy_token_delete_project"].Route.Destructive {
+		t.Fatal("gitlab_deploy_token_delete_project should be destructive")
+	}
+	if byTool["gitlab_deploy_token_get_project"].ParameterGuidance["deploy_token_id"].SemanticRole == "" {
+		t.Fatal("gitlab_deploy_token_get_project should define deploy_token_id parameter guidance")
+	}
+}
+
 // TestActionSpecs_DeleteErrors verifies that canonical delete routes return errors when GitLab rejects deletion.
 func TestActionSpecs_DeleteErrors(t *testing.T) {
 	mux := http.NewServeMux()

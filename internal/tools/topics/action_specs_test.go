@@ -12,6 +12,48 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// TestActionSpecs_Metadata verifies canonical metadata for topic actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	handler := http.NewServeMux()
+	handler.HandleFunc("GET /api/v4/topics", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[`+topicJSON+`]`)
+	})
+	handler.HandleFunc("GET /api/v4/topics/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, topicJSON)
+	})
+	handler.HandleFunc("POST /api/v4/topics", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusCreated, topicJSON)
+	})
+	handler.HandleFunc("PUT /api/v4/topics/1", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, topicJSON)
+	})
+	handler.HandleFunc("DELETE /api/v4/topics/1", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	byTool := topicsSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, handler)))
+
+	if len(byTool) != 5 {
+		t.Fatalf("unique individual tools = %d, want 5", len(byTool))
+	}
+	for toolName, spec := range byTool {
+		if spec.OwnerPackage != "topics" {
+			t.Fatalf("OwnerPackage for %s = %q, want topics", toolName, spec.OwnerPackage)
+		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", toolName)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", toolName)
+		}
+	}
+	if byTool["gitlab_get_topic"].ParameterGuidance["topic_id"].SemanticRole == "" {
+		t.Fatal("gitlab_get_topic should define topic_id parameter guidance")
+	}
+	if !byTool["gitlab_delete_topic"].Route.Destructive {
+		t.Fatal("gitlab_delete_topic should be destructive")
+	}
+}
+
 // TestActionSpecs_CallAllRoutes exercises every topic tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()

@@ -14,6 +14,31 @@ import (
 
 const actionSpecFeatureJSON = `{"name":"flag1","state":"on","gates":[{"key":"boolean","value":true}]}`
 
+// TestActionSpecs_Metadata verifies canonical metadata for feature actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
+	if len(byTool) != 4 {
+		t.Fatalf("unique individual tools = %d, want 4", len(byTool))
+	}
+	for toolName, spec := range byTool {
+		if spec.OwnerPackage != "features" {
+			t.Fatalf("OwnerPackage for %s = %q, want features", toolName, spec.OwnerPackage)
+		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", toolName)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", toolName)
+		}
+	}
+	if byTool["gitlab_set_feature_flag"].ParameterGuidance["name"].SemanticRole == "" {
+		t.Fatal("gitlab_set_feature_flag should define name parameter guidance")
+	}
+	if !byTool["gitlab_delete_feature_flag"].Route.Destructive {
+		t.Fatal("gitlab_delete_feature_flag should be destructive")
+	}
+}
+
 // TestActionSpecs_CallRoutes exercises feature tools through their canonical routes.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))

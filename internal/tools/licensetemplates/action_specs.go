@@ -14,11 +14,29 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func licenseTemplateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Tags:           []string{"template", "license"},
-		RelatedActions: []string{"repository.file_create", "project.create"},
-		OpenWorld:      true,
-		OwnerPackage:   "licensetemplates",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
-	})
+	return toolutil.NewReadActionSpec(name, route, licenseTemplateOptions(name, individualTool))
+}
+
+func licenseTemplateOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "List available license templates."
+	guidance := map[string]toolutil.ParameterGuidance{}
+	if actionName == "license_get" {
+		usage = "Get one license template by key for project README/LICENSE scaffolding."
+		guidance["key"] = toolutil.ParameterGuidance{
+			SemanticRole:   "template_key",
+			ValueSource:    "License key returned by license template list output.",
+			ExampleBinding: `params.key:"mit"`,
+		}
+	}
+
+	return toolutil.ActionSpecOptions{
+		Aliases:           []string{individualTool},
+		Tags:              []string{"template", "license"},
+		Usage:             usage,
+		RelatedActions:    []string{"repository.file_create", "project.create"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "licensetemplates",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
 }

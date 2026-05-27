@@ -53,8 +53,9 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 		options.Usage = "Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"deploy_key_id": {
-				SemanticRole: "deploy_key",
-				ValueSource:  "Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.",
+				SemanticRole:   "deploy_key",
+				ValueSource:    "Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.",
+				ExampleBinding: "params.deploy_key_id:1",
 				CommonConfusions: []string{
 					"Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources.",
 					"Do not use token_id for deploy key get/update/delete operations.",

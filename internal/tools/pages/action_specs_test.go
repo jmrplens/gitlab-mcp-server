@@ -16,6 +16,31 @@ const pagesActionPagesJSON = `{"url":"https://p.io","is_unique_domain_enabled":t
 
 const pagesActionDomainJSON = `{"domain":"example.com","auto_ssl_enabled":true,"url":"https://example.com","project_id":42,"verified":true,"verification_code":"abc","certificate":{"subject":"example.com","expired":false}}`
 
+// TestActionSpecs_Metadata verifies canonical metadata for Pages actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	byTool := pagesSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, pagesActionHandler())))
+	if len(byTool) != 9 {
+		t.Fatalf("unique individual tools = %d, want 9", len(byTool))
+	}
+	for toolName, spec := range byTool {
+		if spec.OwnerPackage != "pages" {
+			t.Fatalf("OwnerPackage for %s = %q, want pages", toolName, spec.OwnerPackage)
+		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", toolName)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", toolName)
+		}
+	}
+	if byTool["gitlab_pages_domain_get"].ParameterGuidance["domain"].SemanticRole == "" {
+		t.Fatal("gitlab_pages_domain_get should define domain parameter guidance")
+	}
+	if !byTool["gitlab_pages_unpublish"].Route.Destructive {
+		t.Fatal("gitlab_pages_unpublish should be destructive")
+	}
+}
+
 // TestActionSpecs_CallAllRoutes exercises every Pages tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := pagesSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, pagesActionHandler())))

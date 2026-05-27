@@ -14,11 +14,26 @@ func UserActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func userEventReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	usage := "List current-user contribution events across visible resources."
+	guidance := map[string]toolutil.ParameterGuidance{}
+	if name == "event_list_project" {
+		usage = "List events for one specific project with optional filters and pagination."
+		guidance["project_id"] = toolutil.ParameterGuidance{
+			SemanticRole:   "scope_project",
+			ValueSource:    "Project ID or path whose activity events should be listed.",
+			ExampleBinding: `params.project_id:"group/project"`,
+		}
+	}
+
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"user", "event"},
-		OpenWorld:      true,
-		OwnerPackage:   "events",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:           []string{individualTool},
+		Tags:              []string{"user", "event"},
+		Usage:             usage,
+		RelatedActions:    []string{"project.get", "user.get"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "events",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 	return toolutil.NewReadActionSpec(name, route, options)
 }

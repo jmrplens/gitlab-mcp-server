@@ -14,11 +14,29 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func gitignoreTemplateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Tags:           []string{"template", "gitignore"},
-		RelatedActions: []string{"repository.file_create", "project.create"},
-		OpenWorld:      true,
-		OwnerPackage:   "gitignoretemplates",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
-	})
+	return toolutil.NewReadActionSpec(name, route, gitignoreTemplateOptions(name, individualTool))
+}
+
+func gitignoreTemplateOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "List available .gitignore templates."
+	guidance := map[string]toolutil.ParameterGuidance{}
+	if actionName == "gitignore_get" {
+		usage = "Get one .gitignore template by key for repository bootstrap workflows."
+		guidance["key"] = toolutil.ParameterGuidance{
+			SemanticRole:   "template_key",
+			ValueSource:    "Template key returned by gitignore template list output.",
+			ExampleBinding: `params.key:"Go"`,
+		}
+	}
+
+	return toolutil.ActionSpecOptions{
+		Aliases:           []string{individualTool},
+		Tags:              []string{"template", "gitignore"},
+		Usage:             usage,
+		RelatedActions:    []string{"repository.file_create", "project.create"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "gitignoretemplates",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
 }

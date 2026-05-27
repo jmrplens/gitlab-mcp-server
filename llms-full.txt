@@ -59,7 +59,15 @@ Action guidance:
 - deploy_key_list_project: Lists SSH deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested.
 - deploy_key_list_user_project: Use for SSH deploy keys that grant repository access to projects.
 - deploy_key_update: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
+- deploy_token_create_group: Manage group deploy tokens (list/get/create/delete).
+- deploy_token_create_project: Manage project deploy tokens (list/get/create/delete).
+- deploy_token_delete_group: Manage group deploy tokens (list/get/create/delete).
 - deploy_token_delete_project: Use to delete a deploy token owned by a project; pass the deploy token ID, not another token type.
+- deploy_token_get_group: Manage group deploy tokens (list/get/create/delete).
+- deploy_token_get_project: Manage project deploy tokens (list/get/create/delete).
+- deploy_token_list_all: Manage deploy tokens across instance, project, and group scopes.
+- deploy_token_list_group: Manage group deploy tokens (list/get/create/delete).
+- deploy_token_list_project: Manage project deploy tokens (list/get/create/delete).
 - request_list_group: List pending group access requests. Use before approving or denying user access requests at group scope.
 - request_list_project: List pending project access requests. Use before approving or denying user access requests at project scope.
 - token_group_create: Use for GitLab group access tokens; this action creates a group-scoped API token.
@@ -87,8 +95,18 @@ Parameter guidance:
 - deploy_key_enable.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_key_get.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
 - deploy_key_update.deploy_key_id: deploy_key; source: Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.; avoid: Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources., Do not use token_id for deploy key get/update/delete operations.
+- deploy_token_create_group.group_id: scope_group; source: Group ID or path owning the deploy token.
+- deploy_token_create_project.project_id: scope_project; source: Project ID or path owning the deploy token.
+- deploy_token_delete_group.deploy_token_id: deploy_token; source: Deploy token ID returned by deploy token list/get actions.; avoid: Do not use deploy_key_id; deploy keys are a different access resource.
+- deploy_token_delete_group.group_id: scope_group; source: Group ID or path owning the deploy token.
 - deploy_token_delete_project.deploy_token_id: deploy_token; source: Deploy token ID, not a project, deploy key, personal token, or runner ID.; avoid: Do not use deploy_key_id or token_id for project deploy token deletion.
 - deploy_token_delete_project.project_id: scope_owner_project; source: Project that owns the deploy token.
+- deploy_token_get_group.deploy_token_id: deploy_token; source: Deploy token ID returned by deploy token list/get actions.; avoid: Do not use deploy_key_id; deploy keys are a different access resource.
+- deploy_token_get_group.group_id: scope_group; source: Group ID or path owning the deploy token.
+- deploy_token_get_project.deploy_token_id: deploy_token; source: Deploy token ID returned by deploy token list/get actions.; avoid: Do not use deploy_key_id; deploy keys are a different access resource.
+- deploy_token_get_project.project_id: scope_project; source: Project ID or path owning the deploy token.
+- deploy_token_list_group.group_id: scope_group; source: Group ID or path owning the deploy token.
+- deploy_token_list_project.project_id: scope_project; source: Project ID or path owning the deploy token.
 - request_list_group.group_id: scope_group; source: Group numeric ID or full path where requests are pending.
 - request_list_project.project_id: scope_project; source: Project numeric ID or path where access requests are pending.
 - token_group_get.token_id: access_token; source: Access token ID returned by token_group_list or token_group_get.; avoid: Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself.
@@ -6146,6 +6164,15 @@ Action guidance:
 - milestone_create: Create a milestone in a project with title and optional description/start/due dates.
 - milestone_get: Get one milestone by project_id and milestone_iid. Use this when a specific milestone is referenced and detailed fields are required.
 - milestone_list: List milestones in one project with optional state/search filters and pagination. Use for release planning and progress overviews.
+- pages_domain_create: Manage project Pages settings and custom domains.
+- pages_domain_delete: Manage project Pages settings and custom domains.
+- pages_domain_get: Manage project Pages settings and custom domains.
+- pages_domain_list: Manage project Pages settings and custom domains.
+- pages_domain_list_all: List Pages domains across accessible projects.
+- pages_domain_update: Manage project Pages settings and custom domains.
+- pages_get: Manage project Pages settings and custom domains.
+- pages_unpublish: Manage project Pages settings and custom domains.
+- pages_update: Manage project Pages settings and custom domains.
 Parameter guidance:
 - badge_add.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_delete.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
@@ -6159,6 +6186,18 @@ Parameter guidance:
 - label_get.label_id: label_identifier; source: Label name or ID from task context or label list output.
 - list.order_by: project_list_sort_field; source: Use only GitLab project list ordering fields accepted by the projects API.; avoid: Use last_activity_at to sort by recent activity; last_activity_after is a date filter, not an order_by value.
 - milestone_get.milestone_iid: milestone_iid; source: Milestone IID from milestone list output or URL context.; avoid: Use milestone_iid (project-scoped IID), not global milestone ID.
+- pages_domain_create.domain: pages_domain; source: Fully qualified domain name of the Pages domain.
+- pages_domain_create.project_id: scope_project; source: Project ID or path owning the Pages configuration.
+- pages_domain_delete.domain: pages_domain; source: Fully qualified domain name of the Pages domain.
+- pages_domain_delete.project_id: scope_project; source: Project ID or path owning the Pages configuration.
+- pages_domain_get.domain: pages_domain; source: Fully qualified domain name of the Pages domain.
+- pages_domain_get.project_id: scope_project; source: Project ID or path owning the Pages configuration.
+- pages_domain_list.project_id: scope_project; source: Project ID or path owning the Pages configuration.
+- pages_domain_update.domain: pages_domain; source: Fully qualified domain name of the Pages domain.
+- pages_domain_update.project_id: scope_project; source: Project ID or path owning the Pages configuration.
+- pages_get.project_id: scope_project; source: Project ID or path owning the Pages configuration.
+- pages_unpublish.project_id: scope_project; source: Project ID or path owning the Pages configuration.
+- pages_update.project_id: scope_project; source: Project ID or path owning the Pages configuration.
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). Delete, unpublish, force-push and *_delete actions are destructive.
 When to use: project-level configuration and metadata. NOT for: file content/commits (use gitlab_repository), branches (gitlab_branch), wiki pages (gitlab_wiki), issues (gitlab_issue), MRs (gitlab_merge_request).
@@ -9089,6 +9128,24 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"ci_yml_get","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_template.<action>.
+Action guidance:
+- dockerfile_get: Get one Dockerfile template by key for scaffold/bootstrap workflows.
+- dockerfile_list: List available Dockerfile templates.
+- gitignore_get: Get one .gitignore template by key for repository bootstrap workflows.
+- gitignore_list: List available .gitignore templates.
+- license_get: Get one license template by key for project README/LICENSE scaffolding.
+- license_list: List available license templates.
+- project_template_get: Get one project-scoped template by template_type and key.
+- project_template_list: List project-scoped templates by template_type.
+Parameter guidance:
+- dockerfile_get.key: template_key; source: Template key returned by dockerfile template list output.
+- gitignore_get.key: template_key; source: Template key returned by gitignore template list output.
+- license_get.key: template_key; source: License key returned by license template list output.
+- project_template_get.key: template_key; source: Template key from project template list output.
+- project_template_get.project_id: scope_project; source: Project ID or path whose template namespace is queried.
+- project_template_get.template_type: template_type; source: Template family, such as licenses, gitignores, or dockerfiles.
+- project_template_list.project_id: scope_project; source: Project ID or path whose template namespace is queried.
+- project_template_list.template_type: template_type; source: Template family, such as licenses, gitignores, or dockerfiles.
 
 Browse GitLab built-in templates (gitignore, CI/CD YAML, Dockerfile, license, project scaffolding) and lint CI configuration. Read-only; ci_lint may resolve `include:` directives that fetch remote URLs.
 When to use: discover available built-in templates, fetch a template body to commit into a project, validate a .gitlab-ci.yml before pushing, or list project scaffolds.
@@ -9228,6 +9285,8 @@ Action guidance:
 - avatar_get: Resolve the avatar URL for a known email address. Use this when the task already provides an email; do not use it to search for users by name or username.
 - create: Create a new user account with required fields email, name, and username. Add optional admin/external flags only when explicitly requested.
 - current: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
+- event_list_contributions: List current-user contribution events across visible resources.
+- event_list_project: List events for one specific project with optional filters and pagination.
 - get: Get a single user by numeric user_id. Use this when the prompt already references a concrete user account and needs detailed profile fields.
 - list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
 - me: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
@@ -9236,6 +9295,7 @@ Parameter guidance:
 - avatar_get.size: image_size_pixels; source: Optional avatar size in pixels; omit it to let GitLab choose the default size.; avoid: Send a numeric pixel size such as 64 or 128, not CSS strings like 64px.
 - create.email: email_address; source: New account email address from task requirements.; avoid: Provide a real email address; do not pass usernames in the email field.
 - create.username: username; source: GitLab username slug for the new account.; avoid: Use username without spaces; it is different from display name.
+- event_list_project.project_id: scope_project; source: Project ID or path whose activity events should be listed.
 - get.user_id: scope_user; source: Numeric GitLab user ID from prior list/get output or explicit task input.; avoid: Use numeric user_id; do not pass username where an ID is required.
 - list.search; source: Name, username, or email fragment from the user's request.; avoid: search narrows users globally; it is not a project/group membership filter.
 
