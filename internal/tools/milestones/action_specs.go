@@ -37,27 +37,52 @@ func milestoneGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func milestoneReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, milestoneOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, milestoneOptionsForAction(name, individualTool))
 }
 
 func milestoneCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, milestoneOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, milestoneOptionsForAction(name, individualTool))
 }
 
 func milestoneUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, milestoneOptions(individualTool))
+	return toolutil.NewUpdateActionSpec(name, route, milestoneOptionsForAction(name, individualTool))
 }
 
 func milestoneDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, milestoneOptions(individualTool))
+	return toolutil.NewDeleteActionSpec(name, route, milestoneOptionsForAction(name, individualTool))
 }
 
-func milestoneOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+func milestoneOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
+	options := toolutil.ActionSpecOptions{
 		Tags:           []string{"project", "milestone"},
 		RelatedActions: []string{"project.get", "issue.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "milestones",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+
+	switch actionName {
+	case "milestone_list":
+		options.Usage = "List milestones in one project with optional state/search filters and pagination. Use for release planning and progress overviews."
+		options.Aliases = []string{"list milestones", "show project milestones", "find milestones"}
+		options.RelatedActions = []string{"milestone.get", "milestone.issues", "milestone.merge_requests"}
+	case "milestone_get":
+		options.Usage = "Get one milestone by project_id and milestone_iid. Use this when a specific milestone is referenced and detailed fields are required."
+		options.Aliases = []string{"get milestone", "show milestone details", "lookup milestone"}
+		options.RelatedActions = []string{"milestone.list", "milestone.issues", "milestone.merge_requests"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"milestone_iid": {
+				SemanticRole:     "milestone_iid",
+				ValueSource:      "Milestone IID from milestone list output or URL context.",
+				ExampleBinding:   "params.milestone_iid:3",
+				CommonConfusions: []string{"Use milestone_iid (project-scoped IID), not global milestone ID."},
+			},
+		}
+	case "milestone_create":
+		options.Usage = "Create a milestone in a project with title and optional description/start/due dates."
+		options.Aliases = []string{"create milestone", "new milestone", "add milestone"}
+		options.RelatedActions = []string{"milestone.get", "milestone.update", "issue.list"}
+	}
+
+	return options
 }

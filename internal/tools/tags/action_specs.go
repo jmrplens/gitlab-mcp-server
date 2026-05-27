@@ -47,6 +47,48 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 		OwnerPackage:   "tags",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+
+	switch name {
+	case "list":
+		options.Usage = "List tags in one project. Use this to discover release points, version tags, and candidates for release/tag workflows."
+		options.Aliases = []string{"list tags", "show repository tags", "find tags"}
+		options.RelatedActions = []string{"tag.get", "release.list", "repository.compare"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project ID or path containing tags.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+		}
+	case "get":
+		options.Usage = "Get one tag by project_id and tag_name. Use when a concrete tag is already known and detailed metadata/signature are needed."
+		options.Aliases = []string{"get tag", "show tag details", "lookup tag"}
+		options.RelatedActions = []string{"tag.list", "release.get", "tag.get_signature"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"tag_name": {
+				SemanticRole:   "git_tag",
+				ValueSource:    "Tag string from task context or tag list output.",
+				ExampleBinding: `params.tag_name:"v1.2.0"`,
+			},
+		}
+	case "create":
+		options.Usage = "Create a new tag for a project ref. Use message only when creating annotated tags or when task requires tag annotations."
+		options.Aliases = []string{"create tag", "new git tag", "tag release"}
+		options.RelatedActions = []string{"release.create", "tag.get", "repository.compare"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"tag_name": {
+				SemanticRole:   "git_tag",
+				ValueSource:    "Tag name requested for the release/version.",
+				ExampleBinding: `params.tag_name:"v2.0.0"`,
+			},
+			"ref": {
+				SemanticRole:     "git_ref",
+				ValueSource:      "Branch, tag, or commit to tag.",
+				ExampleBinding:   `params.ref:"main"`,
+				CommonConfusions: []string{"Use ref for source revision; do not pass project paths or URLs."},
+			},
+		}
+	}
 	switch {
 	case readOnly:
 		return toolutil.NewReadActionSpec(name, route, options)

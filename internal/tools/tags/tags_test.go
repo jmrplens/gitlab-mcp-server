@@ -1280,6 +1280,35 @@ func newTagSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	return tagSpecsByTool(t, ActionSpecs(client))
 }
 
+// TestActionSpecs_Metadata verifies canonical metadata for tag actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	byTool := newTagSpecsByTool(t)
+
+	if len(byTool) != 9 {
+		t.Fatalf("len(byTool) = %d, want 9", len(byTool))
+	}
+	for toolName, spec := range byTool {
+		if spec.OwnerPackage != "tags" {
+			t.Fatalf("OwnerPackage for %s = %q, want tags", toolName, spec.OwnerPackage)
+		}
+	}
+
+	list := byTool["gitlab_tag_list"]
+	if list.Usage == "" || len(list.Aliases) == 0 || len(list.ParameterGuidance) == 0 {
+		t.Fatalf("gitlab_tag_list metadata incomplete: usage=%q aliases=%d guidance=%d", list.Usage, len(list.Aliases), len(list.ParameterGuidance))
+	}
+
+	get := byTool["gitlab_tag_get"]
+	if get.Usage == "" || len(get.Aliases) == 0 || get.ParameterGuidance["tag_name"].SemanticRole == "" {
+		t.Fatalf("gitlab_tag_get metadata incomplete: usage=%q aliases=%d guidance(tag_name)=%q", get.Usage, len(get.Aliases), get.ParameterGuidance["tag_name"].SemanticRole)
+	}
+
+	create := byTool["gitlab_tag_create"]
+	if create.Usage == "" || len(create.Aliases) == 0 || create.ParameterGuidance["ref"].SemanticRole == "" {
+		t.Fatalf("gitlab_tag_create metadata incomplete: usage=%q aliases=%d guidance(ref)=%q", create.Usage, len(create.Aliases), create.ParameterGuidance["ref"].SemanticRole)
+	}
+}
+
 // assertTagRouteSuccess checks tag route success invariants for tests.
 func assertTagRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpec, name string, args map[string]any) {
 	t.Helper()

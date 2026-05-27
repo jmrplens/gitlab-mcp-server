@@ -6031,7 +6031,13 @@ Action guidance:
 - badge_preview: Preview a project badge. Use project_id for project badge operations; do not use group_id. Use when the task says project badge; do not use gitlab_group for project badge CRUD.
 - delete: Use to delete a project. For ordinary cleanup, send project_id and confirm only. Set permanently_remove only when explicitly requested; when permanently_remove is true, full_path must exactly match the project's path_with_namespace from project create/get.
 - get: Get one exact project by numeric ID or full namespace path. Use this when the prompt gives a concrete path like group/project and asks to find, show, verify, or read project metadata such as id or default_branch; do not use search.projects for an exact path lookup.
+- label_create: Create a label in a project with required name and color, plus optional description and priority.
+- label_get: Get one label by project_id and label_id (label name/ID route parameter). Use when exact label metadata is needed.
+- label_list: List labels for a project with optional search and pagination. Use to discover taxonomy before issue/MR filtering or label maintenance.
 - list: List projects accessible to the authenticated user. For most recently updated projects, use order_by last_activity_at with sort desc and per_page for the requested count; do not use last_activity_after as an order_by value.
+- milestone_create: Create a milestone in a project with title and optional description/start/due dates.
+- milestone_get: Get one milestone by project_id and milestone_iid. Use this when a specific milestone is referenced and detailed fields are required.
+- milestone_list: List milestones in one project with optional state/search filters and pagination. Use for release planning and progress overviews.
 Parameter guidance:
 - badge_add.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_delete.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
@@ -6041,7 +6047,10 @@ Parameter guidance:
 - badge_list.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_preview.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - get.project_id: scope_project; source: Concrete numeric project ID or full namespace path from the prompt or a prior project result.; avoid: Use project_id for a namespace path; do not substitute full_path, path, remote_url, search, or query.
+- label_create.color: hex_color; source: Hex color string for label background (for example #d9534f).; avoid: Provide hex color values; avoid named colors.
+- label_get.label_id: label_identifier; source: Label name or ID from task context or label list output.
 - list.order_by: project_list_sort_field; source: Use only GitLab project list ordering fields accepted by the projects API.; avoid: Use last_activity_at to sort by recent activity; last_activity_after is a date filter, not an order_by value.
+- milestone_get.milestone_iid: milestone_iid; source: Milestone IID from milestone list output or URL context.; avoid: Use milestone_iid (project-scoped IID), not global milestone ID.
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). Delete, unpublish, force-push and *_delete actions are destructive.
 When to use: project-level configuration and metadata. NOT for: file content/commits (use gitlab_repository), branches (gitlab_branch), wiki pages (gitlab_wiki), issues (gitlab_issue), MRs (gitlab_merge_request).
@@ -7242,14 +7251,21 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_release.<action>.
 Action guidance:
+- create: Create a release for a tag (and optionally ref when creating a new tag). Use this for publishing release notes and lifecycle artifacts.
+- get: Get a release by project_id and tag_name. Use this when a specific tag is known and detailed release notes/assets are needed.
 - link_create: Create a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url.
 - link_create_batch: Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets.
 - link_update: Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url.
+- list: List releases for one project. Use this when the task asks for recent releases, release history, or release notes discovery.
 Parameter guidance:
+- create.ref: git_ref; source: Branch/tag/commit used to create tag when tag_name does not exist.; avoid: ref is only needed when creating a new tag; omit it when releasing an existing tag.
+- create.tag_name: git_tag; source: Release tag to publish.
+- get.tag_name: git_tag; source: Release tag name from list output or task context.; avoid: Use tag_name for release lookup; do not pass release title in this field.
 - link_create.url: release_asset_absolute_url; source: Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions.; avoid: Do not use local file paths, relative paths, or package file names as url., Do not construct package registry URLs manually when a package publish action returned the asset URL.
 - link_create_batch.links: release_asset_links; source: Array of link objects. Each item supports only name, url, and link_type; url must be absolute.; avoid: Do not send direct_asset_path or filepath to link_create_batch., For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.
 - link_update.link_id: release_asset_link_identifier; source: Use the release link ID returned by release.link_create, release.link_create_batch, or release.link_list.; avoid: Do not use link_update to create a new release asset link; call link_create or link_create_batch first.
 - link_update.url: release_asset_absolute_url; source: Absolute URL accepted by GitLab release links. For package assets, use the URL returned by package publish actions.; avoid: Do not use local file paths, relative paths, or package file names as url., Do not construct package registry URLs manually when a package publish action returned the asset URL.
+- list.project_id: scope_project; source: Project ID or full path that owns releases.
 
 Manage GitLab releases and their asset links (binaries, packages, runbooks). Releases wrap a Git tag with notes, milestones and downloadable assets. Delete is destructive: it removes the release but preserves the underlying tag.
 When to use: publish a release for a tag, create a release and its tag from a ref, list/get/update releases, attach asset links to a release, batch-attach links after a CI build.
@@ -7390,7 +7406,13 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"archive","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_repository.<action>.
 Action guidance:
+- blob: Get blob metadata/content for a specific file path and ref. Use when you need one file's content or metadata after locating its path.
+- changelog_add: Create or append changelog entries in the repository for a version. Use in release workflows when structured changelog updates are requested.
 - compare: Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff.
+- tree: List repository tree entries for a project/ref/path. Use this to browse directories and locate files before file/blob operations.
+Parameter guidance:
+- tree.project_id: scope_project; source: Project ID or path containing the repository.
+- tree.ref: git_ref; source: Branch/tag/commit to inspect; default branch when omitted.
 
 Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions. File delete is destructive.
 	When to use: exact file/commit operations, diffs for a known commit SHA, blame, compare, archives, submodules, markdown rendering. NOT for: full-text code search (use gitlab_search action code), MR changes/diffs by merge_request_iid (use gitlab_mr_review changes_get/raw_diffs), branch CRUD (use gitlab_branch), tag CRUD (use gitlab_tag).
@@ -8790,6 +8812,15 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_tag.<action>.
+Action guidance:
+- create: Create a new tag for a project ref. Use message only when creating annotated tags or when task requires tag annotations.
+- get: Get one tag by project_id and tag_name. Use when a concrete tag is already known and detailed metadata/signature are needed.
+- list: List tags in one project. Use this to discover release points, version tags, and candidates for release/tag workflows.
+Parameter guidance:
+- create.ref: git_ref; source: Branch, tag, or commit to tag.; avoid: Use ref for source revision; do not pass project paths or URLs.
+- create.tag_name: git_tag; source: Tag name requested for the release/version.
+- get.tag_name: git_tag; source: Tag string from task context or tag list output.
+- list.project_id: scope_project; source: Project ID or path containing tags.
 
 Manage Git tags and tag protections in a project, plus GPG signature inspection. Delete is destructive and also removes any release attached to the tag.
 When to use: create/list/delete tags, protect or unprotect tag patterns, verify a tag's GPG/X.509 signature.
@@ -22145,7 +22176,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_release_list
 
-List all releases for a GitLab project ordered by release date. Returns paginated results including each release's metadata, tag, and asset links.
+List releases in a project with pagination. Returns: tag names, release names, release dates, and summary metadata. See also: gitlab_release_get, gitlab_tag_list, gitlab_release_link_list.
 
 **Parameters:**
 
@@ -22347,7 +22378,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_repository_tree
 
-List the files and directories (tree) of a GitLab repository at a given path and ref. 'ref' accepts a branch name, tag name, or commit SHA (defaults to the project's default branch if omitted). Returns file name, type (blob/tree), mode, and path with pagination. Use recursive=true to list all files in subdirectories. For reading file content, use gitlab_file_get instead.
+List repository tree items. Returns: paths, object IDs, entry types (blob/tree), and pagination metadata. See also: gitlab_repository_blob, gitlab_repository_raw_blob, gitlab_branch_list.
 
 **Parameters:**
 

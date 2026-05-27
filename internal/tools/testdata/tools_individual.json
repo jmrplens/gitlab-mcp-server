@@ -98649,7 +98649,7 @@
   },
   {
     "name": "gitlab_release_list",
-    "description": "List all releases for a GitLab project ordered by release date. Returns paginated results including each release's metadata, tag, and asset links.\n\nReturns: paginated list of releases with tag_name, name, description, author, and assets. See also: gitlab_release_get, gitlab_tag_list.",
+    "description": "List releases in a project with pagination. Returns: tag names, release names, release dates, and summary metadata. See also: gitlab_release_get, gitlab_tag_list, gitlab_release_link_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -100278,7 +100278,7 @@
   },
   {
     "name": "gitlab_repository_tree",
-    "description": "List the files and directories (tree) of a GitLab repository at a given path and ref. 'ref' accepts a branch name, tag name, or commit SHA (defaults to the project's default branch if omitted). Returns file name, type (blob/tree), mode, and path with pagination. Use recursive=true to list all files in subdirectories. For reading file content, use gitlab_file_get instead.\n\nReturns: JSON array of repository tree entries with pagination. See also: gitlab_file_get, gitlab_file_list.",
+    "description": "List repository tree items. Returns: paths, object IDs, entry types (blob/tree), and pagination metadata. See also: gitlab_repository_blob, gitlab_repository_raw_blob, gitlab_branch_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

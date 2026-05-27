@@ -955,6 +955,24 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("OwnerPackage for %s = %q, want releases", spec.Name, spec.OwnerPackage)
 		}
 	}
+
+	list := byTool["gitlab_release_list"]
+	if list.Usage == "" || len(list.Aliases) == 0 || len(list.ParameterGuidance) == 0 {
+		t.Fatalf("gitlab_release_list metadata incomplete: usage=%q aliases=%d guidance=%d", list.Usage, len(list.Aliases), len(list.ParameterGuidance))
+	}
+	if list.IndividualTool.Description == "" {
+		t.Fatal("gitlab_release_list description is empty")
+	}
+
+	get := byTool["gitlab_release_get"]
+	if get.Usage == "" || len(get.Aliases) == 0 || get.ParameterGuidance["tag_name"].SemanticRole == "" {
+		t.Fatalf("gitlab_release_get metadata incomplete: usage=%q aliases=%d guidance(tag_name)=%q", get.Usage, len(get.Aliases), get.ParameterGuidance["tag_name"].SemanticRole)
+	}
+
+	create := byTool["gitlab_release_create"]
+	if create.Usage == "" || len(create.Aliases) == 0 {
+		t.Fatalf("gitlab_release_create metadata incomplete: usage=%q aliases=%d", create.Usage, len(create.Aliases))
+	}
 }
 
 // ---------------------------------------------------------------------------

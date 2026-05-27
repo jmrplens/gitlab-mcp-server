@@ -801,6 +801,21 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("OwnerPackage for %s = %q, want labels", spec.Name, spec.OwnerPackage)
 		}
 	}
+
+	list := byTool["gitlab_label_list"]
+	if list.Usage == "" || len(list.Aliases) == 0 {
+		t.Fatalf("gitlab_label_list metadata incomplete: usage=%q aliases=%d", list.Usage, len(list.Aliases))
+	}
+
+	get := byTool["gitlab_label_get"]
+	if get.Usage == "" || len(get.Aliases) == 0 || get.ParameterGuidance["label_id"].SemanticRole == "" {
+		t.Fatalf("gitlab_label_get metadata incomplete: usage=%q aliases=%d guidance(label_id)=%q", get.Usage, len(get.Aliases), get.ParameterGuidance["label_id"].SemanticRole)
+	}
+
+	create := byTool["gitlab_label_create"]
+	if create.Usage == "" || len(create.Aliases) == 0 || create.ParameterGuidance["color"].SemanticRole == "" {
+		t.Fatalf("gitlab_label_create metadata incomplete: usage=%q aliases=%d guidance(color)=%q", create.Usage, len(create.Aliases), create.ParameterGuidance["color"].SemanticRole)
+	}
 }
 
 // TestActionSpecs_CallAllRoutes validates label routes across multiple scenarios.
