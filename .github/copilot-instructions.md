@@ -162,6 +162,28 @@ go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 - Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies
 - Not covered (needs Docker mode): pipeline CRUD (CI runner), job tools
 
+### Surface Evaluator (Docker)
+
+Use these Makefile targets for model-backed surface evaluation with the Docker GitLab fixture:
+
+```bash
+# CE case set
+make eval-surfaces-docker SURFACE=dynamic
+make eval-surfaces-docker SURFACE=meta
+
+# Enterprise case set on GitLab EE runtime
+make eval-surfaces-docker-enterprise SURFACE=dynamic
+make eval-surfaces-docker-enterprise SURFACE=meta
+
+# CE + Enterprise case set together on GitLab EE runtime
+make eval-surfaces-docker-enterprise-all SURFACE=dynamic
+make eval-surfaces-docker-enterprise-all SURFACE=meta
+```
+
+- `SURFACE` must be `dynamic` or `meta`.
+- Add `PRESET=...` to run a single Docker preset.
+- `eval-surfaces-docker-enterprise-all` sets `EVAL_SURFACE_CASE_SET=all` and is the standard full validation command for CE+Enterprise regression checks.
+
 ### Build & Cross-Compilation
 
 ```bash

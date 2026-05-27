@@ -60,6 +60,29 @@ Full Docker runs use real model calls against the selected MCP surface and, when
 
 ## Common Commands
 
+Recommended Makefile shortcuts for full Docker-backed evaluator runs:
+
+```bash
+# CE presets (read + mutating-safe + destructive-safe + capability-discovery)
+make eval-surfaces-docker SURFACE=dynamic
+make eval-surfaces-docker SURFACE=meta
+
+# Enterprise-only presets on GitLab EE runtime
+make eval-surfaces-docker-enterprise SURFACE=dynamic
+make eval-surfaces-docker-enterprise SURFACE=meta
+
+# CE + Enterprise presets together on GitLab EE runtime
+make eval-surfaces-docker-enterprise-all SURFACE=dynamic
+make eval-surfaces-docker-enterprise-all SURFACE=meta
+```
+
+Notes:
+
+- `eval-surfaces-docker` runs CE-only Docker presets.
+- `eval-surfaces-docker-enterprise` runs Enterprise-only Docker presets (`docker-enterprise-*`).
+- `eval-surfaces-docker-enterprise-all` runs both CE and Enterprise Docker presets in one run (`EVAL_SURFACE_CASE_SET=all`) on GitLab EE.
+- Add `PRESET=...` to any command to run a single preset instead of the full set.
+
 Dry-run the current catalog without model calls:
 
 ```bash

@@ -206,7 +206,22 @@ make test-e2e                                          # Same via Makefile
 make test-e2e-docker                                   # Ephemeral GitLab CE + runner + fixture service (Docker, ~4 GB RAM)
 go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
+
+# Surface evaluator (Docker GitLab fixture)
+# CE case set
+make eval-surfaces-docker SURFACE=dynamic
+make eval-surfaces-docker SURFACE=meta
+
+# Enterprise-only case set on GitLab EE runtime
+make eval-surfaces-docker-enterprise SURFACE=dynamic
+make eval-surfaces-docker-enterprise SURFACE=meta
+
+# CE + Enterprise case set together on GitLab EE runtime
+make eval-surfaces-docker-enterprise-all SURFACE=dynamic
+make eval-surfaces-docker-enterprise-all SURFACE=meta
 ```
+
+For targeted debugging, append `PRESET=...` to any evaluator target to run a single preset.
 
 ### Release process
 
