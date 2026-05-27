@@ -39,7 +39,7 @@ func secureFileDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 
 func secureFileOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"secure-file"},
+		Aliases: []string{individualTool}, Usage: "Use to execute securefiles domain action.", Tags: []string{"secure-file"},
 		OpenWorld:      true,
 		OwnerPackage:   "securefiles",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

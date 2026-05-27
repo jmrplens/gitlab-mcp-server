@@ -39,7 +39,7 @@ func uploadDeleteSpec(name string, route toolutil.ActionRoute, individualTool st
 
 func uploadOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"project", "upload"},
+		Aliases: []string{individualTool}, Usage: "Use to execute uploads domain action.", Tags: []string{"project", "upload"},
 		RelatedActions: []string{"project.upload_list", "project.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "uploads",

@@ -27,7 +27,7 @@ func snippetStorageMoveCreateSpec(name string, route toolutil.ActionRoute, indiv
 
 func snippetStorageMoveOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"storage_move", "snippet"},
+		Aliases: []string{individualTool}, Usage: "Use to execute snippetstoragemoves domain action.", Tags: []string{"storage_move", "snippet"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "snippetstoragemoves",

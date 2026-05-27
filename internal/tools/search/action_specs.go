@@ -45,7 +45,7 @@ func searchReadSpec(name string, route toolutil.ActionRoute, individualTool stri
 
 func searchReadOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"search"},
+		Aliases: []string{individualTool}, Usage: "Use to execute search domain action.", Tags: []string{"search"},
 		OpenWorld:      true,
 		OwnerPackage:   "search",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

@@ -32,7 +32,7 @@ func samplingSpec[T, R any](name string, client *gitlabclient.Client, fn func(ct
 
 func analyzeSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Tags:           []string{"analyze", "sampling"},
+		Aliases: []string{individualTool}, Usage: "Use to execute samplingtools domain action.", Tags: []string{"analyze", "sampling"},
 		OpenWorld:      true,
 		OwnerPackage:   "samplingtools",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},

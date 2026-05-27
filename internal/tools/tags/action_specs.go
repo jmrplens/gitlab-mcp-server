@@ -41,7 +41,7 @@ func tagGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 
 func tagSpec(name string, route toolutil.ActionRoute, individualTool string, readOnly, idempotent bool) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"tag"},
+		Aliases: []string{individualTool}, Usage: "Use to execute tags domain action.", Tags: []string{"tag"},
 		RelatedActions: []string{"tag.list", "tag.get", "release.get", "repository.commit_get"},
 		OpenWorld:      true,
 		OwnerPackage:   "tags",

@@ -1553,6 +1553,18 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"ci_config","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_analyze.<action>.
+Action guidance:
+- ci_config: Use to execute samplingtools domain action.
+- deployment_history: Use to execute samplingtools domain action.
+- issue_scope: Use to execute samplingtools domain action.
+- issue_summary: Use to execute samplingtools domain action.
+- milestone_report: Use to execute samplingtools domain action.
+- mr_changes: Use to execute samplingtools domain action.
+- mr_review: Use to execute samplingtools domain action.
+- mr_security: Use to execute samplingtools domain action.
+- pipeline_failure: Use to execute samplingtools domain action.
+- release_notes: Use to execute samplingtools domain action.
+- technical_debt: Use to execute samplingtools domain action.
 
 LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarize / analyze / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).
 When to use: ask an LLM to interpret GitLab artifacts — MR diffs, issue threads, pipeline failures, CI configs, milestone progress, deployment history, technical-debt markers — and produce Markdown narratives, scopes, or release notes.
@@ -6636,7 +6648,10 @@ Action guidance:
 - unarchive: Use to execute projects domain action.
 - unstar: Use to execute projects domain action.
 - update: Use to execute projects domain action.
+- upload: Use to execute uploads domain action.
 - upload_avatar: Use to execute projects domain action.
+- upload_delete: Use to execute uploads domain action.
+- upload_list: Use to execute uploads domain action.
 Parameter guidance:
 - badge_add.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_delete.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
@@ -8497,7 +8512,36 @@ Action guidance:
 - controller_delete: Use to execute runnercontrollers domain action.
 - controller_get: Use to execute runnercontrollers domain action.
 - controller_list: Use to execute runnercontrollers domain action.
+- controller_scope_add_instance: Use to execute runnercontrollerscopes domain action.
+- controller_scope_add_runner: Use to execute runnercontrollerscopes domain action.
+- controller_scope_list: Use to execute runnercontrollerscopes domain action.
+- controller_scope_remove_instance: Use to execute runnercontrollerscopes domain action.
+- controller_scope_remove_runner: Use to execute runnercontrollerscopes domain action.
+- controller_token_create: Use to execute runnercontrollertokens domain action.
+- controller_token_get: Use to execute runnercontrollertokens domain action.
+- controller_token_list: Use to execute runnercontrollertokens domain action.
+- controller_token_revoke: Use to execute runnercontrollertokens domain action.
+- controller_token_rotate: Use to execute runnercontrollertokens domain action.
 - controller_update: Use to execute runnercontrollers domain action.
+- delete_by_token: Use to execute runners domain action.
+- delete_registered: Use to execute runners domain action.
+- disable_project: Use to execute runners domain action.
+- enable_project: Use to execute runners domain action.
+- get: Use to execute runners domain action.
+- jobs: Use to execute runners domain action.
+- list: Use to execute runners domain action.
+- list_all: Use to execute runners domain action.
+- list_group: Use to execute runners domain action.
+- list_managers: Use to execute runners domain action.
+- list_project: Use to execute runners domain action.
+- register: Use to execute runners domain action.
+- remove: Use to execute runners domain action.
+- reset_group_reg_token: Use to execute runners domain action.
+- reset_instance_reg_token: Use to execute runners domain action.
+- reset_project_reg_token: Use to execute runners domain action.
+- reset_token: Use to execute runners domain action.
+- update: Use to execute runners domain action.
+- verify: Use to execute runners domain action.
 Parameter guidance:
 - delete_registered.runner_id: runner_identifier; source: Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.; avoid: Do not pass project_id as runner_id., For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.
 - disable_project.project_id: scope_owner_project; source: Use gitlab_project get/list outputs; accepts numeric ID or namespace/project path.; avoid: project_id identifies the project scope, not the runner., Use runner_id for the runner to enable, disable, reset, or inspect.
@@ -8853,7 +8897,15 @@ Use {"action":"code","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_search.<action>.
 Action guidance:
 - code: Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories; do not use for project or repository name discovery.
+- commits: Use to execute search domain action.
+- issues: Use to execute search domain action.
+- merge_requests: Use to execute search domain action.
+- milestones: Use to execute search domain action.
+- notes: Use to execute search domain action.
 - projects: Search project records by fuzzy project name, path fragment, namespace, or description. Use for broad discovery across many projects; if the prompt gives one exact namespace path like group/project and asks for metadata, use project.get instead. Do not use for code contents.
+- snippets: Use to execute search domain action.
+- users: Use to execute search domain action.
+- wiki: Use to execute search domain action.
 
 Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages. Read-only.
 When to use: full-text search across the supplied scope. Use action code for prompts like "search code for ..." or "find occurrences of ...". Most actions accept project_id and / or group_id; if both are omitted the search runs at instance level (an authenticated user always has implicit instance scope on GitLab.com).
@@ -8969,6 +9021,15 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_snippet.<action>.
 Action guidance:
+- content: Use to execute snippets domain action.
+- create: Use to execute snippets domain action.
+- delete: Use to execute snippets domain action.
+- discussion_add_note: Use to execute snippetdiscussions domain action.
+- discussion_create: Use to execute snippetdiscussions domain action.
+- discussion_delete_note: Use to execute snippetdiscussions domain action.
+- discussion_get: Use to execute snippetdiscussions domain action.
+- discussion_list: Use to execute snippetdiscussions domain action.
+- discussion_update_note: Use to execute snippetdiscussions domain action.
 - emoji_snippet_create: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
 - emoji_snippet_delete: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
 - emoji_snippet_get: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
@@ -8977,6 +9038,23 @@ Action guidance:
 - emoji_snippet_note_delete: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
 - emoji_snippet_note_get: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
 - emoji_snippet_note_list: Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets.
+- explore: Use to execute snippets domain action.
+- file_content: Use to execute snippets domain action.
+- get: Use to execute snippets domain action.
+- list: Use to execute snippets domain action.
+- list_all: Use to execute snippets domain action.
+- note_create: Use to execute snippetnotes domain action.
+- note_delete: Use to execute snippetnotes domain action.
+- note_get: Use to execute snippetnotes domain action.
+- note_list: Use to execute snippetnotes domain action.
+- note_update: Use to execute snippetnotes domain action.
+- project_content: Use to execute snippets domain action.
+- project_create: Use to execute snippets domain action.
+- project_delete: Use to execute snippets domain action.
+- project_get: Use to execute snippets domain action.
+- project_list: Use to execute snippets domain action.
+- project_update: Use to execute snippets domain action.
+- update: Use to execute snippets domain action.
 Parameter guidance:
 - emoji_snippet_create.project_id: scope_project; source: Project ID or path that owns the snippet.
 - emoji_snippet_create.snippet_id: snippet_iid; source: Snippet IID from snippet list/get outputs.
@@ -9333,10 +9411,16 @@ Action params schema: gitlab://tools/gitlab_storage_move.<action>.
 Action guidance:
 - get_project: Use to execute projectstoragemoves domain action.
 - get_project_for_project: Use to execute projectstoragemoves domain action.
+- get_snippet: Use to execute snippetstoragemoves domain action.
+- get_snippet_for_snippet: Use to execute snippetstoragemoves domain action.
 - retrieve_all_project: Use to execute projectstoragemoves domain action.
+- retrieve_all_snippet: Use to execute snippetstoragemoves domain action.
 - retrieve_project: Use to execute projectstoragemoves domain action.
+- retrieve_snippet: Use to execute snippetstoragemoves domain action.
 - schedule_all_project: Use to execute projectstoragemoves domain action.
+- schedule_all_snippet: Use to execute snippetstoragemoves domain action.
 - schedule_project: Use to execute projectstoragemoves domain action.
+- schedule_snippet: Use to execute snippetstoragemoves domain action.
 
 Manage repository storage moves for projects, groups, and snippets (admin only).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -9525,8 +9609,14 @@ Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_tag.<action>.
 Action guidance:
 - create: Create a new tag for a project ref. Use message only when creating annotated tags or when task requires tag annotations.
+- delete: Use to execute tags domain action.
 - get: Get one tag by project_id and tag_name. Use when a concrete tag is already known and detailed metadata/signature are needed.
+- get_protected: Use to execute tags domain action.
+- get_signature: Use to execute tags domain action.
 - list: List tags in one project. Use this to discover release points, version tags, and candidates for release/tag workflows.
+- list_protected: Use to execute tags domain action.
+- protect: Use to execute tags domain action.
+- unprotect: Use to execute tags domain action.
 Parameter guidance:
 - create.ref: git_ref; source: Branch, tag, or commit to tag.; avoid: Use ref for source revision; do not pass project paths or URLs.
 - create.tag_name: git_tag; source: Tag name requested for the release/version.
@@ -9821,6 +9911,9 @@ Action guidance:
 - notification_project_get: Use to execute notifications domain action.
 - notification_project_update: Use to execute notifications domain action.
 - revoke_impersonation_token: Use to execute impersonationtokens domain action.
+- todo_list: Use to execute todos domain action.
+- todo_mark_all_done: Use to execute todos domain action.
+- todo_mark_done: Use to execute todos domain action.
 Parameter guidance:
 - avatar_get.email: email_address; source: Email address supplied by the task or returned by another GitLab user lookup.; avoid: Do not send a username or display name as email.
 - avatar_get.size: image_size_pixels; source: Optional avatar size in pixels; omit it to let GitLab choose the default size.; avoid: Send a numeric pixel size such as 64 or 128, not CSS strings like 64px.
@@ -11574,6 +11667,8 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_security_finding.<action>.
+Action guidance:
+- list: Use to execute list action.
 
 List pipeline security report findings via GraphQL (Premium/Ultimate). Replaces deprecated REST vulnerability_findings endpoint.
 Returns: JSON with resource data. The list action accepts first/after cursor pagination and returns action-specific pagination metadata. Errors: 404 not found, 403 forbidden — with actionable hints.

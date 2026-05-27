@@ -92,7 +92,7 @@ func runnerUpdateSpec(name string, route toolutil.ActionRoute, individualTool st
 
 func runnerOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:              []string{"runner"},
+		Aliases: []string{individualTool}, Usage: "Use to execute runners domain action.", Tags: []string{"runner"},
 		ParameterGuidance: runnerParameterGuidance(actionName),
 		OpenWorld:         true,
 		OwnerPackage:      "runners",

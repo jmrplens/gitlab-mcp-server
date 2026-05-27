@@ -9,7 +9,7 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		toolutil.NewReadActionSpec("list", toolutil.RouteAction(client, List), toolutil.ActionSpecOptions{
-			Tags:           []string{"security", "finding"},
+			Aliases: []string{"gitlab_list_security_findings"}, Usage: "Use to execute list action.", Tags: []string{"security", "finding"},
 			OpenWorld:      true,
 			Edition:        "premium",
 			OwnerPackage:   "securityfindings",
