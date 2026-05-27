@@ -267,6 +267,26 @@ func TestParseOpenAIToolArguments_WrapsMissingOpeningBrace(t *testing.T) {
 	}
 }
 
+// TestParseOpenAIToolArguments_RepairsCommaBeforeValues verifies recovery for
+// OpenAI-compatible providers that emit a stray comma before a JSON value.
+func TestParseOpenAIToolArguments_RepairsCommaBeforeValues(t *testing.T) {
+	input, err := parseOpenAIToolArguments(`{"action":,"create","params":,{"project_id":"42","deploy_access_levels":[,{"access_level":40}]}}`)
+	if err != nil {
+		t.Fatalf("parseOpenAIToolArguments() error = %v", err)
+	}
+	if input["action"] != "create" {
+		t.Fatalf("action = %v, want create", input["action"])
+	}
+	params, ok := input["params"].(map[string]any)
+	if !ok {
+		t.Fatalf("params = %#v, want object", input["params"])
+	}
+	levels, ok := params["deploy_access_levels"].([]any)
+	if !ok || len(levels) != 1 {
+		t.Fatalf("deploy_access_levels = %#v, want one level", params["deploy_access_levels"])
+	}
+}
+
 // TestGoogleProviderCallOnce_SendsAPIKeyHeader verifies GoogleProviderCallOnce when sends API key header.
 func TestGoogleProviderCallOnce_SendsAPIKeyHeader(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {

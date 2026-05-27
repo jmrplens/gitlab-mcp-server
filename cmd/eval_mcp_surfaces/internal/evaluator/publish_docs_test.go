@@ -459,6 +459,101 @@ func TestReadPublishReport_SplitsFullRunByPresetFromTraceArtifacts(t *testing.T)
 	}
 }
 
+// TestPublishEvaluationDocs_SplitsCombinedDynamicRunByEdition verifies that a
+// combined Dynamic report generated on an Enterprise runtime still routes CE
+// preset rows to the CE Dynamic block and Enterprise rows to the Enterprise
+// Dynamic block.
+func TestPublishEvaluationDocs_SplitsCombinedDynamicRunByEdition(t *testing.T) {
+	tmp := t.TempDir()
+	reportPath, resultsPath, readmePath := writeCombinedDynamicPublishFixture(t, tmp)
+
+	report, err := readPublishReport(reportPath)
+	if err != nil {
+		t.Fatalf("readPublishReport() error = %v", err)
+	}
+	assertCombinedDynamicReportSections(t, report)
+
+	opts := options{
+		PublishDocs:    true,
+		PublishFrom:    stringList{reportPath},
+		PublishResults: resultsPath,
+		PublishReadme:  readmePath,
+		PublishLabel:   "Docker CE+Enterprise-on-Enterprise dynamic 2026 combined targeted",
+		PublishMode:    publishModeReplaceCurrent,
+	}
+	if publishErr := publishEvaluationDocs(opts); publishErr != nil {
+		t.Fatalf("publishEvaluationDocs(combined dynamic) error = %v", publishErr)
+	}
+	assertCombinedDynamicPublishedDocs(t, resultsPath, readmePath)
+}
+
+func writeCombinedDynamicPublishFixture(t *testing.T, tmp string) (reportPath, resultsPath, readmePath string) {
+	t.Helper()
+	traceDir := filepath.Join(tmp, "traces")
+	if mkdirErr := os.MkdirAll(traceDir, 0o700); mkdirErr != nil {
+		t.Fatalf("mkdir traces: %v", mkdirErr)
+	}
+	if writeErr := os.WriteFile(filepath.Join(traceDir, "traces.jsonl"), []byte(combinedEnterpriseFullRunTraceJSONL()), 0o600); writeErr != nil {
+		t.Fatalf("write traces: %v", writeErr)
+	}
+	reportPath = filepath.Join(tmp, "dynamic-report.md")
+	if writeErr := os.WriteFile(reportPath, []byte(dynamicEnterpriseFullRunPublishReportNoPreset()), 0o600); writeErr != nil {
+		t.Fatalf("write report: %v", writeErr)
+	}
+	resultsPath = filepath.Join(tmp, "model-results.md")
+	readmePath = filepath.Join(tmp, "README.md")
+	resultsDoc := "# Results\n\n" +
+		modelEvalDynamicResultsStart + "\n" + modelEvalDynamicResultsEnd + "\n\n" +
+		modelEvalEnterpriseDynamicResultsStart + "\n" + modelEvalEnterpriseDynamicResultsEnd + "\n"
+	if writeErr := os.WriteFile(resultsPath, []byte(resultsDoc), 0o600); writeErr != nil {
+		t.Fatalf("write results doc: %v", writeErr)
+	}
+	readmeDoc := "# README\n\n" +
+		modelEvalDynamicSummaryStart + "\n" + modelEvalDynamicSummaryEnd + "\n\n" +
+		modelEvalEnterpriseDynamicSummaryStart + "\n" + modelEvalEnterpriseDynamicSummaryEnd + "\n"
+	if writeErr := os.WriteFile(readmePath, []byte(readmeDoc), 0o600); writeErr != nil {
+		t.Fatalf("write readme: %v", writeErr)
+	}
+	return reportPath, resultsPath, readmePath
+}
+
+func assertCombinedDynamicReportSections(t *testing.T, report publishReport) {
+	t.Helper()
+	rows := map[string]publishRow{}
+	for _, row := range report.Rows {
+		rows[row.Preset] = row
+	}
+	if got := publishSectionForRow(report, rows[presetDockerRead]); got != publishSectionDynamic {
+		t.Fatalf("CE row section = %q, want %q", got, publishSectionDynamic)
+	}
+	if got := publishSectionForRow(report, rows[presetDockerEnterpriseRead]); got != publishSectionEnterpriseDynamic {
+		t.Fatalf("Enterprise row section = %q, want %q", got, publishSectionEnterpriseDynamic)
+	}
+}
+
+func assertCombinedDynamicPublishedDocs(t *testing.T, resultsPath, readmePath string) {
+	t.Helper()
+	results, readErr := os.ReadFile(resultsPath)
+	if readErr != nil {
+		t.Fatalf("read results: %v", readErr)
+	}
+	dynamicBlock := managedBlockForTest(t, string(results), modelEvalDynamicResultsStart, modelEvalDynamicResultsEnd)
+	enterpriseDynamicBlock := managedBlockForTest(t, string(results), modelEvalEnterpriseDynamicResultsStart, modelEvalEnterpriseDynamicResultsEnd)
+	if !strings.Contains(dynamicBlock, "### Docker CE-on-Enterprise dynamic 2026 targeted") || !strings.Contains(dynamicBlock, "| `openai:gpt-5.4-nano` | `docker-read`") || strings.Contains(dynamicBlock, "docker-enterprise-read") {
+		t.Fatalf("dynamic block = %s", dynamicBlock)
+	}
+	if !strings.Contains(enterpriseDynamicBlock, "### Docker Enterprise dynamic 2026 targeted") || !strings.Contains(enterpriseDynamicBlock, "| `openai:gpt-5.4-nano` | `docker-enterprise-read`") || strings.Contains(enterpriseDynamicBlock, "| `openai:gpt-5.4-nano` | `docker-read`") {
+		t.Fatalf("enterprise dynamic block = %s", enterpriseDynamicBlock)
+	}
+	readme, readErr := os.ReadFile(readmePath)
+	if readErr != nil {
+		t.Fatalf("read readme: %v", readErr)
+	}
+	if !strings.Contains(string(readme), "Current published result: **Docker CE-on-Enterprise dynamic 2026 targeted**.") || !strings.Contains(string(readme), "Current published result: **Docker Enterprise dynamic 2026 targeted**.") {
+		t.Fatalf("readme labels = %s", readme)
+	}
+}
+
 // TestReadPublishReport_AllowsLargeTraceLines verifies provider-body traces do not exceed the publisher scanner buffer.
 func TestReadPublishReport_AllowsLargeTraceLines(t *testing.T) {
 	tmp := t.TempDir()
@@ -949,6 +1044,12 @@ func dynamicFullRunPublishReportNoPreset() string {
 		"| 1 | MT-008 | `gitlab_execute_action` / `group.delete` | `gitlab_execute_action` / `group.delete` | 1/1 | No | Yes | - | Yes | 1 | 1 | - |\n"
 }
 
+// dynamicEnterpriseFullRunPublishReportNoPreset returns a combined Dynamic
+// report fixture generated against an Enterprise runtime with no preset metadata.
+func dynamicEnterpriseFullRunPublishReportNoPreset() string {
+	return strings.Replace(dynamicFullRunPublishReportNoPreset(), "Tool surface: `dynamic`\n", "Tool surface: `dynamic`\nEdition: `enterprise`\n", 1)
+}
+
 // fullRunTraceJSONL returns trace rows for all tasks in the publish report fixture.
 func fullRunTraceJSONL() string {
 	return strings.Join([]string{
@@ -956,4 +1057,26 @@ func fullRunTraceJSONL() string {
 		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-010","expected":[{"step":1,"tool":"gitlab_execute_action","action":"issue.create"}],"events":[{"usage":{"input_tokens":15,"output_tokens":4}}],"summary":{"first_tool":"gitlab_execute_action","first_action":"issue.create","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":2,"tool_calls":2}}`,
 		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-008","expected":[{"step":1,"tool":"gitlab_execute_action","action":"group.delete","destructive":true}],"events":[{"usage":{"input_tokens":11,"output_tokens":3}}],"summary":{"first_tool":"gitlab_execute_action","first_action":"group.delete","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
 	}, "\n") + "\n"
+}
+
+// combinedEnterpriseFullRunTraceJSONL returns one CE and one Enterprise trace row.
+func combinedEnterpriseFullRunTraceJSONL() string {
+	return strings.Join([]string{
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-001","expected":[{"step":1,"tool":"gitlab_execute_action","action":"user.current"}],"events":[{"usage":{"input_tokens":10,"output_tokens":2}}],"summary":{"first_tool":"gitlab_execute_action","first_action":"user.current","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
+		`{"run":1,"model":"openai:gpt-5.4-nano","task_id":"MT-188","expected":[{"step":1,"tool":"gitlab_execute_action","action":"project.security_settings_get"}],"events":[{"usage":{"input_tokens":12,"output_tokens":3}}],"summary":{"first_tool":"gitlab_execute_action","first_action":"project.security_settings_get","first_pass":true,"final_success":true,"destructive_safe":true,"expected_steps":1,"model_calls":1,"tool_calls":1}}`,
+	}, "\n") + "\n"
+}
+
+func managedBlockForTest(t *testing.T, content, startMarker, endMarker string) string {
+	t.Helper()
+	start := strings.Index(content, startMarker)
+	if start == -1 {
+		t.Fatalf("missing start marker %s in %s", startMarker, content)
+	}
+	start += len(startMarker)
+	end := strings.Index(content[start:], endMarker)
+	if end == -1 {
+		t.Fatalf("missing end marker %s in %s", endMarker, content)
+	}
+	return content[start : start+end]
 }

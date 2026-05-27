@@ -625,9 +625,64 @@ func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 		candidate += "}"
 	}
 	if err := json.Unmarshal([]byte(candidate), &input); err != nil {
+		if repaired := repairOpenAIArgumentValueCommas(candidate); repaired != candidate {
+			if repairErr := json.Unmarshal([]byte(repaired), &input); repairErr == nil {
+				return input, nil
+			}
+		}
 		return nil, err
 	}
 	return input, nil
+}
+
+func repairOpenAIArgumentValueCommas(candidate string) string {
+	var out strings.Builder
+	changed := false
+	for index := 0; index < len(candidate); index++ {
+		char := candidate[index]
+		out.WriteByte(char)
+		if char != ':' && char != '{' && char != '[' {
+			continue
+		}
+		next := index + 1
+		for next < len(candidate) && isJSONWhitespace(candidate[next]) {
+			out.WriteByte(candidate[next])
+			next++
+		}
+		if next >= len(candidate) || candidate[next] != ',' {
+			index = next - 1
+			continue
+		}
+		afterComma := next + 1
+		for afterComma < len(candidate) && isJSONWhitespace(candidate[afterComma]) {
+			afterComma++
+		}
+		if afterComma >= len(candidate) {
+			index = next
+			continue
+		}
+		changed = true
+		if char == ':' && !lastBuilderByteIsWhitespace(&out) {
+			out.WriteByte(' ')
+		}
+		index = afterComma - 1
+	}
+	if !changed {
+		return candidate
+	}
+	return out.String()
+}
+
+func isJSONWhitespace(char byte) bool {
+	return char == ' ' || char == '\t' || char == '\r' || char == '\n'
+}
+
+func lastBuilderByteIsWhitespace(builder *strings.Builder) bool {
+	if builder.Len() == 0 {
+		return false
+	}
+	value := builder.String()
+	return isJSONWhitespace(value[len(value)-1])
 }
 
 func parseOpenAIJSONObjectFragment(candidate string) (map[string]any, bool) {

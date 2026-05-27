@@ -117,7 +117,7 @@ func resourceReadSchema() map[string]any {
 		"properties": map[string]any{
 			"uri": map[string]any{
 				"type":        "string",
-				"description": "MCP resource URI to read, for example gitlab://tools or gitlab://tools/project.get.",
+				"description": "MCP resource URI to read, for example gitlab://tools or a tool detail URI from the active manifest such as gitlab://tools/{id}.",
 			},
 		},
 		"required":             []string{"uri"},

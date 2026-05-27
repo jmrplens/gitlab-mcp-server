@@ -223,6 +223,12 @@ func NormalizeActionAlias(action string, routes ActionMap) string {
 	return action
 }
 
+// NormalizeActionAliasForParams returns the canonical action name for aliases
+// that depend on the submitted parameter shape.
+func NormalizeActionAliasForParams(toolName, action string, params map[string]any, routes ActionMap) string {
+	return normalizeActionAliasForParams(toolName, action, params, routes)
+}
+
 func normalizeActionAliasForParams(toolName, action string, params map[string]any, routes ActionMap) string {
 	if toolName != "gitlab_environment" || action != "get" {
 		return action

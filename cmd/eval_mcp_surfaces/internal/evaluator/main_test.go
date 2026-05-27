@@ -2905,6 +2905,30 @@ func TestTaskPrompt_SingleFileCreateUsesExactToolCall(t *testing.T) {
 	}
 }
 
+// TestTaskPrompt_ProjectGetUsesExactToolCall verifies exact project path
+// lookups do not drift into project search in meta-surface evaluations.
+func TestTaskPrompt_ProjectGetUsesExactToolCall(t *testing.T) {
+	task := evalTask{
+		ID:             "MT-002",
+		Prompt:         "Find project `my-org/tools/gitlab-mcp-server` and give me its ID and default branch.",
+		ExpectedTool:   "gitlab_project",
+		ExpectedAction: "get",
+		RequiredParams: []string{"project_id"},
+	}
+
+	prompt := taskPrompt(task)
+	for _, want := range []string{
+		"Exact required call: use the gitlab_project tool once with input",
+		`"action":"get"`,
+		`"project_id":"my-org/tools/gitlab-mcp-server"`,
+		"do not call gitlab_discover_project",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("taskPrompt() = %q, want exact project_get guidance containing %q", prompt, want)
+		}
+	}
+}
+
 // TestTaskPrompt_InstanceVariableCreateUsesExactToolCall verifies TaskPrompt when instance variable create uses exact tool call.
 func TestTaskPrompt_InstanceVariableCreateUsesExactToolCall(t *testing.T) {
 	task := evalTask{

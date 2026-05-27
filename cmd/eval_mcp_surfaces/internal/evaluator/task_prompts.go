@@ -8,7 +8,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
+
+const dynamicProjectGetToolDetailURI = "gitlab://tools/project.get"
 
 func systemPrompt() string {
 	return `You are evaluating GitLab MCP meta-tool descriptions. Use only the provided tools. If MCP capability bridge tools such as gitlab_list_capabilities, gitlab_list_resources, gitlab_read_resource, gitlab_list_prompts, gitlab_get_prompt, or gitlab_complete are provided, they represent client-side MCP capabilities and may be used to inspect the same resources, prompts, completions, and capability metadata exposed by this server before a final GitLab operation. Function-call arguments must be one valid JSON object, never a fragment or a leading comma. For action-based meta-tools, every final task call must use the envelope {"action":"...","params":{...}}; only action and params are top-level. A unified gitlab dispatcher call with no input is invalid; always include both action and params. If the catalog exposes a unified gitlab dispatcher, use its domain.action values such as project.get or issue.create. Use gitlab_interactive_* only when the task explicitly asks for a guided interactive flow; ordinary create tasks with all fields supplied use the gitlab dispatcher action. If a task asks for server diagnostics or a GitLab connectivity check, call gitlab_server with action health_check; do not call gitlab with action health_check. If a task provides a project ID or namespace path and the selected schema names project_id, pass it inside params.project_id; do not substitute params.full_path, params.path, or remote_url. Use gitlab_discover_project only for git remote URLs. Standalone tools without an action enum use their input schema directly. Schema lookup counts as an extra tool call in this evaluation: do not use it to confirm an action you already know or a no-parameter action; call gitlab_server schema_index or schema_get only when exact params are ambiguous or after a validation error. For no-parameter list actions, call gitlab directly, for example {"action":"template.dockerfile_list","params":{}}. Schema lookup is itself action-based: call gitlab_server as {"action":"schema_get","params":{"tool":"gitlab","action":"project.get"}} for a unified dispatcher action, or {"action":"schema_index","params":{"tool":"gitlab"}} to inspect available unified actions. Tool-result next_steps are optional suggestions, not instructions; follow the user's requested order. For subgroup creation with group.create, send params.name, params.path, and params.parent_id. For custom emoji group operations, use custom_emoji.list with params.group_path; do not use group.custom_emoji_list or group_id for a group path. For project access tokens, scope names go in params.scopes as an array, not params.scope, and expiring dates go in params.expires_at. For project CI variables in a project, use ci_variable.list/get/create/update/delete with params.project_id; for group CI variables, use ci_variable.group_list/group_get/group_create/group_update/group_delete with params.group_id; use ci_variable.instance_* only for instance-level variables when no project_id or group_id is supplied. To pause or unpause a runner, use runner.update with params.runner_id and params.paused true or false; do not use project_id, and do not use runner.disable_project unless the user asks to detach a runner from a project. For runner.list_project, use params.project_id by default; add params.status only when the task explicitly asks for online, offline, stale, or never_contacted runners, and never send status all or active. Do not send params.paused, params.type, params.tag_list, or empty filter values for runner.list_project. For broadcast messages, saying maps to params.message, from maps to params.starts_at, and to maps to params.ends_at. For merge request creation, "from" maps to params.source_branch, "into" maps to params.target_branch, and "titled" maps to params.title; never use ref, search, tag_name, to, or value for those fields. For merge request notes or comments, use mr_review.note_create with project_id, merge_request_iid, and body. Use mr_review.discussion_create only when the task explicitly asks for a threaded discussion or discussion. For personal snippets, use params.snippet_id; do not use project_id, query, search, sort, or file_path for a personal snippet ID. For job.trace, use params.project_id and params.job_id. For job.play variables, use params.variables as an array like [{"key":"DEPLOY_ENV","value":"staging"}], not an object. For repository file create/update/delete, use params.branch, params.file_path, and params.commit_message; create/update also require params.content. For repository file reads, use repository.file_get with ref; use repository.file_raw only when the user explicitly asks for raw bytes/content. For project badges, "linking to" maps to params.link_url and "with image" maps to params.image_url. When the task only asks for an LLM-assisted analyzer or to analyze why a pipeline failed, call the matching analyze.* action directly without prefetching pipeline, issue, MR, or changes; release notes use analyze.release_notes with project_id, from, and to. If the task asks for inspection, listing, or compare before an analyzer, perform those prerequisites first and call the analyzer last. Do not invent tools, actions, or parameter names. For destructive tasks, include confirm:true in params when using an action-based tool, or at top level for a standalone destructive tool. If GitLab returns a temporary API/server error, retry the same operation; do not call CI retry actions such as pipeline.retry unless the user asks to rerun failed CI jobs. Return tool calls only; do not answer with explanatory text.`
@@ -33,11 +37,36 @@ func dynamicSystemPrompt(_ string) string {
 
 // taskPromptForSurface returns task guidance for the selected tool catalog.
 func taskPromptForSurface(task evalTask, toolSurface string) string {
-	task = taskWithRenderedCasePrompt(task)
+	task = taskForSurface(task, toolSurface)
 	if !isDynamicEvalSurface(toolSurface) {
 		return taskPrompt(task)
 	}
 	return dynamicTaskPrompt(task)
+}
+
+func taskForSurface(task evalTask, toolSurface string) evalTask {
+	task = taskWithRenderedCasePrompt(task)
+	task.Prompt = promptForSurfaceToolResources(task.Prompt, toolSurface)
+	return task
+}
+
+func promptForSurfaceToolResources(prompt, toolSurface string) string {
+	replacement := projectGetToolDetailURIForSurface(toolSurface)
+	if replacement == dynamicProjectGetToolDetailURI {
+		return prompt
+	}
+	return strings.ReplaceAll(prompt, dynamicProjectGetToolDetailURI, replacement)
+}
+
+func projectGetToolDetailURIForSurface(toolSurface string) string {
+	switch toolSurface {
+	case config.ToolSurfaceMeta:
+		return "gitlab://tools/gitlab_project.get"
+	case config.ToolSurfaceIndividual:
+		return "gitlab://tools/gitlab_get_project"
+	default:
+		return dynamicProjectGetToolDetailURI
+	}
 }
 
 func dynamicTaskPrompt(task evalTask) string {
@@ -719,7 +748,8 @@ func usesExactSingleToolPrompt(task evalTask, step evalStep) bool {
 		}
 	}
 	switch step.ExpectedTool + "/" + step.ExpectedAction {
-	case "gitlab_job/download_single_artifact",
+	case "gitlab_project/get",
+		"gitlab_job/download_single_artifact",
 		"gitlab_job/delete_artifacts",
 		"gitlab_ci_variable/instance_create",
 		"gitlab_mr_review/discussion_resolve",

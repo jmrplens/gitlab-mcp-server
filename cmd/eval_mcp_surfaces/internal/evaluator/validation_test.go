@@ -79,6 +79,39 @@ func TestValidateStepCallWithRoutes_UsesNormalizedParams(t *testing.T) {
 	}
 }
 
+// TestValidateStepCallWithRoutes_UsesParamSensitiveActionAlias verifies the
+// evaluator accepts aliases that the meta-tool execution layer canonicalizes
+// from submitted params.
+func TestValidateStepCallWithRoutes_UsesParamSensitiveActionAlias(t *testing.T) {
+	schema := map[string]any{
+		"properties": map[string]any{
+			"project_id":  map[string]any{"type": "string"},
+			"environment": map[string]any{"type": "string"},
+		},
+		"required": []any{"project_id", "environment"},
+	}
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_environment": {
+			"get":           toolutil.ActionRoute{},
+			"protected_get": toolutil.ActionRoute{InputSchema: schema},
+		},
+	}
+	step := evalStep{
+		ExpectedTool:   "gitlab_environment",
+		ExpectedAction: "protected_get",
+		RequiredParams: []string{"project_id", "environment"},
+	}
+	input := map[string]any{
+		"action": "get",
+		"params": map[string]any{"project_id": "my-org/project", "environment": "staging"},
+	}
+
+	result := validateStepCallWithRoutes(step, "gitlab_environment", input, routes)
+	if !result.Valid || result.Action != "protected_get" {
+		t.Fatalf("validateStepCallWithRoutes() = %+v, want protected_get alias accepted", result)
+	}
+}
+
 func TestValidateStepCallWithRoutes_RejectsForbiddenParams(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: toolutil.ActionRoute{}}}
 	step := evalStep{

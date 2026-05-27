@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestLegacyOutputWrappers_ReturnUnderlyingErrors verifies the action-spec
@@ -265,4 +266,87 @@ func TestProjectOptions_PushRuleAddGuidance(t *testing.T) {
 	if _, ok := options.ParameterGuidance["commit_message_regex"]; !ok {
 		t.Fatalf("ParameterGuidance = %#v, want commit_message_regex guidance", options.ParameterGuidance)
 	}
+}
+
+// TestActionSpecs_ProjectGetAndListGuidance verifies project metadata actions
+// expose disambiguation and constrained sort schemas for meta/dynamic callers.
+func TestActionSpecs_ProjectGetAndListGuidance(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client, false)
+
+	getSpec := projectActionSpecByTool(t, specs, "gitlab_project_get")
+	for _, want := range []string{"exact project", "group/project", "do not use search.projects"} {
+		if !strings.Contains(getSpec.Usage, want) {
+			t.Fatalf("get Usage = %q, want %q", getSpec.Usage, want)
+		}
+	}
+	if guidance := getSpec.ParameterGuidance["project_id"]; guidance.SemanticRole != "scope_project" || !strings.Contains(guidance.ValueSource, "full namespace path") {
+		t.Fatalf("project_id guidance = %+v, want namespace path guidance", guidance)
+	}
+
+	listSpec := projectActionSpecByTool(t, specs, "gitlab_project_list")
+	if !strings.Contains(listSpec.Usage, "last_activity_at") || strings.Contains(listSpec.Usage, "last_activity_after as an order_by") && !strings.Contains(listSpec.Usage, "do not use") {
+		t.Fatalf("list Usage = %q, want last_activity_at ordering guidance", listSpec.Usage)
+	}
+	if got := projectSchemaPropertyEnum(t, listSpec.Route.InputSchema, "order_by"); !sameProjectStringSet(got, []string{"id", "name", "path", "created_at", "updated_at", "last_activity_at"}) {
+		t.Fatalf("order_by enum = %v, want accepted project ordering fields", got)
+	}
+	if got := projectSchemaPropertyEnum(t, listSpec.Route.InputSchema, "sort"); !sameProjectStringSet(got, []string{"asc", "desc"}) {
+		t.Fatalf("sort enum = %v, want asc/desc", got)
+	}
+}
+
+func projectActionSpecByTool(t *testing.T, specs []toolutil.ActionSpec, toolName string) toolutil.ActionSpec {
+	t.Helper()
+	for _, spec := range specs {
+		if spec.IndividualTool.Name == toolName {
+			return spec
+		}
+	}
+	t.Fatalf("missing action spec for %s", toolName)
+	return toolutil.ActionSpec{}
+}
+
+func projectSchemaPropertyEnum(t *testing.T, schema map[string]any, propertyName string) []string {
+	t.Helper()
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties missing: %#v", schema)
+	}
+	property, ok := properties[propertyName].(map[string]any)
+	if !ok {
+		t.Fatalf("property %q missing: %#v", propertyName, properties)
+	}
+	values, ok := property["enum"].([]any)
+	if !ok {
+		t.Fatalf("property %q enum missing or invalid: %#v", propertyName, property["enum"])
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		text, isString := value.(string)
+		if !isString {
+			t.Fatalf("property %q enum contains non-string %T", propertyName, value)
+		}
+		out = append(out, text)
+	}
+	return out
+}
+
+func sameProjectStringSet(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	seen := make(map[string]int, len(got))
+	for _, value := range got {
+		seen[value]++
+	}
+	for _, value := range want {
+		if seen[value] == 0 {
+			return false
+		}
+		seen[value]--
+	}
+	return true
 }

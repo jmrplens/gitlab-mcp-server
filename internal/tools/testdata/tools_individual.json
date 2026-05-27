@@ -87510,7 +87510,15 @@
           "type": "integer"
         },
         "order_by": {
-          "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
+          "description": "Order projects by id, name, path, created_at, updated_at, or last_activity_at.",
+          "enum": [
+            "id",
+            "name",
+            "path",
+            "created_at",
+            "updated_at",
+            "last_activity_at"
+          ],
           "type": "string"
         },
         "owned": {
@@ -87542,6 +87550,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "starred": {

@@ -234,7 +234,7 @@ func publishEvaluationDocs(opts options) error {
 	}
 	for _, section := range publishDocSectionsForReports(reports) {
 		sectionReports := filterPublishReportsBySection(reports, section.Key)
-		sectionLabel := publishSectionLabel(label)
+		sectionLabel := publishSectionLabel(label, section.Key, reports)
 		resultsBlock := buildModelResultsBlock(sectionLabel, sectionReports)
 		summaryBlock := buildReadmeSummaryBlock(sectionLabel, sectionReports)
 		if applyErr := applyManagedDoc(opts.PublishResults, section.ResultsStartMarker, section.ResultsEndMarker, resultsBlock, opts.PublishMode, sectionLabel); applyErr != nil {
@@ -318,7 +318,13 @@ func publishSectionForRow(report publishReport, row publishRow) string {
 	if section == publishSectionUnknown {
 		return section
 	}
-	if publishReportEdition(report) == editionEnterprise || publishPresetIsEnterprise(row.Preset) {
+	if rowEdition := publishPresetEdition(row.Preset); rowEdition != "" {
+		if rowEdition == editionEnterprise {
+			return enterprisePublishSection(section)
+		}
+		return section
+	}
+	if publishReportEdition(report) == editionEnterprise {
 		return enterprisePublishSection(section)
 	}
 	return section
@@ -364,12 +370,20 @@ func publishReportEdition(report publishReport) string {
 
 // publishPresetIsEnterprise reports whether a preset belongs to Enterprise output tables.
 func publishPresetIsEnterprise(preset string) bool {
+	return publishPresetEdition(preset) == editionEnterprise
+}
+
+// publishPresetEdition reports the edition represented by a preset or partition.
+func publishPresetEdition(preset string) string {
 	switch strings.TrimSpace(preset) {
 	case presetSchemaEnterprise, presetDockerEnterpriseRead, presetDockerEnterpriseMutatingSafe, presetDockerEnterpriseDestructiveSafe,
 		partitionEnterpriseRead, partitionEnterpriseMutating, partitionEnterpriseDestructive:
-		return true
+		return editionEnterprise
+	case presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe, presetDockerCapabilityDiscovery,
+		partitionErrorRecovery, partitionCapabilityFallback:
+		return editionCE
 	default:
-		return false
+		return ""
 	}
 }
 
@@ -414,12 +428,55 @@ func publishDocSectionForKey(sectionKey string) publishDocSection {
 }
 
 // publishSectionLabel returns the snapshot heading used within a managed section.
-func publishSectionLabel(label string) string {
+func publishSectionLabel(label, sectionKey string, reports []publishReport) string {
 	trimmed := strings.TrimSpace(label)
 	if trimmed == "" {
 		trimmed = strings.TrimSpace(publishSnapshotLabel("", nil))
 	}
+	if publishHasSiblingEditionSection(sectionKey, reports) {
+		return qualifyPublishSectionLabel(trimmed, sectionKey)
+	}
 	return trimmed
+}
+
+// publishHasSiblingEditionSection reports whether this publish updates CE and Enterprise blocks for the same surface.
+func publishHasSiblingEditionSection(sectionKey string, reports []publishReport) bool {
+	keys := map[string]bool{}
+	for _, section := range publishDocSectionsForReports(reports) {
+		keys[section.Key] = true
+	}
+	sibling := ""
+	switch sectionKey {
+	case publishSectionMeta:
+		sibling = publishSectionEnterpriseMeta
+	case publishSectionDynamic:
+		sibling = publishSectionEnterpriseDynamic
+	case publishSectionEnterpriseMeta:
+		sibling = publishSectionMeta
+	case publishSectionEnterpriseDynamic:
+		sibling = publishSectionDynamic
+	}
+	return sibling != "" && keys[sectionKey] && keys[sibling]
+}
+
+// qualifyPublishSectionLabel makes split CE/Enterprise snapshots distinguishable in published docs.
+func qualifyPublishSectionLabel(label, sectionKey string) string {
+	ceLabel, enterpriseLabel := "CE", "Enterprise"
+	editionLabel := ceLabel
+	if sectionKey == publishSectionEnterpriseMeta || sectionKey == publishSectionEnterpriseDynamic {
+		editionLabel = enterpriseLabel
+	}
+	if strings.Contains(label, "CE+Enterprise-on-Enterprise") {
+		replacement := "CE-on-Enterprise"
+		if editionLabel == enterpriseLabel {
+			replacement = "Enterprise"
+		}
+		return strings.TrimSpace(strings.Replace(strings.Replace(label, "CE+Enterprise-on-Enterprise", replacement, 1), " combined", "", 1))
+	}
+	if strings.Contains(label, "CE+Enterprise") {
+		return strings.TrimSpace(strings.Replace(strings.Replace(label, "CE+Enterprise", editionLabel, 1), " combined", "", 1))
+	}
+	return label + " (" + editionLabel + ")"
 }
 
 // readPublishReports parses one or more local evaluation reports.

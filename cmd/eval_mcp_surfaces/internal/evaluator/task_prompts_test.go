@@ -19,6 +19,29 @@ func TestTaskPromptForSurface_DynamicBridgeGuidance(t *testing.T) {
 	}
 }
 
+// TestTaskForSurface_RewritesToolDetailResourceIDs verifies capability tasks use
+// detail resource IDs from the active surface instead of dynamic-only IDs.
+func TestTaskForSurface_RewritesToolDetailResourceIDs(t *testing.T) {
+	evalCase, ok := CaseByID("MS-040")
+	if !ok {
+		t.Fatal("CaseByID(MS-040) = false")
+	}
+	task := taskFromCase(evalCase)
+
+	metaTask := taskForSurface(task, config.ToolSurfaceMeta)
+	if !strings.Contains(metaTask.Prompt, "`gitlab://tools/gitlab_project.get`") {
+		t.Fatalf("meta prompt = %q, want meta project detail URI", metaTask.Prompt)
+	}
+	if strings.Contains(metaTask.Prompt, dynamicProjectGetToolDetailURI) {
+		t.Fatalf("meta prompt kept dynamic project detail URI: %q", metaTask.Prompt)
+	}
+
+	dynamicTask := taskForSurface(task, config.ToolSurfaceDynamic)
+	if !strings.Contains(dynamicTask.Prompt, "`"+dynamicProjectGetToolDetailURI+"`") {
+		t.Fatalf("dynamic prompt = %q, want dynamic project detail URI", dynamicTask.Prompt)
+	}
+}
+
 // TestJoinNonEmpty_TrimAndSkipBlanks verifies prompt fragments are composed
 // without introducing empty paragraphs.
 func TestJoinNonEmpty_TrimAndSkipBlanks(t *testing.T) {

@@ -76,6 +76,11 @@ func normalizeRouteActionInput(step ExpectedStep, toolName string, input map[str
 			action = normalized
 		}
 	}
+	if params, paramsOK := input["params"].(map[string]any); paramsOK {
+		if normalized := toolutil.NormalizeActionAliasForParams(step.ExpectedTool, action, params, toolRoutes); normalized != action {
+			return cloneToolInputWithAction(input, normalized)
+		}
+	}
 	if normalized := toolutil.NormalizeActionAlias(action, toolRoutes); normalized != action {
 		return cloneToolInputWithAction(input, normalized)
 	}

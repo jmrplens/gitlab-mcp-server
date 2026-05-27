@@ -114,7 +114,7 @@ func (r *modelRunner) evaluateTask(ctx context.Context, task evalTask, catalog [
 }
 
 func (r *modelRunner) evaluatePreparedCase(ctx context.Context, prepared PreparedCase, catalog []modelTool, routes map[string]toolutil.ActionMap) taskResult {
-	task := taskFromPreparedCase(prepared)
+	task := taskForSurface(taskFromPreparedCase(prepared), r.toolSurface)
 	steps := prepared.Steps
 	userPrompt := taskPromptForSurface(task, r.toolSurface)
 	systemPrompt := systemPromptForTask(task, r.toolSurface)

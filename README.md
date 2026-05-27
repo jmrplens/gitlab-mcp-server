@@ -39,11 +39,11 @@ Measured with `go run ./cmd/gen_readme/` against the current base catalog. Total
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          |             2 |               870 | n/a                 |              2,193 |        18,284 |       20,477 |
-| `dynamic` / `minimal`                                 |             2 |               870 | n/a                 |              2,193 |           740 |        2,933 |
-| `meta` / `full`                                       |            34 |               870 | `opaque`            |             66,405 |        18,284 |       84,689 |
-| `meta` / `minimal`                                    |            34 |               870 | `opaque`            |             66,405 |           740 |       67,145 |
-| `individual` / `full`                                 |           866 |               866 | n/a                 |            473,781 |        18,284 |      492,065 |
+| `dynamic` / `full` (default)                          |             2 |               870 | n/a                 |              2,204 |        18,284 |       20,488 |
+| `dynamic` / `minimal`                                 |             2 |               870 | n/a                 |              2,204 |           740 |        2,944 |
+| `meta` / `full`                                       |            34 |               870 | `opaque`            |             67,105 |        18,284 |       85,389 |
+| `meta` / `minimal`                                    |            34 |               870 | `opaque`            |             67,105 |           740 |       67,845 |
+| `individual` / `full`                                 |           866 |               866 | n/a                 |            473,806 |        18,284 |      492,090 |
 
 Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.
 
@@ -285,20 +285,20 @@ action, sends valid parameters, recovers from actionable GitLab errors, and
 respects destructive-action safeguards.
 
 <!-- START MODEL EVAL META SUMMARY -->
-Current published result: **2026-05-18 Meta and Dynamic Docker full run**.
+Current published result: **Docker CE-on-Enterprise meta 20260527**.
 
-| Provider  | Model                           | Compatibility | Tool accuracy |      Recovery | Docker live status          |
-| --------- | ------------------------------- | ------------- | ------------: | ------------: | --------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001`     | Review        |        100.0% |    No repairs | 98.5% final across 264 ops  |
-| Google    | `gemini-3.1-flash-lite-preview` | Review        |         91.2% | 76.9% (10/13) | 97.8% final across 264 ops  |
-| OpenAI    | `gpt-5.4-nano`                  | OK            |        100.0% |  100.0% (2/2) | 100.0% final across 264 ops |
-| Qwen      | `qwen3.6-flash`                 | Review        |         97.0% |  100.0% (2/2) | 97.0% final across 264 ops  |
+| Provider  | Model                       | Compatibility | Tool accuracy |       Recovery | Docker live status          |
+| --------- | --------------------------- | ------------- | ------------: | -------------: | --------------------------- |
+| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% |     No repairs | 100.0% final across 274 ops |
+| Google    | `gemini-flash-latest`       | Review        |         74.3% | 100.0% (36/36) | 100.0% final across 274 ops |
+| OpenAI    | `gpt-5.4-nano`              | Review        |         99.3% |   100.0% (6/6) | 100.0% final across 274 ops |
+| Qwen      | `qwen3.6-flash`             | OK            |        100.0% |   100.0% (5/5) | 100.0% final across 274 ops |
 
-The published model-evaluation set covers 544 task attempts and 1056 expected MCP operations. Across the selected reports, models emitted 1043 tool calls over 1064 model requests, with 98.3% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 560 task attempts and 1096 expected MCP operations. Across the selected reports, models emitted 1109 tool calls over 1145 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
-Current published result: **Docker CE+Enterprise-on-Enterprise dynamic 20260525 combined**.
+Current published result: **Docker CE-on-Enterprise dynamic 20260525**.
 
 | Provider  | Model                       | Compatibility | Tool accuracy |   Recovery | Docker live status          |
 | --------- | --------------------------- | ------------- | ------------: | ---------: | --------------------------- |
@@ -311,20 +311,20 @@ The published model-evaluation set covers 560 task attempts and 1096 expected MC
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
-Current published result: **Docker Enterprise meta 20260523-142014**.
+Current published result: **Docker Enterprise meta 20260527**.
 
-| Provider  | Model                           | Compatibility | Tool accuracy |     Recovery | Docker live status         |
-| --------- | ------------------------------- | ------------- | ------------: | -----------: | -------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001`     | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 84 ops |
-| Google    | `gemini-3.1-flash-lite-preview` | OK            |        100.0% | 100.0% (3/3) | 100.0% final across 84 ops |
-| OpenAI    | `gpt-5.4-nano`                  | OK            |        100.0% | 100.0% (2/2) | 100.0% final across 84 ops |
-| Qwen      | `qwen3.6-flash`                 | OK            |        100.0% | 100.0% (2/2) | 100.0% final across 84 ops |
+| Provider  | Model                       | Compatibility | Tool accuracy |     Recovery | Docker live status         |
+| --------- | --------------------------- | ------------- | ------------: | -----------: | -------------------------- |
+| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 84 ops |
+| Google    | `gemini-flash-latest`       | Review        |         78.2% | 100.0% (7/7) | 100.0% final across 84 ops |
+| OpenAI    | `gpt-5.4-nano`              | Review        |        100.0% | 100.0% (4/4) | 100.0% final across 84 ops |
+| Qwen      | `qwen3.6-flash`             | OK            |        100.0% | 100.0% (1/1) | 100.0% final across 84 ops |
 
-The published model-evaluation set covers 92 task attempts and 336 expected MCP operations. Across the selected reports, models emitted 346 tool calls over 346 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 92 task attempts and 336 expected MCP operations. Across the selected reports, models emitted 345 tool calls over 350 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL ENTERPRISE META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
-Current published result: **Docker CE+Enterprise-on-Enterprise dynamic 20260525 combined**.
+Current published result: **Docker Enterprise dynamic 20260525**.
 
 | Provider  | Model                       | Compatibility | Tool accuracy |   Recovery | Docker live status         |
 | --------- | --------------------------- | ------------- | ------------: | ---------: | -------------------------- |
@@ -445,65 +445,65 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       885 |     146,856 |
-| Unit tests (`_test.go`)  |       475 |     249,138 |
-| End-to-end tests         |       111 |      24,461 |
-| **Total**                | **1,471** | **420,455** |
+| Source (`.go`, non-test) |       907 |     151,254 |
+| Unit tests (`_test.go`)  |       486 |     252,608 |
+| End-to-end tests         |       122 |      28,546 |
+| **Total**                | **1,515** | **432,408** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  6,221 |
-| — exported (public)             |  2,442 |
-| — unexported (private)          |  3,779 |
-| Unit test functions (`TestXxx`) | 10,145 |
-| Subtests (`t.Run(...)`)         |  2,210 |
-| End-to-end test functions       |    252 |
+| Source functions                |  6,435 |
+| — exported (public)             |  2,462 |
+| — unexported (private)          |  3,973 |
+| Unit test functions (`TestXxx`) | 10,253 |
+| Subtests (`t.Run(...)`)         |  2,386 |
+| End-to-end test functions       |    256 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.70× more tests than code |
-| Average source file length         |                 ~165 lines |
-| Average test file length           |                 ~524 lines |
-| Comment lines in source            |   11,883 (~8.1% of source) |
+| Test lines vs source lines         | 1.67× more tests than code |
+| Average source file length         |                 ~166 lines |
+| Average test file length           |                 ~519 lines |
+| Comment lines in source            |   11,865 (~7.8% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,040 |
-| `defer` statements                 |   768 |
-| `struct` types defined             | 2,282 |
-| `//nolint` suppressions            |    62 |
+| `if err != nil` checks             | 6,046 |
+| `defer` statements                 |   773 |
+| `struct` types defined             | 2,327 |
+| `//nolint` suppressions            |    74 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   215 |
+| Go packages                    |   218 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   184 |
+| Git commits                    |   216 |
 | Unique contributors            |     2 |
 
 ### Hall of fame
 
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
-| Longest source file | `internal/tools/dynamic/register.go` — 2,994 lines       |
-| Longest test file   | `internal/tools/projects/projects_test.go` — 7,080 lines |
+| Longest source file | `internal/tools/dynamic/register.go` — 3,346 lines       |
+| Longest test file   | `internal/tools/projects/projects_test.go` — 7,099 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~2,670 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 8,573 (impossible to avoid)                                                                          |
+| Source code printed at 55 lines/page | ~2,750 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 9,089 (impossible to avoid)                                                                          |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

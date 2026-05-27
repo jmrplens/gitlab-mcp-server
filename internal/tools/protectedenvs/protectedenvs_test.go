@@ -396,6 +396,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	if !strings.Contains(md, "Approval Rules") {
 		t.Error("expected approval rules section")
 	}
+	if !strings.Contains(md, "protected_update") || !strings.Contains(md, "protected_unprotect") {
+		t.Error("expected canonical protected action hints")
+	}
 }
 
 // TestFormatOutputMarkdown_Empty verifies FormatOutputMarkdown when empty.
@@ -424,6 +427,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 	if !strings.Contains(md, "Protected Environments (2)") {
 		t.Error("expected header with count")
+	}
+	if !strings.Contains(md, "protected_get") || !strings.Contains(md, "protected_protect") {
+		t.Error("expected canonical protected action hints")
 	}
 }
 

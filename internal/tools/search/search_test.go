@@ -1770,7 +1770,7 @@ func TestActionSpecs_SearchDisambiguationUsage(t *testing.T) {
 	}
 
 	projects := byTool["gitlab_search_projects"]
-	if !strings.Contains(projects.Usage, "project name") || !strings.Contains(projects.Usage, "do not use for code") {
+	if !strings.Contains(projects.Usage, "fuzzy project name") || !strings.Contains(projects.Usage, "use project.get instead") || !strings.Contains(projects.Usage, "Do not use for code") {
 		t.Fatalf("projects Usage = %q, want project/code distinction", projects.Usage)
 	}
 }
