@@ -198,6 +198,36 @@ func TestUpdate_UnmarshalOptionsError(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_Metadata verifies canonical metadata for settings actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, settingsJSON)
+	}))
+	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
+
+	if len(specs) != 2 {
+		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "settings" {
+			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
+		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	if specByTool["gitlab_update_settings"].ParameterGuidance["settings"].SemanticRole == "" {
+		t.Fatal("gitlab_update_settings should define settings parameter guidance")
+	}
+}
+
 // TestActionSpecs_CallRoutes verifies that both settings canonical routes
 // execute successfully through ActionSpecs.
 func TestActionSpecs_CallRoutes(t *testing.T) {

@@ -12,6 +12,39 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// TestActionSpecs_Metadata verifies canonical metadata for license actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client)
+	byTool := licenseSpecsByTool(t, specs)
+
+	if len(specs) != 3 {
+		t.Fatalf("len(ActionSpecs) = %d, want 3", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	for _, spec := range specs {
+		if spec.OwnerPackage != "license" {
+			t.Fatalf("OwnerPackage for %s = %q, want license", spec.Name, spec.OwnerPackage)
+		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	if byTool["gitlab_add_license"].ParameterGuidance["license"].SemanticRole == "" {
+		t.Fatal("gitlab_add_license should define license parameter guidance")
+	}
+	if !byTool["gitlab_delete_license"].Route.Destructive {
+		t.Fatal("gitlab_delete_license should be destructive")
+	}
+}
+
 // TestActionSpecs_CallAllRoutes exercises every license tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()

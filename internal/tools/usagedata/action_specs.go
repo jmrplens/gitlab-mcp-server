@@ -18,18 +18,41 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func usageDataReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, usageDataOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, usageDataOptions(name, individualTool))
 }
 
 func usageDataCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, usageDataOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, usageDataOptions(name, individualTool))
 }
 
-func usageDataOptions(individualTool string) toolutil.ActionSpecOptions {
+func usageDataOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "Read administrative usage-data analytics endpoints."
+	guidance := map[string]toolutil.ParameterGuidance{}
+	if actionName == "usage_data_track_event" {
+		usage = "Track one internal usage event for analytics instrumentation."
+		guidance["event"] = toolutil.ParameterGuidance{
+			SemanticRole:   "usage_event_name",
+			ValueSource:    "Single usage event name to send to tracking endpoint.",
+			ExampleBinding: `params.event:"my_event"`,
+		}
+	}
+	if actionName == "usage_data_track_events" {
+		usage = "Track multiple usage events in one request payload."
+		guidance["events"] = toolutil.ParameterGuidance{
+			SemanticRole:   "usage_event_batch",
+			ValueSource:    "Array of event objects accepted by track-events endpoint.",
+			ExampleBinding: `params.events:[{"event":"my_event"}]`,
+		}
+	}
+
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"admin", "usage-data"},
-		OpenWorld:      true,
-		OwnerPackage:   "usagedata",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:           []string{individualTool},
+		Tags:              []string{"admin", "usage-data"},
+		Usage:             usage,
+		RelatedActions:    []string{"admin.metadata_get"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "usagedata",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

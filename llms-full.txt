@@ -5810,6 +5810,10 @@ Action guidance:
 - create: Create a pipeline for a project ref (branch or tag). Use variables only when the task explicitly requires runtime overrides.
 - get: Get one pipeline by project_id and pipeline_id. Use this when the target pipeline is already known and you need detailed status, ref, source, and web URL fields.
 - list: List pipelines for one project. Use filters and pagination when the task asks for recent, failed, running, or branch-specific pipelines.
+- resource_group_edit: Update one resource group process mode by key.
+- resource_group_get: Get one resource group by key.
+- resource_group_list: List CI resource groups configured for a project.
+- resource_group_upcoming_jobs: List upcoming jobs queued for a resource group by key.
 - schedule_create_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
 - schedule_edit_variable: Create or update a pipeline schedule variable. The value parameter is required for both create and edit operations.
 - wait: Use only to poll an existing pipeline_id until a terminal status. For merge when pipeline succeeds, use merge_request.merge with auto_merge=true instead.
@@ -5819,6 +5823,14 @@ Parameter guidance:
 - get.pipeline_id: pipeline_identifier; source: Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.; avoid: Use pipeline_id, not job_id or merge_request_iid.
 - list.project_id: scope_project; source: Project ID or full path that owns the pipeline history.
 - list.status: pipeline_status_filter; source: Pipeline status requested by the task, such as failed, running, or success.
+- resource_group_edit.key: resource_group_key; source: Resource group key from resource group list output.
+- resource_group_edit.process_mode: resource_group_process_mode; source: Requested process mode (unordered, oldest_first, newest_first, newest_ready_first).
+- resource_group_edit.project_id: scope_project; source: Project ID or path that owns the resource groups.
+- resource_group_get.key: resource_group_key; source: Resource group key from resource group list output.
+- resource_group_get.project_id: scope_project; source: Project ID or path that owns the resource groups.
+- resource_group_list.project_id: scope_project; source: Project ID or path that owns the resource groups.
+- resource_group_upcoming_jobs.key: resource_group_key; source: Resource group key from resource group list output.
+- resource_group_upcoming_jobs.project_id: scope_project; source: Project ID or path that owns the resource groups.
 - schedule_create_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
 - schedule_edit_variable.value: pipeline_schedule_variable_value; source: Required variable value to store on the schedule; supply an explicit value even when the task only names the key.
 - wait.pipeline_id: pipeline_identifier; source: Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines.; avoid: Do not use merge_request_iid; pipeline.wait requires pipeline_id.
@@ -6173,6 +6185,7 @@ Action guidance:
 - pages_get: Manage project Pages settings and custom domains.
 - pages_unpublish: Manage project Pages settings and custom domains.
 - pages_update: Manage project Pages settings and custom domains.
+- statistics_get: Get detailed storage and repository statistics for a project.
 Parameter guidance:
 - badge_add.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
 - badge_delete.project_id: scope_project; source: Project that owns the badge.; avoid: Do not use group_id for project badge actions.
@@ -6198,6 +6211,7 @@ Parameter guidance:
 - pages_get.project_id: scope_project; source: Project ID or path owning the Pages configuration.
 - pages_unpublish.project_id: scope_project; source: Project ID or path owning the Pages configuration.
 - pages_update.project_id: scope_project; source: Project ID or path owning the Pages configuration.
+- statistics_get.project_id: scope_project; source: Project ID or path whose statistics should be retrieved.
 
 Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping). Delete, unpublish, force-push and *_delete actions are destructive.
 When to use: project-level configuration and metadata. NOT for: file content/commits (use gitlab_repository), branches (gitlab_branch), wiki pages (gitlab_wiki), issues (gitlab_issue), MRs (gitlab_merge_request).
@@ -9290,6 +9304,10 @@ Action guidance:
 - get: Get a single user by numeric user_id. Use this when the prompt already references a concrete user account and needs detailed profile fields.
 - list: List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories.
 - me: Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active.
+- namespace_exists: List namespaces visible to the authenticated user.
+- namespace_get: List namespaces visible to the authenticated user.
+- namespace_list: List namespaces visible to the authenticated user.
+- namespace_search: Search namespaces by query string.
 Parameter guidance:
 - avatar_get.email: email_address; source: Email address supplied by the task or returned by another GitLab user lookup.; avoid: Do not send a username or display name as email.
 - avatar_get.size: image_size_pixels; source: Optional avatar size in pixels; omit it to let GitLab choose the default size.; avoid: Send a numeric pixel size such as 64 or 128, not CSS strings like 64px.
@@ -9298,6 +9316,9 @@ Parameter guidance:
 - event_list_project.project_id: scope_project; source: Project ID or path whose activity events should be listed.
 - get.user_id: scope_user; source: Numeric GitLab user ID from prior list/get output or explicit task input.; avoid: Use numeric user_id; do not pass username where an ID is required.
 - list.search; source: Name, username, or email fragment from the user's request.; avoid: search narrows users globally; it is not a project/group membership filter.
+- namespace_exists.id: namespace_identifier; source: Namespace numeric ID or full path from namespace list output.
+- namespace_get.id: namespace_identifier; source: Namespace numeric ID or full path from namespace list output.
+- namespace_search.query: search_query; source: User-provided namespace search text.
 
 User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars. This is the canonical user management tool — covers the entire /users API surface. Delete / block / ban / reject actions are destructive.
 When to use: any user-management workflow — user CRUD (create / modify / delete / block / unblock / ban / unban / approve / reject / activate / deactivate), SSH/GPG key management, personal access token (PAT) management, impersonation tokens (admin), todos, contribution events, notification settings, namespaces, avatars, current-user status. NOT for: deploy tokens or project/group access tokens (use gitlab_access), instance-wide admin operations (use gitlab_admin), project/group memberships (use gitlab_project / gitlab_group).

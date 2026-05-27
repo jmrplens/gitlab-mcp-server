@@ -227,6 +227,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 	specs := ActionSpecs(client)
+	specByTool := resourceGroupSpecsByTool(specs)
 	if len(specs) != 4 {
 		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
 	}
@@ -234,6 +235,18 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "resourcegroups" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	if specByTool["gitlab_get_resource_group"].ParameterGuidance["key"].SemanticRole == "" {
+		t.Fatal("gitlab_get_resource_group should define key parameter guidance")
+	}
+	if specByTool["gitlab_edit_resource_group"].ParameterGuidance["process_mode"].SemanticRole == "" {
+		t.Fatal("gitlab_edit_resource_group should define process_mode parameter guidance")
 	}
 }
 

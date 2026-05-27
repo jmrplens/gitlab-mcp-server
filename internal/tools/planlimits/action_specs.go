@@ -14,18 +14,34 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func planLimitReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, planLimitOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, planLimitOptions(name, individualTool))
 }
 
 func planLimitUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, planLimitOptions(individualTool))
+	return toolutil.NewUpdateActionSpec(name, route, planLimitOptions(name, individualTool))
 }
 
-func planLimitOptions(individualTool string) toolutil.ActionSpecOptions {
+func planLimitOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "Get plan limits for the default or requested plan."
+	guidance := map[string]toolutil.ParameterGuidance{
+		"plan_name": {
+			SemanticRole:   "plan_name",
+			ValueSource:    "Optional plan name (for example default) when querying/updating plan limits.",
+			ExampleBinding: `params.plan_name:"default"`,
+		},
+	}
+	if actionName == "plan_limits_change" {
+		usage = "Update plan limit values for a specific plan."
+	}
+
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"admin", "plan-limit"},
-		OpenWorld:      true,
-		OwnerPackage:   "planlimits",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:           []string{individualTool},
+		Tags:              []string{"admin", "plan-limit"},
+		Usage:             usage,
+		RelatedActions:    []string{"admin.settings_get"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "planlimits",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

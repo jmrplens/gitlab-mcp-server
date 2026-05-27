@@ -82,6 +82,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if specs[0].OwnerPackage != "projectstatistics" || specs[0].IndividualTool.Name != "gitlab_get_project_statistics" {
 		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
 	}
+	if specs[0].Usage == "" {
+		t.Fatal("project statistics ActionSpec should define usage")
+	}
+	if len(specs[0].Aliases) == 0 {
+		t.Fatal("project statistics ActionSpec should define aliases")
+	}
+	if specs[0].ParameterGuidance["project_id"].SemanticRole == "" {
+		t.Fatal("project statistics ActionSpec should define project_id parameter guidance")
+	}
 }
 
 // TestActionSpecs_CallRoute verifies the project statistics canonical route.
