@@ -18,9 +18,16 @@ func applicationStatisticsReadSpec(name string, route toolutil.ActionRoute, indi
 
 func applicationStatisticsOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"admin"},
+		Aliases:        []string{"application statistics", "instance statistics", "gitlab statistics", "admin statistics"},
+		Tags:           []string{"admin", "statistics", "instance"},
+		Usage:          "Read GitLab instance-wide application statistics such as totals for users, groups, projects, issues, and merge requests. Requires administrator access.",
+		RelatedActions: []string{"admin.metadata_get", "server.health_check"},
 		OpenWorld:      true,
 		OwnerPackage:   "appstatistics",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		IndividualTool: toolutil.IndividualToolSpec{
+			Name:        individualTool,
+			Title:       toolutil.TitleFromName(individualTool),
+			Description: "Get GitLab application statistics for the current instance. Returns: aggregate counts for users, groups, projects, issues, merge requests, and related records. See also: gitlab_get_metadata, gitlab_server_status.",
+		},
 	}
 }

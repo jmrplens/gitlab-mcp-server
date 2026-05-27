@@ -130,6 +130,50 @@ func TestActionSpecs_SettingsAndMetadataUsageGuidance(t *testing.T) {
 	if !slices.Contains(metadataSpec.Aliases, "gitlab version") {
 		t.Fatalf("metadata_get Aliases = %v, want gitlab version alias", metadataSpec.Aliases)
 	}
+	if !slices.Equal(metadataSpec.RelatedActions, []string{"admin.settings_get", "admin.app_statistics_get", "server.health_check"}) {
+		t.Fatalf("metadata_get RelatedActions = %v", metadataSpec.RelatedActions)
+	}
+	for _, want := range []string{"Returns:", "See also:"} {
+		if !strings.Contains(metadataSpec.IndividualTool.Description, want) {
+			t.Fatalf("metadata_get description = %q, want %q", metadataSpec.IndividualTool.Description, want)
+		}
+	}
+}
+
+// TestActionSpecs_AppearanceAndStatisticsGuidance verifies aligned discovery
+// metadata for appearance and application statistics actions.
+func TestActionSpecs_AppearanceAndStatisticsGuidance(t *testing.T) {
+	specs := specsByName(t, ActionSpecs(nil))
+
+	appearanceGet := specs["appearance_get"]
+	if !strings.Contains(appearanceGet.Usage, "branding") {
+		t.Fatalf("appearance_get Usage = %q, want branding guidance", appearanceGet.Usage)
+	}
+	if !slices.Contains(appearanceGet.Aliases, "branding settings") {
+		t.Fatalf("appearance_get Aliases = %v, want branding settings alias", appearanceGet.Aliases)
+	}
+	if !slices.Equal(appearanceGet.RelatedActions, []string{"admin.settings_get", "admin.metadata_get", "admin.appearance_update"}) {
+		t.Fatalf("appearance_get RelatedActions = %v", appearanceGet.RelatedActions)
+	}
+
+	appearanceUpdate := specs["appearance_update"]
+	if guidance := appearanceUpdate.ParameterGuidance["message_background_color"]; guidance.SemanticRole != "hex_color" {
+		t.Fatalf("appearance_update message_background_color guidance = %+v", guidance)
+	}
+	if !slices.Contains(appearanceUpdate.Aliases, "update branding") {
+		t.Fatalf("appearance_update Aliases = %v, want update branding alias", appearanceUpdate.Aliases)
+	}
+
+	appStats := specs["app_statistics_get"]
+	if !strings.Contains(appStats.Usage, "instance-wide application statistics") {
+		t.Fatalf("app_statistics_get Usage = %q, want instance statistics guidance", appStats.Usage)
+	}
+	if !slices.Contains(appStats.Aliases, "instance statistics") {
+		t.Fatalf("app_statistics_get Aliases = %v, want instance statistics alias", appStats.Aliases)
+	}
+	if !slices.Equal(appStats.RelatedActions, []string{"admin.metadata_get", "server.health_check"}) {
+		t.Fatalf("app_statistics_get RelatedActions = %v", appStats.RelatedActions)
+	}
 }
 
 // TestActionSpecs_SystemHookDescriptionsIncludeOutputGuidance verifies the

@@ -5,6 +5,7 @@ package avatar
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -94,6 +95,18 @@ func TestActionSpecs_Metadata_Coverage(t *testing.T) {
 	}
 	if specs[0].OwnerPackage != "avatar" || specs[0].IndividualTool.Name != "gitlab_get_avatar" {
 		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
+	}
+	if !strings.Contains(specs[0].Usage, "known email address") {
+		t.Fatalf("Usage = %q, want known email address guidance", specs[0].Usage)
+	}
+	if !strings.Contains(specs[0].IndividualTool.Description, "Returns:") || !strings.Contains(specs[0].IndividualTool.Description, "See also:") {
+		t.Fatalf("Description = %q, want Returns/See also guidance", specs[0].IndividualTool.Description)
+	}
+	if guidance := specs[0].ParameterGuidance["email"]; guidance.SemanticRole != "email_address" {
+		t.Fatalf("email guidance = %+v, want email_address semantic role", guidance)
+	}
+	if !slices.Contains(specs[0].Aliases, "lookup avatar by email") {
+		t.Fatalf("Aliases = %v, want lookup avatar by email", specs[0].Aliases)
 	}
 }
 

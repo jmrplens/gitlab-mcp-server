@@ -22449,7 +22449,7 @@
   },
   {
     "name": "gitlab_get_appearance",
-    "description": "Get current application appearance settings. Requires admin access.\n\nReturns: JSON with appearance settings details.\n\nSee also: gitlab_update_appearance, gitlab_list_broadcast_messages",
+    "description": "Get the current GitLab application appearance and branding settings. Returns: the instance appearance object including title, messages, logos, and PWA labels. See also: gitlab_update_appearance, gitlab_get_settings, gitlab_get_metadata.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -22543,7 +22543,7 @@
   },
   {
     "name": "gitlab_get_application_statistics",
-    "description": "Get application statistics (admin). Returns counts for users, projects, groups, issues, MRs, etc.\n\nReturns: JSON with application statistics.\n\nSee also: gitlab_server_status.",
+    "description": "Get GitLab application statistics for the current instance. Returns: aggregate counts for users, groups, projects, issues, merge requests, and related records. See also: gitlab_get_metadata, gitlab_server_status.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -22619,7 +22619,7 @@
   },
   {
     "name": "gitlab_get_avatar",
-    "description": "Get the avatar URL for an email address.\n\nReturns: JSON with the avatar URL.\n\nSee also: gitlab_user_current.",
+    "description": "Get the avatar URL for an email address. Returns: the resolved avatar URL for that email address. See also: gitlab_user_current, gitlab_get_user_status.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26038,7 +26038,7 @@
   },
   {
     "name": "gitlab_get_metadata",
-    "description": "Get GitLab instance metadata (version, revision, KAS info, enterprise flag).\n\nReturns: JSON with GitLab instance metadata.\n\nSee also: gitlab_server_status",
+    "description": "Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag. Returns: the current instance metadata object. See also: gitlab_server_status, gitlab_get_settings, gitlab_get_application_statistics.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -107503,7 +107503,7 @@
   },
   {
     "name": "gitlab_server_status",
-    "description": "Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Use this to diagnose connection issues.\n\nReturns: JSON with server health and connectivity information.\n\nSee also: gitlab_server_check_update, gitlab_get_metadata",
+    "description": "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the current server and GitLab health diagnostics object. See also: gitlab_get_metadata, gitlab_user_current.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -112675,7 +112675,7 @@
   },
   {
     "name": "gitlab_update_appearance",
-    "description": "Update application appearance (title, description, messages, PWA settings). Requires admin access.\n\nReturns: JSON with the updated appearance settings.\n\nSee also: gitlab_get_appearance, gitlab_create_broadcast_message",
+    "description": "Update GitLab application appearance and branding settings. Returns: the updated appearance object after GitLab applies the change. See also: gitlab_get_appearance, gitlab_get_settings, gitlab_get_metadata.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

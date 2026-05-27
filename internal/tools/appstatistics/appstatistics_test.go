@@ -5,6 +5,7 @@ package appstatistics
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -117,6 +118,15 @@ func TestActionSpecs_Metadata_Coverage(t *testing.T) {
 	}
 	if specs[0].OwnerPackage != "appstatistics" || specs[0].IndividualTool.Name != "gitlab_get_application_statistics" {
 		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
+	}
+	if !strings.Contains(specs[0].Usage, "instance-wide application statistics") {
+		t.Fatalf("Usage = %q, want instance statistics guidance", specs[0].Usage)
+	}
+	if !slices.Contains(specs[0].Aliases, "instance statistics") {
+		t.Fatalf("Aliases = %v, want instance statistics alias", specs[0].Aliases)
+	}
+	if !strings.Contains(specs[0].IndividualTool.Description, "Returns:") || !strings.Contains(specs[0].IndividualTool.Description, "See also:") {
+		t.Fatalf("Description = %q, want Returns/See also guidance", specs[0].IndividualTool.Description)
 	}
 }
 

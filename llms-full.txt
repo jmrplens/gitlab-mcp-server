@@ -541,10 +541,15 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"alert_metric_image_delete","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_admin.<action>.
 Action guidance:
+- app_statistics_get: Read GitLab instance-wide application statistics such as totals for users, groups, projects, issues, and merge requests. Requires administrator access.
+- appearance_get: Read the current GitLab application appearance and branding settings. Use this for logos, banners, PWA labels, and instance message colors rather than general application settings or version metadata.
+- appearance_update: Update GitLab application appearance and branding settings such as title, messages, colors, PWA labels, and profile guidance text. Requires administrator access and changes the instance UI immediately.
 - metadata_get: Read GitLab instance metadata such as version and revision. Do not use this for application settings.
 - settings_get: Read current GitLab application settings. Use this for instance or application settings, not for server metadata or version information.
 - terraform_state_unlock: Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name; do not send the state name as id.
 Parameter guidance:
+- appearance_update.message_background_color: hex_color; source: Hex color string such as #e75e40 for the appearance banner background.; avoid: Provide a CSS-style hex color such as #ffffff; do not send color names or RGB tuples.
+- appearance_update.message_font_color: hex_color; source: Hex color string such as #ffffff for the appearance banner text.; avoid: Provide a CSS-style hex color such as #000000; do not send color names or RGB tuples.
 - terraform_state_unlock.name: terraform_state_name; source: Terraform state name from the prompt or admin.terraform_state_list output.; avoid: Do not send the state name as id; use params.name.
 
 GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab→GitLab migrations) and external imports (GitHub/Bitbucket). Most actions require admin privileges. Delete/purge/revoke actions are destructive.
@@ -8990,6 +8995,11 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_user.<action>.
+Action guidance:
+- avatar_get: Resolve the avatar URL for a known email address. Use this when the task already provides an email; do not use it to search for users by name or username.
+Parameter guidance:
+- avatar_get.email: email_address; source: Email address supplied by the task or returned by another GitLab user lookup.; avoid: Do not send a username or display name as email.
+- avatar_get.size: image_size_pixels; source: Optional avatar size in pixels; omit it to let GitLab choose the default size.; avoid: Send a numeric pixel size such as 64 or 128, not CSS strings like 64px.
 
 User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars. This is the canonical user management tool — covers the entire /users API surface. Delete / block / ban / reject actions are destructive.
 When to use: any user-management workflow — user CRUD (create / modify / delete / block / unblock / ban / unban / approve / reject / activate / deactivate), SSH/GPG key management, personal access token (PAT) management, impersonation tokens (admin), todos, contribution events, notification settings, namespaces, avatars, current-user status. NOT for: deploy tokens or project/group access tokens (use gitlab_access), instance-wide admin operations (use gitlab_admin), project/group memberships (use gitlab_project / gitlab_group).
@@ -13965,19 +13975,19 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_appearance
 
-Get current application appearance settings. Requires admin access.
+Get the current GitLab application appearance and branding settings. Returns: the instance appearance object including title, messages, logos, and PWA labels. See also: gitlab_update_appearance, gitlab_get_settings, gitlab_get_metadata.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_application_statistics
 
-Get application statistics (admin). Returns counts for users, projects, groups, issues, MRs, etc.
+Get GitLab application statistics for the current instance. Returns: aggregate counts for users, groups, projects, issues, merge requests, and related records. See also: gitlab_get_metadata, gitlab_server_status.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_avatar
 
-Get the avatar URL for an email address.
+Get the avatar URL for an email address. Returns: the resolved avatar URL for that email address. See also: gitlab_user_current, gitlab_get_user_status.
 
 **Parameters:**
 
@@ -14417,7 +14427,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_metadata
 
-Get GitLab instance metadata (version, revision, KAS info, enterprise flag).
+Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag. Returns: the current instance metadata object. See also: gitlab_server_status, gitlab_get_settings, gitlab_get_application_statistics.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -23122,7 +23132,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_server_status
 
-Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Use this to diagnose connection issues.
+Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the current server and GitLab health diagnostics object. See also: gitlab_get_metadata, gitlab_user_current.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -23817,7 +23827,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_appearance
 
-Update application appearance (title, description, messages, PWA settings). Requires admin access.
+Update GitLab application appearance and branding settings. Returns: the updated appearance object after GitLab applies the change. See also: gitlab_get_appearance, gitlab_get_settings, gitlab_get_metadata.
 
 **Parameters:**
 
