@@ -158,6 +158,31 @@ func TestEvaluateTask_AcceptsOptionalCapabilityBridgePreludeSkip(t *testing.T) {
 	}
 }
 
+func TestEvaluateTask_AcceptsDirectDynamicExecuteWithoutFind(t *testing.T) {
+	runner := newScriptedRunner(t,
+		toolUseResponse("exec", dynamicExecuteActionTool, map[string]any{"action": actionProjectGet, "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
+	)
+	task := evalTask{ID: "MT-DYN-DIRECT-001", Steps: []evalStep{
+		{ExpectedTool: dynamicFindTool, RequiredParams: []string{"query"}},
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}},
+	}}
+
+	result := runner.evaluateTask(t.Context(), task, nil, nil)
+
+	if !result.FinalSuccess || !result.FirstPass || result.RepairAttempted {
+		t.Fatalf("result = %+v, want first-pass success without repair", result)
+	}
+	if result.CompletedSteps != 2 {
+		t.Fatalf("completed steps = %d, want 2", result.CompletedSteps)
+	}
+	if result.FirstTool != dynamicExecuteActionTool || result.FirstAction != actionProjectGet {
+		t.Fatalf("first call = %s/%s, want %s/%s", result.FirstTool, result.FirstAction, dynamicExecuteActionTool, actionProjectGet)
+	}
+	if !strings.Contains(strings.Join(result.Notes, "; "), "accepted direct") {
+		t.Fatalf("notes = %v, want accepted direct note", result.Notes)
+	}
+}
+
 func hasPassedAssertion(results []CaseAssertionResult, assertionType CaseAssertionType) bool {
 	for _, result := range results {
 		if result.Type == assertionType && result.Passed {

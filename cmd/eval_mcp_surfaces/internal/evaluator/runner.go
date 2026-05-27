@@ -223,10 +223,19 @@ func (r *modelRunner) handleStepToolUse(ctx context.Context, stepCtx stepToolUse
 	}
 
 	stepIndex := turnCtx.state.stepIndex
-	validation := validateStepCallWithRoutes(turnCtx.steps[stepIndex], toolUse.Name, toolUse.Input, turnCtx.routes)
-	recordStepAssertionResults(turnCtx.result, turnCtx.steps[stepIndex], validation, stepIndex+1)
+	step := turnCtx.steps[stepIndex]
+	validation := validateStepCallWithRoutes(step, toolUse.Name, toolUse.Input, turnCtx.routes)
+	if !validation.Valid {
+		var accepted bool
+		step, validation, accepted = acceptDirectDynamicExecuteStep(turnCtx.steps, stepIndex, toolUse, validation, turnCtx.routes, turnCtx.state)
+		if accepted {
+			stepIndex = turnCtx.state.stepIndex
+			turnCtx.result.Notes = append(turnCtx.result.Notes, fmt.Sprintf("accepted direct %s call without prior %s for action %s", dynamicExecuteActionTool, dynamicFindTool, step.ExpectedAction))
+		}
+	}
+	recordStepAssertionResults(turnCtx.result, step, validation, stepIndex+1)
 	turnCtx.result.Trace.Events = append(turnCtx.result.Trace.Events, traceValidationEvent(turnCtx.result.ModelCalls, validation))
-	if acceptsDynamicPreludeCall(r.toolSurface, turnCtx.steps[stepIndex], validation) {
+	if acceptsDynamicPreludeCall(r.toolSurface, step, validation) {
 		appendDynamicPreludeFollowup(turnCtx.steps, stepIndex, toolUse, validation, turnCtx.result, turnCtx.state, stepCtx.followups)
 		return false
 	}
@@ -237,6 +246,33 @@ func (r *modelRunner) handleStepToolUse(ctx context.Context, stepCtx stepToolUse
 		return r.handleValidToolStep(ctx, validCtx)
 	}
 	return r.handleInvalidStepToolUse(ctx, stepCtx, validation)
+}
+
+func acceptDirectDynamicExecuteStep(steps []evalStep, stepIndex int, toolUse modelContentBlock, validation validationResult, routes map[string]toolutil.ActionMap, state *modelEvaluationState) (evalStep, validationResult, bool) {
+	if validation.Valid {
+		return steps[stepIndex], validation, false
+	}
+	if stepIndex < 0 || stepIndex >= len(steps) {
+		return evalStep{}, validation, false
+	}
+	current := steps[stepIndex]
+	if !expectedDynamicFindStep(current) {
+		return current, validation, false
+	}
+	nextIndex := stepIndex + 1
+	if nextIndex >= len(steps) {
+		return current, validation, false
+	}
+	next := steps[nextIndex]
+	if next.ExpectedTool != dynamicExecuteActionTool || next.ExpectedAction == "" {
+		return current, validation, false
+	}
+	nextValidation := validateStepCallWithRoutes(next, toolUse.Name, toolUse.Input, routes)
+	if !nextValidation.Valid {
+		return current, validation, false
+	}
+	state.stepIndex = nextIndex
+	return next, nextValidation, true
 }
 
 func (r *modelRunner) handleInvalidStepToolUse(ctx context.Context, stepCtx stepToolUseContext, validation validationResult) bool {

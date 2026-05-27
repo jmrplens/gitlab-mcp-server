@@ -12,27 +12,49 @@ import (
 // ActionSpecs returns canonical specs for LLM-assisted GitLab analysis actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
-		samplingSpec("mr_changes", client, AnalyzeMRChanges, "gitlab_analyze_mr_changes", analyzeMRChangesDescription()),
-		samplingSpec("issue_summary", client, SummarizeIssue, "gitlab_summarize_issue", summarizeIssueDescription()),
-		samplingSpec("release_notes", client, GenerateReleaseNotes, "gitlab_generate_release_notes", generateReleaseNotesDescription()),
-		samplingSpec("pipeline_failure", client, AnalyzePipelineFailure, "gitlab_analyze_pipeline_failure", analyzePipelineFailureDescription()),
-		samplingSpec("mr_review", client, SummarizeMRReview, "gitlab_summarize_mr_review", summarizeMRReviewDescription()),
-		samplingSpec("milestone_report", client, GenerateMilestoneReport, "gitlab_generate_milestone_report", generateMilestoneReportDescription()),
-		samplingSpec("ci_config", client, AnalyzeCIConfig, "gitlab_analyze_ci_configuration", analyzeCIConfigDescription()),
-		samplingSpec("issue_scope", client, AnalyzeIssueScope, "gitlab_analyze_issue_scope", analyzeIssueScopeDescription()),
-		samplingSpec("mr_security", client, ReviewMRSecurity, "gitlab_review_mr_security", reviewMRSecurityDescription()),
-		samplingSpec("technical_debt", client, FindTechnicalDebt, "gitlab_find_technical_debt", findTechnicalDebtDescription()),
-		samplingSpec("deployment_history", client, AnalyzeDeploymentHistory, "gitlab_analyze_deployment_history", analyzeDeploymentHistoryDescription()),
+		samplingSpecWithAliases("mr_changes", client, AnalyzeMRChanges, "gitlab_analyze_mr_changes", analyzeMRChangesDescription(),
+			[]string{"analyze mr changes", "analyze merge request code", "code review analysis", "mr code quality"}),
+		samplingSpecWithAliases("issue_summary", client, SummarizeIssue, "gitlab_summarize_issue", summarizeIssueDescription(),
+			[]string{"summarize issue", "issue summary analysis", "get issue decisions", "issue key points"}),
+		samplingSpecWithAliases("release_notes", client, GenerateReleaseNotes, "gitlab_generate_release_notes", generateReleaseNotesDescription(),
+			[]string{"generate release notes", "create release notes", "release changelog"}),
+		samplingSpecWithAliases("pipeline_failure", client, AnalyzePipelineFailure, "gitlab_analyze_pipeline_failure", analyzePipelineFailureDescription(),
+			[]string{"analyze pipeline failure", "pipeline failure analysis", "debug pipeline failure", "diagnose pipeline failure", "find pipeline root cause", "why pipeline failed"}),
+		samplingSpecWithAliases("mr_review", client, SummarizeMRReview, "gitlab_summarize_mr_review", summarizeMRReviewDescription(),
+			[]string{"summarize mr review", "review feedback summary", "mr approval summary"}),
+		samplingSpecWithAliases("milestone_report", client, GenerateMilestoneReport, "gitlab_generate_milestone_report", generateMilestoneReportDescription(),
+			[]string{"generate milestone report", "milestone progress report", "milestone analysis"}),
+		samplingSpecWithAliases("ci_config", client, AnalyzeCIConfig, "gitlab_analyze_ci_configuration", analyzeCIConfigDescription(),
+			[]string{"analyze ci config", "ci configuration analysis", "gitlab-ci.yml analysis", "ci pipeline analysis"}),
+		samplingSpecWithAliases("issue_scope", client, AnalyzeIssueScope, "gitlab_analyze_issue_scope", analyzeIssueScopeDescription(),
+			[]string{"analyze issue scope", "issue scope analysis", "define issue requirements"}),
+		samplingSpecWithAliases("mr_security", client, ReviewMRSecurity, "gitlab_review_mr_security", reviewMRSecurityDescription(),
+			[]string{"review mr security", "security review", "security analysis", "vulnerability detection"}),
+		samplingSpecWithAliases("technical_debt", client, FindTechnicalDebt, "gitlab_find_technical_debt", findTechnicalDebtDescription(),
+			[]string{"find technical debt", "technical debt analysis", "code debt analysis"}),
+		samplingSpecWithAliases("deployment_history", client, AnalyzeDeploymentHistory, "gitlab_analyze_deployment_history", analyzeDeploymentHistoryDescription(),
+			[]string{"analyze deployment history", "deployment analysis", "release history analysis"}),
 	}
 }
 
 func samplingSpec[T, R any](name string, client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), individualTool, description string) toolutil.ActionSpec {
-	return analyzeSpec(name, samplingRoute[T, R](client, fn, individualTool), individualTool, description)
+	return analyzeSpec(name, samplingRoute[T, R](client, fn, individualTool), individualTool, description, nil)
 }
 
-func analyzeSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
+func samplingSpecWithAliases[T, R any](name string, client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), individualTool, description string, aliases []string) toolutil.ActionSpec {
+	return analyzeSpec(name, samplingRoute[T, R](client, fn, individualTool), individualTool, description, aliases)
+}
+
+func analyzeSpec(name string, route toolutil.ActionRoute, individualTool, description string, aliases []string) toolutil.ActionSpec {
+	if len(aliases) == 0 {
+		aliases = []string{individualTool}
+	} else {
+		aliases = append(aliases, individualTool)
+	}
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute samplingtools domain action.", Tags: []string{"analyze", "sampling"},
+		Aliases: aliases,
+		Usage:   "Use to execute samplingtools domain action.",
+		Tags:    []string{"analyze", "sampling"},
 		OpenWorld:      true,
 		OwnerPackage:   "samplingtools",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},
