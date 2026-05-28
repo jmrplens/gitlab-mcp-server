@@ -41,23 +41,23 @@ func readEvalCases() []Case {
 		baseReadEvalCase("MT-110", "List merged merge requests in `my-org/tools/gitlab-mcp-server` ordered by updated date, with 5 results per page.", readStep("gitlab_merge_request", "list", params("project_id"), params("state", "order_by", "sort", "per_page"))),
 		baseReadEvalCase("MT-111", "Get all pending to-do items for the current user.", readStep("gitlab_todo", "list", nil, params("state", "per_page"))),
 		baseReadEvalCase("MT-112", "List all available MCP resources exposed by the server.", readStep("gitlab_list_resources", "", nil, nil)),
-		baseReadEvalCase("MT-113", "Show me the available MCP prompts, then get the details of the git-workflow prompts.", 
+		baseReadEvalCase("MT-113", "Show me the available MCP prompts, then get the details of the git-workflow prompts.",
 			readStep("gitlab_list_prompts", "", nil, nil),
 			readStep("gitlab_get_prompt", "", params("name"), nil),
 		),
-		baseReadEvalCase("MT-114", "Retrieve the current user info, then use parameter completion to autocomplete the `state` parameter for issue listings.", 
+		baseReadEvalCase("MT-114", "Retrieve the current user info, then use parameter completion to autocomplete the `state` parameter for issue listings.",
 			readStep("gitlab_user", "current", nil, nil),
 			readStep("gitlab_complete", "", params("tool", "action"), nil),
 		),
 		baseReadEvalCase("MT-115", "List issues with status `closed` created in the last 60 days in project `my-org/tools/gitlab-mcp-server`, ordered by creation date.", readStep("gitlab_issue", "list", params("project_id"), params("state", "order_by", "sort", "created_after", "per_page"))),
-		baseReadEvalCase("MT-116", "For project `my-org/tools/gitlab-mcp-server`, get the latest pipeline on `main`, then list all jobs in that pipeline and their statuses.", 
+		baseReadEvalCase("MT-116", "For project `my-org/tools/gitlab-mcp-server`, get the latest pipeline on `main`, then list all jobs in that pipeline and their statuses.",
 			readStep("gitlab_pipeline", "list", params("project_id"), params("ref", "per_page")),
 			readStep("gitlab_job", "list", params("project_id", "pipeline_id"), params("scope", "per_page")),
 		),
 		baseReadEvalCase("MT-117", "Find issues labeled `bug` and in milestone `v2.0` for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_issue", "list", params("project_id"), params("labels", "milestone", "per_page"))),
 		baseReadEvalCase("MT-118", "Get the second page of releases (100 per page) for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_release", "list", params("project_id"), params("page", "per_page"))),
 		baseReadEvalCase("MT-119", "Search for branches starting with `feat` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_branch", "list", params("project_id"), params("search", "per_page"))),
-		baseReadEvalCase("MT-120", "List project members with their roles in `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_project", "members", params("project_id"), params("per_page", "order_by"))),
+		baseReadEvalCase("MT-120", "List members with their roles in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_project", "members", params("project_id"), params("per_page", "query"))),
 		baseReadEvalCase("MS-001", "Resolve remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git` for project `my-org/tools/gitlab-mcp-server`, verify the project metadata, then read `README.md` from `main`.",
 			readStep("gitlab_discover_project", "", params("remote_url"), nil),
 			readStep("gitlab_project", "get", params("project_id"), nil),
@@ -132,19 +132,19 @@ func baseReadPromptTemplateAndFixtures(id string) (template string, fixtures []s
 	case "MT-179":
 		return "Inspect merge request `{{ .MergeRequest.IID }}` changes in project `{{ .Project.Path }}` without running an LLM analyzer.", []string{fixtureMergeRequest}
 	case "MT-110":
-		return "List merged merge requests in `{{ .Project.Path }}` ordered by updated date, with 5 results per page.", []string{fixtureMergeRequest}
+		return "List merged merge requests in project `{{ .Project.Path }}` ordered by updated date, with 5 results per page.", []string{fixtureMergeRequest}
 	case "MT-115":
-		return "List issues with status closed created in the last 60 days in `{{ .Project.Path }}`, ordered by creation date.", []string{fixtureIssue}
+		return "List issues with status closed created in the last 60 days in project `{{ .Project.Path }}`, ordered by creation date.", []string{fixtureIssue}
 	case "MT-116":
 		return "For project `{{ .Project.Path }}`, get the latest pipeline on main, then list all jobs in pipeline `{{ .Pipeline.ID }}` and their statuses.", []string{fixturePipelineJob}
 	case "MT-117":
-		return "Find issues labeled bug and in milestone v2.0 for `{{ .Project.Path }}`.", []string{fixtureIssue}
+		return "Find issues labeled bug and in milestone v2.0 for project `{{ .Project.Path }}`.", []string{fixtureIssue}
 	case "MT-118":
-		return "Get the second page of releases (100 per page) for `{{ .Project.Path }}`.", []string{fixtureRelease}
+		return "Get the second page of releases (100 per page) for project `{{ .Project.Path }}`.", []string{fixtureRelease}
 	case "MT-119":
-		return "Search for branches starting with feat in `{{ .Project.Path }}`.", []string{fixtureBranch}
+		return "Search for branches starting with feat in project `{{ .Project.Path }}`.", []string{fixtureBranch}
 	case "MT-120":
-		return "List project members with their roles in `{{ .Project.Path }}`.", []string{fixtureMember}
+		return "List members with their roles in project `{{ .Project.Path }}`.", []string{fixtureMember}
 	case "MS-002":
 		return "Investigate failed pipeline `{{ .Pipeline.ID }}` for project `{{ .Project.Path }}` and remote URL `{{ .Values.remote_url }}`: first resolve that exact remote URL to the project, inspect the pipeline, list failed jobs, fetch job `{{ .Job.ID }}` trace, then call the pipeline failure analyzer using that same pipeline ID.", []string{fixtureFailedJobArtifact}
 	default:
