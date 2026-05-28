@@ -2894,6 +2894,10 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 		{name: "protected environment deployment approval", query: "protected environment deployment_list deployment approve_or_reject", limit: 12, want: []string{"environment.protected_get", "environment.deployment_list", "environment.deployment_approve_or_reject"}},
 		{name: "feature flag user list lifecycle", query: "feature flag user list get user_list_iid update delete", limit: 8, want: []string{"feature_flags.ff_user_list_get", "feature_flags.ff_user_list_update", "feature_flags.ff_user_list_delete"}},
 		{name: "issue note lifecycle", query: "issue note get by note_id update delete comment", limit: 8, want: []string{"issue.note_get", "issue.note_update", "issue.note_delete"}},
+		{name: "mr security analyzer intent", query: "LLM-assisted security review analyzer for merge request 1 in project my-org/tools/gitlab-mcp-server", limit: 8, want: []string{"analyze.mr_security"}},
+		{name: "discover project by path or url", query: "project find by path or url", limit: 8, want: []string{"discover_project.resolve"}},
+		{name: "project get by path", query: "project show by path my-org/tools/gitlab-mcp-server", limit: 8, want: []string{"project.get"}},
+		{name: "search projects intent", query: "project list search gitlab-mcp-server", limit: 8, want: []string{"search.projects"}},
 	}
 
 	for _, tt := range tests {
@@ -2907,6 +2911,57 @@ func TestSearch_ProviderConfusionQueries_ReturnExpectedActions(t *testing.T) {
 			}
 			assertSearchResultsContain(t, output.Results, tt.want...)
 		})
+	}
+}
+
+func TestSearch_ProviderConfusionQueries_PrioritizeExactTopResult(t *testing.T) {
+	registry := realCatalogRegistry(t)
+
+	tests := []struct {
+		name  string
+		query string
+		limit int
+		want  string
+	}{
+		{name: "search projects top result", query: "project list search gitlab-mcp-server", limit: 8, want: "search.projects"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: tt.query, Limit: tt.limit})
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if result == nil || result.IsError {
+				t.Fatalf("Search() result = %+v, want non-error", result)
+			}
+			if len(output.Results) == 0 || output.Results[0].ID != tt.want {
+				t.Fatalf("Search(%q) top result = %+v, want %s", tt.query, output.Results, tt.want)
+			}
+		})
+	}
+}
+
+func TestSearch_ProviderConfusionQueries_PrioritizeExactTopResult_EnterpriseCatalog(t *testing.T) {
+	enterpriseCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog(enterprise) error = %v", err)
+	}
+	enterpriseCatalog, err = AddStandaloneCatalog(enterpriseCatalog, nil, StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneCatalog(enterprise) error = %v", err)
+	}
+	registry := NewRegistryFromCatalog(enterpriseCatalog)
+
+	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "project list search gitlab-mcp-server", Limit: 20})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if result == nil || result.IsError {
+		t.Fatalf("Search() result = %+v, want non-error", result)
+	}
+	if len(output.Results) == 0 || output.Results[0].ID != "search.projects" {
+		t.Fatalf("Search top result = %+v, want search.projects", output.Results)
 	}
 }
 

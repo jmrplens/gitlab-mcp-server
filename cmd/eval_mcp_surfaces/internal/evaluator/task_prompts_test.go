@@ -12,10 +12,67 @@ import (
 func TestTaskPromptForSurface_DynamicBridgeGuidance(t *testing.T) {
 	task := evalTask{ID: "MS-039", Prompt: "Read `gitlab://tools`.", Steps: []evalStep{{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}}
 	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
-	for _, want := range []string{"Use MCP capability bridge tools directly", "do not use gitlab_find_action for those bridge-only steps", "gitlab://tools"} {
+	for _, want := range []string{"Use MCP capability bridge tools directly", "do not use bridge tools as a substitute for a required catalog action", "gitlab://tools"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("dynamic prompt missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestTaskPromptForSurface_DynamicRemoteURLDiscoveryGuidance(t *testing.T) {
+	task := evalTask{ID: "MS-002", Prompt: "Resolve remote URL `https://gitlab.example.com/group/project.git` then inspect pipeline `1`.", Steps: []evalStep{{ExpectedTool: "gitlab_execute_action", ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}}, {ExpectedTool: "gitlab_execute_action", ExpectedAction: "pipeline.get", RequiredParams: []string{"project_id", "pipeline_id"}}}}
+	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
+	for _, want := range []string{"first gitlab_find_action query for that discovery step must explicitly describe resolving the provided remote URL", "must use the project-discovery action with params.remote_url set to that exact URL"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("dynamic prompt missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "discover_project.resolve") {
+		t.Fatalf("dynamic prompt leaked exact discovery action:\n%s", got)
+	}
+}
+
+func TestTaskPromptForSurface_DynamicRemoteURLGuidanceIsScoped(t *testing.T) {
+	task := evalTask{ID: "MT-002", Prompt: "Find project `my-org/tools/gitlab-mcp-server` and give me its ID and default branch.", Steps: []evalStep{{ExpectedTool: "gitlab_execute_action", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}}}
+	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
+	forbidden := []string{"first gitlab_find_action query for that discovery step must explicitly describe resolving the provided remote URL", "must use the project-discovery action with params.remote_url set to that exact URL"}
+	for _, text := range forbidden {
+		if strings.Contains(got, text) {
+			t.Fatalf("dynamic prompt unexpectedly included remote URL guidance %q:\n%s", text, got)
+		}
+	}
+	if strings.Contains(got, "discover_project.resolve") {
+		t.Fatalf("dynamic prompt unexpectedly leaked exact discovery action:\n%s", got)
+	}
+}
+
+func TestTaskPromptForSurface_DynamicAvoidsPlaceholderRetries(t *testing.T) {
+	task := evalTask{ID: "MS-012", Prompt: "Prepare an LLM-assisted release summary for project `my-org/tools/gitlab-mcp-server`: inspect releases, compare refs `main` and `v0.0.0-eval-ms`, then generate release notes.", Steps: []evalStep{{ExpectedTool: "gitlab_execute_action", ExpectedAction: "release.list", RequiredParams: []string{"project_id"}}, {ExpectedTool: "gitlab_execute_action", ExpectedAction: "repository.compare", RequiredParams: []string{"project_id", "from", "to"}}, {ExpectedTool: "gitlab_execute_action", ExpectedAction: "analyze.release_notes", RequiredParams: []string{"project_id", "from", "to"}}}}
+	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
+	if !strings.Contains(got, "Never use placeholder values like <to>, <from>, or <project_id> in retries") {
+		t.Fatalf("dynamic prompt missing placeholder guidance:\n%s", got)
+	}
+	if !strings.Contains(got, "do not call gitlab_execute_action for an unrelated action just because it ranked higher") {
+		t.Fatalf("dynamic prompt missing find retry guidance:\n%s", got)
+	}
+	if !strings.Contains(got, "keep the same two refs across the compare step and the final analyzer step") {
+		t.Fatalf("dynamic prompt missing release compare guidance:\n%s", got)
+	}
+}
+
+func TestDynamicExampleParamValue_CompareRefsExtractsFromAndTo(t *testing.T) {
+	prompt := "Prepare an LLM-assisted release summary for project `my-org/tools/gitlab-mcp-server`: inspect releases, compare refs `main` and `v0.0.0-eval-ms`, then generate release notes."
+	if got := dynamicExampleParamValue("repository.compare", "from", prompt); got != "main" {
+		t.Fatalf("dynamicExampleParamValue(from) = %v, want main", got)
+	}
+	if got := dynamicExampleParamValue("repository.compare", "to", prompt); got != "v0.0.0-eval-ms" {
+		t.Fatalf("dynamicExampleParamValue(to) = %v, want v0.0.0-eval-ms", got)
+	}
+	if got := dynamicExampleParamValue("analyze.release_notes", "from", prompt); got != "main" {
+		t.Fatalf("dynamicExampleParamValue(analyze.from) = %v, want main", got)
+	}
+	if got := dynamicExampleParamValue("analyze.release_notes", "to", prompt); got != "v0.0.0-eval-ms" {
+		t.Fatalf("dynamicExampleParamValue(analyze.to) = %v, want v0.0.0-eval-ms", got)
 	}
 }
 

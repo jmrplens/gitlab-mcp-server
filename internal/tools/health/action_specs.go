@@ -28,10 +28,10 @@ func healthOptions(name, individualTool string) toolutil.ActionSpecOptions {
 	}
 	switch name {
 	case "status":
-		options.Aliases = []string{"server status", "health status", "mcp server status", "gitlab connectivity status"}
+		options.Aliases = []string{"mcp server status", "gitlab server status", "gitlab connectivity status"}
 		options.IndividualTool.Description = "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the current server and GitLab health diagnostics object. See also: gitlab_get_metadata, gitlab_user_current."
 	case "health_check":
-		options.Aliases = []string{"health check", "server health check", "connectivity check", "gitlab health check"}
+		options.Aliases = []string{"health check", "server health check", "connectivity check", "gitlab health check", "server diagnostics", "run diagnostics", "diagnostics", "server status check"}
 	}
 	return options
 }

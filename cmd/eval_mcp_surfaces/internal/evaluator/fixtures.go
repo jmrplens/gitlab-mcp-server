@@ -1455,6 +1455,9 @@ func taskLiveFixtureStateAvailable(task evalTask, state *liveFixtureState) bool 
 	case "MT-020", "MT-021", "MT-039", "MF-001":
 		return state.PipelineID > 0
 	case "MT-022", "MT-024", "MT-065", "MS-002":
+		if task.ID == "MS-002" {
+			return state.PipelineID > 0 && state.FailedJobID > 0
+		}
 		return state.FailedJobID > 0
 	case "MT-064":
 		return state.ManualJobID > 0

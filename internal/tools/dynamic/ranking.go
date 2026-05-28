@@ -17,6 +17,13 @@ const (
 	searchFieldSchemaEnum     = "schema_enum"
 	searchFieldSchemaDesc     = "schema_description"
 	searchFieldSpecificity    = "action_specificity"
+	searchFieldCompareIntent  = "compare_refs_intent"
+	searchFieldReleaseIntent  = "release_list_intent"
+	searchFieldAnalyzeIntent  = "analyze_release_notes_intent"
+	searchFieldSecurityIntent = "mr_security_intent"
+	searchFieldDiscoverIntent = "discover_project_intent"
+	searchFieldProjectIntent  = "project_get_intent"
+	searchFieldSearchIntent   = "search_projects_intent"
 	searchFieldServiceAccount = "service_account_intent"
 	searchFieldScopeIntent    = "scope_intent"
 	searchFieldTool           = "tool"
@@ -59,6 +66,13 @@ const (
 	scoreVerbIntentPenalty      = -24
 	scoreRequiredParamBoost     = 10
 	scoreCompoundTagBoost       = 50
+	scoreCompareRefsIntentBoost = 90
+	scoreReleaseListIntentBoost = 80
+	scoreAnalyzeNotesIntentBoost = 70
+	scoreMRSecurityIntentBoost  = 95
+	scoreDiscoverIntentBoost    = 95
+	scoreProjectGetIntentBoost  = 220
+	scoreSearchProjectsBoost    = 90
 	scoreServiceAccountBoost    = 80
 	scoreServiceAccountScope    = 30
 	scoreScopeIntentBoost       = 80

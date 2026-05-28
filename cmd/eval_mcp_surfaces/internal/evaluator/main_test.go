@@ -1262,6 +1262,24 @@ func TestDynamicSingleTaskPrompt_UsesFindFirstForSearchProjects(t *testing.T) {
 	}
 }
 
+// TestDynamicSingleTaskPrompt_ExactProjectLookupPrefersProjectGet verifies exact project lookups
+// steer models toward project.get instead of project.list.
+func TestDynamicSingleTaskPrompt_ExactProjectLookupPrefersProjectGet(t *testing.T) {
+	task := evalTask{ID: "MT-002", Prompt: "Find project `my-org/tools/gitlab-mcp-server` and give me its ID and default branch.", Steps: []evalStep{
+		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.get", RequiredParams: []string{"project_id"}},
+	}}
+
+	prompt := taskPromptForSurface(task, config.ToolSurfaceDynamic)
+	requireContainsAll(t, "taskPromptForSurface()", prompt, []string{
+		"requested catalog operation is project.get, not project.list",
+		"first gitlab_find_action query should ask for project metadata for the exact namespace path",
+		"follow-up gitlab_execute_action call must use project.get with params.project_id set to that exact path",
+	})
+	if strings.Contains(prompt, `"action":"project.list"`) {
+		t.Fatalf("taskPromptForSurface() = %q, want no exact project.list action", prompt)
+	}
+}
+
 // TestDynamicTaskPrompt_MultiStepOmitsExactActionPlan verifies Dynamic prompts do not leak planned action IDs.
 func TestDynamicTaskPrompt_MultiStepOmitsExactActionPlan(t *testing.T) {
 	task := evalTask{ID: "MS-020", Prompt: "Exercise pipeline schedule CRUD in project `my-org/tools/gitlab-mcp-server`: create inactive schedule `eval-crud-schedule` on `main`, get it, update its cron, create variable `SCHEDULE_CRUD_TOKEN`, update that variable, delete the variable, then delete the schedule.", Steps: []evalStep{

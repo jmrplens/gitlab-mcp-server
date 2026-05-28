@@ -986,11 +986,13 @@ var searchSynonymsMap = map[string][]string{
 	"closed":        {"close", "list", "filter"},
 	"comment":       {"note", "discussion", "reply"},
 	"container":     {"registry", "package", "image"},
+	"compare":       {"diff", "repository", "refs", "ref"},
 	"current":       {"current_user", "self", "me", "author", "author_username", "assignee", "assignee_username", "settings"},
 	"deploy":        {"deployment", "environment", "key"},
 	"deployment":    {"deploy", "environment"},
 	"deployments":   {"deployment", "deploy", "environment"},
 	"details":       {"get"},
+	"diff":          {"compare", "repository", "refs", "ref"},
 	"discussion":    {"comment", "thread", "note"},
 	"draft":         {"wip", "work_in_progress", "proposal"},
 	"env":           {"environment"},
@@ -1014,6 +1016,7 @@ var searchSynonymsMap = map[string][]string{
 	"open":          {"active", "unresolved", "status_open", "list"},
 	"owned":         {"my", "personal", "mine", "owner", "list"},
 	"pending":       {"list", "filter", "todo"},
+	"path":          {"project", "repository", "discover", "resolve", "url"},
 	"package":       {"registry", "generic_package", "container", "artifact"},
 	"pr":            {"merge", "request", "merge_request", "pull_request", "mr"},
 	"pull_request":  {"merge", "request", "merge_request", "mr", "pr"},
@@ -1022,9 +1025,12 @@ var searchSynonymsMap = map[string][]string{
 	"release":       {"tag", "asset", "link", "notes"},
 	"releases":      {"release", "list"},
 	"remote":        {"url", "git", "origin", "repository", "discover", "resolve"},
+	"url":           {"remote", "origin", "git", "discover", "resolve", "project", "path"},
 	"refs":          {"ref", "compare", "repository"},
+	"ref":           {"refs", "compare"},
 	"review":        {"approval", "feedback", "assessment"},
 	"repo":          {"repository", "file", "tree", "branch", "tag"},
+	"repository":    {"repo", "file", "tree", "branch", "tag"},
 	"runner":        {"job", "ci", "pipeline"},
 	"secret":        {"variable", "ci_variable", "token", "password"},
 	"credential":    {"credentials", "token"},
@@ -1036,6 +1042,7 @@ var searchSynonymsMap = map[string][]string{
 	"user":          {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
 	"users":         {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
 	"tokens":        {"token"},
+	"tags":          {"tag", "refs"},
 	"verify":        {"get", "exists"},
 	"webhook":       {"hook"},
 	"webhooks":      {"hook"},
@@ -1753,7 +1760,7 @@ func shouldRunSegmentedSearch(terms []searchTerm, limit int) bool {
 	if len(terms) > maxSegmentTerms {
 		return true
 	}
-	return limit <= 10 && len(terms) >= 5
+	return len(terms) >= 5
 }
 
 func computeConfidence(matches []scoredActionEntry) []scoredActionEntry {
@@ -2325,6 +2332,13 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	score += scoreCompoundTagSignalValue(entry, terms)
 	score += scoreServiceAccountIntentValue(entry, terms)
 	score += scoreScopeIntentValue(entry, terms)
+	score += scoreCompareRefsIntentValue(entry, terms)
+	score += scoreReleaseListIntentValue(entry, terms)
+	score += scoreAnalyzeReleaseNotesIntentValue(entry, terms)
+	score += scoreMRSecurityIntentValue(entry, terms)
+	score += scoreDiscoverProjectIntentValue(entry, terms)
+	score += scoreProjectGetIntentValue(entry, terms)
+	score += scoreSearchProjectsIntentValue(entry, terms)
 	score += scoreActionSpecificityValue(entry, terms)
 	if score <= 0 {
 		return 0
@@ -2382,6 +2396,34 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 		reasons = append(reasons, reason)
 	}
 	if adjustment, reason := scoreScopeIntent(entry, terms); adjustment != 0 {
+		score += adjustment
+		reasons = append(reasons, reason)
+	}
+	if adjustment, reason := scoreCompareRefsIntent(entry, terms); adjustment != 0 {
+		score += adjustment
+		reasons = append(reasons, reason)
+	}
+	if adjustment, reason := scoreReleaseListIntent(entry, terms); adjustment != 0 {
+		score += adjustment
+		reasons = append(reasons, reason)
+	}
+	if adjustment, reason := scoreAnalyzeReleaseNotesIntent(entry, terms); adjustment != 0 {
+		score += adjustment
+		reasons = append(reasons, reason)
+	}
+	if adjustment, reason := scoreMRSecurityIntent(entry, terms); adjustment != 0 {
+		score += adjustment
+		reasons = append(reasons, reason)
+	}
+	if adjustment, reason := scoreDiscoverProjectIntent(entry, terms); adjustment != 0 {
+		score += adjustment
+		reasons = append(reasons, reason)
+	}
+	if adjustment, reason := scoreProjectGetIntent(entry, terms); adjustment != 0 {
+		score += adjustment
+		reasons = append(reasons, reason)
+	}
+	if adjustment, reason := scoreSearchProjectsIntent(entry, terms); adjustment != 0 {
 		score += adjustment
 		reasons = append(reasons, reason)
 	}
@@ -2456,6 +2498,8 @@ func scoreVerbIntentFor(entry actionEntry, intent verbIntent, terms []searchTerm
 	case verbIntentRead:
 		if entry.Destructive {
 			adjustment = scoreVerbIntentPenalty
+		} else if isWriteAction(document.Action) {
+			adjustment = scoreVerbIntentPenalty / 2
 		} else if isReadAction(document.Action) {
 			adjustment = scoreVerbIntentBoost
 		}
@@ -2542,6 +2586,7 @@ func scoreCompoundTagSignals(entry actionEntry, terms []searchTerm) (int, []Matc
 	document := documentForEntry(entry)
 	termSet := searchTermAlternativeSet(terms)
 	reasons := make([]MatchReason, 0)
+	total := 0
 	for _, tag := range document.Tags {
 		words := splitSearchFieldWords(tag)
 		if len(words) < 2 {
@@ -2557,14 +2602,19 @@ func scoreCompoundTagSignals(entry actionEntry, terms []searchTerm) (int, []Matc
 		if !matched {
 			continue
 		}
-		reasons = append(reasons, MatchReason{Field: searchFieldTag, QueryTerm: strings.Join(words, " "), MatchedValue: tag, Score: scoreCompoundTagBoost})
+		boost := scoreCompoundTagBoost
+		if document.Domain == "repository" && document.Action == "compare" && (containsWord(words, "ref") || containsWord(words, "refs")) && containsWord(words, "compare") {
+			boost += scoreRequiredParamBoost
+		}
+		reasons = append(reasons, MatchReason{Field: searchFieldTag, QueryTerm: strings.Join(words, " "), MatchedValue: tag, Score: boost})
+		total += boost
 	}
-	return len(reasons) * scoreCompoundTagBoost, reasons
+	return total, reasons
 }
 
 func scoreCompoundTagSignalValue(entry actionEntry, terms []searchTerm) int {
 	document := documentForEntry(entry)
-	matches := 0
+	total := 0
 	for _, tag := range document.Tags {
 		words := splitSearchFieldWords(tag)
 		if len(words) < 2 {
@@ -2578,10 +2628,23 @@ func scoreCompoundTagSignalValue(entry actionEntry, terms []searchTerm) int {
 			}
 		}
 		if matched {
-			matches++
+			boost := scoreCompoundTagBoost
+			if document.Domain == "repository" && document.Action == "compare" && (containsWord(words, "ref") || containsWord(words, "refs")) && containsWord(words, "compare") {
+				boost += scoreRequiredParamBoost
+			}
+			total += boost
 		}
 	}
-	return matches * scoreCompoundTagBoost
+	return total
+}
+
+func containsWord(words []string, target string) bool {
+	for _, word := range words {
+		if word == target {
+			return true
+		}
+	}
+	return false
 }
 
 func scoreServiceAccountIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
@@ -2659,6 +2722,184 @@ func scoreScopeIntentValue(entry actionEntry, terms []searchTerm) int {
 		return scoreScopeIntentBoost
 	}
 	return 0
+}
+
+func scoreCompareRefsIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreCompareRefsIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldCompareIntent, QueryTerm: "compare refs", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreCompareRefsIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "repository" || document.Action != "compare" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "compare") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "ref") && !searchTermsContainWord(terms, "refs") {
+		return 0
+	}
+	return scoreCompareRefsIntentBoost
+}
+
+func scoreReleaseListIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreReleaseListIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldReleaseIntent, QueryTerm: "list releases", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreReleaseListIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "release" || document.Action != "list" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "list") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "release") && !searchTermsContainWord(terms, "releases") {
+		return 0
+	}
+	return scoreReleaseListIntentBoost
+}
+
+func scoreAnalyzeReleaseNotesIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreAnalyzeReleaseNotesIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldAnalyzeIntent, QueryTerm: "release notes", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreAnalyzeReleaseNotesIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "analyze" || document.Action != "release_notes" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "release") && !searchTermsContainWord(terms, "releases") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "notes") {
+		return 0
+	}
+	return scoreAnalyzeNotesIntentBoost
+}
+
+func scoreMRSecurityIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreMRSecurityIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldSecurityIntent, QueryTerm: "mr security review", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreMRSecurityIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "analyze" || document.Action != "mr_security" {
+		return 0
+	}
+	if !(searchTermsContainWord(terms, "security") || searchTermsContainWord(terms, "secure")) {
+		return 0
+	}
+	if !(searchTermsContainWord(terms, "review") || searchTermsContainWord(terms, "analyzer") || searchTermsContainWord(terms, "analyze")) {
+		return 0
+	}
+	if !(searchTermsContainWord(terms, "merge") || searchTermsContainWord(terms, "mr") || searchTermsContainWord(terms, "merge_request")) {
+		return 0
+	}
+	return scoreMRSecurityIntentBoost
+}
+
+func scoreDiscoverProjectIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreDiscoverProjectIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldDiscoverIntent, QueryTerm: "discover project from remote", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreDiscoverProjectIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "discover_project" || document.Action != "resolve" {
+		return 0
+	}
+	if !(searchTermsContainWord(terms, "url") || searchTermsContainWord(terms, "remote") || searchTermsContainWord(terms, "origin") || searchTermsContainWord(terms, "git")) {
+		return 0
+	}
+	if !(searchTermsContainWord(terms, "project") || searchTermsContainWord(terms, "path") || searchTermsContainWord(terms, "resolve") || searchTermsContainWord(terms, "discover") || searchTermsContainWord(terms, "find")) {
+		return 0
+	}
+	return scoreDiscoverIntentBoost
+}
+
+func scoreProjectGetIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreProjectGetIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldProjectIntent, QueryTerm: "project get by path", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreProjectGetIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "project" || document.Action != "get" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "project") {
+		return 0
+	}
+	if !(searchTermsContainWord(terms, "get") || searchTermsContainWord(terms, "show") || searchTermsContainWord(terms, "find") || searchTermsContainWord(terms, "path") || searchTermsContainWord(terms, "id")) {
+		return 0
+	}
+	return scoreProjectGetIntentBoost
+}
+
+func scoreSearchProjectsIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreSearchProjectsIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldSearchIntent, QueryTerm: "search projects", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreSearchProjectsIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "search" || document.Action != "projects" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "search") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "project") && !searchTermsContainWord(terms, "projects") {
+		return 0
+	}
+	if searchProjectsQueryHasConcreteNeedle(terms) {
+		return scoreSearchProjectsBoost + scoreProjectGetIntentBoost + scoreCompoundTagBoost
+	}
+	return scoreSearchProjectsBoost
+}
+
+func searchProjectsQueryHasConcreteNeedle(terms []searchTerm) bool {
+	for _, term := range terms {
+		switch term.Raw {
+		case "project", "projects", "search", "list", "find", "all", "show", "get", "read":
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func matchingQueryScope(terms []searchTerm) string {
