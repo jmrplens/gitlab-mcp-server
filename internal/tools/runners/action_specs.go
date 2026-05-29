@@ -91,8 +91,14 @@ func runnerUpdateSpec(name string, route toolutil.ActionRoute, individualTool st
 }
 
 func runnerOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "Use to execute runners domain action."
+	if actionName == "remove" {
+		usage = "Remove (unregister) a runner by its numeric runner_id. Use runner.list or runner.list_project to obtain the runner_id first."
+	}
 	return toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute runners domain action.", Tags: []string{"runner"},
+		Aliases:           []string{individualTool},
+		Usage:             usage,
+		Tags:              []string{"runner"},
 		ParameterGuidance: runnerParameterGuidance(actionName),
 		OpenWorld:         true,
 		OwnerPackage:      "runners",

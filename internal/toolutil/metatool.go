@@ -1371,6 +1371,11 @@ func numericRoleAccessLevel(value any) (int, bool) {
 }
 
 func validGitLabRoleAccessLevelInt64(value int64) (int, bool) {
+	// Guard against overflow before narrowing: valid access levels are all small
+	// non-negative integers (0–60), so reject anything outside int range first.
+	if value < 0 || value > math.MaxInt32 {
+		return 0, false
+	}
 	switch value {
 	case 0, 10, 20, 30, 40, 50, 60:
 		return int(value), true

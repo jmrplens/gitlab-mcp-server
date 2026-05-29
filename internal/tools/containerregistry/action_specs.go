@@ -45,7 +45,7 @@ func registryOptions(individualTool string) toolutil.ActionSpecOptions {
 	usage := "Manage container registry repositories, tags, and protection rules for projects or groups."
 	switch individualTool {
 	case "gitlab_registry_list_project":
-		usage = "List container registry repositories for a project."
+		usage = "Lists container registry image repositories for a project."
 	case "gitlab_registry_list_group":
 		usage = "List container registry repositories across a group."
 	case "gitlab_registry_get_repository":

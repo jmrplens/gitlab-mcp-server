@@ -98,6 +98,8 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		options.Aliases = []string{"get job log", "job trace", "show job output"}
 		options.RelatedActions = []string{"job.get", "job.list_project", "job.retry", "job.cancel"}
 		options.IndividualTool.Description = "Get CI job trace output. Returns: text log with truncation metadata when logs exceed limits. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_cancel."
+	case "gitlab_job_download_single_artifact":
+		options.Usage = "Download one artifact file path from a job by job_id and artifact_path. Use when the task requests one artifact file by explicit path; prefer job.artifacts for full archives."
 	case "gitlab_job_retry":
 		options.RelatedActions = []string{"job.get", "job.trace", "job.cancel"}
 	case "gitlab_job_cancel":

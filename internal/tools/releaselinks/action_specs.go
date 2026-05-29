@@ -41,6 +41,9 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		OwnerPackage:   "releaselinks",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if actionName == "link_get" {
+		options.Usage = "Get one release asset link by link_id. Use when the task references a specific release asset link."
+	}
 	if actionName == "link_create" || actionName == "link_update" {
 		if actionName == "link_create" {
 			options.Usage = "Create a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url."

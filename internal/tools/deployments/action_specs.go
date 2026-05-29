@@ -61,7 +61,7 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 
 	switch actionName {
 	case "deployment_list":
-		options.Usage = "List deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions."
+		options.Usage = "Lists deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions."
 		options.Aliases = []string{"list deployments", "show deployment history", "find deployments"}
 		options.RelatedActions = []string{"deployment.get", "environment.list", "pipeline.get"}
 	case "deployment_get":

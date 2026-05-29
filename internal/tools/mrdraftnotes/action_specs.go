@@ -60,10 +60,16 @@ func mrDraftNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 }
 
 func mrDraftNoteOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute mrdraftnotes domain action.", Tags: []string{"merge_request", "review", "draft_note"},
+	options := toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
+		Usage:          "Use to execute mrdraftnotes domain action.",
+		Tags:           []string{"merge_request", "review", "draft_note"},
 		OpenWorld:      true,
 		OwnerPackage:   "mrdraftnotes",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if individualTool == "gitlab_mr_draft_note_publish_all" {
+		options.Usage = "Publishes all pending draft MR review notes for a merge request in one call."
+	}
+	return options
 }

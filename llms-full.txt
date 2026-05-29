@@ -60,14 +60,14 @@ Action guidance:
 - deploy_key_list_user_project: Use for SSH deploy keys that grant repository access to projects.
 - deploy_key_update: Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource.
 - deploy_token_create_group: Manage group deploy tokens (list/get/create/delete).
-- deploy_token_create_project: Manage project deploy tokens (list/get/create/delete).
+- deploy_token_create_project: Manage project deploy tokens/credentials (list/get/create/delete).
 - deploy_token_delete_group: Manage group deploy tokens (list/get/create/delete).
 - deploy_token_delete_project: Use to delete a deploy token owned by a project; pass the deploy token ID, not another token type.
 - deploy_token_get_group: Manage group deploy tokens (list/get/create/delete).
-- deploy_token_get_project: Manage project deploy tokens (list/get/create/delete).
+- deploy_token_get_project: Manage project deploy tokens/credentials (list/get/create/delete).
 - deploy_token_list_all: Manage deploy tokens across instance, project, and group scopes.
 - deploy_token_list_group: Manage group deploy tokens (list/get/create/delete).
-- deploy_token_list_project: Manage project deploy tokens (list/get/create/delete).
+- deploy_token_list_project: Manage project deploy tokens/credentials (list/get/create/delete).
 - invite_group: Use to execute invites domain action.
 - invite_list_group: Use to execute invites domain action.
 - invite_list_project: Use to execute invites domain action.
@@ -2155,7 +2155,7 @@ Action guidance:
 - deployment_create: Create a deployment for an environment/ref/sha. Use when orchestrating manual or API-driven deployment entries.
 - deployment_delete: Use to execute deployments domain action.
 - deployment_get: Get one deployment by deployment_id for a project. Use when investigating a specific deployment state, environment, or actor metadata.
-- deployment_list: List deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions.
+- deployment_list: Lists deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions.
 - deployment_merge_requests: Use to execute deployment_merge_requests action.
 - deployment_update: Use to execute deployments domain action.
 - freeze_create: Create a deploy freeze period for a project.
@@ -4018,7 +4018,7 @@ Action guidance:
 - mrs_related: Use to execute issues domain action.
 - note_create: Use to execute issuenotes domain action.
 - note_delete: Use to execute issuenotes domain action.
-- note_get: Use to execute issuenotes domain action.
+- note_get: Get one issue note by params.note_id. Use when the task references a specific comment or note ID on an issue.
 - note_list: Use to execute issuenotes domain action.
 - note_update: Use to execute issuenotes domain action.
 - participants: Use to execute issues domain action.
@@ -4675,7 +4675,7 @@ Action guidance:
 - delete_artifacts: Use to execute jobs domain action.
 - delete_project_artifacts: Use to execute jobs domain action.
 - download_artifacts: Use to execute jobs domain action.
-- download_single_artifact: Use to execute jobs domain action.
+- download_single_artifact: Download one artifact file path from a job by job_id and artifact_path. Use when the task requests one artifact file by explicit path; prefer job.artifacts for full archives.
 - download_single_artifact_by_ref: Use to execute jobs domain action.
 - erase: Use to execute jobs domain action.
 - get: Get one CI job by project_id and job_id. Use this when the task already references a specific job and needs state, stage, runner, failure reason, or timing details.
@@ -5631,7 +5631,7 @@ Action guidance:
 - draft_note_get: Use to execute mrdraftnotes domain action.
 - draft_note_list: Use to execute mrdraftnotes domain action.
 - draft_note_publish: Use to execute mrdraftnotes domain action.
-- draft_note_publish_all: Use to execute mrdraftnotes domain action.
+- draft_note_publish_all: Publishes all pending draft MR review notes for a merge request in one call.
 - draft_note_update: Use to execute mrdraftnotes domain action.
 - note_create: Use to execute mrnotes domain action.
 - note_delete: Use to execute mrnotes domain action.
@@ -5897,7 +5897,7 @@ Action guidance:
 - registry_delete: Delete one container registry repository.
 - registry_get: Get details for one container registry repository.
 - registry_list_group: List container registry repositories across a group.
-- registry_list_project: List container registry repositories for a project.
+- registry_list_project: Lists container registry image repositories for a project.
 - registry_rule_create: Create a container registry protection rule for a project.
 - registry_rule_delete: Delete a container registry protection rule from a project.
 - registry_rule_list: List container registry protection rules for a project.
@@ -7890,7 +7890,7 @@ Action guidance:
 - link_create: Create a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url.
 - link_create_batch: Create multiple release asset links in one call. Use absolute URLs returned by package publish actions for package assets.
 - link_delete: Use to execute releaselinks domain action.
-- link_get: Use to execute releaselinks domain action.
+- link_get: Get one release asset link by link_id. Use when the task references a specific release asset link.
 - link_list: Use to execute releaselinks domain action.
 - link_update: Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url.
 - list: List releases for one project. Use this when the task asks for recent releases, release history, or release notes discovery.
@@ -8540,7 +8540,7 @@ Action guidance:
 - list_managers: Use to execute runners domain action.
 - list_project: Use to execute runners domain action.
 - register: Use to execute runners domain action.
-- remove: Use to execute runners domain action.
+- remove: Remove (unregister) a runner by its numeric runner_id. Use runner.list or runner.list_project to obtain the runner_id first.
 - reset_group_reg_token: Use to execute runners domain action.
 - reset_instance_reg_token: Use to execute runners domain action.
 - reset_project_reg_token: Use to execute runners domain action.

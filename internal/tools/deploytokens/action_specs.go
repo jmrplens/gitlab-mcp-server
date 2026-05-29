@@ -81,7 +81,7 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			ValueSource:    "Project ID or path owning the deploy token.",
 			ExampleBinding: `params.project_id:"group/project"`,
 		}
-		usage = "Manage project deploy tokens (list/get/create/delete)."
+		usage = "Manage project deploy tokens/credentials (list/get/create/delete)."
 		relatedActions = []string{"access.deploy_token_list_project", "project.get"}
 	case "deploy_token_list_group", "deploy_token_get_group", "deploy_token_create_group", "deploy_token_delete_group":
 		guidance["group_id"] = toolutil.ParameterGuidance{
