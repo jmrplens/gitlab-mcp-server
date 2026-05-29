@@ -763,6 +763,25 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	}
 }
 
+// TestFormatOutputMarkdown_WithPipelineWebURL verifies that pipeline_web_url renders a link.
+func TestFormatOutputMarkdown_WithPipelineWebURL(t *testing.T) {
+	md := FormatOutputMarkdown(Output{
+		ID:             5,
+		IID:            5,
+		Ref:            "main",
+		SHA:            "abc123",
+		Status:         "success",
+		PipelineWebURL: "https://gitlab.example.com/my-org/project/-/pipelines/123",
+	})
+
+	if !strings.Contains(md, "| Pipeline |") {
+		t.Errorf("markdown missing Pipeline row:\n%s", md)
+	}
+	if !strings.Contains(md, "https://gitlab.example.com/my-org/project/-/pipelines/123") {
+		t.Errorf("markdown missing pipeline URL:\n%s", md)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.

@@ -375,6 +375,25 @@ func TestUpdateInstanceServiceAccount_Forbidden(t *testing.T) {
 	}
 }
 
+// TestUpdateInstanceServiceAccount_NilResponse verifies UpdateInstanceServiceAccount
+// returns an error when the GitLab API returns a nil service account body.
+func TestUpdateInstanceServiceAccount_NilResponse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `null`)
+	}))
+
+	_, err := UpdateInstanceServiceAccount(context.Background(), client, UpdateServiceAccountInput{
+		ServiceAccountID: 5,
+		Name:             "test",
+	})
+	if err == nil {
+		t.Fatal("expected error for nil API response, got nil")
+	}
+	if !strings.Contains(err.Error(), "nil account") {
+		t.Errorf("expected error to mention nil account, got: %v", err)
+	}
+}
+
 // TestFormatServiceAccountMarkdownString_WithEmail verifies FormatServiceAccountMarkdownString
 // includes Email and UnconfirmedEmail fields when both are set.
 func TestFormatServiceAccountMarkdownString_WithEmail(t *testing.T) {

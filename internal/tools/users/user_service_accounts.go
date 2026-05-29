@@ -149,6 +149,9 @@ func UpdateInstanceServiceAccount(ctx context.Context, client *gitlabclient.Clie
 		return ServiceAccountOutput{}, toolutil.WrapErrWithStatusHint("update_instance_service_account", err, http.StatusForbidden,
 			"updating instance service accounts requires admin token; service accounts are GitLab Premium/Ultimate")
 	}
+	if account == nil {
+		return ServiceAccountOutput{}, errors.New("update_instance_service_account: GitLab API returned nil account")
+	}
 	return ServiceAccountOutput{
 		ID:               account.ID,
 		Username:         account.Username,
