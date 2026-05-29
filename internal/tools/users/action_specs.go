@@ -52,6 +52,7 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		specs = append(specs,
 			userEnterpriseCreateSpec("create_service_account", toolutil.RouteAction(client, CreateServiceAccount), "gitlab_create_service_account"),
 			userEnterpriseReadSpec("list_service_accounts", toolutil.RouteAction(client, ListServiceAccounts), "gitlab_list_service_accounts"),
+			userEnterpriseUpdateSpec("update_service_account", toolutil.RouteAction(client, UpdateInstanceServiceAccount), "gitlab_update_instance_service_account"),
 		)
 	}
 	return specs
@@ -103,6 +104,12 @@ func userEnterpriseCreateSpec(name string, route toolutil.ActionRoute, individua
 	options := userOptionsForAction(name, individualTool)
 	options.Edition = "premium"
 	return toolutil.NewCreateActionSpec(name, route, options)
+}
+
+func userEnterpriseUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := userOptionsForAction(name, individualTool)
+	options.Edition = "premium"
+	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {

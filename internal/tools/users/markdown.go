@@ -262,6 +262,7 @@ func init() {
 	toolutil.RegisterMarkdown(FormatUserMembershipsMarkdownString)
 	toolutil.RegisterMarkdown(FormatUserRunnerMarkdownString)
 	toolutil.RegisterMarkdown(FormatDeleteUserIdentityMarkdownString)
+	toolutil.RegisterMarkdown(FormatServiceAccountMarkdownString)
 	toolutil.RegisterMarkdown(FormatServiceAccountListMarkdownString)
 	toolutil.RegisterMarkdown(FormatCurrentUserPATMarkdownString)
 }

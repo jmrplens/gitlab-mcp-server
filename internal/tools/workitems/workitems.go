@@ -572,4 +572,73 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	return nil
 }
 
+// List Work Item Types.
+
+// WorkItemTypeOutput represents a work item type.
+type WorkItemTypeOutput struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
+}
+
+// WorkItemTypeListOutput holds a list of work item types.
+type WorkItemTypeListOutput struct {
+	toolutil.HintableOutput
+	Types      []WorkItemTypeOutput             `json:"types"`
+	Pagination toolutil.GraphQLPaginationOutput `json:"pagination"`
+}
+
+// ListWorkItemTypesInput defines parameters for listing work item types.
+type ListWorkItemTypesInput struct {
+	FullPath      string `json:"full_path"            jsonschema:"Project or group full path (namespace path),required"`
+	Name          string `json:"name,omitempty"       jsonschema:"Filter by work item type name"`
+	OnlyAvailable bool   `json:"only_available,omitempty" jsonschema:"Return only available work item types"`
+	First         int64  `json:"first,omitempty"      jsonschema:"Number of types to return from the beginning (cursor pagination)"`
+	After         string `json:"after,omitempty"      jsonschema:"Cursor for forward pagination"`
+}
+
+// ListWorkItemTypes lists work item types (system-defined and custom) for a namespace.
+func ListWorkItemTypes(ctx context.Context, client *gitlabclient.Client, input ListWorkItemTypesInput) (WorkItemTypeListOutput, error) {
+	if input.FullPath == "" {
+		return WorkItemTypeListOutput{}, toolutil.ErrRequiredString("list_work_item_types", "full_path")
+	}
+	opts := &gl.ListWorkItemTypesOptions{}
+	if input.Name != "" {
+		opts.Name = new(input.Name)
+	}
+	if input.OnlyAvailable {
+		opts.OnlyAvailable = new(true)
+	}
+	if input.First > 0 {
+		first := input.First
+		opts.First = &first
+	}
+	if input.After != "" {
+		opts.After = new(input.After)
+	}
+	types, resp, err := client.GL().WorkItems.ListWorkItemTypes(input.FullPath, opts, gl.WithContext(ctx))
+	if err != nil {
+		return WorkItemTypeListOutput{}, toolutil.WrapErrWithStatusHint("list_work_item_types", err, http.StatusNotFound,
+			"verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types")
+	}
+	out := make([]WorkItemTypeOutput, 0, len(types))
+	for _, t := range types {
+		out = append(out, WorkItemTypeOutput{
+			ID:      string(t.ID),
+			Name:    t.Name,
+			Enabled: t.Enabled,
+		})
+	}
+	result := WorkItemTypeListOutput{Types: out}
+	if resp != nil && resp.PageInfo != nil {
+		result.Pagination = toolutil.GraphQLPaginationOutput{
+			HasNextPage:     resp.PageInfo.HasNextPage,
+			HasPreviousPage: resp.PageInfo.HasPreviousPage,
+			EndCursor:       resp.PageInfo.EndCursor,
+			StartCursor:     resp.PageInfo.StartCursor,
+		}
+	}
+	return result, nil
+}
+
 // Markdown Formatters.
