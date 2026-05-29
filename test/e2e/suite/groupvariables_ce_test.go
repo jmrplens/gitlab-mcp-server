@@ -1,0 +1,117 @@
+//go:build e2e && !enterprise
+
+// groupvariables_ce_test.go tests the group CI variable MCP tools against a live GitLab instance.
+// Exercises create, list, get, update, and delete via the gitlab_ci_variable meta-tool.
+package suite
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupvariables"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
+)
+
+// TestMeta_GroupVariables exercises group CI variable CRUD via the gitlab_ci_variable meta-tool.
+func TestMeta_GroupVariables(t *testing.T) {
+	if !sess.enterprise {
+		t.Parallel()
+	}
+	ctx, cancel := e2eTimeoutContext(120*time.Second, 300*time.Second)
+	defer cancel()
+
+	// Create a dedicated group for this test.
+	groupPath := uniqueName("e2e-grpvar")
+	grp, grpErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name":       groupPath,
+			"path":       groupPath,
+			"visibility": "public",
+		},
+	})
+	requireNoError(t, grpErr, "create group for variables")
+	requireTruef(t, grp.ID > 0, "group ID should be positive")
+	groupID := grp.ID
+	t.Logf("Created group %d (%s) for variable tests", groupID, grp.FullPath)
+
+	t.Cleanup(func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanCancel()
+		_ = callToolVoidOn(cleanCtx, sess.individual, "gitlab_group_delete", groups.DeleteInput{
+			GroupID: toolutil.StringOrInt(strconv.FormatInt(groupID, 10)),
+		})
+	})
+
+	gid := strconv.FormatInt(groupID, 10)
+	varKey := fmt.Sprintf("E2E_GROUP_VAR_%d", time.Now().UnixNano())
+
+	t.Run("Meta/GroupVariable/Create", func(t *testing.T) {
+		out, err := callToolOn[groupvariables.Output](ctx, sess.meta, "gitlab_ci_variable", map[string]any{
+			"action": "group_create",
+			"params": map[string]any{
+				"group_id": gid,
+				"key":      varKey,
+				"value":    "group-test-value",
+			},
+		})
+		requireNoError(t, err, "group variable create")
+		requireTruef(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
+		t.Logf("Created group variable: %s", out.Key)
+	})
+
+	t.Run("Meta/GroupVariable/List", func(t *testing.T) {
+		out, err := callToolOn[groupvariables.ListOutput](ctx, sess.meta, "gitlab_ci_variable", map[string]any{
+			"action": "group_list",
+			"params": map[string]any{
+				"group_id": gid,
+			},
+		})
+		requireNoError(t, err, "group variable list")
+		requireTruef(t, len(out.Variables) >= 1, "expected at least 1 group variable")
+		t.Logf("Listed %d group variable(s)", len(out.Variables))
+	})
+
+	t.Run("Meta/GroupVariable/Get", func(t *testing.T) {
+		out, err := callToolOn[groupvariables.Output](ctx, sess.meta, "gitlab_ci_variable", map[string]any{
+			"action": "group_get",
+			"params": map[string]any{
+				"group_id": gid,
+				"key":      varKey,
+			},
+		})
+		requireNoError(t, err, "group variable get")
+		requireTruef(t, out.Key == varKey, "group variable key mismatch")
+		t.Logf("Got group variable: %s=%s", out.Key, out.Value)
+	})
+
+	t.Run("Meta/GroupVariable/Update", func(t *testing.T) {
+		out, err := callToolOn[groupvariables.Output](ctx, sess.meta, "gitlab_ci_variable", map[string]any{
+			"action": "group_update",
+			"params": map[string]any{
+				"group_id": gid,
+				"key":      varKey,
+				"value":    "updated-group-value",
+			},
+		})
+		requireNoError(t, err, "group variable update")
+		requireTruef(t, out.Key == varKey, "expected key %s, got %q", varKey, out.Key)
+		t.Logf("Updated group variable: %s", out.Key)
+	})
+
+	t.Run("Meta/GroupVariable/Delete", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_ci_variable", map[string]any{
+			"action": "group_delete",
+			"params": map[string]any{
+				"group_id": gid,
+				"key":      varKey,
+			},
+		})
+		requireNoError(t, err, "group variable delete")
+		t.Logf("Deleted group variable: %s", varKey)
+	})
+}

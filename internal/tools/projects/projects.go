@@ -2252,6 +2252,9 @@ func AddPushRule(ctx context.Context, client *gitlabclient.Client, input AddPush
 	if input.ProjectID == "" {
 		return PushRuleOutput{}, errors.New("projectAddPushRule: project_id is required. Use gitlab_project_list to find the ID, then pass it as project_id")
 	}
+	if !hasAddPushRuleSetting(input) {
+		return PushRuleOutput{}, errors.New("projectAddPushRule: at least one push rule setting is required. Include params.commit_message_regex for commit message regex tasks, or another setting such as reject_unsigned_commits, prevent_secrets, branch_name_regex, deny_delete_tag, member_check, or max_file_size")
+	}
 	opts := &gl.AddProjectPushRuleOptions{}
 	if input.AuthorEmailRegex != "" {
 		opts.AuthorEmailRegex = new(input.AuthorEmailRegex)
@@ -2302,6 +2305,22 @@ func AddPushRule(ctx context.Context, client *gitlabclient.Client, input AddPush
 			"adding push rules requires Maintainer/Owner role and Premium/Ultimate licensing")
 	}
 	return pushRuleOutputFromGL(rule), nil
+}
+
+func hasAddPushRuleSetting(input AddPushRuleInput) bool {
+	return input.AuthorEmailRegex != "" ||
+		input.BranchNameRegex != "" ||
+		input.CommitCommitterCheck != nil ||
+		input.CommitCommitterNameCheck != nil ||
+		input.CommitMessageNegativeRegex != "" ||
+		input.CommitMessageRegex != "" ||
+		input.DenyDeleteTag != nil ||
+		input.FileNameRegex != "" ||
+		input.MaxFileSize != nil ||
+		input.MemberCheck != nil ||
+		input.PreventSecrets != nil ||
+		input.RejectUnsignedCommits != nil ||
+		input.RejectNonDCOCommits != nil
 }
 
 // EditPushRuleInput defines parameters for editing push rules on a project.

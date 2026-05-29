@@ -87,7 +87,7 @@ gitlab-mcp-server/
 - Register runtime surfaces from the canonical action catalog only; ordinary GitLab actions must not add package-local `RegisterTools` functions or package-level meta registration paths
 - Resources for read-only data (project info, user info, etc.)
 - Graceful shutdown via signal handling
-- Dynamic mode (`TOOL_SURFACE=dynamic`) exposes `gitlab_find_action` and `gitlab_execute_tool` over the canonical action catalog shared with meta-tools. It is the default tool surface; set `TOOL_SURFACE=meta` for consolidated domain meta-tools.
+- Dynamic mode (`TOOL_SURFACE=dynamic`) exposes `gitlab_find_action` and `gitlab_execute_action` over the canonical action catalog shared with meta-tools. It is the default tool surface; set `TOOL_SURFACE=meta` for consolidated domain meta-tools.
 - When adding GitLab actions, add or update domain-local `ActionSpecs` and the generated/audited catalog manifest. Meta-tools, dynamic find/execute, `gitlab://tools` resources, LLM files, and individual tool projection consume that catalog. Do not add package-local `RegisterTools` functions for ordinary GitLab API actions.
 - For the detailed developer architecture of individual tools, meta-tools, dynamic mode, and the canonical action core, see `docs/development/tool-surfaces-and-action-core.md`.
 
@@ -161,6 +161,28 @@ go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 - Covers: user, project CRUD, commits, branches, tags, releases, issues, labels, milestones, members, upload, MR lifecycle, notes, discussions, search, groups, pipelines, packages, wikis, CI variables, environments, issue links, deploy keys, snippets, pipeline schedules, badges, access tokens, award emoji, sampling, elicitation
 - Docker mode also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` for deterministic webhook, custom emoji, and push mirror tests without public Internet dependencies
 - Not covered (needs Docker mode): pipeline CRUD (CI runner), job tools
+
+### Surface Evaluator (Docker)
+
+Use these Makefile targets for model-backed surface evaluation with the Docker GitLab fixture:
+
+```bash
+# CE case set
+make eval-surfaces-docker SURFACE=dynamic
+make eval-surfaces-docker SURFACE=meta
+
+# Enterprise case set on GitLab EE runtime
+make eval-surfaces-docker-enterprise SURFACE=dynamic
+make eval-surfaces-docker-enterprise SURFACE=meta
+
+# CE + Enterprise case set together on GitLab EE runtime
+make eval-surfaces-docker-enterprise-all SURFACE=dynamic
+make eval-surfaces-docker-enterprise-all SURFACE=meta
+```
+
+- `SURFACE` must be `dynamic` or `meta`.
+- Add `PRESET=...` to run a single Docker preset.
+- `eval-surfaces-docker-enterprise-all` sets `EVAL_SURFACE_CASE_SET=all` and is the standard full validation command for CE+Enterprise regression checks.
 
 ### Build & Cross-Compilation
 

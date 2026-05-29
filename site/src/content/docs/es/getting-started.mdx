@@ -470,7 +470,7 @@ Si obtienes errores de conexión, comprueba:
 
 ## Entendiendo las meta-herramientas
 
-Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab_find_action` y `gitlab_execute_tool`. Establece `TOOL_SURFACE=meta` para usar **33 meta-herramientas por dominio** (49 en Enterprise/Premium autoalojado, 50 en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio.
+Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab_find_action` y `gitlab_execute_action`. Establece `TOOL_SURFACE=meta` para usar **33 meta-herramientas por dominio** (49 en Enterprise/Premium autoalojado, 50 en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio.
 
 Por ejemplo, en lugar de herramientas separadas `gitlab_list_issues`, `gitlab_create_issue`, `gitlab_close_issue`, hay una única herramienta `gitlab_issue` con un parámetro `action`:
 
@@ -490,7 +490,7 @@ Esto es transparente para ti — tu cliente de IA maneja el enrutamiento automá
 :::tip
 Las meta-herramientas reducen el overhead de tokens en un **96%** mientras preservan la funcionalidad completa. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
 
-Para el catálogo visible estable más pequeño, establece `TOOL_SURFACE=dynamic`. El servidor expone solo `gitlab_find_action` y `gitlab_execute_tool`, respaldadas por el mismo catálogo canónico de acciones de GitLab.
+Para el catálogo visible estable más pequeño, establece `TOOL_SURFACE=dynamic`. El servidor expone solo `gitlab_find_action` y `gitlab_execute_action`, respaldadas por el mismo catálogo canónico de acciones de GitLab.
 
 Combina el modo dinámico con `CAPABILITY_SURFACE=minimal` para mantener solo workspace roots y `gitlab://tools`, y omitir recursos opcionales, guías y prompts cuando necesites el contexto MCP inicial más pequeño. Dynamic conserva schemas inline mediante `gitlab_find_action`.
 :::

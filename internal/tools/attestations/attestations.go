@@ -94,6 +94,11 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 	}
 	atts, _, err := client.GL().Attestations.ListAttestations(in.ProjectID.String(), in.SubjectDigest, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			if _, _, projectErr := client.GL().Projects.GetProject(in.ProjectID.String(), nil, gl.WithContext(ctx)); projectErr == nil {
+				return ListOutput{Attestations: []Output{}}, nil
+			}
+		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list attestations", err, http.StatusNotFound, "verify project_id with gitlab_project_get \u2014 attestations require Ultimate license")
 	}
 	out := ListOutput{Attestations: make([]Output, 0, len(atts))}
@@ -116,7 +121,8 @@ func Download(ctx context.Context, client *gitlabclient.Client, in DownloadInput
 	}
 	data, _, err := client.GL().Attestations.DownloadAttestation(in.ProjectID.String(), in.AttestationIID, gl.WithContext(ctx))
 	if err != nil {
-		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("download attestation", err, http.StatusNotFound, "verify attestation_iid and project_id are valid — use gitlab_list_project_attestations to find valid IIDs")
+		return DownloadOutput{}, toolutil.WrapErrWithStatusHint("download attestation", err, http.StatusNotFound,
+			"verify attestation_iid and project_id are valid; use gitlab_attestation action 'list' or gitlab_list_attestations to find valid IIDs")
 	}
 	return DownloadOutput{
 		AttestationIID: in.AttestationIID,

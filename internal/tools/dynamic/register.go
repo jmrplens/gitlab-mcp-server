@@ -23,11 +23,16 @@ var searchStopWordsMap = map[string]struct{}{
 }
 
 const (
-	findToolName    = "gitlab_find_action"
-	executeToolName = "gitlab_execute_tool"
+	aliasProtectedEnvironment  = "protected environment"
+	aliasEnvironmentProtection = "environment protection"
+	aliasMergeRequest          = "merge request"
 
-	findToolDescription    = "Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples."
-	executeToolDescription = "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear."
+	findToolName          = "gitlab_find_action"
+	executeActionToolName = "gitlab_execute_action"
+
+	findToolDescription          = "Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples."
+	executeActionToolDescription = "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear."
+	dynamicExecuteEnvelopeHint   = "Execute matches with top-level `action` and one `params` object; every Required Params key below belongs inside `params`, not beside it. Use top-level `confirm` only for destructive actions."
 
 	defaultLimit                 = 20
 	maxLimit                     = 50
@@ -68,13 +73,13 @@ type SearchInput struct {
 
 // SearchResult is one matching GitLab catalog action.
 type SearchResult struct {
-	ID             string              `json:"id" jsonschema:"Canonical action ID to pass to gitlab_execute_tool."`
+	ID             string              `json:"id" jsonschema:"Canonical action ID to pass to gitlab_execute_action."`
 	Tool           string              `json:"tool" jsonschema:"Backing meta-tool name."`
 	Domain         string              `json:"domain" jsonschema:"Canonical action domain."`
 	Action         string              `json:"action" jsonschema:"Action name inside the catalog group."`
 	SchemaURI      string              `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool                `json:"destructive" jsonschema:"Whether this action is marked destructive and requires explicit confirmation."`
-	RequiredParams []string            `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the action input schema."`
+	RequiredParams []string            `json:"required_params,omitempty" jsonschema:"Required action-specific parameter names to place inside gitlab_execute_action params."`
 	Usage          string              `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	WhyThisAction  string              `json:"why_this_action,omitempty" jsonschema:"Compact reason included only for close or ambiguous alternatives."`
 	RelatedActions []string            `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
@@ -99,10 +104,10 @@ type DescribeInput struct {
 	Actions []string `json:"actions,omitempty" jsonschema:"Canonical action IDs to describe in one call."`
 }
 
-// ActionExample shows how to call gitlab_execute_tool for an action.
+// ActionExample shows how to call gitlab_execute_action for an action.
 type ActionExample struct {
 	Tool      string         `json:"tool" jsonschema:"Tool to call for execution."`
-	Arguments map[string]any `json:"arguments" jsonschema:"Example arguments for gitlab_execute_tool."`
+	Arguments map[string]any `json:"arguments" jsonschema:"Example arguments for gitlab_execute_action."`
 }
 
 // ActionDescription describes one GitLab catalog action.
@@ -113,13 +118,13 @@ type ActionDescription struct {
 	Action         string                                `json:"action" jsonschema:"Action name inside the catalog group."`
 	SchemaURI      string                                `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool                                  `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
-	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
+	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required action-specific parameter names to place inside gitlab_execute_action params."`
 	Usage          string                                `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	RelatedActions []string                              `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
 	ParamGuidance  map[string]toolutil.ParameterGuidance `json:"parameter_guidance,omitempty" jsonschema:"Parameter binding guidance for commonly confused params."`
 	InputSchema    map[string]any                        `json:"input_schema" jsonschema:"Exact JSON Schema for action-specific params."`
 	OutputSchema   map[string]any                        `json:"output_schema,omitempty" jsonschema:"Best-effort JSON Schema for the action result."`
-	Example        ActionExample                         `json:"example" jsonschema:"Example gitlab_execute_tool call."`
+	Example        ActionExample                         `json:"example" jsonschema:"Example gitlab_execute_action call."`
 }
 
 // DescribeOutput is the structured output for catalog action descriptions.
@@ -137,13 +142,13 @@ type FindInput struct {
 
 // FindResult is a matching catalog action with schema details and an execute example.
 type FindResult struct {
-	ID             string                                `json:"id" jsonschema:"Canonical action ID to pass to gitlab_execute_tool."`
+	ID             string                                `json:"id" jsonschema:"Canonical action ID to pass to gitlab_execute_action."`
 	Tool           string                                `json:"tool" jsonschema:"Backing meta-tool name."`
 	Domain         string                                `json:"domain" jsonschema:"Canonical action domain."`
 	Action         string                                `json:"action" jsonschema:"Action name inside the catalog group."`
 	SchemaURI      string                                `json:"schema_uri" jsonschema:"MCP resource URI for the action parameter schema."`
 	Destructive    bool                                  `json:"destructive" jsonschema:"Whether this action requires explicit confirmation."`
-	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required parameter names captured from the input schema."`
+	RequiredParams []string                              `json:"required_params,omitempty" jsonschema:"Required action-specific parameter names to place inside gitlab_execute_action params."`
 	Usage          string                                `json:"usage,omitempty" jsonschema:"Short disambiguation note for commonly confused actions."`
 	RelatedActions []string                              `json:"related_actions,omitempty" jsonschema:"Curated nearby action IDs for workflows where ordering matters."`
 	ParamGuidance  map[string]toolutil.ParameterGuidance `json:"parameter_guidance,omitempty" jsonschema:"Parameter binding guidance for commonly confused params."`
@@ -153,7 +158,7 @@ type FindResult struct {
 	AmbiguousWith  []string                              `json:"ambiguous_with,omitempty" jsonschema:"Other canonical action IDs that share the exact ambiguous alias used in the query."`
 	InputSchema    map[string]any                        `json:"input_schema" jsonschema:"Exact JSON Schema for action-specific params."`
 	OutputSchema   map[string]any                        `json:"output_schema,omitempty" jsonschema:"Best-effort JSON Schema for the action result."`
-	Example        ActionExample                         `json:"example" jsonschema:"Example gitlab_execute_tool call."`
+	Example        ActionExample                         `json:"example" jsonschema:"Example gitlab_execute_action call."`
 }
 
 // FindOutput is the structured output for gitlab_find_action.
@@ -163,11 +168,11 @@ type FindOutput struct {
 	Results []FindResult `json:"results" jsonschema:"Matching GitLab catalog actions with schemas and execute examples."`
 }
 
-// ExecuteInput is the input for gitlab_execute_tool.
+// ExecuteInput is the input for gitlab_execute_action.
 type ExecuteInput struct {
 	Action  string         `json:"action" jsonschema:"Canonical action ID returned by gitlab_find_action, or a supported compatibility alias, such as project.list, issue.update, or issue.close."`
 	Params  map[string]any `json:"params" jsonschema:"Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters."`
-	Confirm bool           `json:"confirm,omitempty" jsonschema:"Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_tool."`
+	Confirm bool           `json:"confirm,omitempty" jsonschema:"Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_action."`
 }
 
 type scoredActionEntry struct {
@@ -213,7 +218,7 @@ type Registry struct {
 func RegisterCatalogFindExecuteTools(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	registry := NewRegistryFromCatalog(catalog)
 	addFindTool(server, registry)
-	addExecuteTool(server, registry)
+	addExecuteActionTool(server, registry)
 }
 
 func addFindTool(server *mcp.Server, registry *Registry) {
@@ -227,16 +232,16 @@ func addFindTool(server *mcp.Server, registry *Registry) {
 	}, registry.Find)
 }
 
-func addExecuteTool(server *mcp.Server, registry *Registry) {
+func addExecuteActionTool(server *mcp.Server, registry *Registry) {
 	destructiveHint := true
 	openWorldHint := true
 	mcp.AddTool(server, &mcp.Tool{
-		Name:         executeToolName,
-		Title:        "GitLab Execute Tool",
-		Description:  executeToolDescription,
+		Name:         executeActionToolName,
+		Title:        "GitLab Execute Action",
+		Description:  executeActionToolDescription,
 		OutputSchema: toolutil.ActionDispatchOutputSchema(),
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "GitLab Execute Tool",
+			Title:           "GitLab Execute Action",
 			DestructiveHint: &destructiveHint,
 			OpenWorldHint:   &openWorldHint,
 		},
@@ -439,12 +444,12 @@ func (r *Registry) Find(_ context.Context, _ *mcp.CallToolRequest, input FindInp
 func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input ExecuteInput) (*mcp.CallToolResult, any, error) {
 	id := strings.ToLower(strings.TrimSpace(input.Action))
 	if id == "" {
-		return toolutil.ErrorResult("gitlab_execute_tool: action is required. Use the registered discovery tool for this surface to find a canonical action ID."), nil, nil
+		return toolutil.ErrorResult("gitlab_execute_action: action is required. Use the registered discovery tool for this surface to find a canonical action ID."), nil, nil
 	}
 	requestedActionID := id
 	entry, ok := r.resolveAction(id)
 	if !ok {
-		return toolutil.ErrorResult(r.unknownActionMessage("gitlab_execute_tool", input.Action)), nil, nil
+		return toolutil.ErrorResult(r.unknownActionMessage("gitlab_execute_action", input.Action)), nil, nil
 	}
 
 	params := maps.Clone(input.Params)
@@ -459,7 +464,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	if stateEvent, lifecycleAlias := issueLifecycleAliasStateEvent(requestedActionID); lifecycleAlias && entry.ID == "issue.update" {
 		if existing, hasStateEvent := params["state_event"]; hasStateEvent {
 			if existingStateEvent, converted := actioncompat.IssueStateEventValue(existing); converted && existingStateEvent != stateEvent {
-				return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_tool: action %q implies state_event=%q, but params.state_event was %q. Use the canonical issue.update action for explicit state_event control.", requestedActionID, stateEvent, existingStateEvent)), nil, nil
+				return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_action: action %q implies state_event=%q, but params.state_event was %q. Use the canonical issue.update action for explicit state_event control.", requestedActionID, stateEvent, existingStateEvent)), nil, nil
 			}
 		} else {
 			params["state_event"] = stateEvent
@@ -477,7 +482,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	}
 	if entry.Destructive && !hasExplicitConfirm(params) {
 		slog.Warn("blocked destructive dynamic action without explicit confirmation", "action", entry.ID)
-		return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_tool: action %q is destructive. Re-send with confirm=true only after the user explicitly approves this operation.", entry.ID)), nil, nil
+		return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_action: action %q is destructive. Re-send with confirm=true only after the user explicitly approves this operation.", entry.ID)), nil, nil
 	}
 
 	handler := r.handlers[entry.Tool]
@@ -518,7 +523,7 @@ func validateDynamicExecuteParams(entry actionEntry, params map[string]any) *mcp
 	if len(unknown) == 0 && len(missing) == 0 {
 		return nil
 	}
-	parts := []string{fmt.Sprintf("gitlab_execute_tool/%s: invalid params.", entry.ID)}
+	parts := []string{fmt.Sprintf("gitlab_execute_action/%s: invalid params.", entry.ID)}
 	if len(unknown) > 0 {
 		parts = append(parts, fmt.Sprintf("Unknown params: %s.", strings.Join(unknown, ", ")))
 		if suggestions := unknownParamSuggestions(unknown, validParams); len(suggestions) > 0 {
@@ -930,7 +935,7 @@ func (r *Registry) suggestSearchTokens(query string, limit int) []string {
 		seen[item.value] = struct{}{}
 		values = append(values, item.value)
 	}
-	for _, fallback := range []string{"project", "issue", "merge request", "pipeline", "branch", "user"} {
+	for _, fallback := range []string{"project", "issue", aliasMergeRequest, "pipeline", "branch", "user"} {
 		if len(values) >= limit {
 			break
 		}
@@ -985,11 +990,13 @@ var searchSynonymsMap = map[string][]string{
 	"closed":        {"close", "list", "filter"},
 	"comment":       {"note", "discussion", "reply"},
 	"container":     {"registry", "package", "image"},
+	"compare":       {"diff", "repository", "refs", "ref"},
 	"current":       {"current_user", "self", "me", "author", "author_username", "assignee", "assignee_username", "settings"},
 	"deploy":        {"deployment", "environment", "key"},
 	"deployment":    {"deploy", "environment"},
 	"deployments":   {"deployment", "deploy", "environment"},
 	"details":       {"get"},
+	"diff":          {"compare", "repository", "refs", "ref"},
 	"discussion":    {"comment", "thread", "note"},
 	"draft":         {"wip", "work_in_progress", "proposal"},
 	"env":           {"environment"},
@@ -1013,6 +1020,7 @@ var searchSynonymsMap = map[string][]string{
 	"open":          {"active", "unresolved", "status_open", "list"},
 	"owned":         {"my", "personal", "mine", "owner", "list"},
 	"pending":       {"list", "filter", "todo"},
+	"path":          {"project", "repository", "discover", "resolve", "url"},
 	"package":       {"registry", "generic_package", "container", "artifact"},
 	"pr":            {"merge", "request", "merge_request", "pull_request", "mr"},
 	"pull_request":  {"merge", "request", "merge_request", "mr", "pr"},
@@ -1021,9 +1029,12 @@ var searchSynonymsMap = map[string][]string{
 	"release":       {"tag", "asset", "link", "notes"},
 	"releases":      {"release", "list"},
 	"remote":        {"url", "git", "origin", "repository", "discover", "resolve"},
+	"url":           {"remote", "origin", "git", "discover", "resolve", "project", "path"},
 	"refs":          {"ref", "compare", "repository"},
+	"ref":           {"refs", "compare"},
 	"review":        {"approval", "feedback", "assessment"},
 	"repo":          {"repository", "file", "tree", "branch", "tag"},
+	"repository":    {"repo", "file", "tree", "branch", "tag"},
 	"runner":        {"job", "ci", "pipeline"},
 	"secret":        {"variable", "ci_variable", "token", "password"},
 	"credential":    {"credentials", "token"},
@@ -1035,6 +1046,7 @@ var searchSynonymsMap = map[string][]string{
 	"user":          {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
 	"users":         {"username", "user_id", "author_username", "assignee_username", "current_user", "member"},
 	"tokens":        {"token"},
+	"tags":          {"tag", "refs"},
 	"verify":        {"get", "exists"},
 	"webhook":       {"hook"},
 	"webhooks":      {"hook"},
@@ -1133,6 +1145,10 @@ func addIDPatternTags(add tagCollector, id, domain, action string) bool {
 		add("project member", "project membership")
 	case strings.Contains(id, "member_") && domain == "group":
 		add("group member", "group membership")
+	case strings.Contains(id, "service_account_pat"):
+		addServiceAccountPATActionTags(add, domain, action)
+	case strings.Contains(id, "service_account") && (domain == "project" || domain == "group"):
+		addServiceAccountActionTags(add, domain, action)
 	case domain == "discover_project":
 		add("discover", "project", "remote", "url", "lookup", "resolve", "project discovery", "git remote", "remote url", "resolve project")
 	case domain == "interactive":
@@ -1146,12 +1162,43 @@ func addIDPatternTags(add tagCollector, id, domain, action string) bool {
 	return true
 }
 
+func addServiceAccountActionTags(add tagCollector, domain, action string) {
+	scope := strings.TrimSpace(domain)
+	resource := scope + " service account"
+	add(resource, resource+"s")
+	switch action {
+	case "service_account_list":
+		add(resource+" list", "list "+resource+"s")
+	case "service_account_create":
+		add(resource+" create", "create "+resource)
+	case "service_account_update":
+		add(resource+" update", "update "+resource)
+	case "service_account_delete":
+		add(resource+" delete", "delete "+resource)
+	}
+}
+
+func addServiceAccountPATActionTags(add tagCollector, domain, action string) {
+	scope := strings.TrimSpace(domain)
+	resource := scope + " service account personal access token"
+	add(resource, resource+"s", scope+" service account pat", scope+" service account token")
+	verb := strings.TrimPrefix(action, "service_account_pat_")
+	if verb == action || verb == "" {
+		return
+	}
+	add(resource+" "+verb, verb+" "+resource, verb+" "+resource+"s", scope+" service account pat "+verb, verb+" token for "+scope+" service account")
+}
+
 func addInteractiveActionTags(add tagCollector, action string) {
 	switch action {
 	case "project_create":
 		add("project", "create", "creation", "flow", "start", "guided project creation", "guided project creation flow", "project creation flow", "project wizard", "start guided project creation")
 	case "issue_create":
 		add("issue", "create", "creation", "flow", "start", "guided issue creation", "guided issue creation flow", "issue creation flow", "issue wizard", "start guided issue creation")
+	case "mr_create":
+		add(aliasMergeRequest, "mr", "create", "creation", "flow", "start", "merge request create", "create merge request", "mr create", "create mr", "guided merge request creation", "guided mr creation", "merge request creation flow", "mr wizard", "start guided merge request creation")
+	case "release_create":
+		add("release", "create", "creation", "flow", "start", "guided release creation", "guided release creation flow", "release creation flow", "release wizard", "start guided release creation")
 	}
 }
 
@@ -1159,18 +1206,76 @@ func addCoreDomainTags(add tagCollector, _, domain, action string) bool {
 	switch {
 	case domain == "user" && action == "current":
 		add("current", "authenticated", "me", "whoami", "profile", "current user", "authenticated user", "current authenticated user", "show current user", "my profile")
+	case domain == "project":
+		addProjectActionTags(add, action)
 	case domain == "repository" && strings.HasPrefix(action, "file_"):
 		add("repository file", "repo file", "file content")
 	case domain == "repository" && action == "tree":
 		add("repository tree", "repository tree list", "repo tree", "list repository tree", "browse repository tree", "repository_tree", "tree list", "ref", "main")
+	case domain == "search":
+		addSearchActionTags(add, action)
+	case domain == "server":
+		addServerActionTags(add, action)
+	case domain == "ci_catalog":
+		addCICatalogActionTags(add, action)
 	case domain == "merge_request":
-		add("mr", "merge request")
+		add("mr", aliasMergeRequest)
+	case domain == "mr_review":
+		addMRReviewActionTags(add, action)
 	case domain == "ci_variable":
 		add("ci variable", "ci secret", "secret", "environment variable")
+		addCIVariableActionTags(add, action)
 	default:
 		return false
 	}
 	return true
+}
+
+func addProjectActionTags(add tagCollector, action string) {
+	switch action {
+	case "star":
+		add("star project", "add star", "favorite project", "mark project starred", "project favorite")
+	case "unstar":
+		add("unstar project", "remove star", "unfavorite project", "remove project favorite")
+	}
+}
+
+func addSearchActionTags(add tagCollector, action string) {
+	if action == "projects" {
+		add("search projects", "project search", "find projects", "find repositories", "search repositories", "project name search", "repository name search")
+	}
+}
+
+func addServerActionTags(add tagCollector, action string) {
+	switch action {
+	case "health_check":
+		add("health check", "server health check", "server diagnostics", "connectivity check", "diagnostics connectivity check", "gitlab server health", "mcp server health")
+	case "status":
+		add("server status", "gitlab status", "mcp status")
+	}
+}
+
+func addCICatalogActionTags(add tagCollector, action string) {
+	if action == "list" {
+		add("ci catalog", "ci/cd catalog", "catalog resources", "catalog components", "ci catalog resources", "ci catalog components", "list catalog resources", "list catalog components")
+	}
+}
+
+func addMRReviewActionTags(add tagCollector, action string) {
+	if action == "changes_get" {
+		add("merge request changes", "mr changes", "merge request diff", "mr diff", "review changes", "get merge request changes", "merge request changes analyzer")
+	}
+}
+
+func addCIVariableActionTags(add tagCollector, action string) {
+	switch action {
+	case "instance_create":
+		add("instance ci variable", "system ci variable", "global ci variable", "admin ci variable", "create instance ci variable", "create global ci variable")
+	case "create":
+		add("project ci variable", "create project ci variable")
+	case "group_create":
+		add("group ci variable", "create group ci variable")
+	}
 }
 
 func addEnvironmentAndCITags(add tagCollector, _, domain, action string) bool {
@@ -1195,9 +1300,25 @@ func addEnvironmentAndCITags(add tagCollector, _, domain, action string) bool {
 func addEnvironmentActionTags(add tagCollector, action string) {
 	switch {
 	case strings.HasPrefix(action, "protected_"):
-		add("protected environment", "environment protection", "protected environment get", "protected environment list")
+		add(aliasProtectedEnvironment, aliasEnvironmentProtection)
+		addProtectedEnvironmentActionTags(add, action)
 	case strings.HasPrefix(action, "deployment_"):
 		add("environment deployment", "deployment list", "deployment approval", "deployment approve", "deployment reject")
+	}
+}
+
+func addProtectedEnvironmentActionTags(add tagCollector, action string) {
+	switch action {
+	case "protected_protect":
+		add("protect environment", "protect project environment", "project environment protect", "project deploy access", "maintainer deploy access")
+	case "protected_list":
+		add("protected environment list", "list protected environments")
+	case "protected_get":
+		add("protected environment get", "get protected environment")
+	case "protected_update":
+		add("protected environment update", "update protected environment")
+	case "protected_unprotect":
+		add("unprotect environment", "unprotect protected environment")
 	}
 }
 
@@ -1238,12 +1359,31 @@ func addAdminReleaseTags(add tagCollector, _, domain, action string) bool {
 		addReleaseActionTags(add, action)
 	case domain == "repository" && action == "compare":
 		add("compare refs", "compare branches", "compare tags", "diff between refs", "from ref", "to ref", "from", "to", tagReleaseNotes, "release compare")
-	case domain == "analyze" && action == "release_notes":
-		add(tagReleaseNotes, "generate release notes", "from ref", "to ref", "from", "to")
+	case domain == "analyze":
+		addAnalyzeActionTags(add, action)
 	default:
 		return false
 	}
 	return true
+}
+
+func addAnalyzeActionTags(add tagCollector, action string) {
+	switch action {
+	case "release_notes":
+		add(tagReleaseNotes, "generate release notes", "from ref", "to ref", "from", "to")
+	case "pipeline_failure":
+		add("pipeline failure", "failed pipeline", "pipeline failed", "why pipeline failed", "root cause", "failed jobs", "job trace", "failure analysis")
+	case "ci_config":
+		add("configuration", "config", "ci configuration", "project ci configuration", "ci configuration analysis", "project ci configuration analysis", "ci config analysis", "project ci config", "analyze .gitlab-ci.yml", "gitlab ci yaml", "pipeline config", "branch ci configuration", "best practices", "maintainability")
+	case "mr_changes":
+		add("merge request changes", "merge request changes analyzer", "analyze merge request changes", "mr changes analysis", "code review", "diff analysis", "review merge request changes", "review merge request diff", "llm assisted analyzer", "llm-assisted analyzer")
+	case "issue_summary":
+		add("issue summary", "summarize issue", "issue discussion summary", "key decisions", "issue recap")
+	case "mr_security":
+		add("merge request security", "security review", "mr security review", "owasp", "vulnerabilities", "review security")
+	case "technical_debt":
+		add("technical debt", "technical debt markers", "technical-debt markers", "find technical debt markers", "todo", "fixme", "hack", "todo fixme hack", "debt markers", "branch technical debt")
+	}
 }
 
 func addAdminActionTags(add tagCollector, action string) {
@@ -1261,6 +1401,8 @@ func addAdminActionTags(add tagCollector, action string) {
 
 func addReleaseActionTags(add tagCollector, action string) {
 	switch action {
+	case "create":
+		add("create release", "release create", "create release from ref", "release create from ref", "generate release", "new release", "tag release", "ref")
 	case "get":
 		add("verify release", "release exists", "release by tag", "tag_name")
 	case "link_list":
@@ -1270,7 +1412,7 @@ func addReleaseActionTags(add tagCollector, action string) {
 	case "delete":
 		add("delete release", "remove release", "preserve tag")
 	case "list":
-		add("releases", "list releases", "release inventory", tagReleaseNotes)
+		add("releases", "list releases", "release list", "list release", "release inventory", tagReleaseNotes)
 	}
 }
 
@@ -1301,6 +1443,10 @@ func addPackageActionTags(add tagCollector, action string) {
 
 func addRunnerActionTags(add tagCollector, action string) {
 	switch action {
+	case "update":
+		add("update runner", "runner update", "pause runner", "paused runner", "set paused", "set paused true", "runner paused true", "paused=true", "runner_id")
+	case "jobs":
+		add("runner jobs", "runner jobs list", "runner job list", "jobs for runner", "list runner jobs", "inspect runner jobs", "runner job history", "runner_id")
 	case "remove":
 		add("remove runner", "delete runner by id", "runner_id")
 	case "delete_registered":
@@ -1310,6 +1456,12 @@ func addRunnerActionTags(add tagCollector, action string) {
 
 func addIssueActionTags(add tagCollector, action string) {
 	switch action {
+	case "create":
+		add("create issue", "new issue", "open issue", "issue create")
+	case "delete":
+		add("delete issue", "remove issue", "destroy issue", "issue delete")
+	case "link_list":
+		add("issue links", "linked issues", "list issue links", "issue relationship", "issue link list")
 	case "note_create":
 		add(tagIssueNote, tagIssueComment, "create note", "create comment")
 	case "note_get":
@@ -1333,16 +1485,52 @@ func addIssueActionTags(add tagCollector, action string) {
 
 func addProtectionTags(add tagCollector, id, domain, action string) bool {
 	switch {
+	case domain == "group" && strings.Contains(id, "protected_branch"):
+		add("group protected branch", "group branch protection", "protected branch rule", "branch pattern")
+		addGroupProtectedBranchActionTags(add, action)
+	case domain == "group" && (strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment")):
+		add("group protected environment", "group environment protection", "group deployment gate", aliasProtectedEnvironment, aliasEnvironmentProtection)
+		addGroupProtectedEnvironmentActionTags(add, action)
 	case domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect"):
 		add("protected branch", "branch protection")
 	case strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment"):
-		add("protected environment", "environment protection")
+		add(aliasProtectedEnvironment, aliasEnvironmentProtection)
 	case strings.Contains(id, "member_role"):
 		add("custom role", "member role")
 	default:
 		return false
 	}
 	return true
+}
+
+func addGroupProtectedBranchActionTags(add tagCollector, action string) {
+	switch action {
+	case "protected_branch_protect":
+		add("protect group branch", "group protected branch protect", "create group protected branch", "protect branch pattern", "maintainer push access", "maintainer merge access", "maintainer push and merge access")
+	case "protected_branch_list":
+		add("list group protected branches", "group protected branch list")
+	case "protected_branch_get":
+		add("get group protected branch", "fetch group protected branch", "group protected branch get")
+	case "protected_branch_update":
+		add("update group protected branch", "group protected branch update", "allow force push", "force push")
+	case "protected_branch_unprotect":
+		add("unprotect group branch", "remove group protected branch", "group protected branch unprotect")
+	}
+}
+
+func addGroupProtectedEnvironmentActionTags(add tagCollector, action string) {
+	switch action {
+	case "protected_env_protect":
+		add("protect group environment", "group protected environment protect", "create group protected environment", "maintainer deploy access")
+	case "protected_env_list":
+		add("list group protected environments", "group protected environment list")
+	case "protected_env_get":
+		add("get group protected environment", "fetch group protected environment", "group protected environment get")
+	case "protected_env_update":
+		add("update group protected environment", "group protected environment update", "require approval", "approval rules")
+	case "protected_env_unprotect":
+		add("unprotect group environment", "remove group protected environment", "delete group protected environment", "group protected environment unprotect")
+	}
 }
 
 func addSchemaPropertyTags(add tagCollector, schema map[string]any) {
@@ -1387,6 +1575,7 @@ func (r *Registry) searchMatches(query string, limit int, explain bool) []scored
 	if segmented := r.segmentedSearchMatchesWithScorer(terms, limit, searchScorer); len(segmented) > 0 {
 		matches = mergeBestMatches(matches, segmented)
 	}
+	matches = adjustServiceAccountVerbScores(matches, terms)
 	matches = sortAndLimitMatches(matches, limit)
 	matches = computeConfidence(matches)
 	lowConfidence := len(matches) > 0 && matches[0].lowConfidence
@@ -1527,14 +1716,55 @@ func (r *Registry) segmentedSearchMatchesWithScorer(terms []searchTerm, limit in
 	return matches
 }
 
-func shouldRunSegmentedSearch(terms []searchTerm, limit int) bool {
+func adjustServiceAccountVerbScores(matches []scoredActionEntry, terms []searchTerm) []scoredActionEntry {
+	if !queryHasSearchWords(terms, "service", "account") {
+		return matches
+	}
+	queryVerb := serviceAccountQueryVerb(terms)
+	if queryVerb == "" {
+		return matches
+	}
+	for index := range matches {
+		document := documentForEntry(matches[index].entry)
+		if !strings.Contains(document.CanonicalID, "service_account") {
+			continue
+		}
+		actionVerb := serviceAccountActionVerb(document.Action)
+		if actionVerb == "" {
+			continue
+		}
+		if actionVerb == queryVerb {
+			matches[index].score += scoreServiceAccountBoost
+		} else {
+			matches[index].score -= scoreServiceAccountBoost * 2
+			if matches[index].score < 0 {
+				matches[index].score = 0
+			}
+		}
+		if matches[index].explanation.TotalScore != 0 {
+			matches[index].explanation.TotalScore = matches[index].score
+		}
+	}
+	return matches
+}
+
+func serviceAccountQueryVerb(terms []searchTerm) string {
+	for _, verb := range []string{"create", "list", "update", "delete", "rotate", "revoke"} {
+		if searchTermsContainWord(terms, verb) {
+			return verb
+		}
+	}
+	return ""
+}
+
+func shouldRunSegmentedSearch(terms []searchTerm, _ int) bool {
 	if len(terms) < minSegmentTerms {
 		return false
 	}
 	if len(terms) > maxSegmentTerms {
 		return true
 	}
-	return limit <= 10 && len(terms) >= 5
+	return len(terms) >= 5
 }
 
 func computeConfidence(matches []scoredActionEntry) []scoredActionEntry {
@@ -1636,8 +1866,8 @@ func dynamicInputSchema(entry actionEntry) map[string]any {
 		removeDynamicRequiredConfirmParam(schema)
 		schema["x_destructive"] = true
 		schema["x_confirmation"] = map[string]any{
-			"location":    "gitlab_execute_tool.confirm",
-			"description": "Set top-level confirm=true on gitlab_execute_tool after explicit user approval; do not put confirm inside params.",
+			"location":    "gitlab_execute_action.confirm",
+			"description": "Set top-level confirm=true on gitlab_execute_action after explicit user approval; do not put confirm inside params.",
 		}
 	}
 	return schema
@@ -1881,7 +2111,7 @@ func (r *Registry) unknownActionMessage(toolName, action string) string {
 	if len(suggestions) == 0 {
 		return fmt.Sprintf("%s: unknown action %q. Use the registered discovery tool for this surface to find canonical action IDs.", toolName, action)
 	}
-	return fmt.Sprintf("%s: unknown action %q. Did you mean %s? Use canonical action IDs with gitlab_execute_tool.", toolName, action, strings.Join(suggestions, ", "))
+	return fmt.Sprintf("%s: unknown action %q. Did you mean %s? Use canonical action IDs with gitlab_execute_action.", toolName, action, strings.Join(suggestions, ", "))
 }
 
 func (r *Registry) ambiguousAliasTargets(action string) []string {
@@ -2096,10 +2326,7 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	if matchedCount == 0 {
 		return 0
 	}
-	minRequired := len(terms)
-	if len(terms) > 2 {
-		minRequired = len(terms) - 1
-	}
+	minRequired := minimumMatchedTermCount(entry, terms)
 	if matchedCount < minRequired {
 		return 0
 	}
@@ -2107,6 +2334,15 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	score += scoreVerbIntentValue(entry, terms)
 	score += scoreRequiredParamSignalValue(entry, terms)
 	score += scoreCompoundTagSignalValue(entry, terms)
+	score += scoreServiceAccountIntentValue(entry, terms)
+	score += scoreScopeIntentValue(entry, terms)
+	score += scoreCompareRefsIntentValue(entry, terms)
+	score += scoreReleaseListIntentValue(entry, terms)
+	score += scoreAnalyzeReleaseNotesIntentValue(entry, terms)
+	score += scoreMRSecurityIntentValue(entry, terms)
+	score += scoreDiscoverProjectIntentValue(entry, terms)
+	score += scoreProjectGetIntentValue(entry, terms)
+	score += scoreSearchProjectsIntentValue(entry, terms)
 	score += scoreActionSpecificityValue(entry, terms)
 	if score <= 0 {
 		return 0
@@ -2140,35 +2376,14 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 	if matchedCount == 0 {
 		return 0, ScoringExplanation{}
 	}
-	// For short queries (1–2 terms) all terms must match.
-	// For longer queries allow at most one unmatched term so that incidental
-	// words like state values ("open") or prepositions don't suppress results.
-	minRequired := len(terms)
-	if len(terms) > 2 {
-		minRequired = len(terms) - 1
-	}
+	minRequired := minimumMatchedTermCount(entry, terms)
 	if matchedCount < minRequired {
 		return 0, ScoringExplanation{}
 	}
 	// Scale the total score by the match ratio so fully-matched entries rank
 	// above partial matches.
 	score := totalScore * matchedCount / len(terms)
-	if adjustment, reason := scoreVerbIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, paramReasons := scoreRequiredParamSignals(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, paramReasons...)
-	}
-	if adjustment, tagReasons := scoreCompoundTagSignals(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, tagReasons...)
-	}
-	if adjustment, reason := scoreActionSpecificity(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
+	score, reasons = applyIntentAdjustments(entry, terms, score, reasons)
 	if score <= 0 {
 		return 0, ScoringExplanation{}
 	}
@@ -2178,6 +2393,77 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 		RequiredTerms: minRequired,
 		Reasons:       reasons,
 	}
+}
+
+// applyIntentAdjustments accumulates all specialized intent and signal scores
+// into the running total and match-reason list. Extracting this loop reduces
+// the cyclomatic complexity of scoreEntryWithExplanation.
+func applyIntentAdjustments(entry actionEntry, terms []searchTerm, score int, reasons []MatchReason) (int, []MatchReason) {
+	type intentFn func(actionEntry, []searchTerm) (int, MatchReason)
+	for _, fn := range []intentFn{
+		scoreVerbIntent,
+		scoreServiceAccountIntent,
+		scoreScopeIntent,
+		scoreCompareRefsIntent,
+		scoreReleaseListIntent,
+		scoreAnalyzeReleaseNotesIntent,
+		scoreMRSecurityIntent,
+		scoreDiscoverProjectIntent,
+		scoreProjectGetIntent,
+		scoreSearchProjectsIntent,
+		scoreActionSpecificity,
+	} {
+		if adj, r := fn(entry, terms); adj != 0 {
+			score += adj
+			reasons = append(reasons, r)
+		}
+	}
+	if adj, paramReasons := scoreRequiredParamSignals(entry, terms); adj != 0 {
+		score += adj
+		reasons = append(reasons, paramReasons...)
+	}
+	if adj, tagReasons := scoreCompoundTagSignals(entry, terms); adj != 0 {
+		score += adj
+		reasons = append(reasons, tagReasons...)
+	}
+	return score, reasons
+}
+
+func minimumMatchedTermCount(entry actionEntry, terms []searchTerm) int {
+	minRequired := len(terms)
+	if len(terms) > 2 {
+		minRequired = len(terms) - 1
+	}
+	if len(terms) > 3 && matchedCompoundTagCount(entry, terms) > 0 && minRequired > len(terms)-2 {
+		minRequired = len(terms) - 2
+	}
+	if minRequired < 1 {
+		return 1
+	}
+	return minRequired
+}
+
+func matchedCompoundTagCount(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	termSet := searchTermAlternativeSet(terms)
+	matches := 0
+	for _, tag := range document.Tags {
+		words := splitSearchFieldWords(tag)
+		if len(words) < 2 {
+			continue
+		}
+		matched := true
+		for _, word := range words {
+			if _, ok := termSet[word]; !ok {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			matches++
+		}
+	}
+	return matches
 }
 
 func scoreVerbIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
@@ -2197,9 +2483,12 @@ func scoreVerbIntentFor(entry actionEntry, intent verbIntent, terms []searchTerm
 	adjustment := 0
 	switch intent {
 	case verbIntentRead:
-		if entry.Destructive {
+		switch {
+		case entry.Destructive:
 			adjustment = scoreVerbIntentPenalty
-		} else if isReadAction(document.Action) {
+		case isWriteAction(document.Action):
+			adjustment = scoreVerbIntentPenalty / 2
+		case isReadAction(document.Action):
 			adjustment = scoreVerbIntentBoost
 		}
 	case verbIntentWrite:
@@ -2207,16 +2496,7 @@ func scoreVerbIntentFor(entry actionEntry, intent verbIntent, terms []searchTerm
 			adjustment = scoreVerbIntentBoost
 		}
 	case verbIntentDestructive:
-		if isDestructiveActionName(document.Action) || entry.Destructive {
-			if queryHasResourceSignal(terms, document) {
-				adjustment = scoreVerbIntentBoost
-				if document.Action == "delete" || document.Action == "remove" || document.Action == "revoke" {
-					adjustment = scoreVerbIntentBoost * 3
-				}
-			} else {
-				adjustment = scoreVerbIntentPenalty
-			}
-		}
+		adjustment = scoreDestructiveVerbAdjustment(entry, terms, document)
 	case verbIntentWorkflow:
 		if isWorkflowAction(document.Action) {
 			adjustment = scoreVerbIntentBoost
@@ -2230,6 +2510,22 @@ func scoreVerbIntentFor(entry actionEntry, intent verbIntent, terms []searchTerm
 		return 0, MatchReason{}
 	}
 	return adjustment, MatchReason{Field: searchFieldVerbIntent, QueryTerm: string(intent), MatchedValue: document.Action, Score: adjustment}
+}
+
+// scoreDestructiveVerbAdjustment returns the score adjustment when the user
+// expresses a destructive verb intent. Extracted to keep scoreVerbIntentFor
+// within cyclomatic complexity limits.
+func scoreDestructiveVerbAdjustment(entry actionEntry, terms []searchTerm, document searchDocument) int {
+	if !isDestructiveActionName(document.Action) && !entry.Destructive {
+		return 0
+	}
+	if !queryHasResourceSignal(terms, document) {
+		return scoreVerbIntentPenalty
+	}
+	if document.Action == "delete" || document.Action == "remove" || document.Action == "revoke" {
+		return scoreVerbIntentBoost * 3
+	}
+	return scoreVerbIntentBoost
 }
 
 func scoreRequiredParamSignalValue(entry actionEntry, terms []searchTerm) int {
@@ -2285,6 +2581,7 @@ func scoreCompoundTagSignals(entry actionEntry, terms []searchTerm) (int, []Matc
 	document := documentForEntry(entry)
 	termSet := searchTermAlternativeSet(terms)
 	reasons := make([]MatchReason, 0)
+	total := 0
 	for _, tag := range document.Tags {
 		words := splitSearchFieldWords(tag)
 		if len(words) < 2 {
@@ -2300,14 +2597,19 @@ func scoreCompoundTagSignals(entry actionEntry, terms []searchTerm) (int, []Matc
 		if !matched {
 			continue
 		}
-		reasons = append(reasons, MatchReason{Field: searchFieldTag, QueryTerm: strings.Join(words, " "), MatchedValue: tag, Score: scoreCompoundTagBoost})
+		boost := scoreCompoundTagBoost
+		if document.Domain == "repository" && document.Action == "compare" && (containsWord(words, "ref") || containsWord(words, "refs")) && containsWord(words, "compare") {
+			boost += scoreRequiredParamBoost
+		}
+		reasons = append(reasons, MatchReason{Field: searchFieldTag, QueryTerm: strings.Join(words, " "), MatchedValue: tag, Score: boost})
+		total += boost
 	}
-	return len(reasons) * scoreCompoundTagBoost, reasons
+	return total, reasons
 }
 
 func scoreCompoundTagSignalValue(entry actionEntry, terms []searchTerm) int {
 	document := documentForEntry(entry)
-	matches := 0
+	total := 0
 	for _, tag := range document.Tags {
 		words := splitSearchFieldWords(tag)
 		if len(words) < 2 {
@@ -2321,10 +2623,284 @@ func scoreCompoundTagSignalValue(entry actionEntry, terms []searchTerm) int {
 			}
 		}
 		if matched {
-			matches++
+			boost := scoreCompoundTagBoost
+			if document.Domain == "repository" && document.Action == "compare" && (containsWord(words, "ref") || containsWord(words, "refs")) && containsWord(words, "compare") {
+				boost += scoreRequiredParamBoost
+			}
+			total += boost
 		}
 	}
-	return matches * scoreCompoundTagBoost
+	return total
+}
+
+func containsWord(words []string, target string) bool {
+	return slices.Contains(words, target)
+}
+
+func scoreServiceAccountIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreServiceAccountIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldServiceAccount, QueryTerm: "service account", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreServiceAccountIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if !strings.Contains(document.CanonicalID, "service_account") || !queryHasSearchWords(terms, "service", "account") {
+		return 0
+	}
+	score := scoreServiceAccountBoost
+	if document.Domain != "" && searchTermsContainWord(terms, document.Domain) {
+		score += scoreServiceAccountScope
+	}
+	if strings.Contains(document.CanonicalID, "service_account_pat") && (queryHasSearchWords(terms, "personal", "access", "token") || searchTermsContainWord(terms, "pat")) {
+		score += scoreServiceAccountBoost
+	}
+	if verb := serviceAccountActionVerb(document.Action); verb != "" && searchTermsContainWord(terms, verb) {
+		score += scoreServiceAccountBoost
+	}
+	return score
+}
+
+func queryHasSearchWords(terms []searchTerm, words ...string) bool {
+	for _, word := range words {
+		if !searchTermsContainWord(terms, word) {
+			return false
+		}
+	}
+	return true
+}
+
+func serviceAccountActionVerb(action string) string {
+	switch {
+	case strings.HasSuffix(action, "_list"):
+		return "list"
+	case strings.HasSuffix(action, "_create"):
+		return "create"
+	case strings.HasSuffix(action, "_update"):
+		return "update"
+	case strings.HasSuffix(action, "_delete"):
+		return "delete"
+	case strings.HasSuffix(action, "_rotate"):
+		return "rotate"
+	case strings.HasSuffix(action, "_revoke"):
+		return "revoke"
+	default:
+		return ""
+	}
+}
+
+func scoreScopeIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreScopeIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	scope := matchingQueryScope(terms)
+	return score, MatchReason{Field: searchFieldScopeIntent, QueryTerm: scope, MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreScopeIntentValue(entry actionEntry, terms []searchTerm) int {
+	scope := matchingQueryScope(terms)
+	if scope == "" {
+		return 0
+	}
+	document := documentForEntry(entry)
+	if document.Domain == scope || document.Scope == scope {
+		return scoreScopeIntentBoost
+	}
+	return 0
+}
+
+func scoreCompareRefsIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreCompareRefsIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldCompareIntent, QueryTerm: "compare refs", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreCompareRefsIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "repository" || document.Action != "compare" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "compare") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "ref") && !searchTermsContainWord(terms, "refs") {
+		return 0
+	}
+	return scoreCompareRefsIntentBoost
+}
+
+func scoreReleaseListIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreReleaseListIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldReleaseIntent, QueryTerm: "list releases", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreReleaseListIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "release" || document.Action != "list" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "list") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "release") && !searchTermsContainWord(terms, "releases") {
+		return 0
+	}
+	return scoreReleaseListIntentBoost
+}
+
+func scoreAnalyzeReleaseNotesIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreAnalyzeReleaseNotesIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldAnalyzeIntent, QueryTerm: "release notes", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreAnalyzeReleaseNotesIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "analyze" || document.Action != "release_notes" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "release") && !searchTermsContainWord(terms, "releases") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "notes") {
+		return 0
+	}
+	return scoreAnalyzeNotesIntentBoost
+}
+
+func scoreMRSecurityIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreMRSecurityIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldSecurityIntent, QueryTerm: "mr security review", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreMRSecurityIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "analyze" || document.Action != "mr_security" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "security") && !searchTermsContainWord(terms, "secure") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "review") && !searchTermsContainWord(terms, "analyzer") && !searchTermsContainWord(terms, "analyze") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "merge") && !searchTermsContainWord(terms, "mr") && !searchTermsContainWord(terms, "merge_request") {
+		return 0
+	}
+	return scoreMRSecurityIntentBoost
+}
+
+func scoreDiscoverProjectIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreDiscoverProjectIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldDiscoverIntent, QueryTerm: "discover project from remote", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreDiscoverProjectIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "discover_project" || document.Action != "resolve" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "url") && !searchTermsContainWord(terms, "remote") && !searchTermsContainWord(terms, "origin") && !searchTermsContainWord(terms, "git") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "project") && !searchTermsContainWord(terms, "path") && !searchTermsContainWord(terms, "resolve") && !searchTermsContainWord(terms, "discover") && !searchTermsContainWord(terms, "find") {
+		return 0
+	}
+	return scoreDiscoverIntentBoost
+}
+
+func scoreProjectGetIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreProjectGetIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldProjectIntent, QueryTerm: "project get by path", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreProjectGetIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "project" || document.Action != "get" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "project") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "get") && !searchTermsContainWord(terms, "show") && !searchTermsContainWord(terms, "find") && !searchTermsContainWord(terms, "path") && !searchTermsContainWord(terms, "id") {
+		return 0
+	}
+	return scoreProjectGetIntentBoost
+}
+
+func scoreSearchProjectsIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreSearchProjectsIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldSearchIntent, QueryTerm: "search projects", MatchedValue: document.CanonicalID, Score: score}
+}
+
+func scoreSearchProjectsIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "search" || document.Action != "projects" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "search") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "project") && !searchTermsContainWord(terms, "projects") {
+		return 0
+	}
+	if searchProjectsQueryHasConcreteNeedle(terms) {
+		return scoreSearchProjectsBoost + scoreProjectGetIntentBoost + scoreCompoundTagBoost
+	}
+	return scoreSearchProjectsBoost
+}
+
+func searchProjectsQueryHasConcreteNeedle(terms []searchTerm) bool {
+	for _, term := range terms {
+		switch term.Raw {
+		case "project", "projects", "search", "list", "find", "all", "show", "get", "read":
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func matchingQueryScope(terms []searchTerm) string {
+	switch {
+	case searchTermsContainWord(terms, "group"):
+		return "group"
+	case searchTermsContainWord(terms, "project"):
+		return "project"
+	default:
+		return ""
+	}
 }
 
 func scoreActionSpecificity(entry actionEntry, terms []searchTerm) (int, MatchReason) {
@@ -2719,7 +3295,7 @@ func exampleFor(entry actionEntry, schema map[string]any) ActionExample {
 		arguments["confirm"] = true
 	}
 	return ActionExample{
-		Tool:      executeToolName,
+		Tool:      executeActionToolName,
 		Arguments: arguments,
 	}
 }
@@ -2804,6 +3380,7 @@ func formatSearchOutput(output SearchOutput) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
+	fmt.Fprintf(&b, "%s\n\n", dynamicExecuteEnvelopeHint)
 	if targets := ambiguousTargetsFromSearchResults(output.Results); len(targets) > 0 {
 		fmt.Fprintf(&b, "Use one canonical action ID explicitly: %s.\n\n", strings.Join(backtickStrings(targets), ", "))
 	}
@@ -2880,6 +3457,8 @@ func formatFindOutput(output FindOutput) string {
 		return b.String()
 	}
 	fmt.Fprintf(&b, "Query: `%s`\n\n", output.Query)
+	b.WriteString("Immediate next step: choose one row and call `gitlab_execute_action` now; do not call `gitlab_find_action` again until that execute call returns.\n\n")
+	fmt.Fprintf(&b, "%s\n\n", dynamicExecuteEnvelopeHint)
 	withExplanations := hasFindExplanations(output.Results)
 	withGuidance := hasFindGuidance(output.Results)
 	switch {
@@ -2912,23 +3491,27 @@ func formatFindOutput(output FindOutput) string {
 			fmt.Fprintf(&b, "| `%s` | %d | %t | %s |\n", result.ID, result.Score, result.Destructive, required)
 		}
 	}
-	b.WriteString("\nStructured results include exact `input_schema` values and `gitlab_execute_tool` examples for each action.\n")
+	b.WriteString("\nNext step: choose one row and call `gitlab_execute_action` with that row's schema/example before starting another catalog operation.\n")
+	b.WriteString("Structured results include exact `input_schema` values and `gitlab_execute_action` examples for each action.\n")
 	return b.String()
 }
 
 func hasFindGuidance(results []FindResult) bool {
 	return slices.ContainsFunc(results, func(result FindResult) bool {
-		return strings.TrimSpace(result.Usage) != "" || len(result.ParamGuidance) > 0
+		return result.Destructive || strings.TrimSpace(result.Usage) != "" || len(result.ParamGuidance) > 0
 	})
 }
 
 func compactFindGuidance(result FindResult) string {
-	parts := make([]string, 0, 2)
+	parts := make([]string, 0, 3)
 	if usage := strings.TrimSpace(result.Usage); usage != "" {
 		parts = append(parts, usage)
 	}
 	if guidance := compactParameterGuidance(result.ParamGuidance, defaultMaxParamGuidanceItems, result.RequiredParams...); guidance != "" {
 		parts = append(parts, guidance)
+	}
+	if result.Destructive {
+		parts = append(parts, "Execute destructive actions with top-level `confirm:true`.")
 	}
 	if len(parts) == 0 {
 		return "-"

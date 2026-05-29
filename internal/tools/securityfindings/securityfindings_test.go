@@ -167,6 +167,11 @@ func TestList_WithFilters(t *testing.T) {
 			if vars["pipelineIID"] != "456" {
 				t.Errorf("pipelineIID = %v, want 456", vars["pipelineIID"])
 			}
+			for _, key := range []string{"severity", "confidence", "scanner", "reportType"} {
+				if _, ok := vars[key]; !ok {
+					t.Errorf("GraphQL variables missing %q", key)
+				}
+			}
 			testutil.RespondGraphQL(w, http.StatusOK, `{
 				"project": {
 					"pipeline": {
@@ -185,6 +190,8 @@ func TestList_WithFilters(t *testing.T) {
 		ProjectPath: "my-group/my-project",
 		PipelineIID: "456",
 		Severity:    []string{"HIGH", "CRITICAL"},
+		Confidence:  []string{"CONFIRMED"},
+		Scanner:     []string{"semgrep-sast"},
 		ReportType:  []string{"SAST"},
 	})
 	if err != nil {
@@ -192,6 +199,50 @@ func TestList_WithFilters(t *testing.T) {
 	}
 	if len(out.Findings) != 0 {
 		t.Errorf("expected 0 findings, got %d", len(out.Findings))
+	}
+}
+
+// TestList_ProjectNilExistingProjectReturnsEmpty verifies unavailable findings are not mistaken for missing projects.
+func TestList_ProjectNilExistingProjectReturnsEmpty(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.Handle("/api/graphql", testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": null}`)
+		},
+	}))
+	mux.HandleFunc("/api/v4/projects/my-group%2Fmy-project", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"path_with_namespace":"my-group/my-project"}`)
+	})
+
+	client := testutil.NewTestClient(t, mux)
+	out, err := List(context.Background(), client, ListInput{ProjectPath: "my-group/my-project", PipelineIID: "456"})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(out.Findings) != 0 {
+		t.Fatalf("expected empty findings, got %d", len(out.Findings))
+	}
+}
+
+// TestList_ProjectNilMissingProjectErrors verifies a null GraphQL project still checks the REST project identity.
+func TestList_ProjectNilMissingProjectErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.Handle("/api/graphql", testutil.GraphQLHandler(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{"project": null}`)
+		},
+	}))
+	mux.HandleFunc("/api/v4/projects/my-group%2Fmy-project", func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	})
+
+	client := testutil.NewTestClient(t, mux)
+	_, err := List(context.Background(), client, ListInput{ProjectPath: "my-group/my-project", PipelineIID: "456"})
+	if err == nil {
+		t.Fatal("expected missing project error")
+	}
+	if !strings.Contains(err.Error(), "project \"my-group/my-project\" not found") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -226,6 +277,35 @@ func TestList_EmptyResults(t *testing.T) {
 	}
 	if out.Pagination.HasNextPage {
 		t.Error("expected HasNextPage=false")
+	}
+}
+
+// TestList_PipelineNotFound verifies that a null GraphQL pipeline is reported
+// as an actionable pipeline_iid error instead of a false empty findings list.
+func TestList_PipelineNotFound(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"securityReportFindings": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"project": {
+					"pipeline": null
+				}
+			}`)
+		},
+	})
+
+	client := testutil.NewTestClient(t, handler)
+	_, err := List(context.Background(), client, ListInput{
+		ProjectPath: "my-group/my-project",
+		PipelineIID: "999",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing pipeline_iid")
+	}
+	errText := err.Error()
+	for _, want := range []string{"pipeline_iid", "gitlab_pipeline", "security scan report artifacts"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
 	}
 }
 

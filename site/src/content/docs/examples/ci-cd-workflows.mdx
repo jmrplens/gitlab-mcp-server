@@ -233,14 +233,14 @@ The default dynamic surface discovers exact CI/CD actions before execution:
 
 ```text
 gitlab_find_action → query: "latest pipeline status for project"
-gitlab_execute_tool → action: "pipeline.latest", params: { project_id: "42" }
+gitlab_execute_action → action: "pipeline.latest", params: { project_id: "42" }
 ```
 
 For failed jobs, discover the log or retry action first, then execute with the returned schema:
 
 ```text
 gitlab_find_action → query: "get failed job trace"
-gitlab_execute_tool → action: "job.trace", params: { project_id: "42", job_id: 9876 }
+gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_id: 9876 }
 ```
 
 ---

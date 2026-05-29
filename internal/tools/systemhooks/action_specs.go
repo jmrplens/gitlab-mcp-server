@@ -71,7 +71,7 @@ func systemHookDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 
 func systemHookOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"admin", "system-hook"},
+		Aliases: []string{individualTool}, Usage: "Use to execute systemhooks domain action.", Tags: []string{"admin", "system-hook"},
 		OpenWorld:      true,
 		OwnerPackage:   "systemhooks",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

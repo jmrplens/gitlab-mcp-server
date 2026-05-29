@@ -9,6 +9,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionPipelineGet    = "pipeline.get"
+	actionJobListProject = "job.list_project"
+)
+
 // ActionSpecs returns canonical specs for CI/CD pipeline actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -66,10 +71,65 @@ func pipelineDeleteSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"ci", "pipeline"},
+		Aliases: []string{individualTool}, Usage: "Use to execute pipelines domain action.", Tags: []string{"ci", "pipeline"},
 		OpenWorld:      true,
 		OwnerPackage:   "pipelines",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+
+	switch actionName {
+	case "list":
+		options.Usage = "List pipelines for one project. Use filters and pagination when the task asks for recent, failed, running, or branch-specific pipelines."
+		options.Aliases = []string{"list pipelines", "show project pipelines", "find pipelines"}
+		options.RelatedActions = []string{actionPipelineGet, "pipeline.latest", actionJobListProject}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project ID or full path that owns the pipeline history.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+			"status": {
+				SemanticRole:   "pipeline_status_filter",
+				ValueSource:    "Pipeline status requested by the task, such as failed, running, or success.",
+				ExampleBinding: `params.status:"failed"`,
+			},
+		}
+		options.IndividualTool.Description = "List project pipelines with filters and pagination. Returns: pipeline IDs, refs, statuses, source, and timing metadata. See also: gitlab_pipeline_get, gitlab_pipeline_latest, gitlab_job_list_project."
+	case "get":
+		options.Usage = "Get one pipeline by project_id and pipeline_id. Use this when the target pipeline is already known and you need detailed status, ref, source, and web URL fields."
+		options.Aliases = []string{"get pipeline", "show pipeline details", "lookup pipeline"}
+		options.RelatedActions = []string{"pipeline.list", "pipeline.variables", actionJobListProject, "pipeline.cancel", "pipeline.retry"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"pipeline_id": {
+				SemanticRole:     "pipeline_identifier",
+				ValueSource:      "Numeric pipeline ID from pipeline.list, pipeline.latest, or merge-request pipeline context.",
+				ExampleBinding:   "params.pipeline_id:12345",
+				CommonConfusions: []string{"Use pipeline_id, not job_id or merge_request_iid."},
+			},
+		}
+		options.IndividualTool.Description = "Get one pipeline by ID. Returns: full pipeline metadata, status lifecycle fields, and links. See also: gitlab_pipeline_list, gitlab_pipeline_variables, gitlab_job_list_project, gitlab_pipeline_retry."
+	case "create":
+		options.Usage = "Create a pipeline for a project ref (branch or tag). Use variables only when the task explicitly requires runtime overrides."
+		options.Aliases = []string{"run pipeline", "trigger pipeline", "create pipeline"}
+		options.RelatedActions = []string{actionPipelineGet, "pipeline.wait", actionJobListProject}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project where the pipeline should be created.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+			"ref": {
+				SemanticRole:     "git_ref",
+				ValueSource:      "Branch or tag to run the pipeline against.",
+				ExampleBinding:   `params.ref:"main"`,
+				CommonConfusions: []string{"Use ref for branch/tag names; do not send commit SHA when branch intent is requested."},
+			},
+		}
+		options.IndividualTool.Description = "Create a new pipeline. Returns: created pipeline metadata including ID, status, and target ref. See also: gitlab_pipeline_get, gitlab_pipeline_wait, gitlab_job_list_project."
+	case "cancel":
+		options.RelatedActions = []string{actionPipelineGet, "pipeline.retry", actionJobListProject}
+	case "retry":
+		options.RelatedActions = []string{actionPipelineGet, "pipeline.cancel", actionJobListProject}
 	}
 	if actionName == "wait" {
 		options.Usage = "Use only to poll an existing pipeline_id until a terminal status. For merge when pipeline succeeds, use merge_request.merge with auto_merge=true instead."

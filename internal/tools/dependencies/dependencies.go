@@ -158,8 +158,12 @@ func CreateExport(ctx context.Context, client *gitlabclient.Client, input Create
 	}
 	e, _, err := client.GL().DependencyListExport.CreateDependencyListExport(input.PipelineID, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return ExportOutput{}, toolutil.WrapErrWithHint("dependencyCreateExport", err,
+				"verify pipeline_id with gitlab_pipeline action 'latest' or 'list'; dependency list exports require an existing pipeline with dependency scanning or SBOM data and an Ultimate license")
+		}
 		return ExportOutput{}, toolutil.WrapErrWithStatusHint("dependencyCreateExport", err, http.StatusBadRequest,
-			"requires Developer + Ultimate; export_type defaults to dependency_list (CycloneDX SBOM); creation is async \u2014 poll with gitlab_get_dependency_list_export until status=finished")
+			"requires Developer + Ultimate; export_type defaults to sbom; the pipeline must contain dependency scanning or SBOM data; creation is async \u2014 poll with gitlab_get_dependency_list_export until status=finished")
 	}
 	return toExportOutput(e), nil
 }

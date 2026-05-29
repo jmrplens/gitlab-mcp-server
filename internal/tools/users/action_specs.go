@@ -71,45 +71,105 @@ func userGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 }
 
 func userReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, userOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, userOptionsForAction(name, individualTool))
 }
 
 func userCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, userOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, userOptionsForAction(name, individualTool))
 }
 
 func userUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, userOptions(individualTool))
+	return toolutil.NewUpdateActionSpec(name, route, userOptionsForAction(name, individualTool))
 }
 
 func userDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, userOptions(individualTool))
+	return toolutil.NewDeleteActionSpec(name, route, userOptionsForAction(name, individualTool))
 }
 
 func userDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	individualDestructive := false
-	options := userOptions(individualTool)
+	options := userOptionsForAction(name, individualTool)
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
 func userEnterpriseReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userOptions(individualTool)
+	options := userOptionsForAction(name, individualTool)
 	options.Edition = "premium"
 	return toolutil.NewReadActionSpec(name, route, options)
 }
 
 func userEnterpriseCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	options := userOptions(individualTool)
+	options := userOptionsForAction(name, individualTool)
 	options.Edition = "premium"
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
-func userOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
-		Tags:           []string{"user"},
+func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
+	options := toolutil.ActionSpecOptions{
+		Aliases: []string{individualTool}, Usage: "Use to execute users domain action.", Tags: []string{"user"},
 		OpenWorld:      true,
 		OwnerPackage:   "users",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+
+	switch individualTool {
+	case "gitlab_user_current":
+		options.Usage = "Get the authenticated user profile for the current token. Use this when the prompt asks who the caller is, what permissions they have, or what user identity is currently active."
+		if actionName == "current" {
+			options.Aliases = []string{"who am i", "current user", "show my profile"}
+		}
+		options.RelatedActions = []string{"user.list", "user.current_user_status", "user.emails"}
+		options.IndividualTool.Description = "Get the current authenticated user. Returns: account ID, username, name, state, avatar URL, and profile metadata. See also: gitlab_list_users, gitlab_current_user_status, gitlab_list_emails."
+	case "gitlab_list_users":
+		options.Usage = "List users visible to the authenticated caller. Use filters like search, username, active, blocked, and pagination when the task asks for matching users or account inventories."
+		options.Aliases = []string{"list users", "find users", "search users"}
+		options.RelatedActions = []string{"user.get", "user.current", "user.create"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"search": {
+				ValueSource:      "Name, username, or email fragment from the user's request.",
+				ExampleBinding:   `params.search:"alice"`,
+				CommonConfusions: []string{"search narrows users globally; it is not a project/group membership filter."},
+			},
+		}
+		options.IndividualTool.Description = "List users with filtering and pagination support. Returns: user summaries including ID, username, name, state, and profile URLs. See also: gitlab_get_user, gitlab_user_current, gitlab_create_user."
+	case "gitlab_get_user":
+		options.Usage = "Get a single user by numeric user_id. Use this when the prompt already references a concrete user account and needs detailed profile fields."
+		options.Aliases = []string{"get user by id", "show user details", "lookup user"}
+		options.RelatedActions = []string{"user.list", "user.modify", "user.delete"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"user_id": {
+				SemanticRole:     "scope_user",
+				ValueSource:      "Numeric GitLab user ID from prior list/get output or explicit task input.",
+				ExampleBinding:   "params.user_id:42",
+				CommonConfusions: []string{"Use numeric user_id; do not pass username where an ID is required."},
+			},
+		}
+		options.IndividualTool.Description = "Get one user by ID. Returns: detailed account profile metadata and status fields. See also: gitlab_list_users, gitlab_modify_user, gitlab_delete_user."
+	case "gitlab_create_user":
+		options.Usage = "Create a new user account with required fields email, name, and username. Add optional admin/external flags only when explicitly requested."
+		options.Aliases = []string{"create user", "provision user", "new user account"}
+		options.RelatedActions = []string{"user.get", "user.modify", "user.block"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"email": {
+				SemanticRole:     "email_address",
+				ValueSource:      "New account email address from task requirements.",
+				ExampleBinding:   `params.email:"new.user@example.com"`,
+				CommonConfusions: []string{"Provide a real email address; do not pass usernames in the email field."},
+			},
+			"username": {
+				SemanticRole:     "username",
+				ValueSource:      "GitLab username slug for the new account.",
+				ExampleBinding:   `params.username:"newuser"`,
+				CommonConfusions: []string{"Use username without spaces; it is different from display name."},
+			},
+		}
+		options.IndividualTool.Description = "Create a user account. Returns: created user identity and profile summary fields. See also: gitlab_get_user, gitlab_modify_user, gitlab_block_user."
+	case "gitlab_current_user_status":
+		options.RelatedActions = []string{"user.current", "user.set_status", "user.get_status"}
+	case "gitlab_set_user_status":
+		options.RelatedActions = []string{"user.current_user_status", "user.get_status"}
+	}
+
+	return options
 }

@@ -219,6 +219,40 @@ func toLinkItem(e *gl.Epic) LinksItem {
 	return out
 }
 
+func epicToOutput(e *gl.Epic) Output {
+	out := Output{
+		ID:           e.ID,
+		IID:          e.IID,
+		Type:         "Epic",
+		State:        e.State,
+		Title:        e.Title,
+		Description:  e.Description,
+		WebURL:       e.WebURL,
+		Labels:       e.Labels,
+		Confidential: e.Confidential,
+		ParentIID:    e.ParentID,
+	}
+	if e.Author != nil {
+		out.Author = e.Author.Username
+	}
+	if e.StartDate != nil {
+		out.StartDate = time.Time(*e.StartDate).Format(time.DateOnly)
+	}
+	if e.DueDate != nil {
+		out.DueDate = time.Time(*e.DueDate).Format(time.DateOnly)
+	}
+	if e.CreatedAt != nil {
+		out.CreatedAt = e.CreatedAt.Format(time.RFC3339)
+	}
+	if e.UpdatedAt != nil {
+		out.UpdatedAt = e.UpdatedAt.Format(time.RFC3339)
+	}
+	if e.ClosedAt != nil {
+		out.ClosedAt = e.ClosedAt.Format(time.RFC3339)
+	}
+	return out
+}
+
 // mapStatusToID maps a human-readable status string to the GitLab WorkItemStatusID.
 func mapStatusToID(s string) gl.WorkItemStatusID {
 	switch s {
@@ -245,8 +279,52 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.FullPath == "" {
 		return ListOutput{}, errors.New("epicList: full_path is required. Use gitlab_group_list to find the group path first")
 	}
+	if input.AuthorUsername != "" || input.Confidential != nil || input.After != "" {
+		return listWithWorkItems(ctx, client, input)
+	}
+
+	perPage := int64(20)
+	if input.First != nil && *input.First > 0 && *input.First <= 100 {
+		perPage = *input.First
+	}
+	opts := &gl.ListGroupEpicsOptions{ListOptions: gl.ListOptions{PerPage: perPage}}
+	if input.State != "" {
+		opts.State = &input.State
+	}
+	if input.Search != "" {
+		opts.Search = &input.Search
+	}
+	if len(input.LabelName) > 0 {
+		labels := gl.LabelOptions(input.LabelName)
+		opts.Labels = &labels
+	}
+	if input.Sort != "" {
+		opts.Sort = &input.Sort
+	}
+	if input.IncludeAncestors != nil {
+		opts.IncludeAncestorGroups = input.IncludeAncestors
+	}
+	if input.IncludeDescendants != nil {
+		opts.IncludeDescendantGroups = input.IncludeDescendants
+	}
+
+	items, _, err := client.GL().Epics.ListGroupEpics(input.FullPath, opts, gl.WithContext(ctx))
+	if err != nil {
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("epicList", err, http.StatusNotFound,
+			"verify full_path with gitlab_group_list; epics require GitLab Premium or Ultimate")
+	}
+	out := make([]Output, 0, len(items))
+	for _, epic := range items {
+		out = append(out, epicToOutput(epic))
+	}
+	return ListOutput{Epics: out}, nil
+}
+
+func listWithWorkItems(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
+	defaultFirst := int64(20)
 	opts := &gl.ListWorkItemsOptions{
-		Types: []string{"Epic"},
+		First: &defaultFirst,
+		Types: []string{"EPIC"},
 	}
 	if input.State != "" {
 		opts.State = &input.State

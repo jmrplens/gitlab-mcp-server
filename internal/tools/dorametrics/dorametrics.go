@@ -76,21 +76,37 @@ func toOutput(metrics []gl.DORAMetric) Output {
 	return Output{Metrics: out}
 }
 
+func validateMetricsInput(resourceID toolutil.StringOrInt, resourceField, metric string) error {
+	if resourceID == "" {
+		return toolutil.ErrFieldRequired(resourceField)
+	}
+	if metric == "" {
+		return toolutil.ErrFieldRequired("metric")
+	}
+	return nil
+}
+
+func wrapMetricsError(operation string, err error, notFoundHint, scope string) error {
+	if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+		return toolutil.WrapErrWithHint(operation, err,
+			"verify metric, interval, and date filters; omit environment_tiers unless the "+scope+
+				" has matching deployment environment tiers such as production or staging")
+	}
+	return toolutil.WrapErrWithStatusHint(operation, err, http.StatusNotFound, notFoundHint)
+}
+
 // GetProjectMetrics retrieves DORA metrics for a project.
 func GetProjectMetrics(ctx context.Context, client *gitlabclient.Client, input ProjectInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	if input.ProjectID == "" {
-		return Output{}, toolutil.ErrFieldRequired("project_id")
-	}
-	if input.Metric == "" {
-		return Output{}, toolutil.ErrFieldRequired("metric")
+	if err := validateMetricsInput(input.ProjectID, "project_id", input.Metric); err != nil {
+		return Output{}, err
 	}
 	opts := buildOpts(input.Metric, input.StartDate, input.EndDate, input.Interval, input.EnvironmentTiers)
 	metrics, _, err := client.GL().DORAMetrics.GetProjectDORAMetrics(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("doraProjectMetrics", err, http.StatusNotFound, "verify project_id with gitlab_project_get \u2014 DORA metrics require Ultimate license")
+		return Output{}, wrapMetricsError("doraProjectMetrics", err, "verify project_id with gitlab_project_get \u2014 DORA metrics require Ultimate license", "project")
 	}
 	return toOutput(metrics), nil
 }
@@ -100,16 +116,13 @@ func GetGroupMetrics(ctx context.Context, client *gitlabclient.Client, input Gro
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
-	if input.GroupID == "" {
-		return Output{}, toolutil.ErrFieldRequired("group_id")
-	}
-	if input.Metric == "" {
-		return Output{}, toolutil.ErrFieldRequired("metric")
+	if err := validateMetricsInput(input.GroupID, "group_id", input.Metric); err != nil {
+		return Output{}, err
 	}
 	opts := buildOpts(input.Metric, input.StartDate, input.EndDate, input.Interval, input.EnvironmentTiers)
 	metrics, _, err := client.GL().DORAMetrics.GetGroupDORAMetrics(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("doraGroupMetrics", err, http.StatusNotFound, "verify group_id with gitlab_group_get \u2014 DORA metrics require Ultimate license")
+		return Output{}, wrapMetricsError("doraGroupMetrics", err, "verify group_id with gitlab_group_get \u2014 DORA metrics require Ultimate license", "group")
 	}
 	return toOutput(metrics), nil
 }

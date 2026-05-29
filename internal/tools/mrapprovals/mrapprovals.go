@@ -300,6 +300,10 @@ func Reset(ctx context.Context, client *gitlabclient.Client, input ResetInput) e
 	}
 	_, err := client.GL().MergeRequestApprovals.ResetApprovalsOfMergeRequest(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return toolutil.WrapErrWithHint("mrApprovalReset", err,
+				"endpoint requires a bot user backed by a project/group access token; verify project_id + merge_request_iid and that the caller authenticates with a project or group access token (PATs from human users are not accepted)")
+		}
 		return toolutil.WrapErrWithStatusHint("mrApprovalReset", err, http.StatusForbidden,
 			"requires Maintainer role; resets all approvals on the MR \u2014 cannot be undone; verify project_id + merge_request_iid")
 	}

@@ -15,7 +15,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		toolutil.NewCreateActionSpec("link_create",
 			toolutil.RouteAction(client, Create),
 			toolutil.ActionSpecOptions{
-				Tags:           []string{"issue", "link"},
+				Aliases: []string{"gitlab_issue_link_create"}, Tags: []string{"issue", "link"},
 				Usage:          "Use to create a relationship from a source issue to a target issue, optionally across projects.",
 				RelatedActions: []string{"issue.link_list", "issue.link_get", "issue.link_delete", "issue.get"},
 				ParameterGuidance: map[string]toolutil.ParameterGuidance{
@@ -66,7 +66,7 @@ func issueLinkDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 func issueLinkOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"issue", "link"},
+		Aliases: []string{individualTool}, Usage: "Use to execute issuelinks domain action.", Tags: []string{"issue", "link"},
 		OpenWorld:      true,
 		OwnerPackage:   "issuelinks",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

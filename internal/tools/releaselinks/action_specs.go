@@ -35,11 +35,14 @@ func releaseLinkDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 
 func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"release", "asset", "link"},
+		Aliases: []string{individualTool}, Usage: "Use to execute releaselinks domain action.", Tags: []string{"release", "asset", "link"},
 		RelatedActions: []string{"release.get", "release.update", "package.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "releaselinks",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	}
+	if actionName == "link_get" {
+		options.Usage = "Get one release asset link by link_id. Use when the task references a specific release asset link."
 	}
 	if actionName == "link_create" || actionName == "link_update" {
 		if actionName == "link_create" {

@@ -53,7 +53,7 @@ func wikiDeleteSpec(name string, route toolutil.ActionRoute, individualTool stri
 
 func wikiOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"wiki"},
+		Aliases: []string{individualTool}, Usage: "Use to execute wikis domain action.", Tags: []string{"wiki"},
 		RelatedActions: []string{"wiki.list", "wiki.get", "project.get", "repository.file_get"},
 		OpenWorld:      true,
 		OwnerPackage:   "wikis",

@@ -51,7 +51,7 @@ func TestListDynamicTools_ExposesFindAndExecute(t *testing.T) {
 		t.Fatalf("len(listDynamicTools()) = %d, want 2", len(tools))
 	}
 	names := []string{tools[0].Name, tools[1].Name}
-	if names[0] != dynamicFindToolName || names[1] != dynamicExecuteToolName {
+	if names[0] != dynamicFindToolName || names[1] != dynamicExecuteActionToolName {
 		t.Fatalf("dynamic tools = %v, want find before execute", names)
 	}
 
@@ -84,10 +84,10 @@ func TestListDynamicTools_ExposesFindAndExecute(t *testing.T) {
 // assertion removes find and expects validation to fail. This keeps accidental
 // dynamic surface changes visible during llms generation.
 func TestValidateDynamicToolContract_RejectsDrift(t *testing.T) {
-	if err := validateDynamicToolContract([]*mcp.Tool{{Name: dynamicFindToolName}, {Name: dynamicExecuteToolName}}); err != nil {
+	if err := validateDynamicToolContract([]*mcp.Tool{{Name: dynamicFindToolName}, {Name: dynamicExecuteActionToolName}}); err != nil {
 		t.Fatalf("validateDynamicToolContract() error = %v", err)
 	}
-	if err := validateDynamicToolContract([]*mcp.Tool{{Name: dynamicExecuteToolName}}); err == nil {
+	if err := validateDynamicToolContract([]*mcp.Tool{{Name: dynamicExecuteActionToolName}}); err == nil {
 		t.Fatal("validateDynamicToolContract() error = nil, want error")
 	}
 }

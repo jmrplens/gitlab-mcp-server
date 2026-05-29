@@ -31,7 +31,7 @@ func userEmailDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 func userEmailOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"user", "email"},
+		Aliases: []string{individualTool}, Usage: "Use to execute useremails domain action.", Tags: []string{"user", "email"},
 		OpenWorld:      true,
 		OwnerPackage:   "useremails",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

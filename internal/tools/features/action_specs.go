@@ -65,25 +65,50 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func featureReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, featureOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, featureOptions(name, individualTool))
 }
 
 func featureSetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	individualIdempotent := false
-	options := featureOptions("gitlab_set_feature_flag")
+	options := featureOptions("feature_set", "gitlab_set_feature_flag")
 	options.IndividualTool.AnnotationOverrides.Idempotent = &individualIdempotent
 	return toolutil.NewUpdateActionSpec("feature_set", SetRoute(client), options)
 }
 
 func featureDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, featureOptions(individualTool))
+	return toolutil.NewDeleteActionSpec(name, route, featureOptions(name, individualTool))
 }
 
-func featureOptions(individualTool string) toolutil.ActionSpecOptions {
+func featureOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "List instance feature flags and definitions."
+	guidance := map[string]toolutil.ParameterGuidance{}
+	if actionName == "feature_set" || actionName == "feature_delete" {
+		guidance["name"] = toolutil.ParameterGuidance{
+			SemanticRole:   "feature_flag_name",
+			ValueSource:    "Feature flag name from list/definitions or requested admin toggle.",
+			ExampleBinding: `params.name:"flag1"`,
+		}
+	}
+	if actionName == "feature_set" {
+		usage = "Set or update an instance feature flag value (bool/int/string)."
+		guidance["value"] = toolutil.ParameterGuidance{
+			SemanticRole:   "feature_flag_value",
+			ValueSource:    "Desired value (boolean, integer, or string) for the feature flag gate.",
+			ExampleBinding: "params.value:true",
+		}
+	}
+	if actionName == "feature_delete" {
+		usage = "Delete an instance feature flag override by name."
+	}
+
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"admin", "feature"},
-		OpenWorld:      true,
-		OwnerPackage:   "features",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:           []string{individualTool},
+		Tags:              []string{"admin", "feature"},
+		Usage:             usage,
+		RelatedActions:    []string{"admin.settings_get"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "features",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

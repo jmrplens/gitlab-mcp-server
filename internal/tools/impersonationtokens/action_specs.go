@@ -30,7 +30,7 @@ func userTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 func userTokenOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"user", "token"},
+		Aliases: []string{individualTool}, Usage: "Use to execute impersonationtokens domain action.", Tags: []string{"user", "token"},
 		OpenWorld:      true,
 		OwnerPackage:   "impersonationtokens",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

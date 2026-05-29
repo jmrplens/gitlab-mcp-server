@@ -44,10 +44,16 @@ func issueNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 }
 
 func issueNoteOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
+	options := toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
+		Usage:          "Use to execute issuenotes domain action.",
 		Tags:           []string{"issue", "note"},
 		OpenWorld:      true,
 		OwnerPackage:   "issuenotes",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if individualTool == "gitlab_issue_note_get" {
+		options.Usage = "Get one issue note by params.note_id. Use when the task references a specific comment or note ID on an issue."
+	}
+	return options
 }

@@ -253,6 +253,7 @@ func TestChange_AllOptionalFields(t *testing.T) {
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	specs := ActionSpecs(client)
+	specByTool := planLimitSpecsByTool(specs)
 	if len(specs) != 2 {
 		t.Fatalf("len(ActionSpecs) = %d, want 2", len(specs))
 	}
@@ -260,6 +261,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "planlimits" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	if specByTool["gitlab_get_plan_limits"].ParameterGuidance["plan_name"].SemanticRole == "" {
+		t.Fatal("gitlab_get_plan_limits should define plan_name parameter guidance")
 	}
 }
 

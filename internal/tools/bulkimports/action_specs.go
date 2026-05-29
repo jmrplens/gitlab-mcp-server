@@ -31,8 +31,29 @@ func bulkImportUpdateSpec(name string, route toolutil.ActionRoute, individualToo
 }
 
 func bulkImportOptions(individualTool string) toolutil.ActionSpecOptions {
+	usage := "Operate bulk import migrations and entities."
+	switch individualTool {
+	case "gitlab_start_bulk_import":
+		usage = "Start a new bulk import migration from an external GitLab source."
+	case "gitlab_list_bulk_imports":
+		usage = "List bulk import migrations visible to the current user or admin context."
+	case "gitlab_get_bulk_import":
+		usage = "Get status and metadata for one bulk import migration."
+	case "gitlab_cancel_bulk_import":
+		usage = "Cancel an in-progress bulk import migration."
+	case "gitlab_list_bulk_import_entities":
+		usage = "List entities associated with a bulk import migration or globally."
+	case "gitlab_get_bulk_import_entity":
+		usage = "Get details for one entity inside a bulk import migration."
+	case "gitlab_list_bulk_import_entity_failures":
+		usage = "List failure records for one bulk import entity."
+	}
+
 	return toolutil.ActionSpecOptions{
+		Aliases:        []string{individualTool},
 		Tags:           []string{"admin", "import"},
+		Usage:          usage,
+		RelatedActions: []string{"project.import_status", "project.export_status"},
 		OpenWorld:      true,
 		OwnerPackage:   "bulkimports",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

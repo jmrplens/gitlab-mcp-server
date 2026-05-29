@@ -50,7 +50,7 @@ func securityCategoryDeleteSpec(name string, route toolutil.ActionRoute, individ
 
 func securityCategoryOptions(individualTool, description string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"security", "category", "graphql", "namespace"},
+		Aliases: []string{individualTool}, Usage: "Use to execute securitycategories domain action.", Tags: []string{"security", "category", "graphql", "namespace"},
 		RelatedActions: []string{"security_attribute.create", "security_attribute.update", "group.get", "project.get"},
 		OpenWorld:      true,
 		Edition:        "premium",

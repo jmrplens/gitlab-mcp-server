@@ -1402,6 +1402,40 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
+// TestActionSpecs_Metadata verifies canonical metadata for branch actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	byTool := newBranchSpecsByTool(t)
+
+	if len(byTool) != 10 {
+		t.Fatalf("len(byTool) = %d, want 10", len(byTool))
+	}
+	for toolName, spec := range byTool {
+		if spec.OwnerPackage != "branches" {
+			t.Fatalf("OwnerPackage for %s = %q, want branches", toolName, spec.OwnerPackage)
+		}
+	}
+
+	list := byTool["gitlab_branch_list"]
+	if list.Usage == "" || len(list.Aliases) == 0 || len(list.ParameterGuidance) == 0 {
+		t.Fatalf("gitlab_branch_list metadata incomplete: usage=%q aliases=%d guidance=%d", list.Usage, len(list.Aliases), len(list.ParameterGuidance))
+	}
+
+	get := byTool["gitlab_branch_get"]
+	if get.Usage == "" || len(get.Aliases) == 0 || get.ParameterGuidance["branch_name"].SemanticRole == "" {
+		t.Fatalf("gitlab_branch_get metadata incomplete: usage=%q aliases=%d guidance(branch_name)=%q", get.Usage, len(get.Aliases), get.ParameterGuidance["branch_name"].SemanticRole)
+	}
+
+	create := byTool["gitlab_branch_create"]
+	if create.Usage == "" || len(create.Aliases) == 0 || create.ParameterGuidance["ref"].SemanticRole == "" {
+		t.Fatalf("gitlab_branch_create metadata incomplete: usage=%q aliases=%d guidance(ref)=%q", create.Usage, len(create.Aliases), create.ParameterGuidance["ref"].SemanticRole)
+	}
+
+	protect := byTool["gitlab_branch_protect"]
+	if protect.Usage == "" || protect.ParameterGuidance["push_access_level"].SemanticRole == "" {
+		t.Fatalf("gitlab_branch_protect metadata incomplete: usage=%q push_guidance=%q", protect.Usage, protect.ParameterGuidance["push_access_level"].SemanticRole)
+	}
+}
+
 // TestBranchProtect_Conflict409_FallbackGet verifies idempotent behavior
 // when the branch is already protected (409 Conflict): the handler falls
 // back to GET the existing protection rule.

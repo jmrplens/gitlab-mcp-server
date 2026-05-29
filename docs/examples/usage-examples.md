@@ -210,11 +210,11 @@ Dynamic mode is the default tool surface. The model first searches the canonical
 Call: gitlab_find_action(query="list open merge requests")
 → Returns: merge_request.list with input schema, examples, safety metadata, and output summary
 
-Call: gitlab_execute_tool(action="merge_request.list", params={project_id:"42", state:"opened"})
+Call: gitlab_execute_action(action="merge_request.list", params={project_id:"42", state:"opened"})
 → Executes the GitLab API request and returns Markdown plus structured content
 ```
 
-Use this flow when startup context or visible tool count matters. It reaches the same catalog as meta-tools and individual tools while exposing only `gitlab_find_action` and `gitlab_execute_tool` in `tools/list`.
+Use this flow when startup context or visible tool count matters. It reaches the same catalog as meta-tools and individual tools while exposing only `gitlab_find_action` and `gitlab_execute_action` in `tools/list`.
 
 ## Meta-Tool Discovery
 

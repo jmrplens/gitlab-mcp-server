@@ -19,7 +19,7 @@ func groupEpicBoardReadSpec(name string, route toolutil.ActionRoute, individualT
 
 func groupEpicBoardOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "epic", "board"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupepicboards domain action.", Tags: []string{"group", "epic", "board"},
 		RelatedActions: []string{"group.epic_list"},
 		Edition:        "premium",
 		OpenWorld:      true,

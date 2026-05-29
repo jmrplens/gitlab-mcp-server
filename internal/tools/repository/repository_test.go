@@ -1307,6 +1307,24 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Errorf("OwnerPackage for %s = %q, want repository", spec.Name, spec.OwnerPackage)
 		}
 	}
+
+	tree := byTool["gitlab_repository_tree"]
+	if tree.Usage == "" || len(tree.Aliases) == 0 || len(tree.ParameterGuidance) == 0 {
+		t.Fatalf("gitlab_repository_tree metadata incomplete: usage=%q aliases=%d guidance=%d", tree.Usage, len(tree.Aliases), len(tree.ParameterGuidance))
+	}
+	if tree.IndividualTool.Description == "" {
+		t.Fatal("gitlab_repository_tree description is empty")
+	}
+
+	blob := byTool["gitlab_repository_blob"]
+	if blob.Usage == "" || len(blob.Aliases) == 0 {
+		t.Fatalf("gitlab_repository_blob metadata incomplete: usage=%q aliases=%d", blob.Usage, len(blob.Aliases))
+	}
+
+	changelogAdd := byTool["gitlab_repository_changelog_add"]
+	if changelogAdd.Usage == "" || len(changelogAdd.Aliases) == 0 {
+		t.Fatalf("gitlab_repository_changelog_add metadata incomplete: usage=%q aliases=%d", changelogAdd.Usage, len(changelogAdd.Aliases))
+	}
 }
 
 // newRepositorySpecsByTool constructs repository specs by tool test fixtures.

@@ -14,18 +14,33 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func settingsReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, settingsOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, settingsOptions(name, individualTool))
 }
 
 func settingsUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, settingsOptions(individualTool))
+	return toolutil.NewUpdateActionSpec(name, route, settingsOptions(name, individualTool))
 }
 
-func settingsOptions(individualTool string) toolutil.ActionSpecOptions {
+func settingsOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "Get current GitLab application settings."
+	guidance := map[string]toolutil.ParameterGuidance{}
+	if actionName == "settings_update" {
+		usage = "Update mutable GitLab application settings through a key-value settings map."
+		guidance["settings"] = toolutil.ParameterGuidance{
+			SemanticRole:   "settings_patch",
+			ValueSource:    "Map of setting keys to desired values (snake_case keys expected by GitLab API).",
+			ExampleBinding: `params.settings:{"signup_enabled":false}`,
+		}
+	}
+
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"admin", "settings"},
-		OpenWorld:      true,
-		OwnerPackage:   "settings",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:           []string{individualTool},
+		Tags:              []string{"admin", "settings"},
+		Usage:             usage,
+		RelatedActions:    []string{"admin.metadata_get"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "settings",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

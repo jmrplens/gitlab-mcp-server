@@ -322,6 +322,27 @@ func TestProtect(t *testing.T) {
 	}
 }
 
+// TestProtect_InvalidTierIncludesActionableHint verifies GitLab validation errors
+// guide the model toward the finite set of accepted group environment tiers.
+func TestProtect_InvalidTierIncludesActionableHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
+		testutil.AssertRequestPath(t, r, pathGroupProtEnvs)
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"message":["Name must be one of environment tiers: production, staging, testing, development, other."]}`)
+	}))
+
+	_, err := Protect(context.Background(), client, ProtectInput{GroupID: "mygroup", Name: "production-123"})
+	if err == nil {
+		t.Fatal("Protect() error = nil, want invalid tier error")
+	}
+	got := err.Error()
+	for _, want := range []string{"valid group protected environment tiers", "production", "staging", "testing", "development", "other"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Protect() error = %q, want substring %q", got, want)
+		}
+	}
+}
+
 // --- Update tests ---
 
 // TestUpdate covers success (with/without rename, access levels, rules),
@@ -423,6 +444,25 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+// TestUpdate_NotFoundIncludesActionableHint verifies validation-like update errors include tier and merge guidance.
+func TestUpdate_NotFoundIncludesActionableHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodPut)
+		testutil.AssertRequestPath(t, r, pathGroupProtEnv)
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+
+	_, err := Update(context.Background(), client, UpdateInput{GroupID: "mygroup", Environment: "production"})
+	if err == nil {
+		t.Fatal("Update() error = nil, want not found error")
+	}
+	for _, want := range []string{"protected_env_list", "valid tiers", "partial updates merge"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("Update() error missing %q: %v", want, err)
+		}
+	}
+}
+
 // --- Unprotect tests ---
 
 // TestUnprotect covers success, API errors, context cancellation, and input
@@ -488,6 +528,23 @@ func TestUnprotect(t *testing.T) {
 				t.Fatalf("Unprotect() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestUnprotect_ServerErrorUsesGenericMessage verifies non-auth/not-found failures use the generic mutating error path.
+func TestUnprotect_ServerErrorUsesGenericMessage(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodDelete)
+		testutil.AssertRequestPath(t, r, pathGroupProtEnv)
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"server error"}`)
+	}))
+
+	err := Unprotect(context.Background(), client, UnprotectInput{GroupID: "mygroup", Environment: "production"})
+	if err == nil {
+		t.Fatal("Unprotect() error = nil, want server error")
+	}
+	if strings.Contains(err.Error(), "valid tiers") {
+		t.Fatalf("unexpected tier hint for server error: %v", err)
 	}
 }
 

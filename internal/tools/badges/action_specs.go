@@ -52,7 +52,7 @@ func badgeDeleteSpec(name string, route toolutil.ActionRoute, individualTool str
 
 func badgeOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"project", "badge"},
+		Aliases: []string{individualTool}, Usage: "Use to execute badges domain action.", Tags: []string{"project", "badge"},
 		RelatedActions: []string{"project.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "badges",
@@ -79,7 +79,7 @@ func groupBadgeDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 
 func groupBadgeOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "badge"},
+		Aliases: []string{individualTool}, Usage: "Use to execute badges domain action.", Tags: []string{"group", "badge"},
 		RelatedActions: []string{"group.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "badges",

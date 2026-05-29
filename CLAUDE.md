@@ -22,7 +22,7 @@
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | MCP Tools (individual)    | 1025 self-managed Enterprise/Premium; 1031 on GitLab.com Enterprise/Premium with Orbit                     |
 | Meta-mode tools           | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise (Orbit)                                    |
-| Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_tool`) — see Dynamic toolset mode below |
+| Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
 | MCP Resources             | 46 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
 | Completion argument types | 17                                                                                                           |
@@ -206,7 +206,22 @@ make test-e2e                                          # Same via Makefile
 make test-e2e-docker                                   # Ephemeral GitLab CE + runner + fixture service (Docker, ~4 GB RAM)
 go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
+
+# Surface evaluator (Docker GitLab fixture)
+# CE case set
+make eval-surfaces-docker SURFACE=dynamic
+make eval-surfaces-docker SURFACE=meta
+
+# Enterprise-only case set on GitLab EE runtime
+make eval-surfaces-docker-enterprise SURFACE=dynamic
+make eval-surfaces-docker-enterprise SURFACE=meta
+
+# CE + Enterprise case set together on GitLab EE runtime
+make eval-surfaces-docker-enterprise-all SURFACE=dynamic
+make eval-surfaces-docker-enterprise-all SURFACE=meta
 ```
+
+For targeted debugging, append `PRESET=...` to any evaluator target to run a single preset.
 
 ### Release process
 
@@ -485,7 +500,7 @@ Markdown formatters use a type-based registry in `internal/toolutil/mdregistry.g
 
 ### Dynamic toolset mode
 
-`TOOL_SURFACE=dynamic` registers only `gitlab_find_action` and `gitlab_execute_tool`. It is the default when `TOOL_SURFACE` and legacy `META_TOOLS` are unset. The dynamic registry is built from the canonical action catalog shared with meta-tools and augmented with standalone routes such as project discovery, so execution reuses existing handlers, typed schemas, destructive-action classification, read-only filtering, safe-mode previews, markdown formatters, and scope filtering.
+`TOOL_SURFACE=dynamic` registers only `gitlab_find_action` and `gitlab_execute_action`. It is the default when `TOOL_SURFACE` and legacy `META_TOOLS` are unset. The dynamic registry is built from the canonical action catalog shared with meta-tools and augmented with standalone routes such as project discovery, so execution reuses existing handlers, typed schemas, destructive-action classification, read-only filtering, safe-mode previews, markdown formatters, and scope filtering.
 
 Developers add normal GitLab actions through domain-local `ActionSpecs` and the audited catalog aggregation path. `internal/tools/action_catalog.go` builds the canonical catalog from those specs; meta-tools register visible domain dispatchers from it, dynamic mode builds find/execute over it, and individual mode projects one visible tool per action from the same catalog. Do not add package-local `RegisterTools` functions, duplicate dynamic-only action definitions, or package-level meta registration for ordinary GitLab API operations. See `docs/development/tool-surfaces-and-action-core.md` for the detailed developer architecture.
 
@@ -531,7 +546,7 @@ curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -d '{
 - **TLS errors**: Set `GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs
 - **Tool not found**: Check the action's `ActionSpec`, catalog aggregation, `action_catalog.go`, and `docs/development/tool-surfaces-and-action-core.md` for surface ownership rules
 - **Meta-tools disabled**: legacy `META_TOOLS=false` maps to `TOOL_SURFACE=individual`; prefer setting `TOOL_SURFACE=meta` explicitly
-- **Dynamic mode shows only two tools**: this is expected by default. Use `gitlab_find_action` and `gitlab_execute_tool`; set `TOOL_SURFACE=meta` to use meta-tools.
+- **Dynamic mode shows only two tools**: this is expected by default. Use `gitlab_find_action` and `gitlab_execute_action`; set `TOOL_SURFACE=meta` to use meta-tools.
 - **Pagination missing**: Ensure tool uses `buildPaginationResponse()` helper for list operations
 - **Test mocking**: All tests use `httptest.NewServer` — check URL routing in mock handler
 

@@ -25,7 +25,7 @@ func mergeTrainCreateSpec(name string, route toolutil.ActionRoute, individualToo
 
 func mergeTrainOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"merge_request", "merge_train"},
+		Aliases: []string{individualTool}, Usage: "Use to execute mergetrains domain action.", Tags: []string{"merge_request", "merge_train"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "mergetrains",

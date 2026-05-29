@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -182,12 +183,21 @@ func projectPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
 
 func projectGetSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	options := projectOptions("gitlab_project_get")
+	options.Usage = "Get one exact project by numeric ID or full namespace path. Use this when the prompt gives a concrete path like group/project and asks to find, show, verify, or read project metadata such as id or default_branch; do not use search.projects for an exact path lookup."
 	options.RelatedActions = []string{"project.archive", "project.delete", "project.update"}
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"project_id": {
+			SemanticRole:     "scope_project",
+			ValueSource:      "Concrete numeric project ID or full namespace path from the prompt or a prior project result.",
+			ExampleBinding:   `params.project_id:"my-org/tools/gitlab-mcp-server"`,
+			CommonConfusions: []string{"Use project_id for a namespace path; do not substitute full_path, path, remote_url, search, or query."},
+		},
+	}
 	return toolutil.NewReadActionSpec("get", route, options)
 }
 
 func projectReadSpec(name string, route toolutil.ActionRoute, individualTool string, extraTags ...string) toolutil.ActionSpec {
-	options := projectOptions(individualTool, extraTags...)
+	options := projectOptionsForAction(name, individualTool, extraTags...)
 	return toolutil.NewReadActionSpec(name, route, options)
 }
 
@@ -204,11 +214,63 @@ func projectDestructiveUpdateSpec(name string, route toolutil.ActionRoute, indiv
 }
 
 func projectOptions(individualTool string, extraTags ...string) toolutil.ActionSpecOptions {
+	return projectOptionsForAction("", individualTool, extraTags...)
+}
+
+func projectOptionsForAction(actionName, individualTool string, extraTags ...string) toolutil.ActionSpecOptions {
 	tags := append([]string{"project"}, extraTags...)
-	return toolutil.ActionSpecOptions{
-		Tags:           tags,
+	options := toolutil.ActionSpecOptions{
+		Aliases: []string{individualTool}, Usage: "Use to execute projects domain action.", Tags: tags,
 		OpenWorld:      true,
 		OwnerPackage:   "projects",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if slices.Contains(extraTags, "push_rule") {
+		options.Usage = "Use project push rule actions for the singleton project-level push rule. Do not pass push_rule_id; get/add/edit/delete operate by project_id only. Use reject_unsigned_commits, not deny_unsigned_commits."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:     "scope_project",
+				ValueSource:      "Project that owns the singleton push rule.",
+				CommonConfusions: []string{"Push rules are project-scoped singletons; there is no push_rule_id parameter."},
+			},
+		}
+		if individualTool == "gitlab_project_add_push_rule" || individualTool == "gitlab_project_edit_push_rule" {
+			options.ParameterGuidance["commit_message_regex"] = toolutil.ParameterGuidance{
+				ValueSource:      "Commit message regex requested by the user.",
+				ExampleBinding:   `params.commit_message_regex:"^EVAL-"`,
+				CommonConfusions: []string{"Use commit_message_regex directly; do not send commit_message_regex_enabled or empty regex placeholders."},
+			}
+			options.ParameterGuidance["reject_unsigned_commits"] = toolutil.ParameterGuidance{
+				ValueSource:      "Boolean that enables unsigned commit rejection.",
+				ExampleBinding:   "params.reject_unsigned_commits:true",
+				CommonConfusions: []string{"Use reject_unsigned_commits, not deny_unsigned_commits."},
+			}
+		}
+		if individualTool == "gitlab_project_add_push_rule" {
+			options.Usage += " For add, include at least one rule-setting parameter such as commit_message_regex, reject_unsigned_commits, prevent_secrets, branch_name_regex, or deny_delete_tag; do not call add with project_id alone."
+		}
+	}
+	if individualTool == "gitlab_project_delete" {
+		options.Usage = "Use to delete a project. For ordinary cleanup, send project_id and confirm only. Set permanently_remove only when explicitly requested; when permanently_remove is true, full_path must exactly match the project's path_with_namespace from project create/get."
+	}
+	if actionName == "list" && individualTool == "gitlab_project_list" {
+		options.Usage = "List projects accessible to the authenticated user. For most recently updated projects, use order_by last_activity_at with sort desc and per_page for the requested count; do not use last_activity_after as an order_by value."
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"order_by": {
+				SemanticRole: "project_list_sort_field",
+				ValueSource:  "Use only GitLab project list ordering fields accepted by the projects API.",
+				CommonConfusions: []string{
+					"Use last_activity_at to sort by recent activity; last_activity_after is a date filter, not an order_by value.",
+				},
+			},
+		}
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("order_by", map[string]any{
+				"enum":        []any{"id", "name", "path", "created_at", "updated_at", "last_activity_at"},
+				"description": "Order projects by id, name, path, created_at, updated_at, or last_activity_at.",
+			}),
+			toolutil.SchemaPropertyOverride("sort", map[string]any{"enum": []any{"asc", "desc"}}),
+		}
+	}
+	return options
 }

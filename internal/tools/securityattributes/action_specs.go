@@ -80,7 +80,7 @@ func securityAttributeBulkUpdateSpec(name string, route toolutil.ActionRoute, in
 
 func securityAttributeOptions(individualTool, description string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"security", "attribute", "graphql", "namespace"},
+		Aliases: []string{individualTool}, Usage: "Use to execute securityattributes domain action.", Tags: []string{"security", "attribute", "graphql", "namespace"},
 		RelatedActions: []string{"security_category.create", "security_category.update", "project.get", "group.get"},
 		OpenWorld:      true,
 		Edition:        "premium",

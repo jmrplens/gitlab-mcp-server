@@ -24,10 +24,10 @@ Dynamic mode keeps the same underlying GitLab coverage as meta-tools. It changes
 
 `TOOL_SURFACE=dynamic` (or leaving `TOOL_SURFACE` unset) exposes the current two-tool surface:
 
-| Tool                  | Purpose                                                                                                                                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `gitlab_find_action`  | Search the canonical action catalog and return exact input schemas, examples, safety metadata, and output summaries for matching action IDs |
-| `gitlab_execute_tool` | Execute one selected action by canonical `domain.action` ID with runtime validation and safety checks                                       |
+| Tool                    | Purpose                                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `gitlab_find_action`    | Search the canonical action catalog and return exact input schemas, examples, safety metadata, and output summaries for matching action IDs |
+| `gitlab_execute_action` | Execute one selected action by canonical `domain.action` ID with runtime validation and safety checks                                       |
 
 ## Configuration
 
@@ -70,14 +70,14 @@ gitlab-mcp-server --http \
 The model should use a two-step workflow:
 
 1. Find candidate actions and exact schemas with `gitlab_find_action`.
-2. Execute one validated action with `gitlab_execute_tool`.
+2. Execute one validated action with `gitlab_execute_action`.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant LLM as AI Client
     participant Find as gitlab_find_action
-    participant Execute as gitlab_execute_tool
+    participant Execute as gitlab_execute_action
     participant GitLab
 
     User->>LLM: Show open MRs authored by me
@@ -90,7 +90,7 @@ sequenceDiagram
     LLM-->>User: Human-readable result
 ```
 
-The dynamic tools return normal MCP tool results. The examples below show the `structuredContent` payloads, not the full MCP envelope. In the full result, human-readable Markdown appears in `content`, JSON data appears in `structuredContent`, and `isError` is set on the MCP result envelope when the server returns repair guidance instead of a successful action payload. The dynamic layer does not invent a second execution path: `gitlab_execute_tool` dispatches to the same handler, markdown formatter, schema validation, policy checks, and GitLab client used by the corresponding meta-tool action.
+The dynamic tools return normal MCP tool results. The examples below show the `structuredContent` payloads, not the full MCP envelope. In the full result, human-readable Markdown appears in `content`, JSON data appears in `structuredContent`, and `isError` is set on the MCP result envelope when the server returns repair guidance instead of a successful action payload. The dynamic layer does not invent a second execution path: `gitlab_execute_action` dispatches to the same handler, markdown formatter, schema validation, policy checks, and GitLab client used by the corresponding meta-tool action.
 
 ## MCP Response Shapes
 
@@ -121,7 +121,7 @@ Find returns a ranked shortlist of catalog actions with exact schemas inline. Th
         }
       },
       "example": {
-        "tool": "gitlab_execute_tool",
+        "tool": "gitlab_execute_action",
         "arguments": {
           "action": "merge_request.list",
           "params": { "project_id": "group/project" }
@@ -137,7 +137,7 @@ Pass `explain: true` to include deterministic scoring reasons in each result. Th
 
 Find accepts `limit`; the default is 20 results and the server caps it at 50. The limit only controls how many ranked actions are returned. It does not shrink the catalog searched by the server.
 
-### `gitlab_execute_tool`
+### `gitlab_execute_action`
 
 Execute accepts a canonical `domain.action` ID and a required `params` object. Use `params: {}` for actions with no parameters.
 
@@ -192,7 +192,7 @@ These resources are available for every tool surface, including `CAPABILITY_SURF
 
 ```json
 {
-  "tool": "gitlab_execute_tool",
+  "tool": "gitlab_execute_action",
   "arguments": {
     "action": "merge_request.list",
     "params": {
@@ -225,7 +225,7 @@ Dynamic mode reuses the same destructive-action protection as meta-tools. Destru
 
 ```json
 {
-  "tool": "gitlab_execute_tool",
+  "tool": "gitlab_execute_action",
   "arguments": {
     "action": "project.delete",
     "params": {
@@ -239,7 +239,7 @@ Without confirmation, destructive execution returns `isError: true` with guidanc
 
 ```json
 {
-  "tool": "gitlab_execute_tool",
+  "tool": "gitlab_execute_action",
   "arguments": {
     "action": "project.delete",
     "confirm": true,
@@ -271,7 +271,7 @@ flowchart TD
 
     subgraph Public MCP Surface
         E[gitlab_find_action]
-        G[gitlab_execute_tool]
+        G[gitlab_execute_action]
     end
 
     subgraph Shared Execution Path

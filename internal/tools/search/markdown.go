@@ -194,10 +194,12 @@ func formatSearchResultList(kind string, count int, pagination toolutil.Paginati
 	fmt.Fprintf(&b, "## %s Search Results (%d)\n\n", kind, pagination.TotalItems)
 	toolutil.WriteListSummary(&b, count, pagination)
 	if count == 0 {
-		b.WriteString(emptyMessage + "\n")
+		b.WriteString(emptyMessage)
+		b.WriteByte('\n')
 		return b.String()
 	}
-	b.WriteString(header + "\n")
+	b.WriteString(header)
+	b.WriteByte('\n')
 	b.WriteString(toolutil.TblSep4Col)
 	for _, row := range rows {
 		fmt.Fprintf(&b, fmtTableRow4Col, row[0], row[1], row[2], row[3])

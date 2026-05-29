@@ -61,8 +61,8 @@ func TestDynamicSchemaIndex_ListsCanonicalActionsSorted(t *testing.T) {
 	if uErr := json.Unmarshal([]byte(result.Contents[0].Text), &index); uErr != nil {
 		t.Fatalf("unmarshal: %v", uErr)
 	}
-	if index.URITemplate != "gitlab://schema/dynamic/{action}" || index.ExecuteTool != "gitlab_execute_tool" {
-		t.Fatalf("index metadata = %+v, want dynamic template and execute tool", index)
+	if index.URITemplate != "gitlab://schema/dynamic/{action}" || index.ExecuteAction != "gitlab_execute_action" {
+		t.Fatalf("index metadata = %+v, want dynamic template and execute action", index)
 	}
 	if index.ActionCount != 2 || len(index.Actions) != 2 {
 		t.Fatalf("actions = %+v, want 2", index.Actions)
@@ -107,7 +107,7 @@ func TestDynamicSchemaTemplate_ReturnsDynamicParamsSchema(t *testing.T) {
 		t.Fatalf("dynamic params schema should not include meta confirm param: %+v", properties)
 	}
 	confirmation, ok := schema["x_confirmation"].(map[string]any)
-	if !ok || confirmation["location"] != "gitlab_execute_tool.confirm" {
+	if !ok || confirmation["location"] != "gitlab_execute_action.confirm" {
 		t.Fatalf("x_confirmation = %+v, want top-level dynamic confirmation guidance", schema["x_confirmation"])
 	}
 }

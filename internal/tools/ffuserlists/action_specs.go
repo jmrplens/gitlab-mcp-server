@@ -34,7 +34,7 @@ func userListDeleteSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func userListOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"feature_flags", "user_list", "rollout"},
+		Aliases: []string{individualTool}, Usage: "Use to execute ffuserlists domain action.", Tags: []string{"feature_flags", "user_list", "rollout"},
 		RelatedActions: []string{"feature_flags.feature_flag_get", "feature_flags.feature_flag_update"},
 		OpenWorld:      true,
 		OwnerPackage:   "ffuserlists",

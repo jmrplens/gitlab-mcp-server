@@ -225,14 +225,14 @@ func visibleToolSnapshots(tools []*mcp.Tool) ([]ToolSurfaceVisibleTool, []toolSn
 }
 
 func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Catalog) {
-	if catalog == nil || !snapshot.hasVisibleTool("gitlab_execute_tool") {
+	if catalog == nil || !snapshot.hasVisibleTool("gitlab_execute_action") {
 		return
 	}
 	for _, action := range catalog.Actions() {
 		entry := ToolSurfaceEntry{
 			ID:             string(action.ID),
 			Kind:           toolManifestKindDynamicAction,
-			Tool:           "gitlab_execute_tool",
+			Tool:           "gitlab_execute_action",
 			Action:         string(action.ID),
 			Domain:         action.Domain,
 			BackingTool:    action.ToolName,
@@ -244,7 +244,7 @@ func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Ca
 			RequiredParams: dynamicRequiredParams(action.Route.InputSchema),
 		}
 		call := ToolSurfaceCallShape{
-			Tool:           "gitlab_execute_tool",
+			Tool:           "gitlab_execute_action",
 			Action:         string(action.ID),
 			ActionLocation: "action",
 			ParamsLocation: "params",

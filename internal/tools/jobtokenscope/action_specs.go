@@ -76,7 +76,7 @@ func jobTokenScopeDeleteSpec(name string, route toolutil.ActionRoute, individual
 
 func jobTokenScopeOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"job", "token-scope", "allowlist"},
+		Aliases: []string{individualTool}, Usage: "Use to execute jobtokenscope domain action.", Tags: []string{"job", "token-scope", "allowlist"},
 		OpenWorld:      true,
 		OwnerPackage:   "jobtokenscope",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

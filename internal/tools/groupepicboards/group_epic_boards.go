@@ -11,6 +11,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const groupEpicBoardHint = "verify group_id; epic boards require Premium/Ultimate and can be empty until boards are configured for the group"
+
 // ListInput defines parameters for listing group epic boards.
 type ListInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
@@ -92,7 +94,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 	boards, resp, err := client.GL().GroupEpicBoards.ListGroupEpicBoards(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupEpicBoardList", err, http.StatusNotFound, "verify group_id \u2014 epic boards require Premium license")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("groupEpicBoardList", err, http.StatusNotFound, groupEpicBoardHint)
 	}
 	out := make([]Output, len(boards))
 	for i, b := range boards {
@@ -114,7 +116,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	}
 	b, _, err := client.GL().GroupEpicBoards.GetGroupEpicBoard(string(input.GroupID), input.BoardID, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("groupEpicBoardGet", err, http.StatusNotFound, "verify board_id with gitlab_group_epic_board_list")
+		return Output{}, toolutil.WrapErrWithStatusHint("groupEpicBoardGet", err, http.StatusNotFound, "verify board_id with epic_board_list on gitlab_group; if the list is empty, configure an epic board in GitLab first")
 	}
 	return toOutput(b), nil
 }

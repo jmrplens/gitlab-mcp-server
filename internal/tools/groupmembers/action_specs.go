@@ -36,7 +36,7 @@ func groupMemberDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 
 func groupMemberOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "member"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupmembers domain action.", Tags: []string{"group", "member"},
 		RelatedActions: []string{"group.get", "group.members"},
 		OpenWorld:      true,
 		OwnerPackage:   "groupmembers",

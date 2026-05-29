@@ -54,7 +54,7 @@ func packageDeleteSpec(name string, route toolutil.ActionRoute, individualTool s
 
 func packageOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"package"},
+		Aliases: []string{individualTool}, Usage: "Use to execute packages domain action.", Tags: []string{"package"},
 		OpenWorld:      true,
 		OwnerPackage:   "packages",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -84,8 +84,8 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 	}
 	if actionName == "publish_directory" {
 		options.Usage = "Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file; include_pattern is one glob, not a comma-separated file list."
-		options.Aliases = []string{"publish local directory", "upload package directory", "generic package directory upload", "publish multiple package files"}
-		options.Tags = append(options.Tags, "generic_package", "directory_upload")
+		options.Aliases = []string{"publish local directory", "upload package directory", "generic package directory upload", "publish multiple package files", "publish files from directory", "upload package files from directory", "generic package publish directory files", "publish fixture files directory"}
+		options.Tags = append(options.Tags, "generic_package", "directory_upload", "package-files-directory", "fixture-files-directory")
 		options.RelatedActions = []string{"release.create", "release.link_create_batch", "package.publish"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"include_pattern": {

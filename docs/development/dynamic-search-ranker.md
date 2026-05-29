@@ -179,7 +179,7 @@ Static registry metrics are available through `Registry.Metrics()` and are repor
 go run ./cmd/audit_metrics/
 ```
 
-The metrics include dynamic action count, search index token/posting counts, total aliases, searchable aliases, unsearchable aliases, and ambiguous aliases. The visible dynamic MCP tool count remains unchanged at two public tools: `gitlab_find_action` and `gitlab_execute_tool`.
+The metrics include dynamic action count, search index token/posting counts, total aliases, searchable aliases, unsearchable aliases, and ambiguous aliases. The visible dynamic MCP tool count remains unchanged at two public tools: `gitlab_find_action` and `gitlab_execute_action`.
 
 ## Regression Corpus
 
@@ -219,4 +219,4 @@ Keep benchmark snapshots in ignored local reports or implementation plans when t
 
 - Search explanations are opt-in and intentionally compact; they explain the strongest deterministic matches rather than every internal scoring adjustment.
 - Candidate generation uses a lightweight in-memory index with full-scan fallback; it is not persisted and is rebuilt per dynamic registry.
-- Param normalization explanations are debug-oriented and are not returned in normal `gitlab_execute_tool` responses.
+- Param normalization explanations are debug-oriented and are not returned in normal `gitlab_execute_action` responses.

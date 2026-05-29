@@ -30,6 +30,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if !byTool["gitlab_delete_custom_emoji"].Route.Destructive {
 		t.Fatal("gitlab_delete_custom_emoji should be destructive")
 	}
+	if byTool["gitlab_list_custom_emoji"].Usage == "" {
+		t.Fatal("gitlab_list_custom_emoji should define usage")
+	}
+	if len(byTool["gitlab_create_custom_emoji"].Aliases) == 0 {
+		t.Fatal("gitlab_create_custom_emoji should define aliases")
+	}
+	if byTool["gitlab_delete_custom_emoji"].ParameterGuidance["id"].SemanticRole == "" {
+		t.Fatal("gitlab_delete_custom_emoji should define id parameter guidance")
+	}
 }
 
 // TestActionSpecs_CallAllRoutes verifies custom emoji routes through canonical specs.

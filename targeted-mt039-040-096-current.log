@@ -1,0 +1,3 @@
+eval_mcp_surfaces terminal output
+terminal_log=targeted-mt039-040-096-current.log
+eval_mcp_surfaces: load gitlab env file .env.docker: open .env.docker: no such file or directory

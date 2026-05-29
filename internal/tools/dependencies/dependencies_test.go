@@ -292,6 +292,25 @@ func TestCreateExport_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestCreateExport_NotFoundHint verifies that missing pipeline IDs return
+// actionable guidance for finding a valid pipeline before retrying the export.
+func TestCreateExport_NotFoundHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Pipeline Not Found"}`)
+	}))
+
+	_, err := CreateExport(context.Background(), client, CreateExportInput{PipelineID: 999})
+	if err == nil {
+		t.Fatal("expected error for missing pipeline")
+	}
+	errText := err.Error()
+	for _, want := range []string{"pipeline_id", "gitlab_pipeline", "dependency scanning", "SBOM"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
+	}
+}
+
 // TestGetExport validates the GetExport handler across success,
 // validation, context cancellation, and API error paths.
 func TestGetExport(t *testing.T) {

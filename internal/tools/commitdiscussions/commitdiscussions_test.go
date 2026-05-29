@@ -523,6 +523,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if !byTool["gitlab_delete_commit_discussion_note"].Route.Destructive {
 		t.Fatal("gitlab_delete_commit_discussion_note should be destructive")
 	}
+	if byTool["gitlab_list_commit_discussions"].Usage == "" {
+		t.Fatal("gitlab_list_commit_discussions should define usage")
+	}
+	if len(byTool["gitlab_get_commit_discussion"].Aliases) == 0 {
+		t.Fatal("gitlab_get_commit_discussion should define aliases")
+	}
+	if byTool["gitlab_create_commit_discussion"].ParameterGuidance["commit_sha"].SemanticRole == "" {
+		t.Fatal("gitlab_create_commit_discussion should define commit_sha parameter guidance")
+	}
 }
 
 // TestActionSpecs_CallAllRoutes validates commit discussion routes through canonical specs.

@@ -38,7 +38,7 @@ func TestToolManifest_DynamicSurfaceUsesCanonicalActionIDs(t *testing.T) {
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{
 		Surface: toolSurfaceDynamic,
 		Tools: []*mcp.Tool{
-			{Name: "gitlab_execute_tool", Title: "Execute"},
+			{Name: "gitlab_execute_action", Title: "Execute"},
 			{Name: "gitlab_find_action", Title: "Find"},
 		},
 		Catalog: catalog,
@@ -53,7 +53,7 @@ func TestToolManifest_DynamicSurfaceUsesCanonicalActionIDs(t *testing.T) {
 	}
 
 	detail := readToolDetail(t, session, "gitlab://tools/widget.delete")
-	if detail.Kind != toolManifestKindDynamicAction || detail.Tool != "gitlab_execute_tool" || detail.Action != "widget.delete" {
+	if detail.Kind != toolManifestKindDynamicAction || detail.Tool != "gitlab_execute_action" || detail.Action != "widget.delete" {
 		t.Fatalf("detail = %+v, want dynamic execute shape", detail)
 	}
 	if detail.BackingTool != "gitlab_widget" || detail.BackingAction != "delete" {
@@ -68,8 +68,8 @@ func TestToolManifest_DynamicSurfaceUsesCanonicalActionIDs(t *testing.T) {
 		t.Fatalf("dynamic detail schema includes params.confirm: %+v", properties)
 	}
 	confirmation := schema["x_confirmation"].(map[string]any)
-	if confirmation["location"] != "gitlab_execute_tool.confirm" {
-		t.Fatalf("x_confirmation = %+v, want gitlab_execute_tool.confirm", confirmation)
+	if confirmation["location"] != "gitlab_execute_action.confirm" {
+		t.Fatalf("x_confirmation = %+v, want gitlab_execute_action.confirm", confirmation)
 	}
 }
 

@@ -29,15 +29,15 @@ type DynamicSchemaActionEntry struct {
 
 // DynamicSchemaIndex is the payload returned by the dynamic index resource.
 type DynamicSchemaIndex struct {
-	URITemplate string                     `json:"uri_template"`
-	ExecuteTool string                     `json:"execute_tool"`
-	ActionCount int                        `json:"action_count"`
-	Actions     []DynamicSchemaActionEntry `json:"actions"`
+	URITemplate   string                     `json:"uri_template"`
+	ExecuteAction string                     `json:"execute_action"`
+	ActionCount   int                        `json:"action_count"`
+	Actions       []DynamicSchemaActionEntry `json:"actions"`
 }
 
 // RegisterDynamicSchemaResources wires dynamic action catalog resources into
 // the MCP server. The index uses canonical domain.action IDs accepted by
-// gitlab_execute_tool, while the template returns action-specific params
+// gitlab_execute_action, while the template returns action-specific params
 // schemas without adding meta-tool-only params such as confirm.
 func RegisterDynamicSchemaResources(server *mcp.Server, catalog *actioncatalog.Catalog) {
 	snapshot := catalog
@@ -56,7 +56,7 @@ func registerDynamicSchemaIndex(server *mcp.Server, catalog *actioncatalog.Catal
 		Name:        "dynamic_action_index",
 		Title:       "Dynamic Action Index",
 		MIMEType:    mimeJSON,
-		Description: "Catalog of canonical dynamic action IDs accepted by gitlab_execute_tool. Use gitlab://schema/dynamic/{action} to fetch an action-specific params schema by domain.action ID.",
+		Description: "Catalog of canonical dynamic action IDs accepted by gitlab_execute_action. Use gitlab://schema/dynamic/{action} to fetch an action-specific params schema by domain.action ID.",
 		Annotations: toolutil.ContentList,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -107,10 +107,10 @@ func buildDynamicSchemaIndex(catalog *actioncatalog.Catalog) DynamicSchemaIndex 
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 	return DynamicSchemaIndex{
-		URITemplate: dynamicSchemaTemplateURI,
-		ExecuteTool: "gitlab_execute_tool",
-		ActionCount: len(entries),
-		Actions:     entries,
+		URITemplate:   dynamicSchemaTemplateURI,
+		ExecuteAction: "gitlab_execute_action",
+		ActionCount:   len(entries),
+		Actions:       entries,
 	}
 }
 
@@ -134,8 +134,8 @@ func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action) map
 	if action.Route.Destructive {
 		schema["x_destructive"] = true
 		schema["x_confirmation"] = map[string]any{
-			"location":    "gitlab_execute_tool.confirm",
-			"description": "Set top-level confirm=true on gitlab_execute_tool after explicit user approval; do not put confirm inside params.",
+			"location":    "gitlab_execute_action.confirm",
+			"description": "Set top-level confirm=true on gitlab_execute_action after explicit user approval; do not put confirm inside params.",
 		}
 	}
 	return schema

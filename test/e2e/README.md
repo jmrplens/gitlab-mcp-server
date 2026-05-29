@@ -56,6 +56,43 @@ Or use the Makefile target:
 make test-e2e-docker
 ```
 
+### Docker Enterprise Mode
+
+Enterprise mode uses the same Docker topology with the EE image and a local
+Ultimate subscription. Store a 24-character activation code in `.env` as
+`ENTERPRISE_LICENSE` or `GITLAB_ACTIVATION_CODE`, or export it in the shell; the
+Docker target passes activation codes to the GitLab EE container during startup.
+`make test-e2e-docker-enterprise` runs with the `e2e enterprise` build tags, so
+common harness files plus `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests
+are compiled and executed. CE-only tests live in `test/e2e/suite/*_ce_test.go`
+and remain in `make test-e2e-docker`.
+After a successful activation-code run, the setup script exports the generated
+license key to `test/e2e/.enterprise-license` with owner-only permissions. Future
+runs prefer that ignored local cache and install it through the License API, so
+they do not need to spend the activation code again. Delete the cache file to
+force a fresh activation-code flow.
+Legacy `.gitlab-license` keys can still be stored in `ENTERPRISE_LICENSE`; the
+setup script installs those through the License API without writing the secret
+into `test/e2e/.env.docker`.
+
+```bash
+make test-e2e-docker-enterprise
+```
+
+Equivalent manual setup:
+
+```bash
+GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml up -d
+./test/e2e/scripts/wait-for-gitlab.sh
+GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
+./test/e2e/scripts/register-runner.sh
+
+set -a && source test/e2e/.env.docker && set +a
+go test -v -tags e2e -timeout 600s ./test/e2e/suite/
+
+env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compose.yml down -v
+```
+
 Docker mode enables pipeline and job tests that require a CI runner, and starts an internal fixture service used by webhook and custom emoji tests. The setup script also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` into `.env.docker` so CI runs all non-EE tests without public Internet dependencies.
 
 ## Architecture

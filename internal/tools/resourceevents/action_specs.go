@@ -26,7 +26,7 @@ func issueEventReadSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func issueEventOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"issue", "resource_event"},
+		Aliases: []string{individualTool}, Usage: "Use to execute resourceevents domain action.", Tags: []string{"issue", "resource_event"},
 		OpenWorld:      true,
 		OwnerPackage:   "resourceevents",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -51,7 +51,7 @@ func mergeRequestEventReadSpec(name string, route toolutil.ActionRoute, individu
 
 func mergeRequestEventOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"merge_request", "resource_event"},
+		Aliases: []string{individualTool}, Usage: "Use to execute resourceevents domain action.", Tags: []string{"merge_request", "resource_event"},
 		OpenWorld:      true,
 		OwnerPackage:   "resourceevents",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

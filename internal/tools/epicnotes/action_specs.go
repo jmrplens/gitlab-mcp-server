@@ -48,7 +48,7 @@ func epicNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func epicNoteOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "epic", "note"},
+		Aliases: []string{individualTool}, Usage: "Use to execute epicnotes domain action.", Tags: []string{"group", "epic", "note"},
 		RelatedActions: []string{"group.epic_get"},
 		Edition:        "premium",
 		OpenWorld:      true,

@@ -19,7 +19,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func auditEventReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Tags:           []string{"audit", "event"},
+		Aliases: []string{individualTool}, Usage: "Use to execute auditevents domain action.", Tags: []string{"audit", "event"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "auditevents",

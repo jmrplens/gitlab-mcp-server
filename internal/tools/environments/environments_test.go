@@ -873,6 +873,21 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("OwnerPackage for %s = %q, want environments", spec.Name, spec.OwnerPackage)
 		}
 	}
+
+	list := byTool["gitlab_environment_list"]
+	if list.Usage == "" || len(list.Aliases) == 0 {
+		t.Fatalf("gitlab_environment_list metadata incomplete: usage=%q aliases=%d", list.Usage, len(list.Aliases))
+	}
+
+	get := byTool["gitlab_environment_get"]
+	if get.Usage == "" || len(get.Aliases) == 0 || get.ParameterGuidance["environment_id"].SemanticRole == "" {
+		t.Fatalf("gitlab_environment_get metadata incomplete: usage=%q aliases=%d guidance(environment_id)=%q", get.Usage, len(get.Aliases), get.ParameterGuidance["environment_id"].SemanticRole)
+	}
+
+	stop := byTool["gitlab_environment_stop"]
+	if stop.Usage == "" || len(stop.Aliases) == 0 {
+		t.Fatalf("gitlab_environment_stop metadata incomplete: usage=%q aliases=%d", stop.Usage, len(stop.Aliases))
+	}
 }
 
 // ---------------------------------------------------------------------------

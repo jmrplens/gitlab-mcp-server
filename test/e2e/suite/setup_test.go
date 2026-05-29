@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"slices"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Format strings and test file constants used across E2E test helpers.
@@ -760,6 +762,9 @@ func permanentlyDeleteProject(client *gitlabclient.Client, p *gl.Project) {
 	// Step 1: mark for deletion (may already be marked → ignore 400 errors).
 	_, err := client.GL().Projects.DeleteProject(p.ID, nil)
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return
+		}
 		errMsg := err.Error()
 		if !strings.Contains(errMsg, "already being deleted") && !strings.Contains(errMsg, "marked for deletion") {
 			log.Printf("e2e: cleanup: failed to mark orphan %q (ID=%d) for deletion: %v", p.PathWithNamespace, p.ID, err)
@@ -772,6 +777,8 @@ func permanentlyDeleteProject(client *gitlabclient.Client, p *gl.Project) {
 	path := p.PathWithNamespace
 	if getErr == nil && updated != nil {
 		path = updated.PathWithNamespace
+	} else if toolutil.IsHTTPStatus(getErr, http.StatusNotFound) {
+		return
 	}
 
 	_, err = client.GL().Projects.DeleteProject(p.ID, &gl.DeleteProjectOptions{
@@ -779,6 +786,9 @@ func permanentlyDeleteProject(client *gitlabclient.Client, p *gl.Project) {
 		FullPath:          &path,
 	})
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return
+		}
 		log.Printf("e2e: cleanup: failed to permanently delete orphan %q (ID=%d): %v", p.PathWithNamespace, p.ID, err)
 	} else {
 		log.Printf("e2e: cleanup: permanently deleted orphan project %q (ID=%d)", p.PathWithNamespace, p.ID)
@@ -814,68 +824,6 @@ func drainSidekiq(ctx context.Context, t *testing.T, client *gitlabclient.Client
 	}
 }
 
-// waitForPipeline polls the GitLab API until the pipeline reaches a terminal
-// state (success, failed, canceled, skipped) or the timeout expires. To be
-// resilient against slow CI runners in ephemeral Docker environments, this
-// helper:
-//   - Uses a generous default timeout (15 min).
-//   - Polls every 5 s.
-//   - Tolerates transient API errors (logs and retries up to 10 consecutive
-//     errors before giving up).
-//   - Reports the final observed status in timeout errors so runner state is
-//     easy to diagnose.
-func waitForPipeline(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID, pipelineID int64, timeout time.Duration) string {
-	t.Helper()
-	if client == nil {
-		t.Fatal("waitForPipeline: GitLab client not configured")
-	}
-	drainSidekiq(ctx, t, client)
-	if timeout == 0 {
-		timeout = 900 * time.Second
-	}
-	const pollInterval = 5 * time.Second
-	const maxConsecutiveErrors = 10
-	pollCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	lastStatus := "unknown"
-	consecutiveErrors := 0
-	err := Poll(pollCtx, pollInterval, timeout, func() (bool, string, error) {
-		p, _, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(pollCtx))
-		if err != nil {
-			consecutiveErrors++
-			state := fmt.Sprintf("pipeline %d in project %d: last_status=%s consecutive_errors=%d/%d error=%v", pipelineID, projectID, lastStatus, consecutiveErrors, maxConsecutiveErrors, err)
-			if consecutiveErrors >= maxConsecutiveErrors {
-				return false, state, fmt.Errorf("poll pipeline %d in project %d after %d consecutive API errors: %w", pipelineID, projectID, consecutiveErrors, err)
-			}
-			return false, state, nil
-		}
-		consecutiveErrors = 0
-		lastStatus = p.Status
-		state := fmt.Sprintf("pipeline %d in project %d: status=%s", pipelineID, projectID, p.Status)
-		if isTerminalPipelineStatus(p.Status) {
-			return true, state, nil
-		}
-		return false, state, nil
-	})
-	if err != nil {
-		t.Fatalf("waitForPipeline: pipeline %d in project %d did not reach terminal status within %s (last status: %s): %v", pipelineID, projectID, timeout, lastStatus, err)
-	}
-	t.Logf("waitForPipeline: pipeline %d reached terminal status: %s", pipelineID, lastStatus)
-	return lastStatus
-}
-
-// isTerminalPipelineStatus reports whether status is a GitLab pipeline state
-// that will not transition further.
-func isTerminalPipelineStatus(status string) bool {
-	switch status {
-	case "success", "failed", "canceled", "skipped":
-		return true
-	default:
-		return false
-	}
-}
-
 // hasRunner returns true if a CI runner is available for pipeline tests.
 // In Docker mode it always returns true; in self-hosted mode it checks the
 // Runners API for registered instance runners.
@@ -891,14 +839,4 @@ func hasRunner(client *gitlabclient.Client) bool {
 		Type: &runnerType,
 	})
 	return err == nil && len(runners) > 0
-}
-
-// requirePremiumFeature fails the test if the error indicates the feature
-// requires a premium/ultimate license or admin permissions. Enterprise tests
-// are gated at skip level so they only run when the GitLab instance supports them.
-func requirePremiumFeature(t *testing.T, err error, feature string) {
-	t.Helper()
-	if err != nil {
-		t.Fatalf("%s failed: %v", feature, err)
-	}
 }

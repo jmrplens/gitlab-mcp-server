@@ -426,6 +426,31 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
+// TestList_NotFoundForExistingProject verifies GitLab's attestation 404 is treated as an empty result when the project exists.
+func TestList_NotFoundForExistingProject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/projects/10/attestations/sha256:abc123":
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+		case "/api/v4/projects/10":
+			testutil.RespondJSON(w, http.StatusOK, `{"id":10,"path_with_namespace":"group/project"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := List(context.Background(), client, ListInput{
+		ProjectID:     toolutil.StringOrInt("10"),
+		SubjectDigest: "sha256:abc123",
+	})
+	if err != nil {
+		t.Fatalf("List() error: %v", err)
+	}
+	if len(out.Attestations) != 0 {
+		t.Fatalf("expected empty attestation list, got %d", len(out.Attestations))
+	}
+}
+
 // TestList_EmptyResult verifies that List handles an empty API response and returns a non-nil empty result.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -542,5 +567,11 @@ func TestDownload_APIError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for 404 response, got nil")
+	}
+	errText := err.Error()
+	for _, want := range []string{"attestation_iid", "gitlab_attestation", "gitlab_list_attestations"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
 	}
 }

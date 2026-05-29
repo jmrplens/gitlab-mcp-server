@@ -50,7 +50,7 @@ func geoDeleteSpec(name string, route toolutil.ActionRoute, individualTool strin
 
 func geoOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"geo", "replication"},
+		Aliases: []string{individualTool}, Usage: "Use to execute geo domain action.", Tags: []string{"geo", "replication"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "geo",

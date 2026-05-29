@@ -20,7 +20,7 @@ func issueStatisticsReadSpec(name string, route toolutil.ActionRoute, individual
 
 func issueStatisticsOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"issue", "statistics"},
+		Aliases: []string{individualTool}, Usage: "Use to execute issuestatistics domain action.", Tags: []string{"issue", "statistics"},
 		OpenWorld:      true,
 		OwnerPackage:   "issuestatistics",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

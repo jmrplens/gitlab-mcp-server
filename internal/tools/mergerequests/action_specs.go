@@ -20,7 +20,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		toolutil.NewCreateActionSpec("create",
 			toolutil.RouteAction(client, Create),
 			toolutil.ActionSpecOptions{
-				Tags:           []string{"merge-request", "branch"},
+				Aliases: []string{"gitlab_mr_create"}, Tags: []string{"merge-request", "branch"},
 				Usage:          "Use to open a merge request from a source branch into the target branch in a project.",
 				RelatedActions: []string{"merge_request.get", "merge_request.list", "branch.create", "project.get"},
 				ParameterGuidance: map[string]toolutil.ParameterGuidance{
@@ -135,7 +135,7 @@ func mergeRequestDestructiveUpdateIndividualSpec(name string, route toolutil.Act
 
 func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"merge_request"},
+		Aliases: []string{individualTool}, Usage: "Use to execute mergerequests domain action.", Tags: []string{"merge_request"},
 		OpenWorld:      true,
 		OwnerPackage:   "mergerequests",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

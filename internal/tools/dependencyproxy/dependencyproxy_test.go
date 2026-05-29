@@ -50,6 +50,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	if specs[0].OwnerPackage != "dependencyproxy" || specs[0].IndividualTool.Name != "gitlab_purge_dependency_proxy" {
 		t.Fatalf("unexpected ActionSpec metadata: %+v", specs[0])
 	}
+	if specs[0].Usage == "" {
+		t.Fatal("dependency proxy ActionSpec should define usage")
+	}
+	if len(specs[0].Aliases) == 0 {
+		t.Fatal("dependency proxy ActionSpec should define aliases")
+	}
+	if specs[0].ParameterGuidance["group_id"].SemanticRole == "" {
+		t.Fatal("dependency proxy ActionSpec should define group_id parameter guidance")
+	}
 }
 
 // TestActionSpecs_CallRoute verifies dependency proxy canonical route execution.

@@ -12,6 +12,34 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// TestActionSpecs_Metadata verifies canonical metadata for freeze period actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client)
+	byTool := freezePeriodSpecsByTool(t, specs)
+
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	if !byTool["gitlab_delete_freeze_period"].Route.Destructive {
+		t.Fatal("gitlab_delete_freeze_period should be destructive")
+	}
+	if byTool["gitlab_list_freeze_periods"].Usage == "" {
+		t.Fatal("gitlab_list_freeze_periods should define usage")
+	}
+	if len(byTool["gitlab_get_freeze_period"].Aliases) == 0 {
+		t.Fatal("gitlab_get_freeze_period should define aliases")
+	}
+	if byTool["gitlab_update_freeze_period"].ParameterGuidance["freeze_period_id"].SemanticRole == "" {
+		t.Fatal("gitlab_update_freeze_period should define freeze_period_id parameter guidance")
+	}
+}
+
 // TestActionSpecs_CallAllRoutes exercises every deploy freeze period tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()

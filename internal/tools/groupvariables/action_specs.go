@@ -34,7 +34,7 @@ func groupVariableDeleteSpec(name string, route toolutil.ActionRoute, individual
 
 func groupVariableOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"ci", "group", "variable"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupvariables domain action.", Tags: []string{"ci", "group", "variable"},
 		OpenWorld:      true,
 		OwnerPackage:   "groupvariables",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

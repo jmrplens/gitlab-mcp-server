@@ -33,7 +33,7 @@ func userGPGDeleteSpec(name string, route toolutil.ActionRoute, individualTool s
 
 func userGPGOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"user", "gpg_key"},
+		Aliases: []string{individualTool}, Usage: "Use to execute usergpgkeys domain action.", Tags: []string{"user", "gpg_key"},
 		OpenWorld:      true,
 		OwnerPackage:   "usergpgkeys",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

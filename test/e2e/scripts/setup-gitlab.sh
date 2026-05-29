@@ -7,16 +7,21 @@ set -euo pipefail
 
 GITLAB_URL="${1:-http://localhost:8929}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-E2E_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 ROOT_PASSWORD="E2e_R0ot!xK9mZ#2026"
 TEST_USER="e2e-tester"
 TEST_EMAIL="e2e-tester@example.com"
 TEST_PASSWORD="E2e_T3st!vQ7nW#2026"
-ENV_FILE="${E2E_DIR}/.env.docker"
+ENV_FILE="${REPO_ROOT}/test/e2e/.env.docker"
 ENV_FILE_DISPLAY="test/e2e/.env.docker"
 ROOT_AUTH_ATTEMPTS="${E2E_ROOT_AUTH_ATTEMPTS:-30}"
 ROOT_AUTH_INTERVAL="${E2E_ROOT_AUTH_INTERVAL:-10}"
-COMPOSE_FILE="${E2E_DOCKER_COMPOSE_FILE:-${E2E_DIR}/docker-compose.yml}"
+COMPOSE_FILE="${E2E_DOCKER_COMPOSE_FILE:-${REPO_ROOT}/test/e2e/docker-compose.yml}"
+ENTERPRISE_LICENSE_FILE="${E2E_ENTERPRISE_LICENSE_FILE:-${REPO_ROOT}/test/e2e/.enterprise-license}"
+ENTERPRISE_LICENSE_FILE_DISPLAY="${E2E_ENTERPRISE_LICENSE_FILE:-test/e2e/.enterprise-license}"
+if [[ "$ENTERPRISE_LICENSE_FILE" != /* ]]; then
+    ENTERPRISE_LICENSE_FILE="${REPO_ROOT}/${ENTERPRISE_LICENSE_FILE}"
+fi
 
 echo "=== Setting up GitLab E2E test environment ==="
 echo "GitLab URL: ${GITLAB_URL}"
@@ -58,6 +63,147 @@ try:
 except Exception:
     print("")
 ' 2>/dev/null || true
+}
+
+# Read one key from the repository .env file without shell-evaluating secrets.
+dotenv_value() {
+    local key="$1"
+    local file="${REPO_ROOT}/.env"
+    if [ ! -f "$file" ]; then
+        return 0
+    fi
+    KEY="$key" ENV_PATH="$file" python3 -c 'import os
+key = os.environ.get("KEY", "")
+path = os.environ.get("ENV_PATH", "")
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        for raw in handle:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, value = line.split("=", 1)
+            name = name.strip()
+            if name.startswith("export "):
+                name = name.split(None, 1)[1].strip()
+            if name != key:
+                continue
+            value = value.strip().strip("\"").strip(chr(39))
+            print(value)
+            break
+except OSError:
+    pass
+' 2>/dev/null || true
+}
+
+env_or_dotenv() {
+    local key="$1"
+    local value="${!key:-}"
+    if [ -n "$value" ]; then
+        printf '%s' "$value"
+        return 0
+    fi
+    dotenv_value "$key"
+}
+
+enterprise_license_file_value() {
+    local file="$ENTERPRISE_LICENSE_FILE"
+    if [ ! -f "$file" ]; then
+        return 0
+    fi
+    LICENSE_FILE="$file" python3 -c 'import os
+path = os.environ.get("LICENSE_FILE", "")
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        print(handle.read().strip(), end="")
+except OSError:
+    pass
+' 2>/dev/null || true
+}
+
+cache_current_enterprise_license() {
+    local response_file status license_key tmp_file
+    response_file=$(mktemp)
+    status=$(curl -sS -o "$response_file" -w '%{http_code}' "${GITLAB_URL}/api/v4/license/usage_export.csv" \
+        -H "Authorization: Bearer ${ROOT_TOKEN}" \
+        --retry 3 --retry-delay 2 --retry-all-errors \
+        --connect-timeout 5 --max-time 60 2>/dev/null || true)
+    if [ "$status" != "200" ]; then
+        rm -f "$response_file"
+        echo "WARN: Could not export Enterprise license for reuse (HTTP ${status})" >&2
+        return 1
+    fi
+
+    license_key=$(python3 - "$response_file" <<'PY'
+import csv
+import io
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8", errors="replace", newline="") as handle:
+    content = handle.read()
+
+for row in csv.reader(io.StringIO(content)):
+    if row and row[0] == "License Key" and len(row) > 1:
+        print(row[1].strip(), end="")
+        break
+PY
+)
+    rm -f "$response_file"
+    if [ -z "$license_key" ]; then
+        echo "WARN: Enterprise license export did not include a reusable license key" >&2
+        return 1
+    fi
+
+    mkdir -p "$(dirname "$ENTERPRISE_LICENSE_FILE")"
+    umask 077
+    tmp_file="${ENTERPRISE_LICENSE_FILE}.tmp.$$"
+    printf '%s' "$license_key" > "$tmp_file"
+    mv "$tmp_file" "$ENTERPRISE_LICENSE_FILE"
+    chmod 600 "$ENTERPRISE_LICENSE_FILE" 2>/dev/null || true
+    echo "    Enterprise license cached at ${ENTERPRISE_LICENSE_FILE_DISPLAY}"
+}
+
+normalize_bool() {
+    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|y|on) printf 'true' ;;
+        *) printf 'false' ;;
+    esac
+}
+
+looks_like_activation_code() {
+    [[ "${1:-}" =~ ^[[:alnum:]]{24}$ ]]
+}
+
+license_plan() {
+    local response status body plan
+    response=$(curl -sS -w '\n%{http_code}' "${GITLAB_URL}/api/v4/license" \
+        -H "Authorization: Bearer ${ROOT_TOKEN}" \
+        --retry 3 --retry-delay 2 --retry-all-errors \
+        --connect-timeout 5 --max-time 30 2>/dev/null || true)
+    status=$(printf '%s' "$response" | tail -n 1)
+    body=$(printf '%s' "$response" | sed '$d')
+    if [ "$status" != "200" ]; then
+        return 1
+    fi
+    plan=$(json_field "$body" "plan")
+    if [ -z "$plan" ]; then
+        return 1
+    fi
+    printf '%s' "$plan"
+}
+
+wait_for_enterprise_license() {
+    local reason="$1"
+    local plan
+    for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+        plan=$(license_plan || true)
+        if [ -n "$plan" ]; then
+            echo "    Enterprise license active (plan: ${plan})"
+            return 0
+        fi
+        echo "    Waiting for Enterprise license from ${reason} (${attempt}/12), retrying in 10s..."
+        sleep 10
+    done
+    return 1
 }
 
 bootstrap_root_pat_with_rails() {
@@ -138,6 +284,67 @@ if [ -z "$ROOT_TOKEN" ]; then
     exit 1
 fi
 echo "    Root API token obtained"
+
+ENTERPRISE_MODE="$(normalize_bool "$(env_or_dotenv GITLAB_ENTERPRISE)")"
+ENTERPRISE_LICENSE_RAW="$(env_or_dotenv ENTERPRISE_LICENSE)"
+ENTERPRISE_ACTIVATION_CODE="$(env_or_dotenv GITLAB_ACTIVATION_CODE)"
+ENTERPRISE_LICENSE_CACHED="$(enterprise_license_file_value)"
+ENTERPRISE_LICENSE=""
+ENTERPRISE_LICENSE_SOURCE=""
+if [ -n "$ENTERPRISE_LICENSE_RAW" ] && ! looks_like_activation_code "$ENTERPRISE_LICENSE_RAW" ]; then
+    ENTERPRISE_LICENSE="$ENTERPRISE_LICENSE_RAW"
+    ENTERPRISE_LICENSE_SOURCE="ENTERPRISE_LICENSE"
+elif [ -n "$ENTERPRISE_LICENSE_CACHED" ]; then
+    ENTERPRISE_LICENSE="$ENTERPRISE_LICENSE_CACHED"
+    ENTERPRISE_LICENSE_SOURCE="$ENTERPRISE_LICENSE_FILE_DISPLAY"
+elif [ -z "$ENTERPRISE_ACTIVATION_CODE" ] && looks_like_activation_code "$ENTERPRISE_LICENSE_RAW" ]; then
+    ENTERPRISE_ACTIVATION_CODE="$ENTERPRISE_LICENSE_RAW"
+fi
+if [ "$ENTERPRISE_MODE" = "true" ]; then
+    if [ -z "$ENTERPRISE_LICENSE" ] && [ -z "$ENTERPRISE_ACTIVATION_CODE" ]; then
+        echo "ERROR: GITLAB_ENTERPRISE=true requires ENTERPRISE_LICENSE, GITLAB_ACTIVATION_CODE, or ${ENTERPRISE_LICENSE_FILE_DISPLAY}" >&2
+        exit 1
+    fi
+    if [ -n "$ENTERPRISE_LICENSE" ]; then
+        EXISTING_PLAN=$(license_plan || true)
+        if [ -n "$EXISTING_PLAN" ]; then
+            echo "    Enterprise license already active (plan: ${EXISTING_PLAN})"
+        else
+            echo "    Installing Enterprise license from ${ENTERPRISE_LICENSE_SOURCE}"
+            LICENSE_RESPONSE=$(curl -sS -w '\n%{http_code}' "${GITLAB_URL}/api/v4/license" \
+                -X POST \
+                -H "Authorization: Bearer ${ROOT_TOKEN}" \
+                --data-urlencode "license=${ENTERPRISE_LICENSE}" \
+                --retry 3 --retry-delay 2 --retry-all-errors \
+                --connect-timeout 5 --max-time 60 2>/dev/null || true)
+            LICENSE_STATUS=$(printf '%s' "$LICENSE_RESPONSE" | tail -n 1)
+            LICENSE_BODY=$(printf '%s' "$LICENSE_RESPONSE" | sed '$d')
+            case "$LICENSE_STATUS" in
+                200|201)
+                    echo "    Enterprise license installed"
+                    ;;
+                *)
+                    echo "ERROR: Failed to install Enterprise license (HTTP ${LICENSE_STATUS})" >&2
+                    if [ -n "$LICENSE_BODY" ]; then
+                        printf '%.300s\n' "$LICENSE_BODY" >&2
+                    fi
+                    exit 1
+                    ;;
+            esac
+            if ! wait_for_enterprise_license "license key"; then
+                echo "ERROR: Enterprise license was installed but could not be verified" >&2
+                exit 1
+            fi
+        fi
+    else
+        echo "    Verifying Enterprise activation code applied during installation"
+        if ! wait_for_enterprise_license "activation code"; then
+            echo "ERROR: Enterprise activation code was not applied. Start the GitLab EE container with GITLAB_ACTIVATION_CODE set, or provide a legacy .gitlab-license key in ENTERPRISE_LICENSE." >&2
+            exit 1
+        fi
+        cache_current_enterprise_license || true
+    fi
+fi
 
 # 1b. Disable default branch protection so E2E tests can push to main,
 # reduce deletion_adjourned_period to 1 day (minimum) so permanent deletes work immediately,
@@ -237,12 +444,24 @@ if [ -z "$PAT" ]; then
 fi
 echo "    PAT created successfully"
 
+# Pre-warm the GraphQL endpoint so the first work_items query in E2E
+# does not trigger a cold Puma worker boot under tight context deadlines.
+echo "  [3.5/4] Warming up GraphQL endpoint..."
+for _ in 1 2 3; do
+    curl -sS -o /dev/null -X POST "${GITLAB_URL}/api/graphql" \
+        -H "Authorization: Bearer ${PAT}" \
+        -H "Content-Type: application/json" \
+        --data '{"query":"{ currentUser { id username } }"}' \
+        --connect-timeout 5 --max-time 30 2>/dev/null || true
+done
+
 # 4. Write .env.docker
 echo "  [4/4] Writing ${ENV_FILE_DISPLAY}..."
 cat > "${ENV_FILE}" <<EOF
 GITLAB_URL=${GITLAB_URL}
 GITLAB_TOKEN=${PAT}
 GITLAB_SKIP_TLS_VERIFY=true
+GITLAB_ENTERPRISE=${ENTERPRISE_MODE}
 E2E_MODE=docker
 E2E_FIXTURE_URL=http://e2e-fixture:8080
 E2E_GITLAB_INTERNAL_URL=http://gitlab-e2e
@@ -252,6 +471,7 @@ echo ""
 echo "=== Setup complete ==="
 echo "  User: ${TEST_USER} (admin)"
 echo "  Token: ${PAT:0:10}..."
+echo "  Enterprise: ${ENTERPRISE_MODE}"
 echo "  Config: ${ENV_FILE_DISPLAY}"
 echo ""
 echo "To run E2E tests:"

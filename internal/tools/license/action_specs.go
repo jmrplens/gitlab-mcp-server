@@ -24,22 +24,45 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 }
 
 func licenseReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, licenseOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, licenseOptions(name, individualTool))
 }
 
 func licenseCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, licenseOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, licenseOptions(name, individualTool))
 }
 
 func licenseDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, licenseOptions(individualTool))
+	return toolutil.NewDeleteActionSpec(name, route, licenseOptions(name, individualTool))
 }
 
-func licenseOptions(individualTool string) toolutil.ActionSpecOptions {
+func licenseOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "Get the currently installed GitLab license details."
+	guidance := map[string]toolutil.ParameterGuidance{}
+	if actionName == "license_add" {
+		usage = "Add or replace the GitLab instance license using the encoded license payload."
+		guidance["license"] = toolutil.ParameterGuidance{
+			SemanticRole:   "license_payload",
+			ValueSource:    "License payload value provided by administrators (typically encoded text).",
+			ExampleBinding: `params.license:"base64-license-data"`,
+		}
+	}
+	if actionName == "license_delete" {
+		usage = "Delete an installed GitLab license by ID."
+		guidance["id"] = toolutil.ParameterGuidance{
+			SemanticRole:   "license_id",
+			ValueSource:    "License numeric ID returned by get/add license operations.",
+			ExampleBinding: "params.id:1",
+		}
+	}
+
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"admin", "license"},
-		OpenWorld:      true,
-		OwnerPackage:   "license",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:           []string{individualTool},
+		Tags:              []string{"admin", "license"},
+		Usage:             usage,
+		RelatedActions:    []string{"admin.settings_get"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "license",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

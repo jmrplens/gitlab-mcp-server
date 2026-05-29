@@ -49,7 +49,7 @@ func orbitReadRoute[T, R any](client *gitlabclient.Client, fn func(context.Conte
 // and gated to GitLab.com Premium/Ultimate. Used for both meta-tool and individual tool projection.
 func orbitReadSpec(name string, route toolutil.ActionRoute, individualTool, usage string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Tags:             []string{"orbit", "knowledge_graph"},
+		Aliases: []string{individualTool}, Tags: []string{"orbit", "knowledge_graph"},
 		Usage:            usage,
 		OpenWorld:        true,
 		Edition:          "premium",

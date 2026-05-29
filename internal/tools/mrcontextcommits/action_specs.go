@@ -28,7 +28,7 @@ func contextCommitDeleteSpec(name string, route toolutil.ActionRoute, individual
 
 func contextCommitOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"merge_request", "context_commit"},
+		Aliases: []string{individualTool}, Usage: "Use to execute mrcontextcommits domain action.", Tags: []string{"merge_request", "context_commit"},
 		OpenWorld:      true,
 		OwnerPackage:   "mrcontextcommits",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

@@ -9,7 +9,7 @@ import (
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		toolutil.NewReadActionSpec("deployment_merge_requests", toolutil.RouteAction(client, List), toolutil.ActionSpecOptions{
-			Tags:           []string{"environment", "deployment"},
+			Aliases: []string{"gitlab_list_deployment_merge_requests"}, Usage: "Use to execute deployment_merge_requests action.", Tags: []string{"environment", "deployment"},
 			RelatedActions: []string{"environment.deployment_get", "pipeline.list"},
 			OpenWorld:      true,
 			OwnerPackage:   "deploymentmergerequests",

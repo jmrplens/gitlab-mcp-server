@@ -24,7 +24,7 @@ individual tool catalog.
 The May 2026 MCP ecosystem now includes stronger patterns for very large API surfaces:
 
 - Cloudflare Code Mode exposes about 2,594 endpoints through 2 tools and reports about 1,069 initial tokens.
-- Speakeasy Dynamic Toolsets expose `search_tools`, `describe_tools`, and `execute_tool` and report about 90-96% token
+- Speakeasy Dynamic Toolsets expose `search_tools`, `describe_tools`, and `execute_action` and report about 90-96% token
   reductions in benchmarked workflows.
 - Solo.io Agentgateway and Bifrost demonstrate gateway-side progressive disclosure and code-mode execution.
 - MCP protocol proposals and SEP discussions point toward lazy schema hydration and scope-filtered discovery.
@@ -39,7 +39,7 @@ Introduce a new low-token dynamic toolset mode as the primary candidate for furt
 two plain MCP tools:
 
 - `gitlab_find_action`: search the canonical GitLab action catalog and return exact schemas, examples, safety metadata, and output summaries for matching actions.
-- `gitlab_execute_tool`: execute one selected action by canonical `domain.action` ID with strict runtime validation.
+- `gitlab_execute_action`: execute one selected action by canonical `domain.action` ID with strict runtime validation.
 
 The existing domain meta-tool mode and individual-tool mode remain available. The dynamic toolset mode starts behind an
 explicit configuration flag and must pass evaluation gates before it can become the default.
@@ -60,7 +60,7 @@ explicit configuration flag and must pass evaluation gates before it can become 
 
 - **NEG-001**: Adds an additional discovery layer and likely increases tool calls per task.
 - **NEG-002**: Search quality becomes a core product behavior and needs evaluation, ranking tests, and telemetry.
-- **NEG-003**: Models may skip discovery and call `gitlab_execute_tool` with invented action IDs.
+- **NEG-003**: Models may skip discovery and call `gitlab_execute_action` with invented action IDs.
 - **NEG-004**: Action aliases and canonical `domain.action` naming add migration and documentation complexity.
 - **NEG-005**: The low-token mode requires a new evaluation path before it can be trusted as default.
 

@@ -83,7 +83,7 @@ func accessTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 
 func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"access", "access_token", "token"},
+		Aliases: []string{individualTool}, Usage: "Use to execute accesstokens domain action.", Tags: []string{"access", "access_token", "token"},
 		OpenWorld:      true,
 		OwnerPackage:   "accesstokens",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

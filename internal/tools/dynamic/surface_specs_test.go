@@ -22,11 +22,11 @@ func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 		}
 	}
 
-	execute := findDynamicSurfaceSpec(t, specs, executeToolName)
+	execute := findDynamicSurfaceSpec(t, specs, executeActionToolName)
 	if !execute.Destructive || execute.ReadOnly || execute.Route.OutputSchema == nil {
 		t.Fatalf("execute spec = %+v, want potentially destructive controller with generic output schema", execute)
 	}
-	if execute.Description != executeToolDescription || !strings.Contains(execute.Description, "confirm=true") {
+	if execute.Description != executeActionToolDescription || !strings.Contains(execute.Description, "confirm=true") {
 		t.Fatalf("execute description = %q, want shared confirmation guidance", execute.Description)
 	}
 
@@ -49,7 +49,7 @@ func TestControllerSurfaceSpecs_RouteHandlers(t *testing.T) {
 		t.Fatalf("find route error = %v", err)
 	}
 
-	execute := findDynamicSurfaceSpec(t, specs, executeToolName)
+	execute := findDynamicSurfaceSpec(t, specs, executeActionToolName)
 	if _, err := execute.Route.Handler(t.Context(), map[string]any{"action": "missing.action", "params": map[string]any{}}); err != nil {
 		t.Fatalf("execute route error = %v", err)
 	}

@@ -39,27 +39,53 @@ func deleteDomainOutput(ctx context.Context, client *gitlabclient.Client, input 
 }
 
 func pagesReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, pagesOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, pagesOptions(name, individualTool))
 }
 
 func pagesCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, pagesOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, pagesOptions(name, individualTool))
 }
 
 func pagesUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, pagesOptions(individualTool))
+	return toolutil.NewUpdateActionSpec(name, route, pagesOptions(name, individualTool))
 }
 
 func pagesDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, pagesOptions(individualTool))
+	return toolutil.NewDeleteActionSpec(name, route, pagesOptions(name, individualTool))
 }
 
-func pagesOptions(individualTool string) toolutil.ActionSpecOptions {
+func pagesOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "Manage project Pages settings and custom domains."
+	guidance := map[string]toolutil.ParameterGuidance{}
+
+	if actionName != "pages_domain_list_all" {
+		guidance["project_id"] = toolutil.ParameterGuidance{
+			SemanticRole:   "scope_project",
+			ValueSource:    "Project ID or path owning the Pages configuration.",
+			ExampleBinding: `params.project_id:"group/project"`,
+		}
+	}
+
+	if actionName == "pages_domain_get" || actionName == "pages_domain_create" || actionName == "pages_domain_update" || actionName == "pages_domain_delete" {
+		guidance["domain"] = toolutil.ParameterGuidance{
+			SemanticRole:   "pages_domain",
+			ValueSource:    "Fully qualified domain name of the Pages domain.",
+			ExampleBinding: `params.domain:"example.com"`,
+		}
+	}
+
+	if actionName == "pages_domain_list_all" {
+		usage = "List Pages domains across accessible projects."
+	}
+
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"project", "pages"},
-		RelatedActions: []string{"project.get"},
-		OpenWorld:      true,
-		OwnerPackage:   "pages",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:           []string{individualTool},
+		Tags:              []string{"project", "pages"},
+		Usage:             usage,
+		RelatedActions:    []string{"project.get"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "pages",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

@@ -167,6 +167,24 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestList_NotFoundIncludesActionableHint verifies list failures explain both
+// licensing and the valid empty-list case for epic boards.
+func TestList_NotFoundIncludesActionableHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Group Not Found"}`)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{GroupID: testGroupID})
+	if err == nil {
+		t.Fatal("List() expected error, got nil")
+	}
+	for _, want := range []string{"Premium/Ultimate", "can be empty", "configured for the group"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("List() error missing %q: %v", want, err)
+		}
+	}
+}
+
 // TestGet validates the Get handler for group epic boards across success,
 // error, validation, and edge-case scenarios.
 func TestGet(t *testing.T) {
@@ -345,6 +363,24 @@ func TestGet_CancelledContext(t *testing.T) {
 	_, err := Get(ctx, client, GetInput{GroupID: testGroupID, BoardID: 1})
 	if err == nil {
 		t.Fatal("Get() expected context error, got nil")
+	}
+}
+
+// TestGet_NotFoundIncludesActionableHint verifies missing board errors point
+// callers back to the list action and explain the empty-list case.
+func TestGet_NotFoundIncludesActionableHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Board Not Found"}`)
+	}))
+
+	_, err := Get(context.Background(), client, GetInput{GroupID: testGroupID, BoardID: 999})
+	if err == nil {
+		t.Fatal("Get() expected error, got nil")
+	}
+	for _, want := range []string{"epic_board_list", "gitlab_group", "configure an epic board"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("Get() error missing %q: %v", want, err)
+		}
 	}
 }
 

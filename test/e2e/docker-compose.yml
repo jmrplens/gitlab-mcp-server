@@ -5,6 +5,7 @@ services:
     ports:
       - "8929:80"
     environment:
+      GITLAB_ACTIVATION_CODE: ${GITLAB_ACTIVATION_CODE:-}
       GITLAB_OMNIBUS_CONFIG: |
         external_url 'http://localhost:8929'
         nginx['listen_port'] = 80
@@ -65,7 +66,7 @@ services:
         printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' | base64 -d > /usr/share/nginx/html/emoji.png
         nginx -g 'daemon off;'
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/emoji.png"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/emoji.png"]
       interval: 5s
       timeout: 3s
       retries: 20

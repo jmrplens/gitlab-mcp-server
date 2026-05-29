@@ -34,7 +34,8 @@ func groupProtectedEnvDeleteSpec(name string, route toolutil.ActionRoute, indivi
 
 func groupProtectedEnvOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "protected-environment"},
+		Aliases: []string{individualTool}, Tags: []string{"group", "protected-environment"},
+		Usage:          "Use group protected environment actions for group-level deployment gates. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]. To require approvals, use approval_rules with required_approvals, not top-level required_approval_count.",
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",
 		OpenWorld:      true,

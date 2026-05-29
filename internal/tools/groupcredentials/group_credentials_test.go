@@ -5,6 +5,7 @@ package groupcredentials
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -43,6 +44,74 @@ func TestListPATs_Success(t *testing.T) {
 	}
 	if out.Tokens[0].State != "active" {
 		t.Errorf("expected state active, got %s", out.Tokens[0].State)
+	}
+}
+
+// TestGroupCredential404Hints verifies that unavailable group credential
+// inventory endpoints return model-actionable guidance instead of only asking
+// the model to re-check a valid group_id.
+func TestGroupCredential404Hints(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v4/groups/mygroup/manage/personal_access_tokens",
+			"/api/v4/groups/mygroup/manage/personal_access_tokens/99",
+			"/api/v4/groups/mygroup/manage/ssh_keys",
+			"/api/v4/groups/mygroup/manage/ssh_keys/5":
+			testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	tests := []struct {
+		name string
+		run  func() error
+		want []string
+	}{
+		{
+			name: "list PATs",
+			run: func() error {
+				_, err := ListPATs(context.Background(), client, ListPATsInput{GroupID: toolutil.StringOrInt("mygroup")})
+				return err
+			},
+			want: []string{"group credential inventory", "/groups/:id/manage", "Ultimate", "Owner or admin"},
+		},
+		{
+			name: "list SSH keys",
+			run: func() error {
+				_, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{GroupID: toolutil.StringOrInt("mygroup")})
+				return err
+			},
+			want: []string{"group credential inventory", "/groups/:id/manage", "Ultimate", "Owner or admin"},
+		},
+		{
+			name: "revoke PAT",
+			run: func() error {
+				return RevokePAT(context.Background(), client, RevokePATInput{GroupID: toolutil.StringOrInt("mygroup"), TokenID: 99})
+			},
+			want: []string{"credential_list_pats", "group credential inventory", "Ultimate", "Owner or admin"},
+		},
+		{
+			name: "delete SSH key",
+			run: func() error {
+				return DeleteSSHKey(context.Background(), client, DeleteSSHKeyInput{GroupID: toolutil.StringOrInt("mygroup"), KeyID: 5})
+			},
+			want: []string{"credential_list_ssh_keys", "group credential inventory", "Ultimate", "Owner or admin"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.run()
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error %q does not contain %q", err.Error(), want)
+				}
+			}
+		})
 	}
 }
 

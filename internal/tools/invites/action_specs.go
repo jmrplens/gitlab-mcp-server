@@ -25,7 +25,7 @@ func inviteCreateSpec(name string, route toolutil.ActionRoute, individualTool st
 
 func inviteOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"access", "invite"},
+		Aliases: []string{individualTool}, Usage: "Use to execute invites domain action.", Tags: []string{"access", "invite"},
 		OpenWorld:      true,
 		OwnerPackage:   "invites",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

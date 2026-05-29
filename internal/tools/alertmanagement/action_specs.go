@@ -33,7 +33,7 @@ func alertMetricImageDeleteSpec(name string, route toolutil.ActionRoute, individ
 
 func alertMetricImageOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"alert", "metric-image"},
+		Aliases: []string{individualTool}, Usage: "Use to execute alertmanagement domain action.", Tags: []string{"alert", "metric-image"},
 		OpenWorld:      true,
 		OwnerPackage:   "alertmanagement",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

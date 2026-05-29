@@ -28,6 +28,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionAdminSettingsGet = "admin.settings_get"
+	actionAdminMetadataGet = "admin.metadata_get"
+)
+
 // ActionSpecs returns canonical specs for gitlab_admin meta-tool actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -38,8 +43,8 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminDeleteSpec("topic_delete", toolutil.DestructiveVoidAction(client, topics.Delete), "gitlab_delete_topic"),
 		adminSettingsGetSpec(client),
 		adminUpdateSpec("settings_update", toolutil.RouteAction(client, settings.Update), "gitlab_update_settings"),
-		adminReadSpec("appearance_get", toolutil.RouteAction(client, appearance.Get), "gitlab_get_appearance"),
-		adminUpdateSpec("appearance_update", toolutil.RouteAction(client, appearance.Update), "gitlab_update_appearance"),
+		adminAppearanceGetSpec(client),
+		adminAppearanceUpdateSpec(client),
 		adminReadSpec("broadcast_message_list", toolutil.RouteAction(client, broadcastmessages.List), "gitlab_list_broadcast_messages"),
 		adminReadSpec("broadcast_message_get", toolutil.RouteAction(client, broadcastmessages.Get), "gitlab_get_broadcast_message"),
 		adminCreateSpec("broadcast_message_create", toolutil.RouteAction(client, broadcastmessages.Create), "gitlab_create_broadcast_message"),
@@ -76,7 +81,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		adminReadSpec("application_list", toolutil.RouteAction(client, applications.List), "gitlab_list_applications"),
 		adminCreateSpec("application_create", toolutil.RouteAction(client, applications.Create), "gitlab_create_application"),
 		adminDeleteSpec("application_delete", toolutil.DestructiveVoidAction(client, applications.Delete), "gitlab_delete_application"),
-		adminReadSpec("app_statistics_get", toolutil.RouteAction(client, appstatistics.Get), "gitlab_get_application_statistics"),
+		adminApplicationStatisticsGetSpec(client),
 		adminMetadataGetSpec(client),
 		adminReadSpec("custom_attr_list", toolutil.RouteAction(client, customattributes.List), "gitlab_list_custom_attributes"),
 		adminReadSpec("custom_attr_get", toolutil.RouteAction(client, customattributes.Get), "gitlab_get_custom_attribute"),
@@ -195,7 +200,51 @@ func adminMetadataGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Usage = "Read GitLab instance metadata such as version and revision. Do not use this for application settings."
 	options.Aliases = []string{"instance metadata", "gitlab version", "server metadata", "gitlab revision"}
 	options.Tags = append(options.Tags, "metadata", "version")
+	options.RelatedActions = []string{actionAdminSettingsGet, "admin.app_statistics_get", "server.health_check"}
+	options.IndividualTool.Description = "Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag. Returns: the current instance metadata object. See also: gitlab_server_status, gitlab_get_settings, gitlab_get_application_statistics."
 	return toolutil.NewReadActionSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), options)
+}
+
+func adminAppearanceGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := adminOptions("gitlab_get_appearance")
+	options.Usage = "Read the current GitLab application appearance and branding settings. Use this for logos, banners, PWA labels, and instance message colors rather than general application settings or version metadata."
+	options.Aliases = []string{"appearance", "application appearance", "instance appearance", "branding settings", "gitlab appearance"}
+	options.Tags = append(options.Tags, "appearance", "branding")
+	options.RelatedActions = []string{actionAdminSettingsGet, actionAdminMetadataGet, "admin.appearance_update"}
+	options.IndividualTool.Description = "Get the current GitLab application appearance and branding settings. Returns: the instance appearance object including title, messages, logos, and PWA labels. See also: gitlab_update_appearance, gitlab_get_settings, gitlab_get_metadata."
+	return toolutil.NewReadActionSpec("appearance_get", toolutil.RouteAction(client, appearance.Get), options)
+}
+
+func adminAppearanceUpdateSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := adminOptions("gitlab_update_appearance")
+	options.Usage = "Update GitLab application appearance and branding settings such as title, messages, colors, PWA labels, and profile guidance text. Requires administrator access and changes the instance UI immediately."
+	options.Aliases = []string{"update appearance", "change appearance", "update branding", "change branding", "appearance settings update"}
+	options.Tags = append(options.Tags, "appearance", "branding")
+	options.RelatedActions = []string{"admin.appearance_get", actionAdminSettingsGet, actionAdminMetadataGet}
+	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"message_background_color": {
+			SemanticRole:     "hex_color",
+			ValueSource:      "Hex color string such as #e75e40 for the appearance banner background.",
+			CommonConfusions: []string{"Provide a CSS-style hex color such as #ffffff; do not send color names or RGB tuples."},
+		},
+		"message_font_color": {
+			SemanticRole:     "hex_color",
+			ValueSource:      "Hex color string such as #ffffff for the appearance banner text.",
+			CommonConfusions: []string{"Provide a CSS-style hex color such as #000000; do not send color names or RGB tuples."},
+		},
+	}
+	options.IndividualTool.Description = "Update GitLab application appearance and branding settings. Returns: the updated appearance object after GitLab applies the change. See also: gitlab_get_appearance, gitlab_get_settings, gitlab_get_metadata."
+	return toolutil.NewUpdateActionSpec("appearance_update", toolutil.RouteAction(client, appearance.Update), options)
+}
+
+func adminApplicationStatisticsGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
+	options := adminOptions("gitlab_get_application_statistics")
+	options.Usage = "Read GitLab instance-wide application statistics such as totals for users, groups, projects, issues, and merge requests. Requires administrator access."
+	options.Aliases = []string{"application statistics", "instance statistics", "gitlab statistics", "admin statistics"}
+	options.Tags = append(options.Tags, "statistics", "instance")
+	options.RelatedActions = []string{actionAdminMetadataGet, "server.health_check"}
+	options.IndividualTool.Description = "Get GitLab application statistics for the current instance. Returns: aggregate counts for users, groups, projects, issues, merge requests, and related records. See also: gitlab_get_metadata, gitlab_server_status."
+	return toolutil.NewReadActionSpec("app_statistics_get", toolutil.RouteAction(client, appstatistics.Get), options)
 }
 
 func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionSpec {
@@ -223,7 +272,7 @@ func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionS
 
 func adminOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"admin"},
+		Aliases: []string{individualTool}, Usage: "Use to execute adminspecs domain action.", Tags: []string{"admin"},
 		OpenWorld:      true,
 		OwnerPackage:   "adminspecs",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

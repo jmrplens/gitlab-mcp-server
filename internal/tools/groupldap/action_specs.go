@@ -29,7 +29,7 @@ func groupLDAPDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 func groupLDAPOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "ldap"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupldap domain action.", Tags: []string{"group", "ldap"},
 		RelatedActions: []string{"group.get"},
 		Edition:        "premium",
 		OpenWorld:      true,

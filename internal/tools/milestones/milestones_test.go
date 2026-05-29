@@ -1258,6 +1258,21 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("OwnerPackage for %s = %q, want milestones", spec.Name, spec.OwnerPackage)
 		}
 	}
+
+	list := byTool["gitlab_milestone_list"]
+	if list.Usage == "" || len(list.Aliases) == 0 {
+		t.Fatalf("gitlab_milestone_list metadata incomplete: usage=%q aliases=%d", list.Usage, len(list.Aliases))
+	}
+
+	get := byTool["gitlab_milestone_get"]
+	if get.Usage == "" || len(get.Aliases) == 0 || get.ParameterGuidance["milestone_iid"].SemanticRole == "" {
+		t.Fatalf("gitlab_milestone_get metadata incomplete: usage=%q aliases=%d guidance(milestone_iid)=%q", get.Usage, len(get.Aliases), get.ParameterGuidance["milestone_iid"].SemanticRole)
+	}
+
+	create := byTool["gitlab_milestone_create"]
+	if create.Usage == "" || len(create.Aliases) == 0 {
+		t.Fatalf("gitlab_milestone_create metadata incomplete: usage=%q aliases=%d", create.Usage, len(create.Aliases))
+	}
 }
 
 // TestActionSpecs_CallAllRoutes validates milestone routes across multiple scenarios.

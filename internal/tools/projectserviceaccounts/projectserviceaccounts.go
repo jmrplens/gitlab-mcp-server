@@ -3,6 +3,7 @@ package projectserviceaccounts
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -10,6 +11,8 @@ import (
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+const projectServiceAccountTokenHint = "token_id must be the project service account personal access token ID returned by service_account_pat_list or service_account_pat_create; do not use service_account_id as token_id; requires Premium/Ultimate and sufficient project permissions"
 
 // Output represents a project service account.
 type Output struct {
@@ -343,6 +346,9 @@ func RevokePAT(ctx context.Context, client *gitlabclient.Client, input RevokePAT
 
 	_, err := client.GL().Projects.RevokeProjectServiceAccountPersonalAccessToken(input.ProjectID.String(), input.ServiceAccountID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return toolutil.WrapErrWithHint("revoke project service account PAT", err, projectServiceAccountTokenHint)
+		}
 		return toolutil.WrapErrWithMessage("revoke project service account PAT", err)
 	}
 	return nil
@@ -381,6 +387,9 @@ func RotatePAT(ctx context.Context, client *gitlabclient.Client, input RotatePAT
 	}
 	token, _, err := client.GL().Projects.RotateProjectServiceAccountPersonalAccessToken(input.ProjectID.String(), input.ServiceAccountID, input.TokenID, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) || toolutil.IsHTTPStatus(err, http.StatusNotFound) || toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return PATOutput{}, toolutil.WrapErrWithHint("rotate project service account PAT", err, projectServiceAccountTokenHint)
+		}
 		return PATOutput{}, toolutil.WrapErrWithMessage("rotate project service account PAT", err)
 	}
 	return toPATOutput(token), nil

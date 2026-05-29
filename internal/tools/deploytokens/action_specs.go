@@ -39,19 +39,19 @@ func DeleteGroupOutput(ctx context.Context, client *gitlabclient.Client, input D
 }
 
 func deployTokenReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, deployTokenOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, deployTokenOptions(name, individualTool))
 }
 
 func deployTokenCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, deployTokenOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, deployTokenOptions(name, individualTool))
 }
 
 func deployTokenDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, deployTokenOptions(individualTool))
+	return toolutil.NewDeleteActionSpec(name, route, deployTokenOptions(name, individualTool))
 }
 
 func deployTokenDeleteProjectSpec(client *gitlabclient.Client) toolutil.ActionSpec {
-	options := deployTokenOptions("gitlab_deploy_token_delete_project")
+	options := deployTokenOptions("deploy_token_delete_project", "gitlab_deploy_token_delete_project")
 	options.Usage = "Use to delete a deploy token owned by a project; pass the deploy token ID, not another token type."
 	options.RelatedActions = []string{"access.deploy_token_list_project", "access.deploy_token_get_project", "access.deploy_token_create_project"}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -68,11 +68,50 @@ func deployTokenDeleteProjectSpec(client *gitlabclient.Client) toolutil.ActionSp
 	return toolutil.NewDeleteActionSpec("deploy_token_delete_project", toolutil.DestructiveAction(client, DeleteProjectOutput), options)
 }
 
-func deployTokenOptions(individualTool string) toolutil.ActionSpecOptions {
+func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	aliases := []string{individualTool}
+	usage := "Manage deploy tokens across instance, project, and group scopes."
+	relatedActions := []string{"access.deploy_key_list_project", "project.get", "group.get"}
+	guidance := map[string]toolutil.ParameterGuidance{}
+
+	switch actionName {
+	case "deploy_token_list_project", "deploy_token_get_project", "deploy_token_create_project", "deploy_token_delete_project":
+		guidance["project_id"] = toolutil.ParameterGuidance{
+			SemanticRole:   "scope_project",
+			ValueSource:    "Project ID or path owning the deploy token.",
+			ExampleBinding: `params.project_id:"group/project"`,
+		}
+		usage = "Manage project deploy tokens/credentials (list/get/create/delete)."
+		relatedActions = []string{"access.deploy_token_list_project", "project.get"}
+	case "deploy_token_list_group", "deploy_token_get_group", "deploy_token_create_group", "deploy_token_delete_group":
+		guidance["group_id"] = toolutil.ParameterGuidance{
+			SemanticRole:   "scope_group",
+			ValueSource:    "Group ID or path owning the deploy token.",
+			ExampleBinding: `params.group_id:"my-group"`,
+		}
+		usage = "Manage group deploy tokens (list/get/create/delete)."
+		relatedActions = []string{"access.deploy_token_list_group", "group.get"}
+	}
+
+	if actionName == "deploy_token_get_project" || actionName == "deploy_token_get_group" || actionName == "deploy_token_delete_project" || actionName == "deploy_token_delete_group" {
+		guidance["deploy_token_id"] = toolutil.ParameterGuidance{
+			SemanticRole:   "deploy_token",
+			ValueSource:    "Deploy token ID returned by deploy token list/get actions.",
+			ExampleBinding: "params.deploy_token_id:2",
+			CommonConfusions: []string{
+				"Do not use deploy_key_id; deploy keys are a different access resource.",
+			},
+		}
+	}
+
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"access", "deploy_token"},
-		OpenWorld:      true,
-		OwnerPackage:   "deploytokens",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:           aliases,
+		Tags:              []string{"access", "deploy_token"},
+		Usage:             usage,
+		RelatedActions:    relatedActions,
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "deploytokens",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

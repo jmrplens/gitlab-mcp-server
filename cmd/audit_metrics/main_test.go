@@ -70,7 +70,7 @@ func TestListDynamicTools_ExposesTwoTools(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	sort.Strings(names)
-	for _, want := range []string{"gitlab_execute_tool", "gitlab_find_action"} {
+	for _, want := range []string{"gitlab_execute_action", "gitlab_find_action"} {
 		if !slices.Contains(names, want) {
 			t.Fatalf("listDynamicTools() names = %v, missing %q", names, want)
 		}

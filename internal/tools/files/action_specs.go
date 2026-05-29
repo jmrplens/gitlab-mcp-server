@@ -62,7 +62,7 @@ func fileDeleteSpec(name string, route toolutil.ActionRoute, individualTool stri
 
 func fileOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"repository", "file"},
+		Aliases: []string{individualTool}, Usage: "Use to execute files domain action.", Tags: []string{"repository", "file"},
 		RelatedActions: []string{"repository.tree", "repository.commit_list"},
 		OpenWorld:      true,
 		OwnerPackage:   "files",

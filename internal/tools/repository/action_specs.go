@@ -21,26 +21,58 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func repositoryCompareSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
-	options := repositoryOptions("gitlab_repository_compare")
+	options := repositoryOptionsForAction("compare", "gitlab_repository_compare")
 	options.Usage = "Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff."
 	options.RelatedActions = append(options.RelatedActions, "analyze.release_notes", "release.list")
 	return toolutil.NewReadActionSpec("compare", route, options)
 }
 
 func repositoryReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, repositoryOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, repositoryOptionsForAction(name, individualTool))
 }
 
 func repositoryCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, repositoryOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, repositoryOptionsForAction(name, individualTool))
 }
 
-func repositoryOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
-		Tags:           []string{"repository", "git"},
+func repositoryOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
+	_ = actionName
+
+	options := toolutil.ActionSpecOptions{
+		Aliases: []string{individualTool}, Usage: "Use to execute repository domain action.", Tags: []string{"repository", "git"},
 		RelatedActions: []string{"branch.list", "tag.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "repository",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+
+	switch individualTool {
+	case "gitlab_repository_tree":
+		options.Usage = "List repository tree entries for a project/ref/path. Use this to browse directories and locate files before file/blob operations."
+		options.Aliases = []string{"list repository files", "show repo tree", "browse repository"}
+		options.RelatedActions = []string{"repository.blob", "repository.raw_blob", "branch.list"}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project ID or path containing the repository.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+			"ref": {
+				SemanticRole:   "git_ref",
+				ValueSource:    "Branch/tag/commit to inspect; default branch when omitted.",
+				ExampleBinding: `params.ref:"main"`,
+			},
+		}
+		options.IndividualTool.Description = "List repository tree items. Returns: paths, object IDs, entry types (blob/tree), and pagination metadata. See also: gitlab_repository_blob, gitlab_repository_raw_blob, gitlab_branch_list."
+	case "gitlab_repository_blob":
+		options.Usage = "Get blob metadata/content for a specific file path and ref. Use when you need one file's content or metadata after locating its path."
+		options.Aliases = []string{"get file blob", "show file content", "read repository blob"}
+		options.RelatedActions = []string{"repository.tree", "repository.raw_blob"}
+	case "gitlab_repository_changelog_add":
+		options.Usage = "Create or append changelog entries in the repository for a version. Use in release workflows when structured changelog updates are requested."
+		options.Aliases = []string{"add changelog", "update changelog", "write release notes file"}
+		options.RelatedActions = []string{"repository.changelog_generate", "release.create", "tag.create"}
+	}
+
+	return options
 }

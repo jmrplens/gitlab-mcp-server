@@ -5,6 +5,7 @@ package metadata
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -163,6 +164,15 @@ func TestActionSpecs_MetadataGet_Coverage(t *testing.T) {
 	}
 	if !spec.ReadOnly || !spec.Idempotent || !spec.OpenWorld {
 		t.Errorf("unexpected action semantics: read_only=%v idempotent=%v open_world=%v", spec.ReadOnly, spec.Idempotent, spec.OpenWorld)
+	}
+	if !slices.Contains(spec.Aliases, "gitlab version") {
+		t.Fatalf("Aliases = %v, want gitlab version", spec.Aliases)
+	}
+	if !strings.Contains(spec.Usage, "Do not use this for application settings") {
+		t.Fatalf("Usage = %q, want settings distinction", spec.Usage)
+	}
+	if !strings.Contains(spec.IndividualTool.Description, "Returns:") || !strings.Contains(spec.IndividualTool.Description, "See also:") {
+		t.Fatalf("Description = %q, want Returns/See also guidance", spec.IndividualTool.Description)
 	}
 
 	result, err := spec.Route.Handler(t.Context(), map[string]any{})

@@ -470,7 +470,7 @@ If you get connection errors, check:
 
 ## Understanding meta-tools
 
-By default, the server runs in **dynamic find/execute mode** with `gitlab_find_action` and `gitlab_execute_tool`. Set `TOOL_SURFACE=meta` to use **33 domain-level meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) that cover the same functionality through consolidated domain dispatchers.
+By default, the server runs in **dynamic find/execute mode** with `gitlab_find_action` and `gitlab_execute_action`. Set `TOOL_SURFACE=meta` to use **33 domain-level meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit) that cover the same functionality through consolidated domain dispatchers.
 
 For example, instead of separate `gitlab_list_issues`, `gitlab_create_issue`, `gitlab_close_issue` tools, there's a single `gitlab_issue` tool with an `action` parameter:
 
@@ -490,7 +490,7 @@ This is transparent to you — your AI client handles the routing automatically.
 :::tip
 Meta-tools reduce token overhead by **96%** while preserving full functionality. See [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) for the complete reference.
 
-For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_find_action` and `gitlab_execute_tool`, backed by the same canonical GitLab action catalog.
+For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_find_action` and `gitlab_execute_action`, backed by the same canonical GitLab action catalog.
 
 Pair dynamic mode with `CAPABILITY_SURFACE=minimal` to keep only workspace roots plus `gitlab://tools`, and omit optional resources, workflow guides, and prompts when you need the smallest initial MCP context. Dynamic keeps inline schemas through `gitlab_find_action`.
 :::

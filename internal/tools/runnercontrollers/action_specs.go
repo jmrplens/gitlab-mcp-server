@@ -44,7 +44,7 @@ func runnerControllerDeleteSpec(name string, route toolutil.ActionRoute, individ
 
 func runnerControllerOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"runner", "controller"},
+		Aliases: []string{individualTool}, Usage: "Use to execute runnercontrollers domain action.", Tags: []string{"runner", "controller"},
 		OpenWorld:      true,
 		OwnerPackage:   "runnercontrollers",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

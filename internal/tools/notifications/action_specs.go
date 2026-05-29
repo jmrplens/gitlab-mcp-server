@@ -27,7 +27,7 @@ func notificationUpdateSpec(name string, route toolutil.ActionRoute, individualT
 
 func notificationOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"user", "notification"},
+		Aliases: []string{individualTool}, Usage: "Use to execute notifications domain action.", Tags: []string{"user", "notification"},
 		OpenWorld:      true,
 		OwnerPackage:   "notifications",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

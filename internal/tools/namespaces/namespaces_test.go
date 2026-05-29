@@ -412,6 +412,10 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	specs := ActionSpecs(client)
+	specByTool := make(map[string]toolutil.ActionSpec, len(specs))
+	for _, spec := range specs {
+		specByTool[spec.IndividualTool.Name] = spec
+	}
 	if len(specs) != 4 {
 		t.Fatalf("len(ActionSpecs) = %d, want 4", len(specs))
 	}
@@ -419,6 +423,18 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "namespaces" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	if specByTool["gitlab_namespace_get"].ParameterGuidance["id"].SemanticRole == "" {
+		t.Fatal("gitlab_namespace_get should define id parameter guidance")
+	}
+	if specByTool["gitlab_namespace_search"].ParameterGuidance["query"].SemanticRole == "" {
+		t.Fatal("gitlab_namespace_search should define query parameter guidance")
 	}
 }
 

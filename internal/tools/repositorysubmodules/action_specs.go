@@ -24,7 +24,7 @@ func submoduleUpdateSpec(name string, route toolutil.ActionRoute, individualTool
 
 func submoduleOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"repository", "submodule"},
+		Aliases: []string{individualTool}, Usage: "Use to execute repositorysubmodules domain action.", Tags: []string{"repository", "submodule"},
 		RelatedActions: []string{"repository.tree", "repository.file_get"},
 		OpenWorld:      true,
 		OwnerPackage:   "repositorysubmodules",

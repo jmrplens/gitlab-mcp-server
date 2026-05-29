@@ -12,6 +12,34 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// TestActionSpecs_Metadata verifies canonical metadata for error tracking actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	specs := ActionSpecs(client)
+	byTool := errorTrackingSpecsByTool(t, specs)
+
+	if len(specs) != 5 {
+		t.Fatalf("len(ActionSpecs) = %d, want 5", len(specs))
+	}
+	if len(byTool) != len(specs) {
+		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
+	}
+	if !byTool["gitlab_delete_error_tracking_client_key"].Route.Destructive {
+		t.Fatal("gitlab_delete_error_tracking_client_key should be destructive")
+	}
+	if byTool["gitlab_get_error_tracking_settings"].Usage == "" {
+		t.Fatal("gitlab_get_error_tracking_settings should define usage")
+	}
+	if len(byTool["gitlab_list_error_tracking_client_keys"].Aliases) == 0 {
+		t.Fatal("gitlab_list_error_tracking_client_keys should define aliases")
+	}
+	if byTool["gitlab_delete_error_tracking_client_key"].ParameterGuidance["key_id"].SemanticRole == "" {
+		t.Fatal("gitlab_delete_error_tracking_client_key should define key_id parameter guidance")
+	}
+}
+
 // TestActionSpecs_CallAllRoutes exercises every error tracking tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()

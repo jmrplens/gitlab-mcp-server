@@ -14,19 +14,34 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func compliancePolicyReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, compliancePolicyOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, compliancePolicyOptions(name, individualTool))
 }
 
 func compliancePolicyUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewUpdateActionSpec(name, route, compliancePolicyOptions(individualTool))
+	return toolutil.NewUpdateActionSpec(name, route, compliancePolicyOptions(name, individualTool))
 }
 
-func compliancePolicyOptions(individualTool string) toolutil.ActionSpecOptions {
+func compliancePolicyOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	usage := "Get current compliance policy settings."
+	guidance := map[string]toolutil.ParameterGuidance{}
+	if actionName == "update" {
+		usage = "Update compliance policy settings for the instance."
+		guidance["csp_namespace_id"] = toolutil.ParameterGuidance{
+			SemanticRole:   "compliance_namespace_id",
+			ValueSource:    "Namespace ID that should host compliance policy project(s).",
+			ExampleBinding: "params.csp_namespace_id:200",
+		}
+	}
+
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"compliance", "policy"},
-		OpenWorld:      true,
-		Edition:        "premium",
-		OwnerPackage:   "compliancepolicy",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:           []string{individualTool},
+		Tags:              []string{"compliance", "policy"},
+		Usage:             usage,
+		RelatedActions:    []string{"group.get"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		Edition:           "premium",
+		OwnerPackage:      "compliancepolicy",
+		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

@@ -66,7 +66,7 @@ func snippetDeleteSpec(name string, route toolutil.ActionRoute, individualTool s
 
 func snippetOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"snippet"},
+		Aliases: []string{individualTool}, Usage: "Use to execute snippets domain action.", Tags: []string{"snippet"},
 		OpenWorld:      true,
 		OwnerPackage:   "snippets",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

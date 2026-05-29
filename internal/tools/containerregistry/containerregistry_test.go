@@ -1052,6 +1052,14 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("%s should be destructive", toolName)
 		}
 	}
+	for _, spec := range byTool {
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s is empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s are empty", spec.Name)
+		}
+	}
 }
 
 // newRegistryMCPTestMux creates a ServeMux that handles all registry API endpoints

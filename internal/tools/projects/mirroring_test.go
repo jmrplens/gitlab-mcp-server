@@ -74,6 +74,23 @@ func TestGetPullMirror_APIError(t *testing.T) {
 	}
 }
 
+// TestGetPullMirror_NotMirroredHint verifies GitLab's 400 response for projects
+// without pull mirroring points callers to the configure action.
+func TestGetPullMirror_NotMirroredHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"The project is not mirrored"}`)
+	}))
+	_, err := GetPullMirror(context.Background(), client, GetPullMirrorInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	for _, want := range []string{"not mirrored", "pull_mirror_configure", "pull_mirror_get"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
+	}
+}
+
 // TestConfigurePullMirror_Success verifies ConfigurePullMirror issues PUT to the pull mirror endpoint and returns the updated configuration on HTTP 200.
 func TestConfigurePullMirror_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

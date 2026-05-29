@@ -15,7 +15,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func doraMetricReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Tags:           []string{"analytics", "dora"},
+		Aliases: []string{individualTool}, Usage: "Use to execute dorametrics domain action.", Tags: []string{"analytics", "dora"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "dorametrics",

@@ -42,13 +42,13 @@ const (
 	// keep the file scannable. When a description exceeds this limit, generation
 	// falls back to its first sentence; if that is still too long, the text is
 	// hard-truncated at the rune boundary.
-	maxFullDescRunes       = 600
-	llmsFileName           = "llms.txt"
-	llmsFullFileName       = "llms-full.txt"
-	dynamicFindToolName    = "gitlab_find_action"
-	dynamicExecuteToolName = "gitlab_execute_tool"
-	llmsSummaryItemFormat  = "- %s: %s\n"
-	llmsBoldTitleFormat    = "**%s**\n\n"
+	maxFullDescRunes             = 600
+	llmsFileName                 = "llms.txt"
+	llmsFullFileName             = "llms-full.txt"
+	dynamicFindToolName          = "gitlab_find_action"
+	dynamicExecuteActionToolName = "gitlab_execute_action"
+	llmsSummaryItemFormat        = "- %s: %s\n"
+	llmsBoldTitleFormat          = "**%s**\n\n"
 )
 
 type llmsCatalog struct {
@@ -289,8 +289,8 @@ func listDynamicTools(client *gitlabclient.Client) ([]*mcp.Tool, error) {
 
 func sortDynamicTools(dynamicTools []*mcp.Tool) {
 	order := map[string]int{
-		dynamicFindToolName:    0,
-		dynamicExecuteToolName: 1,
+		dynamicFindToolName:          0,
+		dynamicExecuteActionToolName: 1,
 	}
 	sort.SliceStable(dynamicTools, func(i, j int) bool {
 		left, leftOK := order[dynamicTools[i].Name]
@@ -306,7 +306,7 @@ func sortDynamicTools(dynamicTools []*mcp.Tool) {
 }
 
 func validateDynamicToolContract(dynamicTools []*mcp.Tool) error {
-	expected := []string{dynamicFindToolName, dynamicExecuteToolName}
+	expected := []string{dynamicFindToolName, dynamicExecuteActionToolName}
 	if len(dynamicTools) != len(expected) {
 		return fmt.Errorf("expected %d dynamic tools, got %d", len(expected), len(dynamicTools))
 	}
@@ -411,7 +411,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString(".\n\n")
 
 	b.WriteString("Dynamic toolset (default mode):\n\n")
-	b.WriteString("When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_tool while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set TOOL_SURFACE=meta to use consolidated domain meta-tools instead.\n\n")
+	b.WriteString("When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_action while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set TOOL_SURFACE=meta to use consolidated domain meta-tools instead.\n\n")
 	for _, t := range catalog.Dynamic {
 		desc := firstSentence(t.Description)
 		desc = truncateRunes(desc, 80)
@@ -713,7 +713,7 @@ func compactToolDescription(description string) string {
 
 func writeLLMSFullDynamicTools(b *strings.Builder, dynamicTools []*mcp.Tool) {
 	b.WriteString("## Dynamic Toolset\n\n")
-	b.WriteString("Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_tool` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.\n\n")
+	b.WriteString("Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_action` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.\n\n")
 	for _, tool := range dynamicTools {
 		fmt.Fprintf(b, toolutil.FmtMdH3, tool.Name)
 		if tool.Title != "" {

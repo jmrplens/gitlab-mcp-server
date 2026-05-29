@@ -39,7 +39,7 @@ func integrationDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 
 func integrationOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"project", "integration"},
+		Aliases: []string{individualTool}, Usage: "Use to execute integrations domain action.", Tags: []string{"project", "integration"},
 		RelatedActions: []string{"project.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "integrations",

@@ -4,6 +4,7 @@ package users
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -71,6 +72,43 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 				t.Fatalf("Route.Handler(%s) returned nil", tt.tool)
 			}
 		})
+	}
+}
+
+// TestActionSpecs_PrimaryMetadata verifies richer metadata for core user actions.
+func TestActionSpecs_PrimaryMetadata(t *testing.T) {
+	byTool := userSpecsByTool(t, ActionSpecs(newUserActionSpecClient(t), true))
+
+	currentSpec := byTool["gitlab_user_current"]
+	if !slices.Contains(currentSpec.Aliases, "who am i") {
+		t.Fatalf("current Aliases = %v, want who am i", currentSpec.Aliases)
+	}
+	if !strings.Contains(currentSpec.Usage, "authenticated user profile") {
+		t.Fatalf("current Usage = %q", currentSpec.Usage)
+	}
+
+	listSpec := byTool["gitlab_list_users"]
+	if guidance := listSpec.ParameterGuidance["search"]; guidance.ExampleBinding == "" {
+		t.Fatalf("list search guidance = %+v, want example binding", guidance)
+	}
+	if !slices.Contains(listSpec.RelatedActions, "user.create") {
+		t.Fatalf("list RelatedActions = %v, want user.create", listSpec.RelatedActions)
+	}
+
+	getSpec := byTool["gitlab_get_user"]
+	if guidance := getSpec.ParameterGuidance["user_id"]; guidance.SemanticRole != "scope_user" {
+		t.Fatalf("get user_id guidance = %+v, want scope_user", guidance)
+	}
+	if !strings.Contains(getSpec.IndividualTool.Description, "Returns:") || !strings.Contains(getSpec.IndividualTool.Description, "See also:") {
+		t.Fatalf("get description = %q, want Returns/See also", getSpec.IndividualTool.Description)
+	}
+
+	createSpec := byTool["gitlab_create_user"]
+	if !slices.Contains(createSpec.Aliases, "create user") {
+		t.Fatalf("create Aliases = %v, want create user", createSpec.Aliases)
+	}
+	if guidance := createSpec.ParameterGuidance["email"]; guidance.SemanticRole != "email_address" {
+		t.Fatalf("create email guidance = %+v, want email_address", guidance)
 	}
 }
 

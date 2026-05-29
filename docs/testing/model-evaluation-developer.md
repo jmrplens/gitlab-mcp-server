@@ -9,21 +9,55 @@ around `cmd/eval_mcp_surfaces`.
 
 ## Source Map
 
-| Path                                                            | Purpose                                                                               |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `cmd/eval_mcp_surfaces/main.go`                                 | Command entry point and high-level orchestration.                                     |
-| `cmd/eval_mcp_surfaces/options.go`                              | CLI flags, presets, and tool-surface normalization.                                   |
-| `cmd/eval_mcp_surfaces/runner.go`                               | Model loop, tool-call budgets, validation feedback, and simulated tool results.       |
-| `cmd/eval_mcp_surfaces/sessions.go`                             | Mock and live MCP server sessions, resource/prompt registration, and catalog routing. |
-| `cmd/eval_mcp_surfaces/bridge.go`                               | MCP capability bridge tools for resources, prompts, completions, and capabilities.    |
-| `cmd/eval_mcp_surfaces/live_targets.go`                         | Just-in-time Docker fixture resources for tasks that need fresh mutable targets.      |
-| `cmd/eval_mcp_surfaces/report.go`                               | Per-run Markdown reports, metrics, diagnostics, usage, and coverage output.           |
-| `cmd/eval_mcp_surfaces/comparison.go`                           | Cross-report comparison for model, token, diagnostic, usage, and coverage trends.     |
-| `cmd/eval_mcp_surfaces/providers.go`                            | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs.            |
-| `cmd/eval_mcp_surfaces/fixtures.go`                             | Docker GitLab fixture preparation and placeholder replacement.                        |
-| `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md` | Canonical task corpus.                                                                |
-| `dist/evaluation/mcp-surfaces/`                                 | Generated reports, traces, and fixture state; ignored by Git.                         |
-| `docs/testing/model-results.md`                                 | Current published benchmark result copied from generated reports.                     |
+| Path                                                     | Purpose                                                                               |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `cmd/eval_mcp_surfaces/main.go`                          | Thin command entry point that delegates to the internal evaluator package.            |
+| `cmd/eval_mcp_surfaces/internal/evaluator/run.go`        | High-level command workflow, environment setup, catalog preparation, and model runs.  |
+| `cmd/eval_mcp_surfaces/internal/evaluator/options.go`    | CLI flags, presets, and tool-surface normalization.                                   |
+| `cmd/eval_mcp_surfaces/internal/evaluator/runner.go`     | Model loop, tool-call budgets, validation feedback, and simulated tool results.       |
+| `cmd/eval_mcp_surfaces/internal/evaluator/sessions.go`   | Mock and live MCP server sessions, resource/prompt registration, and catalog routing. |
+| `cmd/eval_mcp_surfaces/internal/evaluator/bridge.go`     | MCP capability bridge tools for resources, prompts, completions, and capabilities.    |
+| `cmd/eval_mcp_surfaces/internal/evaluator/case_*.go`     | Typed case definitions, case registry, prompt rendering, and fixture engine.          |
+| `cmd/eval_mcp_surfaces/internal/evaluator/report.go`     | Per-run Markdown reports, metrics, diagnostics, usage, and coverage output.           |
+| `cmd/eval_mcp_surfaces/internal/evaluator/comparison.go` | Cross-report comparison for model, token, diagnostic, usage, and coverage trends.     |
+| `cmd/eval_mcp_surfaces/internal/evaluator/providers.go`  | Provider adapters for Anthropic, Google, OpenAI, and Qwen-compatible APIs.            |
+| `cmd/eval_mcp_surfaces/internal/evaluator/fixtures.go`   | Docker GitLab fixture preparation and placeholder replacement.                        |
+| `cmd/eval_mcp_surfaces/internal/evalrun/`                | Small run utilities shared by fixture and model execution code.                       |
+| `cmd/eval_mcp_surfaces/internal/termio/`                 | Terminal progress and log routing for long local runs and wrapper scripts.            |
+| `dist/evaluation/mcp-surfaces/`                          | Generated reports, traces, and fixture state; ignored by Git.                         |
+| `docs/testing/model-results.md`                          | Current published benchmark result copied from generated reports.                     |
+
+Case definitions are grouped in `case_registry_*.go` files by partition:
+`case_registry_read.go`, `case_registry_mutating.go`,
+`case_registry_destructive.go`, `case_registry_capabilities.go`, and the
+Enterprise/Premium variants. Add new cases there rather than in testdata files.
+
+The evaluator implementation intentionally lives under `internal/evaluator` so
+the command can stay small while the implementation keeps package-private helper
+types. Prefer adding new evaluator logic inside that package unless the code has
+a clear standalone boundary like terminal I/O or generic run utilities.
+
+## Result Triage Policy
+
+Use live model traces to decide where a fix belongs before changing prompt text
+or MCP metadata:
+
+1. If the model cannot discover the right action, the dynamic ranker, aliases,
+  action descriptions, or `gitlab://tools` manifest metadata are the first
+  suspects.
+2. If the model chooses the right action but invents or omits schema-visible
+  parameters, inspect the canonical `ActionSpec`, JSON schema tags, parameter
+  guidance, and output `next_steps` before changing evaluator prompts.
+3. If the MCP response or Markdown output encourages the wrong follow-up action,
+  fix the tool output, hints, or formatter in the MCP implementation.
+4. If the MCP metadata is already precise and the failure comes from an
+  evaluator-only compact workflow plan, fixture placeholder, or assertion rule,
+  change the evaluator harness.
+
+When auditing full runs, treat a `report_clean` result as necessary but not
+sufficient. Also inspect repaired first-pass diagnostics, Docker live triage,
+and trace-level validation failures so hidden MCP guidance problems are not
+papered over by retries.
 
 ## Environment
 
@@ -37,8 +71,10 @@ The evaluator reads model provider keys from environment variables:
 | Qwen      | `QWEN_API_KEY`                       |
 
 Docker mode also needs `test/e2e/.env.docker`, created by the E2E provisioning
-scripts. Never print or commit `.env`, `.env.docker`, provider keys, raw traces,
-or generated fixture state.
+scripts. Enterprise Docker mode additionally needs `GITLAB_ENTERPRISE=true`, the
+EE image, and `ENTERPRISE_LICENSE` supplied through the shell or the repository
+`.env` file. Never print or commit `.env`, `.env.docker`, provider keys,
+licenses, raw traces, or generated fixture state.
 
 The documented Qwen configuration uses `QWEN_API_KEY` directly. Keep provider
 fallbacks out of `.env.example` unless the evaluator command examples also need
@@ -53,8 +89,13 @@ Use this economy-oriented model set for the standard compatibility matrix unless
 a focused run requires different models:
 
 ```bash
-EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
+EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 ```
+
+`google:gemini-flash-latest` resolves to the latest Gemini Flash model available
+to the API key. If you pin a concrete Google model ID instead, verify it with
+Google ListModels first; Gemini preview IDs can retire without code changes in
+this repository.
 
 ## Surfaces And Capability Access
 
@@ -89,7 +130,7 @@ set -euo pipefail
 
 export PATH="/usr/local/go/bin:$HOME/go/bin:/snap/bin:$PATH"
 GO_BIN="${GO_BIN:-$(command -v go)}"
-EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
+EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 
 timeout 10800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
   --preset schema-enterprise \
@@ -110,6 +151,25 @@ timeout 1800s ./test/e2e/scripts/wait-for-gitlab.sh
 timeout 1800s ./test/e2e/scripts/setup-gitlab.sh
 timeout 1800s ./test/e2e/scripts/register-runner.sh
 ```
+
+For Enterprise Ultimate validation, use the EE image. With a 24-character
+activation code, pass it to the container as `GITLAB_ACTIVATION_CODE` during
+startup. Legacy `.gitlab-license` keys can remain in `ENTERPRISE_LICENSE`; the
+setup script installs those without echoing the license:
+
+```bash
+timeout 3600s env GITLAB_IMAGE=gitlab/gitlab-ee:latest GITLAB_ACTIVATION_CODE="$ENTERPRISE_LICENSE" docker compose -f test/e2e/docker-compose.yml up -d
+timeout 1800s ./test/e2e/scripts/wait-for-gitlab.sh
+timeout 1800s GITLAB_ENTERPRISE=true ./test/e2e/scripts/setup-gitlab.sh
+timeout 1800s ./test/e2e/scripts/register-runner.sh
+```
+
+After an activation-code run succeeds, `setup-gitlab.sh` exports the generated
+license key from GitLab's license usage CSV into `test/e2e/.enterprise-license`
+with owner-only permissions. The Docker Enterprise wrappers prefer that ignored
+cache on later runs and install it through the License API instead of passing the
+activation code again. Remove the cache file when you intentionally want to test
+a fresh activation-code flow.
 
 The evaluator can refresh its own model-evaluation fixtures with
 `--prepare-fixtures`. Some destructive tasks also create just-in-time resources
@@ -156,7 +216,7 @@ set -euo pipefail
 
 export PATH="/usr/local/go/bin:$HOME/go/bin:/snap/bin:$PATH"
 GO_BIN="${GO_BIN:-$(command -v go)}"
-EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-3.1-flash-lite-preview,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
+EVAL_MODELS="anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash"
 
 for preset in docker-read docker-mutating-safe docker-destructive-safe; do
   timeout 7200s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
@@ -171,6 +231,22 @@ for preset in docker-read docker-mutating-safe docker-destructive-safe; do
     --out "dist/evaluation/mcp-surfaces/${preset}-all-models.md"
 done
 '
+```
+
+For Enterprise Ultimate model runs, prefer the wrapper so the EE image, license
+installation, fixture refreshes, and Enterprise presets stay together:
+
+```bash
+make eval-surfaces-docker-enterprise SURFACE=dynamic
+```
+
+The underlying presets are `docker-enterprise-read`,
+`docker-enterprise-mutating-safe`, and `docker-enterprise-destructive-safe`.
+The wrapper passes `--edition enterprise`, so it excludes CE/base and capability
+discovery cases from the full Enterprise run. A focused run can pass one preset:
+
+```bash
+make eval-surfaces-docker-enterprise SURFACE=dynamic PRESET=docker-enterprise-read
 ```
 
 ## Run Targeted Tasks
@@ -199,34 +275,38 @@ timeout 1800s "$GO_BIN" run ./cmd/eval_mcp_surfaces \
 
 ## Important Flags
 
-| Flag                               | Meaning                                                                                                                                                   |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--preset schema-enterprise`       | Schema-only Enterprise/Premium route coverage; dry-run by default.                                                                                        |
-| `--preset docker-read`             | Docker read-only partition.                                                                                                                               |
-| `--preset docker-mutating-safe`    | Docker safe mutation partition.                                                                                                                           |
-| `--preset docker-destructive-safe` | Docker safe destructive partition.                                                                                                                        |
-| `--model`                          | One provider/model pair. Overrides `--models`.                                                                                                            |
-| `--models`                         | Comma-separated provider/model list.                                                                                                                      |
-| `--backend=gitlab`                 | Build the catalog against the real GitLab backend.                                                                                                        |
-| `--gitlab-env-file`                | Load Docker GitLab credentials from `test/e2e/.env.docker`.                                                                                               |
-| `--prepare-fixtures`               | Create or refresh Docker GitLab resources used by evaluation tasks.                                                                                       |
-| `--use-fixtures`                   | Replace placeholder IDs in prompts with fixture state.                                                                                                    |
-| `--execute-tools`                  | Execute validated model tool calls through MCP.                                                                                                           |
-| `--skip-unavailable`               | Skip routes not available in the current catalog or GitLab edition.                                                                                       |
-| `--task`                           | Comma-separated task IDs for targeted runs.                                                                                                               |
-| `--out`                            | Markdown report path. Trace directory defaults to `<report>.traces/`.                                                                                     |
-| `--terminal-log`                   | File receiving progress and terminal output. Defaults beside `--out`, or under `dist/evaluation/mcp-surfaces/terminal/` when no report path is known yet. |
-| `--print-output`                   | Also echo progress/output to the terminal. Without this flag, the command writes terminal output only to `--terminal-log`.                                |
-| `--publish-docs`                   | Publish reviewed evaluation reports into the managed docs blocks.                                                                                         |
-| `--publish-from`                   | Reviewed Markdown report path to publish; repeat once per report.                                                                                         |
-| `--publish-label`                  | Human-readable label for the published snapshot.                                                                                                          |
-| `--check-docs`                     | Verify committed docs match the selected `--publish-from` reports without writing files.                                                                  |
+| Flag                                          | Meaning                                                                                                                                                   |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--preset schema-enterprise`                  | Schema-only Enterprise/Premium route coverage; dry-run by default.                                                                                        |
+| `--preset docker-read`                        | Docker read-only partition.                                                                                                                               |
+| `--preset docker-mutating-safe`               | Docker safe mutation partition.                                                                                                                           |
+| `--preset docker-destructive-safe`            | Docker safe destructive partition.                                                                                                                        |
+| `--preset docker-enterprise-read`             | Docker Enterprise/Premium read-only partition.                                                                                                            |
+| `--preset docker-enterprise-mutating-safe`    | Docker Enterprise/Premium safe mutation partition.                                                                                                        |
+| `--preset docker-enterprise-destructive-safe` | Docker Enterprise/Premium safe destructive partition.                                                                                                     |
+| `--edition ce\|enterprise\|all`               | Filter tasks by GitLab edition. Docker presets set this automatically unless explicitly overridden.                                                       |
+| `--model`                                     | One provider/model pair. Overrides `--models`.                                                                                                            |
+| `--models`                                    | Comma-separated provider/model list.                                                                                                                      |
+| `--backend=gitlab`                            | Build the catalog against the real GitLab backend.                                                                                                        |
+| `--gitlab-env-file`                           | Load Docker GitLab credentials from `test/e2e/.env.docker`.                                                                                               |
+| `--prepare-fixtures`                          | Create or refresh Docker GitLab resources used by evaluation tasks.                                                                                       |
+| `--use-fixtures`                              | Replace placeholder IDs in prompts with fixture state.                                                                                                    |
+| `--execute-tools`                             | Execute validated model tool calls through MCP.                                                                                                           |
+| `--skip-unavailable`                          | Skip routes not available in the current catalog or GitLab edition.                                                                                       |
+| `--task`                                      | Comma-separated task IDs for targeted runs.                                                                                                               |
+| `--out`                                       | Markdown report path. Trace directory defaults to `<report>.traces/`.                                                                                     |
+| `--terminal-log`                              | File receiving progress and terminal output. Defaults beside `--out`, or under `dist/evaluation/mcp-surfaces/terminal/` when no report path is known yet. |
+| `--print-output`                              | Also echo progress/output to the terminal. Without this flag, the command writes terminal output only to `--terminal-log`.                                |
+| `--publish-docs`                              | Publish reviewed evaluation reports into the managed docs blocks.                                                                                         |
+| `--publish-from`                              | Reviewed Markdown report path to publish; repeat once per report.                                                                                         |
+| `--publish-label`                             | Human-readable label for the published snapshot.                                                                                                          |
+| `--check-docs`                                | Verify committed docs match the selected `--publish-from` reports without writing files.                                                                  |
 
 ### Tool Surface Flags
 
 | Flag value               | Model-facing catalog                                                                           | Primary use                                                            |
 | ------------------------ | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `--tool-surface dynamic` | `gitlab_find_action`, `gitlab_execute_tool`, and optional MCP capability bridge tools.         | Default full Docker and schema runs for the current server experience. |
+| `--tool-surface dynamic` | `gitlab_find_action`, `gitlab_execute_action`, and optional MCP capability bridge tools.       | Default full Docker and schema runs for the current server experience. |
 | `--tool-surface meta`    | Consolidated domain meta-tools plus standalone tools and optional MCP capability bridge tools. | Compatibility baseline and comparison with the pre-dynamic default.    |
 
 Capability bridge tools are enabled by task and evaluator options, not by
@@ -258,9 +338,10 @@ output is only progress logging and stays in the log file by default.
 3. Classify the failure as model route miss, parameter shape miss, provider
    adapter issue, fixture gap, GitLab edition limitation, sampling support gap,
    or MCP implementation bug.
-4. Check whether the trace used the intended tool surface. Dynamic traces should
-  usually call `gitlab_find_action` only when the action or params schema was
-  ambiguous; exact dynamic tasks may go straight to `gitlab_execute_tool`.
+4. Check whether the trace used the intended tool surface. Dynamic traces for
+  ordinary GitLab operations should call `gitlab_find_action` before each
+  `gitlab_execute_action`. Capability bridge traces may call bridge tools such
+  as `gitlab_list_resources` or `gitlab_read_resource` directly.
 5. Fix harness noise before judging model quality.
 6. Re-run the targeted task set.
 7. Re-run the affected preset.
@@ -268,16 +349,24 @@ output is only progress logging and stays in the log file by default.
 
 Use `--publish-from` once per reviewed Markdown report and set a clear
 `--publish-label`. The publication phase updates only the managed marker blocks
-in [AI Model Evaluation Results](model-results.md) and the repository README;
-normal evaluator runs never update documentation automatically. Use
-`--check-docs` in CI-style validation when the selected reports should already
-match the committed docs.
+in [AI Model Evaluation Results](model-results.md) and the repository README.
+CE/base and Enterprise/Premium rows are routed into separate dynamic and
+meta-tool blocks, so publishing licensed runs does not overwrite CE results.
+Normal evaluator runs never update documentation automatically. Use `--check-docs`
+in CI-style validation when the selected reports should already match the
+committed docs.
 
 ## Adding Or Updating Cases
 
-Edit `cmd/eval_mcp_surfaces/testdata/automated-mcp-surface-cases.md`. Preserve the
-existing table format and update the summary counts at the bottom. Use the
-following guidance:
+Edit the typed registry files in `cmd/eval_mcp_surfaces/internal/evaluator/`:
+
+- `case_registry_read.go` for CE read-only operations.
+- `case_registry_mutating.go` for CE safe mutations.
+- `case_registry_destructive.go` for CE destructive operations.
+- `case_registry_capabilities.go` for MCP capability bridge scenarios.
+- `case_registry_enterprise_*.go` for Enterprise/Premium scenarios.
+
+Use the following guidance:
 
 - Include `MT-` cases for one clear operation.
 - Define `MS-` cases for real workflows where sequencing matters.

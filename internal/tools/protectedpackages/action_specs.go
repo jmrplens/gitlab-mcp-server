@@ -44,7 +44,7 @@ func protectedPackageDeleteSpec(name string, route toolutil.ActionRoute, individ
 
 func protectedPackageOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"package", "protection"},
+		Aliases: []string{individualTool}, Usage: "Use to execute protectedpackages domain action.", Tags: []string{"package", "protection"},
 		OpenWorld:      true,
 		OwnerPackage:   "protectedpackages",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

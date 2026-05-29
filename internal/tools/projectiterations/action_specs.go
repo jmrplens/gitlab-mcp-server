@@ -14,7 +14,7 @@ func IssueActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func issueIterationReadSpec(name string, route toolutil.ActionRoute, individualTool, ownerPackage string) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"issue", "iteration"},
+		Aliases: []string{individualTool}, Usage: "Use to execute projectiterations domain action.", Tags: []string{"issue", "iteration"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   ownerPackage,

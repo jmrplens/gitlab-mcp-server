@@ -59,7 +59,7 @@ func pipelineScheduleDeleteSpec(name string, route toolutil.ActionRoute, individ
 
 func pipelineScheduleOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
-		Tags:           []string{"ci", "pipeline", "schedule"},
+		Aliases: []string{individualTool}, Usage: "Use to execute pipelineschedules domain action.", Tags: []string{"ci", "pipeline", "schedule"},
 		OpenWorld:      true,
 		OwnerPackage:   "pipelineschedules",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

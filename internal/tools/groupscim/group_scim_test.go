@@ -5,11 +5,25 @@ package groupscim
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+func assertSCIMIdentityHint(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected SCIM identity error, got nil")
+	}
+	errText := err.Error()
+	for _, want := range []string{"uid", "gitlab_group_scim", "gitlab_list_group_scim_identities", "SAML SSO SCIM provisioning"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
+	}
+}
 
 // TestList_Success verifies that List fetches /api/v4/groups/:id/scim/identities
 // and returns all SCIM identities with external_uid, user_id and active fields.
@@ -174,9 +188,7 @@ func TestGet_APIError(t *testing.T) {
 		GroupID: toolutil.StringOrInt("mygroup"),
 		UID:     "uid-123",
 	})
-	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
-	}
+	assertSCIMIdentityHint(t, err)
 }
 
 // TestUpdate_Success verifies that Update issues PATCH
@@ -280,9 +292,7 @@ func TestUpdate_APIError(t *testing.T) {
 		UID:       "uid-123",
 		ExternUID: "new",
 	})
-	if err == nil {
-		t.Fatal("expected error for 403 response, got nil")
-	}
+	assertSCIMIdentityHint(t, err)
 }
 
 // TestDelete_Success verifies that Delete issues DELETE
@@ -364,7 +374,5 @@ func TestDelete_APIError(t *testing.T) {
 		GroupID: toolutil.StringOrInt("mygroup"),
 		UID:     "uid-123",
 	})
-	if err == nil {
-		t.Fatal("expected error for 500 response, got nil")
-	}
+	assertSCIMIdentityHint(t, err)
 }

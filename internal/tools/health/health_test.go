@@ -6,6 +6,7 @@ package health
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -448,6 +449,20 @@ func TestActionSpecs_Metadata(t *testing.T) {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
 	}
+	statusSpec := healthSpecByTool(t, specs, "gitlab_server_status")
+	if !strings.Contains(statusSpec.Usage, "connectivity") {
+		t.Fatalf("status Usage = %q, want connectivity guidance", statusSpec.Usage)
+	}
+	if !slices.Contains(statusSpec.Aliases, "mcp server status") {
+		t.Fatalf("status Aliases = %v, want mcp server status", statusSpec.Aliases)
+	}
+	if !strings.Contains(statusSpec.IndividualTool.Description, "Returns:") || !strings.Contains(statusSpec.IndividualTool.Description, "See also:") {
+		t.Fatalf("status description = %q, want Returns/See also guidance", statusSpec.IndividualTool.Description)
+	}
+	healthCheckSpec := healthSpecByName(t, specs, "health_check")
+	if !slices.Contains(healthCheckSpec.Aliases, "connectivity check") {
+		t.Fatalf("health_check Aliases = %v, want connectivity check", healthCheckSpec.Aliases)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -506,5 +521,16 @@ func healthSpecByTool(t *testing.T, specs []toolutil.ActionSpec, tool string) to
 		}
 	}
 	t.Fatalf("missing ActionSpec for %s", tool)
+	return toolutil.ActionSpec{}
+}
+
+func healthSpecByName(t *testing.T, specs []toolutil.ActionSpec, name string) toolutil.ActionSpec {
+	t.Helper()
+	for _, spec := range specs {
+		if spec.Name == name {
+			return spec
+		}
+	}
+	t.Fatalf("missing ActionSpec for %s", name)
 	return toolutil.ActionSpec{}
 }

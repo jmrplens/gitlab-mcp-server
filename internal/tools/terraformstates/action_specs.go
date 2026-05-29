@@ -38,7 +38,7 @@ func terraformStateDeleteSpec(name string, route toolutil.ActionRoute, individua
 
 func terraformStateOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"terraform-state"},
+		Aliases: []string{individualTool}, Usage: "Use to execute terraformstates domain action.", Tags: []string{"terraform-state"},
 		OpenWorld:      true,
 		OwnerPackage:   "terraformstates",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

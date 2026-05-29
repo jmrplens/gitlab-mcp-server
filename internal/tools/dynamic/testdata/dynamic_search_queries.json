@@ -114,6 +114,151 @@
         "notes": "Guided issue creation wording should resolve to the elicitation workflow, not work item creation."
     },
     {
+        "category": "interactive_mr_flow",
+        "query": "guided merge request creation flow",
+        "want_top": "interactive.mr_create",
+        "notes": "Observed Dynamic eval wording should resolve to the elicitation workflow for MR creation."
+    },
+    {
+        "category": "interactive_mr_generic_create_visible",
+        "query": "merge request create",
+        "want_top_n": [
+            "interactive.mr_create"
+        ],
+        "limit": 20,
+        "notes": "Observed Gemini eval query omitted guided wording; the elicitation workflow should still be visible alongside scripted MR creation."
+    },
+    {
+        "category": "interactive_release_flow",
+        "query": "guided release creation flow",
+        "want_top": "interactive.release_create",
+        "notes": "Observed Dynamic eval wording should resolve to the elicitation workflow for release creation."
+    },
+    {
+        "category": "runner_jobs_phrase",
+        "query": "runner jobs list",
+        "want_top": "runner.jobs",
+        "notes": "Runner job history wording should find runner.jobs instead of generic job or runner list actions."
+    },
+    {
+        "category": "project_star_phrase",
+        "query": "star project",
+        "want_top": "project.star",
+        "notes": "Project star intent should outrank uploads or avatar actions."
+    },
+    {
+        "category": "instance_ci_variable_create_phrase",
+        "query": "create global instance CI variable",
+        "want_top": "ci_variable.instance_create",
+        "notes": "Instance/global CI variable wording should prefer the admin instance variable action."
+    },
+    {
+        "category": "analyze_pipeline_failure_phrase",
+        "query": "pipeline failure analysis",
+        "want_top": "analyze.pipeline_failure",
+        "notes": "Failure-analysis wording should select the sampling analyzer, not a raw pipeline read."
+    },
+    {
+        "category": "analyze_ci_config_phrase",
+        "query": "CI configuration analysis",
+        "want_top": "analyze.ci_config",
+        "notes": "CI configuration analysis should select the analyzer, not a template lint action."
+    },
+    {
+        "category": "analyze_ci_config_project_phrase",
+        "query": "project ci configuration",
+        "want_top": "analyze.ci_config",
+        "notes": "Observed Dynamic eval query should select the CI configuration analyzer over job, variable, or lint helpers."
+    },
+    {
+        "category": "analyze_mr_changes_phrase",
+        "query": "analyze merge request changes",
+        "want_top": "analyze.mr_changes",
+        "notes": "Analysis wording should select the MR changes analyzer over raw changes retrieval."
+    },
+    {
+        "category": "analyze_issue_summary_phrase",
+        "query": "issue summary analyzer",
+        "want_top": "analyze.issue_summary",
+        "notes": "Issue summary wording should select the issue summary analyzer."
+    },
+    {
+        "category": "analyze_mr_security_phrase",
+        "query": "merge request security review",
+        "want_top": "analyze.mr_security",
+        "notes": "Security review wording should select the MR security analyzer."
+    },
+    {
+        "category": "analyze_technical_debt_phrase",
+        "query": "technical debt markers",
+        "want_top": "analyze.technical_debt",
+        "notes": "Technical debt marker wording should select the analyzer instead of raw code search."
+    },
+    {
+        "category": "analyze_technical_debt_find_phrase",
+        "query": "find technical-debt markers on branch main",
+        "want_top": "analyze.technical_debt",
+        "notes": "Observed Dynamic eval wording with a branch should still select the technical-debt analyzer."
+    },
+    {
+        "category": "search_projects_phrase",
+        "query": "search projects gitlab-mcp-server",
+        "want_top": "search.projects",
+        "notes": "Project/repository search wording should prefer search.projects over project list/get."
+    },
+    {
+        "category": "server_health_check_phrase",
+        "query": "server diagnostics connectivity check",
+        "want_top": "server.health_check",
+        "notes": "Diagnostics connectivity wording should prefer the health-check action."
+    },
+    {
+        "category": "ci_catalog_list_phrase",
+        "query": "CI/CD catalog resources components",
+        "want_top": "ci_catalog.list",
+        "notes": "CI/CD catalog component/resource wording should find catalog listing."
+    },
+    {
+        "category": "release_list_phrase",
+        "query": "release list",
+        "want_top": "release.list",
+        "notes": "Release inventory wording should prefer release.list."
+    },
+    {
+        "category": "repository_compare_phrase",
+        "query": "compare refs",
+        "want_top": "repository.compare",
+        "notes": "Ref comparison wording should select repository.compare."
+    },
+    {
+        "category": "release_create_from_ref_phrase",
+        "query": "release create from ref",
+        "want_top": "release.create",
+        "notes": "Release creation from a ref should prefer release.create over release asset-link creation."
+    },
+    {
+        "category": "runner_update_paused_phrase",
+        "query": "set paused=true on runner id 9 for project my-org/tools/gitlab-mcp-server",
+        "want_top": "runner.update",
+        "notes": "Runner pause/update wording should resolve to runner.update instead of job or pipeline listing."
+    },
+    {
+        "category": "mr_review_changes_phrase",
+        "query": "merge request changes analyzer",
+        "want_top_n": [
+            "mr_review.changes_get",
+            "analyze.mr_changes"
+        ],
+        "limit": 20,
+        "notes": "Raw changes retrieval and the analyzer are both valid nearby actions, but both must be discoverable."
+    },
+    {
+        "category": "issue_link_list_phrase",
+        "query": "list issue links",
+        "want_top": "issue.link_list",
+        "notes": "Issue link relationship wording should select issue.link_list."
+    },
+    {
         "category": "repository_tree_phrase",
         "query": "repository tree list at main",
         "want_top": "repository.tree",
@@ -136,6 +281,97 @@
         "query": "issue.close",
         "want_top": "issue.update",
         "notes": "Issue lifecycle shorthand should resolve to issue.update; execute injects the state_event."
+    },
+    {
+        "category": "project_service_account_pat_create_phrase",
+        "query": "project service account personal access token create",
+        "want_top": "project.service_account_pat_create",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval query should prefer project service account PAT creation over generic project access tokens."
+    },
+    {
+        "category": "project_service_account_pat_list_phrase",
+        "query": "project service account personal access token list",
+        "want_top": "project.service_account_pat_list",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval query should prefer project service account PAT listing over generic access token actions."
+    },
+    {
+        "category": "group_service_accounts_list_phrase",
+        "query": "group service accounts list",
+        "want_top": "group.service_account_list",
+        "enterprise": true,
+        "notes": "Group service account inventory wording should prefer group-scoped service accounts over instance user service account listing."
+    },
+    {
+        "category": "group_service_account_pat_create_phrase",
+        "query": "group service account personal access token create",
+        "want_top": "group.service_account_pat_create",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval query should prefer group service account PAT creation over generic group access tokens."
+    },
+    {
+        "category": "group_service_account_pat_list_phrase",
+        "query": "group service account personal access token list",
+        "want_top": "group.service_account_pat_list",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval query should prefer group service account PAT listing over generic access token actions."
+    },
+    {
+        "category": "package_publish_directory_files_phrase",
+        "query": "generic package publish files from directory",
+        "want_top": "package.publish_directory",
+        "notes": "Directory-based multi-file publish wording should select publish_directory rather than single-file publish."
+    },
+    {
+        "category": "project_protected_environment_deploy_access_phrase",
+        "query": "protect environment staging with Maintainer deploy access for the project",
+        "want_top": "environment.protected_protect",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer project protected environment protection over deploy tokens or keys."
+    },
+    {
+        "category": "group_protected_environment_protect_phrase",
+        "query": "group protected environment create with Maintainer deploy access",
+        "want_top": "group.protected_env_protect",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer group protected environment protection over project protected environments or CI variables."
+    },
+    {
+        "category": "group_protected_environment_list_phrase",
+        "query": "group protected environment list",
+        "want_top": "group.protected_env_list",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer group protected environment listing over project protected environments."
+    },
+    {
+        "category": "group_protected_environment_get_phrase",
+        "query": "group protected environment get staging",
+        "want_top": "group.protected_env_get",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer group protected environment fetch over project protected environments."
+    },
+    {
+        "category": "group_protected_environment_update_phrase",
+        "query": "group protected environment update require one approval",
+        "want_top": "group.protected_env_update",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer group protected environment updates over project protected environments."
+    },
+    {
+        "category": "group_protected_environment_unprotect_phrase",
+        "query": "group protected environment unprotect",
+        "want_top": "group.protected_env_unprotect",
+        "enterprise": true,
+        "expect_destructive_top": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer destructive group protected environment unprotect and remind callers to use top-level confirm=true."
+    },
+    {
+        "category": "group_protected_branch_maintainer_access_phrase",
+        "query": "group protect branch pattern eval-enterprise/* with Maintainer push and merge access for group my-org",
+        "want_top": "group.protected_branch_protect",
+        "enterprise": true,
+        "notes": "Observed Enterprise Dynamic eval wording should prefer group protected branch protection over generic access token actions."
     },
     {
         "category": "no_match",

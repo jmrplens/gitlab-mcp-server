@@ -13,6 +13,25 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// TestActionSpecs_Metadata verifies canonical metadata for project alias actions.
+func TestActionSpecs_Metadata(t *testing.T) {
+	byTool := projectAliasSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, projectAliasesActionHandler())))
+	if len(byTool) != 4 {
+		t.Fatalf("len(ActionSpecs) = %d, want 4", len(byTool))
+	}
+	for _, spec := range byTool {
+		if spec.OwnerPackage != "projectaliases" {
+			t.Fatalf("OwnerPackage for %s = %q, want projectaliases", spec.Name, spec.OwnerPackage)
+		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s is empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s are empty", spec.Name)
+		}
+	}
+}
+
 // TestActionSpecs_CallAllRoutes exercises every project alias tool through its canonical route.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := projectAliasSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, projectAliasesActionHandler())))

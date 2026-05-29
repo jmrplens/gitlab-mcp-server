@@ -13,7 +13,7 @@ GitLab business logic.
 | Surface          | Selector                                              |                             Visible MCP tools | Source of action metadata                                              |
 | ---------------- | ----------------------------------------------------- | --------------------------------------------: | ---------------------------------------------------------------------- |
 | Individual tools | `TOOL_SURFACE=individual` (`META_TOOLS=false` legacy) |                 One tool per GitLab operation | Canonical action catalog projected by `RegisterIndividualCatalogTools` |
-| Dynamic          | default, `TOOL_SURFACE=dynamic`                       |   `gitlab_find_action`, `gitlab_execute_tool` | Canonical action catalog                                               |
+| Dynamic          | default, `TOOL_SURFACE=dynamic`                       | `gitlab_find_action`, `gitlab_execute_action` | Canonical action catalog                                               |
 | Meta-tools       | `TOOL_SURFACE=meta`                                   | Domain dispatchers with `action` and `params` | Canonical action catalog                                               |
 
 Individual tools, meta-tools, and dynamic tools are now catalog-backed surfaces
@@ -151,7 +151,7 @@ flowchart TD
     collectDynamicSpecs --> generatedManifest
     buildDynamic --> standalone[dynamic.AddStandaloneCatalog]
     standalone --> dynamicTools[dynamic.RegisterCatalogFindExecuteTools]
-    dynamicTools --> twoTools[gitlab_find_action\ngitlab_execute_tool]
+    dynamicTools --> twoTools[gitlab_find_action\ngitlab_execute_action]
 ```
 
 ## Action Spec Builder Ownership

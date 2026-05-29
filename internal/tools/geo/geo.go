@@ -251,6 +251,14 @@ func Repair(ctx context.Context, client *gitlabclient.Client, in IDInput) (Outpu
 		return Output{}, toolutil.WrapErrWithStatusHint("repair geo site", err, http.StatusNotFound,
 			"verify id with gitlab_list_geo_sites; repair re-creates the OAuth application for the secondary site \u2014 must be run from the primary")
 	}
+	if site == nil {
+		return Output{
+			HintableOutput: toolutil.HintableOutput{NextSteps: []string{
+				"Geo repair was accepted but GitLab returned an empty response; call action 'get' to refresh the Geo site.",
+			}},
+			ID: in.ID,
+		}, nil
+	}
 	return toOutput(site), nil
 }
 

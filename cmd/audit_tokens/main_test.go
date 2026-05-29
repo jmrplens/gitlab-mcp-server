@@ -96,7 +96,7 @@ func TestListDynamicTools_ExposesLowTokenSurface(t *testing.T) {
 		names = append(names, tool.Name)
 	}
 	sort.Strings(names)
-	if got := strings.Join(names, ","); got != "gitlab_execute_tool,gitlab_find_action" {
+	if got := strings.Join(names, ","); got != "gitlab_execute_action,gitlab_find_action" {
 		t.Fatalf("dynamic tools = %q, want find/execute", got)
 	}
 }

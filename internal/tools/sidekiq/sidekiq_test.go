@@ -327,6 +327,12 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "sidekiq" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
 	}
 }
 

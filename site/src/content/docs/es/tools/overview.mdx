@@ -32,7 +32,7 @@ En modo meta-herramientas (`TOOL_SURFACE=meta`), las operaciones relacionadas se
 
 ### Conjunto de herramientas dinámico
 
-El modo dinámico (`TOOL_SURFACE=dynamic`) es la alternativa de bajo consumo de tokens. Expone solo `gitlab_find_action` y `gitlab_execute_tool`, mientras conserva las mismas acciones de GitLab detrás del catálogo canónico. El asistente encuentra una acción con su schema exacto y luego ejecuta el ID canónico `domain.action`.
+El modo dinámico (`TOOL_SURFACE=dynamic`) es la alternativa de bajo consumo de tokens. Expone solo `gitlab_find_action` y `gitlab_execute_action`, mientras conserva las mismas acciones de GitLab detrás del catálogo canónico. El asistente encuentra una acción con su schema exacto y luego ejecuta el ID canónico `domain.action`.
 
 ```mermaid
 flowchart LR
@@ -48,7 +48,7 @@ Todas las herramientas siguen un patrón de nomenclatura consistente:
 
 - **Herramientas individuales**: `gitlab_{action}_{resource}` (p. ej., `gitlab_create_issue`, `gitlab_list_projects`)
 - **Meta-herramientas**: `gitlab_{domain}` (p. ej., `gitlab_issue`, `gitlab_project`)
-- **Acciones dinámicas**: IDs canónicos `domain.action` ejecutados mediante `gitlab_execute_tool` (p. ej., `issue.create`, `merge_request.list`)
+- **Acciones dinámicas**: IDs canónicos `domain.action` ejecutados mediante `gitlab_execute_action` (p. ej., `issue.create`, `merge_request.list`)
 
 ## Meta-herramientas base (33)
 

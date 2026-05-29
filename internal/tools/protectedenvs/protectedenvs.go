@@ -35,7 +35,7 @@ type GetInput struct {
 type ProtectInput struct {
 	ProjectID             toolutil.StringOrInt     `json:"project_id"                        jsonschema:"Project ID or URL-encoded path,required"`
 	Name                  string                   `json:"name"                              jsonschema:"Environment name to protect,required"`
-	DeployAccessLevels    []DeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Deploy access levels"`
+	DeployAccessLevels    []DeployAccessLevelInput `json:"deploy_access_levels,omitempty"    jsonschema:"Deploy access levels,required"`
 	RequiredApprovalCount *int64                   `json:"required_approval_count,omitempty" jsonschema:"Required number of approvals"`
 	ApprovalRules         []ApprovalRuleInput      `json:"approval_rules,omitempty"          jsonschema:"Approval rules"`
 }

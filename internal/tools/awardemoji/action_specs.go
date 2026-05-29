@@ -56,13 +56,33 @@ func issueEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualToo
 	return toolutil.NewDeleteActionSpec(name, route, issueEmojiOptions(individualTool))
 }
 
-func issueEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
+func awardEmojiBaseOptions(individualTool, ownerPackage string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"issue", "emoji"},
+		Aliases:        []string{individualTool},
 		OpenWorld:      true,
-		OwnerPackage:   "awardemoji",
+		OwnerPackage:   ownerPackage,
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+}
+
+func issueEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
+	opts := awardEmojiBaseOptions(individualTool, "awardemoji")
+	opts.Tags = []string{"issue", "emoji"}
+	opts.Usage = "Manage issue and issue-note award emojis (list/get/create/delete). Use this for reactions and lightweight signals on issues."
+	opts.RelatedActions = []string{"issue.get", "issue_note.list"}
+	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"project_id": {
+			SemanticRole:   "scope_project",
+			ValueSource:    "Project ID or path that owns the issue.",
+			ExampleBinding: `params.project_id:"group/project"`,
+		},
+		"issue_iid": {
+			SemanticRole:   "issue_iid",
+			ValueSource:    "Issue IID from issue list/get outputs.",
+			ExampleBinding: "params.issue_iid:123",
+		},
+	}
+	return opts
 }
 
 // MergeRequestActionSpecs returns canonical specs for merge request award emoji actions.
@@ -92,12 +112,23 @@ func mergeRequestEmojiDeleteSpec(name string, route toolutil.ActionRoute, indivi
 }
 
 func mergeRequestEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
-		Tags:           []string{"merge_request", "emoji"},
-		OpenWorld:      true,
-		OwnerPackage:   "awardemoji",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	opts := awardEmojiBaseOptions(individualTool, "awardemoji")
+	opts.Tags = []string{"merge_request", "emoji"}
+	opts.Usage = "Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals."
+	opts.RelatedActions = []string{"merge_request.get", "mr_note.list"}
+	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"project_id": {
+			SemanticRole:   "scope_project",
+			ValueSource:    "Project ID or path that owns the merge request.",
+			ExampleBinding: `params.project_id:"group/project"`,
+		},
+		"merge_request_iid": {
+			SemanticRole:   "merge_request_iid",
+			ValueSource:    "Merge request IID from MR list/get outputs.",
+			ExampleBinding: "params.merge_request_iid:77",
+		},
 	}
+	return opts
 }
 
 func snippetEmojiReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
@@ -113,12 +144,23 @@ func snippetEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualT
 }
 
 func snippetEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
-		Tags:           []string{"snippet", "emoji"},
-		OpenWorld:      true,
-		OwnerPackage:   "awardemoji",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+	opts := awardEmojiBaseOptions(individualTool, "awardemoji")
+	opts.Tags = []string{"snippet", "emoji"}
+	opts.Usage = "Manage snippet and snippet-note award emojis (list/get/create/delete). Use for reaction workflows around snippets."
+	opts.RelatedActions = []string{"snippet.get", "snippet_note.list"}
+	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+		"project_id": {
+			SemanticRole:   "scope_project",
+			ValueSource:    "Project ID or path that owns the snippet.",
+			ExampleBinding: `params.project_id:"group/project"`,
+		},
+		"snippet_id": {
+			SemanticRole:   "snippet_iid",
+			ValueSource:    "Snippet IID from snippet list/get outputs.",
+			ExampleBinding: "params.snippet_id:12",
+		},
 	}
+	return opts
 }
 
 func awardEmojiGetRoute[T any](client *gitlabclient.Client, fn func(context.Context, *gitlabclient.Client, T) (Output, error), notFound func(map[string]any) awardEmojiNotFoundOutput) toolutil.ActionRoute {

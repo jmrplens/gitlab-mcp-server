@@ -4,6 +4,7 @@ package protectedenvs
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -81,6 +82,16 @@ func TestActionSpecs_UnprotectOutput(t *testing.T) {
 	}
 	if out.Message != "Successfully deleted protected environment." {
 		t.Fatalf("delete message = %q", out.Message)
+	}
+}
+
+// TestActionSpecs_ProtectRequiresDeployAccessLevels verifies discovery schemas
+// advertise the access rule required to create a protected environment.
+func TestActionSpecs_ProtectRequiresDeployAccessLevels(t *testing.T) {
+	byTool := protectedEnvironmentSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, protectedEnvironmentsActionHandler())))
+	schema := byTool["gitlab_protected_environment_protect"].Route.InputSchema
+	if !schemaRequiredIncludes(schema, "deploy_access_levels") {
+		t.Fatalf("protect required fields = %v, want deploy_access_levels", schema["required"])
 	}
 }
 
@@ -163,4 +174,18 @@ func protectedEnvironmentSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) 
 		byTool[toolName] = spec
 	}
 	return byTool
+}
+
+func schemaRequiredIncludes(schema map[string]any, name string) bool {
+	switch required := schema["required"].(type) {
+	case []any:
+		for _, raw := range required {
+			if field, ok := raw.(string); ok && field == name {
+				return true
+			}
+		}
+	case []string:
+		return slices.Contains(required, name)
+	}
+	return false
 }

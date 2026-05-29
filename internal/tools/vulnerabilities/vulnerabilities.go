@@ -415,6 +415,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}
 
 	if resp.Data.Project == nil {
+		if _, _, projectErr := client.GL().Projects.GetProject(input.ProjectPath, nil, gl.WithContext(ctx)); projectErr == nil {
+			return ListOutput{Vulnerabilities: []Item{}}, nil
+		}
 		return ListOutput{}, fmt.Errorf("list_vulnerabilities: project %q not found", input.ProjectPath)
 	}
 

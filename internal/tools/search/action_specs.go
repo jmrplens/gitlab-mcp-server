@@ -32,7 +32,7 @@ func searchCodeSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 
 func searchProjectsSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := searchReadOptions("gitlab_search_projects")
-	options.Usage = "Search project records by project name, path, namespace, or description. Use when the task asks to find projects or repositories; do not use for code contents."
+	options.Usage = "Search project records by fuzzy project name, path fragment, namespace, or description. Use for broad discovery across many projects; if the prompt gives one exact namespace path like group/project and asks for metadata, use project.get instead. Do not use for code contents."
 	options.Aliases = []string{"project search", "repository search", "find projects", "find repositories"}
 	options.Tags = append(options.Tags, "project", "repository", "namespace")
 	options.RelatedActions = []string{"project.get", "project.list", "search.code"}
@@ -45,7 +45,7 @@ func searchReadSpec(name string, route toolutil.ActionRoute, individualTool stri
 
 func searchReadOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"search"},
+		Aliases: []string{individualTool}, Usage: "Use to execute search domain action.", Tags: []string{"search"},
 		OpenWorld:      true,
 		OwnerPackage:   "search",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

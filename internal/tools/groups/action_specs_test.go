@@ -4,6 +4,7 @@ package groups
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -65,6 +66,39 @@ func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 				t.Fatal("expected non-nil result for declined confirmation")
 			}
 		})
+	}
+}
+
+// TestActionSpecs_PrimaryMetadata verifies richer metadata on the core group actions.
+func TestActionSpecs_PrimaryMetadata(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := groupSpecsByTool(t, ActionSpecs(client))
+
+	getSpec := byTool["gitlab_group_get"]
+	if !strings.Contains(getSpec.Usage, "group_id") {
+		t.Fatalf("get Usage = %q, want group_id guidance", getSpec.Usage)
+	}
+	if guidance := getSpec.ParameterGuidance["group_id"]; guidance.SemanticRole != "scope_group" {
+		t.Fatalf("group get guidance = %+v, want scope_group", guidance)
+	}
+	if !slices.Contains(getSpec.RelatedActions, "group.update") {
+		t.Fatalf("group get RelatedActions = %v, want group.update", getSpec.RelatedActions)
+	}
+
+	listSpec := byTool["gitlab_group_list"]
+	if !slices.Contains(listSpec.Aliases, "list groups") {
+		t.Fatalf("group list Aliases = %v, want list groups", listSpec.Aliases)
+	}
+	if !strings.Contains(listSpec.Usage, "pagination") {
+		t.Fatalf("group list Usage = %q, want pagination guidance", listSpec.Usage)
+	}
+
+	createSpec := byTool["gitlab_group_create"]
+	if guidance := createSpec.ParameterGuidance["path"]; guidance.SemanticRole != "group_path_segment" {
+		t.Fatalf("group create path guidance = %+v, want group_path_segment", guidance)
+	}
+	if !strings.Contains(createSpec.IndividualTool.Description, "Returns:") || !strings.Contains(createSpec.IndividualTool.Description, "See also:") {
+		t.Fatalf("group create description = %q, want Returns/See also", createSpec.IndividualTool.Description)
 	}
 }
 

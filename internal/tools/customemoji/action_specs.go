@@ -17,24 +17,61 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func customEmojiReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, customEmojiOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, customEmojiOptions(name, individualTool))
 }
 
 func customEmojiCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, customEmojiOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, customEmojiOptions(name, individualTool))
 }
 
 func customEmojiDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, customEmojiOptions(individualTool))
+	return toolutil.NewDeleteActionSpec(name, route, customEmojiOptions(name, individualTool))
 }
 
-func customEmojiOptions(individualTool string) toolutil.ActionSpecOptions {
+func customEmojiOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	guidance := map[string]toolutil.ParameterGuidance{}
+	aliases := []string{}
+	usage := ""
+
+	switch actionName {
+	case "list":
+		aliases = []string{"list custom emoji", "group emoji list", "emoji management"}
+		usage = "List group-level custom emoji using GraphQL-backed routes."
+	case "create":
+		aliases = []string{"create custom emoji", "add group emoji", "custom emoji create"}
+		usage = "Create group-level custom emoji using GraphQL-backed routes."
+	case "delete":
+		aliases = []string{"delete custom emoji", "remove group emoji", "custom emoji delete"}
+		usage = "Delete group-level custom emoji using GraphQL-backed routes."
+	}
+
+	if actionName == "list" || actionName == "create" {
+		guidance["group_path"] = toolutil.ParameterGuidance{
+			SemanticRole:   "scope_group",
+			ValueSource:    "GitLab full group path.",
+			ExampleBinding: `params.group_path:"my-group/subgroup"`,
+		}
+	}
+	if actionName == "delete" {
+		guidance["id"] = toolutil.ParameterGuidance{
+			SemanticRole:   "custom_emoji_gid",
+			ValueSource:    "Global ID returned by list/create operations for delete.",
+			ExampleBinding: `params.id:"gid://gitlab/CustomEmoji/123"`,
+		}
+	}
+
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"custom_emoji", "group", "graphql"},
-		RelatedActions: []string{"group.get", "issue.emoji_issue_create", "merge_request.emoji_mr_create"},
-		OpenWorld:      true,
-		OwnerPackage:   "customemoji",
-		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:           aliases,
+		Tags:              []string{"custom_emoji", "group", "graphql"},
+		Usage:             usage,
+		RelatedActions:    []string{"group.get", "issue.emoji_issue_create", "merge_request.emoji_mr_create"},
+		ParameterGuidance: guidance,
+		OpenWorld:         true,
+		OwnerPackage:      "customemoji",
+		IndividualTool: toolutil.IndividualToolSpec{
+			Name:  individualTool,
+			Title: toolutil.TitleFromName(individualTool),
+		},
 	}
 }
 

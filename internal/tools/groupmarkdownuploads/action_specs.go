@@ -24,7 +24,7 @@ func groupUploadDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 
 func groupUploadOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"group", "upload"},
+		Aliases: []string{individualTool}, Usage: "Use to execute groupmarkdownuploads domain action.", Tags: []string{"group", "upload"},
 		RelatedActions: []string{"group.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "groupmarkdownuploads",

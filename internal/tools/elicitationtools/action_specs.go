@@ -45,7 +45,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func interactiveCreateSpec(name string, route toolutil.ActionRoute, individualTool, usage, description string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, toolutil.ActionSpecOptions{
-		Tags:           []string{"interactive", "elicitation"},
+		Aliases: []string{individualTool}, Tags: []string{"interactive", "elicitation"},
 		Usage:          usage,
 		OpenWorld:      true,
 		OwnerPackage:   "elicitationtools",

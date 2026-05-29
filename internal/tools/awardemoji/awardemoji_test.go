@@ -1350,6 +1350,15 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "awardemoji" {
 			t.Fatalf("OwnerPackage for %s = %q, want awardemoji", spec.Name, spec.OwnerPackage)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	if byTool["gitlab_issue_emoji_list"].ParameterGuidance["issue_iid"].SemanticRole == "" {
+		t.Fatal("gitlab_issue_emoji_list should expose issue_iid parameter guidance")
 	}
 }
 

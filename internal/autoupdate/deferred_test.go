@@ -8,8 +8,19 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
+
+func equivalentPath(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	trimPrivate := func(path string) string {
+		return strings.TrimPrefix(filepath.Clean(path), "/private")
+	}
+	return trimPrivate(a) == trimPrivate(b)
+}
 
 // fakeBinary returns a byte slice with valid PE (MZ) magic header padded
 // to at least minBinarySize so it passes all writeToFile validations.
@@ -197,7 +208,7 @@ func TestHasPendingUpdate_WithTmpFile(t *testing.T) {
 	if !ok {
 		t.Fatal("expected pending update for .tmp file")
 	}
-	if path != tmpPath {
+	if !equivalentPath(path, tmpPath) {
 		t.Errorf("path = %q, want %q", path, tmpPath)
 	}
 }
@@ -216,7 +227,7 @@ func TestHasPendingUpdate_WithNewFile(t *testing.T) {
 	if !ok {
 		t.Fatal("expected pending update for .new file")
 	}
-	if path != newPath {
+	if !equivalentPath(path, newPath) {
 		t.Errorf("path = %q, want %q", path, newPath)
 	}
 }

@@ -44,13 +44,13 @@ Esta debe establecerse para que el servidor arranque en modo stdio:
 | `LOG_LEVEL`              | `info`               | Nivel de verbosidad del log: `debug`, `info`, `warn`, `error`                                                                                                                                                  |
 
 :::tip
-**El modo dinámico** (`TOOL_SURFACE=dynamic`) es el predeterminado y el catálogo visible de menor consumo. Expone `gitlab_find_action` y `gitlab_execute_tool`, mientras conserva el mismo catálogo canónico de acciones GitLab.
+**El modo dinámico** (`TOOL_SURFACE=dynamic`) es el predeterminado y el catálogo visible de menor consumo. Expone `gitlab_find_action` y `gitlab_execute_action`, mientras conserva el mismo catálogo canónico de acciones GitLab.
 
 Usa `TOOL_SURFACE=meta` cuando un cliente o flujo de trabajo prefiera despachadores consolidados por dominio con parámetro `action`.
 
 Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para el flujo find/execute.
 
-Para despliegues dinámicos donde los recursos y prompts dominan el contexto inicial, usa `CAPABILITY_SURFACE=minimal`. Mantiene `gitlab://workspace/roots` para descubrimiento de proyectos y `gitlab://tools` para descubrir acciones, y omite recursos opcionales, prompts y guías de flujo. Esto no elimina los schemas del descubrimiento dinámico: usa `gitlab_find_action` para recuperar schemas exactos antes de llamar a `gitlab_execute_tool`, o lee `gitlab://tools/{id}` para una entrada del manifiesto. El valor por defecto sigue siendo `full`; hoy no se expone un modo schemas-only.
+Para despliegues dinámicos donde los recursos y prompts dominan el contexto inicial, usa `CAPABILITY_SURFACE=minimal`. Mantiene `gitlab://workspace/roots` para descubrimiento de proyectos y `gitlab://tools` para descubrir acciones, y omite recursos opcionales, prompts y guías de flujo. Esto no elimina los schemas del descubrimiento dinámico: usa `gitlab_find_action` para recuperar schemas exactos antes de llamar a `gitlab_execute_action`, o lee `gitlab://tools/{id}` para una entrada del manifiesto. El valor por defecto sigue siendo `full`; hoy no se expone un modo schemas-only.
 :::
 
 ## Autoactualización

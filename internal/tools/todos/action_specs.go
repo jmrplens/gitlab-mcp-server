@@ -24,7 +24,7 @@ func userTodoUpdateSpec(name string, route toolutil.ActionRoute, individualTool 
 
 func userTodoOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"user", "todo"},
+		Aliases: []string{individualTool}, Usage: "Use to execute todos domain action.", Tags: []string{"user", "todo"},
 		OpenWorld:      true,
 		OwnerPackage:   "todos",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

@@ -26,7 +26,7 @@ func importServiceUpdateSpec(name string, route toolutil.ActionRoute, individual
 
 func importServiceOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
-		Tags:           []string{"import"},
+		Aliases: []string{individualTool}, Usage: "Use to execute importservice domain action.", Tags: []string{"import"},
 		OpenWorld:      true,
 		OwnerPackage:   "importservice",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},

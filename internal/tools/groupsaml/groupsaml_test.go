@@ -153,6 +153,61 @@ func TestDelete_MissingSAMLGroupName(t *testing.T) {
 	}
 }
 
+// TestSAMLLinkErrorHints verifies API failures explain the SAML SSO
+// configuration prerequisite instead of returning a bare 401/404.
+func TestSAMLLinkErrorHints(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
+	}))
+
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "list",
+			run: func() error {
+				_, err := List(context.Background(), client, ListInput{GroupID: "mygroup"})
+				return err
+			},
+		},
+		{
+			name: "get",
+			run: func() error {
+				_, err := Get(context.Background(), client, GetInput{GroupID: "mygroup", SAMLGroupName: "saml-devs"})
+				return err
+			},
+		},
+		{
+			name: "add",
+			run: func() error {
+				_, err := Add(context.Background(), client, AddInput{GroupID: "mygroup", SAMLGroupName: "saml-devs", AccessLevel: 30})
+				return err
+			},
+		},
+		{
+			name: "delete",
+			run: func() error {
+				return Delete(context.Background(), client, DeleteInput{GroupID: "mygroup", SAMLGroupName: "saml-devs"})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.run()
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			for _, want := range []string{"group SAML SSO", "Premium/Ultimate", "Owner access", "401 or 404"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error %q does not contain %q", err.Error(), want)
+				}
+			}
+		})
+	}
+}
+
 // TestList_APIError validates the List handler across API errors and edge cases.
 // Covers: API 500 error propagation.
 func TestList_APIError(t *testing.T) {

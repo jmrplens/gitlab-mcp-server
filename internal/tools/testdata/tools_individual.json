@@ -10797,7 +10797,7 @@
   },
   {
     "name": "gitlab_create_user",
-    "description": "Create a new GitLab user account (admin only). Requires email, name, and username. Supports setting password, admin status, and profile details.\n\nSee also: gitlab_modify_user, gitlab_delete_user\n\nReturns: JSON with created user profile.",
+    "description": "Create a user account. Returns: created user identity and profile summary fields. See also: gitlab_get_user, gitlab_modify_user, gitlab_block_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -22449,7 +22449,7 @@
   },
   {
     "name": "gitlab_get_appearance",
-    "description": "Get current application appearance settings. Requires admin access.\n\nReturns: JSON with appearance settings details.\n\nSee also: gitlab_update_appearance, gitlab_list_broadcast_messages",
+    "description": "Get the current GitLab application appearance and branding settings. Returns: the instance appearance object including title, messages, logos, and PWA labels. See also: gitlab_update_appearance, gitlab_get_settings, gitlab_get_metadata.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -22543,7 +22543,7 @@
   },
   {
     "name": "gitlab_get_application_statistics",
-    "description": "Get application statistics (admin). Returns counts for users, projects, groups, issues, MRs, etc.\n\nReturns: JSON with application statistics.\n\nSee also: gitlab_server_status.",
+    "description": "Get GitLab application statistics for the current instance. Returns: aggregate counts for users, groups, projects, issues, merge requests, and related records. See also: gitlab_get_metadata, gitlab_server_status.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -22619,7 +22619,7 @@
   },
   {
     "name": "gitlab_get_avatar",
-    "description": "Get the avatar URL for an email address.\n\nReturns: JSON with the avatar URL.\n\nSee also: gitlab_user_current.",
+    "description": "Get the avatar URL for an email address. Returns: the resolved avatar URL for that email address. See also: gitlab_user_current, gitlab_get_user_status.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -26038,7 +26038,7 @@
   },
   {
     "name": "gitlab_get_metadata",
-    "description": "Get GitLab instance metadata (version, revision, KAS info, enterprise flag).\n\nReturns: JSON with GitLab instance metadata.\n\nSee also: gitlab_server_status",
+    "description": "Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag. Returns: the current instance metadata object. See also: gitlab_server_status, gitlab_get_settings, gitlab_get_application_statistics.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -29130,7 +29130,7 @@
   },
   {
     "name": "gitlab_get_user",
-    "description": "Retrieve detailed information about a specific GitLab user by their ID. Returns profile details including username, email, state, bio, and admin status.\n\nSee also: gitlab_list_users, gitlab_get_user_status\n\nReturns: JSON with user profile details.",
+    "description": "Get one user by ID. Returns: detailed account profile metadata and status fields. See also: gitlab_list_users, gitlab_modify_user, gitlab_delete_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -31730,7 +31730,7 @@
   },
   {
     "name": "gitlab_group_create",
-    "description": "Create a new GitLab group. Requires name; optionally set path, description, visibility, parent_id (for subgroups), request_access_enabled, lfs_enabled, and default_branch. Returns: id, name, path, full_path, visibility, web_url, parent_id. See also: gitlab_group_get, gitlab_group_list.",
+    "description": "Create a GitLab group or subgroup. Returns: created group metadata including ID, full path, and visibility. See also: gitlab_group_get, gitlab_group_update, gitlab_group_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -32168,7 +32168,7 @@
   },
   {
     "name": "gitlab_group_get",
-    "description": "Retrieve detailed metadata for a GitLab group including name, path, full path, description, visibility, web URL, and parent group. Accepts numeric group ID or URL-encoded path (e.g. 'group/subgroup').\n\nReturns: id, name, path, full_path, description, visibility, web_url, and parent_id. See also: gitlab_group_update, gitlab_group_list.",
+    "description": "Get one GitLab group by ID or path. Returns: group metadata, visibility, parent information, and web URL. See also: gitlab_group_list, gitlab_group_members_list, gitlab_group_projects, gitlab_group_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34512,7 +34512,7 @@
   },
   {
     "name": "gitlab_group_list",
-    "description": "List GitLab groups accessible to the authenticated user. Supports filtering by search term, ownership, and top-level only. Returns paginated results including group name, path, visibility, and web URL.\n\nReturns: paginated list of groups with id, name, path, full_path, visibility, web_url, and parent_id. See also: gitlab_group_get, gitlab_project_list.",
+    "description": "List accessible GitLab groups with filtering and pagination. Returns: matching groups including path, name, and visibility metadata. See also: gitlab_group_get, gitlab_group_search, gitlab_group_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -37630,7 +37630,7 @@
       "additionalProperties": false,
       "properties": {
         "environment": {
-          "description": "Environment name",
+          "description": "Environment tier (production, staging, testing, development, other)",
           "type": "string"
         },
         "group_id": {
@@ -38045,7 +38045,7 @@
           "type": "string"
         },
         "name": {
-          "description": "Environment name to protect",
+          "description": "Environment tier to protect (production, staging, testing, development, other)",
           "type": "string"
         },
         "required_approval_count": {
@@ -38179,7 +38179,7 @@
           "type": "boolean"
         },
         "environment": {
-          "description": "Environment name to unprotect",
+          "description": "Environment tier to unprotect (production, staging, testing, development, other)",
           "type": "string"
         },
         "group_id": {
@@ -38349,7 +38349,7 @@
           ]
         },
         "environment": {
-          "description": "Environment name",
+          "description": "Environment tier (production, staging, testing, development, other)",
           "type": "string"
         },
         "group_id": {
@@ -38357,7 +38357,7 @@
           "type": "string"
         },
         "name": {
-          "description": "New environment name",
+          "description": "New environment tier (production, staging, testing, development, other)",
           "type": "string"
         },
         "required_approval_count": {
@@ -42875,7 +42875,7 @@
   },
   {
     "name": "gitlab_issue_create",
-    "description": "Create a new issue in a GitLab project. Supports title, description (Markdown), assignees, labels, milestone, due date, confidential flag, issue_type (issue/incident/test_case/task), weight, and epic_id. Returns the created issue with ID, IID, state, and web URL. See also: gitlab_issue_list, gitlab_issue_note_create.",
+    "description": "Create a new issue in a project. Returns: the created issue with IID, state, labels, assignees, milestone, due date, and web URL. See also: gitlab_issue_get, gitlab_issue_list, gitlab_issue_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -43602,7 +43602,7 @@
   },
   {
     "name": "gitlab_issue_get",
-    "description": "Retrieve a single GitLab issue by its project-scoped IID (the '#N' number shown in URLs and UI, NOT the global numeric ID). For global IDs, use gitlab_issue_get_by_id instead. Returns title, description, state, labels, assignees, milestone, author, timestamps, and web URL. See also: gitlab_issue_note_list, gitlab_issue_mrs_closing.",
+    "description": "Get a single issue from a project by issue IID. Returns: issue metadata, state, labels, assignees, author, due date, task completion, and web URL. See also: gitlab_issue_list, gitlab_issue_update, gitlab_issue_delete, gitlab_issue_notes_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -44837,7 +44837,7 @@
   },
   {
     "name": "gitlab_issue_list",
-    "description": "List issues for a GitLab project with filters for state, labels, milestone, assignee, author, and search. Returns paginated results with issue details. See also: gitlab_issue_get, gitlab_issue_create.",
+    "description": "List issues in one project with filtering and pagination. Returns: matching issues with state, labels, assignees, author, and pagination metadata. See also: gitlab_issue_get, gitlab_issue_create, gitlab_search_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -45152,7 +45152,7 @@
   },
   {
     "name": "gitlab_issue_list_all",
-    "description": "List issues visible to the authenticated user across all projects (global scope). Supports filtering by state, labels, milestone, scope, search, assignee, author, time range, confidential flag, and ordering. Returns paginated results. See also: gitlab_issue_list, gitlab_issue_get.",
+    "description": "List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -45442,7 +45442,7 @@
   },
   {
     "name": "gitlab_issue_list_group",
-    "description": "List issues across all projects in a GitLab group. Supports filtering by state, labels, milestone, scope, time range, assignee, author, and search. Returns paginated issue details including project reference. See also: gitlab_issue_list, gitlab_issue_get.",
+    "description": "List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -49534,7 +49534,7 @@
   },
   {
     "name": "gitlab_job_get",
-    "description": "Retrieve detailed information about a specific CI/CD job in a GitLab project. Returns job ID, name, status, stage, pipeline, runner, duration, coverage, timestamps, and web URL.\n\nReturns: JSON with job details. See also: gitlab_job_cancel, gitlab_job_trace.",
+    "description": "Get one CI job. Returns: status, stage, ref, pipeline ID, timing fields, runner/user details, and failure metadata. See also: gitlab_job_trace, gitlab_job_cancel, gitlab_job_retry.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50180,7 +50180,7 @@
   },
   {
     "name": "gitlab_job_list_project",
-    "description": "List all jobs across a GitLab project (not limited to a single pipeline). Supports filtering by scope and pagination. Returns job ID, name, status, stage, duration.\n\nReturns: JSON array of jobs with pagination.\n\nSee also: gitlab_job_get.",
+    "description": "List CI jobs in one project with filters and pagination. Returns: job summaries, status, stage, ref, and pipeline associations. See also: gitlab_job_get, gitlab_job_trace, gitlab_pipeline_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -50672,7 +50672,7 @@
   },
   {
     "name": "gitlab_job_trace",
-    "description": "Retrieve the log (trace) output of a CI/CD job. Returns the raw log text, truncated to the last 100KB if larger. There is no pagination — if the log is truncated, the beginning is lost. Useful for debugging failed jobs by examining the most recent output.\n\nReturns: job trace log content. See also: gitlab_job_get.",
+    "description": "Get CI job trace output. Returns: text log with truncation metadata when logs exceed limits. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_cancel.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -61443,7 +61443,7 @@
   },
   {
     "name": "gitlab_list_users",
-    "description": "List GitLab users with optional filters. Supports search by name/username/email, filtering by active/blocked/external status, ordering, and pagination. Useful for finding users or auditing accounts.\n\nSee also: gitlab_get_user, gitlab_user_current\n\nReturns: JSON array of users with pagination.",
+    "description": "List users with filtering and pagination support. Returns: user summaries including ID, username, name, state, and profile URLs. See also: gitlab_get_user, gitlab_user_current, gitlab_create_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -78191,7 +78191,7 @@
   },
   {
     "name": "gitlab_pipeline_create",
-    "description": "Create a new pipeline for a branch or tag. Optionally pass variables (key/value pairs with type env_var or file). Returns: id, iid, status, source, ref, sha, web_url, duration, coverage, timestamps. See also: gitlab_pipeline_get, gitlab_job_list.",
+    "description": "Create a new pipeline. Returns: created pipeline metadata including ID, status, and target ref. See also: gitlab_pipeline_get, gitlab_pipeline_wait, gitlab_job_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -78438,7 +78438,7 @@
   },
   {
     "name": "gitlab_pipeline_get",
-    "description": "Retrieve detailed information about a specific pipeline in a GitLab project. Returns pipeline ID, status, source, ref, SHA, duration, coverage, user, timestamps, and YAML errors. See also: gitlab_job_list, gitlab_pipeline_test_report.\n\nReturns: id, iid, status, source, ref, sha, duration, coverage, user, timestamps, and yaml_errors.",
+    "description": "Get one pipeline by ID. Returns: full pipeline metadata, status lifecycle fields, and links. See also: gitlab_pipeline_list, gitlab_pipeline_variables, gitlab_job_list_project, gitlab_pipeline_retry.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -78763,7 +78763,7 @@
   },
   {
     "name": "gitlab_pipeline_list",
-    "description": "List pipelines for a GitLab project. Supports filtering by status (success, failed, running, pending, canceled), scope (running, pending, finished, branches, tags), source (push, web, schedule, merge_request_event), ref (branch/tag), SHA, and username. Returns pipeline ID, status, source, ref, web URL, and timestamps with pagination.\n\nReturns: paginated list of pipelines with id, status, source, ref, sha, web_url, and timestamps. See also: gitlab_pipeline_get, gitlab_job_list.",
+    "description": "List project pipelines with filters and pagination. Returns: pipeline IDs, refs, statuses, source, and timing metadata. See also: gitlab_pipeline_get, gitlab_pipeline_latest, gitlab_job_list_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -87510,7 +87510,15 @@
           "type": "integer"
         },
         "order_by": {
-          "description": "Order by field (id, name, path, created_at, updated_at, last_activity_at)",
+          "description": "Order projects by id, name, path, created_at, updated_at, or last_activity_at.",
+          "enum": [
+            "id",
+            "name",
+            "path",
+            "created_at",
+            "updated_at",
+            "last_activity_at"
+          ],
           "type": "string"
         },
         "owned": {
@@ -87542,6 +87550,10 @@
         },
         "sort": {
           "description": "Sort direction (asc, desc)",
+          "enum": [
+            "asc",
+            "desc"
+          ],
           "type": "string"
         },
         "starred": {
@@ -90967,7 +90979,7 @@
   },
   {
     "name": "gitlab_project_service_account_create",
-    "description": "Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.",
+    "description": "Create a GitLab project service account. Returns: the created project service account object. See also: gitlab_project_service_account_list, gitlab_project_service_account_update, gitlab_project_service_account_pat_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91036,7 +91048,7 @@
   },
   {
     "name": "gitlab_project_service_account_delete",
-    "description": "Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.",
+    "description": "Delete a GitLab project service account. Returns: a success status confirming deletion. See also: gitlab_project_service_account_list, gitlab_project_service_account_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91100,7 +91112,7 @@
   },
   {
     "name": "gitlab_project_service_account_list",
-    "description": "Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.",
+    "description": "List GitLab project service accounts. Returns: paginated project service account records. See also: gitlab_get_project, gitlab_project_service_account_create, gitlab_project_service_account_pat_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91236,7 +91248,7 @@
   },
   {
     "name": "gitlab_project_service_account_pat_create",
-    "description": "Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.",
+    "description": "Create a personal access token for a GitLab project service account. Returns: the created token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_rotate.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91348,7 +91360,7 @@
   },
   {
     "name": "gitlab_project_service_account_pat_list",
-    "description": "Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.",
+    "description": "List personal access tokens for a GitLab project service account. Returns: paginated token records. See also: gitlab_project_service_account_list, gitlab_project_service_account_pat_create, gitlab_project_service_account_pat_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91554,7 +91566,7 @@
   },
   {
     "name": "gitlab_project_service_account_pat_revoke",
-    "description": "Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.",
+    "description": "Revoke a personal access token for a GitLab project service account. Returns: a success status confirming revocation. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91616,7 +91628,7 @@
   },
   {
     "name": "gitlab_project_service_account_pat_rotate",
-    "description": "Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.",
+    "description": "Rotate a personal access token for a GitLab project service account. Returns: the rotated token record and token value when GitLab returns it. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_revoke.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -91713,7 +91725,7 @@
   },
   {
     "name": "gitlab_project_service_account_update",
-    "description": "Use for GitLab project service accounts and their personal access tokens. Requires GitLab Premium/Ultimate and sufficient project permissions.",
+    "description": "Update a GitLab project service account. Returns: the updated project service account object. See also: gitlab_project_service_account_list, gitlab_project_service_account_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -98637,7 +98649,7 @@
   },
   {
     "name": "gitlab_release_list",
-    "description": "List all releases for a GitLab project ordered by release date. Returns paginated results including each release's metadata, tag, and asset links.\n\nReturns: paginated list of releases with tag_name, name, description, author, and assets. See also: gitlab_release_get, gitlab_tag_list.",
+    "description": "List releases in a project with pagination. Returns: tag names, release names, release dates, and summary metadata. See also: gitlab_release_get, gitlab_tag_list, gitlab_release_link_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -100266,7 +100278,7 @@
   },
   {
     "name": "gitlab_repository_tree",
-    "description": "List the files and directories (tree) of a GitLab repository at a given path and ref. 'ref' accepts a branch name, tag name, or commit SHA (defaults to the project's default branch if omitted). Returns file name, type (blob/tree), mode, and path with pagination. Use recursive=true to list all files in subdirectories. For reading file content, use gitlab_file_get instead.\n\nReturns: JSON array of repository tree entries with pagination. See also: gitlab_file_get, gitlab_file_list.",
+    "description": "List repository tree items. Returns: paths, object IDs, entry types (blob/tree), and pagination metadata. See also: gitlab_repository_blob, gitlab_repository_raw_blob, gitlab_branch_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -107491,7 +107503,7 @@
   },
   {
     "name": "gitlab_server_status",
-    "description": "Check MCP server health and GitLab connectivity. Returns server version, author, department, repository, GitLab version, authentication status, current user, and response time. Use this to diagnose connection issues.\n\nReturns: JSON with server health and connectivity information.\n\nSee also: gitlab_server_check_update, gitlab_get_metadata",
+    "description": "Check MCP server connectivity, GitLab reachability, and authenticated identity details. Returns: the current server and GitLab health diagnostics object. See also: gitlab_get_metadata, gitlab_user_current.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -112663,7 +112675,7 @@
   },
   {
     "name": "gitlab_update_appearance",
-    "description": "Update application appearance (title, description, messages, PWA settings). Requires admin access.\n\nReturns: JSON with the updated appearance settings.\n\nSee also: gitlab_get_appearance, gitlab_create_broadcast_message",
+    "description": "Update GitLab application appearance and branding settings. Returns: the updated appearance object after GitLab applies the change. See also: gitlab_get_appearance, gitlab_get_settings, gitlab_get_metadata.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -115258,7 +115270,7 @@
   },
   {
     "name": "gitlab_user_current",
-    "description": "Retrieve information about the currently authenticated GitLab user. Returns user ID, username, name, email, state, avatar URL, web URL, and admin status. Useful for confirming identity and permissions.\n\nSee also: gitlab_get_user, gitlab_list_users\n\nReturns: JSON with current user profile details.",
+    "description": "Get the current authenticated user. Returns: account ID, username, name, state, avatar URL, and profile metadata. See also: gitlab_list_users, gitlab_current_user_status, gitlab_list_emails.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},

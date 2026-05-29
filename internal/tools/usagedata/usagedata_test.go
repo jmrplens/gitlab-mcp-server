@@ -492,6 +492,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		http.NotFound(w, nil)
 	}))
 	specs := ActionSpecs(client)
+	specByTool := usageDataSpecsByTool(specs)
 	if len(specs) != 6 {
 		t.Fatalf("len(ActionSpecs) = %d, want 6", len(specs))
 	}
@@ -499,6 +500,18 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		if spec.OwnerPackage != "usagedata" || spec.IndividualTool.Name == "" {
 			t.Fatalf("unexpected ActionSpec metadata: %+v", spec)
 		}
+		if spec.Usage == "" {
+			t.Fatalf("Usage for %s should not be empty", spec.Name)
+		}
+		if len(spec.Aliases) == 0 {
+			t.Fatalf("Aliases for %s should not be empty", spec.Name)
+		}
+	}
+	if specByTool["gitlab_track_event"].ParameterGuidance["event"].SemanticRole == "" {
+		t.Fatal("gitlab_track_event should define event parameter guidance")
+	}
+	if specByTool["gitlab_track_events"].ParameterGuidance["events"].SemanticRole == "" {
+		t.Fatal("gitlab_track_events should define events parameter guidance")
 	}
 }
 
