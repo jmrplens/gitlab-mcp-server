@@ -1617,6 +1617,15 @@ func TestListWorkItemTypes_Success(t *testing.T) {
 	if out.Types[1].Name != "Task" {
 		t.Errorf("Types[1].Name = %q, want Task", out.Types[1].Name)
 	}
+	if out.Pagination.HasNextPage {
+		t.Error("Pagination.HasNextPage = true, want false")
+	}
+	if out.Pagination.HasPreviousPage {
+		t.Error("Pagination.HasPreviousPage = true, want false")
+	}
+	if out.Pagination.EndCursor != "" {
+		t.Errorf("Pagination.EndCursor = %q, want empty", out.Pagination.EndCursor)
+	}
 }
 
 // TestListWorkItemTypes_EmptyFullPath verifies ListWorkItemTypes returns a

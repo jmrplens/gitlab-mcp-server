@@ -109,6 +109,12 @@ func userEnterpriseCreateSpec(name string, route toolutil.ActionRoute, individua
 func userEnterpriseUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := userOptionsForAction(name, individualTool)
 	options.Edition = "premium"
+	if individualTool == "gitlab_update_instance_service_account" {
+		options.Usage = "Update an instance-level service account. Allows updating name, username, and email. Returns: updated service account with id, username, name, email, and unconfirmed_email. Requires admin token and GitLab Premium/Ultimate."
+		options.Aliases = []string{"update instance service account", "modify service account", individualTool}
+		options.RelatedActions = []string{"user.create_service_account", "user.list_service_accounts"}
+		options.IndividualTool.Description = "Update an instance-level service account. Returns: updated service account object including email and unconfirmed_email. Requires admin token. See also: gitlab_create_service_account, gitlab_list_service_accounts."
+	}
 	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 

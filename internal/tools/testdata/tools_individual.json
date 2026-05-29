@@ -62060,7 +62060,7 @@
   },
   {
     "name": "gitlab_list_work_item_types",
-    "description": "Use to execute workitems domain action.",
+    "description": "List work item types for a namespace. Returns: id, name, and enabled flag for each type. Supports name filter, onlyAvailable flag, and cursor pagination. Experimental. See also: gitlab_list_work_items, gitlab_create_work_item.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -99870,7 +99870,7 @@
           "type": "string"
         },
         "from_project_id": {
-          "description": "Source project ID for cross-project comparison",
+          "description": "Source project ID for cross-project comparison,minimum=1",
           "type": "integer"
         },
         "project_id": {
@@ -113713,7 +113713,7 @@
   },
   {
     "name": "gitlab_update_instance_service_account",
-    "description": "Use to execute users domain action.",
+    "description": "Update an instance-level service account. Returns: updated service account object including email and unconfirmed_email. Requires admin token. See also: gitlab_create_service_account, gitlab_list_service_accounts.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

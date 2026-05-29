@@ -226,7 +226,7 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("jobCancel", err,
-				"canceling jobs requires Developer+ role on the project; the job may also be in a non-cancellable state (already finished/canceled) \u2014 use force:true to override")
+				"canceling jobs requires Developer+ role on the project; the job may also be in a non-cancellable state (already finished/canceled) \u2014 use force:true to override (requires GitLab v17.2+)")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("jobCancel", err, http.StatusNotFound,
 			"verify job_id with gitlab_job_list \u2014 only running/pending jobs can be cancelled; use force:true for non-cancellable states")

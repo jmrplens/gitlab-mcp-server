@@ -176,7 +176,7 @@ Retrieve the log (trace) output of a CI/CD job. Returns the raw log text, trunca
 
 ### `gitlab_job_cancel`
 
-Cancel a running or pending CI/CD job in a GitLab project. Supports `force: true` to cancel even when the job is in a non-cancellable state. Returns the updated job details.
+Cancel a running or pending CI/CD job in a GitLab project. Supports `force: true` to cancel even when the job is in a non-cancellable state (requires GitLab v17.2+). Returns the updated job details.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

@@ -5,6 +5,7 @@ package jobs
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -960,10 +961,17 @@ func TestJobCancel_NotFoundAPIError(t *testing.T) {
 }
 
 // TestJobCancel_ForceTrue verifies Cancel with Force=true routes to
-// CancelJobWithOptions and returns the cancelled job on success.
+// CancelJobWithOptions, sends force=true in the request body, and returns the cancelled job.
 func TestJobCancel_ForceTrue(t *testing.T) {
+	forceSent := false
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathJobCancel {
+			var body map[string]any
+			if decErr := json.NewDecoder(r.Body).Decode(&body); decErr == nil {
+				if v, ok := body["force"].(bool); ok && v {
+					forceSent = true
+				}
+			}
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"id":100,"name":"build","stage":"build","status":"canceled",
 				"ref":"main","tag":false,"duration":10.0,"queued_duration":1.0,
@@ -982,6 +990,9 @@ func TestJobCancel_ForceTrue(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Cancel(Force=true) unexpected error: %v", err)
+	}
+	if !forceSent {
+		t.Error("Cancel(Force=true) did not send force=true in request body")
 	}
 	if out.Status != "canceled" {
 		t.Errorf("out.Status = %q, want canceled", out.Status)
