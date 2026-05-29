@@ -1753,7 +1753,7 @@ func serviceAccountQueryVerb(terms []searchTerm) string {
 	return ""
 }
 
-func shouldRunSegmentedSearch(terms []searchTerm, limit int) bool {
+func shouldRunSegmentedSearch(terms []searchTerm, _ int) bool {
 	if len(terms) < minSegmentTerms {
 		return false
 	}
@@ -2379,58 +2379,7 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 	// Scale the total score by the match ratio so fully-matched entries rank
 	// above partial matches.
 	score := totalScore * matchedCount / len(terms)
-	if adjustment, reason := scoreVerbIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, paramReasons := scoreRequiredParamSignals(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, paramReasons...)
-	}
-	if adjustment, tagReasons := scoreCompoundTagSignals(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, tagReasons...)
-	}
-	if adjustment, reason := scoreServiceAccountIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, reason := scoreScopeIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, reason := scoreCompareRefsIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, reason := scoreReleaseListIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, reason := scoreAnalyzeReleaseNotesIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, reason := scoreMRSecurityIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, reason := scoreDiscoverProjectIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, reason := scoreProjectGetIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, reason := scoreSearchProjectsIntent(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
-	if adjustment, reason := scoreActionSpecificity(entry, terms); adjustment != 0 {
-		score += adjustment
-		reasons = append(reasons, reason)
-	}
+	score, reasons = applyIntentAdjustments(entry, terms, score, reasons)
 	if score <= 0 {
 		return 0, ScoringExplanation{}
 	}
@@ -2440,6 +2389,40 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 		RequiredTerms: minRequired,
 		Reasons:       reasons,
 	}
+}
+
+// applyIntentAdjustments accumulates all specialized intent and signal scores
+// into the running total and match-reason list. Extracting this loop reduces
+// the cyclomatic complexity of scoreEntryWithExplanation.
+func applyIntentAdjustments(entry actionEntry, terms []searchTerm, score int, reasons []MatchReason) (int, []MatchReason) {
+	type intentFn func(actionEntry, []searchTerm) (int, MatchReason)
+	for _, fn := range []intentFn{
+		scoreVerbIntent,
+		scoreServiceAccountIntent,
+		scoreScopeIntent,
+		scoreCompareRefsIntent,
+		scoreReleaseListIntent,
+		scoreAnalyzeReleaseNotesIntent,
+		scoreMRSecurityIntent,
+		scoreDiscoverProjectIntent,
+		scoreProjectGetIntent,
+		scoreSearchProjectsIntent,
+		scoreActionSpecificity,
+	} {
+		if adj, r := fn(entry, terms); adj != 0 {
+			score += adj
+			reasons = append(reasons, r)
+		}
+	}
+	if adj, paramReasons := scoreRequiredParamSignals(entry, terms); adj != 0 {
+		score += adj
+		reasons = append(reasons, paramReasons...)
+	}
+	if adj, tagReasons := scoreCompoundTagSignals(entry, terms); adj != 0 {
+		score += adj
+		reasons = append(reasons, tagReasons...)
+	}
+	return score, reasons
 }
 
 func minimumMatchedTermCount(entry actionEntry, terms []searchTerm) int {
@@ -2496,11 +2479,12 @@ func scoreVerbIntentFor(entry actionEntry, intent verbIntent, terms []searchTerm
 	adjustment := 0
 	switch intent {
 	case verbIntentRead:
-		if entry.Destructive {
+		switch {
+		case entry.Destructive:
 			adjustment = scoreVerbIntentPenalty
-		} else if isWriteAction(document.Action) {
+		case isWriteAction(document.Action):
 			adjustment = scoreVerbIntentPenalty / 2
-		} else if isReadAction(document.Action) {
+		case isReadAction(document.Action):
 			adjustment = scoreVerbIntentBoost
 		}
 	case verbIntentWrite:
@@ -2508,16 +2492,7 @@ func scoreVerbIntentFor(entry actionEntry, intent verbIntent, terms []searchTerm
 			adjustment = scoreVerbIntentBoost
 		}
 	case verbIntentDestructive:
-		if isDestructiveActionName(document.Action) || entry.Destructive {
-			if queryHasResourceSignal(terms, document) {
-				adjustment = scoreVerbIntentBoost
-				if document.Action == "delete" || document.Action == "remove" || document.Action == "revoke" {
-					adjustment = scoreVerbIntentBoost * 3
-				}
-			} else {
-				adjustment = scoreVerbIntentPenalty
-			}
-		}
+		adjustment = scoreDestructiveVerbAdjustment(entry, terms, document)
 	case verbIntentWorkflow:
 		if isWorkflowAction(document.Action) {
 			adjustment = scoreVerbIntentBoost
@@ -2531,6 +2506,22 @@ func scoreVerbIntentFor(entry actionEntry, intent verbIntent, terms []searchTerm
 		return 0, MatchReason{}
 	}
 	return adjustment, MatchReason{Field: searchFieldVerbIntent, QueryTerm: string(intent), MatchedValue: document.Action, Score: adjustment}
+}
+
+// scoreDestructiveVerbAdjustment returns the score adjustment when the user
+// expresses a destructive verb intent. Extracted to keep scoreVerbIntentFor
+// within cyclomatic complexity limits.
+func scoreDestructiveVerbAdjustment(entry actionEntry, terms []searchTerm, document searchDocument) int {
+	if !isDestructiveActionName(document.Action) && !entry.Destructive {
+		return 0
+	}
+	if !queryHasResourceSignal(terms, document) {
+		return scoreVerbIntentPenalty
+	}
+	if document.Action == "delete" || document.Action == "remove" || document.Action == "revoke" {
+		return scoreVerbIntentBoost * 3
+	}
+	return scoreVerbIntentBoost
 }
 
 func scoreRequiredParamSignalValue(entry actionEntry, terms []searchTerm) int {
@@ -2639,12 +2630,7 @@ func scoreCompoundTagSignalValue(entry actionEntry, terms []searchTerm) int {
 }
 
 func containsWord(words []string, target string) bool {
-	for _, word := range words {
-		if word == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(words, target)
 }
 
 func scoreServiceAccountIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
@@ -2807,13 +2793,13 @@ func scoreMRSecurityIntentValue(entry actionEntry, terms []searchTerm) int {
 	if document.Domain != "analyze" || document.Action != "mr_security" {
 		return 0
 	}
-	if !(searchTermsContainWord(terms, "security") || searchTermsContainWord(terms, "secure")) {
+	if !searchTermsContainWord(terms, "security") && !searchTermsContainWord(terms, "secure") {
 		return 0
 	}
-	if !(searchTermsContainWord(terms, "review") || searchTermsContainWord(terms, "analyzer") || searchTermsContainWord(terms, "analyze")) {
+	if !searchTermsContainWord(terms, "review") && !searchTermsContainWord(terms, "analyzer") && !searchTermsContainWord(terms, "analyze") {
 		return 0
 	}
-	if !(searchTermsContainWord(terms, "merge") || searchTermsContainWord(terms, "mr") || searchTermsContainWord(terms, "merge_request")) {
+	if !searchTermsContainWord(terms, "merge") && !searchTermsContainWord(terms, "mr") && !searchTermsContainWord(terms, "merge_request") {
 		return 0
 	}
 	return scoreMRSecurityIntentBoost
@@ -2833,10 +2819,10 @@ func scoreDiscoverProjectIntentValue(entry actionEntry, terms []searchTerm) int 
 	if document.Domain != "discover_project" || document.Action != "resolve" {
 		return 0
 	}
-	if !(searchTermsContainWord(terms, "url") || searchTermsContainWord(terms, "remote") || searchTermsContainWord(terms, "origin") || searchTermsContainWord(terms, "git")) {
+	if !searchTermsContainWord(terms, "url") && !searchTermsContainWord(terms, "remote") && !searchTermsContainWord(terms, "origin") && !searchTermsContainWord(terms, "git") {
 		return 0
 	}
-	if !(searchTermsContainWord(terms, "project") || searchTermsContainWord(terms, "path") || searchTermsContainWord(terms, "resolve") || searchTermsContainWord(terms, "discover") || searchTermsContainWord(terms, "find")) {
+	if !searchTermsContainWord(terms, "project") && !searchTermsContainWord(terms, "path") && !searchTermsContainWord(terms, "resolve") && !searchTermsContainWord(terms, "discover") && !searchTermsContainWord(terms, "find") {
 		return 0
 	}
 	return scoreDiscoverIntentBoost
@@ -2859,7 +2845,7 @@ func scoreProjectGetIntentValue(entry actionEntry, terms []searchTerm) int {
 	if !searchTermsContainWord(terms, "project") {
 		return 0
 	}
-	if !(searchTermsContainWord(terms, "get") || searchTermsContainWord(terms, "show") || searchTermsContainWord(terms, "find") || searchTermsContainWord(terms, "path") || searchTermsContainWord(terms, "id")) {
+	if !searchTermsContainWord(terms, "get") && !searchTermsContainWord(terms, "show") && !searchTermsContainWord(terms, "find") && !searchTermsContainWord(terms, "path") && !searchTermsContainWord(terms, "id") {
 		return 0
 	}
 	return scoreProjectGetIntentBoost

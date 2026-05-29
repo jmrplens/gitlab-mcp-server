@@ -38,7 +38,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			[]string{"analyze issue scope", "issue scope analysis", "define issue requirements"}),
 		samplingSpecWithAliases("mr_security", client, ReviewMRSecurity, "gitlab_review_mr_security", reviewMRSecurityDescription(),
 			"Run a security-focused merge request review for OWASP risks and exposed secrets.",
-				[]string{"security", "review", "vulnerability", "owasp", "review mr security", "security review", "security analysis", "vulnerability detection", "merge request security review", "security review merge request"}),
+			[]string{"security", "review", "vulnerability", "owasp", "review mr security", "security review", "security analysis", "vulnerability detection", "merge request security review", "security review merge request"}),
 		samplingSpecWithAliases("technical_debt", client, FindTechnicalDebt, "gitlab_find_technical_debt", findTechnicalDebtDescription(),
 			"Identify and prioritize technical debt markers in source code.",
 			[]string{"find technical debt", "technical debt analysis", "code debt analysis"}),
@@ -46,10 +46,6 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			"Analyze deployment trends, failure patterns, and rollback signals.",
 			[]string{"analyze deployment history", "deployment analysis", "release history analysis"}),
 	}
-}
-
-func samplingSpec[T, R any](name string, client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), individualTool, description string) toolutil.ActionSpec {
-	return analyzeSpec(name, samplingRoute[T, R](client, fn, individualTool), individualTool, description, "Use this sampling action when the task requires LLM-assisted analysis.", nil)
 }
 
 func samplingSpecWithAliases[T, R any](name string, client *gitlabclient.Client, fn func(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input T) (R, error), individualTool, description, usage string, aliases []string) toolutil.ActionSpec {
@@ -63,9 +59,9 @@ func analyzeSpec(name string, route toolutil.ActionRoute, individualTool, descri
 		aliases = append(aliases, individualTool)
 	}
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Aliases: aliases,
-		Usage:   usage,
-		Tags:    []string{"analyze", "sampling"},
+		Aliases:        aliases,
+		Usage:          usage,
+		Tags:           []string{"analyze", "sampling"},
 		OpenWorld:      true,
 		OwnerPackage:   "samplingtools",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool), Description: description},

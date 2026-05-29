@@ -60,22 +60,22 @@ const (
 )
 
 const (
-	minimumHighConfidenceScore  = 80
-	minimumHighConfidenceMargin = 15
-	scoreVerbIntentBoost        = 16
-	scoreVerbIntentPenalty      = -24
-	scoreRequiredParamBoost     = 10
-	scoreCompoundTagBoost       = 50
-	scoreCompareRefsIntentBoost = 90
-	scoreReleaseListIntentBoost = 80
+	minimumHighConfidenceScore   = 80
+	minimumHighConfidenceMargin  = 15
+	scoreVerbIntentBoost         = 16
+	scoreVerbIntentPenalty       = -24
+	scoreRequiredParamBoost      = 10
+	scoreCompoundTagBoost        = 50
+	scoreCompareRefsIntentBoost  = 90
+	scoreReleaseListIntentBoost  = 80
 	scoreAnalyzeNotesIntentBoost = 70
-	scoreMRSecurityIntentBoost  = 95
-	scoreDiscoverIntentBoost    = 95
-	scoreProjectGetIntentBoost  = 220
-	scoreSearchProjectsBoost    = 90
-	scoreServiceAccountBoost    = 80
-	scoreServiceAccountScope    = 30
-	scoreScopeIntentBoost       = 80
+	scoreMRSecurityIntentBoost   = 95
+	scoreDiscoverIntentBoost     = 95
+	scoreProjectGetIntentBoost   = 220
+	scoreSearchProjectsBoost     = 90
+	scoreServiceAccountBoost     = 80
+	scoreServiceAccountScope     = 30
+	scoreScopeIntentBoost        = 80
 )
 
 type verbIntent string

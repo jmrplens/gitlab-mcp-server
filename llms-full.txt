@@ -1554,17 +1554,17 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 Use {"action":"ci_config","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_analyze.<action>.
 Action guidance:
-- ci_config: Use to execute samplingtools domain action.
-- deployment_history: Use to execute samplingtools domain action.
-- issue_scope: Use to execute samplingtools domain action.
-- issue_summary: Use to execute samplingtools domain action.
-- milestone_report: Use to execute samplingtools domain action.
-- mr_changes: Use to execute samplingtools domain action.
-- mr_review: Use to execute samplingtools domain action.
-- mr_security: Use to execute samplingtools domain action.
-- pipeline_failure: Use to execute samplingtools domain action.
-- release_notes: Use to execute samplingtools domain action.
-- technical_debt: Use to execute samplingtools domain action.
+- ci_config: Review CI/CD configuration for correctness, security, and maintainability.
+- deployment_history: Analyze deployment trends, failure patterns, and rollback signals.
+- issue_scope: Assess issue scope, complexity, and decomposition strategy.
+- issue_summary: Summarize issue discussions into key decisions and actionable next steps.
+- milestone_report: Produce milestone progress reports with risks, blockers, and recommendations.
+- mr_changes: Analyze merge request diffs for code quality risks and improvement opportunities.
+- mr_review: Summarize merge request reviewer feedback, unresolved threads, and approvals.
+- mr_security: Run a security-focused merge request review for OWASP risks and exposed secrets.
+- pipeline_failure: Investigate failed pipelines and identify likely root causes from jobs and traces.
+- release_notes: Generate categorized release notes from commits and merge requests after requested release/compare data is collected.
+- technical_debt: Identify and prioritize technical debt markers in source code.
 
 LLM-assisted analysis of GitLab data via MCP sampling. Each action fetches data through GitLab APIs, then asks the connected LLM (the host's sampling capability) to summarize / analyze / classify it. Requires the client to advertise sampling capability — actions return SamplingUnsupportedResult otherwise (human-in-the-loop on the client side).
 When to use: ask an LLM to interpret GitLab artifacts — MR diffs, issue threads, pipeline failures, CI configs, milestone progress, deployment history, technical-debt markers — and produce Markdown narratives, scopes, or release notes.

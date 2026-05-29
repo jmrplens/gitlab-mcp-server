@@ -295,7 +295,7 @@ func releaseDynamicExample(action, param, prompt string) (any, bool) {
 	return nil, false
 }
 
-func compareRefsFromToPromptValues(prompt string) (string, string, bool) {
+func compareRefsFromToPromptValues(prompt string) (fromRef, toRef string, ok bool) {
 	lowerPrompt := strings.ToLower(prompt)
 	idx := strings.Index(lowerPrompt, "compare refs")
 	if idx == -1 {
