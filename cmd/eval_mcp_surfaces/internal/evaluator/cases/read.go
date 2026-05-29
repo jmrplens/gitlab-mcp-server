@@ -38,19 +38,21 @@ func readEvalCases() []Case {
 		baseReadEvalCase("MT-097", "Analyze the CI configuration for project `my-org/tools/gitlab-mcp-server` using content_ref `main`.", readStep("gitlab_analyze", "ci_config", params("project_id"), params("content_ref"))),
 		baseReadEvalCase("MT-098", "Analyze technical-debt markers on branch `main` in project `my-org/tools/gitlab-mcp-server` with the LLM-assisted technical debt analyzer.", readStep("gitlab_analyze", "technical_debt", params("project_id"), params("ref"))),
 		baseReadEvalCase("MT-179", "Inspect merge request `7` changes in project `my-org/tools/gitlab-mcp-server` without running an LLM analyzer.", readStep("gitlab_mr_review", "changes_get", params("project_id", "merge_request_iid"), nil)),
-		baseReadEvalCase("MT-110", "List merged merge requests in `my-org/tools/gitlab-mcp-server` ordered by updated date, with 5 results per page.", readStep("gitlab_merge_request", "list", params("project_id"), params("state", "order_by", "sort", "per_page"))),
+		baseReadEvalCase("MT-110", "List merged merge requests in project `my-org/tools/gitlab-mcp-server` ordered by updated date, with 5 results per page.", readStep("gitlab_merge_request", "list", params("project_id"), params("state", "order_by", "sort", "per_page"))),
 		baseReadEvalCase("MT-111", "Get all pending to-do items for the current user.", readStep("gitlab_todo", "list", nil, params("state", "per_page"))),
 		baseReadEvalCase("MT-112", "List all available MCP resources exposed by the server.", readStep("gitlab_list_resources", "", nil, nil)),
-		baseReadEvalCase("MT-113", "Show me the available MCP prompts, then get the details of the git-workflow prompts.",
+		baseReadEvalCase("MT-121", "List all MCP capabilities exposed by the server.", readStep("gitlab_list_capabilities", "", nil, nil)),
+		baseReadEvalCase("MT-122", "Read MCP resource `gitlab://tools` to inspect the tool catalog manifest.", readStep("gitlab_read_resource", "", params("uri"), nil)),
+		baseReadEvalCase("MT-113", "List available MCP prompts, then get prompt details for `my_open_mrs` using that exact prompt name.",
 			readStep("gitlab_list_prompts", "", nil, nil),
 			readStep("gitlab_get_prompt", "", params("name"), nil),
 		),
-		baseReadEvalCase("MT-114", "Retrieve the current user info, then use parameter completion to autocomplete the `state` parameter for issue listings.",
+		baseReadEvalCase("MT-114", "Retrieve the current user info, then call parameter completion for prompt `my_issues` and argument `state` (use `ref_type` = `ref/prompt`, plus `name` and `argument_name`).",
 			readStep("gitlab_user", "current", nil, nil),
-			readStep("gitlab_complete", "", params("tool", "action"), nil),
+			readStep("gitlab_complete", "", params("ref_type", "name", "argument_name"), params("argument_value")),
 		),
 		baseReadEvalCase("MT-115", "List issues with status `closed` created in the last 60 days in project `my-org/tools/gitlab-mcp-server`, ordered by creation date.", readStep("gitlab_issue", "list", params("project_id"), params("state", "order_by", "sort", "created_after", "per_page"))),
-		baseReadEvalCase("MT-116", "For project `my-org/tools/gitlab-mcp-server`, get the latest pipeline on `main`, then list all jobs in that pipeline and their statuses.",
+		baseReadEvalCase("MT-116", "For project `my-org/tools/gitlab-mcp-server`, first discover and execute `pipeline.list` for ref `main`, then discover and execute `job.list` for the returned pipeline ID and list job statuses.",
 			readStep("gitlab_pipeline", "list", params("project_id"), params("ref", "per_page")),
 			readStep("gitlab_job", "list", params("project_id", "pipeline_id"), params("scope", "per_page")),
 		),
@@ -133,10 +135,14 @@ func baseReadPromptTemplateAndFixtures(id string) (template string, fixtures []s
 		return "Inspect merge request `{{ .MergeRequest.IID }}` changes in project `{{ .Project.Path }}` without running an LLM analyzer.", []string{fixtureMergeRequest}
 	case "MT-110":
 		return "List merged merge requests in project `{{ .Project.Path }}` ordered by updated date, with 5 results per page.", []string{fixtureMergeRequest}
+	case "MT-113":
+		return "List available MCP prompts, then get prompt details for `my_open_mrs` using that exact prompt name.", nil
+	case "MT-114":
+		return "Retrieve the current user info, then call parameter completion for prompt `my_issues` and argument `state` (use `ref_type` = `ref/prompt`, plus `name` and `argument_name`).", nil
 	case "MT-115":
 		return "List issues with status closed created in the last 60 days in project `{{ .Project.Path }}`, ordered by creation date.", []string{fixtureIssue}
 	case "MT-116":
-		return "For project `{{ .Project.Path }}`, get the latest pipeline on main, then list all jobs in pipeline `{{ .Pipeline.ID }}` and their statuses.", []string{fixturePipelineJob}
+		return "For project `{{ .Project.Path }}`, first discover and execute `pipeline.list` for ref `main`, then discover and execute `job.list` for pipeline `{{ .Pipeline.ID }}` and list job statuses.", []string{fixturePipelineJob}
 	case "MT-117":
 		return "Find issues labeled bug and in milestone v2.0 for project `{{ .Project.Path }}`.", []string{fixtureIssue}
 	case "MT-118":
