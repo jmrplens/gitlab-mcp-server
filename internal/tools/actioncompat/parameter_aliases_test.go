@@ -495,3 +495,311 @@ func explanationAliases(explanations []toolutil.ParamAliasExplanation) []string 
 	}
 	return out
 }
+
+// TestNormalizeCommonParams_PaginationBooleanCoercion verifies that common
+// pagination boolean params (first, last, per_page, page) are coerced to their
+// numeric defaults when sent as true, and removed when sent as false.
+func TestNormalizeCommonParams_PaginationBooleanCoercion(t *testing.T) {
+	tests := []struct {
+		name        string
+		params      map[string]any
+		schema      []string
+		wantParams  map[string]any
+		wantAliases []string
+	}{
+		{
+			name:        "first true maps to 100",
+			params:      map[string]any{"first": true},
+			schema:      []string{"first"},
+			wantParams:  map[string]any{"first": 100},
+			wantAliases: []string{"first->first"},
+		},
+		{
+			name:        "page true maps to 1",
+			params:      map[string]any{"page": true},
+			schema:      []string{"page"},
+			wantParams:  map[string]any{"page": 1},
+			wantAliases: []string{"page->page"},
+		},
+		{
+			name:        "per_page false is removed",
+			params:      map[string]any{"per_page": false},
+			schema:      []string{"per_page"},
+			wantParams:  map[string]any{},
+			wantAliases: []string{"per_page->per_page"},
+		},
+		{
+			name:        "last true maps to 100",
+			params:      map[string]any{"last": true},
+			schema:      []string{"last"},
+			wantParams:  map[string]any{"last": 100},
+			wantAliases: []string{"last->last"},
+		},
+		{
+			name:        "numeric first is unchanged",
+			params:      map[string]any{"first": 20},
+			schema:      []string{"first"},
+			wantParams:  map[string]any{"first": 20},
+			wantAliases: []string{},
+		},
+		{
+			name:        "first not in schema is unchanged",
+			params:      map[string]any{"first": true},
+			schema:      []string{"query"},
+			wantParams:  map[string]any{"first": true},
+			wantAliases: []string{},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			normalized, explanations := NormalizeParamsWithExplanation("unknown.action", tc.params, schemaWithProperties(tc.schema...))
+			if !reflect.DeepEqual(normalized, tc.wantParams) {
+				t.Fatalf("normalized params = %#v, want %#v", normalized, tc.wantParams)
+			}
+			gotAliases := explanationAliases(explanations)
+			if len(gotAliases) != len(tc.wantAliases) {
+				t.Fatalf("explanations = %#v, want %#v", gotAliases, tc.wantAliases)
+			}
+			for i, want := range tc.wantAliases {
+				if gotAliases[i] != want {
+					t.Fatalf("explanation[%d] = %q, want %q", i, gotAliases[i], want)
+				}
+			}
+		})
+	}
+}
+
+// TestDefaultPaginationValue_PageVsOthers verifies page defaults to 1 and all
+// other pagination param names default to 100.
+func TestDefaultPaginationValue_PageVsOthers(t *testing.T) {
+	if got := defaultPaginationValue("page"); got != 1 {
+		t.Fatalf("defaultPaginationValue(page) = %d, want 1", got)
+	}
+	for _, name := range []string{"first", "last", "per_page"} {
+		if got := defaultPaginationValue(name); got != 100 {
+			t.Fatalf("defaultPaginationValue(%q) = %d, want 100", name, got)
+		}
+	}
+}
+
+// TestNormalizeGroupProtectedBranchProtectParams_BranchAndAccessLevels verifies
+// that the branch alias and access level normalizations are applied together.
+func TestNormalizeGroupProtectedBranchProtectParams_BranchAndAccessLevels(t *testing.T) {
+	tests := []struct {
+		name        string
+		params      map[string]any
+		wantParams  map[string]any
+		wantAliases []string
+	}{
+		{
+			name:        "branch maps to name only",
+			params:      map[string]any{"branch": "main"},
+			wantParams:  map[string]any{"name": "main"},
+			wantAliases: []string{"branch->name"},
+		},
+		{
+			name:        "push access level string normalizes",
+			params:      map[string]any{"push_access_level": "Developer"},
+			wantParams:  map[string]any{"push_access_level": 30},
+			wantAliases: []string{"push_access_level->push_access_level"},
+		},
+		{
+			name:        "merge access level string normalizes",
+			params:      map[string]any{"merge_access_level": "maintainer"},
+			wantParams:  map[string]any{"merge_access_level": 40},
+			wantAliases: []string{"merge_access_level->merge_access_level"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			normalized, explanations := NormalizeParamsWithExplanation(actionGroupProtectedBranchProtect, tc.params, schemaWithProperties("name", "push_access_level", "merge_access_level"))
+			if !reflect.DeepEqual(normalized, tc.wantParams) {
+				t.Fatalf("normalized params = %#v, want %#v", normalized, tc.wantParams)
+			}
+			if gotAliases := explanationAliases(explanations); !reflect.DeepEqual(gotAliases, tc.wantAliases) {
+				t.Fatalf("explanations = %#v, want %#v", gotAliases, tc.wantAliases)
+			}
+		})
+	}
+}
+
+// TestNormalizeProjectPushRuleParams_UnsignedCommitAlias verifies deny_unsigned_commits
+// maps to reject_unsigned_commits.
+func TestNormalizeProjectPushRuleParams_UnsignedCommitAlias(t *testing.T) {
+	normalized, explanations := NormalizeParamsWithExplanation(
+		actionProjectPushRuleAdd,
+		map[string]any{"deny_unsigned_commits": false},
+		schemaWithProperties("reject_unsigned_commits"),
+	)
+	if !reflect.DeepEqual(normalized, map[string]any{"reject_unsigned_commits": false}) {
+		t.Fatalf("normalized = %#v, want reject_unsigned_commits", normalized)
+	}
+	if got := explanationAliases(explanations); !reflect.DeepEqual(got, []string{"deny_unsigned_commits->reject_unsigned_commits"}) {
+		t.Fatalf("explanations = %#v, want deny_unsigned_commits->reject_unsigned_commits", got)
+	}
+}
+
+// TestNormalizeProtectedEnvironmentParams_AccessEntriesAndApprovalCount verifies
+// the full protected environment normalization pipeline including primitive access
+// levels, object entries, and required_approval_count promotion.
+func TestNormalizeProtectedEnvironmentParams_AccessEntriesAndApprovalCount(t *testing.T) {
+	tests := []struct {
+		name        string
+		actionID    string
+		params      map[string]any
+		schema      []string
+		wantParams  map[string]any
+		wantAliases []string
+	}{
+		{
+			name:     "primitive access level wraps to array",
+			actionID: actionGroupProtectedEnvProtect,
+			params:   map[string]any{"deploy_access_levels": float64(40)},
+			schema:   []string{"deploy_access_levels"},
+			wantParams: map[string]any{
+				"deploy_access_levels": []any{map[string]any{"access_level": 40}},
+			},
+			wantAliases: []string{"deploy_access_levels->deploy_access_levels"},
+		},
+		{
+			name:     "object entry normalizes access level string",
+			actionID: actionGroupProtectedEnvProtect,
+			params:   map[string]any{"deploy_access_levels": map[string]any{"access_level": "Developer"}},
+			schema:   []string{"deploy_access_levels"},
+			wantParams: map[string]any{
+				"deploy_access_levels": []any{map[string]any{"access_level": 30}},
+			},
+			wantAliases: []string{"deploy_access_levels->deploy_access_levels"},
+		},
+		{
+			name:     "required_approval_count promotes to approval_rules",
+			actionID: actionProjectProtectedEnvProtect,
+			params:   map[string]any{"required_approval_count": 2},
+			schema:   []string{"approval_rules"},
+			wantParams: map[string]any{
+				"approval_rules": []any{map[string]any{"access_level": 40, "required_approvals": 2}},
+			},
+			wantAliases: []string{"required_approval_count->approval_rules"},
+		},
+		{
+			name:     "required_approval_count dropped when approval_rules already present",
+			actionID: actionProjectProtectedEnvProtect,
+			params: map[string]any{
+				"approval_rules":          []any{map[string]any{"access_level": 40, "required_approvals": 1}},
+				"required_approval_count": 2,
+			},
+			schema: []string{"approval_rules"},
+			wantParams: map[string]any{
+				"approval_rules": []any{map[string]any{"access_level": 40, "required_approvals": 1}},
+			},
+			wantAliases: []string{"required_approval_count->approval_rules"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			normalized, explanations := NormalizeParamsWithExplanation(tc.actionID, tc.params, schemaWithProperties(tc.schema...))
+			if !reflect.DeepEqual(normalized, tc.wantParams) {
+				t.Fatalf("normalized = %#v, want %#v", normalized, tc.wantParams)
+			}
+			if gotAliases := explanationAliases(explanations); !reflect.DeepEqual(gotAliases, tc.wantAliases) {
+				t.Fatalf("explanations = %#v, want %#v", gotAliases, tc.wantAliases)
+			}
+		})
+	}
+}
+
+// TestProtectedEnvironmentAccessEntryHelpers verifies the fine-grained entry
+// normalization and principal-detection helpers used by protected env params.
+func TestProtectedEnvironmentAccessEntryHelpers(t *testing.T) {
+	// protectedEnvironmentPrimitiveAccessEntry: numeric access level wraps to object.
+	if entry, ok := protectedEnvironmentPrimitiveAccessEntry(float64(30)); !ok || entry["access_level"] != 30 {
+		t.Fatalf("primitive float64(30) = %v, %v; want {access_level:30}, true", entry, ok)
+	}
+	if _, ok := protectedEnvironmentPrimitiveAccessEntry("unknown"); ok {
+		t.Fatal("primitive(unknown string) should return false")
+	}
+	if _, ok := protectedEnvironmentPrimitiveAccessEntry(map[string]any{"x": 1}); ok {
+		t.Fatal("primitive(map) should return false")
+	}
+
+	// normalizeProtectedEnvironmentAccessEntry: alias promotion.
+	entry := normalizeProtectedEnvironmentAccessEntry(map[string]any{"deploy_access_level": "Maintainer"}, false)
+	if entry["access_level"] != 40 {
+		t.Fatalf("normalizeEntry alias = %#v, want access_level:40", entry)
+	}
+
+	// approvalRules=true branch with required_approval_count alias.
+	approvalEntry := normalizeProtectedEnvironmentAccessEntry(map[string]any{"required_approval_count": 3}, true)
+	if approvalEntry["required_approvals"] != 3 {
+		t.Fatalf("approvalEntry.required_approvals = %#v, want 3", approvalEntry["required_approvals"])
+	}
+	// No principal → default access_level=40 is added.
+	if approvalEntry["access_level"] != 40 {
+		t.Fatalf("approvalEntry.access_level = %#v, want 40 (default principal)", approvalEntry["access_level"])
+	}
+
+	// protectedEnvironmentAccessEntryHasPrincipal detects presence of principal keys.
+	if !protectedEnvironmentAccessEntryHasPrincipal(map[string]any{"access_level": 40}) {
+		t.Fatal("hasPrincipal with access_level should return true")
+	}
+	if !protectedEnvironmentAccessEntryHasPrincipal(map[string]any{"user_id": 1}) {
+		t.Fatal("hasPrincipal with user_id should return true")
+	}
+	if !protectedEnvironmentAccessEntryHasPrincipal(map[string]any{"group_id": 5}) {
+		t.Fatal("hasPrincipal with group_id should return true")
+	}
+	if protectedEnvironmentAccessEntryHasPrincipal(map[string]any{"required_approvals": 2}) {
+		t.Fatal("hasPrincipal without principal key should return false")
+	}
+}
+
+// TestEnvironmentAccessLevelValue_RoleLabelsAndNumericValues verifies the
+// environment access level value parser accepts both label strings and numbers.
+func TestEnvironmentAccessLevelValue_RoleLabelsAndNumericValues(t *testing.T) {
+	cases := []struct {
+		value     any
+		wantLevel int
+		wantOK    bool
+	}{
+		{value: float64(40), wantLevel: 40, wantOK: true},
+		{value: int(30), wantLevel: 30, wantOK: true},
+		{value: int64(20), wantLevel: 20, wantOK: true},
+		{value: "developer", wantLevel: 30, wantOK: true},
+		{value: "admin", wantLevel: 60, wantOK: true},
+		{value: "no access", wantLevel: 0, wantOK: true},
+		{value: "unknown-role", wantOK: false},
+		{value: 99, wantOK: false},
+		{value: true, wantOK: false},
+	}
+	for _, tc := range cases {
+		got, ok := environmentAccessLevelValue(tc.value)
+		if ok != tc.wantOK || got != tc.wantLevel {
+			t.Fatalf("environmentAccessLevelValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
+		}
+	}
+}
+
+// TestIntegerValue_TypeCoverage verifies integerValue handles all supported
+// numeric representations and rejects unsupported ones.
+func TestIntegerValue_TypeCoverage(t *testing.T) {
+	cases := []struct {
+		value   any
+		wantInt int
+		wantOK  bool
+	}{
+		{value: int(7), wantInt: 7, wantOK: true},
+		{value: int64(42), wantInt: 42, wantOK: true},
+		{value: float64(10.0), wantInt: 10, wantOK: true},
+		{value: float64(10.5), wantInt: 10, wantOK: false},
+		{value: "5", wantInt: 5, wantOK: true},
+		{value: " 8 ", wantInt: 8, wantOK: true},
+		{value: "abc", wantOK: false},
+		{value: true, wantOK: false},
+	}
+	for _, tc := range cases {
+		got, ok := integerValue(tc.value)
+		if ok != tc.wantOK || got != tc.wantInt {
+			t.Fatalf("integerValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantInt, tc.wantOK)
+		}
+	}
+}

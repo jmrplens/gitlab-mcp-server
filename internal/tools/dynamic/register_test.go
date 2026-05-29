@@ -4740,6 +4740,208 @@ func TestAnnotationsWithTitle_CopiesBase(t *testing.T) {
 	}
 }
 
+// TestAddServiceAccountActionTags_TagShapes verifies that service account action
+// tags include the expected resource identifier prefix and verb-specific tags.
+func TestAddServiceAccountActionTags_TagShapes(t *testing.T) {
+	cases := []struct {
+		domain string
+		action string
+		want   []string
+	}{
+		{
+			domain: "group",
+			action: "service_account_list",
+			want:   []string{"group service account", "group service accounts", "group service account list", "list group service accounts"},
+		},
+		{
+			domain: "project",
+			action: "service_account_create",
+			want:   []string{"project service account", "project service accounts", "project service account create", "create project service account"},
+		},
+		{
+			domain: "group",
+			action: "service_account_update",
+			want:   []string{"group service account", "group service accounts", "group service account update", "update group service account"},
+		},
+		{
+			domain: "group",
+			action: "service_account_delete",
+			want:   []string{"group service account", "group service accounts", "group service account delete", "delete group service account"},
+		},
+		{
+			// Unknown action still produces base resource tags.
+			domain: "project",
+			action: "service_account_unknown",
+			want:   []string{"project service account", "project service accounts"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.domain+"/"+tc.action, func(t *testing.T) {
+			var got []string
+			add := func(values ...string) { got = append(got, values...) }
+			addServiceAccountActionTags(add, tc.domain, tc.action)
+			for _, want := range tc.want {
+				if !slices.Contains(got, want) {
+					t.Fatalf("addServiceAccountActionTags() tags = %v, want %q", got, want)
+				}
+			}
+		})
+	}
+}
+
+// TestAddServiceAccountPATActionTags_TagShapes verifies that service account PAT
+// action tags include the expected resource string and verb tags.
+func TestAddServiceAccountPATActionTags_TagShapes(t *testing.T) {
+	cases := []struct {
+		domain string
+		action string
+		want   []string
+	}{
+		{
+			domain: "group",
+			action: "service_account_pat_rotate",
+			want:   []string{"group service account personal access token", "group service account pat rotate"},
+		},
+		{
+			domain: "project",
+			action: "service_account_pat_list",
+			want:   []string{"project service account personal access token", "project service account pat list"},
+		},
+		{
+			// No recognized verb suffix — still produces base tags.
+			domain: "group",
+			action: "service_account_pat",
+			want:   []string{"group service account personal access token"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.domain+"/"+tc.action, func(t *testing.T) {
+			var got []string
+			add := func(values ...string) { got = append(got, values...) }
+			addServiceAccountPATActionTags(add, tc.domain, tc.action)
+			for _, want := range tc.want {
+				if !slices.Contains(got, want) {
+					t.Fatalf("addServiceAccountPATActionTags() tags = %v, want %q", got, want)
+				}
+			}
+		})
+	}
+}
+
+// TestScoreIntentFunctions_ReturnFalseForNonMatchingEntries verifies that each
+// intent-scoring helper returns zero when the entry does not match the domain or
+// action it targets.
+func TestScoreIntentFunctions_ReturnFalseForNonMatchingEntries(t *testing.T) {
+	unrelated := actionEntry{
+		Domain: "issue",
+		Action: "list",
+		Document: searchDocument{
+			Domain:      "issue",
+			Action:      "list",
+			CanonicalID: "issue.list",
+		},
+	}
+	unrelated.Document.DomainWords = splitSearchFieldWords("issue")
+	unrelated.Document.ActionWords = splitSearchFieldWords("list")
+
+	terms := normalizeSearchTerms("compare refs release list security review discover project search projects")
+
+	if v := scoreCompareRefsIntentValue(unrelated, terms); v != 0 {
+		t.Fatalf("scoreCompareRefsIntentValue(unrelated) = %d, want 0", v)
+	}
+	if v := scoreReleaseListIntentValue(unrelated, terms); v != 0 {
+		t.Fatalf("scoreReleaseListIntentValue(unrelated) = %d, want 0", v)
+	}
+	if v := scoreMRSecurityIntentValue(unrelated, terms); v != 0 {
+		t.Fatalf("scoreMRSecurityIntentValue(unrelated) = %d, want 0", v)
+	}
+	if v := scoreProjectGetIntentValue(unrelated, terms); v != 0 {
+		t.Fatalf("scoreProjectGetIntentValue(unrelated) = %d, want 0", v)
+	}
+	if v := scoreSearchProjectsIntentValue(unrelated, terms); v != 0 {
+		t.Fatalf("scoreSearchProjectsIntentValue(unrelated) = %d, want 0", v)
+	}
+	if v := scoreServiceAccountIntentValue(unrelated, terms); v != 0 {
+		t.Fatalf("scoreServiceAccountIntentValue(unrelated) = %d, want 0", v)
+	}
+
+	// Test the (int, MatchReason) variants return zero and empty reason.
+	if score, reason := scoreCompareRefsIntent(unrelated, terms); score != 0 || reason != (MatchReason{}) {
+		t.Fatalf("scoreCompareRefsIntent(unrelated) = %d, %v, want 0, empty", score, reason)
+	}
+	if score, reason := scoreReleaseListIntent(unrelated, terms); score != 0 || reason != (MatchReason{}) {
+		t.Fatalf("scoreReleaseListIntent(unrelated) = %d, %v, want 0, empty", score, reason)
+	}
+	if score, reason := scoreMRSecurityIntent(unrelated, terms); score != 0 || reason != (MatchReason{}) {
+		t.Fatalf("scoreMRSecurityIntent(unrelated) = %d, %v, want 0, empty", score, reason)
+	}
+	if score, reason := scoreProjectGetIntent(unrelated, terms); score != 0 || reason != (MatchReason{}) {
+		t.Fatalf("scoreProjectGetIntent(unrelated) = %d, %v, want 0, empty", score, reason)
+	}
+	if score, reason := scoreSearchProjectsIntent(unrelated, terms); score != 0 || reason != (MatchReason{}) {
+		t.Fatalf("scoreSearchProjectsIntent(unrelated) = %d, %v, want 0, empty", score, reason)
+	}
+	if score, reason := scoreServiceAccountIntent(unrelated, terms); score != 0 || reason != (MatchReason{}) {
+		t.Fatalf("scoreServiceAccountIntent(unrelated) = %d, %v, want 0, empty", score, reason)
+	}
+}
+
+// TestCompactParamList_EdgeCases verifies all branches of compactParamList:
+// empty params, within limit, exactly at limit, and truncated with overflow.
+func TestCompactParamList_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name   string
+		params []string
+		limit  int
+		want   string
+	}{
+		{
+			name:   "empty params returns none",
+			params: []string{},
+			limit:  5,
+			want:   "none",
+		},
+		{
+			name:   "nil params returns none",
+			params: nil,
+			limit:  5,
+			want:   "none",
+		},
+		{
+			name:   "params within limit returns backtick list",
+			params: []string{"project_id", "issue_iid"},
+			limit:  5,
+			want:   "`project_id`, `issue_iid`",
+		},
+		{
+			name:   "params at limit returns full list",
+			params: []string{"a", "b", "c"},
+			limit:  3,
+			want:   "`a`, `b`, `c`",
+		},
+		{
+			name:   "params over limit truncates with and N more",
+			params: []string{"a", "b", "c", "d"},
+			limit:  2,
+			want:   "`a`, `b`, and 2 more",
+		},
+		{
+			name:   "limit zero returns full list",
+			params: []string{"x", "y"},
+			limit:  0,
+			want:   "`x`, `y`",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := compactParamList(tc.params, tc.limit)
+			if got != tc.want {
+				t.Fatalf("compactParamList(%v, %d) = %q, want %q", tc.params, tc.limit, got, tc.want)
+			}
+		})
+	}
+}
+
 // BenchmarkSearch_BaselineMetaCatalog measures dynamic search throughput and
 // allocations against the captured meta catalog plus standalone routes. It
 // preserves the benchmark coverage migrated from register_benchmark_test.go.

@@ -3617,3 +3617,134 @@ func TestWrapVoidActionWithRequest_UnmarshalError_ReturnsError(t *testing.T) {
 		t.Fatalf("result = %#v, want nil on error", result)
 	}
 }
+
+// TestNormalizeActionAliasForParams_EnvironmentRouting verifies that the
+// param-shape-based routing for gitlab_environment/get dispatches to
+// protected_get when the params contain a non-numeric environment identifier,
+// and falls back to the plain get action otherwise.
+func TestNormalizeActionAliasForParams_EnvironmentRouting(t *testing.T) {
+	routes := ActionMap{
+		"get":           Route(nil),
+		"protected_get": Route(nil),
+	}
+
+	tests := []struct {
+		name     string
+		toolName string
+		action   string
+		params   map[string]any
+		want     string
+	}{
+		{
+			name:     "named environment routes to protected_get",
+			toolName: "gitlab_environment",
+			action:   "get",
+			params:   map[string]any{"environment": "staging"},
+			want:     "protected_get",
+		},
+		{
+			name:     "non-numeric environment_id routes to protected_get",
+			toolName: "gitlab_environment",
+			action:   "get",
+			params:   map[string]any{"environment_id": "staging"},
+			want:     "protected_get",
+		},
+		{
+			name:     "numeric environment_id stays on get",
+			toolName: "gitlab_environment",
+			action:   "get",
+			params:   map[string]any{"environment_id": "42"},
+			want:     "get",
+		},
+		{
+			name:     "non-matching tool name returns action unchanged",
+			toolName: "gitlab_project",
+			action:   "get",
+			params:   map[string]any{"environment": "staging"},
+			want:     "get",
+		},
+		{
+			name:     "non-get action returns unchanged",
+			toolName: "gitlab_environment",
+			action:   "list",
+			params:   map[string]any{"environment": "staging"},
+			want:     "list",
+		},
+		{
+			name:     "protected_get missing from routes falls back to get",
+			toolName: "gitlab_environment",
+			action:   "get",
+			params:   map[string]any{"environment": "staging"},
+			want:     "get",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := routes
+			if tc.name == "protected_get missing from routes falls back to get" {
+				r = ActionMap{"get": Route(nil)}
+			}
+			got := NormalizeActionAliasForParams(tc.toolName, tc.action, tc.params, r)
+			if got != tc.want {
+				t.Fatalf("NormalizeActionAliasForParams(%q, %q, %v) = %q, want %q",
+					tc.toolName, tc.action, tc.params, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestHasProtectedEnvironmentNameParam_VariousCases verifies the param-shape
+// detection helper that distinguishes named environments from numeric IDs.
+func TestHasProtectedEnvironmentNameParam_VariousCases(t *testing.T) {
+	tests := []struct {
+		name   string
+		params map[string]any
+		want   bool
+	}{
+		{
+			name:   "empty params returns false",
+			params: map[string]any{},
+			want:   false,
+		},
+		{
+			name:   "nil params returns false",
+			params: nil,
+			want:   false,
+		},
+		{
+			name:   "environment key present returns true",
+			params: map[string]any{"environment": "staging"},
+			want:   true,
+		},
+		{
+			name:   "numeric environment_id returns false",
+			params: map[string]any{"environment_id": "42"},
+			want:   false,
+		},
+		{
+			name:   "non-numeric environment_id returns true",
+			params: map[string]any{"environment_id": "staging"},
+			want:   true,
+		},
+		{
+			name:   "float-like environment_id string returns true",
+			params: map[string]any{"environment_id": "3.14"},
+			want:   true,
+		},
+		{
+			name:   "unrelated param does not match",
+			params: map[string]any{"project_id": "my/project"},
+			want:   false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := hasProtectedEnvironmentNameParam(tc.params)
+			if got != tc.want {
+				t.Fatalf("hasProtectedEnvironmentNameParam(%v) = %v, want %v", tc.params, got, tc.want)
+			}
+		})
+	}
+}

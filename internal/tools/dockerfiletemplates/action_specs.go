@@ -18,25 +18,27 @@ func dockerfileTemplateSpec(name string, route toolutil.ActionRoute, individualT
 }
 
 func dockerfileTemplateOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
-	usage := "List available Dockerfile templates."
-	guidance := map[string]toolutil.ParameterGuidance{}
 	if actionName == "dockerfile_get" {
-		usage = "Get one Dockerfile template by key for scaffold/bootstrap workflows."
-		guidance["key"] = toolutil.ParameterGuidance{
-			SemanticRole:   "template_key",
-			ValueSource:    "Template key returned by dockerfile template list output.",
-			ExampleBinding: `params.key:"Go"`,
+		return toolutil.ActionSpecOptions{
+			Aliases: []string{individualTool},
+			Tags:    []string{"template", "dockerfile"},
+			Usage:   "Get one Dockerfile template by key for scaffold/bootstrap workflows.",
+			ParameterGuidance: map[string]toolutil.ParameterGuidance{
+				"key": {SemanticRole: "template_key", ValueSource: "Template key returned by dockerfile template list output.", ExampleBinding: `params.key:"Go"`},
+			},
+			RelatedActions: []string{"repository.file_create", "template.gitignore_get"},
+			OpenWorld:      true,
+			OwnerPackage:   "dockerfiletemplates",
+			IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 		}
 	}
-
 	return toolutil.ActionSpecOptions{
-		Aliases:           []string{individualTool},
-		Tags:              []string{"template", "dockerfile"},
-		Usage:             usage,
-		RelatedActions:    []string{"repository.file_create", "template.gitignore_get"},
-		ParameterGuidance: guidance,
-		OpenWorld:         true,
-		OwnerPackage:      "dockerfiletemplates",
-		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		Aliases:        []string{individualTool},
+		Tags:           []string{"template", "dockerfile"},
+		Usage:          "List available Dockerfile templates.",
+		RelatedActions: []string{"repository.file_create", "template.gitignore_get"},
+		OpenWorld:      true,
+		OwnerPackage:   "dockerfiletemplates",
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
 }

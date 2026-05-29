@@ -18,36 +18,34 @@ func projectTemplateSpec(name string, route toolutil.ActionRoute, individualTool
 }
 
 func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
-	usage := "List project-scoped templates by template_type."
-	guidance := map[string]toolutil.ParameterGuidance{
-		"project_id": {
-			SemanticRole:   "scope_project",
-			ValueSource:    "Project ID or path whose template namespace is queried.",
-			ExampleBinding: `params.project_id:"group/project"`,
-		},
-		"template_type": {
-			SemanticRole:   "template_type",
-			ValueSource:    "Template family, such as licenses, gitignores, or dockerfiles.",
-			ExampleBinding: `params.template_type:"licenses"`,
+	opts := toolutil.ActionSpecOptions{
+		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
+		OpenWorld:      true,
+		OwnerPackage:   "projecttemplates",
+		Tags:           []string{"template", "project"},
+		Aliases:        []string{individualTool},
+		RelatedActions: []string{"project.create", "project.list"},
+		Usage:          "List project-scoped templates by template_type.",
+		ParameterGuidance: map[string]toolutil.ParameterGuidance{
+			"project_id": {
+				SemanticRole:   "scope_project",
+				ValueSource:    "Project ID or path whose template namespace is queried.",
+				ExampleBinding: `params.project_id:"group/project"`,
+			},
+			"template_type": {
+				SemanticRole:   "template_type",
+				ValueSource:    "Template family, such as licenses, gitignores, or dockerfiles.",
+				ExampleBinding: `params.template_type:"licenses"`,
+			},
 		},
 	}
 	if actionName == "project_template_get" {
-		usage = "Get one project-scoped template by template_type and key."
-		guidance["key"] = toolutil.ParameterGuidance{
+		opts.Usage = "Get one project-scoped template by template_type and key."
+		opts.ParameterGuidance["key"] = toolutil.ParameterGuidance{
 			SemanticRole:   "template_key",
 			ValueSource:    "Template key from project template list output.",
 			ExampleBinding: `params.key:"mit"`,
 		}
 	}
-
-	return toolutil.ActionSpecOptions{
-		Aliases:           []string{individualTool},
-		Tags:              []string{"template", "project"},
-		Usage:             usage,
-		RelatedActions:    []string{"project.create", "project.list"},
-		ParameterGuidance: guidance,
-		OpenWorld:         true,
-		OwnerPackage:      "projecttemplates",
-		IndividualTool:    toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
-	}
+	return opts
 }

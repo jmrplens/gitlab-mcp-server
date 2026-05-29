@@ -626,7 +626,7 @@ func parseOpenAIToolArguments(arguments string) (map[string]any, error) {
 	}
 	if err := json.Unmarshal([]byte(candidate), &input); err != nil {
 		if repaired := repairOpenAIArgumentValueCommas(candidate); repaired != candidate {
-			if repairErr := json.Unmarshal([]byte(repaired), &input); repairErr == nil {
+			if json.Unmarshal([]byte(repaired), &input) == nil {
 				return input, nil
 			}
 		}
