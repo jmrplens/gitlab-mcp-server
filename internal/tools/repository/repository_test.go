@@ -172,6 +172,41 @@ func TestRepositoryCompare_Success(t *testing.T) {
 	}
 }
 
+// TestRepositoryCompare_FromProjectID verifies Compare sets from_project_id
+// when a non-zero FromProjectID is supplied and the API returns a valid result.
+func TestRepositoryCompare_FromProjectID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathRepoCompare {
+			q := r.URL.Query()
+			if q.Get("from_project_id") != "99" {
+				t.Errorf("expected from_project_id=99, got %q", q.Get("from_project_id"))
+			}
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"commits":[],
+				"diffs":[],
+				"compare_timeout":false,
+				"compare_same_ref":false,
+				"web_url":"https://gitlab.example.com/-/compare/main...develop"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Compare(context.Background(), client, CompareInput{
+		ProjectID:     "42",
+		From:          "main",
+		To:            "develop",
+		FromProjectID: 99,
+	})
+	if err != nil {
+		t.Fatalf("Compare(FromProjectID=99) unexpected error: %v", err)
+	}
+	if out.WebURL == "" {
+		t.Error("WebURL is empty")
+	}
+}
+
 // TestRepositoryCompare_EmptyProjectID verifies RepositoryCompare when empty project ID.
 func TestRepositoryCompare_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

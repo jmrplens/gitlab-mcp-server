@@ -39,11 +39,11 @@ Measured with `go run ./cmd/gen_readme/` against the current base catalog. Total
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          |             2 |               870 | n/a                 |              2,204 |        18,284 |       20,488 |
-| `dynamic` / `minimal`                                 |             2 |               870 | n/a                 |              2,204 |           740 |        2,944 |
-| `meta` / `full`                                       |            34 |               870 | `opaque`            |             87,194 |        18,284 |      105,478 |
-| `meta` / `minimal`                                    |            34 |               870 | `opaque`            |             87,194 |           740 |       87,934 |
-| `individual` / `full`                                 |           866 |               866 | n/a                 |            473,228 |        18,284 |      491,512 |
+| `dynamic` / `full` (default)                          |             2 |               871 | n/a                 |              2,204 |        18,284 |       20,488 |
+| `dynamic` / `minimal`                                 |             2 |               871 | n/a                 |              2,204 |           740 |        2,944 |
+| `meta` / `full`                                       |            34 |               871 | `opaque`            |             87,323 |        18,284 |      105,607 |
+| `meta` / `minimal`                                    |            34 |               871 | `opaque`            |             87,323 |           740 |       88,063 |
+| `individual` / `full`                                 |           867 |               867 | n/a                 |            473,749 |        18,284 |      492,033 |
 
 Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.
 
@@ -445,40 +445,40 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       911 |     153,869 |
-| Unit tests (`_test.go`)  |       488 |     254,101 |
+| Source (`.go`, non-test) |       911 |     154,125 |
+| Unit tests (`_test.go`)  |       490 |     255,206 |
 | End-to-end tests         |       122 |      28,546 |
-| **Total**                | **1,521** | **436,516** |
+| **Total**                | **1,523** | **437,877** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  6,486 |
-| — exported (public)             |  2,463 |
-| — unexported (private)          |  4,023 |
-| Unit test functions (`TestXxx`) | 10,288 |
-| Subtests (`t.Run(...)`)         |  2,387 |
+| Source functions                |  6,493 |
+| — exported (public)             |  2,467 |
+| — unexported (private)          |  4,026 |
+| Unit test functions (`TestXxx`) | 10,320 |
+| Subtests (`t.Run(...)`)         |  2,396 |
 | End-to-end test functions       |    256 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.65× more tests than code |
-| Average source file length         |                 ~168 lines |
+| Test lines vs source lines         | 1.66× more tests than code |
+| Average source file length         |                 ~169 lines |
 | Average test file length           |                 ~520 lines |
-| Comment lines in source            |   11,883 (~7.7% of source) |
+| Comment lines in source            |   11,904 (~7.7% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,053 |
+| `if err != nil` checks             | 6,061 |
 | `defer` statements                 |   773 |
-| `struct` types defined             | 2,332 |
-| `//nolint` suppressions            |    74 |
+| `struct` types defined             | 2,339 |
+| `//nolint` suppressions            |    75 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
 ### Project
@@ -488,22 +488,22 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   219 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   245 |
+| Git commits                    |   167 |
 | Unique contributors            |     2 |
 
 ### Hall of fame
 
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
-| Longest source file | `internal/tools/dynamic/register.go` — 3,587 lines       |
+| Longest source file | `internal/tools/dynamic/register.go` — 3,577 lines       |
 | Longest test file   | `internal/tools/projects/projects_test.go` — 7,099 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~2,797 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 9,272 (impossible to avoid)                                                                          |
+| Source code printed at 55 lines/page | ~2,802 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 9,281 (impossible to avoid)                                                                          |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

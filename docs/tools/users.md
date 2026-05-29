@@ -194,6 +194,31 @@ Search namespaces by query string. Returns matching namespaces with pagination.
 
 ---
 
+## Instance Service Accounts (Enterprise/Premium)
+
+### `gitlab_create_service_account`
+
+Create a new instance-level service account. Optionally set `name`, `username`, and `email`. Requires admin token. Returns the created user object.
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
+### `gitlab_list_service_accounts`
+
+List all instance-level service accounts. Supports ordering by `id`, `username`, or `name` with `sort` direction and pagination.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_update_instance_service_account`
+
+Update an instance-level service account. Can change `name`, `username`, or `email`. Requires admin token. Returns the updated service account including `email` and `unconfirmed_email` fields.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
+
+---
+
 ## Group Service Accounts
 
 ### `gitlab_group_service_account_list`
@@ -275,13 +300,16 @@ Revoke a personal access token for a group service account.
 | 18 | `gitlab_namespace_get` | Namespaces | Read |
 | 19 | `gitlab_namespace_exists` | Namespaces | Read |
 | 20 | `gitlab_namespace_search` | Namespaces | Read |
-| 21 | `gitlab_group_service_account_list` | Service Accounts | Read |
-| 22 | `gitlab_group_service_account_create` | Service Accounts | Create |
-| 23 | `gitlab_group_service_account_update` | Service Accounts | Update |
-| 24 | `gitlab_group_service_account_delete` | Service Accounts | Delete |
-| 25 | `gitlab_group_service_account_pat_list` | Service Accounts | Read |
-| 26 | `gitlab_group_service_account_pat_create` | Service Accounts | Create |
-| 27 | `gitlab_group_service_account_pat_revoke` | Service Accounts | Delete |
+| 21 | `gitlab_create_service_account` | Instance Service Accounts | Create |
+| 22 | `gitlab_list_service_accounts` | Instance Service Accounts | Read |
+| 23 | `gitlab_update_instance_service_account` | Instance Service Accounts | Update |
+| 24 | `gitlab_group_service_account_list` | Group Service Accounts | Read |
+| 25 | `gitlab_group_service_account_create` | Group Service Accounts | Create |
+| 26 | `gitlab_group_service_account_update` | Group Service Accounts | Update |
+| 27 | `gitlab_group_service_account_delete` | Group Service Accounts | Delete |
+| 28 | `gitlab_group_service_account_pat_list` | Group Service Accounts | Read |
+| 29 | `gitlab_group_service_account_pat_create` | Group Service Accounts | Create |
+| 30 | `gitlab_group_service_account_pat_revoke` | Group Service Accounts | Delete |
 
 ### Destructive Tools (Require Confirmation)
 

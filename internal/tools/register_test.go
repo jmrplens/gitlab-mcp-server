@@ -168,7 +168,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 		if err != nil {
 			t.Fatalf(fmtListToolsErr, err)
 		}
-		const expectedTools = 1025
+		const expectedTools = 1027
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {
@@ -184,7 +184,7 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		const expectedTools = 866
+		const expectedTools = 867
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {

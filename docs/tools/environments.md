@@ -93,7 +93,7 @@ List deployments for a GitLab project. Supports filtering by environment name an
 
 ### `gitlab_deployment_get`
 
-Get details of a specific deployment in a GitLab project by its ID. Returns deployment ref, SHA, status, user, environment, and timestamps.
+Get details of a specific deployment in a GitLab project by its ID. Returns deployment ref, SHA, status, user, environment, timestamps, and `pipeline_web_url` (clickable link to the pipeline that triggered the deployment).
 
 | Annotation | **Read** |
 | ---------- | -------- |

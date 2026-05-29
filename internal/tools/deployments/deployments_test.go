@@ -110,6 +110,34 @@ func TestDeploymentList_CancelledContext(t *testing.T) {
 // deploymentGet tests
 // ---------------------------------------------------------------------------.
 
+// TestDeploymentGet_WithPipelineWebURL verifies that toOutput populates
+// PipelineWebURL when the deployable.pipeline.web_url field is non-empty.
+func TestDeploymentGet_WithPipelineWebURL(t *testing.T) {
+	const pipelineURL = "https://gitlab.example.com/my-org/project/-/pipelines/123"
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success",
+				"user":{"username":"admin"},
+				"environment":{"name":"production"},
+				"created_at":"2026-01-01T00:00:00Z",
+				"deployable":{"pipeline":{"web_url":"`+pipelineURL+`"}}
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.PipelineWebURL != pipelineURL {
+		t.Errorf("PipelineWebURL = %q, want %q", out.PipelineWebURL, pipelineURL)
+	}
+}
+
 // TestDeploymentGet_Success verifies DeploymentGet when success.
 func TestDeploymentGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

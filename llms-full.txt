@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.0.5 | up to 1031 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
+> Version 2.0.5 | up to 1033 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -2259,7 +2259,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>deployment_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"environment_name":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"ref":{"type":"string"},"sha":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"},"user_name":{"type":"string"}},"required":["id","iid","ref","sha","status"],"type":"object"}
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"environment_name":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_web_url":{"type":"string"},"ref":{"type":"string"},"sha":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"},"user_name":{"type":"string"}},"required":["id","iid","ref","sha","status"],"type":"object"}
 ```
 
 </details>
@@ -2275,7 +2275,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>deployment_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"environment_name":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"ref":{"type":"string"},"sha":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"},"user_name":{"type":"string"}},"required":["id","iid","ref","sha","status"],"type":"object"}
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"environment_name":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_web_url":{"type":"string"},"ref":{"type":"string"},"sha":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"},"user_name":{"type":"string"}},"required":["id","iid","ref","sha","status"],"type":"object"}
 ```
 
 </details>
@@ -2283,7 +2283,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>deployment_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"deployments":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"environment_name":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"ref":{"type":"string"},"sha":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"},"user_name":{"type":"string"}},"required":["id","iid","ref","sha","status"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["deployments","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"deployments":{"items":{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"environment_name":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_web_url":{"type":"string"},"ref":{"type":"string"},"sha":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"},"user_name":{"type":"string"}},"required":["id","iid","ref","sha","status"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["deployments","pagination"],"type":"object"}
 ```
 
 </details>
@@ -2299,7 +2299,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>deployment_update</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"environment_name":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"ref":{"type":"string"},"sha":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"},"user_name":{"type":"string"}},"required":["id","iid","ref","sha","status"],"type":"object"}
+{"additionalProperties":false,"properties":{"created_at":{"type":"string"},"environment_name":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pipeline_web_url":{"type":"string"},"ref":{"type":"string"},"sha":{"type":"string"},"status":{"type":"string"},"updated_at":{"type":"string"},"user_name":{"type":"string"}},"required":["id","iid","ref","sha","status"],"type":"object"}
 ```
 
 </details>
@@ -4038,6 +4038,7 @@ Action guidance:
 - work_item_delete: Use to execute workitems domain action.
 - work_item_get: Use to execute workitems domain action.
 - work_item_list: Use to execute workitems domain action.
+- work_item_type_list: Use to execute workitems domain action.
 - work_item_update: Use to execute workitems domain action.
 Parameter guidance:
 - create.due_date: calendar_date; source: Requested due date in ISO format when the user specifies one.; avoid: Use YYYY-MM-DD; natural-language dates must be normalized before calling the tool.
@@ -4651,6 +4652,14 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ```json
 {"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"work_items":{"items":{"additionalProperties":false,"properties":{"assignees":{"items":{"type":"string"},"type":["null","array"]},"author":{"type":"string"},"closed_at":{"type":"string"},"confidential":{"type":"boolean"},"created_at":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"iid":{"type":"integer"},"labels":{"items":{"type":"string"},"type":["null","array"]},"linked_items":{"items":{"additionalProperties":false,"properties":{"iid":{"type":"integer"},"link_type":{"type":"string"},"path":{"type":"string"}},"required":["iid","link_type"],"type":"object"},"type":["null","array"]},"state":{"type":"string"},"status":{"type":"string"},"title":{"type":"string"},"type":{"type":"string"},"updated_at":{"type":"string"},"web_url":{"type":"string"}},"required":["id","iid","type","state","title"],"type":"object"},"type":["null","array"]}},"required":["work_items"],"type":"object"}
+```
+
+</details>
+
+<details><summary>work_item_type_list</summary>
+
+```json
+{"additionalProperties":false,"properties":{"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"end_cursor":{"type":"string"},"has_next_page":{"type":"boolean"},"has_previous_page":{"type":"boolean"},"start_cursor":{"type":"string"}},"required":["has_next_page","has_previous_page"],"type":"object"},"types":{"items":{"additionalProperties":false,"properties":{"enabled":{"type":"boolean"},"id":{"type":"string"},"name":{"type":"string"}},"required":["id","name","enabled"],"type":"object"},"type":["null","array"]}},"required":["types","pagination"],"type":"object"}
 ```
 
 </details>
@@ -10469,7 +10478,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>list_service_accounts</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"accounts":{"items":{"additionalProperties":false,"properties":{"id":{"type":"integer"},"name":{"type":"string"},"username":{"type":"string"}},"required":["id","username","name"],"type":"object"},"type":["null","array"]}},"required":["accounts"],"type":"object"}
+{"additionalProperties":false,"properties":{"accounts":{"items":{"additionalProperties":false,"properties":{"email":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"unconfirmed_email":{"type":"string"},"username":{"type":"string"}},"required":["id","username","name"],"type":"object"},"type":["null","array"]}},"required":["accounts"],"type":"object"}
 ```
 
 </details>
@@ -10654,6 +10663,14 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 ```json
 {"additionalProperties":false,"properties":{"action":{"type":"string"},"success":{"type":"boolean"},"user_id":{"type":"integer"}},"required":["user_id","action","success"],"type":"object"}
+```
+
+</details>
+
+<details><summary>update_service_account</summary>
+
+```json
+{"additionalProperties":false,"properties":{"email":{"type":"string"},"id":{"type":"integer"},"name":{"type":"string"},"unconfirmed_email":{"type":"string"},"username":{"type":"string"}},"required":["id","username","name"],"type":"object"}
 ```
 
 </details>
@@ -11844,7 +11861,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When `TOOL_SURFACE=individual`, up to 1031 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1025.
+When `TOOL_SURFACE=individual`, up to 1033 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1027.
 Grouped by domain:
 
 ### access (8 tools)
@@ -18087,11 +18104,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_job_cancel
 
-Cancel a running or pending CI/CD job in a GitLab project. Returns the updated job details.
+Cancel a CI job. Set force:true to cancel jobs already in a non-cancellable state (requires GitLab v17.2+). Returns: updated job state. See also: gitlab_job_get, gitlab_job_retry.
 
 **Parameters:**
 
-- `job_id` (integer) (required): Job ID to act on
+- `force` (boolean): Force cancel even if the job is already in a non-cancellable state
+- `job_id` (integer) (required): Job ID to cancel
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -18383,7 +18401,7 @@ Update an existing project label. Can change name, color, description, or priori
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### list (78 tools)
+### list (79 tools)
 
 #### gitlab_list_alert_metric_images
 
@@ -19318,6 +19336,20 @@ List project vulnerabilities (requires Ultimate/Premium). Supports filtering by 
 - `severity` (array of strings): Filter by severity: CRITICAL, HIGH, MEDIUM, LOW, INFO, UNKNOWN
 - `sort` (string): Sort order: severity_desc, severity_asc, detected_desc, detected_asc
 - `state` (array of strings): Filter by state: DETECTED, CONFIRMED, DISMISSED, RESOLVED
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_list_work_item_types
+
+Use to execute workitems domain action.
+
+**Parameters:**
+
+- `after` (string): Cursor for forward pagination
+- `first` (integer): Number of types to return from the beginning (cursor pagination)
+- `full_path` (string) (required): Project or group full path (namespace path)
+- `name` (string): Filter by work item type name
+- `only_available` (boolean): Return only available work item types
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -23322,11 +23354,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_repository_compare
 
-Compare two branches, tags, or commits in a GitLab repository. Returns the list of commits between them and the diffs (changed files) with old/new paths and diff text.
+Compare two refs (branches, tags, or commits) in a project. Use from_project_id for cross-project comparison. Returns: commits, diffs, and comparison metadata. See also: gitlab_repository_tree, gitlab_branch_list.
 
 **Parameters:**
 
 - `from` (string) (required): Branch name, tag, or commit SHA to compare from
+- `from_project_id` (integer): Source project ID for cross-project comparison
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `straight` (boolean): Use straight comparison (from..to) instead of merge-base (from...to)
 - `to` (string) (required): Branch name, tag, or commit SHA to compare to
@@ -24879,7 +24912,7 @@ Unlock a Terraform state
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### update (23 tools)
+### update (24 tools)
 
 #### gitlab_update_alert_metric_image
 
@@ -25023,6 +25056,19 @@ Enable or disable secret push protection for a GitLab group. Optionally exclude 
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `projects_to_exclude` (array of integers): Project IDs to exclude from group-level protection
 - `secret_push_protection_enabled` (boolean) (required): Enable or disable secret push protection
+
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_update_instance_service_account
+
+Use to execute users domain action.
+
+**Parameters:**
+
+- `email` (string): New email for the service account
+- `name` (string): New name for the service account
+- `service_account_id` (integer) (required): Service account ID to update
+- `username` (string): New username for the service account
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 

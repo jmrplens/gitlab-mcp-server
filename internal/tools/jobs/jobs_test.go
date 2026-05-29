@@ -959,6 +959,38 @@ func TestJobCancel_NotFoundAPIError(t *testing.T) {
 	assertContains(t, err, "gitlab_job_list")
 }
 
+// TestJobCancel_ForceTrue verifies Cancel with Force=true routes to
+// CancelJobWithOptions and returns the cancelled job on success.
+func TestJobCancel_ForceTrue(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathJobCancel {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":100,"name":"build","stage":"build","status":"canceled",
+				"ref":"main","tag":false,"duration":10.0,"queued_duration":1.0,
+				"web_url":"https://gitlab.example.com/-/jobs/100",
+				"pipeline":{"id":10},"created_at":"2026-03-01T10:00:00Z"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Cancel(context.Background(), client, CancelInput{
+		ProjectID: "42",
+		JobID:     100,
+		Force:     true,
+	})
+	if err != nil {
+		t.Fatalf("Cancel(Force=true) unexpected error: %v", err)
+	}
+	if out.Status != "canceled" {
+		t.Errorf("out.Status = %q, want canceled", out.Status)
+	}
+	if out.ID != 100 {
+		t.Errorf(fmtIDWant100, out.ID)
+	}
+}
+
 // TestJobCancel_CancelledContext verifies JobCancel when cancelled context.
 func TestJobCancel_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

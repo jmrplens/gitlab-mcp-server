@@ -391,6 +391,13 @@ Permanently delete a work item by IID. This action cannot be undone. Experimenta
 
 > **Destructive**: Protected by confirmation prompt.
 
+### `gitlab_list_work_item_types`
+
+List available work item types (system-defined and custom) for a project or group namespace. Returns type ID, name, and enabled flag. Supports filtering by name and `only_available`, with cursor-based pagination. Experimental: the Work Items API may introduce breaking changes between minor versions.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
 ---
 
 ## Tool Summary
@@ -441,6 +448,7 @@ Permanently delete a work item by IID. This action cannot be undone. Experimenta
 | 42 | `gitlab_create_work_item` | Work Items | Create |
 | 43 | `gitlab_update_work_item` | Work Items | Update |
 | 44 | `gitlab_delete_work_item` | Work Items | Delete |
+| 45 | `gitlab_list_work_item_types` | Work Items | Read |
 
 ### Destructive Tools (Require Confirmation)
 
