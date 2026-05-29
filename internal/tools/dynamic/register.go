@@ -23,6 +23,10 @@ var searchStopWordsMap = map[string]struct{}{
 }
 
 const (
+	aliasProtectedEnvironment  = "protected environment"
+	aliasEnvironmentProtection = "environment protection"
+	aliasMergeRequest          = "merge request"
+
 	findToolName          = "gitlab_find_action"
 	executeActionToolName = "gitlab_execute_action"
 
@@ -931,7 +935,7 @@ func (r *Registry) suggestSearchTokens(query string, limit int) []string {
 		seen[item.value] = struct{}{}
 		values = append(values, item.value)
 	}
-	for _, fallback := range []string{"project", "issue", "merge request", "pipeline", "branch", "user"} {
+	for _, fallback := range []string{"project", "issue", aliasMergeRequest, "pipeline", "branch", "user"} {
 		if len(values) >= limit {
 			break
 		}
@@ -1192,7 +1196,7 @@ func addInteractiveActionTags(add tagCollector, action string) {
 	case "issue_create":
 		add("issue", "create", "creation", "flow", "start", "guided issue creation", "guided issue creation flow", "issue creation flow", "issue wizard", "start guided issue creation")
 	case "mr_create":
-		add("merge request", "mr", "create", "creation", "flow", "start", "merge request create", "create merge request", "mr create", "create mr", "guided merge request creation", "guided mr creation", "merge request creation flow", "mr wizard", "start guided merge request creation")
+		add(aliasMergeRequest, "mr", "create", "creation", "flow", "start", "merge request create", "create merge request", "mr create", "create mr", "guided merge request creation", "guided mr creation", "merge request creation flow", "mr wizard", "start guided merge request creation")
 	case "release_create":
 		add("release", "create", "creation", "flow", "start", "guided release creation", "guided release creation flow", "release creation flow", "release wizard", "start guided release creation")
 	}
@@ -1215,7 +1219,7 @@ func addCoreDomainTags(add tagCollector, _, domain, action string) bool {
 	case domain == "ci_catalog":
 		addCICatalogActionTags(add, action)
 	case domain == "merge_request":
-		add("mr", "merge request")
+		add("mr", aliasMergeRequest)
 	case domain == "mr_review":
 		addMRReviewActionTags(add, action)
 	case domain == "ci_variable":
@@ -1296,7 +1300,7 @@ func addEnvironmentAndCITags(add tagCollector, _, domain, action string) bool {
 func addEnvironmentActionTags(add tagCollector, action string) {
 	switch {
 	case strings.HasPrefix(action, "protected_"):
-		add("protected environment", "environment protection")
+		add(aliasProtectedEnvironment, aliasEnvironmentProtection)
 		addProtectedEnvironmentActionTags(add, action)
 	case strings.HasPrefix(action, "deployment_"):
 		add("environment deployment", "deployment list", "deployment approval", "deployment approve", "deployment reject")
@@ -1485,12 +1489,12 @@ func addProtectionTags(add tagCollector, id, domain, action string) bool {
 		add("group protected branch", "group branch protection", "protected branch rule", "branch pattern")
 		addGroupProtectedBranchActionTags(add, action)
 	case domain == "group" && (strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment")):
-		add("group protected environment", "group environment protection", "group deployment gate", "protected environment", "environment protection")
+		add("group protected environment", "group environment protection", "group deployment gate", aliasProtectedEnvironment, aliasEnvironmentProtection)
 		addGroupProtectedEnvironmentActionTags(add, action)
 	case domain == "branch" && (action == "protect" || action == "get_protected" || action == "update_protected" || action == "unprotect"):
 		add("protected branch", "branch protection")
 	case strings.Contains(id, "protected_env") || strings.Contains(id, "protected_environment"):
-		add("protected environment", "environment protection")
+		add(aliasProtectedEnvironment, aliasEnvironmentProtection)
 	case strings.Contains(id, "member_role"):
 		add("custom role", "member role")
 	default:

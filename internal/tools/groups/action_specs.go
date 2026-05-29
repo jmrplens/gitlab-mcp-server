@@ -9,6 +9,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const actionGroupGet = "group.get"
+
 // ActionSpecs returns canonical specs for core group and group hook actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -105,7 +107,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 	case "gitlab_group_list":
 		options.Usage = "List groups visible to the authenticated user. Use search, owned, min_access_level, and pagination when the user asks for matching or accessible groups."
 		options.Aliases = []string{"list groups", "show visible groups", "find groups"}
-		options.RelatedActions = []string{"group.get", "group.search", "group.create"}
+		options.RelatedActions = []string{actionGroupGet, "group.search", "group.create"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"search": {
 				ValueSource:      "Group name/path keywords from the user query.",
@@ -117,7 +119,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 	case "gitlab_group_create":
 		options.Usage = "Create a group with name and path. Optionally set parent_id, description, visibility, and project creation permissions when requested."
 		options.Aliases = []string{"create group", "create subgroup", "new group"}
-		options.RelatedActions = []string{"group.get", "group.update", "group.delete"}
+		options.RelatedActions = []string{actionGroupGet, "group.update", "group.delete"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"name": {
 				SemanticRole:   "group_name",
@@ -133,7 +135,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		}
 		options.IndividualTool.Description = "Create a GitLab group or subgroup. Returns: created group metadata including ID, full path, and visibility. See also: gitlab_group_get, gitlab_group_update, gitlab_group_delete."
 	case "gitlab_group_members_list":
-		options.RelatedActions = []string{"group.get", "group.projects", "group.member_add"}
+		options.RelatedActions = []string{actionGroupGet, "group.projects", "group.member_add"}
 	}
 
 	return options

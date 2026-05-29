@@ -154,6 +154,8 @@ type ListOutput struct {
 	WorkItems []WorkItemItem `json:"work_items"`
 }
 
+const errHintWorkItemsFullPath = "verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)"
+
 const queryListWorkItems = `
 query ListWorkItems(
   $fullPath: ID!
@@ -206,14 +208,18 @@ query ListWorkItems(
 }
 `
 
+type listWorkItemsNamespace struct {
+	WorkItems struct {
+		Nodes []gqlListWorkItem `json:"nodes"`
+	} `json:"workItems"`
+}
+
+type listWorkItemsData struct {
+	Namespace *listWorkItemsNamespace `json:"namespace"`
+}
+
 type listWorkItemsResponse struct {
-	Data struct {
-		Namespace *struct {
-			WorkItems struct {
-				Nodes []gqlListWorkItem `json:"nodes"`
-			} `json:"workItems"`
-		} `json:"namespace"`
-	} `json:"data"`
+	Data listWorkItemsData `json:"data"`
 	gl.GenericGraphQLErrors
 }
 
@@ -290,17 +296,17 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list_work_items", err, http.StatusNotFound,
-			"verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)")
+			errHintWorkItemsFullPath)
 	}
 	if len(resp.Errors) > 0 {
 		return ListOutput{}, toolutil.WrapErrWithHint("list_work_items", &gl.GraphQLResponseError{
 			Err:    errors.New("GraphQL query failed"),
 			Errors: resp.GenericGraphQLErrors,
-		}, "verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)")
+		}, errHintWorkItemsFullPath)
 	}
 	if resp.Data.Namespace == nil {
 		return ListOutput{}, toolutil.WrapErrWithHint("list_work_items", gl.ErrNotFound,
-			"verify full_path with gitlab_project_list or gitlab_group_list; Work Items API requires Premium/Ultimate for some types (Epic, Objective, Key Result)")
+			errHintWorkItemsFullPath)
 	}
 
 	items := resp.Data.Namespace.WorkItems.Nodes

@@ -1,5 +1,7 @@
 package cases
 
+const evalMT099 = "MT-099"
+
 //nolint:maintidx // Static table keeps destructive case definitions close to their expected workflow order.
 func destructiveEvalCases() []Case {
 	return []Case{
@@ -23,7 +25,7 @@ func destructiveEvalCases() []Case {
 		baseDestructiveEvalCase("MT-063", "Publish all draft review notes for MR `7` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_mr_review", "draft_note_publish_all", params("project_id", "merge_request_iid"), nil)),
 		baseDestructiveEvalCase("MT-066", "Remove project ID `123` from the CI job token allowlist of project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab_job", "token_scope_remove_project", params("project_id", "target_project_id"), params("confirm"))),
 		baseDestructiveEvalCase("MT-069", "Delete instance CI variable `INSTANCE_EVAL_TOKEN`.", destructiveStep("gitlab_ci_variable", "instance_delete", params("key"), params("confirm"))),
-		baseDestructiveEvalCase("MT-099", "Delete branch `obsolete/eval` from project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab_branch", "delete", params("project_id", "branch_name"), params("confirm"))),
+		baseDestructiveEvalCase(evalMT099, "Delete branch `obsolete/eval` from project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab_branch", "delete", params("project_id", "branch_name"), params("confirm"))),
 		baseDestructiveEvalCase("MT-100", "Delete tag `v0.0.0-eval` from project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab_tag", "delete", params("project_id", "tag_name"), params("confirm"))),
 		baseDestructiveEvalCase("MT-101", "Permanently delete pipeline `12345` from project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab_pipeline", "delete", params("project_id", "pipeline_id"), params("confirm"))),
 		baseDestructiveEvalCase("MT-102", "Delete pipeline trigger token ID `77` from project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab_pipeline", "trigger_delete", params("project_id", "trigger_id"), params("confirm"))),
@@ -276,7 +278,7 @@ func baseDestructivePromptTemplateAndFixtures(id string) (template string, fixtu
 	switch {
 	case len(id) >= 3 && id[:3] == "MS-":
 		return baseDestructiveWorkflowPromptTemplateAndFixtures(id)
-	case id >= "MT-099":
+	case id >= evalMT099:
 		return baseDestructiveLateSinglePromptTemplateAndFixtures(id)
 	default:
 		return baseDestructiveEarlySinglePromptTemplateAndFixtures(id)
@@ -333,7 +335,7 @@ func baseDestructiveEarlySinglePromptTemplateAndFixtures(id string) (template st
 
 func baseDestructiveLateSinglePromptTemplateAndFixtures(id string) (template string, fixtures []string) {
 	switch id {
-	case "MT-099":
+	case evalMT099:
 		return "Delete branch `{{ .Branch.Name }}` from project `{{ .Project.Path }}`.", []string{fixtureBranchDelete}
 	case "MT-100":
 		return "Delete tag `{{ .Tag.Name }}` from project `{{ .Project.Path }}`.", []string{fixtureTagDelete}

@@ -9,6 +9,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const actionDeploymentList = "deployment.list"
+
 // ActionSpecs returns canonical specs for environment actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -60,7 +62,7 @@ func environmentStopSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 func environmentOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute environments domain action.", Tags: []string{"environment", "deployment"},
-		RelatedActions: []string{"deployment.list", "ci_variable.list", "feature_flags.strategy_list"},
+		RelatedActions: []string{actionDeploymentList, "ci_variable.list", "feature_flags.strategy_list"},
 		OpenWorld:      true,
 		OwnerPackage:   "environments",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -70,7 +72,7 @@ func environmentOptionsForAction(actionName, individualTool string) toolutil.Act
 	case "list":
 		options.Usage = "List environments in one project with filters and pagination. Use this to discover environment IDs before get/update/stop/delete operations."
 		options.Aliases = []string{"list environments", "show environments", "find environments"}
-		options.RelatedActions = []string{"environment.get", "environment.stop", "deployment.list"}
+		options.RelatedActions = []string{"environment.get", "environment.stop", actionDeploymentList}
 	case "get":
 		options.Usage = "Get one environment by environment_id. Use when inspecting state, tier, external URL, and stop behavior of a specific environment."
 		options.Aliases = []string{"get environment", "show environment details", "lookup environment"}
@@ -89,7 +91,7 @@ func environmentOptionsForAction(actionName, individualTool string) toolutil.Act
 	case "stop":
 		options.Usage = "Stop an active environment. This is modeled as a delete-style action but intentionally marked non-destructive because it changes runtime state without deleting the environment resource."
 		options.Aliases = []string{"stop environment", "pause environment", "halt environment"}
-		options.RelatedActions = []string{"environment.get", "deployment.list"}
+		options.RelatedActions = []string{"environment.get", actionDeploymentList}
 	}
 
 	return options

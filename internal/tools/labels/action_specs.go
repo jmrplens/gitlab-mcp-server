@@ -9,6 +9,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const actionIssueList = "issue.list"
+
 // ActionSpecs returns canonical specs for project label actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -57,7 +59,7 @@ func labelDeleteSpec(name string, route toolutil.ActionRoute, individualTool str
 func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute labels domain action.", Tags: []string{"project", "label"},
-		RelatedActions: []string{"project.get", "issue.list"},
+		RelatedActions: []string{"project.get", actionIssueList},
 		OpenWorld:      true,
 		OwnerPackage:   "labels",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -67,7 +69,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 	case "label_list":
 		options.Usage = "List labels for a project with optional search and pagination. Use to discover taxonomy before issue/MR filtering or label maintenance."
 		options.Aliases = []string{"list labels", "show project labels", "find labels"}
-		options.RelatedActions = []string{"label.get", "label.create", "issue.list"}
+		options.RelatedActions = []string{"label.get", "label.create", actionIssueList}
 	case "label_get":
 		options.Usage = "Get one label by project_id and label_id (label name/ID route parameter). Use when exact label metadata is needed."
 		options.Aliases = []string{"get label", "show label details", "lookup label"}
@@ -82,7 +84,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 	case "label_create":
 		options.Usage = "Create a label in a project with required name and color, plus optional description and priority."
 		options.Aliases = []string{"create label", "add label", "new label"}
-		options.RelatedActions = []string{"label.get", "label.update", "issue.list"}
+		options.RelatedActions = []string{"label.get", "label.update", actionIssueList}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"color": {
 				SemanticRole:     "hex_color",

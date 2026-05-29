@@ -89,6 +89,10 @@ const (
 	flagSkipDestructive = "skip-destructive"
 	// flagSkipMutating identifies the flag skip mutating constant used by this package.
 	flagSkipMutating = "skip-mutating"
+	// flagOnlyDestructive identifies the flag only destructive constant used by this package.
+	flagOnlyDestructive = "only-destructive"
+	// flagOnlyMutating identifies the flag only mutating constant used by this package.
+	flagOnlyMutating = "only-mutating"
 	// flagSkipUnavailable identifies the flag skip unavailable constant used by this package.
 	flagSkipUnavailable = "skip-unavailable"
 	// promptMarkerIssue identifies the prompt marker issue constant used by this package.

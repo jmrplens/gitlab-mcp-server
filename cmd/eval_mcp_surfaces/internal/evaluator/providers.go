@@ -681,8 +681,8 @@ func lastBuilderByteIsWhitespace(builder *strings.Builder) bool {
 	if builder.Len() == 0 {
 		return false
 	}
-	value := builder.String()
-	return isJSONWhitespace(value[len(value)-1])
+	s := builder.String()
+	return isJSONWhitespace(s[len(s)-1])
 }
 
 func parseOpenAIJSONObjectFragment(candidate string) (map[string]any, bool) {

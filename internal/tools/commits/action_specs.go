@@ -5,6 +5,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionRepositoryTree = "repository.tree"
+	actionCommitDiff     = "commit.diff"
+	actionCommitGet      = "commit.get"
+)
+
 // ActionSpecs returns canonical specs for commit actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -40,7 +46,7 @@ func commitUpdateSpec(name string, route toolutil.ActionRoute, individualTool st
 func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute commits domain action.", Tags: []string{"repository", "commit"},
-		RelatedActions: []string{"repository.tree", "branch.list"},
+		RelatedActions: []string{actionRepositoryTree, "branch.list"},
 		OpenWorld:      true,
 		OwnerPackage:   "commits",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -50,7 +56,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 	case "commit_list":
 		options.Usage = "List commits for a project/ref with pagination. Use this to inspect history before selecting a commit for diff, comments, statuses, or revert/cherry-pick workflows."
 		options.Aliases = []string{"list commits", "show commit history", "find commits"}
-		options.RelatedActions = []string{"commit.get", "commit.diff", "commit.statuses"}
+		options.RelatedActions = []string{actionCommitGet, actionCommitDiff, "commit.statuses"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
@@ -61,7 +67,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 	case "file_history":
 		options.Usage = "List commit history for repository content context. This action projects to the same individual tool as commit_list and should preserve the same discovery guidance."
 		options.Aliases = []string{"file history", "history of changes", "list file commits"}
-		options.RelatedActions = []string{"commit.get", "commit.diff", "repository.tree"}
+		options.RelatedActions = []string{actionCommitGet, actionCommitDiff, actionRepositoryTree}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
@@ -72,7 +78,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 	case "commit_get":
 		options.Usage = "Get detailed commit information by sha. Use this when a specific commit is referenced and full metadata/message/stats are needed."
 		options.Aliases = []string{"get commit", "show commit details", "lookup commit"}
-		options.RelatedActions = []string{"commit.list", "commit.diff", "commit.refs"}
+		options.RelatedActions = []string{"commit.list", actionCommitDiff, "commit.refs"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"sha": {
 				SemanticRole:   "commit_sha",
@@ -83,7 +89,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 	case "commit_create":
 		options.Usage = "Create a commit by applying file actions to a branch. Use for multi-file changes where repository file APIs are not enough."
 		options.Aliases = []string{"create commit", "commit file changes", "batch commit changes"}
-		options.RelatedActions = []string{"branch.list", "repository.tree", "commit.get"}
+		options.RelatedActions = []string{"branch.list", actionRepositoryTree, actionCommitGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"branch": {
 				SemanticRole:   "git_branch",

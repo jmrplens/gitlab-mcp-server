@@ -100,7 +100,7 @@ func Run() (runErr error) {
 
 func prepareRunFailureReport(opts options, currentRunErr func() error, setRunErr func(error), finalReportWritten func() bool) (func(), error) {
 	if !shouldWriteStartupReport(opts) {
-		return func() {}, nil
+		return func() { /* no cleanup needed when startup report is skipped */ }, nil
 	}
 	if writeErr := writeStartupReport(opts.Output, opts); writeErr != nil {
 		return nil, writeErr

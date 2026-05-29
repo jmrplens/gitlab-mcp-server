@@ -9,6 +9,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const actionBranchList = "branch.list"
+
 // ActionSpecs returns canonical specs for branch and protected branch actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -43,7 +45,7 @@ func branchGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 func branchSpec(name string, route toolutil.ActionRoute, individualTool string, readOnly, idempotent bool) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute branches domain action.", Tags: []string{"branch"},
-		RelatedActions: []string{"branch.list", "branch.get", "repository.tree", "merge_request.create"},
+		RelatedActions: []string{actionBranchList, "branch.get", "repository.tree", "merge_request.create"},
 		OpenWorld:      true,
 		OwnerPackage:   "branches",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -64,7 +66,7 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 	case "get":
 		options.Usage = "Get one branch by project_id and branch_name. Use when a specific branch is referenced and exact branch protection/default metadata is needed."
 		options.Aliases = []string{"get branch", "show branch details", "lookup branch"}
-		options.RelatedActions = []string{"branch.list", "branch.protect", "branch.unprotect"}
+		options.RelatedActions = []string{actionBranchList, "branch.protect", "branch.unprotect"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"branch_name": {
 				SemanticRole:   "git_branch",
@@ -75,7 +77,7 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 	case "create":
 		options.Usage = "Create a branch from a source ref (branch/tag/commit). Use when preparing feature branches or release branches."
 		options.Aliases = []string{"create branch", "new branch", "branch from ref"}
-		options.RelatedActions = []string{"branch.list", "merge_request.create", "repository.compare"}
+		options.RelatedActions = []string{actionBranchList, "merge_request.create", "repository.compare"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"branch_name": {
 				SemanticRole:   "git_branch",
@@ -91,11 +93,11 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 	case "delete":
 		options.Usage = "Delete one branch by name. Use only for confirmed cleanup tasks when the branch is no longer needed."
 		options.Aliases = []string{"delete branch", "remove branch", "drop branch"}
-		options.RelatedActions = []string{"branch.list", "branch.unprotect"}
+		options.RelatedActions = []string{actionBranchList, "branch.unprotect"}
 	case "delete_merged":
 		options.Usage = "Delete merged branches in a project. Use with caution for branch hygiene after confirming merge status requirements."
 		options.Aliases = []string{"delete merged branches", "cleanup merged branches", "prune merged branches"}
-		options.RelatedActions = []string{"branch.list", "merge_request.list"}
+		options.RelatedActions = []string{actionBranchList, "merge_request.list"}
 	}
 
 	if name == "protect" {

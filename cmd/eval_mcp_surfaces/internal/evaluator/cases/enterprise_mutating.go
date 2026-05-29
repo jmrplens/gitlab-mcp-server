@@ -1,5 +1,11 @@
 package cases
 
+const (
+	evalMT192 = "MT-192"
+	evalMT195 = "MT-195"
+	evalMS054 = "MS-054"
+)
+
 func enterpriseMutatingEvalCases() []Case {
 	return []Case{
 		baseEnterpriseMutatingEvalCase("MS-006", "Check deployment gate state for project `my-org/tools/gitlab-mcp-server` and remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git`: resolve the project, list available environments, inspect protected environment `production`, list production deployments, then approve deployment ID `77`. Do not call deployment approval until after the deployment list step completes.",
@@ -37,11 +43,11 @@ func enterpriseMutatingEvalCases() []Case {
 		baseEnterpriseMutatingEvalCase("MT-182", "Update project service account user ID `55` in project `my-org/tools/gitlab-mcp-server` to name `eval-project-bot-v2`.", readStep("gitlab", "project.service_account_update", params("project_id", "service_account_id"), params("name", "username", "email"))),
 		baseEnterpriseMutatingEvalCase("MT-185", "Create personal access token `eval-project-bot-token` with scope `api` for project service account user ID `55` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab", "project.service_account_pat_create", params("project_id", "service_account_id", "name", "scopes"), params("description"))),
 		baseEnterpriseMutatingEvalCase("MT-186", "Rotate project service account PAT ID `66` for project service account user ID `55` in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab", "project.service_account_pat_rotate", params("project_id", "service_account_id", "token_id"), nil)),
-		baseEnterpriseMutatingEvalCase("MT-192", "Add a project push rule to project `my-org/tools/gitlab-mcp-server` with commit message regex `^EVAL-`.", readStep("gitlab_project", "push_rule_add", params("project_id"), params("commit_message_regex", "reject_unsigned_commits"))),
+		baseEnterpriseMutatingEvalCase(evalMT192, "Add a project push rule to project `my-org/tools/gitlab-mcp-server` with commit message regex `^EVAL-`.", readStep("gitlab_project", "push_rule_add", params("project_id"), params("commit_message_regex", "reject_unsigned_commits"))),
 		baseEnterpriseMutatingEvalCase("MT-193", "Edit the project push rule in project `my-org/tools/gitlab-mcp-server` to reject unsigned commits.", readStep("gitlab_project", "push_rule_edit", params("project_id"), params("reject_unsigned_commits", "commit_message_regex"))),
 		baseEnterpriseMutatingEvalCase("MT-194", "Update project security settings for project `my-org/tools/gitlab-mcp-server` to set `secret_push_protection_enabled` to true.", readStep("gitlab_project", "security_settings_update", params("project_id", "secret_push_protection_enabled"), nil)),
-		baseEnterpriseMutatingEvalCase("MT-195", "Update project service account user ID `55` in project `my-org/tools/gitlab-mcp-server` to name `eval-project-bot-live`.", readStep("gitlab_project", "service_account_update", params("project_id", "service_account_id"), params("name", "username", "email"))),
-		baseEnterpriseMutatingEvalCase("MS-054", "Exercise Enterprise project mutating settings in project `my-org/tools/gitlab-mcp-server`: get project security settings, update `secret_push_protection_enabled` to true, list project service accounts, then update project service account user ID `55` to name `eval-project-bot-workflow`.",
+		baseEnterpriseMutatingEvalCase(evalMT195, "Update project service account user ID `55` in project `my-org/tools/gitlab-mcp-server` to name `eval-project-bot-live`.", readStep("gitlab_project", "service_account_update", params("project_id", "service_account_id"), params("name", "username", "email"))),
+		baseEnterpriseMutatingEvalCase(evalMS054, "Exercise Enterprise project mutating settings in project `my-org/tools/gitlab-mcp-server`: get project security settings, update `secret_push_protection_enabled` to true, list project service accounts, then update project service account user ID `55` to name `eval-project-bot-workflow`.",
 			readStep("gitlab_project", "security_settings_get", params("project_id"), nil),
 			readStep("gitlab_project", "security_settings_update", params("project_id", "secret_push_protection_enabled"), nil),
 			readStep("gitlab_project", "service_account_list", params("project_id"), params("per_page")),
@@ -52,7 +58,7 @@ func enterpriseMutatingEvalCases() []Case {
 
 func baseEnterpriseMutatingEvalCase(id, prompt string, steps ...Step) Case {
 	presets := []string{presetSchemaEnterprise}
-	if (id >= "MT-192" && id <= "MT-195") || id == "MS-054" {
+	if (id >= evalMT192 && id <= evalMT195) || id == evalMS054 {
 		presets = append(presets, presetDockerEnterpriseMutatingSafe)
 	}
 	promptTemplate, fixtures := enterpriseMutatingPromptTemplateAndFixtures(id, prompt)
@@ -72,13 +78,13 @@ func baseEnterpriseMutatingEvalCase(id, prompt string, steps ...Step) Case {
 
 func enterpriseMutatingPromptTemplateAndFixtures(id, prompt string) (promptTemplate PromptTemplate, fixtures []string) {
 	switch id {
-	case "MT-192":
+	case evalMT192:
 		return PromptTemplate{Text: "Add a project push rule to project `{{.Project.Path}}` with commit message regex `^EVAL-`. Only add the rule; do not edit or delete it."}, []string{fixtureEnterprisePushRuleProject}
 	case "MT-193":
 		return PromptTemplate{Text: "Edit the project push rule in project `{{.Project.Path}}` to reject unsigned commits."}, []string{fixtureEnterprisePushRuleProjectSeeded}
-	case "MT-195":
+	case evalMT195:
 		return PromptTemplate{Text: "Update project service account user ID `{{.Values.project_service_account_id}}` in project `{{.Project.Path}}` to name `eval-project-bot-live`."}, []string{fixtureProjectServiceAccount}
-	case "MS-054":
+	case evalMS054:
 		return PromptTemplate{Text: "Exercise Enterprise project mutating settings in project `{{.Project.Path}}`: get project security settings, update `secret_push_protection_enabled` to true, list project service accounts, then update project service account user ID `{{.Values.project_service_account_id}}` to name `eval-project-bot-workflow`."}, []string{fixtureProjectServiceAccount}
 	default:
 		return PromptTemplate{Text: prompt}, nil

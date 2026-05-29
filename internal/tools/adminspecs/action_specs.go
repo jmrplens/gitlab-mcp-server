@@ -28,6 +28,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionAdminSettingsGet = "admin.settings_get"
+	actionAdminMetadataGet = "admin.metadata_get"
+)
+
 // ActionSpecs returns canonical specs for gitlab_admin meta-tool actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -195,7 +200,7 @@ func adminMetadataGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Usage = "Read GitLab instance metadata such as version and revision. Do not use this for application settings."
 	options.Aliases = []string{"instance metadata", "gitlab version", "server metadata", "gitlab revision"}
 	options.Tags = append(options.Tags, "metadata", "version")
-	options.RelatedActions = []string{"admin.settings_get", "admin.app_statistics_get", "server.health_check"}
+	options.RelatedActions = []string{actionAdminSettingsGet, "admin.app_statistics_get", "server.health_check"}
 	options.IndividualTool.Description = "Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag. Returns: the current instance metadata object. See also: gitlab_server_status, gitlab_get_settings, gitlab_get_application_statistics."
 	return toolutil.NewReadActionSpec("metadata_get", toolutil.RouteAction(client, metadata.Get), options)
 }
@@ -205,7 +210,7 @@ func adminAppearanceGetSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Usage = "Read the current GitLab application appearance and branding settings. Use this for logos, banners, PWA labels, and instance message colors rather than general application settings or version metadata."
 	options.Aliases = []string{"appearance", "application appearance", "instance appearance", "branding settings", "gitlab appearance"}
 	options.Tags = append(options.Tags, "appearance", "branding")
-	options.RelatedActions = []string{"admin.settings_get", "admin.metadata_get", "admin.appearance_update"}
+	options.RelatedActions = []string{actionAdminSettingsGet, actionAdminMetadataGet, "admin.appearance_update"}
 	options.IndividualTool.Description = "Get the current GitLab application appearance and branding settings. Returns: the instance appearance object including title, messages, logos, and PWA labels. See also: gitlab_update_appearance, gitlab_get_settings, gitlab_get_metadata."
 	return toolutil.NewReadActionSpec("appearance_get", toolutil.RouteAction(client, appearance.Get), options)
 }
@@ -215,7 +220,7 @@ func adminAppearanceUpdateSpec(client *gitlabclient.Client) toolutil.ActionSpec 
 	options.Usage = "Update GitLab application appearance and branding settings such as title, messages, colors, PWA labels, and profile guidance text. Requires administrator access and changes the instance UI immediately."
 	options.Aliases = []string{"update appearance", "change appearance", "update branding", "change branding", "appearance settings update"}
 	options.Tags = append(options.Tags, "appearance", "branding")
-	options.RelatedActions = []string{"admin.appearance_get", "admin.settings_get", "admin.metadata_get"}
+	options.RelatedActions = []string{"admin.appearance_get", actionAdminSettingsGet, actionAdminMetadataGet}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"message_background_color": {
 			SemanticRole:     "hex_color",
@@ -237,7 +242,7 @@ func adminApplicationStatisticsGetSpec(client *gitlabclient.Client) toolutil.Act
 	options.Usage = "Read GitLab instance-wide application statistics such as totals for users, groups, projects, issues, and merge requests. Requires administrator access."
 	options.Aliases = []string{"application statistics", "instance statistics", "gitlab statistics", "admin statistics"}
 	options.Tags = append(options.Tags, "statistics", "instance")
-	options.RelatedActions = []string{"admin.metadata_get", "server.health_check"}
+	options.RelatedActions = []string{actionAdminMetadataGet, "server.health_check"}
 	options.IndividualTool.Description = "Get GitLab application statistics for the current instance. Returns: aggregate counts for users, groups, projects, issues, merge requests, and related records. See also: gitlab_get_metadata, gitlab_server_status."
 	return toolutil.NewReadActionSpec("app_statistics_get", toolutil.RouteAction(client, appstatistics.Get), options)
 }

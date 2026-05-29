@@ -7,6 +7,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const actionCIVariableUpdate = "ci_variable.update"
+
 // ActionSpecs returns canonical specs for project CI/CD variable actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -46,11 +48,11 @@ func ciVariableOptionsForAction(actionName, individualTool string) toolutil.Acti
 	case "list":
 		options.Usage = "List project CI/CD variables with pagination and optional filters. Use to inspect variable inventory before get/update/delete actions."
 		options.Aliases = []string{"list ci variables", "show project variables", "find ci variables"}
-		options.RelatedActions = []string{"ci_variable.get", "ci_variable.update", "ci_variable.delete"}
+		options.RelatedActions = []string{"ci_variable.get", actionCIVariableUpdate, "ci_variable.delete"}
 	case "get":
 		options.Usage = "Get one CI/CD variable by key (and optional environment scope). Use when exact variable settings are needed."
 		options.Aliases = []string{"get ci variable", "show variable details", "lookup variable"}
-		options.RelatedActions = []string{"ci_variable.list", "ci_variable.update"}
+		options.RelatedActions = []string{"ci_variable.list", actionCIVariableUpdate}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"key": {
 				SemanticRole:   "ci_variable_key",
@@ -66,7 +68,7 @@ func ciVariableOptionsForAction(actionName, individualTool string) toolutil.Acti
 	case "create":
 		options.Usage = "Create a CI/CD variable in a project. Use for pipeline/runtime configuration that should not be stored in repository files."
 		options.Aliases = []string{"create ci variable", "add pipeline variable", "new ci variable"}
-		options.RelatedActions = []string{"ci_variable.list", "ci_variable.get", "ci_variable.update"}
+		options.RelatedActions = []string{"ci_variable.list", "ci_variable.get", actionCIVariableUpdate}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"key": {
 				SemanticRole:   "ci_variable_key",

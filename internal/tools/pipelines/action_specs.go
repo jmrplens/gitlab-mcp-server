@@ -9,6 +9,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionPipelineGet    = "pipeline.get"
+	actionJobListProject = "job.list_project"
+)
+
 // ActionSpecs returns canonical specs for CI/CD pipeline actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -76,7 +81,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 	case "list":
 		options.Usage = "List pipelines for one project. Use filters and pagination when the task asks for recent, failed, running, or branch-specific pipelines."
 		options.Aliases = []string{"list pipelines", "show project pipelines", "find pipelines"}
-		options.RelatedActions = []string{"pipeline.get", "pipeline.latest", "job.list_project"}
+		options.RelatedActions = []string{actionPipelineGet, "pipeline.latest", actionJobListProject}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
@@ -93,7 +98,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 	case "get":
 		options.Usage = "Get one pipeline by project_id and pipeline_id. Use this when the target pipeline is already known and you need detailed status, ref, source, and web URL fields."
 		options.Aliases = []string{"get pipeline", "show pipeline details", "lookup pipeline"}
-		options.RelatedActions = []string{"pipeline.list", "pipeline.variables", "job.list_project", "pipeline.cancel", "pipeline.retry"}
+		options.RelatedActions = []string{"pipeline.list", "pipeline.variables", actionJobListProject, "pipeline.cancel", "pipeline.retry"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"pipeline_id": {
 				SemanticRole:     "pipeline_identifier",
@@ -106,7 +111,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 	case "create":
 		options.Usage = "Create a pipeline for a project ref (branch or tag). Use variables only when the task explicitly requires runtime overrides."
 		options.Aliases = []string{"run pipeline", "trigger pipeline", "create pipeline"}
-		options.RelatedActions = []string{"pipeline.get", "pipeline.wait", "job.list_project"}
+		options.RelatedActions = []string{actionPipelineGet, "pipeline.wait", actionJobListProject}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
@@ -122,9 +127,9 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 		}
 		options.IndividualTool.Description = "Create a new pipeline. Returns: created pipeline metadata including ID, status, and target ref. See also: gitlab_pipeline_get, gitlab_pipeline_wait, gitlab_job_list_project."
 	case "cancel":
-		options.RelatedActions = []string{"pipeline.get", "pipeline.retry", "job.list_project"}
+		options.RelatedActions = []string{actionPipelineGet, "pipeline.retry", actionJobListProject}
 	case "retry":
-		options.RelatedActions = []string{"pipeline.get", "pipeline.cancel", "job.list_project"}
+		options.RelatedActions = []string{actionPipelineGet, "pipeline.cancel", actionJobListProject}
 	}
 	if actionName == "wait" {
 		options.Usage = "Use only to poll an existing pipeline_id until a terminal status. For merge when pipeline succeeds, use merge_request.merge with auto_merge=true instead."

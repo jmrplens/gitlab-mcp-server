@@ -8,6 +8,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionIssueList    = "issue.list"
+	actionSearchIssues = "search.issues"
+	actionIssueGet     = "issue.get"
+)
+
 // ActionSpecs returns canonical specs for issue lifecycle actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -64,7 +70,7 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	switch individualTool {
 	case "gitlab_issue_get":
 		options.Usage = "Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number; prefer issue.get over issue.list when the target issue is already known."
-		options.RelatedActions = []string{"issue.list", "issue.update", "issue.delete", "issue.notes_list"}
+		options.RelatedActions = []string{actionIssueList, "issue.update", "issue.delete", "issue.notes_list"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:     "scope_project",
@@ -83,7 +89,7 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	case "gitlab_issue_list":
 		options.Usage = "List issues in one project. Use filters such as state, labels, search, assignee_username, milestone, order_by, sort, and pagination when the prompt asks for matching or recent issues in a known project."
 		options.Aliases = []string{"list project issues", "find issues in project", "show project issues"}
-		options.RelatedActions = []string{"issue.get", "issue.create", "search.issues"}
+		options.RelatedActions = []string{actionIssueGet, "issue.create", actionSearchIssues}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:     "scope_project",
@@ -107,14 +113,14 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	case "gitlab_issue_list_all":
 		options.Usage = "List issues visible to the authenticated user across all accessible projects. Use this when the user asks for their open issues, assigned issues, or a cross-project issue overview."
 		options.Aliases = []string{"list all issues", "show my issues across projects", "list visible issues"}
-		options.RelatedActions = []string{"issue.list", "issue.list_group", "search.issues"}
+		options.RelatedActions = []string{actionIssueList, "issue.list_group", actionSearchIssues}
 		options.IndividualTool.Description = "List issues across accessible projects. Returns: visible issues with project context and pagination metadata. See also: gitlab_issue_list, gitlab_issue_list_group, gitlab_search_issues."
 	case "gitlab_issue_time_stats_get":
 		options.RelatedActions = []string{"issue.time_estimate_set", "issue.time_estimate_reset", "issue.spent_time_add", "issue.spent_time_reset"}
 	case "gitlab_issue_participants":
-		options.RelatedActions = []string{"issue.get", "issue.notes_list"}
+		options.RelatedActions = []string{actionIssueGet, "issue.notes_list"}
 	case "gitlab_issue_mrs_closing", "gitlab_issue_mrs_related":
-		options.RelatedActions = []string{"issue.get", "issue.list", "merge_request.get"}
+		options.RelatedActions = []string{actionIssueGet, actionIssueList, "merge_request.get"}
 	}
 	return toolutil.NewReadActionSpec(name, route, options)
 }
@@ -124,7 +130,7 @@ func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 	if individualTool == "gitlab_issue_create" {
 		options.Usage = "Create a new issue in a known project. Provide project_id and a clear title, then add description, labels, assignee_ids, milestone_id, due_date, confidential, or task metadata only when requested."
 		options.Aliases = []string{"open issue", "create bug report", "file issue"}
-		options.RelatedActions = []string{"issue.get", "issue.list", "issue.update"}
+		options.RelatedActions = []string{actionIssueGet, actionIssueList, "issue.update"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:     "scope_project",
@@ -157,7 +163,7 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := issueOptions("gitlab_issue_update")
 	options.Usage = "Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen; dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically."
 	options.Aliases = []string{"close issue", "reopen issue", "change issue state", "transition issue"}
-	options.RelatedActions = []string{"issue.get", "issue.delete", "issue.list"}
+	options.RelatedActions = []string{actionIssueGet, "issue.delete", actionIssueList}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"state_event": {
 			SemanticRole:     "issue_state_transition",
@@ -196,7 +202,7 @@ func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool 
 	if individualTool == "gitlab_issue_list_group" {
 		options.Usage = "List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project."
 		options.Aliases = []string{"list group issues", "show issues in group", "find issues across group"}
-		options.RelatedActions = []string{"issue.list", "group.get", "search.issues"}
+		options.RelatedActions = []string{actionIssueList, "group.get", actionSearchIssues}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"group_id": {
 				SemanticRole:     "scope_group",

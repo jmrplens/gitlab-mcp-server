@@ -14,6 +14,8 @@ const (
 const defaultActionAliasReason = "Historical Dynamic compatibility alias for canonical action selection."
 
 const (
+	actionGroupServiceAccountPATRevoke   = "group.service_account_pat_revoke"
+	actionProjectServiceAccountPATRevoke = "project.service_account_pat_revoke"
 	actionFeatureFlagCreate              = "feature_flags.feature_flag_create"
 	actionBranchProtect                  = "branch.protect"
 	actionExternalStatusCheckListProject = "external_status_check.list_project"
@@ -220,16 +222,16 @@ func defaultActionAliases() []ActionAlias {
 		compatActionAlias("group.variable.create", "ci_variable.group_create"),
 		compatActionAlias("group.audit_events", "audit_event.list_group"),
 		compatActionAlias("service_account.delete", "group.service_account_delete"),
-		compatActionAlias("service_account_pat.revoke", "group.service_account_pat_revoke"),
+		compatActionAlias("service_account_pat.revoke", actionGroupServiceAccountPATRevoke),
 		compatActionAlias("group_service_account.delete", "group.service_account_delete"),
-		compatActionAlias("group_service_account.pat_revoke", "group.service_account_pat_revoke"),
-		compatActionAlias("group_service_account.personal_access_token_revoke", "group.service_account_pat_revoke"),
-		compatActionAlias("group_service_account.revoke_pat", "group.service_account_pat_revoke"),
+		compatActionAlias("group_service_account.pat_revoke", actionGroupServiceAccountPATRevoke),
+		compatActionAlias("group_service_account.personal_access_token_revoke", actionGroupServiceAccountPATRevoke),
+		compatActionAlias("group_service_account.revoke_pat", actionGroupServiceAccountPATRevoke),
 		compatActionAlias("group_service_account.update", "group.service_account_update"),
 		compatActionAlias("project_service_account.delete", "project.service_account_delete"),
-		compatActionAlias("project_service_account.pat_revoke", "project.service_account_pat_revoke"),
-		compatActionAlias("project_service_account.personal_access_token_revoke", "project.service_account_pat_revoke"),
-		compatActionAlias("project_service_account.revoke_pat", "project.service_account_pat_revoke"),
+		compatActionAlias("project_service_account.pat_revoke", actionProjectServiceAccountPATRevoke),
+		compatActionAlias("project_service_account.personal_access_token_revoke", actionProjectServiceAccountPATRevoke),
+		compatActionAlias("project_service_account.revoke_pat", actionProjectServiceAccountPATRevoke),
 		compatActionAlias("project_service_account.update", "project.service_account_update"),
 		standaloneActionAlias("gitlab_discover_project", "discover_project.resolve"),
 		standaloneActionAlias("interactive_issue.create", actionInteractiveIssueCreate),

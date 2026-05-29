@@ -9,6 +9,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const actionTagGet = "tag.get"
+
 // ActionSpecs returns canonical specs for tag and protected tag actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -42,7 +44,7 @@ func tagGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 func tagSpec(name string, route toolutil.ActionRoute, individualTool string, readOnly, idempotent bool) toolutil.ActionSpec {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute tags domain action.", Tags: []string{"tag"},
-		RelatedActions: []string{"tag.list", "tag.get", "release.get", "repository.commit_get"},
+		RelatedActions: []string{"tag.list", actionTagGet, "release.get", "repository.commit_get"},
 		OpenWorld:      true,
 		OwnerPackage:   "tags",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
@@ -52,7 +54,7 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 	case "list":
 		options.Usage = "List tags in one project. Use this to discover release points, version tags, and candidates for release/tag workflows."
 		options.Aliases = []string{"list tags", "show repository tags", "find tags"}
-		options.RelatedActions = []string{"tag.get", "release.list", "repository.compare"}
+		options.RelatedActions = []string{actionTagGet, "release.list", "repository.compare"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
@@ -74,7 +76,7 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 	case "create":
 		options.Usage = "Create a new tag for a project ref. Use message only when creating annotated tags or when task requires tag annotations."
 		options.Aliases = []string{"create tag", "new git tag", "tag release"}
-		options.RelatedActions = []string{"release.create", "tag.get", "repository.compare"}
+		options.RelatedActions = []string{"release.create", actionTagGet, "repository.compare"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"tag_name": {
 				SemanticRole:   "git_tag",

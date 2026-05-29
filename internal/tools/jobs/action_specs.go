@@ -5,6 +5,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const (
+	actionJobTrace  = "job.trace"
+	actionJobRetry  = "job.retry"
+	actionJobCancel = "job.cancel"
+	actionJobGet    = "job.get"
+)
+
 // ActionSpecs returns canonical specs for CI/CD job actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -32,7 +39,7 @@ func jobGetSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	options := jobOptionsForAction("get", "gitlab_job_get")
 	options.Usage = "Get one CI job by project_id and job_id. Use this when the task already references a specific job and needs state, stage, runner, failure reason, or timing details."
 	options.Aliases = []string{"get job", "show job details", "lookup job"}
-	options.RelatedActions = []string{"job.trace", "job.cancel", "job.retry"}
+	options.RelatedActions = []string{actionJobTrace, actionJobCancel, actionJobRetry}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"project_id": {
 			SemanticRole:     "scope_project",
@@ -78,7 +85,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 	case "gitlab_job_list_project":
 		options.Usage = "List jobs in one project. Use this when the prompt asks for recent, failed, manual, or retried jobs in a known project; combine filters and pagination as needed."
 		options.Aliases = []string{"list project jobs", "show jobs in project", "find project jobs"}
-		options.RelatedActions = []string{"job.get", "job.trace", "pipeline.get"}
+		options.RelatedActions = []string{actionJobGet, actionJobTrace, "pipeline.get"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"project_id": {
 				SemanticRole:   "scope_project",
@@ -96,14 +103,14 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 	case "gitlab_job_trace":
 		options.Usage = "Get job log output (trace) for troubleshooting and diagnostics. Use with a known job_id after selecting a relevant job from list/get calls."
 		options.Aliases = []string{"get job log", "job trace", "show job output"}
-		options.RelatedActions = []string{"job.get", "job.list_project", "job.retry", "job.cancel"}
+		options.RelatedActions = []string{actionJobGet, "job.list_project", actionJobRetry, actionJobCancel}
 		options.IndividualTool.Description = "Get CI job trace output. Returns: text log with truncation metadata when logs exceed limits. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_cancel."
 	case "gitlab_job_download_single_artifact":
 		options.Usage = "Download one artifact file path from a job by job_id and artifact_path. Use when the task requests one artifact file by explicit path; prefer job.artifacts for full archives."
 	case "gitlab_job_retry":
-		options.RelatedActions = []string{"job.get", "job.trace", "job.cancel"}
+		options.RelatedActions = []string{actionJobGet, actionJobTrace, actionJobCancel}
 	case "gitlab_job_cancel":
-		options.RelatedActions = []string{"job.get", "job.trace", "job.retry"}
+		options.RelatedActions = []string{actionJobGet, actionJobTrace, actionJobRetry}
 	}
 
 	return options

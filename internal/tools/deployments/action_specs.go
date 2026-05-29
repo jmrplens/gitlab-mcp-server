@@ -9,6 +9,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+const actionDeploymentUpdate = "deployment.update"
+
 // ActionSpecs returns canonical specs for deployment actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
@@ -67,7 +69,7 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 	case "deployment_get":
 		options.Usage = "Get one deployment by deployment_id for a project. Use when investigating a specific deployment state, environment, or actor metadata."
 		options.Aliases = []string{"get deployment", "show deployment details", "lookup deployment"}
-		options.RelatedActions = []string{"deployment.list", "deployment.update", "deployment.approve_or_reject"}
+		options.RelatedActions = []string{"deployment.list", actionDeploymentUpdate, "deployment.approve_or_reject"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"deployment_id": {
 				SemanticRole:   "deployment_id",
@@ -78,11 +80,11 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 	case "deployment_create":
 		options.Usage = "Create a deployment for an environment/ref/sha. Use when orchestrating manual or API-driven deployment entries."
 		options.Aliases = []string{"create deployment", "start deployment", "new deployment"}
-		options.RelatedActions = []string{"environment.get", "deployment.list", "deployment.update"}
+		options.RelatedActions = []string{"environment.get", "deployment.list", actionDeploymentUpdate}
 	case "deployment_approve_or_reject":
 		options.Usage = "Approve or reject a blocked deployment. Use only when approval workflows require explicit deployment approvals/rejections."
 		options.Aliases = []string{"approve deployment", "reject deployment", "deployment approval"}
-		options.RelatedActions = []string{"deployment.get", "deployment.update"}
+		options.RelatedActions = []string{"deployment.get", actionDeploymentUpdate}
 	}
 
 	return options

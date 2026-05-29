@@ -69,9 +69,9 @@ func parseFlags() options {
 	flag.BoolVar(&opts.DockerAutoStart, "docker-auto-start", false, "For Docker presets, start and provision the Docker GitLab fixture stack before connecting to --backend=gitlab")
 	flag.DurationVar(&opts.DockerWaitTimeout, "docker-wait-timeout", 10*time.Minute, "Maximum time to wait for Docker GitLab readiness when --docker-auto-start is enabled")
 	flag.BoolVar(&opts.SkipDestructive, flagSkipDestructive, false, "Skip tasks with destructive calls or destructive workflow steps")
-	flag.BoolVar(&opts.OnlyDestructive, "only-destructive", false, "Run only tasks with destructive calls or destructive workflow steps")
+	flag.BoolVar(&opts.OnlyDestructive, flagOnlyDestructive, false, "Run only tasks with destructive calls or destructive workflow steps")
 	flag.BoolVar(&opts.SkipMutating, flagSkipMutating, false, "Skip tasks whose expected calls mutate GitLab state")
-	flag.BoolVar(&opts.OnlyMutating, "only-mutating", false, "Run only tasks whose expected calls mutate GitLab state")
+	flag.BoolVar(&opts.OnlyMutating, flagOnlyMutating, false, "Run only tasks whose expected calls mutate GitLab state")
 	flag.BoolVar(&opts.SkipUnavailable, flagSkipUnavailable, false, "Skip tasks whose expected routes or live fixtures are unavailable")
 	flag.BoolVar(&opts.PrintOutput, "print-output", false, "Echo command progress and optional report output to the terminal in addition to --terminal-log")
 	flag.BoolVar(&opts.TraceProviderBodies, "trace-provider-bodies", false, "Include raw model provider request and response bodies in trace artifacts")
@@ -106,12 +106,12 @@ func applyPresetDefaults(opts options) (options, error) {
 	case presetDockerMutatingSafe:
 		setStringDefault(&opts.Edition, opts, "edition", editionCE)
 		applyDockerPresetDefaults(&opts, partitionBaseMutating)
-		setBoolDefault(&opts.OnlyMutating, opts, "only-mutating")
+		setBoolDefault(&opts.OnlyMutating, opts, flagOnlyMutating)
 		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	case presetDockerDestructiveSafe:
 		setStringDefault(&opts.Edition, opts, "edition", editionCE)
 		applyDockerPresetDefaults(&opts, partitionBaseDestructive)
-		setBoolDefault(&opts.OnlyDestructive, opts, "only-destructive")
+		setBoolDefault(&opts.OnlyDestructive, opts, flagOnlyDestructive)
 	case presetDockerEnterpriseRead:
 		setStringDefault(&opts.Edition, opts, "edition", editionEnterprise)
 		applyDockerPresetDefaults(&opts, partitionEnterpriseRead)
@@ -120,12 +120,12 @@ func applyPresetDefaults(opts options) (options, error) {
 	case presetDockerEnterpriseMutatingSafe:
 		setStringDefault(&opts.Edition, opts, "edition", editionEnterprise)
 		applyDockerPresetDefaults(&opts, partitionEnterpriseMutating)
-		setBoolDefault(&opts.OnlyMutating, opts, "only-mutating")
+		setBoolDefault(&opts.OnlyMutating, opts, flagOnlyMutating)
 		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	case presetDockerEnterpriseDestructiveSafe:
 		setStringDefault(&opts.Edition, opts, "edition", editionEnterprise)
 		applyDockerPresetDefaults(&opts, partitionEnterpriseDestructive)
-		setBoolDefault(&opts.OnlyDestructive, opts, "only-destructive")
+		setBoolDefault(&opts.OnlyDestructive, opts, flagOnlyDestructive)
 	case presetDockerCapabilityDiscovery:
 		setStringDefault(&opts.Edition, opts, "edition", editionCE)
 		applyDockerPresetDefaults(&opts, partitionCapabilityFallback)

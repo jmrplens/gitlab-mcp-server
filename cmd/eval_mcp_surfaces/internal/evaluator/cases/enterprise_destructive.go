@@ -1,5 +1,14 @@
 package cases
 
+const (
+	evalMS053             = "MS-053"
+	actionGroupEpicDelete = "group.epic_delete"
+	evalMT196             = "MT-196"
+	evalMT198             = "MT-198"
+	evalMS045             = "MS-045"
+	actionGroupEpicCreate = "group.epic_create"
+)
+
 func enterpriseDestructiveEvalCases() []Case {
 	return []Case{
 		baseEnterpriseDestructiveEvalCase("MS-005", "Review external integration risk in project `my-org/tools/gitlab-mcp-server`: list project hooks, list project status checks, inspect CI job-token inbound allowlist, then remove target project ID `123` from that allowlist.",
@@ -13,7 +22,7 @@ func enterpriseDestructiveEvalCases() []Case {
 		baseEnterpriseDestructiveEvalCase("MT-128", "Delete external project status check ID `8` from project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab", "external_status_check.delete_project", params("project_id", "check_id"), params("confirm"))),
 		baseEnterpriseDestructiveEvalCase("MT-131", "Delete Geo site ID `3`.", destructiveStep("gitlab", "geo.delete", params("id"), params("confirm"))),
 		baseEnterpriseDestructiveEvalCase("MT-134", "Revoke group personal access token ID `77` in group `my-org`.", destructiveStep("gitlab", "group.credential_revoke_pat", params("group_id", "token_id"), params("confirm"))),
-		baseEnterpriseDestructiveEvalCase("MT-139", "Delete epic IID `12` from group full path `my-org`.", destructiveStep("gitlab", "group.epic_delete", params("full_path", "epic_iid"), params("confirm"))),
+		baseEnterpriseDestructiveEvalCase("MT-139", "Delete epic IID `12` from group full path `my-org`.", destructiveStep("gitlab", actionGroupEpicDelete, params("full_path", "epic_iid"), params("confirm"))),
 		baseEnterpriseDestructiveEvalCase("MT-141", "Remove issue IID `99` from child project path `my-org/tools/gitlab-mcp-server` from epic IID `12` in group full path `my-org`.", destructiveStep("gitlab", "group.epic_issue_remove", params("full_path", "epic_iid", "child_project_path", "child_iid"), params("confirm"))),
 		baseEnterpriseDestructiveEvalCase("MT-143", "Delete note ID `44` from epic IID `12` in group full path `my-org`.", destructiveStep("gitlab", "group.epic_note_delete", params("full_path", "epic_iid", "note_id"), params("confirm"))),
 		baseEnterpriseDestructiveEvalCase("MT-145", "Delete LDAP link for provider `ldapmain` in group `my-org`.", destructiveStep("gitlab", "group.ldap_link_delete_for_provider", params("group_id", "provider"), params("confirm"))),
@@ -28,9 +37,9 @@ func enterpriseDestructiveEvalCases() []Case {
 		baseEnterpriseDestructiveEvalCase("MT-171", "Delete project alias `eval-alias`.", destructiveStep("gitlab", "project_alias.delete", params("name"), params("confirm"))),
 		baseEnterpriseDestructiveEvalCase("MT-183", "Delete project service account user ID `55` in project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab", "project.service_account_delete", params("project_id", "service_account_id"), params("hard_delete", "confirm"))),
 		baseEnterpriseDestructiveEvalCase("MT-187", "Revoke project service account PAT ID `66` for project service account user ID `55` in project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab", "project.service_account_pat_revoke", params("project_id", "service_account_id", "token_id"), params("confirm"))),
-		baseEnterpriseDestructiveEvalCase("MT-196", "Delete the project push rule from project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab_project", "push_rule_delete", params("project_id"), params("confirm"))),
+		baseEnterpriseDestructiveEvalCase(evalMT196, "Delete the project push rule from project `my-org/tools/gitlab-mcp-server`.", destructiveStep("gitlab_project", "push_rule_delete", params("project_id"), params("confirm"))),
 		baseEnterpriseDestructiveEvalCase("MT-197", "Revoke group service account PAT ID `66` for service account user ID `55` in group `my-org`.", destructiveStep("gitlab_group", "service_account_pat_revoke", params("group_id", "service_account_id", "token_id"), params("confirm"))),
-		baseEnterpriseDestructiveEvalCase("MT-198", "Delete group service account user ID `55` in group `my-org`.", destructiveStep("gitlab_group", "service_account_delete", params("group_id", "service_account_id"), params("hard_delete", "confirm"))),
+		baseEnterpriseDestructiveEvalCase(evalMT198, "Delete group service account user ID `55` in group `my-org`.", destructiveStep("gitlab_group", "service_account_delete", params("group_id", "service_account_id"), params("hard_delete", "confirm"))),
 		baseEnterpriseDestructiveEvalCase("MS-043", "Exercise project service account lifecycle in project `my-org/tools/gitlab-mcp-server`: create service account `eval-project-service-account`, list project service accounts, update the created service account name to `eval-project-service-account-v2`, create personal access token `eval-project-service-token` with scope `api`, list that service account's tokens, rotate the token, revoke the rotated token, then delete the service account.",
 			readStep("gitlab_project", "service_account_create", params("project_id"), params("name", "username")),
 			readStep("gitlab_project", "service_account_list", params("project_id"), params("per_page")),
@@ -41,7 +50,7 @@ func enterpriseDestructiveEvalCases() []Case {
 			destructiveStep("gitlab_project", "service_account_pat_revoke", params("project_id", "service_account_id", "token_id"), params("confirm")),
 			destructiveStep("gitlab_project", "service_account_delete", params("project_id", "service_account_id"), params("hard_delete", "confirm")),
 		),
-		baseEnterpriseDestructiveEvalCase("MS-045", "Exercise project push rule lifecycle: add a push rule to project `my-org/tools/gitlab-mcp-server` with commit message regex `^EVAL-`, fetch the project push rule, edit it to reject unsigned commits, then delete the project push rule.",
+		baseEnterpriseDestructiveEvalCase(evalMS045, "Exercise project push rule lifecycle: add a push rule to project `my-org/tools/gitlab-mcp-server` with commit message regex `^EVAL-`, fetch the project push rule, edit it to reject unsigned commits, then delete the project push rule.",
 			readStep("gitlab_project", "push_rule_add", params("project_id"), params("commit_message_regex")),
 			readStep("gitlab_project", "push_rule_get", params("project_id"), nil),
 			readStep("gitlab_project", "push_rule_edit", params("project_id"), params("reject_unsigned_commits", "commit_message_regex")),
@@ -57,39 +66,39 @@ func enterpriseDestructiveEvalCases() []Case {
 			destructiveStep("gitlab_group", "service_account_delete", params("group_id", "service_account_id"), params("hard_delete", "confirm")),
 		),
 		baseEnterpriseDestructiveEvalCase("MS-047", "Exercise epic CRUD in group full path `my-org`: create epic `Evaluation Enterprise Epic`, list epics, fetch the created epic by IID, update its title to `Evaluation Enterprise Epic v2`, then delete the epic.",
-			readStep("gitlab", "group.epic_create", params("full_path", "title"), params("description")),
+			readStep("gitlab", actionGroupEpicCreate, params("full_path", "title"), params("description")),
 			readStep("gitlab", "group.epic_list", params("full_path"), params("first")),
 			readStep("gitlab", "group.epic_get", params("full_path", "epic_iid"), nil),
 			readStep("gitlab", "group.epic_update", params("full_path", "epic_iid"), params("title")),
-			destructiveStep("gitlab", "group.epic_delete", params("full_path", "epic_iid"), params("confirm")),
+			destructiveStep("gitlab", actionGroupEpicDelete, params("full_path", "epic_iid"), params("confirm")),
 		),
 		baseEnterpriseDestructiveEvalCase("MS-048", "Exercise epic note lifecycle in group full path `my-org`: create epic `Evaluation Enterprise Note Epic`, create note `first enterprise note`, list epic notes, fetch the created note by note ID, update it to `updated enterprise note`, delete the note, then delete the epic.",
-			readStep("gitlab", "group.epic_create", params("full_path", "title"), params("description")),
+			readStep("gitlab", actionGroupEpicCreate, params("full_path", "title"), params("description")),
 			readStep("gitlab", "group.epic_note_create", params("full_path", "epic_iid", "body"), nil),
 			readStep("gitlab", "group.epic_note_list", params("full_path", "epic_iid"), nil),
 			readStep("gitlab", "group.epic_note_get", params("full_path", "epic_iid", "note_id"), nil),
 			readStep("gitlab", "group.epic_note_update", params("full_path", "epic_iid", "note_id", "body"), nil),
 			destructiveStep("gitlab", "group.epic_note_delete", params("full_path", "epic_iid", "note_id"), params("confirm")),
-			destructiveStep("gitlab", "group.epic_delete", params("full_path", "epic_iid"), params("confirm")),
+			destructiveStep("gitlab", actionGroupEpicDelete, params("full_path", "epic_iid"), params("confirm")),
 		),
 		baseEnterpriseDestructiveEvalCase("MS-049", "Exercise epic discussion lifecycle in group full path `my-org`: create epic `Evaluation Enterprise Discussion Epic`, create discussion `first enterprise discussion`, list discussions, fetch the created discussion, add reply note `enterprise reply`, update that reply to `enterprise reply updated`, delete the reply note, then delete the epic.",
-			readStep("gitlab", "group.epic_create", params("full_path", "title"), params("description")),
+			readStep("gitlab", actionGroupEpicCreate, params("full_path", "title"), params("description")),
 			readStep("gitlab", "group.epic_discussion_create", params("full_path", "epic_iid", "body"), nil),
 			readStep("gitlab", "group.epic_discussion_list", params("full_path", "epic_iid"), nil),
 			readStep("gitlab", "group.epic_discussion_get", params("full_path", "epic_iid", "discussion_id"), nil),
 			readStep("gitlab", "group.epic_discussion_add_note", params("full_path", "epic_iid", "discussion_id", "body"), nil),
 			readStep("gitlab", "group.epic_discussion_update_note", params("full_path", "epic_iid", "note_id", "body"), nil),
 			destructiveStep("gitlab", "group.epic_discussion_delete_note", params("full_path", "epic_iid", "note_id"), params("confirm")),
-			destructiveStep("gitlab", "group.epic_delete", params("full_path", "epic_iid"), params("confirm")),
+			destructiveStep("gitlab", actionGroupEpicDelete, params("full_path", "epic_iid"), params("confirm")),
 		),
 		baseEnterpriseDestructiveEvalCase("MS-050", "Exercise epic issue assignment in group full path `my-org` using project `my-org/tools/gitlab-mcp-server`: create issue `eval-enterprise-epic-child`, create epic `Evaluation Enterprise Issue Epic`, assign the issue to the epic, list epic issues, remove the issue from the epic, delete the issue, then delete the epic.",
 			readStep("gitlab_issue", "create", params("project_id", "title"), params("description")),
-			readStep("gitlab", "group.epic_create", params("full_path", "title"), params("description")),
+			readStep("gitlab", actionGroupEpicCreate, params("full_path", "title"), params("description")),
 			readStep("gitlab", "group.epic_issue_assign", params("full_path", "epic_iid", "child_project_path", "child_iid"), nil),
 			readStep("gitlab", "group.epic_issue_list", params("full_path", "epic_iid"), nil),
 			destructiveStep("gitlab", "group.epic_issue_remove", params("full_path", "epic_iid", "child_project_path", "child_iid"), params("confirm")),
 			destructiveStep("gitlab_issue", "delete", params("project_id", "issue_iid"), params("confirm")),
-			destructiveStep("gitlab", "group.epic_delete", params("full_path", "epic_iid"), params("confirm")),
+			destructiveStep("gitlab", actionGroupEpicDelete, params("full_path", "epic_iid"), params("confirm")),
 		),
 		baseEnterpriseDestructiveEvalCase("MS-051", "Exercise group protected branch lifecycle in group `my-org`: protect branch pattern `eval-enterprise/*` with Maintainer push and merge access, list group protected branches, fetch that protected branch, update it to allow force push, then unprotect it.",
 			readStep("gitlab_group", "protected_branch_protect", params("group_id", "name"), params("push_access_level", "merge_access_level")),
@@ -120,7 +129,7 @@ func enterpriseDestructiveEvalCases() []Case {
 
 func baseEnterpriseDestructiveEvalCase(id, prompt string, steps ...Step) Case {
 	presets := []string{presetSchemaEnterprise}
-	if (id >= "MT-196" && id <= "MT-198") || id == "MS-043" || (id >= "MS-045" && id <= "MS-053") {
+	if (id >= evalMT196 && id <= evalMT198) || id == "MS-043" || (id >= evalMS045 && id <= evalMS053) {
 		presets = append(presets, presetDockerEnterpriseDestructiveSafe)
 	}
 	promptTemplate, fixtures := enterpriseDestructivePromptTemplateAndFixtures(id, prompt)
@@ -143,17 +152,17 @@ func enterpriseDestructivePromptTemplateAndFixtures(id, prompt string) (promptTe
 	switch id {
 	case "MS-005":
 		return PromptTemplate{Text: "Review external integration risk in project `{{.Project.Path}}`: list project hooks, list project status checks, inspect CI job-token inbound allowlist, then remove target project ID `{{.Values.target_project_id}}` from that allowlist."}, []string{fixtureJobTokenScopeProject}
-	case "MT-196":
+	case evalMT196:
 		return PromptTemplate{Text: "Delete the project push rule from project `{{.Project.Path}}`."}, []string{fixtureEnterprisePushRuleProjectSeeded}
 	case "MT-197":
 		return PromptTemplate{Text: "Revoke group service account PAT ID `{{.Token.ID}}` for service account user ID `{{.Values.service_account_id}}` in group `my-org`."}, []string{fixtureEnterpriseGroupServiceAccountPAT}
-	case "MT-198":
+	case evalMT198:
 		return PromptTemplate{Text: "Delete group service account user ID `{{.Values.service_account_id}}` in group `my-org`."}, []string{fixtureEnterpriseGroupServiceAccount}
-	case "MS-045":
+	case evalMS045:
 		return PromptTemplate{Text: "Exercise project push rule lifecycle: add a push rule to project `{{.Project.Path}}` with commit message regex `^EVAL-`, fetch the project push rule, edit it to reject unsigned commits, then delete the project push rule."}, []string{fixtureEnterprisePushRuleProject}
 	case "MS-052":
 		return PromptTemplate{Text: "Exercise group protected environment lifecycle with a temporary group: create group `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}`, protect environment `staging` with Maintainer deploy access, list group protected environments, fetch environment `staging`, update it to require one approval, unprotect environment `staging`, then delete the temporary group."}, []string{fixtureAttemptNames}
-	case "MS-053":
+	case evalMS053:
 		return PromptTemplate{Text: "Exercise project protected environment lifecycle with a temporary project: create project `{{ .Values.subgroup_name }}` with path `{{ .Values.subgroup_path }}`, protect environment `staging` with Maintainer deploy access, list protected environments, fetch environment `staging`, unprotect environment `staging`, then delete the temporary project."}, []string{fixtureAttemptNames}
 	default:
 		return PromptTemplate{Text: prompt}, nil
