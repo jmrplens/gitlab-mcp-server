@@ -1,0 +1,1 @@
+../../.github/agents/go-source-documenter.agent.md
