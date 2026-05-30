@@ -1,1 +1,1 @@
-/Users/jmrplens/GIT/gitlab-mcp-server/.github/agents/debug.agent.md
+../../.github/agents/debug.agent.md

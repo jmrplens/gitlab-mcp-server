@@ -1,1 +1,1 @@
-/Users/jmrplens/GIT/gitlab-mcp-server/.github/agents/se-reviewer.agent.md
+../../.github/agents/se-reviewer.agent.md

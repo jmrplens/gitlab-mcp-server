@@ -1,1 +1,1 @@
-/Users/jmrplens/GIT/gitlab-mcp-server/.github/agents/plan-expert.agent.md
+../../.github/agents/plan-expert.agent.md

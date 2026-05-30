@@ -1,1 +1,1 @@
-/Users/jmrplens/GIT/gitlab-mcp-server/.github/agents/documentation-writer.agent.md
+../../.github/agents/documentation-writer.agent.md

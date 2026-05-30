@@ -1,1 +1,1 @@
-/Users/jmrplens/GIT/gitlab-mcp-server/.github/agents/go-mcp-expert.agent.md
+../../.github/agents/go-mcp-expert.agent.md
