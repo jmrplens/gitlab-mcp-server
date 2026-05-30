@@ -1263,7 +1263,11 @@ func addCICatalogActionTags(add tagCollector, action string) {
 
 func addMRReviewActionTags(add tagCollector, action string) {
 	if action == "changes_get" {
-		add("merge request changes", "mr changes", "merge request diff", "mr diff", "review changes", "get merge request changes", "merge request changes analyzer")
+		add("merge request changes", "mr changes", "merge request diff", "mr diff",
+			"review changes", "get merge request changes", "merge request changes analyzer",
+			"inspect mr changes", "inspect merge request changes", "view mr changes",
+			"list mr changes", "list merge request changes", "mr changes list",
+			"mr code diff")
 	}
 }
 
@@ -2328,7 +2332,13 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	}
 	minRequired := minimumMatchedTermCount(entry, terms)
 	if matchedCount < minRequired {
-		return 0
+		// Exception: let through entries with an explicit high-confidence intent
+		// signal (search.code, user.current) even when the query contains many
+		// extra tokens (project path, symbol name) that inflate minRequired. At
+		// least two terms must still match so unrelated entries are never promoted.
+		if matchedCount < 2 || !qualifiesForExplicitIntentBypass(entry, terms) {
+			return 0
+		}
 	}
 	score := totalScore * matchedCount / len(terms)
 	score += scoreVerbIntentValue(entry, terms)
@@ -2339,10 +2349,13 @@ func scoreEntry(entry actionEntry, terms []searchTerm) int {
 	score += scoreCompareRefsIntentValue(entry, terms)
 	score += scoreReleaseListIntentValue(entry, terms)
 	score += scoreAnalyzeReleaseNotesIntentValue(entry, terms)
+	score += scoreAnalyzeMRChangesIntentValue(entry, terms)
 	score += scoreMRSecurityIntentValue(entry, terms)
 	score += scoreDiscoverProjectIntentValue(entry, terms)
 	score += scoreProjectGetIntentValue(entry, terms)
 	score += scoreSearchProjectsIntentValue(entry, terms)
+	score += scoreSearchCodeIntentValue(entry, terms)
+	score += scoreCurrentUserIntentValue(entry, terms)
 	score += scoreActionSpecificityValue(entry, terms)
 	if score <= 0 {
 		return 0
@@ -2378,7 +2391,13 @@ func scoreEntryWithExplanation(entry actionEntry, terms []searchTerm) (int, Scor
 	}
 	minRequired := minimumMatchedTermCount(entry, terms)
 	if matchedCount < minRequired {
-		return 0, ScoringExplanation{}
+		// Exception: let through entries with an explicit high-confidence intent
+		// signal (search.code, user.current) even when the query contains many
+		// extra tokens (project path, symbol name) that inflate minRequired. At
+		// least two terms must still match so unrelated entries are never promoted.
+		if matchedCount < 2 || !qualifiesForExplicitIntentBypass(entry, terms) {
+			return 0, ScoringExplanation{}
+		}
 	}
 	// Scale the total score by the match ratio so fully-matched entries rank
 	// above partial matches.
@@ -2407,10 +2426,13 @@ func applyIntentAdjustments(entry actionEntry, terms []searchTerm, score int, re
 		scoreCompareRefsIntent,
 		scoreReleaseListIntent,
 		scoreAnalyzeReleaseNotesIntent,
+		scoreAnalyzeMRChangesIntent,
 		scoreMRSecurityIntent,
 		scoreDiscoverProjectIntent,
 		scoreProjectGetIntent,
 		scoreSearchProjectsIntent,
+		scoreSearchCodeIntent,
+		scoreCurrentUserIntent,
 		scoreActionSpecificity,
 	} {
 		if adj, r := fn(entry, terms); adj != 0 {
@@ -2760,6 +2782,37 @@ func scoreReleaseListIntentValue(entry actionEntry, terms []searchTerm) int {
 	return scoreReleaseListIntentBoost
 }
 
+func scoreAnalyzeMRChangesIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreAnalyzeMRChangesIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldAnalyzeIntent, QueryTerm: "analyze mr changes", MatchedValue: document.CanonicalID, Score: score}
+}
+
+// scoreAnalyzeMRChangesIntentValue fires for analyze.mr_changes when the query
+// combines an LLM/analyzer signal with an MR context. Without this boost,
+// mr_review.changes_get outranks analyze.mr_changes because it accumulates more
+// match-ratio points from its broader set of "changes/review" tags.
+func scoreAnalyzeMRChangesIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "analyze" || document.Action != "mr_changes" {
+		return 0
+	}
+	hasLLMSignal := searchTermsContainWord(terms, "llm") ||
+		searchTermsContainWord(terms, "analyzer") ||
+		searchTermsContainWord(terms, "sampling")
+	if !hasLLMSignal {
+		return 0
+	}
+	hasMR := searchTermsContainWord(terms, "mr") || searchTermsContainWord(terms, "merge")
+	if !hasMR {
+		return 0
+	}
+	return scoreAnalyzeMRChangesIntentBoost
+}
+
 func scoreAnalyzeReleaseNotesIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
 	score := scoreAnalyzeReleaseNotesIntentValue(entry, terms)
 	if score == 0 {
@@ -2890,6 +2943,83 @@ func searchProjectsQueryHasConcreteNeedle(terms []searchTerm) bool {
 		return true
 	}
 	return false
+}
+
+func scoreSearchCodeIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreSearchCodeIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldSearchIntent, QueryTerm: "search code", MatchedValue: document.CanonicalID, Score: score}
+}
+
+// scoreSearchCodeIntentValue fires for search.code when the query pairs a search
+// verb ("search"/"grep") with a code/blob/source noun. Without this, long queries
+// that also name a project path inflate match-ratio for search.projects far above
+// search.code, causing the wrong action to rank first.
+func scoreSearchCodeIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "search" || document.Action != "code" {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "search") && !searchTermsContainWord(terms, "grep") {
+		return 0
+	}
+	if !searchTermsContainWord(terms, "code") &&
+		!searchTermsContainWord(terms, "blob") &&
+		!searchTermsContainWord(terms, "blobs") &&
+		!searchTermsContainWord(terms, "source") {
+		return 0
+	}
+	return scoreSearchCodeIntentBoost
+}
+
+func scoreCurrentUserIntent(entry actionEntry, terms []searchTerm) (int, MatchReason) {
+	score := scoreCurrentUserIntentValue(entry, terms)
+	if score == 0 {
+		return 0, MatchReason{}
+	}
+	document := documentForEntry(entry)
+	return score, MatchReason{Field: searchFieldVerbIntent, QueryTerm: "current user", MatchedValue: document.CanonicalID, Score: score}
+}
+
+// scoreCurrentUserIntentValue fires for user.current when the query pairs a self
+// signal ("current"/"authenticated"/"whoami") with an identity noun. The canonical
+// alias "current user" is multi-word and never reaches exact-alias score on
+// word-tokenized queries, so user.get and member-get actions outrank it without
+// this scorer.
+func scoreCurrentUserIntentValue(entry actionEntry, terms []searchTerm) int {
+	document := documentForEntry(entry)
+	if document.Domain != "user" || document.Action != "current" {
+		return 0
+	}
+	hasSelf := searchTermsContainWord(terms, "current") ||
+		searchTermsContainWord(terms, "authenticated") ||
+		searchTermsContainWord(terms, "whoami")
+	if !hasSelf {
+		return 0
+	}
+	hasIdentity := searchTermsContainWord(terms, "user") ||
+		searchTermsContainWord(terms, "profile") ||
+		searchTermsContainWord(terms, "account") ||
+		searchTermsContainWord(terms, "identity")
+	if !hasIdentity {
+		return 0
+	}
+	return scoreCurrentUserIntentBoost
+}
+
+// qualifiesForExplicitIntentBypass reports whether an entry qualifies for the
+// match-ratio filter bypass in scoreEntry/scoreEntryWithExplanation. These
+// actions match only 2–3 of ~10 tokens in long queries (the rest are project
+// path, symbol name, version tags, etc.), so minimumMatchedTermCount filters
+// them out before any intent boost can apply. The bypass lets them through when
+// at least 2 terms matched and the intent signal fires.
+func qualifiesForExplicitIntentBypass(entry actionEntry, terms []searchTerm) bool {
+	return scoreSearchCodeIntentValue(entry, terms) > 0 ||
+		scoreCurrentUserIntentValue(entry, terms) > 0 ||
+		scoreCompareRefsIntentValue(entry, terms) > 0
 }
 
 func matchingQueryScope(terms []searchTerm) string {

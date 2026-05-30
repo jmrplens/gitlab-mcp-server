@@ -5049,3 +5049,115 @@ func benchmarkName(query string) string {
 	}
 	return "q_" + strings.Join(parts, "_")
 }
+
+// logRanking renders the ranked head of a result set for failure diagnostics.
+func logRanking(t *testing.T, query string, results []SearchResult) {
+	t.Helper()
+	t.Logf("query %q ranking:", query)
+	for i, r := range results {
+		t.Logf("  %d. %s (score=%d)", i+1, r.ID, r.Score)
+	}
+}
+
+// TestIntentBoost_SearchCodeSurfacesForCodeQueries verifies that explicit code
+// searches rank search.code first even when the query also names a project or
+// repository path. These are the exact phrasings from surface-eval task MT-032,
+// where match-ratio scaling previously buried search.code below search.projects
+// and repository.tree.
+func TestIntentBoost_SearchCodeSurfacesForCodeQueries(t *testing.T) {
+	t.Parallel()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("build action catalog: %v", err)
+	}
+	reg := NewRegistryFromCatalog(catalog)
+	queries := []string{
+		"search code in project my-org/tools/gitlab-mcp-server for RegisterMCPMeta using project_id",
+		"search code for func RegisterMCPMeta in project my-org/tools/gitlab-mcp-server",
+		"search code contents for RegisterMCPMeta in repository my-org/tools/gitlab-mcp-server",
+	}
+	for _, query := range queries {
+		var out SearchOutput
+		_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: 5})
+		if err != nil {
+			t.Fatalf("search %q: %v", query, err)
+		}
+		if len(out.Results) == 0 {
+			t.Fatalf("query %q returned no results", query)
+		}
+		if out.Results[0].ID != "search.code" {
+			logRanking(t, query, out.Results)
+			t.Errorf("top result = %q, want search.code", out.Results[0].ID)
+		}
+	}
+}
+
+// TestIntentBoost_CurrentUserSurfacesForIdentityQueries verifies user.current
+// ranks first for current-user phrasings (surface-eval task MT-114). The
+// canonical alias "current user" is multi-word and never reaches the
+// exact-alias score on word-tokenized queries, so user.get and member-get
+// actions previously outranked it.
+func TestIntentBoost_CurrentUserSurfacesForIdentityQueries(t *testing.T) {
+	t.Parallel()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("build action catalog: %v", err)
+	}
+	reg := NewRegistryFromCatalog(catalog)
+	queries := []string{
+		"current user info get",
+		"get current user profile",
+		"show the authenticated user account",
+	}
+	for _, query := range queries {
+		var out SearchOutput
+		_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: 5})
+		if err != nil {
+			t.Fatalf("search %q: %v", query, err)
+		}
+		if len(out.Results) == 0 {
+			t.Fatalf("query %q returned no results", query)
+		}
+		if out.Results[0].ID != "user.current" {
+			logRanking(t, query, out.Results)
+			t.Errorf("top result = %q, want user.current", out.Results[0].ID)
+		}
+	}
+}
+
+// TestIntentBoost_ControlsNotHijacked verifies the new explicit-intent boosts do
+// not fire for queries whose intent is genuinely project search, get-user-by-id,
+// or user listing. It asserts the boosted action is not promoted to the top,
+// rather than a specific winner, so it stays robust to unrelated ranking
+// changes.
+func TestIntentBoost_ControlsNotHijacked(t *testing.T) {
+	t.Parallel()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("build action catalog: %v", err)
+	}
+	reg := NewRegistryFromCatalog(catalog)
+	cases := []struct {
+		query     string
+		forbidden string
+	}{
+		{"search projects named platform", "search.code"},
+		{"find repositories matching backend", "search.code"},
+		{"get user by id 42", "user.current"},
+		{"list all users in the group", "user.current"},
+	}
+	for _, tc := range cases {
+		var out SearchOutput
+		_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: tc.query, Limit: 5})
+		if err != nil {
+			t.Fatalf("search %q: %v", tc.query, err)
+		}
+		if len(out.Results) == 0 {
+			t.Fatalf("query %q returned no results", tc.query)
+		}
+		if out.Results[0].ID == tc.forbidden {
+			logRanking(t, tc.query, out.Results)
+			t.Errorf("query %q: top result must not be %q", tc.query, tc.forbidden)
+		}
+	}
+}

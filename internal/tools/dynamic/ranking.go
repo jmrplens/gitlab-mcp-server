@@ -60,22 +60,31 @@ const (
 )
 
 const (
-	minimumHighConfidenceScore   = 80
-	minimumHighConfidenceMargin  = 15
-	scoreVerbIntentBoost         = 16
-	scoreVerbIntentPenalty       = -24
-	scoreRequiredParamBoost      = 10
-	scoreCompoundTagBoost        = 50
-	scoreCompareRefsIntentBoost  = 90
-	scoreReleaseListIntentBoost  = 80
-	scoreAnalyzeNotesIntentBoost = 70
-	scoreMRSecurityIntentBoost   = 95
-	scoreDiscoverIntentBoost     = 95
-	scoreProjectGetIntentBoost   = 220
-	scoreSearchProjectsBoost     = 90
-	scoreServiceAccountBoost     = 80
-	scoreServiceAccountScope     = 30
-	scoreScopeIntentBoost        = 80
+	minimumHighConfidenceScore       = 80
+	minimumHighConfidenceMargin      = 15
+	scoreVerbIntentBoost             = 16
+	scoreVerbIntentPenalty           = -24
+	scoreRequiredParamBoost          = 10
+	scoreCompoundTagBoost            = 50
+	scoreCompareRefsIntentBoost      = 90
+	scoreReleaseListIntentBoost      = 80
+	scoreAnalyzeNotesIntentBoost     = 70
+	scoreAnalyzeMRChangesIntentBoost = 200
+	scoreMRSecurityIntentBoost       = 95
+	scoreDiscoverIntentBoost         = 95
+	scoreProjectGetIntentBoost       = 220
+	scoreSearchProjectsBoost         = 90
+	// scoreSearchCodeIntentBoost and scoreCurrentUserIntentBoost are intentionally
+	// large. Both actions pass the match-ratio filter via an intent bypass (they
+	// match only 2 of ~10 tokens in long queries), so after scaling their base
+	// score is ~26. Competing actions such as search.projects reach ~980 through
+	// high match counts and stacked boosts. The boost must exceed that deficit to
+	// guarantee the correct action wins.
+	scoreSearchCodeIntentBoost  = 1000
+	scoreCurrentUserIntentBoost = 1000
+	scoreServiceAccountBoost    = 80
+	scoreServiceAccountScope    = 30
+	scoreScopeIntentBoost       = 80
 )
 
 type verbIntent string
