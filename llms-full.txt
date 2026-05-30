@@ -23359,7 +23359,7 @@ Compare two refs (branches, tags, or commits) in a project. Use from_project_id 
 **Parameters:**
 
 - `from` (string) (required): Branch name, tag, or commit SHA to compare from
-- `from_project_id` (integer): Source project ID for cross-project comparison,minimum=1
+- `from_project_id` (integer): Source project ID for cross-project comparison, minimum=1
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `straight` (boolean): Use straight comparison (from..to) instead of merge-base (from...to)
 - `to` (string) (required): Branch name, tag, or commit SHA to compare to

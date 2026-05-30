@@ -341,7 +341,7 @@ func TestUpdateInstanceServiceAccount_Success(t *testing.T) {
 // returns a validation error when ServiceAccountID is 0.
 func TestUpdateInstanceServiceAccount_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when service_account_id is zero")
+		t.Errorf("API should not be called when service_account_id is zero")
 	}))
 
 	_, err := UpdateInstanceServiceAccount(context.Background(), client, UpdateServiceAccountInput{

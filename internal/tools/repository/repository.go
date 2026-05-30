@@ -91,7 +91,7 @@ type CompareInput struct {
 	To            string               `json:"to"                      jsonschema:"Branch name, tag, or commit SHA to compare to,required"`
 	Straight      bool                 `json:"straight,omitempty"      jsonschema:"Use straight comparison (from..to) instead of merge-base (from...to)"`
 	Unidiff       bool                 `json:"unidiff,omitempty"       jsonschema:"Return diffs in unified diff format"`
-	FromProjectID int64                `json:"from_project_id,omitempty" jsonschema:"Source project ID for cross-project comparison,minimum=1"`
+	FromProjectID int64                `json:"from_project_id,omitempty" jsonschema:"Source project ID for cross-project comparison, minimum=1"`
 }
 
 // DiffOutput is an alias for the shared diff type in toolutil.

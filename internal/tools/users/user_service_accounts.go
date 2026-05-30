@@ -146,8 +146,11 @@ func UpdateInstanceServiceAccount(ctx context.Context, client *gitlabclient.Clie
 	}
 	account, _, err := client.GL().Users.UpdateInstanceServiceAccount(input.ServiceAccountID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ServiceAccountOutput{}, toolutil.WrapErrWithStatusHint("update_instance_service_account", err, http.StatusForbidden,
-			"updating instance service accounts requires admin token; service accounts are GitLab Premium/Ultimate")
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return ServiceAccountOutput{}, toolutil.WrapErrWithStatusHint("update_instance_service_account", err, http.StatusForbidden,
+				"updating instance service accounts requires admin token; service accounts are GitLab Premium/Ultimate")
+		}
+		return ServiceAccountOutput{}, toolutil.WrapErrWithMessage("update_instance_service_account", err)
 	}
 	if account == nil {
 		return ServiceAccountOutput{}, errors.New("update_instance_service_account: GitLab API returned nil account")
@@ -243,7 +246,7 @@ func FormatServiceAccountListMarkdownString(out ServiceAccountListOutput) string
 	sb.WriteString("| ID | Username | Name | Email |\n")
 	sb.WriteString("|---|---|---|---|\n")
 	for _, a := range out.Accounts {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", a.ID, a.Username, a.Name, a.Email)
+		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", a.ID, toolutil.EscapeMdTableCell(a.Username), toolutil.EscapeMdTableCell(a.Name), toolutil.EscapeMdTableCell(a.Email))
 	}
 	return sb.String()
 }
