@@ -86,11 +86,12 @@ func Tree(ctx context.Context, client *gitlabclient.Client, input TreeInput) (Tr
 
 // CompareInput defines parameters for comparing branches, tags, or commits.
 type CompareInput struct {
-	ProjectID toolutil.StringOrInt `json:"project_id"           jsonschema:"Project ID or URL-encoded path,required"`
-	From      string               `json:"from"                 jsonschema:"Branch name, tag, or commit SHA to compare from,required"`
-	To        string               `json:"to"                   jsonschema:"Branch name, tag, or commit SHA to compare to,required"`
-	Straight  bool                 `json:"straight,omitempty"   jsonschema:"Use straight comparison (from..to) instead of merge-base (from...to)"`
-	Unidiff   bool                 `json:"unidiff,omitempty"    jsonschema:"Return diffs in unified diff format"`
+	ProjectID     toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
+	From          string               `json:"from"                    jsonschema:"Branch name, tag, or commit SHA to compare from,required"`
+	To            string               `json:"to"                      jsonschema:"Branch name, tag, or commit SHA to compare to,required"`
+	Straight      bool                 `json:"straight,omitempty"      jsonschema:"Use straight comparison (from..to) instead of merge-base (from...to)"`
+	Unidiff       bool                 `json:"unidiff,omitempty"       jsonschema:"Return diffs in unified diff format"`
+	FromProjectID int64                `json:"from_project_id,omitempty" jsonschema:"Source project ID for cross-project comparison, minimum=1"`
 }
 
 // DiffOutput is an alias for the shared diff type in toolutil.
@@ -124,6 +125,9 @@ func Compare(ctx context.Context, client *gitlabclient.Client, input CompareInpu
 	}
 	if input.Unidiff {
 		opts.Unidiff = new(true)
+	}
+	if input.FromProjectID != 0 {
+		opts.FromProjectID = &input.FromProjectID
 	}
 
 	cmp, _, err := client.GL().Repositories.Compare(string(input.ProjectID), opts, gl.WithContext(ctx))

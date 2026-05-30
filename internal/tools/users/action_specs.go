@@ -52,6 +52,7 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		specs = append(specs,
 			userEnterpriseCreateSpec("create_service_account", toolutil.RouteAction(client, CreateServiceAccount), "gitlab_create_service_account"),
 			userEnterpriseReadSpec("list_service_accounts", toolutil.RouteAction(client, ListServiceAccounts), "gitlab_list_service_accounts"),
+			userEnterpriseUpdateSpec("update_service_account", toolutil.RouteAction(client, UpdateInstanceServiceAccount), "gitlab_update_instance_service_account"),
 		)
 	}
 	return specs
@@ -103,6 +104,12 @@ func userEnterpriseCreateSpec(name string, route toolutil.ActionRoute, individua
 	options := userOptionsForAction(name, individualTool)
 	options.Edition = "premium"
 	return toolutil.NewCreateActionSpec(name, route, options)
+}
+
+func userEnterpriseUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := userOptionsForAction(name, individualTool)
+	options.Edition = "premium"
+	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
 func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
@@ -169,6 +176,11 @@ func userOptionsForAction(actionName, individualTool string) toolutil.ActionSpec
 		options.RelatedActions = []string{"user.current", "user.set_status", "user.get_status"}
 	case "gitlab_set_user_status":
 		options.RelatedActions = []string{"user.current_user_status", "user.get_status"}
+	case "gitlab_update_instance_service_account":
+		options.Usage = "Update an instance-level service account. Allows updating name, username, and email. Returns: updated service account with id, username, name, email, and unconfirmed_email. Requires admin token and GitLab Premium/Ultimate."
+		options.Aliases = []string{"update instance service account", "modify service account", individualTool}
+		options.RelatedActions = []string{"user.create_service_account", "user.list_service_accounts"}
+		options.IndividualTool.Description = "Update an instance-level service account. Returns: updated service account object including email and unconfirmed_email. Requires admin token. See also: gitlab_create_service_account, gitlab_list_service_accounts."
 	}
 
 	return options

@@ -77,6 +77,7 @@ type Output struct {
 	EnvironmentName string `json:"environment_name,omitempty"`
 	CreatedAt       string `json:"created_at,omitempty"`
 	UpdatedAt       string `json:"updated_at,omitempty"`
+	PipelineWebURL  string `json:"pipeline_web_url,omitempty"`
 }
 
 // ListOutput represents a paginated list of deployments.
@@ -110,6 +111,9 @@ func toOutput(d *gitlab.Deployment) Output {
 	}
 	if d.UpdatedAt != nil {
 		out.UpdatedAt = d.UpdatedAt.Format(time.RFC3339)
+	}
+	if d.Deployable.Pipeline.WebURL != "" {
+		out.PipelineWebURL = d.Deployable.Pipeline.WebURL
 	}
 	return out
 }

@@ -63,7 +63,28 @@ func FormatListMarkdown(out ListOutput) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
+// FormatWorkItemTypeListMarkdown formats a list of work item types as a Markdown table.
+func FormatWorkItemTypeListMarkdown(out WorkItemTypeListOutput) *mcp.CallToolResult {
+	if len(out.Types) == 0 {
+		return toolutil.ToolResultWithMarkdown("No work item types found.\n")
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "## Work Item Types (%d)\n\n", len(out.Types))
+	sb.WriteString("| Name | ID | Enabled |\n")
+	sb.WriteString("|------|----|---------|\n")
+	for _, t := range out.Types {
+		fmt.Fprintf(&sb, "| %s | `%s` | %v |\n",
+			toolutil.EscapeMdTableCell(t.Name), toolutil.EscapeMdTableCell(t.ID), t.Enabled)
+	}
+	if out.Pagination.HasNextPage {
+		fmt.Fprintf(&sb, "\n> Next page cursor: `%s`\n", out.Pagination.EndCursor)
+	}
+	toolutil.WriteHints(&sb, "Use `gitlab_create_work_item` with work_item_type_id from the ID column to create work items of this type")
+	return toolutil.ToolResultWithMarkdown(sb.String())
+}
+
 func init() {
 	toolutil.RegisterMarkdownResult(FormatGetMarkdown)
 	toolutil.RegisterMarkdownResult(FormatListMarkdown)
+	toolutil.RegisterMarkdownResult(FormatWorkItemTypeListMarkdown)
 }

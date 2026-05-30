@@ -544,11 +544,11 @@ func assertCatalogMissingAction(t *testing.T, catalog *actioncatalog.Catalog, ac
 
 const (
 	// expectedBaseDynamicCatalogActions identifies the expected base dynamic catalog actions constant used by this package.
-	expectedBaseDynamicCatalogActions = 870
+	expectedBaseDynamicCatalogActions = 871
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
-	expectedEnterpriseDynamicCatalogActions = 1029
+	expectedEnterpriseDynamicCatalogActions = 1031
 	// expectedGitLabComEnterpriseCatalogActions identifies the expected GitLab com enterprise catalog actions constant used by this package.
-	expectedGitLabComEnterpriseCatalogActions = 1035
+	expectedGitLabComEnterpriseCatalogActions = 1037
 )
 
 // TestActionCatalog_BaselineCountsDoNotRegress covers ActionCatalog with table-driven subtests for baseline counts do not regress.

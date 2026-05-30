@@ -15,6 +15,7 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestGet_Success verifies Get when success.
@@ -1563,6 +1564,211 @@ func TestFormatGetMarkdown_NoStatusNoLinkedItems(t *testing.T) {
 	}
 	if strings.Contains(text, "### Linked Items") {
 		t.Error("unexpected Linked Items in output")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ListWorkItemTypes
+// ---------------------------------------------------------------------------.
+
+// TestListWorkItemTypes_Success verifies ListWorkItemTypes returns two types
+// when the GraphQL endpoint returns a namespace with two WorkItemType nodes.
+func TestListWorkItemTypes_Success(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf(fmtUnexpMethod, r.Method)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"data": {
+				"namespace": {
+					"workItemTypes": {
+						"nodes": [
+							{"id":"gid://gitlab/WorkItems::Type/1","name":"Issue","enabled":true},
+							{"id":"gid://gitlab/WorkItems::Type/7","name":"Task","enabled":true}
+						],
+						"pageInfo": {
+							"hasNextPage": false,
+							"hasPreviousPage": false,
+							"endCursor": "",
+							"startCursor": ""
+						}
+					}
+				}
+			}
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{
+		FullPath: testFullPath,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Types) != 2 {
+		t.Fatalf("expected 2 types, got %d", len(out.Types))
+	}
+	if out.Types[0].Name != "Issue" {
+		t.Errorf("Types[0].Name = %q, want Issue", out.Types[0].Name)
+	}
+	if !out.Types[0].Enabled {
+		t.Errorf("Types[0].Enabled = false, want true")
+	}
+	if out.Types[1].Name != "Task" {
+		t.Errorf("Types[1].Name = %q, want Task", out.Types[1].Name)
+	}
+	if out.Pagination.HasNextPage {
+		t.Error("Pagination.HasNextPage = true, want false")
+	}
+	if out.Pagination.HasPreviousPage {
+		t.Error("Pagination.HasPreviousPage = true, want false")
+	}
+	if out.Pagination.EndCursor != "" {
+		t.Errorf("Pagination.EndCursor = %q, want empty", out.Pagination.EndCursor)
+	}
+}
+
+// TestListWorkItemTypes_EmptyFullPath verifies ListWorkItemTypes returns a
+// validation error when full_path is empty.
+func TestListWorkItemTypes_EmptyFullPath(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("should not reach API")
+	}))
+	_, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "full_path") {
+		t.Fatalf("expected error to mention full_path, got: %v", err)
+	}
+}
+
+// TestListWorkItemTypes_NotFound verifies ListWorkItemTypes returns an error
+// when the GraphQL response contains errors (e.g. namespace not found).
+func TestListWorkItemTypes_NotFound(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"errors":[{"message":"not found"}]}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{FullPath: "nonexistent/project"})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+}
+
+// TestListWorkItemTypes_WithOptions verifies ListWorkItemTypes passes name and
+// onlyAvailable filter options to the API.
+func TestListWorkItemTypes_WithOptions(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"data": {
+				"namespace": {
+					"workItemTypes": {
+						"nodes": [
+							{"id":"gid://gitlab/WorkItems::Type/1","name":"Issue","enabled":true}
+						],
+						"pageInfo": {"hasNextPage":false,"hasPreviousPage":false,"endCursor":"","startCursor":""}
+					}
+				}
+			}
+		}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{
+		FullPath:      testFullPath,
+		Name:          "Issue",
+		OnlyAvailable: true,
+		First:         10,
+		After:         "cursor-abc",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Types) != 1 {
+		t.Fatalf("expected 1 type, got %d", len(out.Types))
+	}
+	if out.Types[0].Name != "Issue" {
+		t.Errorf("Types[0].Name = %q, want Issue", out.Types[0].Name)
+	}
+}
+
+// TestListWorkItemTypes_APIError verifies ListWorkItemTypes returns an error
+// when the API returns a non-200 HTTP status.
+func TestListWorkItemTypes_APIError(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{FullPath: testFullPath})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FormatWorkItemTypeListMarkdown
+// ---------------------------------------------------------------------------.
+
+// TestFormatWorkItemTypeListMarkdown_WithTypes verifies that a list with two
+// types renders a Markdown table with the correct headers and rows.
+func TestFormatWorkItemTypeListMarkdown_WithTypes(t *testing.T) {
+	out := WorkItemTypeListOutput{
+		Types: []WorkItemTypeOutput{
+			{ID: "gid://gitlab/WorkItems::Type/1", Name: "Issue", Enabled: true},
+			{ID: "gid://gitlab/WorkItems::Type/7", Name: "Task", Enabled: false},
+		},
+	}
+	result := FormatWorkItemTypeListMarkdown(out)
+	if result == nil {
+		t.Fatal(errExpNonNilResult)
+	}
+	text := extractText(t, result)
+
+	for _, want := range []string{
+		"## Work Item Types (2)",
+		"| Name | ID | Enabled |",
+		"Issue",
+		"Task",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("markdown missing %q:\n%s", want, text)
+		}
+	}
+}
+
+// TestFormatWorkItemTypeListMarkdown_Empty verifies that an empty type list
+// returns a result containing a "no work item types" message.
+func TestFormatWorkItemTypeListMarkdown_Empty(t *testing.T) {
+	out := WorkItemTypeListOutput{}
+	result := FormatWorkItemTypeListMarkdown(out)
+	if result == nil {
+		t.Fatal(errExpNonNilResult)
+	}
+	text := extractText(t, result)
+	if !strings.Contains(text, "No work item types found") {
+		t.Errorf("expected 'No work item types found' message, got:\n%s", text)
+	}
+}
+
+// TestFormatWorkItemTypeListMarkdown_WithNextPage verifies that a next-page
+// cursor is included in the output when HasNextPage is true.
+func TestFormatWorkItemTypeListMarkdown_WithNextPage(t *testing.T) {
+	out := WorkItemTypeListOutput{
+		Types: []WorkItemTypeOutput{
+			{ID: "gid://gitlab/WorkItems::Type/1", Name: "Issue", Enabled: true},
+		},
+		Pagination: toolutil.GraphQLPaginationOutput{
+			HasNextPage: true,
+			EndCursor:   "next-page-cursor",
+		},
+	}
+	result := FormatWorkItemTypeListMarkdown(out)
+	text := extractText(t, result)
+	if !strings.Contains(text, "next-page-cursor") {
+		t.Errorf("expected next-page cursor in output:\n%s", text)
 	}
 }
 

@@ -45,6 +45,9 @@ func FormatOutputMarkdown(d Output) string {
 	if d.UpdatedAt != "" {
 		fmt.Fprintf(&b, "| Updated | %s |\n", toolutil.FormatTime(d.UpdatedAt))
 	}
+	if d.PipelineWebURL != "" {
+		fmt.Fprintf(&b, "| Pipeline | [#%d](%s) |\n", d.ID, d.PipelineWebURL)
+	}
 	toolutil.WriteHints(&b,
 		"Use gitlab_environment action 'list' to see all environments",
 		"Use gitlab_merge_request to see related merge request details",

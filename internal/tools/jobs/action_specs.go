@@ -111,6 +111,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		options.RelatedActions = []string{actionJobGet, actionJobTrace, actionJobCancel}
 	case "gitlab_job_cancel":
 		options.RelatedActions = []string{actionJobGet, actionJobTrace, actionJobRetry}
+		options.IndividualTool.Description = "Cancel a CI job. Set force:true to cancel jobs already in a non-cancellable state (requires GitLab v17.2+). Returns: updated job state. See also: gitlab_job_get, gitlab_job_retry."
 	}
 
 	return options

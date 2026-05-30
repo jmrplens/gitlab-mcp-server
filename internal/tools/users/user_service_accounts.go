@@ -16,9 +16,11 @@ import (
 
 // ServiceAccountOutput represents a service account.
 type ServiceAccountOutput struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
+	ID               int64  `json:"id"`
+	Username         string `json:"username"`
+	Name             string `json:"name"`
+	Email            string `json:"email,omitempty"`
+	UnconfirmedEmail string `json:"unconfirmed_email,omitempty"`
 }
 
 // ServiceAccountListOutput holds a list of service accounts.
@@ -109,12 +111,57 @@ func ListServiceAccounts(ctx context.Context, client *gitlabclient.Client, input
 	out := make([]ServiceAccountOutput, 0, len(accounts))
 	for _, a := range accounts {
 		out = append(out, ServiceAccountOutput{
-			ID:       a.ID,
-			Username: a.Username,
-			Name:     a.Name,
+			ID:               a.ID,
+			Username:         a.Username,
+			Name:             a.Name,
+			Email:            a.Email,
+			UnconfirmedEmail: a.UnconfirmedEmail,
 		})
 	}
 	return ServiceAccountListOutput{Accounts: out}, nil
+}
+
+// UpdateServiceAccountInput holds parameters for updating an instance service account.
+type UpdateServiceAccountInput struct {
+	ServiceAccountID int64  `json:"service_account_id" jsonschema:"Service account ID to update,required"`
+	Name             string `json:"name,omitempty"              jsonschema:"New name for the service account"`
+	Username         string `json:"username,omitempty"          jsonschema:"New username for the service account"`
+	Email            string `json:"email,omitempty"             jsonschema:"New email for the service account"`
+}
+
+// UpdateInstanceServiceAccount updates an instance-level service account.
+func UpdateInstanceServiceAccount(ctx context.Context, client *gitlabclient.Client, input UpdateServiceAccountInput) (ServiceAccountOutput, error) {
+	if input.ServiceAccountID <= 0 {
+		return ServiceAccountOutput{}, toolutil.ErrRequiredInt64("update_instance_service_account", "service_account_id")
+	}
+	opts := &gl.UpdateServiceAccountOptions{}
+	if input.Name != "" {
+		opts.Name = new(input.Name)
+	}
+	if input.Username != "" {
+		opts.Username = new(input.Username)
+	}
+	if input.Email != "" {
+		opts.Email = new(input.Email)
+	}
+	account, _, err := client.GL().Users.UpdateInstanceServiceAccount(input.ServiceAccountID, opts, gl.WithContext(ctx))
+	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
+			return ServiceAccountOutput{}, toolutil.WrapErrWithStatusHint("update_instance_service_account", err, http.StatusForbidden,
+				"updating instance service accounts requires admin token; service accounts are GitLab Premium/Ultimate")
+		}
+		return ServiceAccountOutput{}, toolutil.WrapErrWithMessage("update_instance_service_account", err)
+	}
+	if account == nil {
+		return ServiceAccountOutput{}, errors.New("update_instance_service_account: GitLab API returned nil account")
+	}
+	return ServiceAccountOutput{
+		ID:               account.ID,
+		Username:         account.Username,
+		Name:             account.Name,
+		Email:            account.Email,
+		UnconfirmedEmail: account.UnconfirmedEmail,
+	}, nil
 }
 
 // CreateCurrentUserPAT creates a personal access token for the currently authenticated user.
@@ -173,6 +220,22 @@ func toCurrentUserPATOutput(t *gl.PersonalAccessToken) CurrentUserPATOutput {
 
 // --- Markdown formatters ---.
 
+// FormatServiceAccountMarkdownString formats a single service account as Markdown.
+func FormatServiceAccountMarkdownString(out ServiceAccountOutput) string {
+	var sb strings.Builder
+	sb.WriteString("## Service Account\n\n")
+	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
+	fmt.Fprintf(&sb, "- **Username**: %s\n", out.Username)
+	fmt.Fprintf(&sb, "- **Name**: %s\n", out.Name)
+	if out.Email != "" {
+		fmt.Fprintf(&sb, "- **Email**: %s\n", out.Email)
+	}
+	if out.UnconfirmedEmail != "" {
+		fmt.Fprintf(&sb, "- **Unconfirmed Email**: %s\n", out.UnconfirmedEmail)
+	}
+	return sb.String()
+}
+
 // FormatServiceAccountListMarkdownString formats a list of service accounts as Markdown.
 func FormatServiceAccountListMarkdownString(out ServiceAccountListOutput) string {
 	if len(out.Accounts) == 0 {
@@ -180,10 +243,10 @@ func FormatServiceAccountListMarkdownString(out ServiceAccountListOutput) string
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Service Accounts (%d)\n\n", len(out.Accounts))
-	sb.WriteString("| ID | Username | Name |\n")
-	sb.WriteString("|---|---|---|\n")
+	sb.WriteString("| ID | Username | Name | Email |\n")
+	sb.WriteString("|---|---|---|---|\n")
 	for _, a := range out.Accounts {
-		fmt.Fprintf(&sb, "| %d | %s | %s |\n", a.ID, a.Username, a.Name)
+		fmt.Fprintf(&sb, "| %d | %s | %s | %s |\n", a.ID, toolutil.EscapeMdTableCell(a.Username), toolutil.EscapeMdTableCell(a.Name), toolutil.EscapeMdTableCell(a.Email))
 	}
 	return sb.String()
 }

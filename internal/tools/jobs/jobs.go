@@ -195,8 +195,15 @@ type ActionInput struct {
 	JobID     int64                `json:"job_id"     jsonschema:"Job ID to act on,required"`
 }
 
-// Cancel cancels a running job.
-func Cancel(ctx context.Context, client *gitlabclient.Client, input ActionInput) (Output, error) {
+// CancelInput defines parameters for canceling a job, with optional force cancel.
+type CancelInput struct {
+	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
+	JobID     int64                `json:"job_id"     jsonschema:"Job ID to cancel,required"`
+	Force     bool                 `json:"force,omitempty" jsonschema:"Force cancel even if the job is already in a non-cancellable state"`
+}
+
+// Cancel cancels a running job. When Force is true, cancels even if the job is in a non-cancellable state.
+func Cancel(ctx context.Context, client *gitlabclient.Client, input CancelInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
 	}
@@ -208,14 +215,21 @@ func Cancel(ctx context.Context, client *gitlabclient.Client, input ActionInput)
 		return Output{}, toolutil.ErrRequiredInt64("jobCancel", "job_id")
 	}
 
-	j, _, err := client.GL().Jobs.CancelJob(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
+	var j *gl.Job
+	var err error
+	if input.Force {
+		//nolint:staticcheck // CancelJobWithOptions is the only way to pass Force until v4.0 merges it into CancelJob.
+		j, _, err = client.GL().Jobs.CancelJobWithOptions(string(input.ProjectID), input.JobID, &gl.CancelJobOptions{Force: new(true)}, gl.WithContext(ctx))
+	} else {
+		j, _, err = client.GL().Jobs.CancelJob(string(input.ProjectID), input.JobID, gl.WithContext(ctx))
+	}
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("jobCancel", err,
-				"canceling jobs requires Developer+ role on the project; the job may also be in a non-cancellable state (already finished/canceled)")
+				"canceling jobs requires Developer+ role on the project; the job may also be in a non-cancellable state (already finished/canceled) \u2014 use force:true to override (requires GitLab v17.2+)")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("jobCancel", err, http.StatusNotFound,
-			"verify job_id with gitlab_job_list \u2014 only running/pending jobs can be cancelled")
+			"verify job_id with gitlab_job_list \u2014 only running/pending jobs can be cancelled; use force:true for non-cancellable states")
 	}
 	return ToOutput(j), nil
 }

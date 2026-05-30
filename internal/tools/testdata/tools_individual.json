@@ -16053,6 +16053,9 @@
             "array"
           ]
         },
+        "pipeline_web_url": {
+          "type": "string"
+        },
         "ref": {
           "type": "string"
         },
@@ -16185,6 +16188,9 @@
             "array"
           ]
         },
+        "pipeline_web_url": {
+          "type": "string"
+        },
         "ref": {
           "type": "string"
         },
@@ -16284,6 +16290,9 @@
                   "null",
                   "array"
                 ]
+              },
+              "pipeline_web_url": {
+                "type": "string"
               },
               "ref": {
                 "type": "string"
@@ -16423,6 +16432,9 @@
             "null",
             "array"
           ]
+        },
+        "pipeline_web_url": {
+          "type": "string"
         },
         "ref": {
           "type": "string"
@@ -48956,12 +48968,16 @@
   },
   {
     "name": "gitlab_job_cancel",
-    "description": "Cancel a running or pending CI/CD job in a GitLab project. Returns the updated job details.\n\nReturns: JSON with the updated job details. See also: gitlab_job_retry, gitlab_job_get.",
+    "description": "Cancel a CI job. Set force:true to cancel jobs already in a non-cancellable state (requires GitLab v17.2+). Returns: updated job state. See also: gitlab_job_get, gitlab_job_retry.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "force": {
+          "description": "Force cancel even if the job is already in a non-cancellable state",
+          "type": "boolean"
+        },
         "job_id": {
-          "description": "Job ID to act on",
+          "description": "Job ID to cancel",
           "type": "integer"
         },
         "project_id": {
@@ -60386,10 +60402,16 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "email": {
+                "type": "string"
+              },
               "id": {
                 "type": "integer"
               },
               "name": {
+                "type": "string"
+              },
+              "unconfirmed_email": {
                 "type": "string"
               },
               "username": {
@@ -62025,6 +62047,112 @@
       },
       "required": [
         "vulnerabilities",
+        "pagination"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "gitlab_list_work_item_types",
+    "description": "List work item types for a namespace. Returns: id, name, and enabled flag for each type. Supports name filter, only_available flag, and cursor pagination. Experimental. See also: gitlab_list_work_items, gitlab_create_work_item.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "description": "Cursor for forward pagination",
+          "type": "string"
+        },
+        "first": {
+          "description": "Number of types to return from the beginning (cursor pagination)",
+          "type": "integer"
+        },
+        "full_path": {
+          "description": "Project or group full path (namespace path)",
+          "type": "string"
+        },
+        "name": {
+          "description": "Filter by work item type name",
+          "type": "string"
+        },
+        "only_available": {
+          "description": "Return only available work item types",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "full_path"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "pagination": {
+          "additionalProperties": false,
+          "properties": {
+            "end_cursor": {
+              "type": "string"
+            },
+            "has_next_page": {
+              "type": "boolean"
+            },
+            "has_previous_page": {
+              "type": "boolean"
+            },
+            "start_cursor": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "has_next_page",
+            "has_previous_page"
+          ],
+          "type": "object"
+        },
+        "types": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "enabled"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "types",
         "pagination"
       ],
       "type": "object"
@@ -99733,13 +99861,17 @@
   },
   {
     "name": "gitlab_repository_compare",
-    "description": "Compare two branches, tags, or commits in a GitLab repository. Returns the list of commits between them and the diffs (changed files) with old/new paths and diff text.\n\nReturns: JSON with commits and file diffs between the two refs. See also: gitlab_commit_diff, gitlab_branch_list.",
+    "description": "Compare two refs (branches, tags, or commits) in a project. Use from_project_id for cross-project comparison. Returns: commits, diffs, and comparison metadata. See also: gitlab_repository_tree, gitlab_branch_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "from": {
           "description": "Branch name, tag, or commit SHA to compare from",
           "type": "string"
+        },
+        "from_project_id": {
+          "description": "Source project ID for cross-project comparison, minimum=1",
+          "type": "integer"
         },
         "project_id": {
           "description": "Project ID or URL-encoded path",
@@ -113570,6 +113702,66 @@
       },
       "required": [
         "secret_push_protection_enabled"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_update_instance_service_account",
+    "description": "Update an instance-level service account. Returns: updated service account object including email and unconfirmed_email. Requires admin token. See also: gitlab_create_service_account, gitlab_list_service_accounts.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "description": "New email for the service account",
+          "type": "string"
+        },
+        "name": {
+          "description": "New name for the service account",
+          "type": "string"
+        },
+        "service_account_id": {
+          "description": "Service account ID to update",
+          "type": "integer"
+        },
+        "username": {
+          "description": "New username for the service account",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service_account_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "unconfirmed_email": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "name"
       ],
       "type": "object"
     },

@@ -5,6 +5,7 @@ package jobs
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -264,7 +265,7 @@ func TestJobCancel_Success(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := Cancel(context.Background(), client, ActionInput{
+	out, err := Cancel(context.Background(), client, CancelInput{
 		ProjectID: "42",
 		JobID:     100,
 	})
@@ -282,7 +283,7 @@ func TestJobCancel_EmptyProjectID(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
 	}))
 
-	_, err := Cancel(context.Background(), client, ActionInput{JobID: 100})
+	_, err := Cancel(context.Background(), client, CancelInput{JobID: 100})
 	if err == nil {
 		t.Fatal(testutil.MsgErrEmptyProjectID)
 	}
@@ -756,8 +757,8 @@ func TestJobIDRequired_Validation(t *testing.T) {
 		{"Get_negative", func() error { _, e := Get(ctx, client, GetInput{ProjectID: pid, JobID: -1}); return e }},
 		{"Trace_zero", func() error { _, e := Trace(ctx, client, TraceInput{ProjectID: pid, JobID: 0}); return e }},
 		{"Trace_negative", func() error { _, e := Trace(ctx, client, TraceInput{ProjectID: pid, JobID: -1}); return e }},
-		{"Cancel_zero", func() error { _, e := Cancel(ctx, client, ActionInput{ProjectID: pid, JobID: 0}); return e }},
-		{"Cancel_negative", func() error { _, e := Cancel(ctx, client, ActionInput{ProjectID: pid, JobID: -3}); return e }},
+		{"Cancel_zero", func() error { _, e := Cancel(ctx, client, CancelInput{ProjectID: pid, JobID: 0}); return e }},
+		{"Cancel_negative", func() error { _, e := Cancel(ctx, client, CancelInput{ProjectID: pid, JobID: -3}); return e }},
 		{"Retry_zero", func() error { _, e := Retry(ctx, client, ActionInput{ProjectID: pid, JobID: 0}); return e }},
 		{"Retry_negative", func() error { _, e := Retry(ctx, client, ActionInput{ProjectID: pid, JobID: -1}); return e }},
 		{"GetArtifacts_zero", func() error { _, e := GetArtifacts(ctx, client, GetInput{ProjectID: pid, JobID: 0}); return e }},
@@ -944,7 +945,7 @@ func TestJobCancel_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
 	}))
-	_, err := Cancel(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
+	_, err := Cancel(context.Background(), client, CancelInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
@@ -955,8 +956,50 @@ func TestJobCancel_NotFoundAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Job Not Found"}`)
 	}))
-	_, err := Cancel(context.Background(), client, ActionInput{ProjectID: "42", JobID: 100})
+	_, err := Cancel(context.Background(), client, CancelInput{ProjectID: "42", JobID: 100})
 	assertContains(t, err, "gitlab_job_list")
+}
+
+// TestJobCancel_ForceTrue verifies Cancel with Force=true routes to
+// CancelJobWithOptions, sends force=true in the request body, and returns the cancelled job.
+func TestJobCancel_ForceTrue(t *testing.T) {
+	forceSent := false
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathJobCancel {
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
+				if v, ok := body["force"].(bool); ok && v {
+					forceSent = true
+				}
+			}
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":100,"name":"build","stage":"build","status":"canceled",
+				"ref":"main","tag":false,"duration":10.0,"queued_duration":1.0,
+				"web_url":"https://gitlab.example.com/-/jobs/100",
+				"pipeline":{"id":10},"created_at":"2026-03-01T10:00:00Z"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Cancel(context.Background(), client, CancelInput{
+		ProjectID: "42",
+		JobID:     100,
+		Force:     true,
+	})
+	if err != nil {
+		t.Fatalf("Cancel(Force=true) unexpected error: %v", err)
+	}
+	if !forceSent {
+		t.Error("Cancel(Force=true) did not send force=true in request body")
+	}
+	if out.Status != "canceled" {
+		t.Errorf("out.Status = %q, want canceled", out.Status)
+	}
+	if out.ID != 100 {
+		t.Errorf(fmtIDWant100, out.ID)
+	}
 }
 
 // TestJobCancel_CancelledContext verifies JobCancel when cancelled context.
@@ -965,7 +1008,7 @@ func TestJobCancel_CancelledContext(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, jobJSON)
 	}))
 	ctx := testutil.CancelledCtx(t)
-	_, err := Cancel(ctx, client, ActionInput{ProjectID: "42", JobID: 100})
+	_, err := Cancel(ctx, client, CancelInput{ProjectID: "42", JobID: 100})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
 	}

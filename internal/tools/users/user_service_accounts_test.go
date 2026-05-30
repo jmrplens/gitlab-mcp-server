@@ -291,3 +291,154 @@ func TestFormatCurrentUserPATMarkdownString_WithAllFields(t *testing.T) {
 		}
 	}
 }
+
+// --- UpdateInstanceServiceAccount tests ---.
+
+// TestUpdateInstanceServiceAccount_Success verifies UpdateInstanceServiceAccount
+// returns the updated service account when PATCH /service_accounts/:id responds 200 OK.
+func TestUpdateInstanceServiceAccount_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch && r.URL.Path == "/api/v4/service_accounts/5" {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":5,
+				"username":"svc-updated",
+				"name":"Updated Service",
+				"email":"updated@example.com",
+				"unconfirmed_email":"new@example.com"
+			}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := UpdateInstanceServiceAccount(context.Background(), client, UpdateServiceAccountInput{
+		ServiceAccountID: 5,
+		Name:             "Updated Service",
+		Username:         "svc-updated",
+		Email:            "updated@example.com",
+	})
+	if err != nil {
+		t.Fatalf("UpdateInstanceServiceAccount() unexpected error: %v", err)
+	}
+	if out.ID != 5 {
+		t.Errorf("out.ID = %d, want 5", out.ID)
+	}
+	if out.Username != "svc-updated" {
+		t.Errorf("out.Username = %q, want svc-updated", out.Username)
+	}
+	if out.Name != "Updated Service" {
+		t.Errorf("out.Name = %q, want 'Updated Service'", out.Name)
+	}
+	if out.Email != "updated@example.com" {
+		t.Errorf("out.Email = %q, want updated@example.com", out.Email)
+	}
+	if out.UnconfirmedEmail != "new@example.com" {
+		t.Errorf("out.UnconfirmedEmail = %q, want new@example.com", out.UnconfirmedEmail)
+	}
+}
+
+// TestUpdateInstanceServiceAccount_MissingID verifies UpdateInstanceServiceAccount
+// returns a validation error when ServiceAccountID is 0.
+func TestUpdateInstanceServiceAccount_MissingID(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Errorf("API should not be called when service_account_id is zero")
+	}))
+
+	_, err := UpdateInstanceServiceAccount(context.Background(), client, UpdateServiceAccountInput{
+		ServiceAccountID: 0,
+		Name:             "test",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing service_account_id, got nil")
+	}
+	if !strings.Contains(err.Error(), "service_account_id") {
+		t.Errorf("expected error to mention service_account_id, got: %v", err)
+	}
+}
+
+// TestUpdateInstanceServiceAccount_Forbidden verifies UpdateInstanceServiceAccount
+// returns an error with admin hint when the API responds 403 Forbidden.
+func TestUpdateInstanceServiceAccount_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
+	}))
+
+	_, err := UpdateInstanceServiceAccount(context.Background(), client, UpdateServiceAccountInput{
+		ServiceAccountID: 5,
+		Name:             "test",
+	})
+	if err == nil {
+		t.Fatal("expected error for 403 Forbidden, got nil")
+	}
+	if !strings.Contains(err.Error(), "admin") {
+		t.Errorf("expected error to mention admin token requirement, got: %v", err)
+	}
+}
+
+// TestUpdateInstanceServiceAccount_NilResponse verifies UpdateInstanceServiceAccount
+// returns an error when the GitLab API returns a nil service account body.
+func TestUpdateInstanceServiceAccount_NilResponse(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `null`)
+	}))
+
+	_, err := UpdateInstanceServiceAccount(context.Background(), client, UpdateServiceAccountInput{
+		ServiceAccountID: 5,
+		Name:             "test",
+	})
+	if err == nil {
+		t.Fatal("expected error for nil API response, got nil")
+	}
+	if !strings.Contains(err.Error(), "nil account") {
+		t.Errorf("expected error to mention nil account, got: %v", err)
+	}
+}
+
+// TestFormatServiceAccountMarkdownString_WithEmail verifies FormatServiceAccountMarkdownString
+// includes Email and UnconfirmedEmail fields when both are set.
+func TestFormatServiceAccountMarkdownString_WithEmail(t *testing.T) {
+	out := ServiceAccountOutput{
+		ID:               7,
+		Username:         "svc-7",
+		Name:             "Service Seven",
+		Email:            "svc7@example.com",
+		UnconfirmedEmail: "pending@example.com",
+	}
+	md := FormatServiceAccountMarkdownString(out)
+
+	for _, want := range []string{
+		"## Service Account",
+		"**Username**: svc-7",
+		"**Name**: Service Seven",
+		"**Email**: svc7@example.com",
+		"**Unconfirmed Email**: pending@example.com",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown missing %q:\n%s", want, md)
+		}
+	}
+}
+
+// TestFormatServiceAccountMarkdownString_NoEmail verifies FormatServiceAccountMarkdownString
+// omits the Email and UnconfirmedEmail lines when those fields are empty.
+func TestFormatServiceAccountMarkdownString_NoEmail(t *testing.T) {
+	out := ServiceAccountOutput{
+		ID:       8,
+		Username: "svc-8",
+		Name:     "Service Eight",
+	}
+	md := FormatServiceAccountMarkdownString(out)
+
+	if !strings.Contains(md, "**Username**: svc-8") {
+		t.Errorf("markdown missing Username:\n%s", md)
+	}
+	if !strings.Contains(md, "**Name**: Service Eight") {
+		t.Errorf("markdown missing Name:\n%s", md)
+	}
+	if strings.Contains(md, "**Email**") {
+		t.Errorf("markdown should not contain Email when empty:\n%s", md)
+	}
+	if strings.Contains(md, "**Unconfirmed Email**") {
+		t.Errorf("markdown should not contain Unconfirmed Email when empty:\n%s", md)
+	}
+}

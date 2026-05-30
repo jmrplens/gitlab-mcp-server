@@ -110,6 +110,34 @@ func TestDeploymentList_CancelledContext(t *testing.T) {
 // deploymentGet tests
 // ---------------------------------------------------------------------------.
 
+// TestDeploymentGet_WithPipelineWebURL verifies that toOutput populates
+// PipelineWebURL when the deployable.pipeline.web_url field is non-empty.
+func TestDeploymentGet_WithPipelineWebURL(t *testing.T) {
+	const pipelineURL = "https://gitlab.example.com/my-org/project/-/pipelines/123"
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{
+				"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success",
+				"user":{"username":"admin"},
+				"environment":{"name":"production"},
+				"created_at":"2026-01-01T00:00:00Z",
+				"deployable":{"pipeline":{"web_url":"`+pipelineURL+`"}}
+			}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.PipelineWebURL != pipelineURL {
+		t.Errorf("PipelineWebURL = %q, want %q", out.PipelineWebURL, pipelineURL)
+	}
+}
+
 // TestDeploymentGet_Success verifies DeploymentGet when success.
 func TestDeploymentGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -126,6 +154,64 @@ func TestDeploymentGet_Success(t *testing.T) {
 	}
 	if out.ID != 1 || out.Ref != "main" || out.SHA != "abc123" || out.Status != "success" {
 		t.Errorf("unexpected output: %+v", out)
+	}
+}
+
+// TestDeploymentGet_NilDeployable verifies DeploymentGet when deployable is absent.
+func TestDeploymentGet_NilDeployable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
+			// deployable field is absent — zero-value DeploymentDeployable has empty Pipeline
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.PipelineWebURL != "" {
+		t.Errorf("PipelineWebURL = %q, want empty string", out.PipelineWebURL)
+	}
+}
+
+// TestDeploymentGet_NilPipeline verifies DeploymentGet when deployable exists but pipeline is absent.
+func TestDeploymentGet_NilPipeline(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","deployable":{"id":10,"status":"success","stage":"deploy"}}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.PipelineWebURL != "" {
+		t.Errorf("PipelineWebURL = %q, want empty string", out.PipelineWebURL)
+	}
+}
+
+// TestDeploymentGet_EmptyWebURL verifies DeploymentGet when pipeline exists but web_url is empty.
+func TestDeploymentGet_EmptyWebURL(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","deployable":{"pipeline":{"web_url":""}}}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.PipelineWebURL != "" {
+		t.Errorf("PipelineWebURL = %q, want empty string", out.PipelineWebURL)
 	}
 }
 
@@ -732,6 +818,25 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		if strings.Contains(md, absent) {
 			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
 		}
+	}
+}
+
+// TestFormatOutputMarkdown_WithPipelineWebURL verifies that pipeline_web_url renders a link.
+func TestFormatOutputMarkdown_WithPipelineWebURL(t *testing.T) {
+	md := FormatOutputMarkdown(Output{
+		ID:             5,
+		IID:            5,
+		Ref:            "main",
+		SHA:            "abc123",
+		Status:         "success",
+		PipelineWebURL: "https://gitlab.example.com/my-org/project/-/pipelines/123",
+	})
+
+	if !strings.Contains(md, "| Pipeline |") {
+		t.Errorf("markdown missing Pipeline row:\n%s", md)
+	}
+	if !strings.Contains(md, "https://gitlab.example.com/my-org/project/-/pipelines/123") {
+		t.Errorf("markdown missing pipeline URL:\n%s", md)
 	}
 }
 

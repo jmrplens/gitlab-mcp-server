@@ -24,6 +24,7 @@ func repositoryCompareSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	options := repositoryOptionsForAction("compare", "gitlab_repository_compare")
 	options.Usage = "Compares two refs using params.from and params.to; use before analyze.release_notes when the task asks to inspect the diff."
 	options.RelatedActions = append(options.RelatedActions, "analyze.release_notes", "release.list")
+	options.IndividualTool.Description = "Compare two refs (branches, tags, or commits) in a project. Use from_project_id for cross-project comparison. Returns: commits, diffs, and comparison metadata. See also: gitlab_repository_tree, gitlab_branch_list."
 	return toolutil.NewReadActionSpec("compare", route, options)
 }
 

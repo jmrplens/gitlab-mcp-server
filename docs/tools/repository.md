@@ -47,7 +47,7 @@ List the files and directories (tree) of a GitLab repository at a given path and
 
 ### `gitlab_repository_compare`
 
-Compare two branches, tags, or commits in a GitLab repository. Returns the list of commits between them and the diffs (changed files) with old/new paths and diff text.
+Compare two branches, tags, or commits in a GitLab repository. Supports `from_project_id` for cross-project comparisons (compare a ref from a different project). Returns the list of commits between them and the diffs (changed files) with old/new paths and diff text.
 
 | Annotation | **Read** |
 | ---------- | -------- |
