@@ -99870,7 +99870,7 @@
           "type": "string"
         },
         "from_project_id": {
-          "description": "Source project ID for cross-project comparison,minimum=1",
+          "description": "Source project ID for cross-project comparison, minimum=1",
           "type": "integer"
         },
         "project_id": {
