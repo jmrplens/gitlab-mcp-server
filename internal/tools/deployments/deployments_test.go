@@ -157,6 +157,64 @@ func TestDeploymentGet_Success(t *testing.T) {
 	}
 }
 
+// TestDeploymentGet_NilDeployable verifies DeploymentGet when deployable is absent.
+func TestDeploymentGet_NilDeployable(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
+			// deployable field is absent — zero-value DeploymentDeployable has empty Pipeline
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z"}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.PipelineWebURL != "" {
+		t.Errorf("PipelineWebURL = %q, want empty string", out.PipelineWebURL)
+	}
+}
+
+// TestDeploymentGet_NilPipeline verifies DeploymentGet when deployable exists but pipeline is absent.
+func TestDeploymentGet_NilPipeline(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","deployable":{"id":10,"status":"success","stage":"deploy"}}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.PipelineWebURL != "" {
+		t.Errorf("PipelineWebURL = %q, want empty string", out.PipelineWebURL)
+	}
+}
+
+// TestDeploymentGet_EmptyWebURL verifies DeploymentGet when pipeline exists but web_url is empty.
+func TestDeploymentGet_EmptyWebURL(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"ref":"main","sha":"abc123","status":"success","user":{"username":"admin"},"environment":{"name":"production"},"created_at":"2026-01-01T00:00:00Z","deployable":{"pipeline":{"web_url":""}}}`)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":msgNotFound}`)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{ProjectID: "42", DeploymentID: 1})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.PipelineWebURL != "" {
+		t.Errorf("PipelineWebURL = %q, want empty string", out.PipelineWebURL)
+	}
+}
+
 // TestDeploymentGet_ZeroID verifies DeploymentGet when zero ID.
 func TestDeploymentGet_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
