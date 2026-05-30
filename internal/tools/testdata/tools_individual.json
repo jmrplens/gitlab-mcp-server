@@ -62060,7 +62060,7 @@
   },
   {
     "name": "gitlab_list_work_item_types",
-    "description": "List work item types for a namespace. Returns: id, name, and enabled flag for each type. Supports name filter, onlyAvailable flag, and cursor pagination. Experimental. See also: gitlab_list_work_items, gitlab_create_work_item.",
+    "description": "List work item types for a namespace. Returns: id, name, and enabled flag for each type. Supports name filter, only_available flag, and cursor pagination. Experimental. See also: gitlab_list_work_items, gitlab_create_work_item.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

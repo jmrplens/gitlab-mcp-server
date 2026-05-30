@@ -34,7 +34,7 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 		opts.Usage = "List available work item types (system-defined and custom) for a project or group namespace. Supports filtering by name and availability, with cursor-based pagination. Returns: type definitions with id, name, and enabled status. Experimental: the Work Items API may introduce breaking changes between minor versions."
 		opts.Aliases = []string{"list work item types", "show work item types", "find work item types", individualTool}
 		opts.RelatedActions = []string{"work_item.list", "work_item.create"}
-		opts.IndividualTool.Description = "List work item types for a namespace. Returns: id, name, and enabled flag for each type. Supports name filter, onlyAvailable flag, and cursor pagination. Experimental. See also: gitlab_list_work_items, gitlab_create_work_item."
+		opts.IndividualTool.Description = "List work item types for a namespace. Returns: id, name, and enabled flag for each type. Supports name filter, only_available flag, and cursor pagination. Experimental. See also: gitlab_list_work_items, gitlab_create_work_item."
 	}
 	return toolutil.NewReadActionSpec(name, route, opts)
 }
