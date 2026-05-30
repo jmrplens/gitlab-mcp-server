@@ -967,7 +967,7 @@ func TestJobCancel_ForceTrue(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathJobCancel {
 			var body map[string]any
-			if decErr := json.NewDecoder(r.Body).Decode(&body); decErr == nil {
+			if err := json.NewDecoder(r.Body).Decode(&body); err == nil {
 				if v, ok := body["force"].(bool); ok && v {
 					forceSent = true
 				}
