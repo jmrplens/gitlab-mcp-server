@@ -4038,7 +4038,7 @@ Action guidance:
 - work_item_delete: Use to execute workitems domain action.
 - work_item_get: Use to execute workitems domain action.
 - work_item_list: Use to execute workitems domain action.
-- work_item_type_list: Use to execute workitems domain action.
+- work_item_type_list: List available work item types (system-defined and custom) for a project or group namespace. Supports filtering by name and availability, with cursor-based pagination. Returns: type definitions with id, name, and enabled status. Experimental: the Work Items API may introduce breaking changes between minor versions.
 - work_item_update: Use to execute workitems domain action.
 Parameter guidance:
 - create.due_date: calendar_date; source: Requested due date in ISO format when the user specifies one.; avoid: Use YYYY-MM-DD; natural-language dates must be normalized before calling the tool.
@@ -19341,7 +19341,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_work_item_types
 
-Use to execute workitems domain action.
+List work item types for a namespace. Returns: id, name, and enabled flag for each type. Supports name filter, onlyAvailable flag, and cursor pagination. Experimental. See also: gitlab_list_work_items, gitlab_create_work_item.
 
 **Parameters:**
 
@@ -23359,7 +23359,7 @@ Compare two refs (branches, tags, or commits) in a project. Use from_project_id 
 **Parameters:**
 
 - `from` (string) (required): Branch name, tag, or commit SHA to compare from
-- `from_project_id` (integer): Source project ID for cross-project comparison
+- `from_project_id` (integer): Source project ID for cross-project comparison,minimum=1
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `straight` (boolean): Use straight comparison (from..to) instead of merge-base (from...to)
 - `to` (string) (required): Branch name, tag, or commit SHA to compare to
@@ -25061,7 +25061,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_instance_service_account
 
-Use to execute users domain action.
+Update an instance-level service account. Returns: updated service account object including email and unconfirmed_email. Requires admin token. See also: gitlab_create_service_account, gitlab_list_service_accounts.
 
 **Parameters:**
 
