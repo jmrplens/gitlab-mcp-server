@@ -1,0 +1,1 @@
+/Users/jmrplens/GIT/gitlab-mcp-server/.github/agents/go-source-documenter.agent.md
