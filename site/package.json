@@ -25,19 +25,19 @@
   "type": "module",
   "dependencies": {
     "@astrojs/starlight": "^0.39.2",
-    "astro": "^6.3.5",
+    "astro": "^6.4.2",
     "astro-mermaid": "^2.0.1",
     "mermaid": "^11.15.0",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
-    "@typescript-eslint/eslint-plugin": "^8.59.4",
-    "@typescript-eslint/parser": "^8.59.4",
+    "@typescript-eslint/eslint-plugin": "^8.60.0",
+    "@typescript-eslint/parser": "^8.60.0",
     "eslint": "^10.4.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-astro": "^1.7.0",
-    "html-validate": "^11.2.0",
+    "html-validate": "^11.4.0",
     "htmlhint": "^1.9.2",
     "pa11y-ci": "^4.1.1",
     "prettier": "^3.8.3",
