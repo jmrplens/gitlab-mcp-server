@@ -3,7 +3,7 @@
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
   "description": "Manage GitLab projects, issues, merge requests, pipelines, repositories, and admin workflows.",
-  "version": "2.0.5",
+  "version": "2.1.0",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",
     "source": "github",
@@ -31,8 +31,8 @@
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.0.5/gitlab-mcp-server-linux-amd64",
-      "version": "2.0.5",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.1.0/gitlab-mcp-server-linux-amd64",
+      "version": "2.1.0",
       "fileSha256": "d0f40568988c14d385b2240e79546585ea6cb42d262db2f8cfe392588780b53c",
       "transport": {
         "type": "stdio"
@@ -203,8 +203,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.0.5/gitlab-mcp-server-linux-arm64",
-      "version": "2.0.5",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.1.0/gitlab-mcp-server-linux-arm64",
+      "version": "2.1.0",
       "fileSha256": "4dd5147ab092b846bacd7a2277d8538782751c7ead7833d56e02a94e5d234310",
       "transport": {
         "type": "stdio"
@@ -375,8 +375,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.0.5/gitlab-mcp-server-darwin-amd64",
-      "version": "2.0.5",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.1.0/gitlab-mcp-server-darwin-amd64",
+      "version": "2.1.0",
       "fileSha256": "d8383885f049e5e75ddfc7da80e5a242fd3631f5795d8fa973eadac331cec5c0",
       "transport": {
         "type": "stdio"
@@ -547,8 +547,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.0.5/gitlab-mcp-server-darwin-arm64",
-      "version": "2.0.5",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.1.0/gitlab-mcp-server-darwin-arm64",
+      "version": "2.1.0",
       "fileSha256": "5b6002af1b68d100bfe51b104fb0dfaa27208cb57c5350e4b63bf76f57e8d3a5",
       "transport": {
         "type": "stdio"
@@ -719,8 +719,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.0.5/gitlab-mcp-server-windows-amd64.exe",
-      "version": "2.0.5",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.1.0/gitlab-mcp-server-windows-amd64.exe",
+      "version": "2.1.0",
       "fileSha256": "acf6104d65837511836b86d1f0020929d340a6c9b1e2be46dd93c9b661ee4e3a",
       "transport": {
         "type": "stdio"
@@ -891,8 +891,8 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.0.5/gitlab-mcp-server-windows-arm64.exe",
-      "version": "2.0.5",
+      "identifier": "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.1.0/gitlab-mcp-server-windows-arm64.exe",
+      "version": "2.1.0",
       "fileSha256": "6b496aebb3a509c83c2cc4f0daf76cd9a805afb8428a46ad372d17bd74615931",
       "transport": {
         "type": "stdio"
