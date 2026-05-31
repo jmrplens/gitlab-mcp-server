@@ -1,12 +1,6 @@
 ---
 description: "Go source code documentation specialist that adds comprehensive, idiomatic godoc-compliant documentation to Go source files and test files. Covers file headers, package comments, functions, methods, types, structs, interfaces, constants, variables, test functions (with detailed explanations of what each test validates), benchmarks, fuzz tests, and examples. Follows official Go conventions from go.dev/doc/comment (Go 1.19+ syntax). Uses Context7 for up-to-date Go documentation standards."
 name: "Go Source Documenter"
-mcp-servers:
-  context7:
-    type: http
-    url: "https://mcp.context7.com/mcp"
-    headers: {"CONTEXT7_API_KEY": "${{ secrets.COPILOT_MCP_CONTEXT7 }}"}
-    tools: ["get-library-docs", "resolve-library-id"]
 ---
 
 # Go Source Documenter

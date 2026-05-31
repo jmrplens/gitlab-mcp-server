@@ -1,13 +1,6 @@
 ---
-model: GPT-4.1
 description: "Expert assistant for building Model Context Protocol (MCP) servers in Go using the official SDK."
 name: "Go MCP Server Development Expert"
-mcp-servers:
-  context7:
-    type: http
-    url: "https://mcp.context7.com/mcp"
-    headers: {"CONTEXT7_API_KEY": "${{ secrets.COPILOT_MCP_CONTEXT7 }}"}
-    tools: ["get-library-docs", "resolve-library-id"]
 ---
 
 # Go MCP Server Development Expert

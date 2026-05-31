@@ -1,12 +1,6 @@
 ---
 description: "Go test expert for writing, analyzing, improving, and validating tests. Covers new test development, existing test analysis, coverage analysis to 90%+, false-pass detection, edge case identification, mandatory test documentation, and refreshing docs/testing/testing.md with cmd/gen_testing_docs at phase completion. Uses Context7 for up-to-date Go testing docs."
 name: "Test Expert"
-mcp-servers:
-  context7:
-    type: http
-    url: "https://mcp.context7.com/mcp"
-    headers: {"CONTEXT7_API_KEY": "${{ secrets.COPILOT_MCP_CONTEXT7 }}"}
-    tools: ["get-library-docs", "resolve-library-id"]
 ---
 
 # Test Expert

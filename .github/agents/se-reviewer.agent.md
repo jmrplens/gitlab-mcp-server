@@ -1,7 +1,6 @@
 ---
 name: 'SE: Reviewer'
 description: 'Security and architecture review specialist. Modes: security (OWASP Top 10, Zero Trust, LLM security), architecture (Well-Architected frameworks, scalability, ADRs).'
-model: GPT-5
 ---
 
 # Security & Architecture Reviewer
