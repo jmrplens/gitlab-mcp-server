@@ -2963,14 +2963,19 @@ func scoreSearchCodeIntentValue(entry actionEntry, terms []searchTerm) int {
 	if document.Domain != "search" || document.Action != "code" {
 		return 0
 	}
-	if !searchTermsContainWord(terms, "search") && !searchTermsContainWord(terms, "grep") {
+	hasSearchVerb := searchTermsContainWord(terms, "search") || searchTermsContainWord(terms, "grep")
+	if !hasSearchVerb {
 		return 0
 	}
-	if !searchTermsContainWord(terms, "code") &&
-		!searchTermsContainWord(terms, "blob") &&
-		!searchTermsContainWord(terms, "blobs") &&
-		!searchTermsContainWord(terms, "source") {
-		return 0
+	// grep is a strong enough indicator on its own; "search" requires a code noun
+	// to distinguish from other search actions (projects, issues, wikis).
+	if !searchTermsContainWord(terms, "grep") {
+		if !searchTermsContainWord(terms, "code") &&
+			!searchTermsContainWord(terms, "blob") &&
+			!searchTermsContainWord(terms, "blobs") &&
+			!searchTermsContainWord(terms, "source") {
+			return 0
+		}
 	}
 	return scoreSearchCodeIntentBoost
 }
@@ -3000,10 +3005,18 @@ func scoreCurrentUserIntentValue(entry actionEntry, terms []searchTerm) int {
 	if !hasSelf {
 		return 0
 	}
-	hasIdentity := searchTermsContainWord(terms, "user") ||
-		searchTermsContainWord(terms, "profile") ||
-		searchTermsContainWord(terms, "account") ||
-		searchTermsContainWord(terms, "identity")
+	// Check identity nouns in Raw terms only, not in synonym expansions.
+	// "current" expands to "current_user" which splits into ["current","user"],
+	// so searchTermsContainWord would match "user" via the expansion of "current"
+	// itself, making every "current X" query trigger this scorer regardless of
+	// what X is. Restricting to raw terms avoids that false positive.
+	hasIdentity := false
+	for _, tm := range terms {
+		switch tm.Raw {
+		case "user", "profile", "account", "identity", "me", "myself", "whoami":
+			hasIdentity = true
+		}
+	}
 	if !hasIdentity {
 		return 0
 	}
@@ -3013,13 +3026,16 @@ func scoreCurrentUserIntentValue(entry actionEntry, terms []searchTerm) int {
 // qualifiesForExplicitIntentBypass reports whether an entry qualifies for the
 // match-ratio filter bypass in scoreEntry/scoreEntryWithExplanation. These
 // actions match only 2–3 of ~10 tokens in long queries (the rest are project
-// path, symbol name, version tags, etc.), so minimumMatchedTermCount filters
-// them out before any intent boost can apply. The bypass lets them through when
-// at least 2 terms matched and the intent signal fires.
+// path, symbol name, etc.), so minimumMatchedTermCount filters them out before
+// any intent boost can apply. The bypass lets them through when at least 2
+// terms matched and the intent signal fires.
+//
+// repository.compare is intentionally NOT in this list. Compare queries always
+// contain "compare" + at least one of "ref/from/to" as explicit terms, so they
+// pass the match-ratio filter naturally without a bypass.
 func qualifiesForExplicitIntentBypass(entry actionEntry, terms []searchTerm) bool {
 	return scoreSearchCodeIntentValue(entry, terms) > 0 ||
-		scoreCurrentUserIntentValue(entry, terms) > 0 ||
-		scoreCompareRefsIntentValue(entry, terms) > 0
+		scoreCurrentUserIntentValue(entry, terms) > 0
 }
 
 func matchingQueryScope(terms []searchTerm) string {
