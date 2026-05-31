@@ -47,6 +47,9 @@ func TestAllEvalCases_ContainsMigratedReadMutatingAndCapabilityCases(t *testing.
 	if got := len(CasesByPreset(presetDockerCapabilityDiscovery)); got != 4 {
 		t.Fatalf("CasesByPreset(docker-capability-discovery) = %d, want 4", got)
 	}
+	if got := len(CasesByPreset(presetDockerErrorRecovery)); got != 3 {
+		t.Fatalf("CasesByPreset(docker-error-recovery) = %d, want 3", got)
+	}
 	if got := len(CasesByPreset(presetSchemaEnterprise)); got != 110 {
 		t.Fatalf("CasesByPreset(schema-enterprise) = %d, want 110 (all Enterprise cases)", got)
 	}
