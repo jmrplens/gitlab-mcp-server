@@ -31,6 +31,12 @@ var attemptNameFixtureOutputs = []string{
 	"instance_ci_variable_key",
 	"package_release_name",
 	"package_release_tag",
+	"wiki_title",
+	"wiki_title_v2",
+	"feature_flag_user_list_name",
+	"feature_flag_crud_name",
+	"group_label_name",
+	"group_label_name_v2",
 }
 
 type fixtureOutputCache struct {
@@ -224,6 +230,16 @@ func attemptNameFixtureOutput(env FixtureContext) FixtureOutput {
 		"instance_ci_variable_key": suffixEvaluationValue("INSTANCE_EVAL_TOKEN", suffix),
 		"package_release_name":     suffixEvaluationValue(liveFixturePackageReleaseName, suffix),
 		"package_release_tag":      suffixEvaluationValue(liveFixturePackageReleaseTag, suffix),
+		// Idempotent CRUD names for resources GitLab forces to be unique
+		// (wiki title per project, feature flag name per project, group label
+		// name per group). The per-attempt suffix prevents "already exists"
+		// collisions when a preset is re-run without cleanup.
+		"wiki_title":                  suffixEvaluationValue("Evaluation CRUD wiki", suffix),
+		"wiki_title_v2":               suffixEvaluationValue("Evaluation CRUD wiki v2", suffix),
+		"feature_flag_user_list_name": suffixEvaluationValue("eval-feature-list", suffix),
+		"feature_flag_crud_name":      suffixEvaluationValue("eval-feature-flag-crud", suffix),
+		"group_label_name":            suffixEvaluationValue("eval-group-label", suffix),
+		"group_label_name_v2":         suffixEvaluationValue("eval-group-label-v2", suffix),
 	}
 }
 
