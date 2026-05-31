@@ -68,6 +68,8 @@ const (
 	presetDockerEnterpriseDestructiveSafe = "docker-enterprise-destructive-safe"
 	// presetDockerCapabilityDiscovery identifies the Docker-backed MCP capability discovery preset.
 	presetDockerCapabilityDiscovery = "docker-capability-discovery"
+	// presetDockerErrorRecovery identifies the Docker-backed fault-injection/error-recovery preset.
+	presetDockerErrorRecovery = "docker-error-recovery"
 
 	// partitionBaseRead identifies the partition base read constant used by this package.
 	partitionBaseRead = "base-read"

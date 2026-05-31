@@ -29,7 +29,7 @@ func parseFlags() options {
 	flag.StringVar(&opts.PublishReadme, "publish-readme", defaultPublishReadme, "README updated by --publish-docs")
 	flag.StringVar(&opts.PublishLabel, "publish-label", "", "Human-readable label for the published snapshot")
 	flag.StringVar(&opts.PublishMode, "publish-mode", publishModeReplaceCurrent, "Publication mode for model results: append or replace-current")
-	flag.StringVar(&opts.Preset, "preset", "", "Optional evaluation preset: docker-read, docker-mutating-safe, docker-destructive-safe, docker-enterprise-read, docker-enterprise-mutating-safe, docker-enterprise-destructive-safe, docker-capability-discovery, or schema-enterprise")
+	flag.StringVar(&opts.Preset, "preset", "", "Optional evaluation preset: docker-read, docker-mutating-safe, docker-destructive-safe, docker-enterprise-read, docker-enterprise-mutating-safe, docker-enterprise-destructive-safe, docker-capability-discovery, docker-error-recovery, or schema-enterprise")
 	flag.StringVar(&opts.Partition, "partition", "", "Optional schema fixture partition: base-read, base-mutating, base-destructive, enterprise-read, enterprise-mutating, enterprise-destructive, error-recovery, or capability-fallback")
 	flag.StringVar(&opts.ToolSurface, "tool-surface", config.DefaultToolSurface, "Tool catalog surface to evaluate: dynamic or meta")
 	flag.StringVar(&opts.Edition, "edition", editionAll, "Task edition filter: all, ce, or enterprise")
@@ -131,6 +131,11 @@ func applyPresetDefaults(opts options) (options, error) {
 		applyDockerPresetDefaults(&opts, partitionCapabilityFallback)
 		setBoolDefault(&opts.SkipMutating, opts, flagSkipMutating)
 		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
+	case presetDockerErrorRecovery:
+		setStringDefault(&opts.Edition, opts, "edition", editionCE)
+		applyDockerPresetDefaults(&opts, partitionErrorRecovery)
+		setBoolDefault(&opts.SkipMutating, opts, flagSkipMutating)
+		setBoolDefault(&opts.SkipDestructive, opts, flagSkipDestructive)
 	}
 	return opts, nil
 }
@@ -149,7 +154,7 @@ func applyDockerPresetDefaults(opts *options, partition string) {
 // validPreset reports whether valid preset.
 func validPreset(preset string) bool {
 	switch preset {
-	case presetSchemaEnterprise, presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe, presetDockerEnterpriseRead, presetDockerEnterpriseMutatingSafe, presetDockerEnterpriseDestructiveSafe, presetDockerCapabilityDiscovery:
+	case presetSchemaEnterprise, presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe, presetDockerEnterpriseRead, presetDockerEnterpriseMutatingSafe, presetDockerEnterpriseDestructiveSafe, presetDockerCapabilityDiscovery, presetDockerErrorRecovery:
 		return true
 	default:
 		return false

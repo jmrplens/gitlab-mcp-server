@@ -392,6 +392,12 @@ func baseDestructiveWorkflowPromptTemplateAndFixtures(id string) (template strin
 		return "Exercise merge request time tracking and emoji in project `{{ .Project.Path }}`: set estimate `1h` on merge request `{{ .MergeRequest.IID }}`, add spent time `15m`, add award emoji `eyes`, list MR awards, delete the returned award emoji, reset spent time, then reset the estimate.", []string{fixtureMergeRequest}
 	case "MS-034":
 		return "Exercise project member lifecycle in project `{{ .Project.Path }}`: add user ID `{{ .Values.user_id }}` as Reporter, fetch that project member, edit access level to Developer, then remove the member.", []string{fixtureUserBlock}
+	case "MS-023":
+		return "Exercise wiki CRUD in project `{{ .Project.Path }}`: create wiki page titled `{{ .Values.wiki_title }}` with content containing `eval-crud-wiki`, fetch the created page with the returned slug, update its title to `{{ .Values.wiki_title_v2 }}`, then delete it.", []string{fixtureBootstrapProject, fixtureAttemptNames}
+	case "MS-029":
+		return "Exercise feature flag and user-list lifecycle in project `{{ .Project.Path }}`: create feature flag user list `{{ .Values.feature_flag_user_list_name }}` with user IDs `u1,u2`, fetch it, update the user IDs to `u2,u3`, create feature flag `{{ .Values.feature_flag_crud_name }}` using version `new_version_flag`, fetch the flag, update it inactive, delete the flag, then delete the user list.", []string{fixtureBootstrapProject, fixtureAttemptNames}
+	case "MS-035":
+		return "Exercise group label lifecycle in group `{{ .Group.Path }}`: create label `{{ .Values.group_label_name }}` with color `#1f75cb`, fetch it by label ID or name, rename it to `{{ .Values.group_label_name_v2 }}`, then delete it.", []string{fixtureBootstrapProject, fixtureAttemptNames}
 	default:
 		return "", nil
 	}

@@ -14,6 +14,7 @@ func All() []Case {
 	cases = append(cases, enterpriseReadEvalCases()...)
 	cases = append(cases, enterpriseMutatingEvalCases()...)
 	cases = append(cases, enterpriseDestructiveEvalCases()...)
+	cases = append(cases, errorRecoveryEvalCases()...)
 	return cloneCases(cases)
 }
 

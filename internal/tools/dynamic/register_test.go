@@ -5049,3 +5049,235 @@ func benchmarkName(query string) string {
 	}
 	return "q_" + strings.Join(parts, "_")
 }
+
+// logRanking renders the ranked head of a result set for failure diagnostics.
+func logRanking(t *testing.T, query string, results []SearchResult) {
+	t.Helper()
+	t.Logf("query %q ranking:", query)
+	for i, r := range results {
+		t.Logf("  %d. %s (score=%d)", i+1, r.ID, r.Score)
+	}
+}
+
+// TestIntentBoost_SearchCodeSurfacesForCodeQueries verifies that explicit code
+// searches rank search.code first even when the query also names a project or
+// repository path. These are the exact phrasings from surface-eval task MT-032,
+// where match-ratio scaling previously buried search.code below search.projects
+// and repository.tree.
+func TestIntentBoost_SearchCodeSurfacesForCodeQueries(t *testing.T) {
+	t.Parallel()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("build action catalog: %v", err)
+	}
+	reg := NewRegistryFromCatalog(catalog)
+	queries := []string{
+		"search code in project my-org/tools/gitlab-mcp-server for RegisterMCPMeta using project_id",
+		"search code for func RegisterMCPMeta in project my-org/tools/gitlab-mcp-server",
+		"search code contents for RegisterMCPMeta in repository my-org/tools/gitlab-mcp-server",
+	}
+	for _, query := range queries {
+		t.Run(query[:min(len(query), 60)], func(t *testing.T) {
+			t.Parallel()
+			var out SearchOutput
+			_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: 5})
+			if err != nil {
+				t.Fatalf("search: %v", err)
+			}
+			if len(out.Results) == 0 {
+				t.Fatal("no results")
+			}
+			if out.Results[0].ID != "search.code" {
+				logRanking(t, query, out.Results)
+				t.Errorf("top result = %q, want search.code", out.Results[0].ID)
+			}
+		})
+	}
+}
+
+// TestIntentBoost_CurrentUserSurfacesForIdentityQueries verifies user.current
+// ranks first for current-user phrasings (surface-eval task MT-114). The
+// canonical alias "current user" is multi-word and never reaches the
+// exact-alias score on word-tokenized queries, so user.get and member-get
+// actions previously outranked it.
+func TestIntentBoost_CurrentUserSurfacesForIdentityQueries(t *testing.T) {
+	t.Parallel()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("build action catalog: %v", err)
+	}
+	reg := NewRegistryFromCatalog(catalog)
+	queries := []string{
+		"current user info get",
+		"get current user profile",
+		"show the authenticated user account",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			t.Parallel()
+			var out SearchOutput
+			_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: 5})
+			if err != nil {
+				t.Fatalf("search: %v", err)
+			}
+			if len(out.Results) == 0 {
+				t.Fatal("no results")
+			}
+			if out.Results[0].ID != "user.current" {
+				logRanking(t, query, out.Results)
+				t.Errorf("top result = %q, want user.current", out.Results[0].ID)
+			}
+		})
+	}
+}
+
+// TestIntentBoost_AnalyzeMRChangesSurfacesForLLMReviewQueries verifies
+// analyze.mr_changes ranks above mr_review.changes_get when the query carries
+// an LLM/analyzer signal alongside an MR context. This was surface-eval task
+// MT-093 where mr_review.changes_get outranked the intended action.
+func TestIntentBoost_AnalyzeMRChangesSurfacesForLLMReviewQueries(t *testing.T) {
+	t.Parallel()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("build action catalog: %v", err)
+	}
+	reg := NewRegistryFromCatalog(catalog)
+	queries := []string{
+		"LLM-assisted code review analyzer for merge request changes in project my-org/tools/gitlab-mcp-server",
+		"analyze merge request 7 code changes using the LLM code review analyzer in project my-org/tools/gitlab-mcp-server",
+	}
+	for _, query := range queries {
+		t.Run(query[:min(len(query), 60)], func(t *testing.T) {
+			t.Parallel()
+			var out SearchOutput
+			_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: 5})
+			if err != nil {
+				t.Fatalf("search: %v", err)
+			}
+			if len(out.Results) == 0 {
+				t.Fatal("no results")
+			}
+			if out.Results[0].ID != "analyze.mr_changes" {
+				logRanking(t, query, out.Results)
+				t.Errorf("top result = %q, want analyze.mr_changes", out.Results[0].ID)
+			}
+		})
+	}
+}
+
+// TestIntentBoost_ControlsNotHijacked verifies the new explicit-intent boosts do
+// not fire for queries whose intent is genuinely project search, get-user-by-id,
+// or user listing. It asserts the boosted action is not promoted to the top,
+// rather than a specific winner, so it stays robust to unrelated ranking
+// changes.
+func TestIntentBoost_ControlsNotHijacked(t *testing.T) {
+	t.Parallel()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("build action catalog: %v", err)
+	}
+	reg := NewRegistryFromCatalog(catalog)
+	cases := []struct {
+		query     string
+		forbidden string
+	}{
+		{"search projects named platform", "search.code"},
+		{"find repositories matching backend", "search.code"},
+		{"get user by id 42", "user.current"},
+		{"list all users in the group", "user.current"},
+		{"analyze pipeline failure root cause", "analyze.mr_changes"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.query, func(t *testing.T) {
+			t.Parallel()
+			var out SearchOutput
+			_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: tc.query, Limit: 5})
+			if err != nil {
+				t.Fatalf("search: %v", err)
+			}
+			if len(out.Results) == 0 {
+				t.Fatal("no results")
+			}
+			if out.Results[0].ID == tc.forbidden {
+				logRanking(t, tc.query, out.Results)
+				t.Errorf("query %q: top result must not be %q", tc.query, tc.forbidden)
+			}
+		})
+	}
+}
+
+// TestIntentScorers_MatchReasonReturnedWhenIntentFires verifies that the
+// intent scorer functions return a non-empty MatchReason when the intent
+// signal fires. This covers the MatchReason construction paths that integration
+// tests exercise implicitly but unit-coverage tools only see when called
+// directly with a matching entry.
+func TestIntentScorers_MatchReasonReturnedWhenIntentFires(t *testing.T) {
+	t.Parallel()
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		t.Fatalf("build action catalog: %v", err)
+	}
+	entries := NewRegistryFromCatalog(catalog).entries
+
+	find := func(domain, action string) actionEntry {
+		t.Helper()
+		for _, e := range entries {
+			d := documentForEntry(e)
+			if d.Domain == domain && d.Action == action {
+				return e
+			}
+		}
+		t.Fatalf("entry %s.%s not found in catalog", domain, action)
+		return actionEntry{}
+	}
+
+	t.Run("scoreAnalyzeMRChangesIntent", func(t *testing.T) {
+		t.Parallel()
+		e := find("analyze", "mr_changes")
+		terms := normalizeSearchTerms("llm analyzer for merge request changes")
+		score, reason := scoreAnalyzeMRChangesIntent(e, terms)
+		if score == 0 {
+			t.Error("expected non-zero score for analyze.mr_changes with llm+merge signal")
+		}
+		if reason.MatchedValue == "" {
+			t.Error("expected non-empty MatchReason.MatchedValue")
+		}
+	})
+
+	t.Run("scoreSearchCodeIntent", func(t *testing.T) {
+		t.Parallel()
+		e := find("search", "code")
+		terms := normalizeSearchTerms("search code in project my-org/tools for func Foo")
+		score, reason := scoreSearchCodeIntent(e, terms)
+		if score == 0 {
+			t.Error("expected non-zero score for search.code with search+code signal")
+		}
+		if reason.MatchedValue == "" {
+			t.Error("expected non-empty MatchReason.MatchedValue")
+		}
+	})
+
+	t.Run("scoreCurrentUserIntent", func(t *testing.T) {
+		t.Parallel()
+		e := find("user", "current")
+		terms := normalizeSearchTerms("current user profile")
+		score, reason := scoreCurrentUserIntent(e, terms)
+		if score == 0 {
+			t.Error("expected non-zero score for user.current with current+user signal")
+		}
+		if reason.MatchedValue == "" {
+			t.Error("expected non-empty MatchReason.MatchedValue")
+		}
+	})
+
+	t.Run("scoreCurrentUserIntentValue_noIdentity", func(t *testing.T) {
+		t.Parallel()
+		e := find("user", "current")
+		// "current" present but no identity noun → must return 0
+		terms := normalizeSearchTerms("show current pipeline status")
+		score := scoreCurrentUserIntentValue(e, terms)
+		if score != 0 {
+			t.Errorf("expected 0 for current without identity noun, got %d", score)
+		}
+	})
+}

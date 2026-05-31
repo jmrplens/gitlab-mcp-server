@@ -22,6 +22,7 @@ Preset values:
   docker-enterprise-mutating-safe
   docker-enterprise-destructive-safe
   docker-capability-discovery
+  docker-error-recovery
 
 Environment overrides:
   EVAL_SURFACE_MODELS       Comma-separated provider:model list.
@@ -168,7 +169,7 @@ fi
 gitlab_image="${EVAL_DOCKER_GITLAB_IMAGE:-$image_default}"
 case "$case_set" in
   ce)
-    all_presets=(docker-read docker-mutating-safe docker-destructive-safe docker-capability-discovery)
+    all_presets=(docker-read docker-mutating-safe docker-destructive-safe docker-capability-discovery docker-error-recovery)
     if [[ "$enterprise" == "true" ]]; then
       case_label="CE-on-Enterprise"
     fi
@@ -178,7 +179,7 @@ case "$case_set" in
     case_label="Enterprise"
     ;;
   all)
-    all_presets=(docker-read docker-mutating-safe docker-destructive-safe docker-capability-discovery docker-enterprise-read docker-enterprise-mutating-safe docker-enterprise-destructive-safe)
+    all_presets=(docker-read docker-mutating-safe docker-destructive-safe docker-capability-discovery docker-error-recovery docker-enterprise-read docker-enterprise-mutating-safe docker-enterprise-destructive-safe)
     case_label="CE+Enterprise-on-Enterprise"
     ;;
 esac
@@ -187,7 +188,7 @@ run_all_presets=1
 
 if [[ -n "$requested_preset" ]]; then
   case "$requested_preset" in
-    docker-read|docker-mutating-safe|docker-destructive-safe|docker-enterprise-read|docker-enterprise-mutating-safe|docker-enterprise-destructive-safe|docker-capability-discovery)
+    docker-read|docker-mutating-safe|docker-destructive-safe|docker-enterprise-read|docker-enterprise-mutating-safe|docker-enterprise-destructive-safe|docker-capability-discovery|docker-error-recovery)
       if [[ "$case_set" == "ce" && "$requested_preset" == docker-enterprise-* ]]; then
         echo "ERROR: ce case set does not accept Enterprise presets (got: $requested_preset)" >&2
         exit 1
