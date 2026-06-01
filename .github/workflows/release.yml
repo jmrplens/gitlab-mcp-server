@@ -182,7 +182,19 @@ jobs:
 
           Updates server.json (MCP Registry) and .plugin/plugin.json
           (Open Plugins) with version ${VERSION} and pinned SHA256 hashes."
-          git push origin main
+
+          set +e
+          git push origin main 2>&1 | tee /tmp/release-manifest-push.log
+          PUSH_STATUS=${PIPESTATUS[0]}
+          set -e
+
+          if [ "${PUSH_STATUS}" -ne 0 ]; then
+            if grep -q "GH013: Repository rule violations found" /tmp/release-manifest-push.log; then
+              echo "::notice::Manifest commit generated but push to main is blocked by repository rules; continuing release."
+              exit 0
+            fi
+            exit "${PUSH_STATUS}"
+          fi
 
   docker:
     name: Docker
