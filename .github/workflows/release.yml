@@ -149,6 +149,8 @@ jobs:
           fi
 
       - name: Commit updated server.json and plugin.json to main
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -156,6 +158,9 @@ jobs:
 
           git config user.name "José M. Requena Plens"
           git config user.email "jmrplens@gmail.com"
+          if [ -n "${ADMIN_TOKEN}" ]; then
+            git remote set-url origin "https://x-access-token:${ADMIN_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
 
           git fetch origin main
           git checkout main
