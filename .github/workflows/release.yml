@@ -149,10 +149,25 @@ jobs:
           fi
 
       - name: Commit updated server.json and plugin.json to main
+        env:
+          RELEASE_DEPLOY_KEY_B64: ${{ secrets.RELEASE_DEPLOY_KEY_B64 }}
         run: |
           set -euo pipefail
 
           VERSION="${GITHUB_REF#refs/tags/v}"
+          if [ -z "${RELEASE_DEPLOY_KEY_B64}" ]; then
+            echo "::error::RELEASE_DEPLOY_KEY_B64 secret is not configured"
+            exit 1
+          fi
+
+          KEY_FILE="${RUNNER_TEMP}/release_deploy_key"
+          KNOWN_HOSTS_FILE="${RUNNER_TEMP}/known_hosts"
+          echo "${RELEASE_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
+          chmod 600 "${KEY_FILE}"
+          ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
+
+          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
+          git config core.sshCommand "ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
 
           git config user.name "José M. Requena Plens"
           git config user.email "jmrplens@gmail.com"
