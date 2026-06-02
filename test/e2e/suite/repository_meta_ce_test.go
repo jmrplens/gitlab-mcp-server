@@ -391,8 +391,13 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 	})
 }
 
+// // InvalidCommitSHA is a clearly non-existent commit SHA used to exercise
+// the error path in repository commit and submodule update tests.
+const InvalidCommitSHA = "0000000000000000000000000000000000000000"
+
 // TestMeta_SubmoduleUpdate exercises submodule update via gitlab_repository.
-// Uses error path: non-existent submodule returns 404 which is acceptable.
+// Uses error path: non-existent submodule returns 404 which is the expected
+// outcome on a fresh project.
 func TestMeta_SubmoduleUpdate(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -406,21 +411,26 @@ func TestMeta_SubmoduleUpdate(t *testing.T) {
 
 	t.Run("SubmoduleUpdate_Graceful404", func(t *testing.T) {
 		// Attempt to update a clearly non-existent submodule path.
-		// GitLab returns 404 which the tool surfaces cleanly.
+		// GitLab returns 404 which the tool surfaces as an error.
 		_, err := callToolOn[repositorysubmodules.UpdateOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
 			"action": "update_submodule",
 			"params": map[string]any{
 				"project_id":     proj.pidStr(),
 				"submodule_path": "nonexistent/submodule",
 				"branch":         "main",
-				"commit_sha":     "0000000000000000000000000000000000000000",
+				"commit_sha":     InvalidCommitSHA,
 				"commit_message": "update non-existent submodule (error path test)",
 			},
 		})
-		if err != nil {
-			t.Logf("update_submodule error (expected 404): %v", err)
-		} else {
-			t.Log("update_submodule returned no error (instance may have no submodules)")
+		// A fresh project has no submodules — the call must fail. Fail the
+		// test if no error is returned (the API has changed and this test
+		// needs updating). 404 is the expected specific error.
+		if err == nil {
+			t.Fatal("update_submodule for non-existent submodule returned no error; expected 404")
 		}
+		if !isHTTPStatus(err, 404) {
+			t.Fatalf("update_submodule error was not 404: %v", err)
+		}
+		t.Logf("update_submodule 404 error path validated: %v", err)
 	})
 }

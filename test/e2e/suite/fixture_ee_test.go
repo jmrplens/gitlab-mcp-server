@@ -27,14 +27,20 @@ import (
 
 // ProjectFixture holds identifiers for a test project created by a fixture builder.
 type ProjectFixture struct {
-	ID   int64
-	Path string
+	ID            int64
+	Path          string
+	DefaultBranch string
 }
 
 // GroupFixture holds identifiers for a test group created by a fixture builder.
 type GroupFixture struct {
 	ID   int64
 	Path string
+}
+
+// gidStr returns the group ID as a plain string for use in meta-tool params.
+func (f GroupFixture) gidStr() string {
+	return strconv.FormatInt(f.ID, 10)
 }
 
 // pidOf returns the project ID as a StringOrInt for use in individual tool inputs.
@@ -145,7 +151,7 @@ func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSess
 	// Wait for the default branch to be available.
 	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
 
-	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
+	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace, DefaultBranch: out.DefaultBranch}
 }
 
 // createProject keeps legacy call sites working while they migrate to E2EContext.
@@ -206,7 +212,7 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 	// Wait for the default branch to be available.
 	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
 
-	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
+	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace, DefaultBranch: out.DefaultBranch}
 }
 
 // createProjectMeta keeps legacy call sites working while they migrate to E2EContext.
@@ -226,16 +232,23 @@ func CreateProjectUnderGroupMeta(ctx context.Context, e2e *E2EContext, session *
 	}
 	t := e2e.T
 	name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
-	out, err := callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
-		"action": "create",
-		"params": map[string]any{
-			"name":                   name,
-			"description":            "E2E meta: " + t.Name(),
-			"visibility":             "private",
-			"initialize_with_readme": true,
-			"default_branch":         defaultBranch,
-			"namespace_id":           groupID,
-		},
+	out, err := retryWithBackoff(ctx, t, "create project under group fixture (meta)", projectCreateRetries, func(int) (projects.Output, bool, string, error) {
+		out, err := callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
+			"action": "create",
+			"params": map[string]any{
+				"name":                   name,
+				"description":            "E2E meta: " + t.Name(),
+				"visibility":             "private",
+				"initialize_with_readme": true,
+				"default_branch":         defaultBranch,
+				"namespace_id":           groupID,
+			},
+		})
+		if err == nil {
+			return out, false, "", nil
+		}
+		retryable := strings.Contains(err.Error(), "already been taken") || isTransientNetworkError(err) || enterpriseProjectCreateRetryable(err)
+		return out, retryable, "name collision or transient network error", err
 	})
 	requireNoError(t, err, "create project under group fixture (meta)")
 
@@ -261,7 +274,7 @@ func CreateProjectUnderGroupMeta(ctx context.Context, e2e *E2EContext, session *
 
 	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
 
-	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
+	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace, DefaultBranch: out.DefaultBranch}
 }
 
 // createProjectUnderGroupMeta keeps legacy call sites working while they migrate to E2EContext.
@@ -287,6 +300,10 @@ func enterpriseProjectCreateRetryable(err error) bool {
 // other codes return false so callers fall through to requireNoError and
 // surface the real failure.
 //
+// Uses the same anchored phrase matching as isRetryableError ("404 not found",
+// "403 forbidden") to avoid false positives when substrings like "404" appear
+// inside project IDs, commit SHAs, or resource names.
+//
 // Mirrors the CE version in fixture_ce_test.go so EE tests don't need
 // to import CE-specific helpers.
 func isHTTPStatus(err error, code int) bool {
@@ -296,9 +313,9 @@ func isHTTPStatus(err error, code int) bool {
 	msg := strings.ToLower(err.Error())
 	switch code {
 	case 404:
-		return strings.Contains(msg, "404") && strings.Contains(msg, "not found")
+		return strings.Contains(msg, "404 not found")
 	case 403:
-		return strings.Contains(msg, "403") && strings.Contains(msg, "forbidden")
+		return strings.Contains(msg, "403 forbidden")
 	}
 	return false
 }

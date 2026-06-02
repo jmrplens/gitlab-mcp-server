@@ -373,10 +373,14 @@ echo "    Default branch protection disabled, local outbound requests enabled, d
 # because the iterations API returns 403 when the feature flag is not enabled,
 # even with a valid Ultimate license and correct token permissions.
 if [ "$ENTERPRISE_MODE" = "true" ]; then
-    docker compose -f "${COMPOSE_FILE}" exec -T gitlab gitlab-rails runner \
-        "Feature.enable(:iterations); Feature.enable(:iteration_license); puts 'Iterations feature flags enabled'" \
-        > /dev/null 2>&1 || true
-    echo "    Iterations feature flags enabled"
+    ff_output=$(docker compose -f "${COMPOSE_FILE}" exec -T gitlab gitlab-rails runner \
+        "Feature.enable(:iterations); Feature.enable(:iteration_license); puts 'OK'" 2>&1)
+    ff_status=$?
+    if [ "$ff_status" -eq 0 ]; then
+        echo "    Iterations feature flags enabled"
+    else
+        echo "    WARN: could not enable iterations feature flags (exit $ff_status, output: ${ff_output:-unknown})" >&2
+    fi
 fi
 
 # 2. Create test user

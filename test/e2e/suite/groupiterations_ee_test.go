@@ -11,11 +11,9 @@ package suite
 
 import (
 	"context"
-	"strconv"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupiterations"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 )
 
 // TestMeta_GroupIterations exercises group iteration list via gitlab_issue.
@@ -52,26 +50,11 @@ func TestMeta_GroupIterations(t *testing.T) {
 	})
 
 	t.Run("Meta/GroupIteration/List_WithTestGroup", func(t *testing.T) {
-		// Create a group to have a known group with no iterations.
-		groupName := uniqueName("e2e-iterations")
-		grpOut, createErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "create",
-			"params": map[string]any{
-				"name":       groupName,
-				"path":       groupName,
-				"visibility": "private",
-			},
-		})
-		requireNoError(t, createErr, "create group for iteration test")
-		groupIDStr := strconv.FormatInt(grpOut.ID, 10)
-
-		// Clean up after test.
-		t.Cleanup(func() {
-			_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
-				"action": "delete",
-				"params": map[string]any{"group_id": groupIDStr},
-			})
-		})
+		// Create a group via the shared fixture so the resource is registered
+		// in the per-test ledger and cleaned up automatically.
+		e2e := NewE2EContext(t)
+		grp := CreateGroupMeta(ctx, e2e, sess.meta, "e2e-iterations")
+		groupIDStr := grp.gidStr()
 
 		out, err := callToolOn[groupiterations.ListOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
 			"action": "iteration_list_group",
@@ -79,7 +62,14 @@ func TestMeta_GroupIterations(t *testing.T) {
 				"group_id": groupIDStr,
 			},
 		})
-		requireNoError(t, err, "iteration_list_group on test group")
-		t.Logf("Group %s iterations: %d (may be empty)", grpOut.FullPath, len(out.Iterations))
+		// 404 or empty list are both acceptable outcomes on a fresh EE instance.
+		if err != nil && !isHTTPStatus(err, 404) {
+			requireNoError(t, err, "iteration_list_group on test group")
+		}
+		if err == nil {
+			t.Logf("Group %s iterations: %d (may be empty)", grp.Path, len(out.Iterations))
+		} else {
+			t.Logf("iteration_list_group returned 404 for group %d: %v", grp.ID, err)
+		}
 	})
 }

@@ -263,6 +263,10 @@ func TestDynamicToolSurface_WriteActionConfirmation(t *testing.T) {
 
 	e2e := NewE2EContext(t)
 	proj := CreateProject(ctx, e2e, sess.individual)
+	branchRef := proj.DefaultBranch
+	if branchRef == "" {
+		branchRef = defaultBranch
+	}
 
 	// Find branch.create action and verify its required parameters.
 	findResult := dynamicFindAction(ctx, t, "create branch", "branch.create")
@@ -278,7 +282,7 @@ func TestDynamicToolSurface_WriteActionConfirmation(t *testing.T) {
 		Params: map[string]any{
 			"project_id":  proj.pidStr(),
 			"branch_name": branchName,
-			"ref":         defaultBranch,
+			"ref":         branchRef,
 		},
 	})
 	requireNoError(t, err, "branch.create with confirm=true")
@@ -299,6 +303,10 @@ func TestDynamicToolSurface_DomainCoverage(t *testing.T) {
 
 	e2e := NewE2EContext(t)
 	proj := CreateProject(ctx, e2e, sess.individual)
+	branchRef := proj.DefaultBranch
+	if branchRef == "" {
+		branchRef = defaultBranch
+	}
 
 	t.Run("Domain/Issue/Create", func(t *testing.T) {
 		// Find and execute issue creation.
@@ -329,7 +337,7 @@ func TestDynamicToolSurface_DomainCoverage(t *testing.T) {
 
 	t.Run("Domain/Pipeline/Create", func(t *testing.T) {
 		// Commit a minimal .gitlab-ci.yml so the pipeline can run.
-		commitFileMeta(ctx, t, sess.meta, proj, defaultBranch, ".gitlab-ci.yml",
+		commitFileMeta(ctx, t, sess.meta, proj, branchRef, ".gitlab-ci.yml",
 			"image: alpine\ntest:\n  script: echo 'ok'\n", "Add minimal CI config")
 		// Find and execute pipeline creation.
 		// Use "create a pipeline" to avoid matching pipeline.trigger_* actions.
@@ -338,7 +346,7 @@ func TestDynamicToolSurface_DomainCoverage(t *testing.T) {
 			Action: "pipeline.create",
 			Params: map[string]any{
 				"project_id": proj.pidStr(),
-				"ref":        defaultBranch,
+				"ref":        branchRef,
 			},
 		})
 		requireNoError(t, err, "pipeline.create via dynamic surface")

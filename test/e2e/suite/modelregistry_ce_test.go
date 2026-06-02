@@ -30,8 +30,8 @@ func TestMeta_ModelRegistry(t *testing.T) {
 
 		t.Run("DownloadInvalidID_GracefulError", func(t *testing.T) {
 			// Use a clearly non-existent model version ID. 404 is expected
-			// from the GitLab API; the tool surfaces it cleanly.
-			_, err := callToolOn[modelregistry.DownloadOutput](ctx, sess.meta, "gitlab_model_registry", map[string]any{
+			// from the GitLab API; the tool surfaces it as an error.
+			out, err := callToolOn[modelregistry.DownloadOutput](ctx, sess.meta, "gitlab_model_registry", map[string]any{
 				"action": "download",
 				"params": map[string]any{
 					"project_id":       "999999",
@@ -40,13 +40,16 @@ func TestMeta_ModelRegistry(t *testing.T) {
 					"filename":         "model.bin",
 				},
 			})
-			if err != nil {
-				// 404 or 403 is acceptable — the tool routes correctly
-				// and the error is informative.
-				t.Logf("download error (expected): %v", err)
-			} else {
-				t.Log("download returned no error (empty model registry)")
+			// The download of a non-existent model must fail. 404 (not found)
+			// or 403 (forbidden on CE) are the expected outcomes. Success
+			// here would indicate a broken error path that needs fixing.
+			if err == nil {
+				t.Fatalf("download of invalid model returned no error: out=%+v; expected 404 or 403", out)
 			}
+			if !isHTTPStatus(err, 404) && !isHTTPStatus(err, 403) {
+				t.Fatalf("download error did not match expected 404/403: %v", err)
+			}
+			t.Logf("download error (expected 404/403): %v", err)
 		})
 	})
 }

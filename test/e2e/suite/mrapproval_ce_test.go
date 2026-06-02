@@ -201,7 +201,7 @@ func TestMeta_MRApproval(t *testing.T) {
 // TestMeta_MRApprovalSettings exercises project-level MR approval settings
 // via gitlab_merge_request meta-tool. Tests get and update paths.
 // NOTE: MR approval settings require GitLab Premium/Ultimate; on CE GitLab the
-// API returns 404. This test accepts 404 as a valid outcome ( CE behavior confirmed).
+// API returns 404. This test accepts 404 as a valid outcome (CE behavior confirmed).
 func TestMeta_MRApprovalSettings(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -218,9 +218,10 @@ func TestMeta_MRApprovalSettings(t *testing.T) {
 				"project_id": proj.pidStr(),
 			},
 		})
-		// 404 is expected on CE — approval settings are a Premium feature
+		// 404 is expected on CE — approval settings are a Premium feature.
+		// Fail fast on any other unexpected error.
 		if err != nil && !isHTTPStatus(err, 404) {
-			requireNoError(t, err, "approval_settings_project_get")
+			t.Fatalf("approval_settings_project_get: unexpected error: %v", err)
 		}
 		if err == nil {
 			t.Logf("MR approval settings for project %s: allow_author=%v allow_committer=%v",
@@ -239,9 +240,10 @@ func TestMeta_MRApprovalSettings(t *testing.T) {
 				"retain_approvals_on_push": true,
 			},
 		})
-		// 404 is expected on CE — approval settings are a Premium feature
+		// 404 is expected on CE — approval settings are a Premium feature.
+		// Fail fast on any other unexpected error.
 		if err != nil && !isHTTPStatus(err, 404) {
-			requireNoError(t, err, "approval_settings_project_update")
+			t.Fatalf("approval_settings_project_update: unexpected error: %v", err)
 		}
 		if err == nil {
 			requireTruef(t, out.AllowAuthorApproval.Value, "allow_author_approval should be true after update")

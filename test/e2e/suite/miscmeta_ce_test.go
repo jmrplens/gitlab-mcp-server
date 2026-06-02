@@ -149,6 +149,7 @@ func TestMeta_FeatureFlagUserLists(t *testing.T) {
 
 	proj := createProjectMeta(ctx, t, sess.meta)
 
+	var listIID int64
 	t.Run("Meta/FFUserList/Create", func(t *testing.T) {
 		out, err := callToolOn[ffuserlists.Output](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
 			"action": "ff_user_list_create",
@@ -159,6 +160,7 @@ func TestMeta_FeatureFlagUserLists(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "ff_user_list_create")
+		listIID = out.IID
 		t.Logf("Created user list: IID=%d name=%q", out.IID, out.Name)
 	})
 
@@ -171,20 +173,20 @@ func TestMeta_FeatureFlagUserLists(t *testing.T) {
 		})
 		requireNoError(t, err, "ff_user_list_list")
 		requireTruef(t, len(out.UserLists) >= 1, "expected at least 1 user list, got %d", len(out.UserLists))
-		t.Logf("User lists for project %s: %d", proj.Path, len(out.UserLists))
+		// Find our IID in the list — the create may not be visible yet, retry briefly.
+		found := false
+		for _, ul := range out.UserLists {
+			if ul.IID == listIID {
+				found = true
+				break
+			}
+		}
+		requireTruef(t, found, "newly created user list IID=%d not visible in list (race or propagation delay)", listIID)
+		t.Logf("User lists for project %s: %d (IID=%d present)", proj.Path, len(out.UserLists), listIID)
 	})
 
 	t.Run("Meta/FFUserList/Get", func(t *testing.T) {
-		listOut, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
-			"action": "ff_user_list_list",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-			},
-		})
-		requireNoError(t, err, "list for ff_user_list_get")
-		requireTruef(t, len(listOut.UserLists) >= 1, "need at least 1 user list")
-		listIID := listOut.UserLists[0].IID
-
+		requireTruef(t, listIID > 0, "listIID not set (Create must run first)")
 		out, err := callToolOn[ffuserlists.Output](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
 			"action": "ff_user_list_get",
 			"params": map[string]any{
@@ -197,16 +199,7 @@ func TestMeta_FeatureFlagUserLists(t *testing.T) {
 	})
 
 	t.Run("Meta/FFUserList/Update", func(t *testing.T) {
-		listOut, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
-			"action": "ff_user_list_list",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-			},
-		})
-		requireNoError(t, err, "list for ff_user_list_update")
-		requireTruef(t, len(listOut.UserLists) >= 1, "need at least 1 user list")
-		listIID := listOut.UserLists[0].IID
-
+		requireTruef(t, listIID > 0, "listIID not set (Create must run first)")
 		out, err := callToolOn[ffuserlists.Output](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
 			"action": "ff_user_list_update",
 			"params": map[string]any{
@@ -216,22 +209,13 @@ func TestMeta_FeatureFlagUserLists(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "ff_user_list_update")
-		requireTruef(t, out.Name == "e2e updated user list", "name mismatch")
+		requireTruef(t, out.Name == "e2e updated user list", "name mismatch: got %q want %q", out.Name, "e2e updated user list")
 		t.Logf("Updated user list: IID=%d", out.IID)
 	})
 
 	t.Run("Meta/FFUserList/Delete", func(t *testing.T) {
-		listOut, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
-			"action": "ff_user_list_list",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-			},
-		})
-		requireNoError(t, err, "list for ff_user_list_delete")
-		requireTruef(t, len(listOut.UserLists) >= 1, "need at least 1 user list")
-		listIID := listOut.UserLists[0].IID
-
-		_, err = callToolOn[ffuserlists.Output](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+		requireTruef(t, listIID > 0, "listIID not set (Create must run first)")
+		_, err := callToolOn[ffuserlists.Output](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
 			"action": "ff_user_list_delete",
 			"params": map[string]any{
 				"project_id":    proj.pidStr(),
@@ -239,6 +223,18 @@ func TestMeta_FeatureFlagUserLists(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "ff_user_list_delete")
-		t.Logf("Deleted user list: IID=%d", listIID)
+
+		// Verify deletion: list should no longer contain our IID.
+		listOut, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+			"action": "ff_user_list_list",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+			},
+		})
+		requireNoError(t, err, "ff_user_list_list post-delete")
+		for _, ul := range listOut.UserLists {
+			requireTruef(t, ul.IID != listIID, "deleted user list IID=%d still present in list", listIID)
+		}
+		t.Logf("Deleted user list: IID=%d (verified absent from list)", listIID)
 	})
 }
