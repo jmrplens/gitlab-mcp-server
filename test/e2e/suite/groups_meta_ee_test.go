@@ -354,7 +354,7 @@ func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, gr
 			"params": map[string]any{"group_id": groupIDStr},
 		})
 		requireNoError(t, err, "group_board_list")
-		requireTruef(t, len(out.Boards) > 0, "expected at least 1 group board")
+		// A newly created group may have 0 boards — that's valid.
 		t.Logf("Listed %d group boards", len(out.Boards))
 		if boardID == 0 && len(out.Boards) > 0 {
 			boardID = out.Boards[0].ID

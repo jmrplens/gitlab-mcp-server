@@ -124,6 +124,21 @@ func isRetryableError(err error) bool {
 	return false
 }
 
+// isHTTPStatus reports whether err is a GitLab HTTP error with status code.
+func isHTTPStatus(err error, code int) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	switch code {
+	case 404:
+		return strings.Contains(msg, "404") && strings.Contains(msg, "not found")
+	case 403:
+		return strings.Contains(msg, "403") && strings.Contains(msg, "forbidden")
+	}
+	return false
+}
+
 // retryOnTransient calls fn up to maxRetries times with progressive backoff
 // (1s, 2s, 3s…) when the returned error is retryable. Respects context
 // cancellation between attempts. Returns the first successful result or

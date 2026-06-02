@@ -1,0 +1,85 @@
+//go:build e2e && enterprise
+
+// groupiterations_ee_test.go tests group iteration list operations via the
+// gitlab_issue meta-tool against a live GitLab EE/Ultimate instance.
+//
+// NOTE: The groupiterations package exposes only iteration_list_group (read-only list).
+// Create/Update/Delete actions are not registered in the action spec catalog.
+//
+// CAN parallelize: separate group per test.
+package suite
+
+import (
+	"context"
+	"strconv"
+	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupiterations"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
+)
+
+// TestMeta_GroupIterations exercises group iteration list via gitlab_issue.
+// Requires GitLab Premium (GITLAB_ENTERPRISE=true).
+func TestMeta_GroupIterations(t *testing.T) {
+	t.Parallel()
+	if !sess.enterprise {
+		t.Skip("group iterations require GitLab Premium/Ultimate")
+	}
+	if sess.meta == nil {
+		t.Skip("meta session not configured")
+	}
+
+	ctx := context.Background()
+
+	t.Run("Meta/GroupIteration/List_Group0_Graceful", func(t *testing.T) {
+		// Group ID 0 — expected to be empty or 404 on a fresh Docker EE.
+		out, err := callToolOn[groupiterations.ListOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "iteration_list_group",
+			"params": map[string]any{
+				"group_id": "0",
+				"state":    "opened",
+			},
+		})
+		// 404 or empty list are both acceptable outcomes on a fresh EE instance.
+		if err != nil && !isHTTPStatus(err, 404) {
+			requireNoError(t, err, "iteration_list_group")
+		}
+		if err == nil {
+			t.Logf("iteration_list_group on group 0: %d iterations", len(out.Iterations))
+		} else {
+			t.Logf("iteration_list_group returned 404 (expected for group 0 on fresh EE): %v", err)
+		}
+	})
+
+	t.Run("Meta/GroupIteration/List_WithTestGroup", func(t *testing.T) {
+		// Create a group to have a known group with no iterations.
+		groupName := uniqueName("e2e-iterations")
+		grpOut, createErr := callToolOn[groups.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "create",
+			"params": map[string]any{
+				"name":       groupName,
+				"path":       groupName,
+				"visibility": "private",
+			},
+		})
+		requireNoError(t, createErr, "create group for iteration test")
+		groupIDStr := strconv.FormatInt(grpOut.ID, 10)
+
+		// Clean up after test.
+		t.Cleanup(func() {
+			_ = callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "delete",
+				"params": map[string]any{"group_id": groupIDStr},
+			})
+		})
+
+		out, err := callToolOn[groupiterations.ListOutput](ctx, sess.meta, "gitlab_issue", map[string]any{
+			"action": "iteration_list_group",
+			"params": map[string]any{
+				"group_id": groupIDStr,
+			},
+		})
+		requireNoError(t, err, "iteration_list_group on test group")
+		t.Logf("Group %s iterations: %d (may be empty)", grpOut.FullPath, len(out.Iterations))
+	})
+}

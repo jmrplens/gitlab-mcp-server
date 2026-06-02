@@ -1,9 +1,8 @@
 //go:build e2e && !enterprise
 
 // miscmeta_ce_test.go tests miscellaneous MCP tools against a live GitLab instance.
-// Covers feature flags, branch rules (GraphQL), CI/CD catalog (GraphQL),
-// deployments, and user SSH/GPG key listing for both individual and meta-tool
-// modes.
+// Covers feature flags, feature flag user lists, branch rules (GraphQL), CI/CD catalog (GraphQL),
+// deployments, and user SSH/GPG key listing for both individual and meta-tool modes.
 package suite
 
 import (
@@ -14,6 +13,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/cicatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/deployments"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/featureflags"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/ffuserlists"
 )
 
 // TestMeta_FeatureFlags exercises feature flag listing via the gitlab_feature_flags meta-tool.
@@ -134,5 +134,111 @@ func TestIndividual_CICatalog(t *testing.T) {
 		out, err := callToolOn[cicatalog.ListOutput](ctx, sess.individual, "gitlab_list_catalog_resources", cicatalog.ListInput{})
 		requireNoError(t, err, "list catalog resources")
 		t.Logf("Found %d CI/CD catalog resource(s)", len(out.Resources))
+	})
+}
+
+// TestMeta_FeatureFlagUserLists exercises feature flag user list CRUD via the
+// gitlab_feature_flags meta-tool. User lists are project-scoped, not flag-scoped;
+// they don't require a feature flag to exist first.
+func TestMeta_FeatureFlagUserLists(t *testing.T) {
+	t.Parallel()
+	if sess.meta == nil {
+		t.Skip("meta session not configured")
+	}
+	ctx := context.Background()
+
+	proj := createProjectMeta(ctx, t, sess.meta)
+
+	t.Run("Meta/FFUserList/Create", func(t *testing.T) {
+		out, err := callToolOn[ffuserlists.Output](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+			"action": "ff_user_list_create",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+				"name":       "e2e test user list",
+				"user_xids":  "user:1",
+			},
+		})
+		requireNoError(t, err, "ff_user_list_create")
+		t.Logf("Created user list: IID=%d name=%q", out.IID, out.Name)
+	})
+
+	t.Run("Meta/FFUserList/List", func(t *testing.T) {
+		out, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+			"action": "ff_user_list_list",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+			},
+		})
+		requireNoError(t, err, "ff_user_list_list")
+		requireTruef(t, len(out.UserLists) >= 1, "expected at least 1 user list, got %d", len(out.UserLists))
+		t.Logf("User lists for project %s: %d", proj.Path, len(out.UserLists))
+	})
+
+	t.Run("Meta/FFUserList/Get", func(t *testing.T) {
+		listOut, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+			"action": "ff_user_list_list",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+			},
+		})
+		requireNoError(t, err, "list for ff_user_list_get")
+		requireTruef(t, len(listOut.UserLists) >= 1, "need at least 1 user list")
+		listIID := listOut.UserLists[0].IID
+
+		out, err := callToolOn[ffuserlists.Output](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+			"action": "ff_user_list_get",
+			"params": map[string]any{
+				"project_id":    proj.pidStr(),
+				"user_list_iid": listIID,
+			},
+		})
+		requireNoError(t, err, "ff_user_list_get")
+		t.Logf("Got user list: IID=%d name=%q", out.IID, out.Name)
+	})
+
+	t.Run("Meta/FFUserList/Update", func(t *testing.T) {
+		listOut, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+			"action": "ff_user_list_list",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+			},
+		})
+		requireNoError(t, err, "list for ff_user_list_update")
+		requireTruef(t, len(listOut.UserLists) >= 1, "need at least 1 user list")
+		listIID := listOut.UserLists[0].IID
+
+		out, err := callToolOn[ffuserlists.Output](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+			"action": "ff_user_list_update",
+			"params": map[string]any{
+				"project_id":    proj.pidStr(),
+				"user_list_iid": listIID,
+				"name":          "e2e updated user list",
+			},
+		})
+		requireNoError(t, err, "ff_user_list_update")
+		requireTruef(t, out.Name == "e2e updated user list", "name mismatch")
+		t.Logf("Updated user list: IID=%d", out.IID)
+	})
+
+	t.Run("Meta/FFUserList/Delete", func(t *testing.T) {
+		listOut, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+			"action": "ff_user_list_list",
+			"params": map[string]any{
+				"project_id": proj.pidStr(),
+			},
+		})
+		requireNoError(t, err, "list for ff_user_list_delete")
+		requireTruef(t, len(listOut.UserLists) >= 1, "need at least 1 user list")
+		listIID := listOut.UserLists[0].IID
+
+		_, err = callToolOn[ffuserlists.Output](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+			"action": "ff_user_list_delete",
+			"params": map[string]any{
+				"project_id":    proj.pidStr(),
+				"user_list_iid": listIID,
+			},
+		})
+		requireNoError(t, err, "ff_user_list_delete")
+		t.Logf("Deleted user list: IID=%d", listIID)
 	})
 }

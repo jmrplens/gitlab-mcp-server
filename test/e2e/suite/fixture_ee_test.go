@@ -216,12 +216,84 @@ func createProjectMeta(ctx context.Context, t *testing.T, session *mcp.ClientSes
 	return CreateProjectMeta(ctx, NewE2EContext(t), session)
 }
 
+// CreateProjectUnderGroupMeta creates a private project under a group via the
+// gitlab_project meta-tool and registers deletion in the per-test resource ledger.
+// This is needed for features like iterations that require a Group parent.
+func CreateProjectUnderGroupMeta(ctx context.Context, e2e *E2EContext, session *mcp.ClientSession, groupID int64) ProjectFixture {
+	e2e.T.Helper()
+	if session == nil {
+		e2e.T.Skip("project fixture MCP session not configured")
+	}
+	t := e2e.T
+	name := uniqueName(e2eProjectPrefix + "meta-" + sanitizeTestName(t.Name()))
+	out, err := callToolOn[projects.Output](ctx, session, "gitlab_project", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name":                   name,
+			"description":            "E2E meta: " + t.Name(),
+			"visibility":             "private",
+			"initialize_with_readme": true,
+			"default_branch":         defaultBranch,
+			"namespace_id":           groupID,
+		},
+	})
+	requireNoError(t, err, "create project under group fixture (meta)")
+
+	requireNoError(t, e2e.Ledger.Register(ResourceRecord{
+		Kind:      ResourceKindProject,
+		ID:        strconv.FormatInt(out.ID, 10),
+		Path:      out.PathWithNamespace,
+		Name:      out.Name,
+		OwnerTest: e2e.Name,
+		RunID:     e2e.RunID,
+		CreatedAt: time.Now(),
+		Cleanup: func(cleanupCtx context.Context) error {
+			return callToolVoidOn(cleanupCtx, session, "gitlab_project", map[string]any{
+				"action": "delete",
+				"params": map[string]any{
+					"project_id":         strconv.FormatInt(out.ID, 10),
+					"permanently_remove": true,
+					"full_path":          out.PathWithNamespace,
+				},
+			})
+		},
+	}), "register meta project-under-group fixture cleanup")
+
+	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
+
+	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
+}
+
+// createProjectUnderGroupMeta keeps legacy call sites working while they migrate to E2EContext.
+func createProjectUnderGroupMeta(ctx context.Context, t *testing.T, session *mcp.ClientSession, groupID int64) ProjectFixture {
+	t.Helper()
+	//nolint:contextcheck // Legacy wrapper owns per-test cleanup through NewE2EContext; operation calls still receive ctx.
+	return CreateProjectUnderGroupMeta(ctx, NewE2EContext(t), session, groupID)
+}
+
 func enterpriseProjectCreateRetryable(err error) bool {
 	if err == nil || !sess.enterprise {
 		return false
 	}
 	message := err.Error()
 	return strings.Contains(message, "Failed to create repository") || strings.Contains(message, "Internal API error (502)")
+}
+
+// isHTTPStatus reports whether err is a GitLab HTTP error with status code.
+// Mirrors the CE version in fixture_ce_test.go so EE tests don't need
+// to import CE-specific helpers.
+func isHTTPStatus(err error, code int) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	switch code {
+	case 404:
+		return strings.Contains(msg, "404") && strings.Contains(msg, "not found")
+	case 403:
+		return strings.Contains(msg, "403") && strings.Contains(msg, "forbidden")
+	}
+	return false
 }
 
 // CreateGroupMeta creates a group via the gitlab_group meta-tool and registers
