@@ -244,8 +244,8 @@ func TestMeta_MRApprovalSettings(t *testing.T) {
 			requireNoError(t, err, "approval_settings_project_update")
 		}
 		if err == nil {
-			requireTruef(t, out.AllowAuthorApproval.Value == true, "allow_author_approval should be true after update")
-			requireTruef(t, out.RetainApprovalsOnPush.Value == true, "retain_approvals_on_push should be true after update")
+			requireTruef(t, out.AllowAuthorApproval.Value, "allow_author_approval should be true after update")
+			requireTruef(t, out.RetainApprovalsOnPush.Value, "retain_approvals_on_push should be true after update")
 			t.Logf("Updated approval settings: allow_author=%v retain=%v",
 				out.AllowAuthorApproval.Value, out.RetainApprovalsOnPush.Value)
 		} else {

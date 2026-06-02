@@ -135,8 +135,12 @@ func TestMeta_Runner(t *testing.T) {
 				"action": "controller_get",
 				"params": map[string]any{"controller_id": 999999},
 			})
-			// 404 is expected for a non-existent controller ID
-			if err != nil && !isHTTPStatus(err, 404) {
+			// 404 is expected for a non-existent controller ID. If no error is
+			// returned the API has changed and this test needs to be updated.
+			if err == nil {
+				t.Fatal("controller_get for non-existent controller_id returned no error; expected 404")
+			}
+			if !isHTTPStatus(err, 404) {
 				requireNoError(t, err, "controller get")
 			}
 			t.Log("controller_get 404 handled gracefully")

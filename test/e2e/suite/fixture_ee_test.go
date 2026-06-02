@@ -280,6 +280,13 @@ func enterpriseProjectCreateRetryable(err error) bool {
 }
 
 // isHTTPStatus reports whether err is a GitLab HTTP error with status code.
+//
+// String-based parsing is used because go-gitlab returns wrapped errors
+// without an exposed HTTP status field — to classify the response we have
+// to inspect the formatted error message. Only 404 and 403 are recognized;
+// other codes return false so callers fall through to requireNoError and
+// surface the real failure.
+//
 // Mirrors the CE version in fixture_ce_test.go so EE tests don't need
 // to import CE-specific helpers.
 func isHTTPStatus(err error, code int) bool {
