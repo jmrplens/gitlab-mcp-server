@@ -391,7 +391,7 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 	})
 }
 
-// // InvalidCommitSHA is a clearly non-existent commit SHA used to exercise
+// InvalidCommitSHA is a clearly non-existent commit SHA used to exercise
 // the error path in repository commit and submodule update tests.
 const InvalidCommitSHA = "0000000000000000000000000000000000000000"
 

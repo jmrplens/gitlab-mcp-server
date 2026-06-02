@@ -165,24 +165,33 @@ func TestMeta_FeatureFlagUserLists(t *testing.T) {
 	})
 
 	t.Run("Meta/FFUserList/List", func(t *testing.T) {
-		out, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
-			"action": "ff_user_list_list",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-			},
-		})
-		requireNoError(t, err, "ff_user_list_list")
-		requireTruef(t, len(out.UserLists) >= 1, "expected at least 1 user list, got %d", len(out.UserLists))
-		// Find our IID in the list — the create may not be visible yet, retry briefly.
-		found := false
-		for _, ul := range out.UserLists {
-			if ul.IID == listIID {
-				found = true
-				break
+		// Find our IID in the list with retries because newly created
+		// feature-flag user lists are not always visible to the list
+		// endpoint immediately after creation.
+		var found bool
+		var lastList ffuserlists.ListOutput
+		_, listErr := retryWithBackoff(ctx, t, "ff_user_list_list find created", 5, func(int) (struct{}, bool, string, error) {
+			out, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+				"action": "ff_user_list_list",
+				"params": map[string]any{
+					"project_id": proj.pidStr(),
+				},
+			})
+			if err != nil {
+				return struct{}{}, true, "transient list error", err
 			}
-		}
-		requireTruef(t, found, "newly created user list IID=%d not visible in list (race or propagation delay)", listIID)
-		t.Logf("User lists for project %s: %d (IID=%d present)", proj.Path, len(out.UserLists), listIID)
+			lastList = out
+			for _, ul := range out.UserLists {
+				if ul.IID == listIID {
+					found = true
+					return struct{}{}, false, "", nil
+				}
+			}
+			return struct{}{}, true, "newly created IID not yet visible in list", nil
+		})
+		requireNoError(t, listErr, "ff_user_list_list")
+		requireTruef(t, found, "newly created user list IID=%d not visible in list after retries", listIID)
+		t.Logf("User lists for project %s: %d (IID=%d present)", proj.Path, len(lastList.UserLists), listIID)
 	})
 
 	t.Run("Meta/FFUserList/Get", func(t *testing.T) {
