@@ -234,16 +234,28 @@ func TestMeta_FeatureFlagUserLists(t *testing.T) {
 		requireNoError(t, err, "ff_user_list_delete")
 
 		// Verify deletion: list should no longer contain our IID.
-		listOut, err := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
-			"action": "ff_user_list_list",
-			"params": map[string]any{
-				"project_id": proj.pidStr(),
-			},
+		// Deletion may not be reflected immediately, so retry briefly.
+		var absent bool
+		_, delErr := retryWithBackoff(ctx, t, "ff_user_list_list verify deleted", 5, func(int) (struct{}, bool, string, error) {
+			listOut, lerr := callToolOn[ffuserlists.ListOutput](ctx, sess.meta, "gitlab_feature_flags", map[string]any{
+				"action": "ff_user_list_list",
+				"params": map[string]any{
+					"project_id": proj.pidStr(),
+				},
+			})
+			if lerr != nil {
+				return struct{}{}, true, "transient list error", lerr
+			}
+			for _, ul := range listOut.UserLists {
+				if ul.IID == listIID {
+					return struct{}{}, true, "deleted IID still present in list", nil
+				}
+			}
+			absent = true
+			return struct{}{}, false, "", nil
 		})
-		requireNoError(t, err, "ff_user_list_list post-delete")
-		for _, ul := range listOut.UserLists {
-			requireTruef(t, ul.IID != listIID, "deleted user list IID=%d still present in list", listIID)
-		}
+		requireNoError(t, delErr, "ff_user_list_list post-delete")
+		requireTruef(t, absent, "deleted user list IID=%d still present in list after retries", listIID)
 		t.Logf("Deleted user list: IID=%d (verified absent from list)", listIID)
 	})
 }

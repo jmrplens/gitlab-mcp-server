@@ -766,16 +766,38 @@ func runEnterpriseMetaGroupBoardOperations(t *testing.T, ctx context.Context, gr
 
 	t.Run("BoardList", func(t *testing.T) {
 		requireTruef(t, groupID > 0, "groupID not set")
-		out, err := callToolOn[groupboards.ListGroupBoardsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_list",
-			"params": map[string]any{"group_id": groupIDStr},
+		// Poll the list endpoint until the board created in BoardCreate is
+		// visible. GitLab is eventually consistent — the list may not reflect
+		// the create for a few seconds after it returns.
+		requireTruef(t, boardID > 0, "boardID not set by BoardCreate")
+		var lastBoards []groupboards.GroupBoardOutput
+		_, listErr := retryWithBackoff(ctx, t, "group_board_list find created", 5, func(int) (struct{}, bool, string, error) {
+			out, err := callToolOn[groupboards.ListGroupBoardsOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "group_board_list",
+				"params": map[string]any{"group_id": groupIDStr},
+			})
+			if err != nil {
+				return struct{}{}, true, "transient list error", err
+			}
+			lastBoards = out.Boards
+			for _, b := range out.Boards {
+				if b.ID == boardID {
+					return struct{}{}, false, "", nil
+				}
+			}
+			return struct{}{}, true, "newly created board not yet visible in list", nil
 		})
-		requireNoError(t, err, "group_board_list")
-		// A newly created group may have 0 boards — this is expected, not an error.
-		t.Logf("Listed %d group boards (empty is valid for fresh group)", len(out.Boards))
-		if boardID == 0 && len(out.Boards) > 0 {
-			boardID = out.Boards[0].ID
+		requireNoError(t, listErr, "group_board_list")
+		// At minimum the created board must be present.
+		found := false
+		for _, b := range lastBoards {
+			if b.ID == boardID {
+				found = true
+				break
+			}
 		}
+		requireTruef(t, found, "created board ID=%d not visible in group_board_list after retries", boardID)
+		t.Logf("Listed %d group boards (created board present)", len(lastBoards))
 	})
 
 	t.Run("BoardGet", func(t *testing.T) {
