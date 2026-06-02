@@ -219,16 +219,16 @@ func TestMeta_MRApprovalSettings(t *testing.T) {
 			},
 		})
 		// 404 is expected on CE — approval settings are a Premium feature.
-		// Fail fast on any other unexpected error.
-		if err != nil && !isHTTPStatus(err, 404) {
+		// Fail fast on any other unexpected error and return early.
+		if err != nil {
+			if isHTTPStatus(err, 404) {
+				t.Log("approval_settings_project_get returned 404 (expected on CE)")
+				return
+			}
 			t.Fatalf("approval_settings_project_get: unexpected error: %v", err)
 		}
-		if err == nil {
-			t.Logf("MR approval settings for project %s: allow_author=%v allow_committer=%v",
-				proj.Path, out.AllowAuthorApproval.Value, out.AllowCommitterApproval.Value)
-		} else {
-			t.Log("approval_settings_project_get returned 404 (expected on CE)")
-		}
+		t.Logf("MR approval settings for project %s: allow_author=%v allow_committer=%v",
+			proj.Path, out.AllowAuthorApproval.Value, out.AllowCommitterApproval.Value)
 	})
 
 	t.Run("Meta/ApprovalSettings/Update_Graceful404", func(t *testing.T) {
@@ -241,17 +241,17 @@ func TestMeta_MRApprovalSettings(t *testing.T) {
 			},
 		})
 		// 404 is expected on CE — approval settings are a Premium feature.
-		// Fail fast on any other unexpected error.
-		if err != nil && !isHTTPStatus(err, 404) {
+		// Fail fast on any other unexpected error and return early.
+		if err != nil {
+			if isHTTPStatus(err, 404) {
+				t.Log("approval_settings_project_update returned 404 (expected on CE)")
+				return
+			}
 			t.Fatalf("approval_settings_project_update: unexpected error: %v", err)
 		}
-		if err == nil {
-			requireTruef(t, out.AllowAuthorApproval.Value, "allow_author_approval should be true after update")
-			requireTruef(t, out.RetainApprovalsOnPush.Value, "retain_approvals_on_push should be true after update")
-			t.Logf("Updated approval settings: allow_author=%v retain=%v",
-				out.AllowAuthorApproval.Value, out.RetainApprovalsOnPush.Value)
-		} else {
-			t.Log("approval_settings_project_update returned 404 (expected on CE)")
-		}
+		requireTruef(t, out.AllowAuthorApproval.Value, "allow_author_approval should be true after update")
+		requireTruef(t, out.RetainApprovalsOnPush.Value, "retain_approvals_on_push should be true after update")
+		t.Logf("Updated approval settings: allow_author=%v retain=%v",
+			out.AllowAuthorApproval.Value, out.RetainApprovalsOnPush.Value)
 	})
 }

@@ -38,15 +38,16 @@ func TestMeta_GroupIterations(t *testing.T) {
 				"state":    "opened",
 			},
 		})
-		// 404 or empty list are both acceptable outcomes on a fresh EE instance.
-		if err != nil && !isHTTPStatus(err, 404) {
-			requireNoError(t, err, "iteration_list_group")
+		// 404 is the expected outcome on a fresh EE instance; fail fast on
+		// any other unexpected error and return early.
+		if err != nil {
+			if isHTTPStatus(err, 404) {
+				t.Logf("iteration_list_group returned 404 (expected for group 0 on fresh EE): %v", err)
+				return
+			}
+			t.Fatalf("iteration_list_group: unexpected error: %v", err)
 		}
-		if err == nil {
-			t.Logf("iteration_list_group on group 0: %d iterations", len(out.Iterations))
-		} else {
-			t.Logf("iteration_list_group returned 404 (expected for group 0 on fresh EE): %v", err)
-		}
+		t.Logf("iteration_list_group on group 0: %d iterations", len(out.Iterations))
 	})
 
 	t.Run("Meta/GroupIteration/List_WithTestGroup", func(t *testing.T) {
@@ -63,13 +64,14 @@ func TestMeta_GroupIterations(t *testing.T) {
 			},
 		})
 		// 404 or empty list are both acceptable outcomes on a fresh EE instance.
-		if err != nil && !isHTTPStatus(err, 404) {
-			requireNoError(t, err, "iteration_list_group on test group")
+		// Return early on 404 to avoid the rest of the assertion path.
+		if err != nil {
+			if isHTTPStatus(err, 404) {
+				t.Logf("iteration_list_group returned 404 for group %d (expected on fresh EE)", grp.ID)
+				return
+			}
+			t.Fatalf("iteration_list_group on test group: unexpected error: %v", err)
 		}
-		if err == nil {
-			t.Logf("Group %s iterations: %d (may be empty)", grp.Path, len(out.Iterations))
-		} else {
-			t.Logf("iteration_list_group returned 404 for group %d: %v", grp.ID, err)
-		}
+		t.Logf("Group %s iterations: %d (may be empty)", grp.Path, len(out.Iterations))
 	})
 }
