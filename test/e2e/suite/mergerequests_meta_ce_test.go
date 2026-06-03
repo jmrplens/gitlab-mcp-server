@@ -37,7 +37,8 @@ import (
 //
 //nolint:maintidx // Ordered E2E workflow keeps merge request lifecycle state visible across related GitLab operations.
 func TestMeta_MRDeep(t *testing.T) {
-	t.Parallel()
+	// NOT parallel: subtests run sequentially and later subtests depend on
+	// mrIID being set by the CreateMR subtest.
 	if sess.meta == nil {
 		t.Skip("meta session not configured")
 	}
@@ -49,6 +50,7 @@ func TestMeta_MRDeep(t *testing.T) {
 	commitFileMeta(ctx, t, sess.meta, proj, "main", testFileMainGo, "MR deep test", "init commit")
 
 	// Create a branch + commit so we can open an MR
+	createBranchMeta(ctx, t, sess.meta, proj, "feature-deep")
 	commitFileMeta(ctx, t, sess.meta, proj, "feature-deep", "deep.txt", "feat content", "feat commit")
 
 	var mrIID int64

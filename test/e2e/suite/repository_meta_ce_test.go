@@ -3,11 +3,13 @@
 // repository_meta_ce_test.go tests extended repository, file, commit, and commit discussion
 // MCP tools against a live GitLab instance via the gitlab_repository meta-tool.
 // Covers file CRUD, blame, metadata, raw content, contributors, archive, commit refs,
-// comments, statuses, cherry-pick, signature, and commit discussion lifecycle.
+// comments, statuses, cherry-pick, signature, commit discussion lifecycle, and
+// repository submodule operations.
 package suite
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/files"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repository"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repositorysubmodules"
 )
 
 // TestMeta_RepositoryFiles exercises file CRUD actions not covered by existing tests:
@@ -386,5 +389,52 @@ func TestMeta_CommitDiscussions(t *testing.T) {
 				requireNoError(t, err, "commit_discussion_delete_note")
 			})
 		})
+	})
+}
+
+// InvalidCommitSHA is a clearly non-existent commit SHA used to exercise
+// the error path in repository commit and submodule update tests.
+const InvalidCommitSHA = "0000000000000000000000000000000000000000"
+
+// TestMeta_SubmoduleUpdate exercises submodule update via gitlab_repository.
+// Uses error path: non-existent submodule returns 404 which is the expected
+// outcome on a fresh project.
+func TestMeta_SubmoduleUpdate(t *testing.T) {
+	t.Parallel()
+	if sess.meta == nil {
+		t.Skip("meta session not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	proj := createProjectMeta(ctx, t, sess.meta)
+
+	t.Run("SubmoduleUpdate_Graceful404", func(t *testing.T) {
+		// Attempt to update a clearly non-existent submodule path.
+		// GitLab returns 404 which the tool surfaces as an error.
+		_, err := callToolOn[repositorysubmodules.UpdateOutput](ctx, sess.meta, "gitlab_repository", map[string]any{
+			"action": "update_submodule",
+			"params": map[string]any{
+				"project_id":     proj.pidStr(),
+				"submodule":      "group/nonexistent-submodule",
+				"branch":         "main",
+				"commit_sha":     InvalidCommitSHA,
+				"commit_message": "update non-existent submodule (error path test)",
+			},
+		})
+		// A fresh project has no submodules — the call must fail. Fail the
+		// test if no error is returned (the API has changed and this test
+		// needs updating). The GitLab API may respond 404 (submodule not
+		// found) or 400 (invalid submodule path) depending on the
+		// implementation/version — both signal the tool routes correctly
+		// without leaking success.
+		if err == nil {
+			t.Fatal("update_submodule for non-existent submodule returned no error; expected 404 or 400")
+		}
+		if !isHTTPStatus(err, 404) && !strings.Contains(err.Error(), "400") {
+			t.Fatalf("update_submodule error was not 404 or 400: %v", err)
+		}
+		t.Logf("update_submodule error path validated: %v", err)
 	})
 }

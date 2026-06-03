@@ -248,3 +248,107 @@ func requireFindOutputParam(t *testing.T, result dynamictools.FindResult, param 
 	}
 	t.Fatalf("find %s missing output parameter %q; schema=%v", result.ID, param, result.OutputSchema)
 }
+
+// TestDynamicToolSurface_WriteActionConfirmation verifies that gitlab_execute_action
+// accepts a destructive/write action with confirm=true and succeeds.
+// This validates the write-action confirmation guard for branch creation.
+func TestDynamicToolSurface_WriteActionConfirmation(t *testing.T) {
+	t.Parallel()
+	if sess.dynamic == nil {
+		t.Skip("dynamic session not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	e2e := NewE2EContext(t)
+	proj := CreateProject(ctx, e2e, sess.individual)
+	branchRef := proj.DefaultBranch
+	if branchRef == "" {
+		branchRef = defaultBranch
+	}
+
+	// Find branch.create action and verify its required parameters.
+	findResult := dynamicFindAction(ctx, t, "create branch", "branch.create")
+	requireFindParam(t, findResult, "project_id")
+	requireFindParam(t, findResult, "branch_name")
+	requireFindParam(t, findResult, "ref")
+
+	// Execute branch.create with confirm=true — should succeed.
+	branchName := "e2e-dynamic-branch-" + sanitizeTestName(t.Name())
+	_, err := callToolOn[any](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
+		Action:  "branch.create",
+		Confirm: true,
+		Params: map[string]any{
+			"project_id":  proj.pidStr(),
+			"branch_name": branchName,
+			"ref":         branchRef,
+		},
+	})
+	requireNoError(t, err, "branch.create with confirm=true")
+	t.Logf("Branch %q created successfully via dynamic surface", branchName)
+}
+
+// TestDynamicToolSurface_DomainCoverage verifies that dynamic find+execute works
+// across multiple domain areas: issues, merge requests, and pipelines.
+// Each action is discovered via natural-language query and executed successfully.
+func TestDynamicToolSurface_DomainCoverage(t *testing.T) {
+	t.Parallel()
+	if sess.dynamic == nil {
+		t.Skip("dynamic session not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	e2e := NewE2EContext(t)
+	proj := CreateProject(ctx, e2e, sess.individual)
+	branchRef := proj.DefaultBranch
+	if branchRef == "" {
+		branchRef = defaultBranch
+	}
+
+	t.Run("Domain/Issue/Create", func(t *testing.T) {
+		// Find and execute issue creation.
+		_ = dynamicFindAction(ctx, t, "create issue in project", "issue.create")
+		out, err := callToolOn[any](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
+			Action: "issue.create",
+			Params: map[string]any{
+				"project_id": proj.pidStr(),
+				"title":      "Test issue from dynamic surface",
+			},
+		})
+		requireNoError(t, err, "issue.create via dynamic surface")
+		t.Logf("Issue created via dynamic surface: %+v", out)
+	})
+
+	t.Run("Domain/MergeRequest/List", func(t *testing.T) {
+		// Find and execute merge request listing.
+		_ = dynamicFindAction(ctx, t, "list merge requests", "merge_request.list")
+		out, err := callToolOn[any](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
+			Action: "merge_request.list",
+			Params: map[string]any{
+				"project_id": proj.pidStr(),
+			},
+		})
+		requireNoError(t, err, "merge_request.list via dynamic surface")
+		t.Logf("Merge request list via dynamic surface: %+v", out)
+	})
+
+	t.Run("Domain/Pipeline/Create", func(t *testing.T) {
+		// Commit a minimal .gitlab-ci.yml so the pipeline can run.
+		commitFileMeta(ctx, t, sess.meta, proj, branchRef, ".gitlab-ci.yml",
+			"image: alpine\ntest:\n  script: echo 'ok'\n", "Add minimal CI config")
+		// Find and execute pipeline creation.
+		// Use "create a pipeline" to avoid matching pipeline.trigger_* actions.
+		_ = dynamicFindAction(ctx, t, "create a new pipeline for a project ref", "pipeline.create")
+		_, err := callToolOn[any](ctx, sess.dynamic, "gitlab_execute_action", dynamictools.ExecuteInput{
+			Action: "pipeline.create",
+			Params: map[string]any{
+				"project_id": proj.pidStr(),
+				"ref":        branchRef,
+			},
+		})
+		requireNoError(t, err, "pipeline.create via dynamic surface")
+	})
+}

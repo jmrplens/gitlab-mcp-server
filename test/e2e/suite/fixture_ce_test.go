@@ -32,8 +32,9 @@ import (
 
 // ProjectFixture holds identifiers for a test project created by a fixture builder.
 type ProjectFixture struct {
-	ID   int64
-	Path string
+	ID            int64
+	Path          string
+	DefaultBranch string
 }
 
 // GroupFixture holds identifiers for a test group created by a fixture builder.
@@ -124,6 +125,31 @@ func isRetryableError(err error) bool {
 	return false
 }
 
+// isHTTPStatus reports whether err is a GitLab HTTP error with status code.
+//
+// String-based parsing is used because go-gitlab returns wrapped errors
+// without an exposed HTTP status field — to classify the response we have
+// to inspect the formatted error message. Only 404 and 403 are recognized;
+// other codes return false so callers fall through to requireNoError and
+// surface the real failure.
+//
+// Uses the same anchored phrase matching as isRetryableError ("404 not found",
+// "403 forbidden") to avoid false positives when substrings like "404" appear
+// inside project IDs, commit SHAs, or resource names.
+func isHTTPStatus(err error, code int) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	switch code {
+	case 404:
+		return strings.Contains(msg, "404 not found")
+	case 403:
+		return strings.Contains(msg, "403 forbidden")
+	}
+	return false
+}
+
 // retryOnTransient calls fn up to maxRetries times with progressive backoff
 // (1s, 2s, 3s…) when the returned error is retryable. Respects context
 // cancellation between attempts. Returns the first successful result or
@@ -193,7 +219,7 @@ func CreateProject(ctx context.Context, e2e *E2EContext, session *mcp.ClientSess
 	// Wait for the default branch to be available.
 	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
 
-	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
+	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace, DefaultBranch: out.DefaultBranch}
 }
 
 // createProject keeps legacy call sites working while they migrate to E2EContext.
@@ -254,7 +280,7 @@ func CreateProjectMeta(ctx context.Context, e2e *E2EContext, session *mcp.Client
 	// Wait for the default branch to be available.
 	waitForBranchOn(ctx, t, e2e.GitLab, out.ID, defaultBranch)
 
-	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace}
+	return ProjectFixture{ID: out.ID, Path: out.PathWithNamespace, DefaultBranch: out.DefaultBranch}
 }
 
 // createProjectMeta keeps legacy call sites working while they migrate to E2EContext.

@@ -368,6 +368,26 @@ curl -sf "${GITLAB_URL}/api/v4/application/settings" \
     -d "throttle_unauthenticated_deprecated_api_enabled=false" > /dev/null 2>&1
 echo "    Default branch protection disabled, local outbound requests enabled, deletion_adjourned_period=1, rate limiting disabled"
 
+# 1c. Enable iterations feature flags for EE (Premium/Ultimate).
+# Feature.enable(:iterations) and Feature.enable(:iteration_license) are required
+# because the iterations API returns 403 when the feature flag is not enabled,
+# even with a valid Ultimate license and correct token permissions.
+if [ "$ENTERPRISE_MODE" = "true" ]; then
+    # Run the feature flag enablement and capture both output and exit status.
+    # The '|| true' prevents `set -e` from aborting the script under any
+    # command-substitution failure mode (exit code, pipefail, etc.).
+    set +e
+    ff_output=$(docker compose -f "${COMPOSE_FILE}" exec -T gitlab gitlab-rails runner \
+        "Feature.enable(:iterations); Feature.enable(:iteration_license); puts 'OK'" 2>&1)
+    ff_status=$?
+    set -e
+    if [ "$ff_status" -eq 0 ]; then
+        echo "    Iterations feature flags enabled"
+    else
+        echo "    WARN: could not enable iterations feature flags (exit $ff_status, output: ${ff_output:-unknown})" >&2
+    fi
+fi
+
 # 2. Create test user
 echo "  [2/4] Creating test user '${TEST_USER}'..."
 USER_ID=""
