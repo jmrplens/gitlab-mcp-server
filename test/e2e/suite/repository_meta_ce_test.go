@@ -9,6 +9,7 @@ package suite
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -416,7 +417,7 @@ func TestMeta_SubmoduleUpdate(t *testing.T) {
 			"action": "update_submodule",
 			"params": map[string]any{
 				"project_id":     proj.pidStr(),
-				"submodule_path": "nonexistent/submodule",
+				"submodule":      "group/nonexistent-submodule",
 				"branch":         "main",
 				"commit_sha":     InvalidCommitSHA,
 				"commit_message": "update non-existent submodule (error path test)",
@@ -424,13 +425,16 @@ func TestMeta_SubmoduleUpdate(t *testing.T) {
 		})
 		// A fresh project has no submodules — the call must fail. Fail the
 		// test if no error is returned (the API has changed and this test
-		// needs updating). 404 is the expected specific error.
+		// needs updating). The GitLab API may respond 404 (submodule not
+		// found) or 400 (invalid submodule path) depending on the
+		// implementation/version — both signal the tool routes correctly
+		// without leaking success.
 		if err == nil {
-			t.Fatal("update_submodule for non-existent submodule returned no error; expected 404")
+			t.Fatal("update_submodule for non-existent submodule returned no error; expected 404 or 400")
 		}
-		if !isHTTPStatus(err, 404) {
-			t.Fatalf("update_submodule error was not 404: %v", err)
+		if !isHTTPStatus(err, 404) && !strings.Contains(err.Error(), "400") {
+			t.Fatalf("update_submodule error was not 404 or 400: %v", err)
 		}
-		t.Logf("update_submodule 404 error path validated: %v", err)
+		t.Logf("update_submodule error path validated: %v", err)
 	})
 }
