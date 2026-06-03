@@ -71,6 +71,34 @@ services:
       timeout: 3s
       retries: 20
 
+  # e2e-ldap provides an OpenLDAP server for the groupldap_ee test.
+  # It seeds a test user and group under dc=example,dc=com so
+  # GitLab's LDAP group-links can be created against it. The
+  # e2e-tester is provisioned with admin dn=cn=admin,dc=example,dc=com
+  # password "ldapadmin". The test user and group are simple fixture
+  # data used by the suite; the suite does not modify them.
+  e2e-ldap:
+    image: osixia/openldap:latest
+    hostname: ldap-e2e
+    container_name: e2e-ldap
+    environment:
+      LDAP_ORGANISATION: "E2E"
+      LDAP_DOMAIN: "example.com"
+      LDAP_ADMIN_USERNAME: "admin"
+      LDAP_ADMIN_PASSWORD: "ldapadmin"
+      LDAP_CONFIG_PASSWORD: "config"
+      LDAP_READONLY_USER: "false"
+      LDAP_RFC2307BIS_SCHEMA: "true"
+      LDAP_REMOVE_CONFIG_AFTER_SETUP: "true"
+      LDAP_SSL_HELPER_PREFIX: "ldap"
+      LDAP_TLS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost -b dc=example,dc=com -D \"cn=admin,dc=example,dc=com\" -w ldapadmin \"(objectclass=*)\" >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
 volumes:
   gitlab-config:
   gitlab-logs:

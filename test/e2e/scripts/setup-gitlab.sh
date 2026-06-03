@@ -388,6 +388,46 @@ if [ "$ENTERPRISE_MODE" = "true" ]; then
     fi
 fi
 
+# 1d. Optionally configure LDAP against the e2e-ldap container. GitLab
+# only honors LDAP if the integration is enabled; for EE test runs the
+# setup detects the e2e-ldap container and PATCHes /api/v4/ldap/ldapmain
+# (which creates or updates the LDAP integration). Failures are
+# tolerated — when the container is not present the groupldap_ee tests
+# fall back to the error-path branch.
+if [ "$ENTERPRISE_MODE" = "true" ] && docker compose -f "${COMPOSE_FILE}" ps -q e2e-ldap >/dev/null 2>&1; then
+    set +e
+    ldap_output=$(curl -sS -w '\n%{http_code}' "${GITLAB_URL}/api/v4/ldap/ldapmain" \
+        -H "Authorization: Bearer ${ROOT_TOKEN}" \
+        --retry 5 --retry-delay 2 --retry-all-errors \
+        --connect-timeout 5 --max-time 30 2>&1)
+    set -e
+    ldap_code=$(printf '%s' "$ldap_output" | tail -n 1)
+    ldap_body=$(printf '%s' "$ldap_output" | sed '$d')
+    if [ "$ldap_code" = "404" ]; then
+        # Create the LDAP integration
+        set +e
+        curl -sS -X PUT "${GITLAB_URL}/api/v4/ldap/ldapmain" \
+            -H "Authorization: Bearer ${ROOT_TOKEN}" \
+            -d "host=ldap-e2e" \
+            -d "port=389" \
+            -d "uid=uid" \
+            -d "bind_dn=cn=admin,dc=example,dc=com" \
+            -d "password=ldapadmin" \
+            -d "encryption=no" \
+            -d "verify_certificates=false" \
+            -d "active_directory=false" \
+            -d "block_auto_created_users=false" \
+            --retry 3 --retry-delay 2 --retry-all-errors \
+            --connect-timeout 5 --max-time 30 >/dev/null 2>&1
+        set -e
+        echo "    LDAP integration 'ldapmain' configured against e2e-ldap"
+    elif [ "$ldap_code" = "200" ]; then
+        echo "    LDAP integration 'ldapmain' already configured"
+    else
+        echo "    WARN: could not configure LDAP (HTTP ${ldap_code}, body: ${ldap_body:-unknown})" >&2
+    fi
+fi
+
 # 2. Create test user
 echo "  [2/4] Creating test user '${TEST_USER}'..."
 USER_ID=""
