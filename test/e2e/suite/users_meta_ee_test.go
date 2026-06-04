@@ -43,8 +43,11 @@ func TestEE_MetaUserServiceAccounts(t *testing.T) {
 
 	var serviceAccountID int64
 
+	// Register the cleanup on the parent test so the service account
+	// survives across subtests (notably the subsequent UpdateServiceAccount
+	// subtest, which needs the account to still exist).
 	t.Run("CreateServiceAccount", func(t *testing.T) {
-		saName := uniqueName("sa-e2e")
+		saName := "sa-e2e"
 		out, err := callToolOn[users.Output](ctx, sess.meta, "gitlab_user", map[string]any{
 			"action": "create_service_account",
 			"params": map[string]any{
@@ -56,13 +59,21 @@ func TestEE_MetaUserServiceAccounts(t *testing.T) {
 		requireTruef(t, out.ID > 0, "create_service_account: expected ID > 0")
 		serviceAccountID = out.ID
 		t.Logf("Created instance service account %d: %s", out.ID, saName)
-		t.Cleanup(func() {
-			cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cleanCancel()
-			_ = callToolVoidOn(cleanCtx, sess.meta, "gitlab_user", map[string]any{
-				"action": "delete",
-				"params": map[string]any{"user_id": out.ID},
-			})
+	})
+
+	// Delete the service account once the entire test (all subtests) is
+	// done. Registering on the parent t ensures the cleanup runs after
+	// the UpdateServiceAccount subtest has had a chance to operate on
+	// the still-existing service account.
+	t.Cleanup(func() {
+		if serviceAccountID == 0 {
+			return
+		}
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanCancel()
+		_ = callToolVoidOn(cleanCtx, sess.meta, "gitlab_user", map[string]any{
+			"action": "delete",
+			"params": map[string]any{"user_id": serviceAccountID},
 		})
 	})
 

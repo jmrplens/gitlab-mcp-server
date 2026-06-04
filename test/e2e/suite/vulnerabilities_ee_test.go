@@ -85,9 +85,10 @@ func TestMeta_Vulnerabilities(t *testing.T) {
 // TestMeta_VulnerabilityLifecycle exercises the full vulnerability mutation
 // lifecycle via gitlab_vulnerability: get, dismiss, confirm, resolve,
 // revert, and pipeline_security_summary. The fixture is a project with
-// a Secret-Detection-enabled CI pipeline and an intentionally leaked
-// secret so GitLab reports a real CRITICAL vulnerability on the
-// pipeline run.
+// a SAST-enabled CI pipeline (Security/SAST.gitlab-ci.yml template)
+// and an intentionally vulnerable Python file (SQL injection,
+// command injection, eval) so GitLab's Semgrep-based SAST analyzer
+// reports real CRITICAL findings on the pipeline run.
 //
 // Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
 // Skips on CE or when the runner is not configured (E2E_MODE=ce) or
@@ -98,7 +99,7 @@ func TestMeta_VulnerabilityLifecycle(t *testing.T) {
 	if !sess.enterprise {
 		return
 	}
-	if isDockerMode() == false {
+	if !isDockerMode() {
 		t.Skip("vulnerability lifecycle fixture requires a real runner (Docker mode only)")
 	}
 
@@ -170,8 +171,8 @@ def calc(expr):
 		vulnerablePy,
 		"add intentionally vulnerable code for E2E SAST fixture")
 
-	// 3. Manually trigger a pipeline so the runner processes the
-	// secret-detection job.
+	// 4. Manually trigger a pipeline so the runner processes the
+	// SAST job.
 	created, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
 		"action": "create",
 		"params": map[string]any{
@@ -186,7 +187,7 @@ def calc(expr):
 	pipelineIID := strconv.FormatInt(created.IID, 10)
 	t.Logf("Triggered pipeline ID=%d IID=%s", pipelineID, pipelineIID)
 
-	// 4. Wait for the pipeline to reach a terminal state. The runner
+	// 5. Wait for the pipeline to reach a terminal state. The runner
 	// is shared with the rest of the suite, so this can take a few
 	// minutes. We tolerate transient connection failures and skip the
 	// lifecycle if GitLab appears unhealthy.
@@ -196,8 +197,9 @@ def calc(expr):
 	}
 	t.Logf("Pipeline %d status: %s", pipelineID, pipelineStatus)
 
-	// 5. List vulnerabilities for the project. Secret Detection
-	// creates a CRITICAL vulnerability from the leaked credential.
+	// 5. List vulnerabilities for the project. SAST creates CRITICAL
+	// findings (SQL injection, command injection, eval) from the
+	// intentionally vulnerable Python file.
 	listed, err := callToolOn[vulnerabilities.ListOutput](ctx, sess.meta, "gitlab_vulnerability", map[string]any{
 		"action": "list",
 		"params": map[string]any{
@@ -221,7 +223,7 @@ def calc(expr):
 		t.Logf("Falling back to first vulnerability %q", vulnGID)
 	}
 
-	// 6. Exercise the 6 vulnerability mutation actions.
+	// 6. Exercise the vulnerability mutation actions.
 
 	t.Run("Meta/Vulnerability/Get", func(t *testing.T) {
 		out, err := callToolOn[vulnerabilities.GetOutput](ctx, sess.meta, "gitlab_vulnerability", map[string]any{

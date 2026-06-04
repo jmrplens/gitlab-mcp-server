@@ -38,6 +38,7 @@ const (
 	ResourceKindPipeline            ResourceKind = "pipeline"
 	ResourceKindJob                 ResourceKind = "job"
 	ResourceKindCurrentUserState    ResourceKind = "current_user_state"
+	ResourceKindEpic                ResourceKind = "epic"
 )
 
 // ResourceRecord describes one resource and its best-effort cleanup action.

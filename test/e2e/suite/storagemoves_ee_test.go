@@ -69,11 +69,15 @@ func TestMeta_GroupStorageMoves_Graceful404(t *testing.T) {
 		// Schedule with an invalid storage name returns 422 (validation)
 		// rather than 404 because the route exists. This confirms the
 		// tool distinguishes between routing (404) and validation (422).
+		// The schedule_* actions accept `destination_storage_name` (and
+		// optionally `source_storage_name`); a non-existent storage
+		// shard triggers 422 because the route is wired up but the
+		// shard name is rejected.
 		_, err := callToolOn[groupstoragemoves.Output](ctx, sess.meta, "gitlab_storage_move", map[string]any{
 			"action": "schedule_group",
 			"params": map[string]any{
-				"group_id": grp.gidStr(),
-				"id":       999999,
+				"group_id":                 grp.gidStr(),
+				"destination_storage_name": "e2e-missing-storage",
 			},
 		})
 		if err == nil {

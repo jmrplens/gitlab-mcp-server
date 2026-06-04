@@ -143,7 +143,9 @@ func isHTTPStatus(err error, code int) bool {
 	msg := strings.ToLower(err.Error())
 	switch code {
 	case 400:
-		return strings.Contains(msg, "400 bad request") || strings.Contains(msg, "400")
+		// Anchor on the reason phrase to avoid false positives on IDs
+		// or SHAs that happen to contain "400".
+		return strings.Contains(msg, "400 bad request")
 	case 401:
 		return strings.Contains(msg, "401 unauthorized")
 	case 403:
@@ -151,9 +153,9 @@ func isHTTPStatus(err error, code int) bool {
 	case 404:
 		return strings.Contains(msg, "404 not found")
 	case 422:
-		return strings.Contains(msg, "422 unprocessable") || strings.Contains(msg, "422")
+		return strings.Contains(msg, "422 unprocessable")
 	case 500:
-		return strings.Contains(msg, "500 internal server") || strings.Contains(msg, "500")
+		return strings.Contains(msg, "500 internal server")
 	case 502:
 		return strings.Contains(msg, "502 bad gateway")
 	case 503:

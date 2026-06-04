@@ -33,28 +33,52 @@ func TestMeta_GroupLDAPLinks(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	groupName := uniqueName("e2e-ldap-link")
+	const groupName = "e2e-ldap-link"
 	e2e := NewE2EContext(t)
 	grp := CreateGroupMeta(ctx, e2e, sess.meta, groupName)
 
-	const provider = "ldapmain"
+	const (
+		provider = "ldapmain"
+		ldapCN   = "e2e-ldap-cn"
+	)
 
-	// First attempt the happy path: add a link. If the LDAP integration
-	// is not configured, GitLab returns 404/422 and we exercise the
-	// error path. We do not requireNoError the add; we treat any error
-	// as the "integration not configured" branch.
+	// On the success path we additionally assert lifecycle side
+	// effects (list contains the added link; after delete the list
+	// no longer contains it). On the error path (LDAP integration
+	// not configured) we accept 404/422/502/503 gracefully.
+	ldapLinkListed := func(t *testing.T) (ok bool, listed groupldap.ListOutput, err error) {
+		t.Helper()
+		listed, err = callToolOn[groupldap.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ldap_link_list",
+			"params": map[string]any{"group_id": grp.gidStr()},
+		})
+		if err != nil {
+			return false, listed, err
+		}
+		for _, link := range listed.Links {
+			if link.CN == ldapCN {
+				return true, listed, nil
+			}
+		}
+		return false, listed, nil
+	}
+
 	t.Run("Meta/GroupLDAP/Add", func(t *testing.T) {
-		_, err := callToolOn[groupldap.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+		out, err := callToolOn[groupldap.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "ldap_link_add",
 			"params": map[string]any{
 				"group_id":     grp.gidStr(),
-				"cn":           "e2e-ldap-cn",
+				"cn":           ldapCN,
 				"group_access": 30,
 				"provider":     provider,
 			},
 		})
 		if err == nil {
-			t.Log("LDAP link added (integration is configured)")
+			requireTruef(t, out.CN == ldapCN, "LDAP link CN mismatch: got %q want %q", out.CN, ldapCN)
+			found, _, listErr := ldapLinkListed(t)
+			requireNoError(t, listErr, "ldap_link_list after add")
+			requireTruef(t, found, "added LDAP link %q not present in ldap_link_list response", ldapCN)
+			t.Logf("LDAP link added and verified in list (integration is configured)")
 			return
 		}
 		// Fall back to the error path. The integration may be absent
@@ -89,12 +113,16 @@ func TestMeta_GroupLDAPLinks(t *testing.T) {
 			"action": "ldap_link_delete",
 			"params": map[string]any{
 				"group_id": grp.gidStr(),
-				"cn":       "e2e-ldap-cn",
+				"cn":       ldapCN,
 				"provider": provider,
 			},
 		})
 		if err == nil {
-			t.Log("LDAP link deleted")
+			// On the success path, assert the link is gone.
+			found, _, listErr := ldapLinkListed(t)
+			requireNoError(t, listErr, "ldap_link_list after delete")
+			requireTruef(t, !found, "deleted LDAP link %q still present in ldap_link_list response", ldapCN)
+			t.Log("LDAP link deleted and verified absent from list")
 			return
 		}
 		if isHTTPStatus(err, 404) || isHTTPStatus(err, 422) || isHTTPStatus(err, 502) || isHTTPStatus(err, 503) {

@@ -96,6 +96,22 @@ func TestMeta_GroupProtectedEnvironmentsEE(t *testing.T) {
 		t.Logf("Got group protected env %s", out.Name)
 	})
 
+	t.Run("Meta/GroupProtectedEnv/Update", func(t *testing.T) {
+		requireTruef(t, envName != "", "envName not set")
+		requiredApprovals := int64(2)
+		out, err := callToolOn[groupprotectedenvs.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "protected_env_update",
+			"params": map[string]any{
+				"group_id":                grp.gidStr(),
+				"environment":             envName,
+				"required_approval_count": requiredApprovals,
+			},
+		})
+		requireNoError(t, err, "protected_env_update")
+		requireTruef(t, out.Name == envName, "updated env name = %q, want %q", out.Name, envName)
+		t.Logf("Updated group protected env %s (required_approvals=%d)", out.Name, requiredApprovals)
+	})
+
 	t.Run("Meta/GroupProtectedEnv/Unprotect", func(t *testing.T) {
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "protected_env_unprotect",
@@ -104,9 +120,4 @@ func TestMeta_GroupProtectedEnvironmentsEE(t *testing.T) {
 		requireNoError(t, err, "protected_env_unprotect")
 		t.Logf("Unprotected group env %s", envName)
 	})
-}
-
-// containsString reports whether s contains substr (case-sensitive).
-func containsString(s, substr string) bool {
-	return strings.Contains(s, substr)
 }

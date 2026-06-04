@@ -77,6 +77,17 @@ func TestMeta_GroupSSHCerts(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "ssh_cert_delete")
-		t.Logf("Deleted SSH certificate %d", certID)
+		// Verify the certificate is actually gone. Without this check,
+		// a delete endpoint that silently no-ops would pass.
+		listed, listErr := callToolOn[groupsshcerts.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "ssh_cert_list",
+			"params": map[string]any{"group_id": grp.gidStr()},
+		})
+		requireNoError(t, listErr, "ssh_cert_list after delete")
+		for _, c := range listed.Certificates {
+			requireTruef(t, c.ID != certID, "deleted SSH certificate %d still present in ssh_cert_list", certID)
+		}
+		certID = 0
+		t.Logf("Deleted SSH certificate %d and verified absence from list", certID)
 	})
 }

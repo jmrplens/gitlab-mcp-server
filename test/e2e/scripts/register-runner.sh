@@ -244,17 +244,29 @@ docker exec "$RUNNER_CONTAINER" gitlab-runner register \
 # SAST pipeline (which uses a heavy analyzer image) doesn't have to
 # re-pull on every run. Without this, single-job runners and cold pulls
 # are the dominant source of E2E flake on the vulnerability lifecycle.
-# The runner image is minimal (no bash/tomlq), so we use sed.
+# The edits below are idempotent so repeated runs don't accumulate
+# duplicate keys. The runner image is minimal (no bash/tomlq), so we
+# use sed.
 docker exec "$RUNNER_CONTAINER" sh -c '
 set -e
-sed -i "s/^concurrent = 1$/concurrent = 4/" /etc/gitlab-runner/config.toml
+# Match any concurrent value, not only "1", and replace it with 4.
+sed -i "s|^concurrent = [0-9]*$|concurrent = 4|" /etc/gitlab-runner/config.toml
+# Remove any existing pull_policy line(s) under [runners.docker] so the
+# next sed only inserts the canonical one. (sed ranges are processed
+# line by line; this strips the line itself.)
+sed -i "/^  pull_policy = /d" /etc/gitlab-runner/config.toml
+# Insert a single canonical pull_policy after the [runners.docker] header.
 sed -i "s|^  \[runners\.docker\]$|&\n  pull_policy = [\"if-not-present\"]|" /etc/gitlab-runner/config.toml
-# If pull_policy is already present, replace it.
-sed -i "s|pull_policy = \[\"always\"\]|pull_policy = [\"if-not-present\"]|g" /etc/gitlab-runner/config.toml
 '
 
-# Reload the runner so the new config takes effect.
-docker exec "$RUNNER_CONTAINER" gitlab-runner restart || true
+# Reload the runner so the new config takes effect. If the restart
+# fails (e.g., a previous run left the runner in an inconsistent state
+# and our one-shot config edit did not take), surface the failure so
+# the test suite aborts instead of running with a stale runner.
+if ! docker exec "$RUNNER_CONTAINER" gitlab-runner restart; then
+    echo "ERROR: gitlab-runner restart failed inside $RUNNER_CONTAINER" >&2
+    exit 1
+fi
 
 echo ""
 echo "=== Runner registration complete ==="

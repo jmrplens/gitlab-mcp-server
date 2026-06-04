@@ -11,6 +11,7 @@ package suite
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupwikis"
@@ -80,16 +81,30 @@ func TestMeta_GroupWikis(t *testing.T) {
 
 	t.Run("Meta/GroupWiki/Update", func(t *testing.T) {
 		requireTruef(t, wikiSlug != "", "wikiSlug not set (Create must run first)")
+		const updatedContent = "# E2E group wiki\n\nUpdated content."
 		_, err := callToolOn[groupwikis.Output](ctx, sess.meta, "gitlab_group", map[string]any{
 			"action": "wiki_edit",
 			"params": map[string]any{
 				"group_id": grp.gidStr(),
 				"slug":     wikiSlug,
-				"content":  "# E2E group wiki\n\nUpdated content.",
+				"content":  updatedContent,
 			},
 		})
 		requireNoError(t, err, "wiki_edit")
-		t.Logf("Updated group wiki page %s", wikiSlug)
+		// Verify the edit took effect by re-fetching the page and
+		// asserting the content reflects the new value. Without this
+		// check, an edit endpoint that silently no-ops would pass.
+		got, getErr := callToolOn[groupwikis.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "wiki_get",
+			"params": map[string]any{
+				"group_id": grp.gidStr(),
+				"slug":     wikiSlug,
+			},
+		})
+		requireNoError(t, getErr, "wiki_get after edit")
+		requireTruef(t, got.Slug == wikiSlug, "wiki slug after edit = %q, want %q", got.Slug, wikiSlug)
+		requireTruef(t, strings.Contains(got.Content, "Updated content."), "wiki content after edit does not contain updated string (got: %q)", got.Content)
+		t.Logf("Updated and verified group wiki page %s", wikiSlug)
 	})
 
 	t.Run("Meta/GroupWiki/Delete", func(t *testing.T) {

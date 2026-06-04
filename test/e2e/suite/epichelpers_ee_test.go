@@ -34,7 +34,7 @@ func createEpicInGroup(ctx context.Context, t *testing.T, e2e *E2EContext, group
 	requireNoError(t, err, "epic_create for helper")
 	requireTruef(t, out.IID > 0, "expected epic IID > 0")
 	requireNoError(t, e2e.Ledger.Register(ResourceRecord{
-		Kind:      ResourceKindProject, // reusing ledger kind for tracking; epic is group-scoped
+		Kind:      ResourceKindEpic, // epics live in a group namespace
 		ID:        strconv.FormatInt(int64(out.IID), 10),
 		Path:      groupFullPath,
 		Name:      titlePrefix,

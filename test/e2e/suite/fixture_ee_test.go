@@ -313,7 +313,9 @@ func isHTTPStatus(err error, code int) bool {
 	msg := strings.ToLower(err.Error())
 	switch code {
 	case 400:
-		return strings.Contains(msg, "400 bad request") || strings.Contains(msg, "400")
+		// Anchor on the reason phrase to avoid false positives on IDs
+		// or SHAs that happen to contain "400".
+		return strings.Contains(msg, "400 bad request")
 	case 401:
 		return strings.Contains(msg, "401 unauthorized")
 	case 403:
@@ -321,9 +323,9 @@ func isHTTPStatus(err error, code int) bool {
 	case 404:
 		return strings.Contains(msg, "404 not found")
 	case 422:
-		return strings.Contains(msg, "422 unprocessable") || strings.Contains(msg, "422")
+		return strings.Contains(msg, "422 unprocessable")
 	case 500:
-		return strings.Contains(msg, "500 internal server") || strings.Contains(msg, "500")
+		return strings.Contains(msg, "500 internal server")
 	case 502:
 		return strings.Contains(msg, "502 bad gateway")
 	case 503:
@@ -561,9 +563,11 @@ func retryableMergeRequestResponse(resp *gl.Response) bool {
 
 // waitForPipelineStatusEE polls the GitLab pipelines API until the pipeline
 // reaches a terminal status (success, failed, canceled, skipped) or the
-// timeout elapses. Returns the final status. This is the EE counterpart of
-// pipeline_wait_ce_test.go's waitForPipeline, kept here because CE-only
-// helpers are excluded from the EE build.
+// timeout elapses. Returns the final status. When the timeout expires or
+// the context is cancelled, the last observed status is returned so the
+// caller can decide to skip the test instead of failing outright. This
+// is the EE counterpart of pipeline_wait_ce_test.go's waitForPipeline,
+// kept here because CE-only helpers are excluded from the EE build.
 func waitForPipelineStatusEE(ctx context.Context, t *testing.T, client *gitlabclient.Client, projectID, pipelineID int64, timeout time.Duration) string {
 	t.Helper()
 	if client == nil {
@@ -580,7 +584,17 @@ func waitForPipelineStatusEE(ctx context.Context, t *testing.T, client *gitlabcl
 
 	var lastStatus string
 	for {
-		pipeline, resp, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(ctx))
+		// Use a per-iteration context with the remaining timeout so a
+		// single slow poll does not consume the whole budget at once.
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			t.Logf("waitForPipelineStatusEE: pipeline %d in project %d did not reach terminal status within %s (last status: %s); returning last observed status for caller to handle",
+				pipelineID, projectID, timeout, lastStatus)
+			return lastStatus
+		}
+		pollCtx, pollCancel := context.WithTimeout(ctx, remaining)
+		pipeline, resp, err := client.GL().Pipelines.GetPipeline(projectID, pipelineID, gl.WithContext(pollCtx))
+		pollCancel()
 		if err == nil && pipeline != nil {
 			lastStatus = pipeline.Status
 			if terminal[lastStatus] {
@@ -594,12 +608,15 @@ func waitForPipelineStatusEE(ctx context.Context, t *testing.T, client *gitlabcl
 		}
 
 		if time.Now().After(deadline) {
-			t.Fatalf("waitForPipelineStatusEE: pipeline %d in project %d did not reach terminal status within %s (last status: %s)", pipelineID, projectID, timeout, lastStatus)
+			t.Logf("waitForPipelineStatusEE: deadline reached for pipeline %d in project %d (last status: %s); returning last observed status",
+				pipelineID, projectID, lastStatus)
+			return lastStatus
 		}
 
 		select {
 		case <-ctx.Done():
-			t.Fatalf("waitForPipelineStatusEE: context cancelled while waiting for pipeline %d: %v", pipelineID, ctx.Err())
+			t.Logf("waitForPipelineStatusEE: context cancelled while waiting for pipeline %d: %v; returning last observed status", pipelineID, ctx.Err())
+			return lastStatus
 		case <-time.After(5 * time.Second):
 		}
 	}

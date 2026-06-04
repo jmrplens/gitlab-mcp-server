@@ -94,28 +94,30 @@ services:
       retries: 20
 
   # e2e-ldap provides an OpenLDAP server for the groupldap_ee test.
-  # It seeds a test user and group under dc=example,dc=com so
-  # GitLab's LDAP group-links can be created against it. The
-  # e2e-tester is provisioned with admin dn=cn=admin,dc=example,dc=com
-  # password "ldapadmin". The test user and group are simple fixture
-  # data used by the suite; the suite does not modify them.
+  # The default osixia/openldap image seeds a minimal directory
+  # (ou=people, ou=groups) under dc=example,dc=com at first start;
+  # GitLab's LDAP group-links can then bind as
+  # cn=admin,dc=example,dc=com. The password is sourced from
+  # E2E_LDAP_ADMIN_PASSWORD (default "ldapadmin" for the local
+  # fixture). The test user and group are simple fixture data
+  # used by the suite; the suite does not modify them.
   e2e-ldap:
-    image: osixia/openldap:latest
+    image: osixia/openldap:1.5.0
     hostname: ldap-e2e
     container_name: e2e-ldap
     environment:
       LDAP_ORGANISATION: "E2E"
       LDAP_DOMAIN: "example.com"
       LDAP_ADMIN_USERNAME: "admin"
-      LDAP_ADMIN_PASSWORD: "ldapadmin"
-      LDAP_CONFIG_PASSWORD: "config"
+      LDAP_ADMIN_PASSWORD: ${E2E_LDAP_ADMIN_PASSWORD:-ldapadmin}
+      LDAP_CONFIG_PASSWORD: ${E2E_LDAP_CONFIG_PASSWORD:-config}
       LDAP_READONLY_USER: "false"
       LDAP_RFC2307BIS_SCHEMA: "true"
       LDAP_REMOVE_CONFIG_AFTER_SETUP: "true"
       LDAP_SSL_HELPER_PREFIX: "ldap"
       LDAP_TLS: "false"
     healthcheck:
-      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost -b dc=example,dc=com -D \"cn=admin,dc=example,dc=com\" -w ldapadmin \"(objectclass=*)\" >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost -b dc=example,dc=com -D \"cn=admin,dc=example,dc=com\" -w ${E2E_LDAP_ADMIN_PASSWORD:-ldapadmin} \"(objectclass=*)\" >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 30

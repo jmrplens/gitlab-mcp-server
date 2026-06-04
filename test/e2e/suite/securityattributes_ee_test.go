@@ -33,13 +33,13 @@ func TestMeta_SecurityAttributes(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	groupName := uniqueName("e2e-sec-attr")
+	const groupName = "e2e-sec-attr"
 	e2e := NewE2EContext(t)
 	grp := CreateGroupMeta(ctx, e2e, sess.meta, groupName)
 
 	// First create a category to hold the attribute.
 	var categoryID int64
-	categoryName := uniqueName("e2e-attr-cat")
+	const categoryName = "e2e-attr-cat"
 	t.Run("Setup/Category", func(t *testing.T) {
 		out, err := callToolOn[securitycategories.Output](ctx, sess.meta, "gitlab_security_category", map[string]any{
 			"action": "create",
@@ -55,7 +55,7 @@ func TestMeta_SecurityAttributes(t *testing.T) {
 	})
 
 	var attributeID int64
-	attrName := uniqueName("e2e-attr")
+	const attrName = "e2e-attr"
 
 	t.Run("Meta/SecurityAttribute/Create", func(t *testing.T) {
 		requireTruef(t, categoryID > 0, "categoryID not set (Setup/Category must run first)")
@@ -82,7 +82,7 @@ func TestMeta_SecurityAttributes(t *testing.T) {
 	t.Run("Meta/SecurityAttribute/Update", func(t *testing.T) {
 		requireTruef(t, attributeID > 0, "attributeID not set (Create must run first)")
 		newName := attrName + "-upd"
-		_, err := callToolOn[securityattributes.CreateOutput](ctx, sess.meta, "gitlab_security_attribute", map[string]any{
+		out, err := callToolOn[securityattributes.Output](ctx, sess.meta, "gitlab_security_attribute", map[string]any{
 			"action": "update",
 			"params": map[string]any{
 				"attribute_id": attributeID,
@@ -90,6 +90,11 @@ func TestMeta_SecurityAttributes(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "security_attribute_update")
+		// Assert the update was applied: the returned payload must
+		// reflect the new name and the same attribute ID. Without this
+		// check, an update endpoint that silently no-ops would pass.
+		requireTruef(t, out.ID == attributeID, "updated attribute ID = %d, want %d", out.ID, attributeID)
+		requireTruef(t, out.Name == newName, "updated attribute name = %q, want %q", out.Name, newName)
 		t.Logf("Updated security attribute %d (renamed to %q)", attributeID, newName)
 	})
 
