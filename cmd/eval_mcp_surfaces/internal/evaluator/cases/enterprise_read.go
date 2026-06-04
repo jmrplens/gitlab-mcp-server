@@ -74,7 +74,7 @@ func enterpriseReadEvalCases() []Case {
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-2",
-			"Look up the GitLab project that goes by the path `my-org/tools/gitlab-mcp-server`, then pull the deployment-frequency DORA metric for that project over the last 30 days in `daily` interval.",
+			"Look up project `my-org/tools/gitlab-mcp-server` and pull the deployment-frequency DORA metric for that project over the last 30 days in `daily` interval.",
 			readStep("gitlab_project", "get", params("project_id"), nil),
 			readStep("gitlab_dora_metrics", "project", params("project_id", "metric", "start_date", "end_date", "interval"), nil),
 		),
