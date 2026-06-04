@@ -445,21 +445,21 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       912 |     154,404 |
+| Source (`.go`, non-test) |       912 |     154,423 |
 | Unit tests (`_test.go`)  |       490 |     255,666 |
 | End-to-end tests         |       139 |      31,477 |
-| **Total**                | **1,541** | **441,547** |
+| **Total**                | **1,541** | **441,566** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  6,503 |
+| Source functions                |  6,504 |
 | — exported (public)             |  2,467 |
-| — unexported (private)          |  4,036 |
-| Unit test functions (`TestXxx`) | 10,336 |
+| — unexported (private)          |  4,037 |
+| Unit test functions (`TestXxx`) | 10,331 |
 | Subtests (`t.Run(...)`)         |  2,503 |
-| End-to-end test functions       |    280 |
+| End-to-end test functions       |    279 |
 
 ### Ratios worth noting
 
@@ -468,7 +468,7 @@ Numbers nobody asked for, but here they are anyway.
 | Test lines vs source lines         | 1.66× more tests than code |
 | Average source file length         |                 ~169 lines |
 | Average test file length           |                 ~521 lines |
-| Comment lines in source            |   11,975 (~7.8% of source) |
+| Comment lines in source            |   11,981 (~7.8% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
@@ -488,7 +488,7 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   219 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   182 |
+| Git commits                    |   183 |
 | Unique contributors            |     2 |
 
 ### Hall of fame

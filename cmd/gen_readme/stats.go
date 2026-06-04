@@ -190,9 +190,9 @@ func scanGoLine(line string, isE2E, isTest bool, s *repoStats) {
 
 func updateFunctionStats(name string, isE2E, isTest bool, s *repoStats) {
 	switch {
-	case isE2E && strings.HasPrefix(name, "Test"):
+	case isE2E && isTestFunctionName(name):
 		s.E2ETestFuncs++
-	case isTest && strings.HasPrefix(name, "Test"):
+	case isTest && isTestFunctionName(name):
 		s.TestFuncs++
 		if len(name) > len(s.LongestTestName) {
 			s.LongestTestName = name
@@ -219,6 +219,25 @@ func updateSourceLineStats(line, trimmed string, s *repoStats) {
 	if strings.Contains(strings.ToLower(line), "gitlab") {
 		s.GitlabLines++
 	}
+}
+
+// isTestFunctionName reports whether name follows Go's Test* entry-point
+// rules: starts with "Test" and the next rune is uppercase (or there is no
+// next rune). It excludes "TestMain", which is the framework entry point
+// for _test.go packages and is not itself a test. This matches the
+// behavior of cmd/gen_testing_docs so the two generators report the
+// same counts.
+func isTestFunctionName(name string) bool {
+	if name == "TestMain" {
+		return false
+	}
+	if !strings.HasPrefix(name, "Test") {
+		return false
+	}
+	if len(name) == len("Test") {
+		return true
+	}
+	return unicode.IsUpper(rune(name[len("Test")]))
 }
 
 // extractFuncName returns the identifier from a trimmed "func ..." line.
