@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,561 |
-| Unit test functions                                   | 10,306 |
-| E2E test functions                                    |    255 |
+| Total test functions                                  | 10,601 |
+| Unit test functions                                   | 10,322 |
+| E2E test functions                                    |    279 |
 | cmd test functions                                    |    700 |
 | Test files (internal/)                                |    439 |
 | Test files (cmd/)                                     |     51 |
-| Test files (test/e2e/suite/)                          |    120 |
+| Test files (test/e2e/suite/)                          |    137 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     19 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  89.7% |
-| Overall coverage (`go test ./internal/...`)           |  93.8% |
-| Average package coverage                              |  95.2% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  89.8% |
+| Overall coverage (`go test ./internal/...`)           |  93.9% |
+| Average package coverage                              |  95.5% |
 
 ### Naming Convention Stats
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,472 | 89.7% |
+| `TestFunc_Scenario` (2-part)           | 9,509 | 89.7% |
 | `TestFunc` (no underscore)             |   792 |  7.5% |
-| `TestFunc_Scenario_Expected` (3+ part) |   297 |  2.8% |
+| `TestFunc_Scenario_Expected` (3+ part) |   300 |  2.8% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,778 |         89 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          7,543 |        338 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            255 |        120 | build-tagged real GitLab integration suite                                                      |
+| Tool sub-packages (175) |          7,559 |        338 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            279 |        137 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            700 |         51 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,561** |    **610** |                                                                                                 |
+| **Total**               |     **10,601** |    **627** |                                                                                                 |
 
 ### Core Packages
 
@@ -84,9 +84,9 @@
 | projects          |   345 |    99.8% |    54 |
 | mergerequests     |   224 |   100.0% |    30 |
 | issues            |   208 |   100.0% |    21 |
-| users             |   192 |   100.0% |    37 |
+| users             |   193 |    99.9% |    37 |
 | samplingtools     |   167 |   100.0% |    11 |
-| dynamic           |   140 |    98.6% |     2 |
+| dynamic           |   145 |    98.6% |     2 |
 | jobs              |   131 |    99.8% |    17 |
 | groups            |   128 |   100.0% |    18 |
 | search            |   116 |   100.0% |    10 |
@@ -149,11 +149,11 @@
 | dependencyproxy         |         5 |          1 |   100.0% |         1 |
 | deploykeys              |        66 |          2 |    99.5% |         9 |
 | deploymentmergerequests |        20 |          1 |   100.0% |         1 |
-| deployments             |        53 |          2 |    99.4% |         6 |
+| deployments             |        57 |          2 |   100.0% |         6 |
 | deploytokens            |        64 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |        14 |          1 |   100.0% |         2 |
 | dorametrics             |        10 |          2 |   100.0% |         2 |
-| dynamic                 |       140 |          9 |    98.6% |         2 |
+| dynamic                 |       145 |          9 |    98.6% |         2 |
 | elicitationtools        |        61 |          2 |   100.0% |         4 |
 | enterpriseusers         |        32 |          3 |   100.0% |         4 |
 | environments            |        48 |          2 |   100.0% |         6 |
@@ -206,7 +206,7 @@
 | issuenotes              |        38 |          2 |   100.0% |         5 |
 | issues                  |       208 |          2 |   100.0% |        21 |
 | issuestatistics         |        40 |          1 |   100.0% |         3 |
-| iterationdata           |         3 |          1 |    46.1% |         0 |
+| iterationdata           |         8 |          1 |   100.0% |         0 |
 | jobs                    |       131 |          3 |    99.8% |        17 |
 | jobtokenscope           |        48 |          2 |   100.0% |         8 |
 | keys                    |        20 |          1 |   100.0% |         2 |
@@ -252,7 +252,7 @@
 | protectedpackages       |        32 |          2 |   100.0% |         4 |
 | releaselinks            |        56 |          2 |   100.0% |         6 |
 | releases                |        61 |          1 |   100.0% |         6 |
-| repository              |        67 |          1 |   100.0% |         9 |
+| repository              |        68 |          1 |   100.0% |         9 |
 | repositorysubmodules    |        48 |          3 |   100.0% |         3 |
 | resourceevents          |        98 |          2 |   100.0% |        15 |
 | resourcegroups          |        16 |          1 |   100.0% |         4 |
@@ -284,12 +284,12 @@
 | usagedata               |        27 |          1 |   100.0% |         6 |
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
-| users                   |       192 |          7 |   100.0% |        37 |
+| users                   |       193 |          7 |    99.9% |        37 |
 | vulnerabilities         |        59 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        79 |          2 |   100.0% |         6 |
-| **Total**               | **7,543** |    **338** |          | **1,129** |
+| **Total**               | **7,559** |    **338** |          | **1,129** |
 
 </details>
 
@@ -310,15 +310,15 @@
 | cmd/audit_tokens                               |    19.5% |
 | cmd/audit_tools                                |    34.9% |
 | cmd/eval_mcp_surfaces/internal/evalrun         |    88.9% |
-| cmd/eval_mcp_surfaces/internal/evaluator       |    69.3% |
-| cmd/eval_mcp_surfaces/internal/evaluator/cases |    97.5% |
+| cmd/eval_mcp_surfaces/internal/evaluator       |    69.2% |
+| cmd/eval_mcp_surfaces/internal/evaluator/cases |    98.1% |
 | cmd/eval_mcp_surfaces/internal/termio          |    45.7% |
 | cmd/find_dupes                                 |    90.1% |
 | cmd/format_md_tables                           |    87.2% |
 | cmd/gen_action_catalog_manifest                |    58.3% |
 | cmd/gen_docker_tools                           |    81.9% |
 | cmd/gen_llms                                   |    27.4% |
-| cmd/gen_readme                                 |    34.9% |
+| cmd/gen_readme                                 |    34.3% |
 | cmd/gen_testing_docs                           |    27.6% |
 | cmd/server                                     |    78.5% |
 
@@ -386,7 +386,7 @@
 | dependencyproxy         |   100.0% |
 | deploykeys              |    99.5% |
 | deploymentmergerequests |   100.0% |
-| deployments             |    99.4% |
+| deployments             |   100.0% |
 | deploytokens            |   100.0% |
 | dockerfiletemplates     |   100.0% |
 | dorametrics             |   100.0% |
@@ -443,7 +443,7 @@
 | issuenotes              |   100.0% |
 | issues                  |   100.0% |
 | issuestatistics         |   100.0% |
-| iterationdata           |    46.1% |
+| iterationdata           |   100.0% |
 | jobs                    |    99.8% |
 | jobtokenscope           |   100.0% |
 | keys                    |   100.0% |
@@ -521,7 +521,7 @@
 | usagedata               |   100.0% |
 | useremails              |   100.0% |
 | usergpgkeys             |   100.0% |
-| users                   |   100.0% |
+| users                   |    99.9% |
 | vulnerabilities         |   100.0% |
 | waitpoll                |   100.0% |
 | wikis                   |    99.4% |
@@ -533,16 +533,15 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_output** (26.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_llms** (27.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_testing_docs** (27.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_readme** (34.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tools** (34.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_readme** (34.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_metrics** (35.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/termio** (45.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **iterationdata** (46.1%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/audit_godocs** (50.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/add_docs** (67.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_mcp_surfaces/internal/evaluator** (69.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_mcp_surfaces/internal/evaluator** (69.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_action_spec_coverage** (77.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.5%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_test_names** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
