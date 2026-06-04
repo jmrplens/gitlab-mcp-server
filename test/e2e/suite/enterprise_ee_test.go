@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/attestations"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/auditevents"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/compliancepolicy"
@@ -47,7 +49,44 @@ func TestMeta_MergeTrains(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	proj := createProjectMeta(ctx, t, sess.meta)
+
+	// Create a group so the project lives under a Premium/Ultimate
+	// group namespace. Merge trains are a Premium/Ultimate feature and
+	// GitLab does not persist merge_trains_enabled on projects in
+	// personal namespaces on self-managed EE — the API call succeeds
+	// but the value is dropped because the namespace lacks the
+	// required license feature flag.
+	grpName := uniqueName("mt-group")
+	e2e := NewE2EContext(t)
+	grp := CreateGroupMeta(ctx, e2e, sess.meta, grpName)
+	proj := CreateProjectUnderGroupMeta(ctx, e2e, sess.meta, grp.ID)
+
+	// Enable merge trains on the project so we can add MRs to the train
+	// and list trains per branch. Per the GitLab merge_trains docs
+	// (https://docs.gitlab.com/ci/pipelines/merge_trains/), BOTH the
+	// `merge_pipelines_enabled` (Enable merged results pipelines) and
+	// `merge_trains_enabled` settings must be enabled. Setting only
+	// merge_trains_enabled is silently dropped on Premium/Ultimate
+	// when the project lives in a group namespace.
+	t.Run("EnableMergeTrainsOnProject", func(t *testing.T) {
+		enable := true
+		_, _, err := sess.glClient.GL().Projects.EditProject(
+			proj.Path,
+			&gl.EditProjectOptions{
+				MergePipelinesEnabled: &enable,
+				MergeTrainsEnabled:    &enable,
+			},
+			gl.WithContext(ctx),
+		)
+		requireNoError(t, err, "glClient.EditProject enable merge trains")
+		raw, _, rawErr := sess.glClient.GL().Projects.GetProject(proj.Path, &gl.GetProjectOptions{})
+		requireNoError(t, rawErr, "glClient.GetProject after enabling merge trains")
+		if !raw.MergePipelinesEnabled || !raw.MergeTrainsEnabled {
+			t.Skipf("merge trains prerequisites not persisted on project %s (MergePipelinesEnabled=%v, MergeTrainsEnabled=%v); falling back to error-path assertions",
+				proj.Path, raw.MergePipelinesEnabled, raw.MergeTrainsEnabled)
+		}
+		t.Logf("Project %s now has merge_pipelines_enabled=true and merge_trains_enabled=true", proj.Path)
+	})
 
 	t.Run("Meta/MergeTrain/ListProject", func(t *testing.T) {
 		_, err := callToolOn[mergetrains.ListOutput](ctx, sess.meta, "gitlab_merge_train", map[string]any{
@@ -58,6 +97,56 @@ func TestMeta_MergeTrains(t *testing.T) {
 		})
 		requirePremiumFeature(t, err, "merge trains")
 		t.Log("Merge train list OK")
+	})
+
+	// Build a real MR lifecycle so we have an MR to add to a merge train
+	// when the feature is enabled. When merge_trains is not enabled on
+	// the project the add call returns 400 "Merge trains are not enabled
+	// for this project", which still validates the routing.
+	var mrIID int64
+	t.Run("Meta/MergeTrain/Add", func(t *testing.T) {
+		branch := uniqueName("mt-branch")
+		createBranchMeta(ctx, t, sess.meta, proj, branch)
+		commitFileMeta(ctx, t, sess.meta, proj, branch, "merge-train.txt", "merge train fixture", "add to merge train")
+		mr := createMRMeta(ctx, t, sess.meta, proj, branch, defaultBranch, "merge train fixture")
+		waitForMRReady(ctx, t, sess.glClient, proj.ID, mr.IID)
+		mrIID = mr.IID
+
+		out, err := callToolOn[mergetrains.Output](ctx, sess.meta, "gitlab_merge_train", map[string]any{
+			"action": "add",
+			"params": map[string]any{
+				"project_id":        proj.pidStr(),
+				"merge_request_iid": mrIID,
+			},
+		})
+		if err != nil {
+			// 400 "Merge trains are not enabled" is the expected routing
+			// outcome on a self-managed instance where the flag does not
+			// persist. Both 200 (merge train enabled) and 400 (routing OK
+			// but feature off) are acceptable for this assertion.
+			if isHTTPStatus(err, 400) {
+				t.Logf("merge train add returned 400 (merge trains disabled on this project — routing validated): %v", err)
+				return
+			}
+			requirePremiumFeature(t, err, "merge train add")
+		}
+		requireTruef(t, out.ID > 0, "merge train entry ID should be > 0")
+		t.Logf("Added MR !%d to merge train (entry ID %d)", mrIID, out.ID)
+	})
+
+	t.Run("Meta/MergeTrain/ListBranch", func(t *testing.T) {
+		if mrIID == 0 {
+			t.Skip("no MR was added to the train (previous sub-test failed)")
+		}
+		out, err := callToolOn[mergetrains.ListOutput](ctx, sess.meta, "gitlab_merge_train", map[string]any{
+			"action": "list_branch",
+			"params": map[string]any{
+				"project_id":    proj.pidStr(),
+				"target_branch": defaultBranch,
+			},
+		})
+		requireNoError(t, err, "list merge train for branch")
+		t.Logf("Merge train for branch %q has %d entries", defaultBranch, len(out.Trains))
 	})
 }
 
@@ -1121,6 +1210,159 @@ func TestMeta_StorageMoves(t *testing.T) {
 		})
 		requireErrorContainsAll(t, err, "destination_storage_name", "Gitaly", "storage")
 	})
+
+	// Geo-less single-node Docker returns 404 for these endpoints, but the
+	// tool still has to route the call correctly. Each sub-test asserts
+	// either 404 (no Geo) or 422 (invalid payload).
+
+	t.Run("Meta/StorageMove/GetProject_NotFound", func(t *testing.T) {
+		_, err := callToolOn[projectstoragemoves.Output](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "get_project",
+			"params": map[string]any{"id": int64(999999)},
+		})
+		if err == nil {
+			t.Skip("Geo may be configured")
+		}
+		if !isHTTPStatus(err, 404) {
+			t.Fatalf("get_project error was not 404: %v", err)
+		}
+		t.Logf("get_project routing validated: %v", err)
+	})
+
+	t.Run("Meta/StorageMove/GetGroup_NotFound", func(t *testing.T) {
+		_, err := callToolOn[groupstoragemoves.Output](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "get_group",
+			"params": map[string]any{"id": int64(999999)},
+		})
+		if err == nil {
+			t.Skip("Geo may be configured")
+		}
+		if !isHTTPStatus(err, 404) {
+			t.Fatalf("get_group error was not 404: %v", err)
+		}
+		t.Logf("get_group routing validated: %v", err)
+	})
+
+	t.Run("Meta/StorageMove/GetSnippet_NotFound", func(t *testing.T) {
+		_, err := callToolOn[snippetstoragemoves.Output](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "get_snippet",
+			"params": map[string]any{"id": int64(999999)},
+		})
+		if err == nil {
+			t.Skip("Geo may be configured")
+		}
+		if !isHTTPStatus(err, 404) {
+			t.Fatalf("get_snippet error was not 404: %v", err)
+		}
+		t.Logf("get_snippet routing validated: %v", err)
+	})
+
+	t.Run("Meta/StorageMove/GetProjectForProject_NotFound", func(t *testing.T) {
+		_, err := callToolOn[projectstoragemoves.Output](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "get_project_for_project",
+			"params": map[string]any{
+				"project_id": proj.ID,
+				"id":         int64(999999),
+			},
+		})
+		if err == nil {
+			t.Skip("Geo may be configured")
+		}
+		if !isHTTPStatus(err, 404) {
+			t.Fatalf("get_project_for_project error was not 404: %v", err)
+		}
+		t.Logf("get_project_for_project routing validated: %v", err)
+	})
+
+	t.Run("Meta/StorageMove/GetGroupForGroup_NotFound", func(t *testing.T) {
+		_, err := callToolOn[groupstoragemoves.Output](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "get_group_for_group",
+			"params": map[string]any{
+				"group_id": groupID,
+				"id":       int64(999999),
+			},
+		})
+		if err == nil {
+			t.Skip("Geo may be configured")
+		}
+		if !isHTTPStatus(err, 404) {
+			t.Fatalf("get_group_for_group error was not 404: %v", err)
+		}
+		t.Logf("get_group_for_group routing validated: %v", err)
+	})
+
+	t.Run("Meta/StorageMove/GetSnippetForSnippet_NotFound", func(t *testing.T) {
+		_, err := callToolOn[snippetstoragemoves.Output](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "get_snippet_for_snippet",
+			"params": map[string]any{
+				"snippet_id": snippetID,
+				"id":         int64(999999),
+			},
+		})
+		if err == nil {
+			t.Skip("Geo may be configured")
+		}
+		if !isHTTPStatus(err, 404) {
+			t.Fatalf("get_snippet_for_snippet error was not 404: %v", err)
+		}
+		t.Logf("get_snippet_for_snippet routing validated: %v", err)
+	})
+
+	t.Run("Meta/StorageMove/ScheduleAllProject_NotFound", func(t *testing.T) {
+		// schedule_all_project operates on the entire GitLab instance, not
+		// a single project. Without Geo, GitLab returns 404 for these
+		// endpoints; with invalid shard names it returns 400. We provide
+		// non-existent storage names so the request is well formed and
+		// the routing assertion is meaningful.
+		_, err := callToolOn[projectstoragemoves.ScheduleAllOutput](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "schedule_all_project",
+			"params": map[string]any{
+				"source_storage_name":      "e2e-missing-source",
+				"destination_storage_name": "e2e-missing-destination",
+			},
+		})
+		if err == nil {
+			t.Skip("Geo may be configured")
+		}
+		if !isHTTPStatus(err, 400) && !isHTTPStatus(err, 404) && !isHTTPStatus(err, 422) {
+			t.Fatalf("schedule_all_project error was not 400/404/422: %v", err)
+		}
+		t.Logf("schedule_all_project routing validated: %v", err)
+	})
+
+	t.Run("Meta/StorageMove/ScheduleAllGroup_NotFound", func(t *testing.T) {
+		_, err := callToolOn[groupstoragemoves.ScheduleAllOutput](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "schedule_all_group",
+			"params": map[string]any{
+				"source_storage_name":      "e2e-missing-source",
+				"destination_storage_name": "e2e-missing-destination",
+			},
+		})
+		if err == nil {
+			t.Skip("Geo may be configured")
+		}
+		if !isHTTPStatus(err, 400) && !isHTTPStatus(err, 404) && !isHTTPStatus(err, 422) {
+			t.Fatalf("schedule_all_group error was not 400/404/422: %v", err)
+		}
+		t.Logf("schedule_all_group routing validated: %v", err)
+	})
+
+	t.Run("Meta/StorageMove/ScheduleAllSnippet_NotFound", func(t *testing.T) {
+		_, err := callToolOn[snippetstoragemoves.ScheduleAllOutput](ctx, sess.meta, "gitlab_storage_move", map[string]any{
+			"action": "schedule_all_snippet",
+			"params": map[string]any{
+				"source_storage_name":      "e2e-missing-source",
+				"destination_storage_name": "e2e-missing-destination",
+			},
+		})
+		if err == nil {
+			t.Skip("Geo may be configured")
+		}
+		if !isHTTPStatus(err, 400) && !isHTTPStatus(err, 404) && !isHTTPStatus(err, 422) {
+			t.Fatalf("schedule_all_snippet error was not 400/404/422: %v", err)
+		}
+		t.Logf("schedule_all_snippet routing validated: %v", err)
+	})
 }
 
 // TestMeta_SecurityFindings exercises security finding tools via the
@@ -1405,6 +1647,14 @@ func TestMeta_GroupSCIM(t *testing.T) {
 
 // TestEnterpriseOrbit_NotRegisteredOnSelfManaged verifies that GitLab.com-only
 // Orbit tools are omitted from self-managed Enterprise surfaces.
+//
+// The experimental GitLab Orbit Knowledge Graph is exposed only on
+// gitlab.com. This test enumerates the expected meta-tool name
+// (gitlab_orbit) and the six individual sub-tools
+// (gitlab_orbit_status, gitlab_orbit_schema, gitlab_orbit_tools,
+// gitlab_orbit_dsl, gitlab_orbit_query, gitlab_orbit_graph_status)
+// and asserts that none of them is registered when running against
+// a self-managed instance.
 func TestEnterpriseOrbit_NotRegisteredOnSelfManaged(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
@@ -1414,22 +1664,55 @@ func TestEnterpriseOrbit_NotRegisteredOnSelfManaged(t *testing.T) {
 		t.Skip("Orbit availability depends on GitLab.com Knowledge Graph feature flags")
 	}
 
+	const (
+		orbitMetaTool   = "gitlab_orbit"
+		orbitStatusTool = "gitlab_orbit_status"
+		orbitSchemaTool = "gitlab_orbit_schema"
+		orbitToolsTool  = "gitlab_orbit_tools"
+		orbitDSLTool    = "gitlab_orbit_dsl"
+		orbitQueryTool  = "gitlab_orbit_query"
+		orbitGraphTool  = "gitlab_orbit_graph_status"
+	)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	metaTools, err := sess.meta.ListTools(ctx, nil)
 	requireNoError(t, err, "list meta tools")
 	for _, tool := range metaTools.Tools {
-		if tool.Name == "gitlab_orbit" {
-			t.Fatalf("gitlab_orbit should not be registered on self-managed Enterprise")
+		if tool.Name == orbitMetaTool {
+			t.Fatalf("meta-tool %q should not be registered on self-managed Enterprise", orbitMetaTool)
 		}
 	}
+	t.Logf("Meta-tool %q is correctly absent on self-managed Enterprise", orbitMetaTool)
 
 	individualTools, err := sess.individual.ListTools(ctx, nil)
 	requireNoError(t, err, "list individual tools")
+	registeredOrbit := make(map[string]bool)
 	for _, tool := range individualTools.Tools {
-		if strings.HasPrefix(tool.Name, "gitlab_orbit_") {
-			t.Fatalf("%s should not be registered on self-managed Enterprise", tool.Name)
+		registeredOrbit[tool.Name] = true
+	}
+
+	expectedOrbitIndividualTools := []string{
+		orbitStatusTool,
+		orbitSchemaTool,
+		orbitToolsTool,
+		orbitDSLTool,
+		orbitQueryTool,
+		orbitGraphTool,
+	}
+	for _, expected := range expectedOrbitIndividualTools {
+		if registeredOrbit[expected] {
+			t.Fatalf("individual tool %q should not be registered on self-managed Enterprise", expected)
+		}
+	}
+	t.Logf("Confirmed none of the 6 expected gitlab_orbit_* individual tools are registered on self-managed Enterprise")
+
+	// Defense in depth: any other tool starting with the orbit prefix
+	// (including a future expansion) is also forbidden on self-managed.
+	for name := range registeredOrbit {
+		if strings.HasPrefix(name, "gitlab_orbit_") {
+			t.Fatalf("unexpected gitlab_orbit_* tool %q registered on self-managed Enterprise", name)
 		}
 	}
 }
