@@ -41,9 +41,9 @@ Measured with `go run ./cmd/gen_readme/` against the current base catalog. Total
 | ----------------------------------------------------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
 | `dynamic` / `full` (default)                          |             2 |               871 | n/a                 |              2,204 |        18,284 |       20,488 |
 | `dynamic` / `minimal`                                 |             2 |               871 | n/a                 |              2,204 |           740 |        2,944 |
-| `meta` / `full`                                       |            34 |               871 | `opaque`            |             87,323 |        18,284 |      105,607 |
-| `meta` / `minimal`                                    |            34 |               871 | `opaque`            |             87,323 |           740 |       88,063 |
-| `individual` / `full`                                 |           867 |               867 | n/a                 |            473,749 |        18,284 |      492,033 |
+| `meta` / `full`                                       |            34 |               871 | `opaque`            |             87,392 |        18,284 |      105,676 |
+| `meta` / `minimal`                                    |            34 |               871 | `opaque`            |             87,392 |           740 |       88,132 |
+| `individual` / `full`                                 |           867 |               867 | n/a                 |            473,799 |        18,284 |      492,083 |
 
 Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.
 
@@ -445,21 +445,21 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       911 |     154,125 |
-| Unit tests (`_test.go`)  |       490 |     255,206 |
-| End-to-end tests         |       122 |      28,546 |
-| **Total**                | **1,523** | **437,877** |
+| Source (`.go`, non-test) |       912 |     154,404 |
+| Unit tests (`_test.go`)  |       490 |     255,666 |
+| End-to-end tests         |       139 |      31,477 |
+| **Total**                | **1,541** | **441,547** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  6,493 |
+| Source functions                |  6,503 |
 | — exported (public)             |  2,467 |
-| — unexported (private)          |  4,026 |
-| Unit test functions (`TestXxx`) | 10,320 |
-| Subtests (`t.Run(...)`)         |  2,396 |
-| End-to-end test functions       |    256 |
+| — unexported (private)          |  4,036 |
+| Unit test functions (`TestXxx`) | 10,336 |
+| Subtests (`t.Run(...)`)         |  2,503 |
+| End-to-end test functions       |    280 |
 
 ### Ratios worth noting
 
@@ -467,18 +467,18 @@ Numbers nobody asked for, but here they are anyway.
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.66× more tests than code |
 | Average source file length         |                 ~169 lines |
-| Average test file length           |                 ~520 lines |
-| Comment lines in source            |   11,904 (~7.7% of source) |
+| Average test file length           |                 ~521 lines |
+| Comment lines in source            |   11,975 (~7.8% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,061 |
-| `defer` statements                 |   773 |
+| `if err != nil` checks             | 6,093 |
+| `defer` statements                 |   782 |
 | `struct` types defined             | 2,339 |
-| `//nolint` suppressions            |    75 |
+| `//nolint` suppressions            |    76 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
 
 ### Project
@@ -487,23 +487,23 @@ Numbers nobody asked for, but here they are anyway.
 | ------------------------------ | ----: |
 | Go packages                    |   219 |
 | Direct dependencies (`go.mod`) |    11 |
-| Indirect dependencies          |    49 |
-| Git commits                    |   167 |
+| Indirect dependencies          |    50 |
+| Git commits                    |   182 |
 | Unique contributors            |     2 |
 
 ### Hall of fame
 
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
-| Longest source file | `internal/tools/dynamic/register.go` — 3,577 lines       |
+| Longest source file | `internal/tools/dynamic/register.go` — 3,723 lines       |
 | Longest test file   | `internal/tools/projects/projects_test.go` — 7,099 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~2,802 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 9,281 (impossible to avoid)                                                                          |
+| Source code printed at 55 lines/page | ~2,807 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 9,298 (impossible to avoid)                                                                          |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
