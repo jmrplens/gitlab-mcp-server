@@ -49,6 +49,28 @@ services:
       - runner-config:/etc/gitlab-runner
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
+  e2e-ldap:
+    image: osixia/openldap:latest
+    hostname: ldap-e2e
+    container_name: e2e-ldap
+    environment:
+      LDAP_ORGANISATION: "E2E"
+      LDAP_DOMAIN: "example.com"
+      LDAP_ADMIN_USERNAME: "admin"
+      LDAP_ADMIN_PASSWORD: "ldapadmin"
+      LDAP_CONFIG_PASSWORD: "config"
+      LDAP_READONLY_USER: "false"
+      LDAP_RFC2307BIS_SCHEMA: "true"
+      LDAP_REMOVE_CONFIG_AFTER_SETUP: "true"
+      LDAP_SSL_HELPER_PREFIX: "ldap"
+      LDAP_TLS: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost -b dc=example,dc=com -D \"cn=admin,dc=example,dc=com\" -w ldapadmin \"(objectclass=*)\" >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
   e2e-fixture:
     image: nginx:alpine
     command:

@@ -240,6 +240,22 @@ docker exec "$RUNNER_CONTAINER" gitlab-runner register \
     --docker-network-mode "${COMPOSE_NETWORK}" \
     --description "e2e-docker-runner"
 
+# Bump concurrent jobs and prefer cached images so the vulnerability
+# SAST pipeline (which uses a heavy analyzer image) doesn't have to
+# re-pull on every run. Without this, single-job runners and cold pulls
+# are the dominant source of E2E flake on the vulnerability lifecycle.
+# The runner image is minimal (no bash/tomlq), so we use sed.
+docker exec "$RUNNER_CONTAINER" sh -c '
+set -e
+sed -i "s/^concurrent = 1$/concurrent = 4/" /etc/gitlab-runner/config.toml
+sed -i "s|^  \[runners\.docker\]$|&\n  pull_policy = [\"if-not-present\"]|" /etc/gitlab-runner/config.toml
+# If pull_policy is already present, replace it.
+sed -i "s|pull_policy = \[\"always\"\]|pull_policy = [\"if-not-present\"]|g" /etc/gitlab-runner/config.toml
+'
+
+# Reload the runner so the new config takes effect.
+docker exec "$RUNNER_CONTAINER" gitlab-runner restart || true
+
 echo ""
 echo "=== Runner registration complete ==="
 echo "  Verify: curl -s ${GITLAB_URL}/api/v4/runners/all -H 'PRIVATE-TOKEN: ...'"
