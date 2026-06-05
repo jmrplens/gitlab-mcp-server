@@ -355,6 +355,7 @@ func (p *liveFixturePreparer) prepare(ctx context.Context) error {
 	p.bestEffort(ctx, "environment", p.ensureEnvironment)
 	p.bestEffort(ctx, "project access token", p.ensureProjectAccessToken)
 	p.bestEffort(ctx, "project service account", p.ensureProjectServiceAccount)
+	p.bestEffort(ctx, "project alias", p.ensureProjectAlias)
 	p.bestEffort(ctx, "package", p.ensurePackage)
 	p.bestEffort(ctx, "deploy key", p.ensureDeployKey)
 	p.bestEffort(ctx, "deploy token", p.ensureDeployToken)
@@ -513,6 +514,30 @@ func (p *liveFixturePreparer) findProjectServiceAccountPAT(ctx context.Context, 
 		}
 	}
 	return nil, false, nil
+}
+
+// ensureProjectAlias seeds a project alias (`e2e-enterprise-alias`) pointing
+// at the fixture project. Used by enterprise read cases that resolve a
+// project alias by name (e.g. MS-ENT-DYN-5). Admin-only API; best-effort.
+func (p *liveFixturePreparer) ensureProjectAlias(ctx context.Context) error {
+	const aliasName = "e2e-enterprise-alias"
+	aliases, _, err := p.client.GL().ProjectAliases.ListProjectAliases(gl.WithContext(ctx))
+	if err != nil {
+		return fmt.Errorf("list project aliases: %w", err)
+	}
+	for _, a := range aliases {
+		if a.Name == aliasName {
+			return nil
+		}
+	}
+	_, _, err = p.client.GL().ProjectAliases.CreateProjectAlias(&gl.CreateProjectAliasOptions{
+		Name:      new(aliasName),
+		ProjectID: p.state.ProjectID,
+	}, gl.WithContext(ctx))
+	if err != nil {
+		return fmt.Errorf("create project alias %q: %w", aliasName, err)
+	}
+	return nil
 }
 
 // ensureRepository ensures repository exists for liveFixturePreparer.

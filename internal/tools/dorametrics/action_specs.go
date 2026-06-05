@@ -14,11 +14,20 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 func doraMetricReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute dorametrics domain action.", Tags: []string{"analytics", "dora"},
+	options := toolutil.ActionSpecOptions{
+		Aliases: []string{individualTool}, Tags: []string{"analytics", "dora"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "dorametrics",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
-	})
+	}
+	switch name {
+	case "project":
+		options.Usage = "Retrieves one DORA metric (deployment_frequency, lead_time_for_changes, time_to_restore_service, or change_failure_rate) for a project_id over a date window. interval is the bucket size (daily, monthly, all); for a prompt like `last 30 days`, compute start_date and end_date as YYYY-MM-DD and pass them — there is no `days` or `days_back` parameter."
+		options.RelatedActions = []string{"dora_metrics.group"}
+	case "group":
+		options.Usage = "Retrieves one DORA metric (deployment_frequency, lead_time_for_changes, time_to_restore_service, or change_failure_rate) for a group_id over a date window. interval is the bucket size (daily, monthly, all); for a prompt like `last 30 days`, compute start_date and end_date as YYYY-MM-DD and pass them — there is no `days` or `days_back` parameter."
+		options.RelatedActions = []string{"dora_metrics.project"}
+	}
+	return toolutil.NewReadActionSpec(name, route, options)
 }

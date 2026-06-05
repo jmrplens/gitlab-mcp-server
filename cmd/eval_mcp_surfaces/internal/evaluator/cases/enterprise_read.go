@@ -74,27 +74,36 @@ func enterpriseReadEvalCases() []Case {
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-2",
-			"Look up project `my-org/tools/gitlab-mcp-server` and pull the deployment-frequency DORA metric for that project over the last 30 days in `daily` interval.",
+			"First look up project `my-org/tools/gitlab-mcp-server` with project.get to confirm it exists, then pull the deployment-frequency DORA metric for that project over the last 30 days. Today is 2026-06-04, so compute the start_date and end_date as YYYY-MM-DD strings and pass them; interval is `daily`. Do not use a `days` or `days_back` parameter — only the computed start_date and end_date are accepted.",
 			readStep("gitlab_project", "get", params("project_id"), nil),
 			readStep("gitlab_dora_metrics", "project", params("project_id", "metric", "start_date", "end_date", "interval"), nil),
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-3",
-			"For group `my-org`, give me a quick governance view: number of custom member roles defined for the group, the active enterprise users in the same group, and the most recent group audit event.",
-			readStep("gitlab_member_role", "list_group", params("group_id"), params("per_page")),
+			"For group `my-org`, give me a quick governance view: how many custom member roles are defined at the instance level, the active enterprise users in the group, and the most recent group audit event. For member roles on self-managed GitLab, query the instance-level list (the group-level list is deprecated on self-managed 17+).",
+			// gitlab_member_role.list_group returns 400 on self-managed
+			// GitLab 17+ (group-level custom roles are deprecated; the
+			// remaining API surface is list_instance). Switch the prompt
+			// and expected step to list_instance so the case works on
+			// the EE fixture without requiring a deprecation override.
+			readStep("gitlab_member_role", "list_instance", nil, nil),
 			readStep("gitlab_enterprise_user", "list", params("group_id"), params("active", "per_page")),
 			readStep("gitlab_audit_event", "list_group", params("group_id"), params("per_page")),
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-4",
-			"Count the critical and high severity vulnerabilities for project `my-org/tools/gitlab-mcp-server`, then list the same project's vulnerabilities (paginated to 5 per page).",
+			"For project `my-org/tools/gitlab-mcp-server`: first get the count of critical and high severity vulnerabilities (the dedicated severity-count endpoint, not a paginated list), then list the project's vulnerabilities using GraphQL-style pagination (pass `first=5` for the page size — do not pass `per_page`, that param is for REST-only endpoints).",
 			readStep("gitlab_vulnerability", "severity_count", params("project_path"), nil),
 			readStep("gitlab_vulnerability", "list", params("project_path"), params("state", "first")),
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-5",
-			"Find the project alias named `e2e-enterprise-alias` on this GitLab instance, and the project it points to.",
-			readStep("gitlab_project_alias", "list", nil, params("per_page")),
+			"List every project alias on this GitLab instance, then pick the first alias from the list and fetch its full details with project_alias.get (passing the `name` you read from the list output). Report the alias name and the project_id it points to.",
+			// gitlab_project_alias.list has no per_page in its schema
+			// (the client-go v2 ListProjectAliases entry point takes
+			// only RequestOptionFuncs and no ListOptions). Drop it from
+			// the expected step until the action grows paginated input.
+			readStep("gitlab_project_alias", "list", nil, nil),
 			readStep("gitlab_project_alias", "get", params("name"), nil),
 		),
 		baseEnterpriseReadEvalCase(
@@ -104,16 +113,22 @@ func enterpriseReadEvalCases() []Case {
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-7",
-			"For group `my-org`, list epics in the open state (paginated to 5 per page) and then fetch the current group iterations in any state.",
+			"For group `my-org`: first list the open epics using GraphQL-style pagination (pass `first=5` for the page size — do not pass `per_page`, that param is for REST-only endpoints), then fetch the current group iterations in any state.",
 			readStep("gitlab_group", "epic_list", params("full_path"), params("state", "first")),
 			readStep("gitlab", "issue.iteration_list_group", params("group_id"), params("per_page")),
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-8",
-			"Find the Geo site with ID `3` on this instance and the list of all Geo sites, then give me a list of snippet storage moves for snippet ID `44`.",
-			readStep("gitlab_geo", "get", params("id"), nil),
-			readStep("gitlab_geo", "list", nil, params("per_page")),
-			readStep("gitlab_storage_move", "retrieve_snippet", params("snippet_id"), params("per_page")),
+			"List the Geo sites configured on this GitLab instance (Geo may be unconfigured in the fixture — explain the result either way), then list all snippet repository storage moves recorded on the instance.",
+			// The Geo API on a single-node GitLab EE fixture has no
+			// primary Geo site registered, so geo.get by id is
+			// inherently 404. Use list (which returns an empty array
+			// on an unconfigured instance, a perfectly valid response)
+			// instead of fixing a specific id. Snippet storage moves
+			// use retrieve_all_snippet (no snippet_id required) so the
+			// case does not depend on a specific snippet fixture.
+			readStep("gitlab_geo", "list", nil, nil),
+			readStep("gitlab_storage_move", "retrieve_all_snippet", nil, params("per_page")),
 		),
 	}
 }

@@ -298,16 +298,16 @@ The published model-evaluation set covers 560 task attempts and 1096 expected MC
 <!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
-Current published result: **Docker CE-on-Enterprise dynamic 20260525**.
+Current published result: **Docker Enterprise dynamic 20260605 (CE)**.
 
-| Provider  | Model                       | Compatibility | Tool accuracy |   Recovery | Docker live status          |
-| --------- | --------------------------- | ------------- | ------------: | ---------: | --------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% | No repairs | 100.0% final across 274 ops |
-| Google    | `gemini-flash-latest`       | OK            |        100.0% | No repairs | 100.0% final across 274 ops |
-| OpenAI    | `gpt-5.4-nano`              | OK            |        100.0% | No repairs | 100.0% final across 274 ops |
-| Qwen      | `qwen3.6-flash`             | OK            |        100.0% | No repairs | 100.0% final across 274 ops |
+| Provider  | Model                       | Compatibility | Tool accuracy |     Recovery | Docker live status         |
+| --------- | --------------------------- | ------------- | ------------: | -----------: | -------------------------- |
+| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% | 100.0% (3/3) | 100.0% final across 26 ops |
+| Google    | `gemini-flash-latest`       | OK            |        100.0% | 100.0% (4/4) | 100.0% final across 26 ops |
+| OpenAI    | `gpt-5.4-nano`              | Review        |        100.0% |  75.0% (3/4) | 88.9% final across 26 ops  |
+| Qwen      | `qwen3.6-flash`             | OK            |        100.0% | 100.0% (4/4) | 100.0% final across 26 ops |
 
-The published model-evaluation set covers 560 task attempts and 1096 expected MCP operations. Across the selected reports, models emitted 1136 tool calls over 1136 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 36 task attempts and 104 expected MCP operations. Across the selected reports, models emitted 120 tool calls over 120 model requests, with 97.2% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
@@ -324,16 +324,16 @@ The published model-evaluation set covers 92 task attempts and 336 expected MCP 
 <!-- END MODEL EVAL ENTERPRISE META SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
-Current published result: **Docker Enterprise dynamic 20260525**.
+Current published result: **Docker Enterprise dynamic 20260605 (Enterprise)**.
 
-| Provider  | Model                       | Compatibility | Tool accuracy |   Recovery | Docker live status         |
-| --------- | --------------------------- | ------------- | ------------: | ---------: | -------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% | No repairs | 100.0% final across 84 ops |
-| Google    | `gemini-flash-latest`       | OK            |        100.0% | No repairs | 100.0% final across 84 ops |
-| OpenAI    | `gpt-5.4-nano`              | OK            |        100.0% | No repairs | 100.0% final across 84 ops |
-| Qwen      | `qwen3.6-flash`             | OK            |        100.0% | No repairs | 100.0% final across 84 ops |
+| Provider  | Model                       | Compatibility | Tool accuracy |     Recovery | Docker live status          |
+| --------- | --------------------------- | ------------- | ------------: | -----------: | --------------------------- |
+| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% |   No repairs | 100.0% final across 202 ops |
+| Google    | `gemini-flash-latest`       | OK            |        100.0% |   No repairs | 100.0% final across 202 ops |
+| OpenAI    | `gpt-5.4-nano`              | OK            |        100.0% | 100.0% (3/3) | 100.0% final across 202 ops |
+| Qwen      | `qwen3.6-flash`             | OK            |        100.0% |   No repairs | 100.0% final across 202 ops |
 
-The published model-evaluation set covers 92 task attempts and 336 expected MCP operations. Across the selected reports, models emitted 338 tool calls over 338 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 124 task attempts and 808 expected MCP operations. Across the selected reports, models emitted 817 tool calls over 817 model requests, with 100.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL ENTERPRISE DYNAMIC SUMMARY -->
 
 ## Documentation

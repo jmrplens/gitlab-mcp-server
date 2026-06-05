@@ -977,6 +977,7 @@ func dedupeSortedStrings(values []string) []string {
 
 var searchSynonymsMap = map[string][]string{
 	"access":        {"token"},
+	"alias":         {"name", "project_alias", "redirect"},
 	"approve":       {"approval", "review", "feedback"},
 	"approved":      {"approval", "review", "approved"},
 	"artifact":      {"job", "download"},
@@ -992,6 +993,7 @@ var searchSynonymsMap = map[string][]string{
 	"container":     {"registry", "package", "image"},
 	"compare":       {"diff", "repository", "refs", "ref"},
 	"current":       {"current_user", "self", "me", "author", "author_username", "assignee", "assignee_username", "settings"},
+	"custom":        {"role", "roles", "member_role", "custom_role"},
 	"deploy":        {"deployment", "environment", "key"},
 	"deployment":    {"deploy", "environment"},
 	"deployments":   {"deployment", "deploy", "environment"},
@@ -1016,6 +1018,7 @@ var searchSynonymsMap = map[string][]string{
 	"mr":            {"merge", "request", "merge_request"},
 	"merge_request": {"merge", "request", "mr", "pull_request", "pr"},
 	"my":            {"owned", "owner", "author", "assignee", "list"},
+	"name":          {"alias", "project_alias", "find_by_name"},
 	"note":          {"comment", "discussion", "reply"},
 	"open":          {"active", "unresolved", "status_open", "list"},
 	"owned":         {"my", "personal", "mine", "owner", "list"},
@@ -1029,6 +1032,8 @@ var searchSynonymsMap = map[string][]string{
 	"release":       {"tag", "asset", "link", "notes"},
 	"releases":      {"release", "list"},
 	"remote":        {"url", "git", "origin", "repository", "discover", "resolve"},
+	"role":          {"roles", "custom_role", "member_role", "permission"},
+	"roles":         {"role", "custom_role", "member_role", "permissions"},
 	"url":           {"remote", "origin", "git", "discover", "resolve", "project", "path"},
 	"refs":          {"ref", "compare", "repository"},
 	"ref":           {"refs", "compare"},
@@ -2007,6 +2012,18 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 	},
 	"project.get": {
 		RelatedActions: []string{"project.archive", "project.delete", "project.update"},
+	},
+	"vulnerability.severity_count": {
+		Usage:          "Returns counts of vulnerabilities grouped by severity (critical, high, medium, low, info, unknown) for one project_path. Use this when the prompt asks for a count or summary, not for the individual vulnerability records (use vulnerability.list for that).",
+		RelatedActions: []string{"vulnerability.list", "vulnerability.pipeline_security_summary"},
+	},
+	"vulnerability.list": {
+		Usage:          "Lists vulnerability records for a project_path with optional filters (severity, state, scanner, report_type). Pagination is GraphQL-based: pass first/after, not per_page. Use vulnerability.severity_count when only a count is needed.",
+		RelatedActions: []string{"vulnerability.severity_count", "vulnerability.get", "vulnerability.dismiss"},
+	},
+	"group.epic_list": {
+		Usage:          "Lists epics for a group full_path via the Work Items GraphQL API. Pagination uses first/after — do not pass per_page. Use group.epic_get when a specific epic_iid is known.",
+		RelatedActions: []string{"group.epic_get", "group.epic_create", "group.epic_update"},
 	},
 	"tag.get": {
 		Usage:          "Use to verify that a tag exists before release cleanup or tag deletion workflows.",

@@ -37,23 +37,57 @@ func deleteGroupOutput(ctx context.Context, client *gitlabclient.Client, input D
 }
 
 func memberRoleReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewReadActionSpec(name, route, memberRoleOptions(individualTool))
+	return toolutil.NewReadActionSpec(name, route, memberRoleOptions(name, individualTool))
 }
 
 func memberRoleCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewCreateActionSpec(name, route, memberRoleOptions(individualTool))
+	return toolutil.NewCreateActionSpec(name, route, memberRoleOptions(name, individualTool))
 }
 
 func memberRoleDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
-	return toolutil.NewDeleteActionSpec(name, route, memberRoleOptions(individualTool))
+	return toolutil.NewDeleteActionSpec(name, route, memberRoleOptions(name, individualTool))
 }
 
-func memberRoleOptions(individualTool string) toolutil.ActionSpecOptions {
-	return toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Usage: "Use to execute memberroles domain action.", Tags: []string{"member_role"},
+func memberRoleOptions(name, individualTool string) toolutil.ActionSpecOptions {
+	opts := toolutil.ActionSpecOptions{
+		Aliases: []string{individualTool}, Usage: usageFor(name), Tags: []string{"member_role"},
 		OpenWorld:      true,
 		Edition:        "premium",
 		OwnerPackage:   "memberroles",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+	if rel := relatedActionsFor(name); len(rel) > 0 {
+		opts.RelatedActions = rel
+	}
+	return opts
+}
+
+// usageFor returns a disambiguation note for the named action. The default
+// ("Use to execute memberroles domain action") is replaced for the two
+// list actions that are most often confused with each other and for the
+// deprecated-on-self-managed path. The Usage string is also the surface
+// that the dynamic find surfaces when a model searches with a generic
+// term like "custom member roles" or "list member roles".
+func usageFor(name string) string {
+	switch name {
+	case "list_instance":
+		return "Lists all custom member roles defined at the instance level (Ultimate on self-managed, all tiers on GitLab.com). Use this when the prompt asks for custom member roles in general — list_group is deprecated on self-managed 17+ and returns 400 in that environment."
+	case "list_group":
+		return "Lists custom member roles available for a specific group_id. Deprecated on self-managed GitLab 17+; use list_instance instead on self-managed. Still valid on GitLab.com Ultimate."
+	}
+	return "Use to execute memberroles domain action."
+}
+
+// relatedActionsFor returns the cross-sell action IDs that the dynamic
+// find surfaces as RelatedActions for the named action. list_instance and
+// list_group are listed together so a model that finds one can recover
+// quickly to the other.
+func relatedActionsFor(name string) []string {
+	switch name {
+	case "list_instance":
+		return []string{"list_group"}
+	case "list_group":
+		return []string{"list_instance"}
+	}
+	return nil
 }
