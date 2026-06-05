@@ -355,7 +355,12 @@ func (p *liveFixturePreparer) prepare(ctx context.Context) error {
 	p.bestEffort(ctx, "environment", p.ensureEnvironment)
 	p.bestEffort(ctx, "project access token", p.ensureProjectAccessToken)
 	p.bestEffort(ctx, "project service account", p.ensureProjectServiceAccount)
-	p.bestEffort(ctx, "project alias", p.ensureProjectAlias)
+	// Project alias is a hard dependency for MS-ENT-DYN-5; do not silence
+	// failures here (a missing alias would silently produce a false
+	// failure for that case with no diagnostic).
+	if err := p.ensureProjectAlias(ctx); err != nil {
+		p.notef("project alias fixture unavailable: %v", err)
+	}
 	p.bestEffort(ctx, "package", p.ensurePackage)
 	p.bestEffort(ctx, "deploy key", p.ensureDeployKey)
 	p.bestEffort(ctx, "deploy token", p.ensureDeployToken)

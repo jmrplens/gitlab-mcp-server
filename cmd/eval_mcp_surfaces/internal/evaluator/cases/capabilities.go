@@ -41,7 +41,7 @@ func optionalStep(step Step) Step {
 
 func capabilityEvalCase(id, prompt string, steps ...Step) Case {
 	edition := editionCE
-	if len(id) >= 10 && id[:10] == "MS-ENT-DYN" {
+	if isEnterpriseDynamicCase(id) {
 		// MS-ENT-DYN-* cases exercise Enterprise + dynamic flows on
 		// the GitLab EE runtime, so they must be gated to the
 		// Enterprise edition when the suite is filtered.

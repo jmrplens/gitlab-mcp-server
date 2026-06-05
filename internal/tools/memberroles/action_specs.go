@@ -78,16 +78,17 @@ func usageFor(name string) string {
 	return "Use to execute memberroles domain action."
 }
 
-// relatedActionsFor returns the cross-sell action IDs that the dynamic
-// find surfaces as RelatedActions for the named action. list_instance and
-// list_group are listed together so a model that finds one can recover
-// quickly to the other.
+// relatedActionsFor returns the cross-sell action IDs (in canonical
+// `domain.action` form, matching the IDs the dynamic catalog assigns
+// to member_role) that the dynamic find surfaces as RelatedActions for
+// the named action. list_instance and list_group are linked so a model
+// that finds one can recover quickly to the other.
 func relatedActionsFor(name string) []string {
 	switch name {
 	case "list_instance":
-		return []string{"list_group"}
+		return []string{"member_role.list_group"}
 	case "list_group":
-		return []string{"list_instance"}
+		return []string{"member_role.list_instance"}
 	}
 	return nil
 }

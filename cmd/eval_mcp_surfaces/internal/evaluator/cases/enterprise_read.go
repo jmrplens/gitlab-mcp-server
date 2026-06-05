@@ -1,7 +1,5 @@
 package cases
 
-import "strings"
-
 func enterpriseReadEvalCases() []Case {
 	return []Case{
 		baseEnterpriseReadEvalCase("MT-070", "List attestations in project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_attestation", "list", params("project_id"), params("subject_digest"))),
@@ -137,11 +135,11 @@ func baseEnterpriseReadEvalCase(id, prompt string, steps ...Step) Case {
 	// MT-188 through MT-198 are EnterpriseDockerFixture cases and need both presets
 	presets := []string{presetSchemaEnterprise}
 	hasDockerFixture := (id >= "MT-188" && id <= "MT-191") || id == "MS-044"
-	// MS-ENT-DYN-1..8 are Enterprise + dynamic-surface cases that
+	// MS-ENT-DYN-* are Enterprise + dynamic-surface cases that
 	// stress model discovery / multi-tool synthesis against the live
 	// GitLab EE runtime, so they require the docker-enterprise-read
 	// preset in addition to the schema-only run.
-	if hasDockerFixture || strings.HasPrefix(id, "MS-ENT-DYN-") {
+	if hasDockerFixture || isEnterpriseDynamicCase(id) {
 		presets = append(presets, presetDockerEnterpriseRead)
 	}
 	return Case{

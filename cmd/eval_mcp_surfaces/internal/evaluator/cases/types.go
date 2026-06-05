@@ -1,5 +1,7 @@
 package cases
 
+import "strings"
+
 // Case is the data-only source of truth for one model-evaluation task.
 type Case struct {
 	ID               string
@@ -35,6 +37,15 @@ type Step struct {
 	ProducedValues  []string
 }
 
+// isEnterpriseDynamicCase reports whether the case id belongs to the
+// MS-ENT-DYN-* family of cases that target the Enterprise + dynamic
+// surface. Use this in edition-gating predicates to keep the prefix
+// check consistent across helpers (capabilityEvalCase, errorRecoveryEvalCase,
+// baseEnterpriseReadEvalCase).
+func isEnterpriseDynamicCase(id string) bool {
+	return strings.HasPrefix(id, enterpriseDynamicCasePrefix)
+}
+
 // PromptTemplate defines the prompt text rendered with fixture output values.
 type PromptTemplate struct {
 	Text      string
@@ -62,6 +73,12 @@ type MetricsSpec struct {
 const (
 	editionCE         = "ce"
 	editionEnterprise = "enterprise"
+
+	// enterpriseDynamicCasePrefix is the case-id prefix that flags the
+	// 10 Enterprise + dynamic surface cases (MS-ENT-DYN-1..10). They
+	// target the GitLab EE runtime through the dynamic
+	// gitlab_find_action / gitlab_execute_action chain.
+	enterpriseDynamicCasePrefix = "MS-ENT-DYN-"
 
 	presetSchemaEnterprise                = "schema-enterprise"
 	presetDockerRead                      = "docker-read"

@@ -31,8 +31,12 @@ func projectSecurityUpdateSpec(name string, route toolutil.ActionRoute, individu
 func projectSecurityOptions(individualTool string) toolutil.ActionSpecOptions {
 	usage := "Use project security settings for secret push protection and secret_push_protection_enabled changes. Do not use project.update for secret push protection."
 	tags := []string{"project", "security"}
+	// Default: every action keeps its own canonical individual-tool
+	// name in the alias list. Per-action overrides below may add more
+	// aliases; they must always preserve the individual tool name so
+	// alias-based resolution still hits the action.
+	aliases := []string{individualTool}
 	var related []string
-	var aliases []string
 	switch individualTool {
 	case "gitlab_get_project_security_settings":
 		usage = "Reads the project's security settings (currently secret_push_protection_enabled and continuous_vulnerability_scans_enabled, among others). Use this when the prompt asks for the security posture, secret-push protection status, or vulnerability scanning config of a project. Do not use project.update for these."
