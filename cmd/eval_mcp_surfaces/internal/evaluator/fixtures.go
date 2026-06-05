@@ -358,8 +358,8 @@ func (p *liveFixturePreparer) prepare(ctx context.Context) error {
 	// Project alias is a hard dependency for MS-ENT-DYN-5; do not silence
 	// failures here (a missing alias would silently produce a false
 	// failure for that case with no diagnostic).
-	if err := p.ensureProjectAlias(ctx); err != nil {
-		p.notef("project alias fixture unavailable: %v", err)
+	if aliasErr := p.ensureProjectAlias(ctx); aliasErr != nil {
+		p.notef("project alias fixture unavailable: %v", aliasErr)
 	}
 	p.bestEffort(ctx, "package", p.ensurePackage)
 	p.bestEffort(ctx, "deploy key", p.ensureDeployKey)
