@@ -29,10 +29,33 @@ func projectSecurityUpdateSpec(name string, route toolutil.ActionRoute, individu
 }
 
 func projectSecurityOptions(individualTool string) toolutil.ActionSpecOptions {
+	usage := "Use project security settings for secret push protection and secret_push_protection_enabled changes. Do not use project.update for secret push protection."
+	tags := []string{"project", "security"}
+	// Default: every action keeps its own canonical individual-tool
+	// name in the alias list. Per-action overrides below may add more
+	// aliases; they must always preserve the individual tool name so
+	// alias-based resolution still hits the action.
+	aliases := []string{individualTool}
+	var related []string
+	switch individualTool {
+	case "gitlab_get_project_security_settings":
+		usage = "Reads the project's security settings (currently secret_push_protection_enabled and continuous_vulnerability_scans_enabled, among others). Use this when the prompt asks for the security posture, secret-push protection status, or vulnerability scanning config of a project. Do not use project.update for these."
+		tags = []string{"project", "security", "secret_push_protection", "vulnerability_scan", "settings", "configuration"}
+		aliases = []string{
+			individualTool,
+			"gitlab_get_project_secret_push_protection",
+			"project_secret_push_protection_get",
+			"project_security_posture",
+		}
+		related = []string{"project.get", "project.security_settings_update"}
+	case "gitlab_update_project_secret_push_protection":
+		related = []string{"project.security_settings_get"}
+	}
 	return toolutil.ActionSpecOptions{
-		Aliases: []string{individualTool}, Tags: []string{"project", "security"},
-		Usage:          "Use project security settings for secret push protection and secret_push_protection_enabled changes. Do not use project.update for secret push protection.",
-		RelatedActions: []string{"project.get"},
+		Aliases:        aliases,
+		Tags:           tags,
+		Usage:          usage,
+		RelatedActions: related,
 		OpenWorld:      true,
 		Edition:        "ultimate",
 		OwnerPackage:   "securitysettings",

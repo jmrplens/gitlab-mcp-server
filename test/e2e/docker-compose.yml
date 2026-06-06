@@ -49,50 +49,6 @@ services:
       - runner-config:/etc/gitlab-runner
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
-  e2e-ldap:
-    image: osixia/openldap:latest
-    hostname: ldap-e2e
-    container_name: e2e-ldap
-    environment:
-      LDAP_ORGANISATION: "E2E"
-      LDAP_DOMAIN: "example.com"
-      LDAP_ADMIN_USERNAME: "admin"
-      LDAP_ADMIN_PASSWORD: "ldapadmin"
-      LDAP_CONFIG_PASSWORD: "config"
-      LDAP_READONLY_USER: "false"
-      LDAP_RFC2307BIS_SCHEMA: "true"
-      LDAP_REMOVE_CONFIG_AFTER_SETUP: "true"
-      LDAP_SSL_HELPER_PREFIX: "ldap"
-      LDAP_TLS: "false"
-    healthcheck:
-      test: ["CMD-SHELL", "ldapsearch -x -H ldap://localhost -b dc=example,dc=com -D \"cn=admin,dc=example,dc=com\" -w ldapadmin \"(objectclass=*)\" >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
-
-  e2e-fixture:
-    image: nginx:alpine
-    command:
-      - /bin/sh
-      - -c
-      - |
-        cat > /etc/nginx/conf.d/default.conf <<'NGINX'
-        server {
-          listen 8080;
-          location = /hook { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"hook"}\n'; }
-          location = /hook-updated { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"hook-updated"}\n'; }
-          location = /emoji.png { root /usr/share/nginx/html; add_header Content-Type image/png; }
-        }
-        NGINX
-        printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' | base64 -d > /usr/share/nginx/html/emoji.png
-        nginx -g 'daemon off;'
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/emoji.png"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
   # e2e-ldap provides an OpenLDAP server for the groupldap_ee test.
   # The default osixia/openldap image seeds a minimal directory
   # (ou=people, ou=groups) under dc=example,dc=com at first start;
@@ -122,6 +78,28 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+
+  e2e-fixture:
+    image: nginx:alpine
+    command:
+      - /bin/sh
+      - -c
+      - |
+        cat > /etc/nginx/conf.d/default.conf <<'NGINX'
+        server {
+          listen 8080;
+          location = /hook { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"hook"}\n'; }
+          location = /hook-updated { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"hook-updated"}\n'; }
+          location = /emoji.png { root /usr/share/nginx/html; add_header Content-Type image/png; }
+        }
+        NGINX
+        printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=' | base64 -d > /usr/share/nginx/html/emoji.png
+        nginx -g 'daemon off;'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/emoji.png"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 volumes:
   gitlab-config:

@@ -11000,8 +11000,8 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 Use {"action":"group","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_dora_metrics.<action>.
 Action guidance:
-- group: Use to execute dorametrics domain action.
-- project: Use to execute dorametrics domain action.
+- group: Retrieves one DORA metric (deployment_frequency, lead_time_for_changes, time_to_restore_service, or change_failure_rate) for a group_id over a date window. interval is the bucket size (daily, monthly, all); for a prompt like `last 30 days`, compute start_date and end_date as YYYY-MM-DD and pass them — there is no `days` or `days_back` parameter.
+- project: Retrieves one DORA metric (deployment_frequency, lead_time_for_changes, time_to_restore_service, or change_failure_rate) for a project_id over a date window. interval is the bucket size (daily, monthly, all); for a prompt like `last 30 days`, compute start_date and end_date as YYYY-MM-DD and pass them — there is no `days` or `days_back` parameter.
 
 Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate.
 	Returns: JSON with metric data. Errors: 404 not found, 403 forbidden — with actionable hints.
@@ -11359,8 +11359,8 @@ Action guidance:
 - create_instance: Use to execute memberroles domain action.
 - delete_group: Use to execute memberroles domain action.
 - delete_instance: Use to execute memberroles domain action.
-- list_group: Use to execute memberroles domain action.
-- list_instance: Use to execute memberroles domain action.
+- list_group: Lists custom member roles available for a specific group_id. Deprecated on self-managed GitLab 17+; use list_instance instead on self-managed. Still valid on GitLab.com Ultimate.
+- list_instance: Lists all custom member roles defined at the instance level (Ultimate on self-managed, all tiers on GitLab.com). Use this when the prompt asks for custom member roles in general — list_group is deprecated on self-managed 17+ and returns 400 in that environment.
 
 Manage custom member roles at instance or group level. Fine-grained permissions beyond standard access levels.
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.
@@ -11564,10 +11564,10 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 Use {"action":"list","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_project_alias.<action>.
 Action guidance:
-- create: Create a new project alias that points to a target project ID.
-- delete: Delete a project alias by name.
-- get: Get details for one project alias by name.
-- list: List project aliases visible in the configured scope.
+- create: Create a new project alias that points to a target numeric project_id (not a project path). Admin-only.
+- delete: Delete a project alias by its `name`. The name must be an exact existing alias string; pass the name from a prior project_alias.list response.
+- get: Get details (id, project_id, name) for one project alias by its `name` (the path-style alias string, e.g. `e2e-enterprise-alias`). The name must come from a prior project_alias.list response or be supplied verbatim by the prompt — this action does not search or accept partial names.
+- list: List project aliases visible in the configured scope (admin-only). The response includes the alias `name` and the `project_id` it points to; pass one of the returned `name` values to project_alias.get to fetch full details. This action does not accept per_page or page — it returns the full set.
 
 CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate).
 Returns: JSON with resource data. Lists include pagination (page, per_page, total, next_page). Void actions return confirmation. Errors: 404 not found, 403 forbidden, 400 invalid params — with actionable hints.

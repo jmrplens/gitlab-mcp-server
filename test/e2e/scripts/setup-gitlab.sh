@@ -409,13 +409,17 @@ if [ "$ENTERPRISE_MODE" = "true" ] && docker compose -f "${COMPOSE_FILE}" ps -q 
         # Create the LDAP integration. Capture the response and HTTP
         # status so we can validate success (2xx) before reporting it.
         set +e
+        # Keep the LDAP bind password in sync with docker-compose.yml's
+        # E2E_LDAP_ADMIN_PASSWORD (default: "ldapadmin") so groupldap_ee
+        # auth succeeds when the test compose file overrides the env.
+        LDAP_ADMIN_PASSWORD="${E2E_LDAP_ADMIN_PASSWORD:-ldapadmin}"
         ldap_put_output=$(curl -sS -w '\n%{http_code}' -X PUT "${GITLAB_URL}/api/v4/ldap/ldapmain" \
             -H "Authorization: Bearer ${ROOT_TOKEN}" \
             -d "host=ldap-e2e" \
             -d "port=389" \
             -d "uid=uid" \
             -d "bind_dn=cn=admin,dc=example,dc=com" \
-            -d "password=ldapadmin" \
+            -d "password=${LDAP_ADMIN_PASSWORD}" \
             -d "encryption=no" \
             -d "verify_certificates=false" \
             -d "active_directory=false" \

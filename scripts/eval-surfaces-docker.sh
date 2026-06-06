@@ -321,6 +321,15 @@ check_report_clean() {
 }
 
 preset_edition_arg() {
+  # When case_set is "all", the case registry mixes CE and Enterprise
+  # cases (e.g. MS-ENT-DYN-9/-10 in docker-error-recovery and
+  # docker-capability-discovery). Forcing --edition=ce would filter
+  # those out. Use --edition=all so the per-preset filter
+  # (e.g. error-recovery trait) decides which cases run.
+  if [[ "$case_set" == "all" ]]; then
+    printf '%s' all
+    return
+  fi
   case "$1" in
     docker-enterprise-*) printf '%s' enterprise ;;
     *) printf '%s' ce ;;

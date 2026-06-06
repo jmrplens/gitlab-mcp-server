@@ -20,6 +20,17 @@ func capabilityDiscoveryEvalCases() []Case {
 			readStep(completionTool, "", params("ref_type", "name", "argument_name", "argument_value"), nil),
 			readStep(promptGetTool, "", params("name", "arguments"), nil),
 		),
+
+		// MS-ENT-DYN-10 — Enterprise + dynamic. Capability-driven
+		// discovery: ask the model to surface Enterprise-only tools
+		// via the MCP capability bridge and read the unified manifest
+		// for EE-specific entries, then read the project get schema
+		// resource to confirm EE action inputs are exposed.
+		capabilityEvalCase("MS-ENT-DYN-10", "Surface the Enterprise-only GitLab MCP capabilities: list MCP resources, read the unified tools manifest `gitlab://tools`, and read the project get schema resource `gitlab://tools/project.get` so I can confirm EE action inputs are exposed.",
+			readStep(resourceListTool, "", nil, nil),
+			readStep(resourceReadTool, "", params("uri"), nil),
+			readStep(resourceReadTool, "", params("uri"), nil),
+		),
 	}
 }
 
@@ -29,11 +40,18 @@ func optionalStep(step Step) Step {
 }
 
 func capabilityEvalCase(id, prompt string, steps ...Step) Case {
+	edition := editionCE
+	if isEnterpriseDynamicCase(id) {
+		// MS-ENT-DYN-* cases exercise Enterprise + dynamic flows on
+		// the GitLab EE runtime, so they must be gated to the
+		// Enterprise edition when the suite is filtered.
+		edition = editionEnterprise
+	}
 	return Case{
 		ID:               id,
 		Prompt:           prompt,
 		Steps:            steps,
-		Edition:          editionCE,
+		Edition:          edition,
 		Presets:          []string{presetDockerCapabilityDiscovery},
 		Partition:        partitionCapabilityFallback,
 		CapabilityBridge: true,

@@ -41,15 +41,33 @@ func errorRecoveryEvalCases() []Case {
 			simReadStep("gitlab_user", "current", "poisoned_output"),
 			readStep("gitlab_issue", "list", params("project_id"), params("state", "per_page")),
 		),
+
+		// MS-ENT-DYN-9 — Enterprise + dynamic. Tests that the model
+		// recovers from a transient backend error on a GitLab EE
+		// action by retrying once before reporting the failure.
+		// Runs on the same docker-error-recovery preset as the CE
+		// recovery cases, but against a GitLab EE runtime.
+		errorRecoveryEvalCase(
+			"MS-ENT-DYN-9",
+			"List project `my-org/tools/gitlab-mcp-server` audit events for January 2026. If the call returns a temporary backend error, retry the same operation once before giving up.",
+			simReadStep("gitlab_audit_event", "list_project", "transient_error_once", "project_id", "created_after", "created_before"),
+		),
 	}
 }
 
 func errorRecoveryEvalCase(id, prompt string, steps ...Step) Case {
+	edition := editionCE
+	if isEnterpriseDynamicCase(id) {
+		// MS-ENT-DYN-* cases exercise Enterprise + dynamic flows on
+		// the GitLab EE runtime, so they must be gated to the
+		// Enterprise edition when the suite is filtered.
+		edition = editionEnterprise
+	}
 	return Case{
 		ID:          id,
 		Prompt:      prompt,
 		Steps:       steps,
-		Edition:     editionCE,
+		Edition:     edition,
 		Presets:     []string{presetDockerErrorRecovery},
 		Partition:   partitionErrorRecovery,
 		ReportGroup: partitionErrorRecovery,

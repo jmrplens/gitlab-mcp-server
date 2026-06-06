@@ -44,17 +44,17 @@ func TestAllEvalCases_ContainsMigratedReadMutatingAndCapabilityCases(t *testing.
 	if got := len(CasesByPreset(presetDockerDestructiveSafe)); got != 65 {
 		t.Fatalf("CasesByPreset(docker-destructive-safe) = %d, want 65", got)
 	}
-	if got := len(CasesByPreset(presetDockerCapabilityDiscovery)); got != 4 {
-		t.Fatalf("CasesByPreset(docker-capability-discovery) = %d, want 4", got)
+	if got := len(CasesByPreset(presetDockerCapabilityDiscovery)); got != 5 {
+		t.Fatalf("CasesByPreset(docker-capability-discovery) = %d, want 5", got)
 	}
-	if got := len(CasesByPreset(presetDockerErrorRecovery)); got != 3 {
-		t.Fatalf("CasesByPreset(docker-error-recovery) = %d, want 3", got)
+	if got := len(CasesByPreset(presetDockerErrorRecovery)); got != 4 {
+		t.Fatalf("CasesByPreset(docker-error-recovery) = %d, want 4", got)
 	}
-	if got := len(CasesByPreset(presetSchemaEnterprise)); got != 110 {
-		t.Fatalf("CasesByPreset(schema-enterprise) = %d, want 110 (all Enterprise cases)", got)
+	if got := len(CasesByPreset(presetSchemaEnterprise)); got != 118 {
+		t.Fatalf("CasesByPreset(schema-enterprise) = %d, want 118 (all Enterprise cases, incl. 10 MS-ENT-DYN-*)", got)
 	}
-	if got := len(CasesByPreset(presetDockerEnterpriseRead)); got != 5 {
-		t.Fatalf("CasesByPreset(docker-enterprise-read) = %d, want 5", got)
+	if got := len(CasesByPreset(presetDockerEnterpriseRead)); got != 13 {
+		t.Fatalf("CasesByPreset(docker-enterprise-read) = %d, want 13 (5 baseline + 8 MS-ENT-DYN-1..8)", got)
 	}
 	if got := len(CasesByPreset(presetDockerEnterpriseMutatingSafe)); got != 5 {
 		t.Fatalf("CasesByPreset(docker-enterprise-mutating-safe) = %d, want 5", got)
