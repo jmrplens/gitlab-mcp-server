@@ -298,16 +298,16 @@ The published model-evaluation set covers 560 task attempts and 1096 expected MC
 <!-- END MODEL EVAL META SUMMARY -->
 
 <!-- START MODEL EVAL DYNAMIC SUMMARY -->
-Current published result: **Docker Enterprise dynamic 20260605 (CE)**.
+Current published result: **Docker CE dynamic 20260606**.
 
-| Provider  | Model                       | Compatibility | Tool accuracy |     Recovery | Docker live status         |
-| --------- | --------------------------- | ------------- | ------------: | -----------: | -------------------------- |
-| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% | 100.0% (3/3) | 100.0% final across 26 ops |
-| Google    | `gemini-flash-latest`       | OK            |        100.0% | 100.0% (4/4) | 100.0% final across 26 ops |
-| OpenAI    | `gpt-5.4-nano`              | Review        |        100.0% |  75.0% (3/4) | 88.9% final across 26 ops  |
-| Qwen      | `qwen3.6-flash`             | OK            |        100.0% | 100.0% (4/4) | 100.0% final across 26 ops |
+| Provider  | Model                       | Compatibility | Tool accuracy |      Recovery | Docker live status          |
+| --------- | --------------------------- | ------------- | ------------: | ------------: | --------------------------- |
+| Anthropic | `claude-haiku-4-5-20251001` | OK            |        100.0% |  100.0% (6/6) | 100.0% final across 573 ops |
+| Google    | `gemini-flash-latest`       | Review        |        100.0% |   80.0% (4/5) | 99.3% final across 573 ops  |
+| OpenAI    | `gpt-5.4-nano`              | Review        |         99.4% | 95.8% (23/24) | 97.4% final across 573 ops  |
+| Qwen      | `qwen3.6-flash`             | Review        |        100.0% | 90.9% (10/11) | 99.3% final across 573 ops  |
 
-The published model-evaluation set covers 36 task attempts and 104 expected MCP operations. Across the selected reports, models emitted 120 tool calls over 120 model requests, with 97.2% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
+The published model-evaluation set covers 620 task attempts and 2292 expected MCP operations. Across the selected reports, models emitted 2367 tool calls over 2369 model requests, with 99.0% aggregate final success. See [AI Model Evaluation Results](docs/testing/model-results.md) for the detailed current matrix.
 <!-- END MODEL EVAL DYNAMIC SUMMARY -->
 
 <!-- START MODEL EVAL ENTERPRISE META SUMMARY -->
@@ -445,18 +445,18 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       912 |     154,423 |
+| Source (`.go`, non-test) |       912 |     154,685 |
 | Unit tests (`_test.go`)  |       490 |     255,666 |
 | End-to-end tests         |       139 |      31,477 |
-| **Total**                | **1,541** | **441,566** |
+| **Total**                | **1,541** | **441,828** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  6,504 |
+| Source functions                |  6,508 |
 | — exported (public)             |  2,467 |
-| — unexported (private)          |  4,037 |
+| — unexported (private)          |  4,041 |
 | Unit test functions (`TestXxx`) | 10,331 |
 | Subtests (`t.Run(...)`)         |  2,503 |
 | End-to-end test functions       |    279 |
@@ -465,17 +465,17 @@ Numbers nobody asked for, but here they are anyway.
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.66× more tests than code |
+| Test lines vs source lines         | 1.65× more tests than code |
 | Average source file length         |                 ~169 lines |
 | Average test file length           |                 ~521 lines |
-| Comment lines in source            |   11,981 (~7.8% of source) |
+| Comment lines in source            |   12,059 (~7.8% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,093 |
+| `if err != nil` checks             | 6,095 |
 | `defer` statements                 |   782 |
 | `struct` types defined             | 2,339 |
 | `//nolint` suppressions            |    76 |
@@ -488,22 +488,22 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   219 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   183 |
+| Git commits                    |   187 |
 | Unique contributors            |     2 |
 
 ### Hall of fame
 
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
-| Longest source file | `internal/tools/dynamic/register.go` — 3,723 lines       |
+| Longest source file | `internal/tools/dynamic/register.go` — 3,740 lines       |
 | Longest test file   | `internal/tools/projects/projects_test.go` — 7,099 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~2,807 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 9,298 (impossible to avoid)                                                                          |
+| Source code printed at 55 lines/page | ~2,812 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 9,343 (impossible to avoid)                                                                          |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
