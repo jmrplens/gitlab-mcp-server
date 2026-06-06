@@ -2,7 +2,7 @@
 
 > A Model Context Protocol (MCP) server that exposes GitLab REST API v4 and GraphQL operations as tools for AI assistants.
 
-gitlab-mcp-server v2.1.2 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
+gitlab-mcp-server v2.1.3 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
 It provides up to 1033 individual MCP tools across 98 GitLab API domains, 33 base meta-tools, 49 self-managed enterprise meta-tools, 50 GitLab.com Enterprise meta-tools,
 a default 2-tool dynamic find/execute surface, 46 resources, 37 prompts, and 6 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 

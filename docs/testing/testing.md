@@ -310,8 +310,8 @@
 | cmd/audit_tokens                               |    19.5% |
 | cmd/audit_tools                                |    34.9% |
 | cmd/eval_mcp_surfaces/internal/evalrun         |    88.9% |
-| cmd/eval_mcp_surfaces/internal/evaluator       |    69.2% |
-| cmd/eval_mcp_surfaces/internal/evaluator/cases |    98.1% |
+| cmd/eval_mcp_surfaces/internal/evaluator       |    69.1% |
+| cmd/eval_mcp_surfaces/internal/evaluator/cases |    98.2% |
 | cmd/eval_mcp_surfaces/internal/termio          |    45.7% |
 | cmd/find_dupes                                 |    90.1% |
 | cmd/format_md_tables                           |    87.2% |
@@ -541,7 +541,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_action_catalog_manifest** (58.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (60.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/add_docs** (67.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/eval_mcp_surfaces/internal/evaluator** (69.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/eval_mcp_surfaces/internal/evaluator** (69.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_action_spec_coverage** (77.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (78.5%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_test_names** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

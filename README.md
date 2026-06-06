@@ -445,18 +445,18 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       912 |     154,423 |
+| Source (`.go`, non-test) |       912 |     154,685 |
 | Unit tests (`_test.go`)  |       490 |     255,666 |
 | End-to-end tests         |       139 |      31,477 |
-| **Total**                | **1,541** | **441,566** |
+| **Total**                | **1,541** | **441,828** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  6,504 |
+| Source functions                |  6,508 |
 | — exported (public)             |  2,467 |
-| — unexported (private)          |  4,037 |
+| — unexported (private)          |  4,041 |
 | Unit test functions (`TestXxx`) | 10,331 |
 | Subtests (`t.Run(...)`)         |  2,503 |
 | End-to-end test functions       |    279 |
@@ -465,17 +465,17 @@ Numbers nobody asked for, but here they are anyway.
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.66× more tests than code |
+| Test lines vs source lines         | 1.65× more tests than code |
 | Average source file length         |                 ~169 lines |
 | Average test file length           |                 ~521 lines |
-| Comment lines in source            |   11,981 (~7.8% of source) |
+| Comment lines in source            |   12,059 (~7.8% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,093 |
+| `if err != nil` checks             | 6,095 |
 | `defer` statements                 |   782 |
 | `struct` types defined             | 2,339 |
 | `//nolint` suppressions            |    76 |
@@ -488,22 +488,22 @@ Numbers nobody asked for, but here they are anyway.
 | Go packages                    |   219 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   183 |
+| Git commits                    |   187 |
 | Unique contributors            |     2 |
 
 ### Hall of fame
 
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
-| Longest source file | `internal/tools/dynamic/register.go` — 3,723 lines       |
+| Longest source file | `internal/tools/dynamic/register.go` — 3,740 lines       |
 | Longest test file   | `internal/tools/projects/projects_test.go` — 7,099 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~2,807 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 9,298 (impossible to avoid)                                                                          |
+| Source code printed at 55 lines/page | ~2,812 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 9,343 (impossible to avoid)                                                                          |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
