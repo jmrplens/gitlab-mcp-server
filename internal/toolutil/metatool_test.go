@@ -409,6 +409,23 @@ func TestJSONFieldReflectionHelpers(t *testing.T) {
 		t.Fatalf("jsonFieldNames(nil) = %#v, want nil", got)
 	}
 
+	// Pointer-to-struct is dereferenced in the for-loop body to expose the
+	// underlying struct fields. The result must match the direct value.
+	direct := jsonFieldNames(reflect.TypeFor[namedInput]())
+	viaPtr := jsonFieldNames(reflect.TypeFor[*namedInput]())
+	if !reflect.DeepEqual(direct, viaPtr) {
+		t.Fatalf("jsonFieldNames() = direct:%#v viaPtr:%#v, want equal", direct, viaPtr)
+	}
+
+	// Empty struct has no JSON field names and so the alias normalizer
+	// returns the params untouched. This covers the "len(fields) == 0"
+	// branch inside normalizeParamAliases.
+	type emptyInput struct{}
+	gotParams := normalizeParamAliases(map[string]any{"alias": "x"}, reflect.TypeFor[emptyInput]())
+	if gotParams["alias"] != "x" {
+		t.Fatalf("normalizeParamAliases(empty struct) = %v, want alias:x untouched", gotParams)
+	}
+
 	fieldTypes := jsonFieldTypes(reflect.TypeFor[*namedInput]())
 	if fieldTypes["embedded_name"].Kind() != reflect.String || fieldTypes["string_list"].Kind() != reflect.Slice {
 		t.Fatalf("jsonFieldTypes() = %#v, want embedded string and string slice", fieldTypes)
@@ -1815,6 +1832,19 @@ func TestStripMetaToolDescriptionPrefix_StripsLegacyPrefix(t *testing.T) {
 // descriptions are left intact when only one generated-prefix line is present.
 func TestStripMetaToolDescriptionPrefix_PreservesStandaloneExample(t *testing.T) {
 	description := "Example: resolve this remote before listing projects. More details follow."
+
+	got := StripMetaToolDescriptionPrefix(description)
+	if got != description {
+		t.Fatalf("StripMetaToolDescriptionPrefix() = %q, want original description", got)
+	}
+}
+
+// TestStripMetaToolDescriptionPrefix_PreservesMultiLineWithoutPrefix verifies
+// that a multi-line description that does not carry the generated meta-tool
+// prefix is preserved unchanged (covers the !hasUsageExample || !hasSchemaHint
+// branch).
+func TestStripMetaToolDescriptionPrefix_PreservesMultiLineWithoutPrefix(t *testing.T) {
+	description := "Use this tool to delete resources.\nFree-form documentation line."
 
 	got := StripMetaToolDescriptionPrefix(description)
 	if got != description {

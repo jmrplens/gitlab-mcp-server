@@ -279,6 +279,54 @@ func contains(s, substr string) bool {
 	return len(s) >= len(substr) && searchSubstring(s, substr)
 }
 
+// TestParseDiffLines_BeforeFirstHunk verifies the parser ignores diff metadata
+// lines (and a trailing newline) that appear before the first @@ hunk header.
+func TestParseDiffLines_BeforeFirstHunk(t *testing.T) {
+	diff := "diff --git a/foo b/foo\nindex 0000..1111 100644\n--- a/foo\n+++ b/foo\n@@ -1,2 +1,2 @@\n line1\n-line2\n+line2_new\n"
+
+	lines := ParseDiffLines(diff)
+	if len(lines) != 3 {
+		t.Fatalf("got %d lines, want 3 (skipping pre-hunk metadata)", len(lines))
+	}
+	if lines[0].OldLine != 1 || lines[0].NewLine != 1 {
+		t.Errorf("line[0] = %+v, want context (1,1)", lines[0])
+	}
+	if lines[1].Type != LineRemoved || lines[1].OldLine != 2 {
+		t.Errorf("line[1] = %+v, want removed (2,0)", lines[1])
+	}
+	if lines[2].Type != LineAdded || lines[2].NewLine != 2 {
+		t.Errorf("line[2] = %+v, want added (0,2)", lines[2])
+	}
+}
+
+// TestValidateDiffLinePosition_DefaultBranch exercises the unreachable default
+// branch (both line numbers zero) that should never produce a match.
+func TestValidateDiffLinePosition_DefaultBranch(t *testing.T) {
+	dl := DiffLine{Type: LineAdded, NewLine: 5}
+	matched, err := validateDiffLinePosition(dl, 0, 0)
+	if matched || err != nil {
+		t.Errorf("validateDiffLinePosition(0,0) = (%v, %v), want (false, nil)", matched, err)
+	}
+}
+
+// TestBuildPositionError_BothLineNumbers covers the "and" branch of
+// buildPositionError that fires when both newLine and oldLine are set.
+func TestBuildPositionError_BothLineNumbers(t *testing.T) {
+	diffLines := []DiffLine{
+		{OldLine: 5, NewLine: 5, Type: LineContext},
+		{OldLine: 0, NewLine: 10, Type: LineAdded},
+		{OldLine: 15, NewLine: 0, Type: LineRemoved},
+	}
+	err := buildPositionError(diffLines, 100, 200)
+	if err == nil {
+		t.Fatal("expected error for out-of-range position")
+	}
+	msg := err.Error()
+	if !contains(msg, "new_line 100") || !contains(msg, "old_line 200") || !contains(msg, " and ") {
+		t.Errorf("error should mention both lines joined by ' and ', got: %s", msg)
+	}
+}
+
 func searchSubstring(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {

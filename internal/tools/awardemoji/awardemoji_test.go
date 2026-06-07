@@ -1659,6 +1659,80 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 }
 
+// ----- branch coverage -----
+
+// TestFindExistingMRAwardEmoji_Branches exercises the remaining branches of
+// the findExistingMRAwardEmoji helper: failure to load the current user,
+// failure to list the merge request's award emoji, and pagination
+// termination when the response indicates no next page (resp == nil or
+// NextPage == 0). Each branch must return an empty Output with the found
+// flag set to false so that the caller can fall back to creating a new
+// emoji. Without these tests the "err != nil" and "resp == nil || resp.NextPage == 0"
+// branches were never reached, keeping the function below full coverage.
+func TestFindExistingMRAwardEmoji_Branches(t *testing.T) {
+	const mrEmojiPath = testPathAPIProjects + testProjectID + "/merge_requests/3/award_emoji"
+
+	tests := []struct {
+		name    string
+		handler http.HandlerFunc
+	}{
+		{
+			name: "current user request fails",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v4/user" {
+					testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
+					return
+				}
+				t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			},
+		},
+		{
+			name: "list award emoji request fails",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api/v4/user":
+					testutil.RespondJSON(w, http.StatusOK, `{"id":9,"username":"current"}`)
+				case mrEmojiPath:
+					testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
+				default:
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+			},
+		},
+		{
+			name: "pagination terminates with resp.NextPage == 0",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api/v4/user":
+					testutil.RespondJSON(w, http.StatusOK, `{"id":9,"username":"current"}`)
+				case mrEmojiPath:
+					// Single-page response with NextPage=0.
+					testutil.RespondJSONWithPagination(w, http.StatusOK, `[{"id":1,"name":"other","user":{"id":1,"username":"u"},"created_at":"2026-03-01T00:00:00Z","awardable_id":3,"awardable_type":"MergeRequest"}]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "100", Total: "1"})
+				default:
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, tt.handler)
+			out, found := findExistingMRAwardEmoji(t.Context(), client, MRCreateInput{
+				ProjectID: testProjectID,
+				IID:       3,
+				Name:      "eyes",
+			})
+			if found {
+				t.Fatalf("expected found = false, got true (out=%+v)", out)
+			}
+			if out.ID != 0 || out.Name != "" {
+				t.Fatalf("expected zero-value Output, got %+v", out)
+			}
+		})
+	}
+}
+
 // allAwardEmojiActionSpecs supports all award emoji action specs assertions in awardemoji tests.
 func allAwardEmojiActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	specs := append(IssueActionSpecs(client), MergeRequestActionSpecs(client)...)

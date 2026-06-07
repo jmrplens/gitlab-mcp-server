@@ -394,6 +394,31 @@ func TestUpdateInstanceServiceAccount_NilResponse(t *testing.T) {
 	}
 }
 
+// TestUpdateInstanceServiceAccount_GenericError verifies UpdateInstanceServiceAccount
+// returns an error wrapped with the generic message (not the admin hint) when
+// the API responds with a non-403 error such as 500 Internal Server Error.
+// This covers the fallthrough error branch in the handler.
+func TestUpdateInstanceServiceAccount_GenericError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"500 Internal Server Error"}`)
+	}))
+
+	_, err := UpdateInstanceServiceAccount(context.Background(), client, UpdateServiceAccountInput{
+		ServiceAccountID: 5,
+		Name:             "test",
+	})
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+	if !strings.Contains(err.Error(), "update_instance_service_account") {
+		t.Errorf("expected error to contain operation name, got: %v", err)
+	}
+	// Should NOT include the admin-token hint (that's reserved for 403)
+	if strings.Contains(err.Error(), "admin token") {
+		t.Errorf("expected generic error message for 500, got admin hint: %v", err)
+	}
+}
+
 // TestFormatServiceAccountMarkdownString_WithEmail verifies FormatServiceAccountMarkdownString
 // includes Email and UnconfirmedEmail fields when both are set.
 func TestFormatServiceAccountMarkdownString_WithEmail(t *testing.T) {

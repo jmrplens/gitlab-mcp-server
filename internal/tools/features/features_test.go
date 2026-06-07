@@ -307,3 +307,26 @@ func TestFormatFeatureMarkdown_NoDefinition(t *testing.T) {
 		t.Errorf("should not contain Type when no definition: %s", text)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Set — NewRequest error when the body contains a non-JSON-serializable value
+// ---------------------------------------------------------------------------.
+
+// TestSet_NewRequestErrorOnUnserializableValue verifies that Set surfaces an
+// error when the user-supplied value field cannot be marshaled to JSON (for
+// example, a channel or function). GitLab's client-go NewRequest returns
+// the marshal error directly, and the handler wraps it with the operation
+// name so the LLM sees a meaningful diagnostic.
+func TestSet_NewRequestErrorOnUnserializableValue(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("API should not be called when body fails to marshal")
+	}))
+
+	_, err := Set(context.Background(), client, SetInput{Name: "flag1", Value: make(chan int)})
+	if err == nil {
+		t.Fatal("expected error for non-JSON-serializable value, got nil")
+	}
+	if !strings.Contains(err.Error(), "feature_set") {
+		t.Errorf("error = %q, want wrapped with feature_set operation", err.Error())
+	}
+}

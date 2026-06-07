@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
@@ -316,4 +318,223 @@ func captureStdout(t *testing.T, fn func()) string {
 		t.Fatalf("reader.Close() error: %v", closeErr)
 	}
 	return string(output)
+}
+
+// TestDiffByName_CountsOnlyUniqueDifferences verifies the diff helper returns
+// the number of names in a missing from b, ignoring duplicates and overlap.
+func TestDiffByName_CountsOnlyUniqueDifferences(t *testing.T) {
+	a := []*mcp.Tool{
+		{Name: "gitlab_x"},
+		{Name: "gitlab_y"},
+		{Name: "gitlab_z"},
+		{Name: "gitlab_x"}, // duplicate
+	}
+	b := []*mcp.Tool{
+		{Name: "gitlab_x"},
+		{Name: "gitlab_w"},
+	}
+
+	if got := diffByName(a, b); got != 2 {
+		t.Fatalf("diffByName() = %d, want 2 (y and z)", got)
+	}
+}
+
+// TestDiffByName_EmptyInputsReturnZero verifies the diff helper returns zero
+// for empty inputs.
+func TestDiffByName_EmptyInputsReturnZero(t *testing.T) {
+	if got := diffByName(nil, nil); got != 0 {
+		t.Fatalf("diffByName(nil, nil) = %d, want 0", got)
+	}
+	if got := diffByName([]*mcp.Tool{{Name: "a"}}, nil); got != 1 {
+		t.Fatalf("diffByName([a], nil) = %d, want 1", got)
+	}
+	if got := diffByName(nil, []*mcp.Tool{{Name: "a"}}); got != 0 {
+		t.Fatalf("diffByName(nil, [a]) = %d, want 0", got)
+	}
+}
+
+// TestPrintRow_FormatsWithLabelAndValue verifies the metric row printer uses
+// the configured label width and a trailing newline.
+func TestPrintRow_FormatsWithLabelAndValue(t *testing.T) {
+	output := captureStdout(t, func() {
+		printRow("Test metric", 42)
+	})
+
+	want := "Test metric"
+	// Padding to metricLabelWidth characters followed by "42".
+	if !strings.Contains(output, "  Test metric") {
+		t.Fatalf("printRow() missing padded label:\n%q", output)
+	}
+	if !strings.Contains(output, "42\n") {
+		t.Fatalf("printRow() missing value and newline:\n%q", output)
+	}
+	if !strings.HasPrefix(output, want[:0]+"  ") {
+		// Just confirm the row starts with the leading two-space indent.
+		if output[:2] != "  " {
+			t.Fatalf("printRow() output should start with two-space indent: %q", output)
+		}
+	}
+}
+
+// TestPrintActionIDList_EmptyListWritesNone verifies the empty list path
+// writes the "none" marker instead of a loop.
+func TestPrintActionIDList_EmptyListWritesNone(t *testing.T) {
+	output := captureStdout(t, func() {
+		printActionIDList(nil)
+	})
+
+	if !strings.Contains(output, "- none") {
+		t.Fatalf("printActionIDList() empty output = %q, want '- none'", output)
+	}
+}
+
+// TestPrintActionIDList_EmptySliceWritesNone verifies the empty slice path
+// (different from nil) also writes the "none" marker.
+func TestPrintActionIDList_EmptySliceWritesNone(t *testing.T) {
+	output := captureStdout(t, func() {
+		printActionIDList([]string{})
+	})
+
+	if !strings.Contains(output, "- none") {
+		t.Fatalf("printActionIDList() empty slice output = %q, want '- none'", output)
+	}
+}
+
+// TestPrintActionIDList_ListsAllIDs verifies populated input renders each ID
+// in order using the tool list format.
+func TestPrintActionIDList_ListsAllIDs(t *testing.T) {
+	output := captureStdout(t, func() {
+		printActionIDList([]string{"alpha.list", "beta.get", "gamma.create"})
+	})
+
+	for _, want := range []string{"alpha.list", "beta.get", "gamma.create"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("printActionIDList() missing %q:\n%s", want, output)
+		}
+	}
+}
+
+// TestCountPrompts_ReturnsRegisteredPromptCount verifies the prompt counter
+// returns a positive count for the live registration path.
+func TestCountPrompts_ReturnsRegisteredPromptCount(t *testing.T) {
+	got := countPrompts(newAuditMetricsClient(t))
+	if got <= 0 {
+		t.Fatalf("countPrompts() = %d, want positive registered prompt count", got)
+	}
+}
+
+// TestCountSourceFiles_CountsGoFilesUnderInternal verifies the source/test
+// file counters partition .go files by _test.go suffix.
+func TestCountSourceFiles_CountsGoFilesUnderInternal(t *testing.T) {
+	src, test := countSourceFiles()
+	if src <= 0 {
+		t.Fatalf("countSourceFiles() src = %d, want positive", src)
+	}
+	if test <= 0 {
+		t.Fatalf("countSourceFiles() test = %d, want positive", test)
+	}
+}
+
+// TestPrintDomainTable_LimitsToTop20AndShowsEllipsis verifies the table
+// printer sorts entries by count and shows the ... overflow message.
+func TestPrintDomainTable_LimitsToTop20AndShowsEllipsis(t *testing.T) {
+	domains := map[string]int{}
+	for i := 0; i < 25; i++ {
+		domains[fmt.Sprintf("domain%02d", i)] = 25 - i
+	}
+
+	output := captureStdout(t, func() {
+		printDomainTable(domains)
+	})
+
+	// First domain alphabetically among highest count should be domain00 (25).
+	if !strings.Contains(output, "domain00") {
+		t.Fatalf("printDomainTable() missing highest-count row:\n%s", output)
+	}
+	// The table caps at 20 rows; the rest should be summarized.
+	if !strings.Contains(output, "and 5 more domains") {
+		t.Fatalf("printDomainTable() missing overflow line:\n%s", output)
+	}
+}
+
+// TestPrintDomainTable_FewerThan20DomainsPrintsAll verifies the table
+// includes all entries when below the 20-row cap.
+func TestPrintDomainTable_FewerThan20DomainsPrintsAll(t *testing.T) {
+	domains := map[string]int{
+		"alpha": 3,
+		"beta":  1,
+		"gamma": 2,
+	}
+
+	output := captureStdout(t, func() {
+		printDomainTable(domains)
+	})
+
+	for _, want := range []string{"alpha", "beta", "gamma"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("printDomainTable() missing %q:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "and") {
+		t.Fatalf("printDomainTable() should not show overflow:\n%s", output)
+	}
+}
+
+// TestListServerTools_IndividualAndMetaReturnsPopulatedLists verifies both
+// surface modes register a non-empty tool list through the in-memory server.
+func TestListServerTools_IndividualAndMetaReturnsPopulatedLists(t *testing.T) {
+	client := newAuditMetricsClient(t)
+
+	individual := listServerTools(client, false, false)
+	if len(individual) == 0 {
+		t.Fatal("listServerTools(individual) = 0, want registered tools")
+	}
+	meta := listServerTools(client, true, false)
+	if len(meta) == 0 {
+		t.Fatal("listServerTools(meta) = 0, want registered meta tools")
+	}
+	metaEnterprise := listServerTools(client, true, true)
+	if len(metaEnterprise) < len(meta) {
+		t.Fatalf("listServerTools(enterprise meta) = %d, want >= %d", len(metaEnterprise), len(meta))
+	}
+}
+
+// TestPrintMetaSchemaModes_ListsActiveAndAllModes verifies the schema-mode
+// reporter prints the active mode and the three documented modes.
+func TestPrintMetaSchemaModes_ListsActiveAndAllModes(t *testing.T) {
+	// The reporter resets the mode back to "opaque" on exit; capture the
+	// current state to restore it after the test runs.
+	t.Setenv("META_PARAM_SCHEMA", "compact")
+
+	client := newAuditMetricsClient(t)
+	output := captureStdout(t, func() {
+		printMetaSchemaModes(client)
+	})
+
+	for _, want := range []string{
+		"Active mode (env): compact",
+		"opaque",
+		"compact",
+		"full",
+		"mode",
+		"total bytes",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("printMetaSchemaModes() missing %q:\n%s", want, output)
+		}
+	}
+}
+
+// TestPrintMetaSchemaModes_DefaultsToOpaqueWhenUnset verifies the reporter
+// falls back to opaque mode when META_PARAM_SCHEMA is empty or invalid.
+func TestPrintMetaSchemaModes_DefaultsToOpaqueWhenUnset(t *testing.T) {
+	t.Setenv("META_PARAM_SCHEMA", "bogus")
+
+	output := captureStdout(t, func() {
+		printMetaSchemaModes(newAuditMetricsClient(t))
+	})
+
+	if !strings.Contains(output, "Active mode (env): opaque") {
+		t.Fatalf("printMetaSchemaModes() did not default to opaque:\n%s", output)
+	}
 }

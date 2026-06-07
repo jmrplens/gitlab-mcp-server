@@ -126,3 +126,44 @@ func deployKeyContainsText(values []string, needle string) bool {
 	}
 	return false
 }
+
+// ---------------------------------------------------------------------------
+// deployKeyAliases — branch coverage
+// ---------------------------------------------------------------------------
+
+// TestDeployKeyAliases_AllBranches verifies deployKeyAliases returns the
+// expected alias list for every known action name and nil for unknown
+// action names (the default branch).
+func TestDeployKeyAliases_AllBranches(t *testing.T) {
+	tests := []struct {
+		name       string
+		actionName string
+		minAliases int // expected minimum number of aliases for the case
+	}{
+		{"project list", "deploy_key_list_project", 1},
+		{"get", "deploy_key_get", 1},
+		{"add", "deploy_key_add", 1},
+		{"update", "deploy_key_update", 1},
+		{"delete", "deploy_key_delete", 1},
+		{"enable", "deploy_key_enable", 1},
+		{"list all", "deploy_key_list_all", 1},
+		{"add instance", "deploy_key_add_instance", 1},
+		{"list user project", "deploy_key_list_user_project", 1},
+		{"unknown returns nil", "deploy_key_unknown", 0},
+		{"empty returns nil", "", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := deployKeyAliases(tt.actionName)
+			if tt.minAliases == 0 {
+				if got != nil {
+					t.Errorf("deployKeyAliases(%q) = %v, want nil", tt.actionName, got)
+				}
+				return
+			}
+			if len(got) < tt.minAliases {
+				t.Errorf("deployKeyAliases(%q) has %d aliases, want at least %d", tt.actionName, len(got), tt.minAliases)
+			}
+		})
+	}
+}

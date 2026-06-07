@@ -1,6 +1,8 @@
 package evaluator
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -32,5 +34,40 @@ func TestTerminalPrintHelpers_WriteToConfiguredLog(t *testing.T) {
 	terminalLogPrintf(" log=%d", 1)
 	if got := b.String(); got != "hello there! log=1" {
 		t.Fatalf("terminal output = %q, want combined log", got)
+	}
+}
+
+// TestConfigureTerminalOutput_DefaultAndOverride verifies configureTerminalOutput
+// resolves the default log path and returns the close hook for cleanup, and
+// that an invalid path produces an error and a nil cleanup hook.
+func TestConfigureTerminalOutput_DefaultAndOverride(t *testing.T) {
+	output := t.TempDir()
+	restore := termio.SetOutputForTest(termio.NewOutput(&strings.Builder{}, false))
+	t.Cleanup(restore)
+
+	updated, close, err := configureTerminalOutput(options{Output: output})
+	if err != nil {
+		t.Fatalf("configureTerminalOutput() error = %v", err)
+	}
+	if updated.TerminalLog == "" {
+		t.Fatal("configureTerminalOutput() did not populate TerminalLog")
+	}
+	if close == nil {
+		t.Fatal("configureTerminalOutput() returned nil close hook")
+	}
+	if err := close(); err != nil {
+		t.Fatalf("close() error = %v", err)
+	}
+
+	// An invalid path should surface an error and a nil cleanup hook so the
+	// caller can distinguish between success-with-cleanup and outright failure.
+	// Using a regular file as the log path's parent directory forces MkdirAll
+	// to fail with ENOTDIR.
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	if err := os.WriteFile(blocker, []byte("not a dir"), 0o600); err != nil {
+		t.Fatalf("write blocker: %v", err)
+	}
+	if _, _, err := configureTerminalOutput(options{Output: output, TerminalLog: filepath.Join(blocker, "log.txt")}); err == nil {
+		t.Fatal("configureTerminalOutput(invalid) error = nil, want error")
 	}
 }

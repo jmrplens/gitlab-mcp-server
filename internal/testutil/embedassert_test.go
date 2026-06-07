@@ -44,3 +44,62 @@ func TestAssertEmbeddedResource_TogglesEmbeddedContent(t *testing.T) {
 		t.Fatal("AssertEmbeddedResource did not restore embedded resources to enabled")
 	}
 }
+
+// TestFirstEmbeddedResource_Found verifies the helper returns the first
+// EmbeddedResource content block from a result.
+func TestFirstEmbeddedResource_Found(t *testing.T) {
+	embed := &mcp.EmbeddedResource{Resource: &mcp.ResourceContents{URI: "u", MIMEType: "application/json"}}
+	result := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "x"}, embed}}
+	if got := firstEmbeddedResource(result); got != embed {
+		t.Errorf("firstEmbeddedResource = %v, want embed", got)
+	}
+}
+
+// TestFirstEmbeddedResource_None verifies the helper returns nil when the
+// result has no EmbeddedResource blocks.
+func TestFirstEmbeddedResource_None(t *testing.T) {
+	result := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "x"}}}
+	if got := firstEmbeddedResource(result); got != nil {
+		t.Errorf("firstEmbeddedResource = %v, want nil", got)
+	}
+}
+
+// TestAssertEmbeddedResourcePayload_MismatchFields verifies that the payload
+// assertion helper fails the test when the URI, MIME type, or text payload
+// does not match the expected values.
+func TestAssertEmbeddedResourcePayload_MismatchFields(t *testing.T) {
+	tests := []struct {
+		name      string
+		resource  *mcp.ResourceContents
+		wantURI   string
+		wantField string
+	}{
+		{
+			name:      "URI mismatch",
+			resource:  &mcp.ResourceContents{URI: "got", MIMEType: "application/json", Text: "x"},
+			wantURI:   "want",
+			wantField: "URI",
+		},
+		{
+			name:      "MIMEType mismatch",
+			resource:  &mcp.ResourceContents{URI: "u", MIMEType: "text/plain", Text: "x"},
+			wantURI:   "u",
+			wantField: "MIMEType",
+		},
+		{
+			name:      "Text empty",
+			resource:  &mcp.ResourceContents{URI: "u", MIMEType: "application/json", Text: ""},
+			wantURI:   "u",
+			wantField: "Text",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeT := &testing.T{}
+			assertEmbeddedResourcePayload(fakeT, tt.resource, tt.wantURI)
+			if !fakeT.Failed() {
+				t.Errorf("assertEmbeddedResourcePayload should fail for %s mismatch", tt.wantField)
+			}
+		})
+	}
+}

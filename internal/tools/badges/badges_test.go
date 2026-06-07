@@ -1163,3 +1163,37 @@ func containsText(values []string, needle string) bool {
 	}
 	return false
 }
+
+// ---------------------------------------------------------------------------
+// badgeActionDescription — table-driven coverage
+// ---------------------------------------------------------------------------
+
+// TestBadgeActionDescription_AllBranches verifies badgeActionDescription across
+// all known verbs and the default (fallback) branch, ensuring every switch
+// case returns the expected human-readable description.
+func TestBadgeActionDescription_AllBranches(t *testing.T) {
+	tests := []struct {
+		name     string
+		verb     string
+		scope    string
+		contains string
+	}{
+		{"add verb", "add", "project", "Add a project badge."},
+		{"get verb", "get", "project", "Get a project badge."},
+		{"edit verb", "edit", "project", "Edit a project badge."},
+		{"delete verb", "delete", "group", "Delete a group badge."},
+		{"list verb", "list", "group", "List group badges."},
+		{"preview verb", "preview", "project", "Preview a project badge."},
+		{"unknown verb falls back", "rotate", "project", "Manage project badges."},
+		{"empty verb falls back", "", "group", "Manage group badges."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := badgeActionDescription(tt.verb, tt.scope)
+			if got != tt.contains {
+				t.Errorf("badgeActionDescription(%q, %q) = %q, want %q", tt.verb, tt.scope, got, tt.contains)
+			}
+		})
+	}
+}

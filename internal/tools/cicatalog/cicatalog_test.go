@@ -597,6 +597,42 @@ func TestFormatGetMarkdown_MinimalResource(t *testing.T) {
 	}
 }
 
+// TestFormatGetMarkdown_ComponentWithoutInputs verifies that writeCatalogResourceComponent
+// handles a component with empty Inputs by emitting the header and Include line
+// but no input table, exercising the early-return branch in the component writer.
+func TestFormatGetMarkdown_ComponentWithoutInputs(t *testing.T) {
+	md := FormatGetMarkdown(GetOutput{
+		Resource: ResourceDetail{
+			ResourceItem: ResourceItem{
+				ID:       "gid://gitlab/Ci::CatalogResource/3",
+				Name:     "no-inputs",
+				FullPath: "group/no-inputs",
+				WebURL:   "https://gitlab.example.com/group/no-inputs",
+			},
+			Components: []ComponentItem{
+				{
+					Name:        "simple",
+					Description: "A component without any inputs",
+					IncludePath: "gitlab.example.com/group/no-inputs/simple@1.0.0",
+					Inputs:      nil,
+				},
+			},
+		},
+	})
+	if !strings.Contains(md, "`simple`") {
+		t.Error("expected component name header")
+	}
+	if !strings.Contains(md, "A component without any inputs") {
+		t.Error("expected component description")
+	}
+	if !strings.Contains(md, "**Include:** `gitlab.example.com/group/no-inputs/simple@1.0.0`") {
+		t.Error("expected include path")
+	}
+	if strings.Contains(md, "| Input |") {
+		t.Error("expected no Inputs table for component with empty Inputs")
+	}
+}
+
 // TestActionSpecs_CallRoutes verifies that both CI/CD catalog canonical routes
 // execute successfully through ActionSpecs.
 func TestActionSpecs_CallRoutes(t *testing.T) {

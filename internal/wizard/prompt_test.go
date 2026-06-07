@@ -3,6 +3,7 @@ package wizard
 
 import (
 	"bytes"
+	"io"
 	"strings"
 	"testing"
 )
@@ -481,3 +482,25 @@ func TestPrompter_AskPasswordDefault_ShortToken(t *testing.T) {
 		t.Error("expected masked short token in output")
 	}
 }
+
+// TestPrompter_AskPasswordDefault_ReadError verifies AskPasswordDefault
+// surfaces an error from the underlying reader (e.g. closed pipe).
+func TestPrompter_AskPasswordDefault_ReadError(t *testing.T) {
+	r := &errReader{err: errClosed}
+	w := &bytes.Buffer{}
+	p := NewPrompter(r, w)
+
+	_, err := p.AskPasswordDefault("Token", "default")
+	if err == nil {
+		t.Fatal("expected read error, got nil")
+	}
+}
+
+// errReader returns a fixed error from every Read call to exercise error
+// branches in prompts that read user input.
+type errReader struct{ err error }
+
+func (e *errReader) Read(p []byte) (int, error) { return 0, e.err }
+
+// errClosed is a sentinel error used to test reader-error branches.
+var errClosed = io.EOF

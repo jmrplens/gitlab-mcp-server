@@ -1471,3 +1471,23 @@ func TestIsURLSupported_NilParams(t *testing.T) {
 		t.Error("expected false for nil InitializeParams")
 	}
 }
+
+// TestElicitURL_HandlerError verifies that [Client.ElicitURL] propagates
+// errors from the underlying session Elicit call as a wrapped "URL request
+// failed" error.
+func TestElicitURL_HandlerError(t *testing.T) {
+	ctx := context.Background()
+	_, ss, cleanup := setupElicitURLSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return nil, errors.New("transport blew up")
+	})
+	defer cleanup()
+
+	c := Client{session: ss}
+	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open")
+	if err == nil {
+		t.Fatal("expected error when handler returns error")
+	}
+	if !strings.Contains(err.Error(), "URL request failed") {
+		t.Errorf("err = %v, want substring %q", err, "URL request failed")
+	}
+}

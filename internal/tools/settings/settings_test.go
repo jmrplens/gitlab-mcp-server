@@ -325,3 +325,36 @@ func TestUpdate_BadRequest(t *testing.T) {
 		t.Fatalf("error missing settings guidance: %v", err)
 	}
 }
+
+// TestGet_UnmarshalResponseError documents the contract for Get when the
+// API returns a body that the GitLab SDK cannot decode into the Settings
+// struct (e.g. a bare number). The SDK rejects it before our json.Unmarshal
+// runs, so the in-package json.Unmarshal error branch (settings.go:40-42)
+// is defense-in-depth. We assert that an error is returned, which is the
+// externally observable contract regardless of which layer surfaces it.
+func TestGet_UnmarshalResponseError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// A bare JSON number is invalid for the Settings object type.
+		testutil.RespondJSON(w, http.StatusOK, `42`)
+	}))
+	_, err := Get(t.Context(), client, GetInput{})
+	if err == nil {
+		t.Fatal("expected error for non-object response, got nil")
+	}
+}
+
+// TestUpdate_UnmarshalResponseError documents the contract for Update when
+// the API returns a body that cannot be decoded into map[string]any. The
+// SDK rejects the non-object body before our json.Unmarshal runs, so the
+// in-package json.Unmarshal error branch (settings.go:89-91) is
+// defense-in-depth. We assert that an error is returned, satisfying the
+// contract regardless of which layer surfaces the failure.
+func TestUpdate_UnmarshalResponseError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `42`)
+	}))
+	_, err := Update(t.Context(), client, UpdateInput{Settings: map[string]any{"signup_enabled": false}})
+	if err == nil {
+		t.Fatal("expected error for non-object response, got nil")
+	}
+}

@@ -252,6 +252,182 @@ func (errWriter) Write([]byte) (int, error) {
 	return 0, errors.New("write failed")
 }
 
+// TestRun_OpenRootError verifies that run reports an error when --root points
+// to a non-existent directory.
+//
+// Without this guard the formatter would call filepath.Abs on an empty string
+// and silently continue, masking CLI misuse. The expected error includes the
+// failing path.
+func TestRun_OpenRootError(t *testing.T) {
+	root := t.TempDir()
+	missing := filepath.Join(root, "does-not-exist")
+	var stdout bytes.Buffer
+	err := run([]string{"--root", missing}, &stdout)
+	if err == nil {
+		t.Fatal("run() error = nil, want open root failure")
+	}
+	if !strings.Contains(err.Error(), "open root") {
+		t.Fatalf("run() error = %v, want open root", err)
+	}
+}
+
+// TestRun_FileMissingDuringIteration verifies that run surfaces errors from
+// formatMarkdownTableFile when a discovered Markdown file disappears between
+// the discovery stat and the read step.
+//
+// This is exercised by calling formatMarkdownTableFile directly; the
+// run/discover flow uses a separate stat call that would mask the inner
+// read error.
+func TestRun_FormatFileReadError(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "ghost.md")
+	writeTestFile(t, target, "| A | B |\n| --- | --- |\n| longer | x |\n")
+	if err := os.Remove(target); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	_, err = formatMarkdownTableFile(rootFS, "ghost.md", false)
+	if err == nil {
+		t.Fatal("formatMarkdownTableFile() error = nil, want read failure")
+	}
+	if !strings.Contains(err.Error(), "read ghost.md") {
+		t.Fatalf("formatMarkdownTableFile() error = %v, want read ghost.md", err)
+	}
+}
+
+// TestRun_StdoutWriteErrorsAfterFormatChange verifies that run surfaces
+// Fprintf failures when emitting the per-file change list after formatting.
+//
+// The test stages a single Markdown file that requires normalization, then
+// uses an errWriter that fails on the very first write. The expected error
+// includes "write stdout" and must be returned to the caller, not swallowed.
+func TestRun_StdoutWriteErrorsAfterFormatChange(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "README.md"), "| A | B |\n| --- | ---: |\n| one | 2 |\n")
+	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o750); err != nil {
+		t.Fatalf("mkdir docs: %v", err)
+	}
+
+	err := run([]string{"--root", root}, errWriter{})
+	if err == nil {
+		t.Fatal("run() error = nil, want stdout write failure after format change")
+	}
+	if !strings.Contains(err.Error(), "write stdout") {
+		t.Fatalf("run() error = %v, want write stdout", err)
+	}
+}
+
+// TestMarkdownFilesForInput_NonMarkdownFile verifies that an explicit .txt path
+// returns an empty list without erroring.
+//
+// The formatter is invoked against README.md and a docs/ directory by default;
+// non-Markdown files must be silently skipped to keep the CLI behavior
+// predictable when callers pass arbitrary paths.
+func TestMarkdownFilesForInput_NonMarkdownFile(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "ignored.txt"), "not markdown")
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	files, err := markdownFilesForInput(rootFS, root, "ignored.txt")
+	if err != nil {
+		t.Fatalf("markdownFilesForInput() error: %v", err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("markdownFilesForInput() = %v, want empty slice for .txt", files)
+	}
+}
+
+// TestMarkdownFilesForInput_MissingPath verifies that referencing a
+// non-existent explicit path returns a stat error that names the offending
+// input.
+//
+// The error must reference the original (pre-resolution) input string so
+// users can locate the bad argument in their invocation.
+func TestMarkdownFilesForInput_MissingPath(t *testing.T) {
+	root := t.TempDir()
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	_, err = markdownFilesForInput(rootFS, root, "missing.md")
+	if err == nil {
+		t.Fatal("markdownFilesForInput() error = nil, want stat failure")
+	}
+	if !strings.Contains(err.Error(), "missing.md") {
+		t.Fatalf("markdownFilesForInput() error = %v, want missing.md in message", err)
+	}
+	if !strings.Contains(err.Error(), "stat") {
+		t.Fatalf("markdownFilesForInput() error = %v, want stat prefix", err)
+	}
+}
+
+// TestFormatMarkdownTableFile_ReadError verifies that formatMarkdownTableFile
+// reports a read error when the file is unreadable despite being stat-able.
+//
+// On most filesystems removing the file is the simplest way to make read
+// fail while leaving the rest of the discovery flow intact.
+func TestFormatMarkdownTableFile_ReadError(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "doc.md")
+	writeTestFile(t, target, "| A | B |\n| --- | --- |\n| longer | x |\n")
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	if err := os.Remove(target); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	_, err = formatMarkdownTableFile(rootFS, "doc.md", false)
+	if err == nil {
+		t.Fatal("formatMarkdownTableFile() error = nil, want read failure")
+	}
+	if !strings.Contains(err.Error(), "read doc.md") {
+		t.Fatalf("formatMarkdownTableFile() error = %v, want read doc.md", err)
+	}
+}
+
+// TestFormatMarkdownTableFile_WriteError verifies that formatMarkdownTableFile
+// returns a write error when the target file cannot be overwritten.
+//
+// The test stages a read-only Markdown file that requires normalization, then
+// invokes formatMarkdownTableFile in non-check mode. The expected error wraps
+// a "write" prefix and the failing path.
+func TestFormatMarkdownTableFile_WriteError(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "readonly.md")
+	writeTestFile(t, target, "| A | B |\n| --- | ---: |\n| one | 2 |\n")
+	if err := os.Chmod(target, 0o400); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(target, 0o600) })
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	_, err = formatMarkdownTableFile(rootFS, "readonly.md", false)
+	if err == nil {
+		t.Fatal("formatMarkdownTableFile() error = nil, want write failure")
+	}
+	if !strings.Contains(err.Error(), "write readonly.md") {
+		t.Fatalf("formatMarkdownTableFile() error = %v, want write readonly.md", err)
+	}
+}
+
 func writeTestFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {

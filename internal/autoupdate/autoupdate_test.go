@@ -555,6 +555,53 @@ func TestApplyUpdate_NoUpdateAvailable(t *testing.T) {
 	}
 }
 
+// TestCheckForUpdate_SelfupdateUpdaterError verifies that an error from the
+// selfupdate constructor is propagated by CheckForUpdate without leaking
+// the underlying implementation detail.
+func TestCheckForUpdate_SelfupdateUpdaterError(t *testing.T) {
+	orig := selfupdateUpdater
+	t.Cleanup(func() { selfupdateUpdater = orig })
+	selfupdateUpdater = func(_ selfupdate.Source) (*selfupdate.Updater, error) {
+		return nil, errors.New("constructor failure")
+	}
+
+	u := NewUpdaterWithSource(Config{
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, &mockSource{})
+
+	_, _, err := u.CheckForUpdate(context.Background())
+	if err == nil {
+		t.Fatal("expected error from selfupdateUpdater stub")
+	}
+	if !strings.Contains(err.Error(), "constructor failure") {
+		t.Errorf("err = %v, want to contain 'constructor failure'", err)
+	}
+}
+
+// TestApplyUpdate_SelfupdateUpdaterError verifies that an error from the
+// selfupdate constructor is propagated by ApplyUpdate.
+func TestApplyUpdate_SelfupdateUpdaterError(t *testing.T) {
+	orig := selfupdateUpdater
+	t.Cleanup(func() { selfupdateUpdater = orig })
+	selfupdateUpdater = func(_ selfupdate.Source) (*selfupdate.Updater, error) {
+		return nil, errors.New("constructor failure")
+	}
+
+	u := NewUpdaterWithSource(Config{
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, &mockSource{})
+
+	_, err := u.ApplyUpdate(context.Background())
+	if err == nil {
+		t.Fatal("expected error from selfupdateUpdater stub")
+	}
+	if !strings.Contains(err.Error(), "constructor failure") {
+		t.Errorf("err = %v, want to contain 'constructor failure'", err)
+	}
+}
+
 // CheckOnce coverage.
 
 // TestCheckOnce_NoUpdate verifies the "server is up to date" path.

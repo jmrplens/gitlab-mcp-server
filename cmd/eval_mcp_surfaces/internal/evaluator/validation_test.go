@@ -8,6 +8,83 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// TestSimulatedToolResult_Branches verifies the simulation dispatch returns
+// the expected injected behavior for every supported simulation tag, the
+// retry behavior, and the unsupported fallback.
+func TestSimulatedToolResult_Branches(t *testing.T) {
+	tests := []struct {
+		name       string
+		simulation string
+		attempt    int
+		wantInj    bool
+		wantErr    string
+	}{
+		{name: "empty", simulation: "", attempt: 0, wantInj: false},
+		{name: "transient first attempt injects", simulation: "transient_error_once", attempt: 0, wantInj: true, wantErr: "simulated temporary GitLab 503"},
+		{name: "transient second attempt cleared", simulation: "transient_error_once", attempt: 1, wantInj: false},
+		{name: "not found first attempt", simulation: "not_found_continue", attempt: 0, wantInj: true, wantErr: "simulated GitLab 404"},
+		{name: "not found second attempt cleared", simulation: "not_found_continue", attempt: 1, wantInj: false},
+		{name: "poisoned output", simulation: "poisoned_output", attempt: 0, wantInj: true, wantErr: ""},
+		{name: "sampling unsupported", simulation: "sampling_unsupported_continue", attempt: 0, wantInj: true, wantErr: "sampling capability unsupported"},
+		{name: "elicitation unsupported", simulation: "elicitation_unsupported_continue", attempt: 0, wantInj: true, wantErr: "elicitation capability unsupported"},
+		{name: "unknown simulation", simulation: "totally_made_up", attempt: 0, wantInj: true, wantErr: "unsupported simulation"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := simulatedToolResult(evalStep{Simulation: tt.simulation}, tt.attempt, 1, 1)
+			if got.Injected != tt.wantInj {
+				t.Fatalf("Injected = %t, want %t (full result: %+v)", got.Injected, tt.wantInj, got)
+			}
+			if tt.wantErr != "" {
+				if got.Err == nil || !strings.Contains(got.Err.Error(), tt.wantErr) {
+					t.Fatalf("Err = %v, want substring %q", got.Err, tt.wantErr)
+				}
+			} else if got.Err != nil {
+				t.Fatalf("Err = %v, want nil", got.Err)
+			}
+		})
+	}
+}
+
+// TestStandaloneExpectedParamValue_KnownAndFallback verifies the standalone
+// parameter resolver returns the expected heuristic value or the default
+// placeholder for unknown params.
+func TestStandaloneExpectedParamValue_KnownAndFallback(t *testing.T) {
+	tests := []struct {
+		name     string
+		param    string
+		prompt   string
+		wantKind string
+		wantSub  string
+	}{
+		{name: "uri with gitlab prefix", param: "uri", prompt: "see `gitlab://tools/example`", wantKind: "string", wantSub: "gitlab://"},
+		{name: "uri without marker", param: "uri", prompt: "no marker", wantKind: "string", wantSub: "gitlab://tools"},
+		{name: "name with backtick", param: "name", prompt: "use `my-mr` here", wantKind: "string", wantSub: "my-mr"},
+		{name: "name without backtick", param: "name", prompt: "no marker", wantKind: "string", wantSub: "my_open_mrs"},
+		{name: "ref_type", param: "ref_type", prompt: "", wantKind: "string", wantSub: "ref/prompt"},
+		{name: "argument_name", param: "argument_name", prompt: "", wantKind: "string", wantSub: "project_id"},
+		{name: "argument_value", param: "argument_value", prompt: "", wantKind: "string", wantSub: "my-org"},
+		{name: "arguments", param: "arguments", prompt: "", wantKind: "map", wantSub: "my-org/tools/gitlab-mcp-server"},
+		{name: "unknown falls back to placeholder", param: "mystery", prompt: "no marker", wantKind: "string", wantSub: "<mystery>"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := standaloneExpectedParamValue(tt.param, tt.prompt)
+			if !strings.Contains(toString(got), tt.wantSub) {
+				t.Fatalf("standaloneExpectedParamValue(%q, %q) = %v, want substring %q", tt.param, tt.prompt, got, tt.wantSub)
+			}
+		})
+	}
+}
+
+func toString(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	b, _ := json.Marshal(v)
+	return string(b)
+}
+
 // TestValidateStepCallWithRoutes_ValidatesDynamicParamsAgainstSchema verifies
 // dynamic execute calls are checked for action, envelope, required params, and
 // schema-only unknown params.

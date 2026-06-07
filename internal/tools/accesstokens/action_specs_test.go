@@ -137,3 +137,90 @@ func TestCatalogSurface_RevokeConfirmDeclined(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// accessTokenScopeAndOperation / accessTokenOperationPhrase /
+// accessTokenRelatedActions / accessTokenOptions — branch coverage
+// ---------------------------------------------------------------------------
+
+// TestAccessTokenScopeAndOperation_AllBranches verifies the scope/operation
+// extractor returns the expected (scope, operation) pair for every known
+// prefix, an unmatched action name (default branch), and edge cases.
+func TestAccessTokenScopeAndOperation_AllBranches(t *testing.T) {
+	tests := []struct {
+		name       string
+		actionName string
+		wantScope  string
+		wantOp     string
+	}{
+		{"project list", "token_project_list", "project", "list"},
+		{"group get", "token_group_get", "group", "get"},
+		{"personal rotate", "token_personal_rotate", "personal", "rotate"},
+		{"personal rotate_self", "token_personal_rotate_self", "personal", "rotate_self"},
+		{"group revoke_self", "token_group_revoke_self", "group", "revoke_self"},
+		{"unknown action returns empty", "token_unknown_thing", "", ""},
+		{"action without scope prefix", "unknown_action", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scope, op := accessTokenScopeAndOperation(tt.actionName)
+			if scope != tt.wantScope || op != tt.wantOp {
+				t.Errorf("accessTokenScopeAndOperation(%q) = (%q, %q), want (%q, %q)",
+					tt.actionName, scope, op, tt.wantScope, tt.wantOp)
+			}
+		})
+	}
+}
+
+// TestAccessTokenOperationPhrase_AllBranches verifies every switch arm and
+// the default fallback (used for unknown operations).
+func TestAccessTokenOperationPhrase_AllBranches(t *testing.T) {
+	tests := []struct {
+		operation string
+		want      string
+	}{
+		{"list", "lists"},
+		{"get", "gets"},
+		{"create", "creates"},
+		{"rotate", "rotates"},
+		{"rotate_self", "rotates"},
+		{"revoke", "revokes"},
+		{"revoke_self", "revokes"},
+		{"unknown_op", "unknown op"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.operation, func(t *testing.T) {
+			if got := accessTokenOperationPhrase(tt.operation); got != tt.want {
+				t.Errorf("accessTokenOperationPhrase(%q) = %q, want %q", tt.operation, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAccessTokenRelatedActions_AllBranches verifies the related-action
+// switch returns the canonical list for known scopes and nil for unknown.
+func TestAccessTokenRelatedActions_AllBranches(t *testing.T) {
+	if got := accessTokenRelatedActions("project"); len(got) == 0 {
+		t.Errorf("project scope should return related actions")
+	}
+	if got := accessTokenRelatedActions("group"); len(got) == 0 {
+		t.Errorf("group scope should return related actions")
+	}
+	if got := accessTokenRelatedActions("personal"); len(got) == 0 {
+		t.Errorf("personal scope should return related actions")
+	}
+	if got := accessTokenRelatedActions("unknown"); got != nil {
+		t.Errorf("unknown scope should return nil, got %v", got)
+	}
+}
+
+// TestAccessTokenOptions_EmptyScopeShortCircuit verifies that calling
+// accessTokenOptions with an action name that has no recognized scope prefix
+// (so accessTokenScopeAndOperation returns empty scope) returns the default
+// options without applying the scoped-name template.
+func TestAccessTokenOptions_EmptyScopeShortCircuit(t *testing.T) {
+	got := accessTokenOptions("token_unknown_thing", "gitlab_unknown_thing")
+	if got.Usage != "Use to execute accesstokens domain action." {
+		t.Errorf("expected default Usage for unknown scope, got %q", got.Usage)
+	}
+}

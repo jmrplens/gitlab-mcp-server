@@ -1,6 +1,7 @@
 package actioncatalog
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -88,5 +89,61 @@ func TestActionsFromSpecs_RejectsInvalidSpecs(t *testing.T) {
 func TestGroupFromSpecs_PropagatesSpecProjectionErrors(t *testing.T) {
 	if _, err := GroupFromSpecs(GroupOptions{ToolName: "gitlab_project"}, []toolutil.ActionSpec{{Name: ""}}); err == nil {
 		t.Fatal("GroupFromSpecs() error = nil, want invalid spec rejection")
+	}
+}
+
+// ----- branch coverage -----
+
+// TestActionsFromSpecs_WhitespaceNameNotInRoutes covers the
+// "if !ok { errs = append(errs, ...) }" branch in ActionsFromSpecs.
+// ActionSpecsToMapWithError normalizes spec.Name with strings.TrimSpace
+// before storing it in the routes map, but the ActionsFromSpecs loop
+// looks up the raw spec.Name. A trailing space therefore produces a
+// successful lower-level projection yet leaves routes[spec.Name] unset,
+// so the function must collect an error explaining that the spec was
+// not projected to a route. The test asserts the spec is still
+// considered invalid rather than silently dropped.
+func TestActionsFromSpecs_WhitespaceNameNotInRoutes(t *testing.T) {
+	spec := toolutil.NewActionSpec("get", toolutil.ActionRoute{
+		InputSchema: map[string]any{"type": "object"},
+	}, toolutil.ActionSpecOptions{ReadOnly: true, Idempotent: true})
+	// Inject a trailing space so the raw name differs from the trimmed
+	// key that ActionSpecsToMapWithError uses to index the routes map.
+	spec.Name = "get "
+
+	actions, err := ActionsFromSpecs([]toolutil.ActionSpec{spec})
+	if err == nil {
+		t.Fatal("ActionsFromSpecs() error = nil, want route-projection error for whitespace name")
+	}
+	if !strings.Contains(err.Error(), "get") || !strings.Contains(err.Error(), "not projected") {
+		t.Fatalf("err = %q, want it to mention spec name and 'not projected'", err.Error())
+	}
+	if len(actions) != 0 {
+		t.Fatalf("actions = %+v, want empty slice on route-projection failure", actions)
+	}
+}
+
+// TestActionsFromSpecs_SeenGuardIsUnreachable documents why the
+// `if _, exists := seen[spec.Name]; exists { continue }` branch inside
+// ActionsFromSpecs cannot be exercised by any public API. The lower-level
+// ActionSpecsToMapWithError rejects duplicate canonical names with a
+// "duplicate action spec" error, which is propagated up before the
+// defensive `seen` guard is ever reached. As a result, the guard is
+// dead code that we keep as belt-and-suspenders protection. The test
+// below asserts the documented contract: two specs sharing a name are
+// rejected at the projection step.
+func TestActionsFromSpecs_SeenGuardIsUnreachable(t *testing.T) {
+	makeSpec := func(name string) toolutil.ActionSpec {
+		s := toolutil.NewActionSpec(name, toolutil.ActionRoute{
+			InputSchema: map[string]any{"type": "object"},
+		}, toolutil.ActionSpecOptions{ReadOnly: true, Idempotent: true})
+		return s
+	}
+	_, err := ActionsFromSpecs([]toolutil.ActionSpec{makeSpec("dup"), makeSpec("dup")})
+	if err == nil {
+		t.Fatal("expected duplicate name to be rejected at the projection step, got nil error")
+	}
+	if !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("err = %q, want it to mention 'duplicate'", err.Error())
 	}
 }
