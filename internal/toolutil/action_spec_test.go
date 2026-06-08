@@ -1029,3 +1029,60 @@ func TestSchemaOverrideTargetFrom_NoProperties(t *testing.T) {
 		t.Errorf("schemaOverrideTargetFrom(no properties) = %v, want nil", got)
 	}
 }
+
+// TestSchemaOverrideTargetFrom_EmptyParts covers the defensive early-return
+// when the recursive resolver is invoked with an empty parts slice.
+func TestSchemaOverrideTargetFrom_EmptyParts(t *testing.T) {
+	root := map[string]any{"type": "object"}
+	if got := schemaOverrideTargetFrom(root, root, nil); got != nil {
+		t.Errorf("schemaOverrideTargetFrom(nil parts) = %v, want nil", got)
+	}
+	if got := schemaOverrideTargetFrom(root, root, []string{}); got != nil {
+		t.Errorf("schemaOverrideTargetFrom(empty parts) = %v, want nil", got)
+	}
+}
+
+// TestSchemaOverrideTargetFrom_NilChildProperty covers the defensive guard
+// when the resolved child map is nil but the parts slice still has more
+// entries. This is exercised by storing a typed-nil map under the property
+// name so the type assertion succeeds but the resulting value is nil.
+func TestSchemaOverrideTargetFrom_NilChildProperty(t *testing.T) {
+	var nilMap map[string]any
+	root := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"child": nilMap, // typed-nil map
+		},
+	}
+	if got := schemaOverrideTargetFrom(root, root, []string{"child", "nested"}); got != nil {
+		t.Errorf("schemaOverrideTargetFrom(nil child) = %v, want nil", got)
+	}
+}
+
+// TestSchemaHasPropertyPathFrom_EmptyParts covers the defensive early-return
+// when the recursive resolver is invoked with an empty parts slice.
+func TestSchemaHasPropertyPathFrom_EmptyParts(t *testing.T) {
+	root := map[string]any{"type": "object"}
+	if schemaHasPropertyPathFrom(root, root, nil) {
+		t.Error("schemaHasPropertyPathFrom(nil parts) = true, want false")
+	}
+	if schemaHasPropertyPathFrom(root, root, []string{}) {
+		t.Error("schemaHasPropertyPathFrom(empty parts) = true, want false")
+	}
+}
+
+// TestSchemaHasPropertyPathFrom_NilChildProperty covers the defensive guard
+// when the resolved child map is nil but the parts slice still has more
+// entries.
+func TestSchemaHasPropertyPathFrom_NilChildProperty(t *testing.T) {
+	var nilMap map[string]any
+	root := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"child": nilMap, // typed-nil map
+		},
+	}
+	if schemaHasPropertyPathFrom(root, root, []string{"child", "nested"}) {
+		t.Error("schemaHasPropertyPathFrom(nil child) = true, want false")
+	}
+}

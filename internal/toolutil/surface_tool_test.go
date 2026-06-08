@@ -33,7 +33,7 @@ func TestRegisterSurfaceToolFromSpec_InvalidSpecPanics(t *testing.T) {
 	spec := NewActionSpec("noop", ActionRoute{}, ActionSpecOptions{})
 
 	defer func() {
-		if r := recover(); r == nil {
+		if recover() == nil {
 			t.Error("expected panic for invalid ActionSpec, got none")
 		}
 	}()
