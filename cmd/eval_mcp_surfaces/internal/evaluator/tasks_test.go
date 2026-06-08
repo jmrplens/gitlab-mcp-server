@@ -48,6 +48,63 @@ func TestLiveMergeStatusStillPreparing_CoversTransientStatuses(t *testing.T) {
 	}
 }
 
+// TestStandaloneMetaToolForAction_ClassifiesInteractiveActions verifies the
+// standalone meta-tool mapping returns the correct dispatcher for each
+// supported action and rejects unknown actions.
+func TestStandaloneMetaToolForAction_ClassifiesInteractiveActions(t *testing.T) {
+	tests := []struct {
+		action   string
+		wantTool string
+		wantOK   bool
+	}{
+		{action: actionDiscoverProjectResolve, wantTool: "gitlab_discover_project", wantOK: true},
+		{action: "interactive.issue_create", wantTool: "gitlab_interactive_issue_create", wantOK: true},
+		{action: "interactive.mr_create", wantTool: "gitlab_interactive_mr_create", wantOK: true},
+		{action: "interactive.project_create", wantTool: "gitlab_interactive_project_create", wantOK: true},
+		{action: "interactive.release_create", wantTool: "gitlab_interactive_release_create", wantOK: true},
+		{action: "interactive.unknown_action", wantOK: false},
+		{action: "", wantOK: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.action, func(t *testing.T) {
+			tool, ok := standaloneMetaToolForAction(tt.action)
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %t, want %t", ok, tt.wantOK)
+			}
+			if tool != tt.wantTool {
+				t.Fatalf("tool = %q, want %q", tool, tt.wantTool)
+			}
+		})
+	}
+}
+
+// TestMetaToolRouteForAction_MatchesKnownAndRejectsUnknown verifies the helper
+// resolves a known domain.action pair against the routes map and rejects
+// unknown or malformed action IDs.
+func TestMetaToolRouteForAction_MatchesKnownAndRejectsUnknown(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_project": {"get": toolutil.ActionRoute{}},
+	}
+
+	tool, action, ok := metaToolRouteForAction("project.get", routes)
+	if !ok || tool != "gitlab_project" || action != "get" {
+		t.Fatalf("metaToolRouteForAction(project.get) = (%q, %q, %t), want gitlab_project/get/true", tool, action, ok)
+	}
+
+	if _, _, hasMatch := metaToolRouteForAction("project.missing", routes); hasMatch {
+		t.Fatal("metaToolRouteForAction(missing) = true, want false")
+	}
+	if _, _, hasMatch := metaToolRouteForAction("malformed", routes); hasMatch {
+		t.Fatal("metaToolRouteForAction(malformed) = true, want false")
+	}
+	if _, _, hasMatch := metaToolRouteForAction(".missing", routes); hasMatch {
+		t.Fatal("metaToolRouteForAction(empty domain) = true, want false")
+	}
+	if _, _, hasMatch := metaToolRouteForAction("missing.", routes); hasMatch {
+		t.Fatal("metaToolRouteForAction(empty action) = true, want false")
+	}
+}
+
 // TestFilterTasksByEdition_ExcludesCEUnavailableRoutes verifies routes that are
 // only available when Enterprise features are present stay out of CE case sets.
 func TestFilterTasksByEdition_ExcludesCEUnavailableRoutes(t *testing.T) {

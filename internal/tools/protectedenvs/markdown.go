@@ -37,7 +37,8 @@ func FormatOutputMarkdown(pe Output) string {
 		}
 		b.WriteString("\n")
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'protected_update' to modify protection rules",
 		"Use action 'protected_unprotect' to remove environment protection",
 	)
@@ -60,7 +61,8 @@ func FormatListMarkdown(out ListOutput) string {
 			len(pe.DeployAccessLevels), len(pe.ApprovalRules))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'protected_get' with environment name for full details",
 		"Use action 'protected_protect' to add environment protection",
 	)

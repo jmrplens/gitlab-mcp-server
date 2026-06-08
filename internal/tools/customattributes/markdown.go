@@ -28,7 +28,8 @@ func FormatListMarkdown(out ListOutput) string {
 func FormatGetMarkdown(out GetOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Custom Attribute\n\n**Key**: %s\n**Value**: %s\n", out.Key, out.Value)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_set_custom_attribute` to update this attribute",
 		"Use `gitlab_delete_custom_attribute` to remove it",
 	)

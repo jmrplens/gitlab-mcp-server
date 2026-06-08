@@ -16,7 +16,8 @@ func FormatNoteMarkdown(n NoteOutput) string {
 	fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(n.CreatedAt))
 	fmt.Fprintf(&b, "- **Resolved**: %v\n", n.Resolved)
 	fmt.Fprintf(&b, "\n%s\n", toolutil.WrapGFMBody(n.Body))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'discussion_note_update' with note_id to edit this note",
 		"Use action 'discussion_resolve' with discussion_id to resolve this discussion",
 	)
@@ -32,7 +33,8 @@ func FormatOutputMarkdown(d Output) string {
 	for i, n := range d.Notes {
 		fmt.Fprintf(&b, "\n### Note %d (by %s)\n\n%s\n", i+1, toolutil.EscapeMdHeading(n.Author), toolutil.WrapGFMBody(n.Body))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'discussion_reply' to reply to this discussion",
 		"Use action 'discussion_resolve' with discussion_id to resolve/unresolve",
 	)
@@ -54,7 +56,8 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, toolutil.FmtRow3Str, toolutil.EscapeMdTableCell(d.ID), strconv.Itoa(len(d.Notes)), strconv.FormatBool(d.IndividualNote))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'discussion_get' with discussion_id to see full discussion notes",
 		"Use action 'discussion_create' to start a new discussion on this MR",
 	)

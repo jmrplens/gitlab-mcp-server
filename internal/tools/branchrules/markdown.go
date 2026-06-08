@@ -32,7 +32,8 @@ func FormatListMarkdown(out ListOutput) string {
 		approvals := formatApprovalRulesSummary(r.ApprovalRules)
 		checks := formatStatusChecksSummary(r.ExternalStatusChecks)
 
-		fmt.Fprintf(&sb, "| %s | %s | %s | %d | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&sb, "| %s | %s | %s | %d | %s | %s | %s | %s |\n",
 			toolutil.EscapeMdTableCell(r.Name),
 			boolIcon(r.IsDefault),
 			boolIcon(r.IsProtected),
@@ -53,7 +54,8 @@ func FormatListMarkdown(out ListOutput) string {
 			sb.WriteString("| Name | Approvals Required | Type |\n")
 			sb.WriteString("|------|--------------------|------|\n")
 			for _, ar := range r.ApprovalRules {
-				fmt.Fprintf(&sb, "| %s | %d | %s |\n",
+				fmt.Fprintf(
+					&sb, "| %s | %d | %s |\n",
 					toolutil.EscapeMdTableCell(ar.Name),
 					ar.ApprovalsRequired,
 					toolutil.EscapeMdTableCell(ar.Type),
@@ -66,7 +68,8 @@ func FormatListMarkdown(out ListOutput) string {
 			sb.WriteString("| Name | URL |\n")
 			sb.WriteString("|------|-----|\n")
 			for _, esc := range r.ExternalStatusChecks {
-				fmt.Fprintf(&sb, "| %s | %s |\n",
+				fmt.Fprintf(
+					&sb, "| %s | %s |\n",
 					toolutil.EscapeMdTableCell(esc.Name),
 					toolutil.EscapeMdTableCell(esc.ExternalURL),
 				)

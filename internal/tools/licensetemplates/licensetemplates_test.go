@@ -370,6 +370,40 @@ func TestActionSpecs_CallRouteErrors(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// boolString — false branch
+// ---------------------------------------------------------------------------
+
+// TestBoolString_TrueAndFalse verifies the boolString helper returns the
+// expected string literal for both boolean states used by the featured
+// column in FormatListMarkdown.
+func TestBoolString_TrueAndFalse(t *testing.T) {
+	if got := boolString(true); got != "true" {
+		t.Errorf("boolString(true) = %q, want %q", got, "true")
+	}
+	if got := boolString(false); got != "false" {
+		t.Errorf("boolString(false) = %q, want %q", got, "false")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FormatListMarkdown — non-featured license
+// ---------------------------------------------------------------------------
+
+// TestFormatListMarkdown_NonFeaturedLicense verifies that non-featured
+// licenses render the literal "false" attribute string via boolString.
+func TestFormatListMarkdown_NonFeaturedLicense(t *testing.T) {
+	md := FormatListMarkdown(ListOutput{Licenses: []LicenseItem{
+		{Key: "gpl-3.0", Name: "GPL 3.0", Featured: false},
+	}})
+	if !strings.Contains(md, "gpl-3.0") {
+		t.Errorf("missing license key in markdown: %s", md)
+	}
+	if !strings.Contains(md, "false") {
+		t.Errorf("expected boolString(false) output in markdown: %s", md)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helper: route specs factory
 // ---------------------------------------------------------------------------.
 

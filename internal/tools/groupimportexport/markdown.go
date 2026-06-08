@@ -16,7 +16,8 @@ func FormatScheduleExportMarkdown(out ScheduleExportOutput) *mcp.CallToolResult 
 	}
 	var sb strings.Builder
 	sb.WriteString(out.Message)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_download_group_export` to download the export once complete",
 	)
 	return toolutil.ToolResultWithMarkdown(sb.String())
@@ -29,7 +30,8 @@ func FormatExportDownloadMarkdown(out ExportDownloadOutput) *mcp.CallToolResult 
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Group export archive downloaded: %d bytes (base64-encoded in content_base64 field)", out.SizeBytes)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_import_group_from_file` to import the archive into another group",
 	)
 	return toolutil.ToolResultWithMarkdown(sb.String())
@@ -42,7 +44,8 @@ func FormatImportFileMarkdown(out ImportFileOutput) *mcp.CallToolResult {
 	}
 	var sb strings.Builder
 	sb.WriteString(out.Message)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_group_list` to verify the imported group appears",
 	)
 	return toolutil.ToolResultWithMarkdown(sb.String())

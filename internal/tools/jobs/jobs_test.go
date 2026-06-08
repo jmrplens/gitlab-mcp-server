@@ -936,6 +936,34 @@ func TestJobTrace_CancelledContext(t *testing.T) {
 	}
 }
 
+// TestJobTrace_BodyReadError verifies Trace wraps non-EOF/non-UnexpectedEOF
+// errors from the body reader. The server claims gzip content-encoding but
+// writes raw text, so the http transport's auto-decompression fails with a
+// gzip error that is neither io.EOF nor io.ErrUnexpectedEOF, exercising the
+// fallback error path in Trace.
+func TestJobTrace_BodyReadError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == pathJobTrace {
+			w.Header().Set(testHeaderContentType, "text/plain")
+			// Claim gzip so Go's http transport auto-decompresses; the body
+			// is not actually gzipped, so Read on the gzip reader errors.
+			w.Header().Set("Content-Encoding", "gzip")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("definitely not gzipped data"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Trace(context.Background(), client, TraceInput{ProjectID: "42", JobID: 100})
+	if err == nil {
+		t.Fatal("expected error from invalid gzip body, got nil")
+	}
+	if !strings.Contains(err.Error(), "jobTrace") {
+		t.Errorf("error = %v, want jobTrace context", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Cancel — API error, canceled context
 // ---------------------------------------------------------------------------.

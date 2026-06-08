@@ -14,7 +14,8 @@ type environmentNotFoundOutput struct {
 }
 
 func formatEnvironmentNotFound(out environmentNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Environment", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Environment", out.Identifier,
 		"Use gitlab_environment_list with project_id to list environments",
 		"Verify the environment_id is correct for this project",
 	)
@@ -50,7 +51,8 @@ func FormatOutputMarkdown(e Output) string {
 	if e.AutoStopAt != "" {
 		fmt.Fprintf(&b, "| Auto-Stop At | %s |\n", toolutil.FormatTime(e.AutoStopAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'stop' to stop this environment",
 		"Use gitlab_deployment action 'list' with environment to see deployments",
 	)
@@ -72,7 +74,8 @@ func FormatListMarkdown(out ListOutput) string {
 			e.ID, toolutil.EscapeMdTableCell(e.Name), e.State, e.Tier, toolutil.EscapeMdTableCell(e.ExternalURL))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get' with an environment_id to see details",
 		"Use action 'create' to add a new environment",
 	)

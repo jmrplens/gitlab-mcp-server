@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"encoding/csv"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -139,4 +142,104 @@ func TestScanDir_InvalidPathsReturnNoEntries(t *testing.T) {
 	if entries := scanFile(filepath.Join(root, "missing_test.go")); entries != nil {
 		t.Fatalf("scanFile(missing) = %+v, want nil", entries)
 	}
+}
+
+// TestRun_WritesCSVAndSummary verifies the run entry point walks the supplied
+// directories, emits the expected CSV header/rows to stdout, and prints a
+// classification summary to stderr.
+//
+// The test stages a directory tree containing a mix of compliant and
+// non-compliant test names plus a non-test file, then asserts that the CSV
+// output contains the expected rows and the stderr summary references the
+// audited counts.
+func TestRun_WritesCSVAndSummary(t *testing.T) {
+	root := t.TempDir()
+	fixture := `package sample
+
+import "testing"
+
+func TestCreateIssue_ReturnsIssue(t *testing.T) {}
+func TestCovBuildCatalogError(t *testing.T) {}
+func TestCreateIssueReturnsIssue(t *testing.T) {}
+`
+	if err := os.WriteFile(filepath.Join(root, "sample_test.go"), []byte(fixture), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "sample.go"), []byte("package sample\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{root}, &stdout, &stderr); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+
+	records := readCSVRecords(t, stdout.Bytes())
+	if len(records) == 0 {
+		t.Fatalf("run() emitted no CSV records; stderr:\n%s", stderr.String())
+	}
+	wantHeader := []string{"file", "current_name", "pattern", "suggested_name"}
+	if len(records[0]) != len(wantHeader) {
+		t.Fatalf("CSV header = %v, want %v", records[0], wantHeader)
+	}
+	for i, col := range wantHeader {
+		if records[0][i] != col {
+			t.Errorf("CSV header[%d] = %q, want %q", i, records[0][i], col)
+		}
+	}
+	patterns := map[string]string{}
+	for _, rec := range records[1:] {
+		if len(rec) >= 3 {
+			patterns[rec[1]] = rec[2]
+		}
+	}
+	if patterns["TestCreateIssue_ReturnsIssue"] != Pattern2Part {
+		t.Fatalf("patterns = %+v, want TestCreateIssue_ReturnsIssue as 2-part", patterns)
+	}
+	if patterns["TestCovBuildCatalogError"] != PatternTestCov {
+		t.Fatalf("patterns = %+v, want TestCovBuildCatalogError as TestCov", patterns)
+	}
+	if patterns["TestCreateIssueReturnsIssue"] != PatternNoUnderscore {
+		t.Fatalf("patterns = %+v, want TestCreateIssueReturnsIssue as no-underscore", patterns)
+	}
+
+	if !strings.Contains(stderr.String(), "Total test functions: 3") {
+		t.Fatalf("stderr = %q, want total count line", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), Pattern2Part+":") {
+		t.Fatalf("stderr = %q, want %s summary", stderr.String(), Pattern2Part)
+	}
+	if !strings.Contains(stderr.String(), PatternTestCov+":") {
+		t.Fatalf("stderr = %q, want %s summary", stderr.String(), PatternTestCov)
+	}
+}
+
+// TestRun_EmptyInputStillEmitsHeaderAndSummary verifies the run function emits
+// the CSV header and a zero-count summary even when given no directories.
+//
+// The expected stderr reports zero total test functions; the CSV must still
+// contain the header row so downstream consumers can parse the output.
+func TestRun_EmptyInputStillEmitsHeaderAndSummary(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run(nil, &stdout, &stderr); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+
+	records := readCSVRecords(t, stdout.Bytes())
+	if len(records) != 1 {
+		t.Fatalf("run() with no dirs emitted %d records, want 1 (header)", len(records))
+	}
+	if !strings.Contains(stderr.String(), "Total test functions: 0") {
+		t.Fatalf("stderr = %q, want zero-count summary", stderr.String())
+	}
+}
+
+func readCSVRecords(t *testing.T, data []byte) [][]string {
+	t.Helper()
+	r := csv.NewReader(bytes.NewReader(data))
+	records, err := r.ReadAll()
+	if err != nil {
+		t.Fatalf("CSV read error: %v", err)
+	}
+	return records
 }

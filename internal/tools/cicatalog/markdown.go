@@ -24,7 +24,8 @@ func FormatListMarkdown(out ListOutput) string {
 	for _, r := range out.Resources {
 		desc := toolutil.EscapeMdTableCell(truncate(r.Description, 60))
 		name := fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(r.Name), r.WebURL)
-		fmt.Fprintf(&sb, "| %s | %s | %d | %d | %d | %d | %s | %s |\n",
+		fmt.Fprintf(
+			&sb, "| %s | %s | %d | %d | %d | %d | %s | %s |\n",
 			name,
 			desc,
 			r.StarCount,
@@ -106,7 +107,8 @@ func writeCatalogComponentInput(sb *strings.Builder, input InputItem) {
 	if input.Required {
 		required = "**yes**"
 	}
-	fmt.Fprintf(sb, "| `%s` | %s | %s | %s | %s |\n",
+	fmt.Fprintf(
+		sb, "| `%s` | %s | %s | %s | %s |\n",
 		input.Name,
 		toolutil.EscapeMdTableCell(input.Type),
 		required,
@@ -123,7 +125,8 @@ func writeCatalogResourceVersions(sb *strings.Builder, versions []VersionItem) {
 	sb.WriteString("| Version | Released | Components |\n")
 	sb.WriteString("|---------|----------|------------|\n")
 	for _, version := range versions {
-		fmt.Fprintf(sb, "| %s | %s | %s |\n",
+		fmt.Fprintf(
+			sb, "| %s | %s | %s |\n",
 			toolutil.EscapeMdTableCell(version.Name),
 			formatDate(version.ReleasedAt),
 			toolutil.EscapeMdTableCell(strings.Join(catalogVersionComponentNames(version), ", ")),

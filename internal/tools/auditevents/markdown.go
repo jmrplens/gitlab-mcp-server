@@ -34,7 +34,8 @@ func FormatMarkdown(e Output) string {
 	if e.Details.EntityPath != "" {
 		fmt.Fprintf(&sb, "| Entity Path | %s |\n", toolutil.EscapeMdTableCell(e.Details.EntityPath))
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_list_project_audit_events` or `gitlab_list_group_audit_events` to browse more events",
 	)
 	return sb.String()
@@ -52,7 +53,8 @@ func FormatListMarkdown(out ListOutput) string {
 	sb.WriteString("| ID | Event Name | Entity Type | Entity ID | Author ID | Created At |\n")
 	sb.WriteString("|-----|------------|-------------|-----------|-----------|------------|\n")
 	for _, e := range out.AuditEvents {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %d | %d | %s |\n",
+		fmt.Fprintf(
+			&sb, "| %d | %s | %s | %d | %d | %s |\n",
 			e.ID,
 			toolutil.EscapeMdTableCell(e.EventName),
 			toolutil.EscapeMdTableCell(e.EntityType),

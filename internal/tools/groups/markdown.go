@@ -14,7 +14,8 @@ type groupNotFoundOutput struct {
 }
 
 func formatGroupNotFound(out groupNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Group", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Group", out.Identifier,
 		"Use gitlab_group_list to list accessible groups",
 		"If using a path, ensure it is URL-encoded (e.g. my%2Fgroup)",
 		"Verify your token has access to this group",
@@ -44,7 +45,8 @@ func FormatOutputMarkdown(g Output) string {
 	if g.MarkedForDeletion != "" {
 		fmt.Fprintf(&b, "- %s **Marked for deletion**: %s\n", toolutil.EmojiWarning, g.MarkedForDeletion)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'projects' to see projects in this group",
 		"Use action 'members' to see group members",
@@ -67,7 +69,8 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n", g.ID, toolutil.EscapeMdTableCell(g.Name), toolutil.EscapeMdTableCell(g.FullPath), g.Visibility)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get' with a group_id to see group details",
 		"Use action 'projects' to see projects in a group",
 	)
@@ -89,7 +92,8 @@ func FormatMemberListMarkdown(out MemberListOutput) string {
 		fmt.Fprintf(&b, toolutil.FmtRow4Str, toolutil.EscapeMdTableCell(m.Username), toolutil.EscapeMdTableCell(m.Name), toolutil.EscapeMdTableCell(m.AccessLevelDescription), m.State)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_group_member_add` to add a new member",
 		"Use `gitlab_group_member_edit` to change access level",
 	)
@@ -110,7 +114,8 @@ func FormatListProjectsMarkdown(out ListProjectsOutput) string {
 		if p.Archived {
 			archived = "Yes"
 		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %s | %s | %s |\n",
 			p.ID,
 			toolutil.EscapeMdTableCell(p.Name),
 			toolutil.EscapeMdTableCell(p.PathWithNamespace),
@@ -119,7 +124,8 @@ func FormatListProjectsMarkdown(out ListProjectsOutput) string {
 		)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_get` to view project details",
 		"Use `gitlab_project_create` to add a new project to this group",
 	)
@@ -163,7 +169,8 @@ func FormatHookMarkdown(h HookOutput) string {
 			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(variable.Key), toolutil.RedactedSecretValue))
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_group_hook_edit` to modify this hook",
 		"Use `gitlab_group_hook_delete` to remove it",
@@ -190,7 +197,8 @@ func FormatHookListMarkdown(out HookListOutput) string {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n", h.ID, toolutil.MdTitleLink(toolutil.EscapeMdTableCell(h.URL), h.URL), toolutil.EscapeMdTableCell(enabledEvents(h)), ssl)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_group_hook_get` to view hook details",
 		"Use `gitlab_group_hook_add` to add a new hook",

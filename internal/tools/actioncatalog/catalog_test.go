@@ -220,6 +220,62 @@ func TestMustAddCatalogGroup_PanicsOnInvariantDrift(t *testing.T) {
 	mustAddCatalogGroup(nil, Group{}, "test operation")
 }
 
+// TestCatalog_AddActionCreatesGroupWithoutOptions verifies that AddAction
+// can synthesize a brand new group on demand when the caller does not
+// provide any GroupOptions. This exercises the empty-options branch of
+// newAddActionGroup (the `len(groupOptions) == 0` path returns a default
+// NewGroup(opts)) which is the only uncovered line in that helper.
+func TestCatalog_AddActionCreatesGroupWithoutOptions(t *testing.T) {
+	catalog := NewCatalog()
+	if err := catalog.AddAction("gitlab_no_opts", Action{Name: "list", Route: testRoute(false)}); err != nil {
+		t.Fatalf("AddAction() error = %v", err)
+	}
+	group, ok := catalog.Group("gitlab_no_opts")
+	if !ok {
+		t.Fatal("Group(gitlab_no_opts) = false, want true")
+	}
+	if group.ToolName != "gitlab_no_opts" {
+		t.Fatalf("group.ToolName = %q, want gitlab_no_opts", group.ToolName)
+	}
+	action, ok := group.Actions["list"]
+	if !ok {
+		t.Fatal("expected synthesized group to contain the 'list' action")
+	}
+	if action.ToolName != "gitlab_no_opts" {
+		t.Fatalf("action.ToolName = %q, want gitlab_no_opts", action.ToolName)
+	}
+}
+
+// TestCatalog_AddGroup_DuplicateActionIDDeadBranch documents why the
+// intra-group duplicate action ID branch in AddGroup (the
+// "duplicate action id %q" return at the top of the ActionsInOrder loop)
+// cannot be reached through the public API. The two layers of defense
+// above it make it unreachable:
+//   - normalizeAction requires explicit IDs to match `<domain>.<name>`,
+//     so two different names always produce two different IDs after
+//     normalization, and any two actions that share a name get folded
+//     together by SetAction (which uses the trimmed name as the map
+//     key, overwriting the prior entry).
+//   - ActionsInOrder deduplicates by map key before AddGroup sees the
+//     slice, so two map entries that share a name cannot both surface
+//     as "duplicate IDs".
+//
+// We assert the documented contract below: feeding two actions with the
+// same explicit invalid ID is rejected at the normalization step, and
+// the duplicate-ID branch never has to fire.
+func TestCatalog_AddGroup_DuplicateActionIDDeadBranch(t *testing.T) {
+	group := NewGroup(GroupOptions{ToolName: "gitlab_dup"})
+	group.SetAction(Action{Name: "one", ID: "shared.invalid", Route: testRoute(false)})
+	group.SetAction(Action{Name: "two", ID: "shared.invalid", Route: testRoute(false)})
+	err := NewCatalog().AddGroup(group)
+	if err == nil {
+		t.Fatal("AddGroup() error = nil, want normalization error for mismatched explicit ID")
+	}
+	if !strings.Contains(err.Error(), "has id") {
+		t.Fatalf("err = %q, want it to come from normalizeAction (mention 'has id')", err.Error())
+	}
+}
+
 // TestCatalog_AddActionCreatesGroupWithMetadata verifies Catalog when add action creates group with metadata.
 func TestCatalog_AddActionCreatesGroupWithMetadata(t *testing.T) {
 	catalog := NewCatalog()

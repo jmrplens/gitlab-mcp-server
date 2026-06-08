@@ -23,7 +23,8 @@ func FormatOutputMarkdown(out Output) string {
 	if out.RequestedAt != "" {
 		fmt.Fprintf(&b, "| Requested At | %s |\n", toolutil.FormatTime(out.RequestedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'approve' to approve this access request",
 		"Use action 'deny_project' to deny a project access request",
 		"Use action 'deny_group' to deny a group access request",
@@ -47,7 +48,8 @@ func FormatListMarkdown(out ListOutput) string {
 			ar.ID, ar.Username, ar.Name, ar.State, ar.AccessLevel)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'approve', 'deny_project', or 'deny_group' with request ID to manage requests",
 	)
 	return b.String()

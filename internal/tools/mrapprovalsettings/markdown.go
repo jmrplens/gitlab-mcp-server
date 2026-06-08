@@ -31,7 +31,8 @@ func FormatOutputMarkdown(out Output, scope string) string {
 	fmt.Fprintf(&sb, "| Selective code owner removals | %s |\n", formatSetting(out.SelectiveCodeOwnerRemovals))
 	fmt.Fprintf(&sb, "| Require password to approve | %s |\n", formatSetting(out.RequirePasswordToApprove))
 	fmt.Fprintf(&sb, "| Require reauthentication | %s |\n", formatSetting(out.RequireReauthenticationToApprove))
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use gitlab_update_"+strings.ToLower(scope)+"_mr_approval_settings to change settings",
 	)
 	return sb.String()

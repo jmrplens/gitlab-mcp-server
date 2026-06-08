@@ -491,7 +491,8 @@ func writeTraceArtifacts(dir string, results []taskResult, traceProviderBodies b
 		}
 		jsonl.Write(line)
 		jsonl.WriteByte('\n')
-		fmt.Fprintf(&index, "| `%s` | %d | %s | %s | %s | [%s](%s) |\n",
+		fmt.Fprintf(
+			&index, "| `%s` | %d | %s | %s | %s | [%s](%s) |\n",
 			escapeTable(trace.Model),
 			trace.Run,
 			trace.TaskID,
@@ -823,7 +824,8 @@ func writePerRunMetrics(b *strings.Builder, results []taskResult) {
 	fmt.Fprintf(b, "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, runIndex := range runs {
 		metrics := calculateMetrics(byRun[runIndex])
-		fmt.Fprintf(b, "| %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
+		fmt.Fprintf(
+			b, "| %d | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% | %.1f%% |\n",
 			runIndex,
 			metrics.ToolSelection,
 			metrics.ActionSelection,

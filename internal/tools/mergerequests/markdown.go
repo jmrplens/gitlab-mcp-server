@@ -15,7 +15,8 @@ type mergeRequestNotFoundOutput struct {
 }
 
 func formatMergeRequestNotFound(out mergeRequestNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Merge Request", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Merge Request", out.Identifier,
 		"Use gitlab_mr_list with project_id to list available merge requests",
 		"Verify the merge request IID is correct for this project",
 		"The merge request may have been deleted",
@@ -55,7 +56,8 @@ func FormatMarkdown(mr Output) string {
 		fmt.Fprintf(&b, "\n### Description\n\n%s%s\n", toolutil.WrapGFMBody(mr.Description), toolutil.RichContentHint(toolutil.DetectRichContent(mr.Description), mr.WebURL))
 	}
 	fmt.Fprintf(&b, "\n- **URL**: [%[1]s](%[1]s)\n", mr.WebURL)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_mr_review action 'changes_get' to see the diff of this MR",
 		"Use gitlab_mr_review action 'discussion_list' to see review threads",
 		"Use gitlab_merge_request action 'pipelines' to check CI/CD status",
@@ -142,7 +144,8 @@ func FormatListMarkdown(out ListOutput) string {
 			mr.IID, mr.WebURL, toolutil.EscapeMdTableCell(mr.Title), draftTag, toolutil.MRStateEmoji(mr.State), mr.State, toolutil.EscapeMdTableCell(mr.Author), toolutil.EscapeMdTableCell(mr.ProjectPath), toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with a merge_request_iid to see full details",
 		"Use action 'create' to open a new merge request",
@@ -158,7 +161,8 @@ func FormatApproveMarkdown(a ApproveOutput) string {
 	fmt.Fprintf(&b, "- **Approved**: %v\n", a.Approved)
 	fmt.Fprintf(&b, "- **Approvals Required**: %d\n", a.ApprovalsRequired)
 	fmt.Fprintf(&b, "- **Approved By**: %d\n", a.ApprovedBy)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_mr_merge` to merge this MR",
 		"Use `gitlab_mr_get` to see full MR details",
 	)
@@ -179,7 +183,8 @@ func FormatCommitsMarkdown(out CommitsOutput) string {
 		fmt.Fprintf(&b, "| [%s](%s) | %s | %s | %s |\n", c.ShortID, c.WebURL, toolutil.EscapeMdTableCell(c.Title), toolutil.EscapeMdTableCell(c.AuthorName), toolutil.FormatTime(c.CommittedDate))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_commit_get` to view a specific commit",
 		"Use `gitlab_mr_changes_get` to review the combined diff",
@@ -201,7 +206,8 @@ func FormatPipelinesMarkdown(out PipelinesOutput) string {
 		fmt.Fprintf(&b, "| [#%d](%s) | %s %s | %s | %s |\n",
 			p.ID, p.WebURL, toolutil.PipelineStatusEmoji(p.Status), p.Status, toolutil.EscapeMdTableCell(p.Source), toolutil.EscapeMdTableCell(p.Ref))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_pipeline_get` to view pipeline details",
 		"Use `gitlab_job_list` to see job statuses",
@@ -217,7 +223,8 @@ func FormatRebaseMarkdown(r RebaseOutput) string {
 	} else {
 		b.WriteString("## " + toolutil.EmojiSuccess + " Rebase completed\n\nThe rebase has finished successfully.\n")
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_mr_get to check rebase status",
 		"Use action 'merge' once the rebase is complete",
 	)
@@ -238,7 +245,8 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 		fmt.Fprintf(&b, "| %d | [@%s](%s) | %s | %s |\n",
 			p.ID, toolutil.EscapeMdTableCell(p.Username), p.WebURL, toolutil.EscapeMdTableCell(p.Name), p.State)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_mr_get` to view MR details",
 		"Use `gitlab_mr_note_create` to notify participants",
@@ -260,7 +268,8 @@ func FormatReviewersMarkdown(out ReviewersOutput) string {
 		fmt.Fprintf(&b, "| %d | [@%s](%s) | %s | %s | %s |\n",
 			r.ID, toolutil.EscapeMdTableCell(r.Username), r.WebURL, toolutil.EscapeMdTableCell(r.Name), r.Review, toolutil.FormatTime(r.CreatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_mr_update` to add or change reviewers",
 		"Use `gitlab_mr_approve` to approve the MR",
@@ -283,7 +292,8 @@ func FormatIssuesClosedMarkdown(out IssuesClosedOutput) string {
 			issue.IID, issue.WebURL, toolutil.EscapeMdTableCell(issue.Title), issue.State, toolutil.EscapeMdTableCell(issue.Author), strings.Join(issue.Labels, ", "))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_issue_get` to view details of an issue",
 		"Use `gitlab_mr_merge` to merge and close these issues",
@@ -308,7 +318,8 @@ func FormatCreatePipelineMarkdown(p pipelines.Output) string {
 	if p.WebURL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, p.WebURL)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_pipeline_get` to check pipeline progress",
 		"Use `gitlab_job_list` to monitor job statuses",
 	)
@@ -329,7 +340,8 @@ func FormatTimeStatsMarkdown(ts TimeStatsOutput) string {
 	} else {
 		b.WriteString("- **Spent**: none\n")
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_mr_update` to add time tracking notes",
 	)
 	return b.String()
@@ -355,7 +367,8 @@ func FormatRelatedIssuesMarkdown(out RelatedIssuesOutput) string {
 			strings.Join(iss.Labels, ", "))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_issue_get` to view issue details",
 		"Use `gitlab_issue_note_create` to comment on an issue",
@@ -376,7 +389,8 @@ func FormatCreateTodoMarkdown(t CreateTodoOutput) string {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, t.TargetURL)
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdState, t.State)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_mr_get` to view the MR",
 		"Use `gitlab_todo_mark_done` to mark completed",
 	)
@@ -391,7 +405,8 @@ func FormatDependencyMarkdown(d DependencyOutput) string {
 	fmt.Fprintf(&b, toolutil.FmtMdTitle, d.BlockingMRTitle)
 	fmt.Fprintf(&b, toolutil.FmtMdState, d.BlockingMRState)
 	fmt.Fprintf(&b, "- **Source**: %s → **Target**: %s\n", d.BlockingSourceBranch, d.BlockingTargetBranch)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_mr_get` to view the blocking MR",
 	)
 	return b.String()
@@ -414,7 +429,8 @@ func FormatDependenciesMarkdown(out DependenciesOutput) string {
 			toolutil.EscapeMdTableCell(d.BlockingMRTitle),
 			d.BlockingMRState)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_mr_get` to view a blocking MR",
 		"Use `gitlab_mr_merge` to resolve blocking dependencies",
 	)

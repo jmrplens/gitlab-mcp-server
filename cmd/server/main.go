@@ -568,7 +568,8 @@ func runStdio(ctx context.Context) error {
 				UserID:   strconv.Itoa(userInfo.UserID),
 				Username: userInfo.Username,
 			})
-			slog.Info("gitlab connection verified",
+			slog.Info(
+				"gitlab connection verified",
 				"url", cfg.GitLabURL,
 				"user", userInfo.Username,
 				"user_id", userInfo.UserID,
@@ -662,7 +663,8 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 			}
 		},
 		ProgressNotificationHandler: func(_ context.Context, req *mcp.ProgressNotificationServerRequest) {
-			slog.Debug("received progress notification from client",
+			slog.Debug(
+				"received progress notification from client",
 				"token", req.Params.ProgressToken,
 				"progress", req.Params.Progress,
 			)
@@ -731,7 +733,8 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	// RateLimitRPS is 0 (default).
 	if limiter := toolutil.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst); limiter != nil {
 		toolutil.AttachRateLimit(server, limiter)
-		slog.Info("tools/call rate limit enabled",
+		slog.Info(
+			"tools/call rate limit enabled",
 			"rps", cfg.RateLimitRPS,
 			"burst", cfg.RateLimitBurst,
 		)
@@ -835,7 +838,8 @@ const httpShutdownTimeout = 5 * time.Second
 // token are rejected. Sessions expire after cfg.SessionTimeout of inactivity.
 // The pool is bounded by cfg.MaxHTTPClients entries with LRU eviction.
 func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
-	slog.Info("starting MCP server in HTTP mode",
+	slog.Info(
+		"starting MCP server in HTTP mode",
 		"addr", httpAddr,
 		"auth_mode", cfg.AuthMode,
 		"max_clients", cfg.MaxHTTPClients,
@@ -1016,7 +1020,8 @@ func logIgnoredRequestOptions(token string, options serverpool.RequestOptions) {
 		"token_suffix", safeTokenSuffix(token),
 	}
 	if deprecated := options.DeprecatedOptionsCopy(); len(deprecated) > 0 {
-		args = append(args,
+		args = append(
+			args,
 			"deprecated_options", deprecated,
 			"deprecation_hint", "use TOOL_SURFACE instead of META_TOOLS",
 		)
@@ -1032,7 +1037,8 @@ func logLegacyMetaToolsDeprecation(toolSurfaceValue, metaToolsValue string) {
 	if replacement == "" {
 		return
 	}
-	slog.Warn("META_TOOLS is deprecated; use TOOL_SURFACE instead", //#nosec G706 -- replacement is derived from supported TOOL_SURFACE constants and logged as structured data.
+	slog.Warn(
+		"META_TOOLS is deprecated; use TOOL_SURFACE instead", //#nosec G706 -- replacement is derived from supported TOOL_SURFACE constants and logged as structured data.
 		"legacy_selector", "META_TOOLS",
 		"replacement", "TOOL_SURFACE="+replacement,
 	)
@@ -1393,7 +1399,8 @@ func startStdioAutoUpdateWithCheck(ctx context.Context, cfg *config.Config, chec
 		CurrentVersion: version,
 	}
 
-	slog.Info("autoupdate: starting startup check in background",
+	slog.Info(
+		"autoupdate: starting startup check in background",
 		"mode", mode,
 		"repository", cfg.AutoUpdateRepo,
 		"current_version", version,
@@ -1415,7 +1422,8 @@ func startStdioAutoUpdateWithCheck(ctx context.Context, cfg *config.Config, chec
 			return
 		}
 		if updated && newVersion != "" {
-			slog.Info("autoupdate: binary updated in background — restart the server to use the new version",
+			slog.Info(
+				"autoupdate: binary updated in background — restart the server to use the new version",
 				"new_version", newVersion,
 			)
 		}

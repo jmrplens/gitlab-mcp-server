@@ -208,7 +208,8 @@ func TestRegisterIndividualCatalogTools_EditionFilters(t *testing.T) {
 			}), opts)
 	}
 
-	catalog := testIndividualCatalog(t,
+	catalog := testIndividualCatalog(
+		t,
 		newSpec("base", toolutil.ActionSpecOptions{}),
 		newSpec("enterprise", toolutil.ActionSpecOptions{Edition: "premium"}),
 		newSpec("dotcom", toolutil.ActionSpecOptions{GitLabDotComOnly: true}),
@@ -257,7 +258,8 @@ func TestRegisterIndividualCatalogTools_AllowExcludeAndDuplicateTools(t *testing
 		})
 	}
 
-	catalog := testIndividualCatalog(t,
+	catalog := testIndividualCatalog(
+		t,
 		newSpec("keep", "gitlab_test_keep"),
 		newSpec("skip", "gitlab_test_skip"),
 		newSpec("excluded", "gitlab_test_excluded"),

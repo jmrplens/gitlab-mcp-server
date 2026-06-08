@@ -196,7 +196,8 @@ func (p *ServerPool) getOrCreateLocked(key, token, gitlabURL string) (*mcp.Serve
 		lastValidated: now,
 	}
 
-	slog.Info("server pool: created new entry",
+	slog.Info(
+		"server pool: created new entry",
 		"pool_size", len(p.entries),
 		"gitlab_url", entryCfg.GitLabURL,
 		"enterprise", entryCfg.Enterprise,
@@ -300,7 +301,8 @@ func (p *ServerPool) evictLRU() {
 		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
 		delete(p.entries, key)
 		p.metrics.Evictions.Add(1)
-		slog.Info("server pool: evicted LRU entry",
+		slog.Info(
+			"server pool: evicted LRU entry",
 			"pool_size", len(p.entries),
 			"gitlab_url", gitlabURL,
 			"enterprise", enterprise,
@@ -386,7 +388,8 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 		cancel()
 
 		if err != nil {
-			slog.Warn("server pool: token revalidation failed, evicting entry",
+			slog.Warn(
+				"server pool: token revalidation failed, evicting entry",
 				"error", err,
 				"age", time.Since(entry.createdAt).Round(time.Second),
 			)
@@ -412,7 +415,8 @@ func (p *ServerPool) evictByKey(key string) {
 		p.lru.Remove(entry.element)
 		delete(p.entries, key)
 		p.metrics.Evictions.Add(1)
-		slog.Info("server pool: evicted invalid entry",
+		slog.Info(
+			"server pool: evicted invalid entry",
 			"pool_size", len(p.entries),
 			"gitlab_url", gitlabURL,
 			"enterprise", enterprise,

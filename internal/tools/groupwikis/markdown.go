@@ -19,7 +19,8 @@ func FormatOutputMarkdown(out Output) string {
 	if out.Content != "" {
 		fmt.Fprintf(&b, "\n### Content\n\n%s\n", out.Content)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_wiki_edit to update this page",
 		"Use gitlab_group_wiki_delete to remove this page",
 	)
@@ -36,13 +37,15 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| Title | Slug | Format |\n")
 	b.WriteString("| --- | --- | --- |\n")
 	for _, w := range out.WikiPages {
-		fmt.Fprintf(&b, "| %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %s | %s | %s |\n",
 			toolutil.EscapeMdTableCell(w.Title),
 			toolutil.EscapeMdTableCell(w.Slug),
 			w.Format,
 		)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_wiki_get with a slug to read page content",
 		"Use gitlab_group_wiki_create to add a new page",
 	)

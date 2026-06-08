@@ -56,7 +56,8 @@ func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 	for name, required := range MetaToolScopes {
 		if !allScopesPresent(scopeSet, required) {
 			toRemove = append(toRemove, name)
-			slog.Debug("tool requires missing PAT scope",
+			slog.Debug(
+				"tool requires missing PAT scope",
 				"tool", name,
 				"required", required,
 				"available", tokenScopes,
@@ -70,7 +71,8 @@ func RemoveScopeFilteredTools(server *mcp.Server, tokenScopes []string) int {
 
 	server.RemoveTools(toRemove...)
 
-	slog.Info("scope-filtered tools removed",
+	slog.Info(
+		"scope-filtered tools removed",
 		"removed", len(toRemove),
 		"tools", strings.Join(toRemove, ", "),
 		"scopes", strings.Join(tokenScopes, ", "),
@@ -101,7 +103,8 @@ func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []st
 	for _, group := range catalog.Groups() {
 		if required := MetaToolScopes[group.ToolName]; len(required) > 0 && !allScopesPresent(scopeSet, required) {
 			removed = append(removed, group.ToolName)
-			slog.Debug("catalog group requires missing PAT scope",
+			slog.Debug(
+				"catalog group requires missing PAT scope",
 				"tool", group.ToolName,
 				"required", required,
 				"available", tokenScopes,
@@ -113,7 +116,8 @@ func FilterScopeFilteredCatalog(catalog *actioncatalog.Catalog, tokenScopes []st
 		}
 	}
 	if len(removed) > 0 {
-		slog.Info("scope-filtered catalog groups removed",
+		slog.Info(
+			"scope-filtered catalog groups removed",
 			"removed", len(removed),
 			"tools", strings.Join(removed, ", "),
 			"scopes", strings.Join(tokenScopes, ", "),

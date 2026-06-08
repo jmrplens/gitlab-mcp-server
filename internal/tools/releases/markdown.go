@@ -14,7 +14,8 @@ type releaseNotFoundOutput struct {
 }
 
 func formatReleaseNotFound(out releaseNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Release", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Release", out.Identifier,
 		"Use gitlab_release_list with project_id to list releases",
 		"Verify the tag_name is correct (case-sensitive)",
 		"A tag may exist without a release - check with gitlab_tag_get",
@@ -48,7 +49,8 @@ func FormatMarkdown(r Output) string {
 	if r.Description != "" {
 		fmt.Fprintf(&b, "\n### Description\n\n%s\n", toolutil.WrapGFMBody(r.Description))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_release_link action 'link_list' to see release assets",
 		"Use gitlab_release_link action 'link_create' to add a single asset link",
 		"Use gitlab_release_link action 'link_create_batch' to add multiple asset links in one call",
@@ -81,7 +83,8 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", tag, toolutil.EscapeMdTableCell(r.Name), toolutil.EscapeMdTableCell(r.Author), toolutil.FormatTime(released))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"If the task asks to compare refs before release notes, call gitlab_repository action 'compare' before gitlab_analyze release_notes",
 		"Use action 'get' with a tag_name to see full release details",

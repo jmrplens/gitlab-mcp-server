@@ -23,7 +23,8 @@ func FormatOutputMarkdown(o Output) string {
 	if o.CreatedAt != "" {
 		fmt.Fprintf(&b, "- **Created**: %s\n", o.CreatedAt)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_delete_group_ssh_certificate` to revoke this certificate",
 		"Use `gitlab_list_group_ssh_certificates` to view all certificates",
 	)
@@ -40,13 +41,15 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | Title | Created |\n")
 	b.WriteString("| --: | ----- | ------- |\n")
 	for _, c := range out.Certificates {
-		fmt.Fprintf(&b, "| %d | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %s |\n",
 			c.ID,
 			toolutil.EscapeMdTableCell(c.Title),
 			toolutil.EscapeMdTableCell(c.CreatedAt),
 		)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_create_group_ssh_certificate` to add a new certificate",
 	)
 	return b.String()

@@ -5,6 +5,7 @@ package snippets
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -443,6 +444,46 @@ func TestSnippetCreateInputSchemaPanicsForUnsupportedType(t *testing.T) {
 		}
 	}()
 	_ = snippetCreateInputSchema[unsupportedSchemaInput]()
+}
+
+// TestSnippetCreateInputSchemaMap_DeadBranches documents why the two
+// json.Marshal and json.Unmarshal panic branches in
+// snippetCreateInputSchemaMap are unreachable in practice. The function
+// always receives a *jsonschema.Schema returned by jsonschema.For[T](nil),
+// which is built reflectively from a Go type. The library guarantees:
+//   - The generated schema passes basicChecks() (it deduplicates
+//     PropertyOrder internally and never sets both Type/Types, Defs/Definitions,
+//     or Items/ItemsArray simultaneously).
+//   - The Schema.MarshalJSON implementation only uses standard JSON-friendly
+//     Go types (strings, numbers, bools, maps, slices, *Schema), so
+//     json.Marshal cannot return an error.
+//   - The Schema.UnmarshalJSON implementation accepts any valid JSON object,
+//     so json.Unmarshal of the marshaled bytes into map[string]any cannot fail.
+//
+// We assert the live happy path here as a regression guard, and the test
+// also documents the rationale so future maintainers do not "fix" the
+// dead branches by removing them.
+func TestSnippetCreateInputSchemaMap_DeadBranches(t *testing.T) {
+	// Personal and project schemas must round-trip cleanly through the
+	// marshal/unmarshal dance implemented in snippetCreateInputSchemaMap.
+	for name, schema := range map[string]map[string]any{
+		"personal": CreateInputSchemaMap(),
+		"project":  ProjectCreateInputSchemaMap(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw, err := json.Marshal(schema)
+			if err != nil {
+				t.Fatalf("re-marshal failed: %v", err)
+			}
+			var roundTrip map[string]any
+			if unmarshalErr := json.Unmarshal(raw, &roundTrip); unmarshalErr != nil {
+				t.Fatalf("re-unmarshal failed: %v", unmarshalErr)
+			}
+			if _, ok := roundTrip["anyOf"]; !ok {
+				t.Fatalf("round-trip lost anyOf key: %#v", roundTrip)
+			}
+		})
+	}
 }
 
 // TestFormatFileContentMarkdown verifies FormatFileContentMarkdown.

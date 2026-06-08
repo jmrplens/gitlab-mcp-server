@@ -14,7 +14,8 @@ type snippetNotFoundOutput struct {
 }
 
 func formatSnippetNotFound(out snippetNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Snippet", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Snippet", out.Identifier,
 		"Use gitlab_snippet_list to list your snippets",
 		"Verify the snippet_id is correct",
 		"The snippet may be private or have been deleted",
@@ -55,13 +56,15 @@ func FormatMarkdown(out Output) string {
 	}
 	hints := []string{toolutil.HintPreserveLinks}
 	if out.ProjectID != 0 {
-		hints = append(hints,
+		hints = append(
+			hints,
 			"For project snippets, use action 'project_get' with project_id and snippet_id; do not use personal action 'get'",
 			"Use action 'project_update' with files[] to modify project snippet content; include files[].action set to 'update' and use the Path value as files[].file_path",
 			"Use action 'project_delete' to remove this project snippet",
 		)
 	} else {
-		hints = append(hints,
+		hints = append(
+			hints,
 			"Use action 'content' to read snippet content",
 			hintUpdateSnippet,
 			"Use action 'delete' to remove this snippet",
@@ -88,7 +91,8 @@ func FormatListMarkdown(out ListOutput) string {
 		writeSimpleSnippetTable(&b, out.Snippets)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with snippet_id for full details",
 		"Use action 'create' to add a new snippet",
@@ -103,7 +107,8 @@ func FormatContentMarkdown(out ContentOutput) string {
 	b.WriteString("```\n")
 	b.WriteString(out.Content)
 	b.WriteString("\n```\n")
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'file_content' to get content of a specific file",
 		hintUpdateSnippet,
 	)
@@ -117,7 +122,8 @@ func FormatFileContentMarkdown(out FileContentOutput) string {
 	b.WriteString("```\n")
 	b.WriteString(out.Content)
 	b.WriteString("\n```\n")
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'content' to get the full snippet content",
 		hintUpdateSnippet,
 	)

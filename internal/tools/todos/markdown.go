@@ -27,7 +27,8 @@ func FormatOutputMarkdownString(t Output) string {
 	if t.Body != "" {
 		fmt.Fprintf(&b, "\n---\n\n%s\n", t.Body)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'todo_mark_done' with this todo ID to mark it as done",
 		"Use action 'todo_list' to see all your to-do items",
 	)
@@ -52,7 +53,8 @@ func FormatListMarkdownString(v ListOutput) string {
 		if t.TargetURL != "" {
 			target = fmt.Sprintf("[%s](%s)", target, t.TargetURL)
 		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %s | %s | %s | %s |\n",
 			t.ID,
 			toolutil.EscapeMdTableCell(t.ActionName),
 			target,
@@ -62,7 +64,8 @@ func FormatListMarkdownString(v ListOutput) string {
 		)
 	}
 	b.WriteString(toolutil.FormatPagination(v.Pagination))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'todo_mark_done' with a todo ID to mark it as done",
 		"Use action 'todo_mark_all_done' to clear all to-do items",

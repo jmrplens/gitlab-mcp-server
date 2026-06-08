@@ -10,6 +10,7 @@ package sampling
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -220,6 +221,27 @@ func TestGenerateNonce_Unique(t *testing.T) {
 			t.Fatalf("generateNonce() produced duplicate: %s", n)
 		}
 		seen[n] = true
+	}
+}
+
+// TestGenerateNonce_HexOutput documents why the rand.Read error branch in
+// generateNonce is unreachable through normal test execution. crypto/rand
+// reads from the operating system's CSPRNG, which never fails in any
+// environment where this test can run (it would only fail in environments
+// without /dev/urandom or equivalent entropy sources, which Go does not
+// support on supported platforms). The fallback nonce
+// "fallback_nonce_a1b2c3d4e5f6" exists as a defense-in-depth constant for
+// such a catastrophic case, but it cannot be exercised by a test without
+// monkey-patching the rand package. The test below asserts the documented
+// contract: every produced nonce is a 32-character lowercase hex string,
+// which is the only observable behavior of the live path.
+func TestGenerateNonce_HexOutput(t *testing.T) {
+	hexRe := regexp.MustCompile(`^[0-9a-f]{32}$`)
+	for range 25 {
+		n := generateNonce()
+		if !hexRe.MatchString(n) {
+			t.Fatalf("generateNonce() = %q, want 32 lowercase hex chars", n)
+		}
 	}
 }
 
@@ -1305,7 +1327,8 @@ func TestAnalyzeWithTools_WithToolChoice(t *testing.T) {
 
 	tools := []*mcp.Tool{{Name: "my_tool"}}
 	choice := &mcp.ToolChoice{Mode: "required"}
-	_, err = samplingClient.AnalyzeWithTools(ctx, "test", "data", executor,
+	_, err = samplingClient.AnalyzeWithTools(
+		ctx, "test", "data", executor,
 		WithTools(tools),
 		WithToolChoice(choice),
 		WithModelHints(testModelClaude),
@@ -1851,7 +1874,8 @@ func TestAnalyzeWithTools_IntegrationWithTemperatureAndStops(t *testing.T) {
 
 	samplingClient := Client{session: ss}
 	executor := &mockToolExecutor{}
-	_, err = samplingClient.AnalyzeWithTools(ctx, "p", "d", executor,
+	_, err = samplingClient.AnalyzeWithTools(
+		ctx, "p", "d", executor,
 		WithTemperature(0.7),
 		WithStopSequences("HALT"),
 	)

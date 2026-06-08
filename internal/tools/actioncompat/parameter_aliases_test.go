@@ -753,6 +753,256 @@ func TestProtectedEnvironmentAccessEntryHelpers(t *testing.T) {
 	}
 }
 
+// TestProtectedEnvironmentApprovalCount_NonIntegerValue verifies the
+// normalizeProtectedEnvironmentApprovalCount function returns early when
+// required_approval_count is present but cannot be converted to an integer.
+func TestProtectedEnvironmentApprovalCount_NonIntegerValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		value any
+	}{
+		{name: "non-numeric string", value: "not-a-number"},
+		{name: "boolean", value: true},
+		{name: "float with fraction", value: 2.5},
+		{name: "nil", value: nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			params := map[string]any{"required_approval_count": tc.value}
+			normalized, explanations := NormalizeParamsWithExplanation(
+				actionProjectProtectedEnvProtect,
+				params,
+				schemaWithProperties("approval_rules"),
+			)
+			// Function should return without recording any normalization,
+			// leaving the parameter unchanged.
+			if len(explanations) != 0 {
+				t.Errorf("expected no explanations, got %v", explanationAliases(explanations))
+			}
+			if _, ok := normalized["required_approval_count"]; !ok {
+				t.Errorf("required_approval_count was unexpectedly removed")
+			}
+		})
+	}
+}
+
+// TestIssueUpdateParams_StateEventNotAccepted verifies that normalizeIssueUpdateParams
+// is a no-op when the schema does not accept state_event.
+func TestIssueUpdateParams_StateEventNotAccepted(t *testing.T) {
+	params := map[string]any{"state_event": "close"}
+	normalized, explanations := NormalizeParamsWithExplanation(
+		"issue.update",
+		params,
+		// Empty schema: state_event is not accepted.
+		schemaWithProperties(),
+	)
+	if len(explanations) != 0 {
+		t.Errorf("expected no explanations, got %v", explanationAliases(explanations))
+	}
+	if normalized["state_event"] != "close" {
+		t.Errorf("state_event = %v, want unchanged", normalized["state_event"])
+	}
+}
+
+// TestProtectedEnvironmentAccessEntries_UnsupportedValue verifies the
+// protectedEnvironmentAccessEntries helper returns the original value
+// unchanged when none of the supported types (primitive, map, []any) match.
+func TestProtectedEnvironmentAccessEntries_UnsupportedValue(t *testing.T) {
+	// A non-supported value type (string that is not a known access label).
+	v, changed := protectedEnvironmentAccessEntries("not-an-access-level", false)
+	if changed {
+		t.Errorf("expected changed=false for unsupported value, got true with %v", v)
+	}
+}
+
+// TestProtectedEnvironmentAccessEntries_DefaultSwitchInLoop verifies the
+// switch default branch (non-map, non-primitive entries inside the array).
+func TestProtectedEnvironmentAccessEntries_DefaultSwitchInLoop(t *testing.T) {
+	// An array of unsupported items — none of them are maps, so the
+	// default case runs for each and the function returns the original
+	// value with changed=false.
+	v, changed := protectedEnvironmentAccessEntries([]any{123, 456}, false)
+	if changed {
+		t.Errorf("expected changed=false for array of primitives, got true with %v", v)
+	}
+}
+
+// TestProtectedEnvironmentAccessEntries_PrimitiveInArray verifies the
+// switch default branch wraps a valid primitive (int) into an object.
+func TestProtectedEnvironmentAccessEntries_PrimitiveInArray(t *testing.T) {
+	v, changed := protectedEnvironmentAccessEntries([]any{float64(30)}, false)
+	if !changed {
+		t.Errorf("expected changed=true for primitive access level in array, got false")
+	}
+	items, ok := v.([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("expected []any with 1 item, got %v", v)
+	}
+	entry, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", items[0])
+	}
+	if entry["access_level"] != 30 {
+		t.Errorf("access_level = %v, want 30", entry["access_level"])
+	}
+}
+
+// TestAccessLevelParam_NonConvertibleValue verifies that normalizeAccessLevelParamWith
+// is a no-op when the value cannot be converted to a valid access level.
+func TestAccessLevelParam_NonConvertibleValue(t *testing.T) {
+	// push_access_level=99 is not a valid GitLab access level (must be 0,30,40).
+	params := map[string]any{"push_access_level": 99}
+	normalized, explanations := NormalizeParamsWithExplanation(
+		actionBranchProtect,
+		params,
+		schemaWithProperties("push_access_level", "merge_access_level"),
+	)
+	if len(explanations) != 0 {
+		t.Errorf("expected no explanations, got %v", explanationAliases(explanations))
+	}
+	if normalized["push_access_level"] != 99 {
+		t.Errorf("push_access_level = %v, want unchanged 99", normalized["push_access_level"])
+	}
+}
+
+// TestMoveWithoutSchemaCheck_AliasMissing verifies the early return when
+// the alias is not present in params.
+func TestMoveWithoutSchemaCheck_AliasMissing(t *testing.T) {
+	// Use a group label update call without "name" in params — the
+	// moveWithoutSchemaCheck("name", "new_name", ...) should be a no-op.
+	params := map[string]any{"color": "#ff0000"}
+	normalized, explanations := NormalizeParamsWithExplanation(
+		actionGroupLabelUpdate,
+		params,
+		schemaWithProperties("new_name", "color"),
+	)
+	if len(explanations) != 0 {
+		t.Errorf("expected no explanations, got %v", explanationAliases(explanations))
+	}
+	if _, ok := normalized["new_name"]; ok {
+		t.Errorf("new_name should not be set when 'name' alias is missing")
+	}
+}
+
+// TestMoveWithoutSchemaCheck_TargetPresent verifies the early return when
+// the target key is already present in state.out.
+func TestMoveWithoutSchemaCheck_TargetPresent(t *testing.T) {
+	// Both "name" alias and "new_name" target are present — the move
+	// should not happen (early return).
+	params := map[string]any{"name": "old-label", "new_name": "existing-name"}
+	normalized, explanations := NormalizeParamsWithExplanation(
+		actionGroupLabelUpdate,
+		params,
+		schemaWithProperties("new_name"),
+	)
+	if len(explanations) != 0 {
+		t.Errorf("expected no explanations, got %v", explanationAliases(explanations))
+	}
+	if normalized["new_name"] != "existing-name" {
+		t.Errorf("new_name = %v, want unchanged 'existing-name'", normalized["new_name"])
+	}
+}
+
+// TestRunnerUpdateParams_PausedNotAccepted verifies that normalizeRunnerUpdateParams
+// is a no-op when the schema does not accept "paused".
+func TestRunnerUpdateParams_PausedNotAccepted(t *testing.T) {
+	params := map[string]any{"paused": "true"}
+	normalized, explanations := NormalizeParamsWithExplanation(
+		"runner.update",
+		params,
+		// Empty schema: paused is not accepted.
+		schemaWithProperties(),
+	)
+	if len(explanations) != 0 {
+		t.Errorf("expected no explanations, got %v", explanationAliases(explanations))
+	}
+	if normalized["paused"] != "true" {
+		t.Errorf("paused = %v, want unchanged 'true'", normalized["paused"])
+	}
+}
+
+// TestRunnerUpdateParams_NonParseableValue verifies the early return when
+// the "paused" value cannot be parsed as a bool.
+func TestRunnerUpdateParams_NonParseableValue(t *testing.T) {
+	params := map[string]any{"paused": "maybe"}
+	normalized, explanations := NormalizeParamsWithExplanation(
+		"runner.update",
+		params,
+		schemaWithProperties("paused"),
+	)
+	if len(explanations) != 0 {
+		t.Errorf("expected no explanations, got %v", explanationAliases(explanations))
+	}
+	if normalized["paused"] != "maybe" {
+		t.Errorf("paused = %v, want unchanged 'maybe'", normalized["paused"])
+	}
+}
+
+// TestSnippetProjectCreateParams_FilesNotAccepted verifies the early return
+// when the schema does not accept "files".
+func TestSnippetProjectCreateParams_FilesNotAccepted(t *testing.T) {
+	params := map[string]any{"file_name": "x", "content": "y"}
+	normalized, explanations := NormalizeParamsWithExplanation(
+		actionSnippetProjectCreate,
+		params,
+		// Empty schema: files is not accepted.
+		schemaWithProperties(),
+	)
+	if len(explanations) != 0 {
+		t.Errorf("expected no explanations, got %v", explanationAliases(explanations))
+	}
+	if _, ok := normalized["files"]; ok {
+		t.Errorf("files was unexpectedly added")
+	}
+	if normalized["file_name"] != "x" {
+		t.Errorf("file_name = %v, want unchanged 'x'", normalized["file_name"])
+	}
+}
+
+// TestReleaseLinkBatchEntries_NonArrayLinks verifies the early return when
+// "links" is not a slice.
+func TestReleaseLinkBatchEntries_NonArrayLinks(t *testing.T) {
+	clone := func() map[string]any { return map[string]any{} }
+	record := func(alias, target, reason string) {}
+	params := map[string]any{"links": "not-an-array"}
+	if normalizeReleaseLinkBatchEntries(clone, params, record) {
+		t.Error("expected changed=false for non-array links")
+	}
+}
+
+// TestReleaseLinkBatchEntries_EmptyLinks verifies the early return when
+// "links" is an empty slice.
+func TestReleaseLinkBatchEntries_EmptyLinks(t *testing.T) {
+	clone := func() map[string]any { return map[string]any{} }
+	record := func(alias, target, reason string) {}
+	params := map[string]any{"links": []any{}}
+	if normalizeReleaseLinkBatchEntries(clone, params, record) {
+		t.Error("expected changed=false for empty links")
+	}
+}
+
+// TestReleaseLinkBatchEntries_NonMapLink verifies the per-item continue
+// when a link is not a map.
+func TestReleaseLinkBatchEntries_NonMapLink(t *testing.T) {
+	clone := func() map[string]any { return map[string]any{} }
+	record := func(alias, target, reason string) {}
+	params := map[string]any{"links": []any{"not-a-map"}}
+	if normalizeReleaseLinkBatchEntries(clone, params, record) {
+		t.Error("expected changed=false for non-map link")
+	}
+}
+
+// TestReleaseLinkBatchEntries_NoChanges verifies the case where the link map
+// has no aliases to normalize (so !linkChanged → continue).
+func TestReleaseLinkBatchEntries_NoChanges(t *testing.T) {
+	clone := func() map[string]any { return map[string]any{} }
+	record := func(alias, target, reason string) {}
+	params := map[string]any{"links": []any{map[string]any{"url": "https://x"}}}
+	if normalizeReleaseLinkBatchEntries(clone, params, record) {
+		t.Error("expected changed=false for link with no aliases to normalize")
+	}
+}
+
 // TestEnvironmentAccessLevelValue_RoleLabelsAndNumericValues verifies the
 // environment access level value parser accepts both label strings and numbers.
 func TestEnvironmentAccessLevelValue_RoleLabelsAndNumericValues(t *testing.T) {
@@ -765,6 +1015,9 @@ func TestEnvironmentAccessLevelValue_RoleLabelsAndNumericValues(t *testing.T) {
 		{value: int(30), wantLevel: 30, wantOK: true},
 		{value: int64(20), wantLevel: 20, wantOK: true},
 		{value: "developer", wantLevel: 30, wantOK: true},
+		{value: "guest", wantLevel: 10, wantOK: true},
+		{value: "reporter", wantLevel: 20, wantOK: true},
+		{value: "owner", wantLevel: 50, wantOK: true},
 		{value: "admin", wantLevel: 60, wantOK: true},
 		{value: "no access", wantLevel: 0, wantOK: true},
 		{value: "unknown-role", wantOK: false},
@@ -776,6 +1029,59 @@ func TestEnvironmentAccessLevelValue_RoleLabelsAndNumericValues(t *testing.T) {
 		if ok != tc.wantOK || got != tc.wantLevel {
 			t.Fatalf("environmentAccessLevelValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
 		}
+	}
+}
+
+// TestGitLabBranchProtectionAccessLevelValue_Defaults verifies the
+// branch-protection access level parser handles numeric, string, and
+// unknown values consistently.
+func TestGitLabBranchProtectionAccessLevelValue_Defaults(t *testing.T) {
+	cases := []struct {
+		value     any
+		wantLevel int
+		wantOK    bool
+	}{
+		{value: int(30), wantLevel: 30, wantOK: true},
+		{value: int(40), wantLevel: 40, wantOK: true},
+		{value: int(0), wantLevel: 0, wantOK: true},
+		{value: int(99), wantOK: false},
+		{value: int64(40), wantLevel: 40, wantOK: true},
+		{value: float64(30.0), wantLevel: 30, wantOK: true},
+		{value: float64(30.5), wantOK: false},
+		{value: "developer", wantLevel: 30, wantOK: true},
+		{value: "maintainer", wantLevel: 40, wantOK: true},
+		{value: "no_access", wantLevel: 0, wantOK: true},
+		{value: "30", wantLevel: 30, wantOK: true},
+		{value: "99", wantOK: false},
+		{value: "unknown", wantOK: false},
+		{value: true, wantOK: false},
+	}
+	for _, tc := range cases {
+		got, ok := gitLabBranchProtectionAccessLevelValue(tc.value)
+		if ok != tc.wantOK || got != tc.wantLevel {
+			t.Fatalf("gitLabBranchProtectionAccessLevelValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
+		}
+	}
+}
+
+// TestGitLabAccessLevelValue_InvalidLevel verifies that gitlabAccessLevelValue
+// rejects invalid access level numbers.
+func TestGitLabAccessLevelValue_InvalidLevel(t *testing.T) {
+	if level, ok := gitlabAccessLevelValue(99); ok {
+		t.Errorf("expected false for 99, got level=%d ok=%v", level, ok)
+	}
+	if level, ok := gitlabAccessLevelValue(true); ok {
+		t.Errorf("expected false for bool, got level=%d ok=%v", level, ok)
+	}
+	if level, ok := gitlabAccessLevelValue(float64(40.5)); ok {
+		t.Errorf("expected false for non-integer float, got level=%d ok=%v", level, ok)
+	}
+	if level, ok := gitlabAccessLevelValue("maintainer"); !ok || level != 40 {
+		t.Errorf("expected maintainer → 40, got level=%d ok=%v", level, ok)
+	}
+	// Float64 with whole-number value should succeed.
+	if level, ok := gitlabAccessLevelValue(float64(40)); !ok || level != 40 {
+		t.Errorf("expected float64(40) → 40, got level=%d ok=%v", level, ok)
 	}
 }
 

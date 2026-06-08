@@ -32,7 +32,8 @@ func FormatListMarkdown(out ListOutput) string {
 		}
 		loc := formatLocation(f.Location)
 
-		fmt.Fprintf(&sb, "| %s | %s | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&sb, "| %s | %s | %s | %s | %s | %s | %s |\n",
 			severityBadge(f.Severity),
 			toolutil.EscapeMdTableCell(f.Confidence),
 			toolutil.EscapeMdTableCell(name),

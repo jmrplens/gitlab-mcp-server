@@ -20,7 +20,8 @@ func FormatOutputMarkdown(out Output) string {
 	if out.MemberRoleID != 0 {
 		fmt.Fprintf(&b, "- **Member Role ID**: %d\n", out.MemberRoleID)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_ldap_link_delete to remove this link",
 	)
 	return b.String()
@@ -36,7 +37,8 @@ func FormatListMarkdown(out ListOutput) string {
 	fmt.Fprintf(&b, "**%d LDAP link(s)**\n\n", len(out.Links))
 	b.WriteString("| CN | Filter | Access | Provider |\n| --- | --- | --- | --- |\n")
 	for _, l := range out.Links {
-		fmt.Fprintf(&b, "| %s | %s | %d | %s |\n",
+		fmt.Fprintf(
+			&b, "| %s | %s | %d | %s |\n",
 			toolutil.EscapeMdTableCell(l.CN),
 			toolutil.EscapeMdTableCell(l.Filter),
 			l.GroupAccess,

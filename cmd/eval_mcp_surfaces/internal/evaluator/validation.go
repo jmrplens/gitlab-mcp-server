@@ -344,7 +344,8 @@ func validateDestructiveSafety(result *validationResult, step evalStep, input, p
 }
 
 func recordStepAssertionResults(result *taskResult, step ExpectedStep, validation validationResult, stepNumber int) {
-	result.AssertionResults = append(result.AssertionResults,
+	result.AssertionResults = append(
+		result.AssertionResults,
 		CaseAssertionResult{Type: CaseAssertionExpectedAction, Step: stepNumber, Name: "expected action", Passed: validation.ToolMatches && validation.ActionMatches, Message: validation.Message},
 		CaseAssertionResult{Type: CaseAssertionRequiredParams, Step: stepNumber, Name: "required params", Passed: validation.RequiredPresent, Message: validation.Message},
 	)

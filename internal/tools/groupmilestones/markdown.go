@@ -36,7 +36,8 @@ func FormatMarkdown(v Output) string {
 	if v.UpdatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdUpdated, toolutil.FormatTime(v.UpdatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_milestone_get with the same group_id and milestone_id before update/delete workflows",
 		"Use gitlab_group_milestone_update with the same group_id and milestone_id to modify this milestone",
 		"Use gitlab_group_milestone_issues or gitlab_group_milestone_merge_requests with the same group_id and milestone_id to list associated items",
@@ -61,7 +62,8 @@ func FormatListMarkdownString(out ListOutput) string {
 			m.ID, m.IID, toolutil.EscapeMdTableCell(m.Title), m.State, m.StartDate, m.DueDate)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use gitlab_group_milestone_get with group_id and milestone_id for full details before update/delete",
 		"Use gitlab_group_milestone_create with group_id to add a new group milestone",

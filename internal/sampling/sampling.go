@@ -386,7 +386,8 @@ func (c Client) AnalyzeWithTools(ctx context.Context, prompt, data string, execu
 			params.StopSequences = cfg.stopSequences
 		}
 
-		slog.Debug("sending sampling request with tools",
+		slog.Debug(
+			"sending sampling request with tools",
 			"iteration", iteration,
 			"prompt_length", len(prompt),
 			"data_length", len(sanitized),

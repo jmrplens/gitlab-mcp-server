@@ -55,7 +55,8 @@ func FormatOutputMarkdown(out Output) string {
 	if out.MergedAt != "" {
 		fmt.Fprintf(&sb, "| Merged At | %s |\n", toolutil.FormatTime(out.MergedAt))
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_list_project_merge_trains` to view all merge trains",
 		"Use `gitlab_add_merge_request_to_merge_train` to add another MR to the train",
 	)

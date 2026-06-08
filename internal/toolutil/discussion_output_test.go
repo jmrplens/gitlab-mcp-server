@@ -53,3 +53,23 @@ func TestDiscussionOutputsFromGitLabHandlesNil(t *testing.T) {
 		t.Fatalf("outputs = %+v, want empty first and mapped second", out)
 	}
 }
+
+// TestDiscussionNoteOutputFromGitLabNil verifies that a nil note pointer
+// produces a zero-value DiscussionNoteOutput without panicking.
+func TestDiscussionNoteOutputFromGitLabNil(t *testing.T) {
+	out := DiscussionNoteOutputFromGitLab(nil)
+	zero := DiscussionNoteOutput{}
+	if out.ID != zero.ID || out.Body != zero.Body || out.Author != zero.Author ||
+		out.CreatedAt != zero.CreatedAt || out.UpdatedAt != zero.UpdatedAt || out.System != zero.System {
+		t.Errorf("nil note mapping = %+v, want zero value", out)
+	}
+}
+
+// TestDiscussionNoteOutputFromGitLab_EmptyAuthor verifies that a note with an
+// empty author username does not populate the Author field on the output.
+func TestDiscussionNoteOutputFromGitLab_EmptyAuthor(t *testing.T) {
+	out := DiscussionNoteOutputFromGitLab(&gl.Note{ID: 5, Body: "hi"})
+	if out.Author != "" {
+		t.Errorf("Author = %q, want empty for blank source author", out.Author)
+	}
+}

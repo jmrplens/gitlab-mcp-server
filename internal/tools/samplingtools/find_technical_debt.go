@@ -83,7 +83,8 @@ func FindTechnicalDebt(ctx context.Context, req *mcp.CallToolRequest, client *gi
 	data := FormatTechnicalDebtForAnalysis(allBlobs)
 	tracker.Step(ctx, 3, 4, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, findTechnicalDebtPrompt, data,
+	result, err := samplingClient.Analyze(
+		ctx, findTechnicalDebtPrompt, data,
 		sampling.WithTemperature(0.1),
 		sampling.WithModelPriorities(0.5, 0.5, 0.5),
 	)
@@ -125,7 +126,8 @@ func FormatFindTechnicalDebtMarkdown(f FindTechnicalDebtOutput) string {
 	if f.Model != "" {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", f.Model)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_issue_create` to track debt items as issues",
 		"Use `gitlab_label_create` to add a 'technical-debt' label for tracking",
 	)

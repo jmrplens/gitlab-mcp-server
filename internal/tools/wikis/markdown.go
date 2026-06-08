@@ -14,7 +14,8 @@ type wikiNotFoundOutput struct {
 }
 
 func formatWikiNotFound(out wikiNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Wiki Page", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Wiki Page", out.Identifier,
 		"Use gitlab_wiki_list with project_id to list wiki pages",
 		"Wiki slugs are case-sensitive and may differ from the page title",
 	)
@@ -32,7 +33,8 @@ func FormatOutputMarkdownString(w Output) string {
 	if w.Content != "" {
 		fmt.Fprintf(&b, "\n### Content\n\n%s\n", toolutil.WrapGFMBody(w.Content))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'update' to edit this wiki page",
 		"Use action 'delete' to remove this wiki page",
 	)
@@ -53,13 +55,15 @@ func FormatListMarkdownString(out ListOutput) string {
 	b.WriteString("| Title | Slug | Format |\n")
 	b.WriteString("| --- | --- | --- |\n")
 	for _, w := range out.WikiPages {
-		fmt.Fprintf(&b, "| %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %s | %s | %s |\n",
 			toolutil.EscapeMdTableCell(w.Title),
 			toolutil.EscapeMdTableCell(w.Slug),
 			w.Format,
 		)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get' with a slug to read a wiki page",
 		"Use action 'create' to add a new wiki page",
 	)
@@ -82,7 +86,8 @@ func FormatAttachmentMarkdownString(o AttachmentOutput) string {
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdURL, o.URL)
 	fmt.Fprintf(&b, "- **Markdown**: `%s`\n", o.Markdown)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' to view the wiki page where this attachment is used",
 		"Use action 'list' to see all wiki pages",

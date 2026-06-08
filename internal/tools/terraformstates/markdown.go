@@ -28,7 +28,8 @@ func FormatStateMarkdown(s StateItem) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Terraform State: %s\n\n- **Latest Serial**: %d\n- **Download Path**: %s\n",
 		s.Name, s.LatestSerial, s.DownloadPath)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_lock_terraform_state` to lock this state",
 		"Use `gitlab_delete_terraform_state` to remove it",
 	)

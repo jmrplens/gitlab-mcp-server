@@ -141,7 +141,10 @@ func splitRepository(path string) (owner, repo string, err error) {
 }
 
 // selfupdateUpdater creates a go-selfupdate Updater with checksum validation.
-func selfupdateUpdater(src selfupdate.Source) (*selfupdate.Updater, error) {
+// It is a package-level variable so tests can stub the underlying selfupdate
+// constructor to exercise the error paths in CheckForUpdate, ApplyUpdate,
+// and downloadToStaging without touching the real go-selfupdate library.
+var selfupdateUpdater = func(src selfupdate.Source) (*selfupdate.Updater, error) {
 	u, err := selfupdate.NewUpdater(selfupdate.Config{
 		Source:    src,
 		Validator: &selfupdate.ChecksumValidator{UniqueFilename: "checksums.txt"},
@@ -228,7 +231,8 @@ func (u *Updater) ApplyUpdate(ctx context.Context) (string, error) {
 // In [ModeAuto], detected updates are applied automatically.
 // In [ModeCheck], updates are only logged.
 func (u *Updater) StartPeriodicCheck(ctx context.Context) {
-	slog.Info("autoupdate: starting periodic check",
+	slog.Info(
+		"autoupdate: starting periodic check",
 		"interval", u.cfg.Interval,
 		"mode", u.cfg.Mode,
 		"repository", u.cfg.Repository,
@@ -288,13 +292,15 @@ func (u *Updater) periodicCheckOnce(ctx context.Context) {
 		return
 	}
 
-	slog.Info("autoupdate: new version available",
+	slog.Info(
+		"autoupdate: new version available",
 		"current_version", info.CurrentVersion,
 		"latest_version", info.LatestVersion,
 	)
 
 	if u.cfg.Mode == ModeCheck {
-		slog.Info("autoupdate: check-only mode — skipping apply",
+		slog.Info(
+			"autoupdate: check-only mode — skipping apply",
 			"latest_version", info.LatestVersion,
 		)
 		return
@@ -310,7 +316,8 @@ func (u *Updater) periodicCheckOnce(ctx context.Context) {
 		return
 	}
 
-	slog.Info("autoupdate: update applied — restart the server to use the new version",
+	slog.Info(
+		"autoupdate: update applied — restart the server to use the new version",
 		"new_version", newVersion,
 	)
 }
@@ -326,19 +333,22 @@ func (u *Updater) CheckOnce(ctx context.Context) (newVersion string, updated boo
 	}
 
 	if !available {
-		slog.Info("autoupdate: server is up to date",
+		slog.Info(
+			"autoupdate: server is up to date",
 			"version", u.cfg.CurrentVersion,
 		)
 		return "", false, nil
 	}
 
-	slog.Info("autoupdate: new version available",
+	slog.Info(
+		"autoupdate: new version available",
 		"current_version", info.CurrentVersion,
 		"latest_version", info.LatestVersion,
 	)
 
 	if u.cfg.Mode == ModeCheck {
-		slog.Warn("autoupdate: check-only mode — update available but not applying",
+		slog.Warn(
+			"autoupdate: check-only mode — update available but not applying",
 			"latest_version", info.LatestVersion,
 		)
 		return info.LatestVersion, false, nil
@@ -378,7 +388,8 @@ func (u *Updater) checkOnceFallbackDownload(ctx context.Context, applyErr error)
 		_ = os.Remove(tmpPath)
 		return "", false, fmt.Errorf("applying update: %w (rename fallback: %w)", applyErr, replErr)
 	}
-	slog.Info("autoupdate: binary updated via rename trick (will take effect on next restart)",
+	slog.Info(
+		"autoupdate: binary updated via rename trick (will take effect on next restart)",
 		"new_version", v,
 	)
 	return v, true, nil
@@ -390,7 +401,8 @@ func (u *Updater) checkOnceFallbackDownload(ctx context.Context, applyErr error)
 func (u *Updater) periodicFallbackDownload(ctx context.Context, applyErr error) {
 	v, tmpPath, dlErr := u.downloadToStaging(ctx)
 	if dlErr != nil {
-		slog.Error("autoupdate: failed to apply and download update",
+		slog.Error(
+			"autoupdate: failed to apply and download update",
 			"apply_error", applyErr,
 			"download_error", dlErr,
 		)
@@ -398,13 +410,15 @@ func (u *Updater) periodicFallbackDownload(ctx context.Context, applyErr error) 
 	}
 	if replErr := replaceExecutable(tmpPath); replErr != nil {
 		_ = os.Remove(tmpPath)
-		slog.Error("autoupdate: failed to apply and rename update",
+		slog.Error(
+			"autoupdate: failed to apply and rename update",
 			"apply_error", applyErr,
 			"rename_error", replErr,
 		)
 		return
 	}
-	slog.Info("autoupdate: binary updated via rename trick (will take effect on next restart)",
+	slog.Info(
+		"autoupdate: binary updated via rename trick (will take effect on next restart)",
 		"new_version", v,
 	)
 }
@@ -435,7 +449,9 @@ func JustUpdated() bool {
 }
 
 // SetJustUpdated sets the environment variable that prevents re-exec loops.
-func SetJustUpdated() error {
+// It is a package-level variable so tests can stub the underlying os.Setenv
+// call to exercise the pre-start error paths.
+var SetJustUpdated = func() error {
 	return os.Setenv(envJustUpdated, "1")
 }
 

@@ -22,7 +22,8 @@ func FormatListMarkdown(out ListOutput) string {
 		if len(issue.Labels) > 0 {
 			labels = strings.Join(issue.Labels, ", ")
 		}
-		fmt.Fprintf(&b, "| #%d | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| #%d | %s | %s | %s | %s | %s |\n",
 			issue.IID,
 			toolutil.EscapeMdTableCell(issue.Title),
 			issue.State,
@@ -36,7 +37,8 @@ func FormatListMarkdown(out ListOutput) string {
 		b.WriteString("\n")
 		b.WriteString(pag)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'epic_issue_assign' to add an issue to this epic",
 		"Use action 'epic_issue_remove' to unlink an issue from this epic",
@@ -54,7 +56,8 @@ func FormatAssignMarkdown(out AssignOutput, action string) string {
 	if out.ChildGID != "" {
 		fmt.Fprintf(&b, "- **Issue**: %s\n", out.ChildGID)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_epic_issue_list` to view all issues in the epic",
 		"Use `gitlab_epic_issue_remove` to unlink an issue from the epic",
 	)

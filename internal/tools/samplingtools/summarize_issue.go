@@ -93,7 +93,8 @@ func SummarizeIssue(ctx context.Context, req *mcp.CallToolRequest, client *gitla
 
 	tracker.Step(ctx, 3, 4, "Requesting LLM summary...")
 
-	result, err := samplingClient.Analyze(ctx, summarizeIssuePrompt, data,
+	result, err := samplingClient.Analyze(
+		ctx, summarizeIssuePrompt, data,
 		sampling.WithMaxTokens(2048),
 		sampling.WithTemperature(0.3),
 		sampling.WithModelPriorities(0.4, 0.6, 0.4),
@@ -160,7 +161,8 @@ func FormatSummarizeIssueMarkdown(s SummarizeIssueOutput) string {
 	if s.Model != "" {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", s.Model)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_issue_update` to update status, labels, or assignee",
 		"Use `gitlab_add_issue_note` to add follow-up comments",
 	)

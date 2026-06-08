@@ -33,3 +33,20 @@ func TestListRegisteredTools_NilServer(t *testing.T) {
 		t.Fatalf("ListRegisteredTools(nil) error = %v, want server is nil", err)
 	}
 }
+
+// TestListRegisteredTools_DefaultClientName verifies that an empty client name
+// is replaced with the built-in default and the list still succeeds.
+func TestListRegisteredTools_DefaultClientName(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server.AddTool(&mcp.Tool{Name: "gitlab_x", InputSchema: &map[string]any{"type": "object"}}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{}, nil
+	})
+
+	tools, err := ListRegisteredTools(t.Context(), server, "")
+	if err != nil {
+		t.Fatalf("ListRegisteredTools(\"\") error = %v", err)
+	}
+	if len(tools) != 1 || tools[0].Name != "gitlab_x" {
+		t.Fatalf("ListRegisteredTools() = %+v, want gitlab_x", tools)
+	}
+}

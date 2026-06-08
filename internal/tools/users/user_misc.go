@@ -273,7 +273,8 @@ func FormatUserActivitiesMarkdownString(o UserActivitiesOutput) string {
 		}
 	}
 	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_get_user` to view full details for a user",
 	)
@@ -296,7 +297,8 @@ func FormatUserMembershipsMarkdownString(o UserMembershipsOutput) string {
 		}
 	}
 	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_get_user` to view the user's profile",
 	)
 	return b.String()
@@ -311,7 +313,8 @@ func FormatUserRunnerMarkdownString(o UserRunnerOutput) string {
 	if o.TokenExpiresAt != "" {
 		fmt.Fprintf(&b, "- **Token Expires At**: %s\n", toolutil.FormatTime(o.TokenExpiresAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Save the runner token — it cannot be retrieved again",
 	)
 	return b.String()

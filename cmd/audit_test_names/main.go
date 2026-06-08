@@ -13,6 +13,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -53,31 +54,47 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: go run ./cmd/audit_test_names/ <dir>...")
 		os.Exit(1)
 	}
+	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
 
-	entries := make([]testEntry, 0, len(os.Args[1:])*10)
-	for _, dir := range os.Args[1:] {
+// run executes the audit workflow against the supplied directories. It writes
+// CSV rows to stdout and a human-readable summary to stderr.
+func run(args []string, stdout, stderr io.Writer) error {
+	entries := make([]testEntry, 0, len(args)*10)
+	for _, dir := range args {
 		entries = append(entries, scanDir(dir)...)
 	}
 
-	w := csv.NewWriter(os.Stdout)
-	_ = w.Write([]string{"file", "current_name", "pattern", "suggested_name"})
+	w := csv.NewWriter(stdout)
+	if err := w.Write([]string{"file", "current_name", "pattern", "suggested_name"}); err != nil {
+		return fmt.Errorf("write csv header: %w", err)
+	}
 	for _, e := range entries {
-		_ = w.Write([]string{e.File, e.CurrentName, e.Pattern, e.SuggestedName})
+		if err := w.Write([]string{e.File, e.CurrentName, e.Pattern, e.SuggestedName}); err != nil {
+			return fmt.Errorf("write csv row: %w", err)
+		}
 	}
 	w.Flush()
+	if err := w.Error(); err != nil {
+		return fmt.Errorf("flush csv: %w", err)
+	}
 
 	// Print summary to stderr.
 	counts := map[string]int{}
 	for _, e := range entries {
 		counts[e.Pattern]++
 	}
-	fmt.Fprintf(os.Stderr, "\n=== Test Naming Audit Summary ===\n")
-	fmt.Fprintf(os.Stderr, "Total test functions: %d\n", len(entries))
+	fmt.Fprintf(stderr, "\n=== Test Naming Audit Summary ===\n")
+	fmt.Fprintf(stderr, "Total test functions: %d\n", len(entries))
 	for _, p := range []string{Pattern3Part, Pattern2Part, PatternNoUnderscore, PatternTestCov, PatternOther, PatternSkip} {
 		if c, ok := counts[p]; ok {
-			fmt.Fprintf(os.Stderr, "  %-16s %d\n", p+":", c)
+			fmt.Fprintf(stderr, "  %-16s %d\n", p+":", c)
 		}
 	}
+	return nil
 }
 
 // scanDir recursively scans a directory for test files and classifies test names.

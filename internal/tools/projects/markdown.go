@@ -15,7 +15,8 @@ type projectNotFoundOutput struct {
 }
 
 func formatProjectNotFound(out projectNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Project", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Project", out.Identifier,
 		"Use gitlab_project_list to search for projects by name or path",
 		"Verify the project ID or URL-encoded path is correct (e.g. 'group%2Fproject')",
 		"The project may have been deleted or you may lack access",
@@ -70,7 +71,8 @@ func FormatMarkdown(p Output) string {
 	if p.ProtectMergeRequestPipelines != nil && *p.ProtectMergeRequestPipelines {
 		fmt.Fprintf(&b, "- **Protected MR Pipelines**: enabled\n")
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_branch action 'list' to see branches",
 		"Use gitlab_merge_request action 'list' to see open merge requests",
 		"Use gitlab_issue action 'list' to see open issues",
@@ -92,7 +94,8 @@ func FormatDeleteMarkdown(out DeleteOutput) string {
 	if out.PermanentlyRemoved {
 		b.WriteString("- **Permanently removed**: yes\n")
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_list` to verify deletion",
 	)
 	return b.String()
@@ -117,7 +120,8 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| %d | [%s](%s)%s | %s | %s | %d |\n", p.ID, toolutil.EscapeMdTableCell(p.Name), p.WebURL, archived, toolutil.EscapeMdTableCell(p.PathWithNamespace), p.Visibility, p.StarCount)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with a project_id to see full project details",
 		"Use action 'create' to create a new project",
@@ -140,7 +144,8 @@ func FormatListForksMarkdown(out ListForksOutput) string {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %d |\n", p.ID, toolutil.EscapeMdTableCell(p.Name), toolutil.EscapeMdTableCell(p.PathWithNamespace), p.Visibility, p.StarCount)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_get` to view fork details",
 		"Use `gitlab_project_fork` to create a new fork",
 	)
@@ -160,7 +165,8 @@ func FormatLanguagesMarkdown(out LanguagesOutput) string {
 	for _, l := range out.Languages {
 		fmt.Fprintf(&b, "| %s | %.1f%% |\n", toolutil.EscapeMdTableCell(l.Name), l.Percentage)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_repository_tree` to browse the codebase",
 	)
 	return b.String()
@@ -189,7 +195,8 @@ func FormatListHooksMarkdown(out ListHooksOutput) string {
 			boolIcon(h.EnableSSLVerification))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_hook_get` to view a webhook's details",
 		"Use `gitlab_project_hook_add` to add a new webhook",
 	)
@@ -250,7 +257,8 @@ func FormatHookMarkdown(out HookOutput) string {
 			b.WriteString(toolutil.MarkdownTableRow(toolutil.EscapeMdTableCell(header.Key), toolutil.RedactedSecretValue))
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_hook_edit` to modify event triggers",
 		"Use `gitlab_project_hook_test` to test the webhook",
 	)
@@ -270,7 +278,8 @@ func FormatListProjectUsersMarkdown(out ListProjectUsersOutput) string {
 	for _, u := range out.Users {
 		fmt.Fprintf(&b, "| %d | %s | @%s | %s |\n", u.ID, u.Name, u.Username, u.State)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_member_add` to add a new member",
 		"Use `gitlab_project_share_with_group` to share with a group",
 	)
@@ -290,7 +299,8 @@ func FormatListProjectGroupsMarkdown(out ListProjectGroupsOutput) string {
 	for _, g := range out.Groups {
 		fmt.Fprintf(&b, "| %d | %s | %s |\n", g.ID, g.Name, g.FullPath)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_group_get` to view group details",
 	)
 	return b.String()
@@ -309,7 +319,8 @@ func FormatListStarrersMarkdown(out ListProjectStarrersOutput) string {
 	for _, s := range out.Starrers {
 		fmt.Fprintf(&b, "| %s | @%s | %s |\n", s.User.Name, s.User.Username, toolutil.FormatTime(s.StarredSince))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_get` to view full project details",
 	)
 	return b.String()
@@ -326,7 +337,8 @@ func FormatShareProjectMarkdown(out ShareProjectOutput) string {
 		fmt.Fprintf(&b, "| Group ID | %d |\n", out.GroupID)
 		fmt.Fprintf(&b, "| Access Role | %s |\n", out.AccessRole)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_list_groups` to verify the share",
 		"Use `gitlab_project_delete_shared_group` to revoke access",
 	)
@@ -373,7 +385,8 @@ func FormatPushRuleMarkdown(out PushRuleOutput) string {
 		}
 		fmt.Fprintf(&b, "| %s | %s |\n", r.name, val)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_edit_push_rule` to modify push rules",
 		"Use `gitlab_project_delete_push_rule` to remove push rules",
 	)
@@ -389,7 +402,8 @@ func FormatForkRelationMarkdown(out ForkRelationOutput) string {
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_delete_fork_relation` to remove the fork relation",
 	)
 	return b.String()
@@ -401,7 +415,8 @@ func FormatDownloadAvatarMarkdown(out DownloadAvatarOutput) string {
 	b.WriteString("## Project Avatar\n\n")
 	fmt.Fprintf(&b, "- **Size**: %d bytes\n", out.SizeBytes)
 	fmt.Fprintf(&b, "- **Content**: base64-encoded (%d chars)\n", len(out.ContentBase64))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_upload_avatar` to replace the avatar",
 	)
 	return b.String()
@@ -420,7 +435,8 @@ func FormatApprovalConfigMarkdown(out ApprovalConfigOutput) string {
 	fmt.Fprintf(&b, "| Disable committers approval | %s |\n", boolIcon(out.MergeRequestsDisableCommittersApproval))
 	fmt.Fprintf(&b, "| Require reauthentication to approve | %s |\n", boolIcon(out.RequireReauthenticationToApprove))
 	fmt.Fprintf(&b, "| Selective code owner removals | %s |\n", boolIcon(out.SelectiveCodeOwnerRemovals))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_approval_config_change` to modify settings",
 		"Use `gitlab_project_approval_rule_list` to see approval rules",
 	)
@@ -450,7 +466,8 @@ func FormatApprovalRuleMarkdown(out ApprovalRuleOutput) string {
 	if len(out.EligibleApprovers) > 0 {
 		fmt.Fprintf(&b, "- **Eligible Approvers**: %s\n", strings.Join(out.EligibleApprovers, ", "))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_approval_rule_update` to modify this rule",
 		"Use `gitlab_project_approval_rule_delete` to remove this rule",
 	)
@@ -487,7 +504,8 @@ func FormatListApprovalRulesMarkdown(out ListApprovalRulesOutput) string {
 			toolutil.EscapeMdTableCell(users), toolutil.EscapeMdTableCell(groups))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_project_approval_rule_get` to see rule details",
 		"Use `gitlab_project_approval_rule_create` to add a new rule",
@@ -521,7 +539,8 @@ func FormatPullMirrorMarkdown(out PullMirrorOutput) string {
 	if out.MirrorBranchRegex != "" {
 		fmt.Fprintf(&b, "- **Branch Regex**: `%s`\n", out.MirrorBranchRegex)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_pull_mirror_configure` to modify mirror settings",
 		"Use `gitlab_project_start_mirroring` to trigger an immediate update",
 	)
@@ -538,7 +557,8 @@ func FormatRepositoryStorageMarkdown(out RepositoryStorageOutput) string {
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_start_housekeeping` to optimize the repository",
 	)
 	return b.String()

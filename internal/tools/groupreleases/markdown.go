@@ -17,7 +17,8 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteListSummary(&b, len(out.Releases), out.Pagination)
 	b.WriteString("| Tag | Name | Released | Author |\n| --- | --- | --- | --- |\n")
 	for _, r := range out.Releases {
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %s | %s | %s | %s |\n",
 			toolutil.EscapeMdTableCell(r.TagName),
 			toolutil.EscapeMdTableCell(r.Name),
 			r.ReleasedAt,

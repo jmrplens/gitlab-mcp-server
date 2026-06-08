@@ -2517,6 +2517,60 @@ func TestAddPushRule_RequiresRuleSetting(t *testing.T) {
 	}
 }
 
+// ----- branch coverage -----
+
+// TestAddPushRule_HTTPErrorHints covers the two status-aware error
+// branches in AddPushRule. The 422/400 branch must surface the
+// "push rules already exist" / "invalid regex" hint, while a 403 must
+// surface the "Maintainer/Owner role and Premium/Ultimate licensing"
+// hint. Without these tests both error paths were dead branches despite
+// being part of the documented behavior of the handler.
+func TestAddPushRule_HTTPErrorHints(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		wantSubstr string
+	}{
+		{
+			name:       "422 returns push rules conflict hint",
+			status:     http.StatusUnprocessableEntity,
+			wantSubstr: "push rules already exist",
+		},
+		{
+			name:       "400 returns push rules conflict hint",
+			status:     http.StatusBadRequest,
+			wantSubstr: "push rules already exist",
+		},
+		{
+			name:       "403 returns licensing hint",
+			status:     http.StatusForbidden,
+			wantSubstr: "Maintainer/Owner role",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost && r.URL.Path == pathPushRules42 {
+					testutil.RespondJSON(w, tt.status, `{"message":"rejected"}`)
+					return
+				}
+				t.Errorf("unexpected path: %s", r.URL.Path)
+			}))
+
+			_, err := AddPushRule(context.Background(), client, AddPushRuleInput{
+				ProjectID:          "42",
+				CommitMessageRegex: testCommitRegex,
+			})
+			if err == nil {
+				t.Fatal("expected error for HTTP failure, got nil")
+			}
+			if !strings.Contains(err.Error(), tt.wantSubstr) {
+				t.Fatalf("err = %q, want it to contain %q", err.Error(), tt.wantSubstr)
+			}
+		})
+	}
+}
+
 // TestDeletePushRule_Success verifies DeletePushRule when success.
 func TestDeletePushRule_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -3079,7 +3133,8 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf(fmtIDWant1, out.ID)
 	}
-	assertJSONKeys(t, capturedBody,
+	assertJSONKeys(
+		t, capturedBody,
 		"url",
 		"token",
 		"signing_token",
@@ -3150,7 +3205,8 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 	if out.URL != "https://example.com/hook-updated" {
 		t.Errorf("URL = %q, want updated URL", out.URL)
 	}
-	assertJSONKeys(t, capturedBody,
+	assertJSONKeys(
+		t, capturedBody,
 		"url",
 		"token",
 		"signing_token",

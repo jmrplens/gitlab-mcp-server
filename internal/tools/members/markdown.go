@@ -23,7 +23,8 @@ func FormatListMarkdownString(v ListOutput) string {
 		if m.WebURL != "" {
 			username = fmt.Sprintf("[%s](%s)", username, m.WebURL)
 		}
-		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %s | %s | %s | %s |\n",
 			username,
 			toolutil.EscapeMdTableCell(m.Name),
 			toolutil.EscapeMdTableCell(m.AccessLevelDescription),
@@ -31,7 +32,8 @@ func FormatListMarkdownString(v ListOutput) string {
 		)
 	}
 	toolutil.WritePagination(&b, v.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with user_id to see member details",
 		"Use action 'add' to add a new project member",
@@ -68,7 +70,8 @@ func FormatMarkdown(v Output) string {
 	if v.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(v.CreatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'update' to change this member's access level",
 		"Use action 'member_delete' to remove this member from the project",
 	)

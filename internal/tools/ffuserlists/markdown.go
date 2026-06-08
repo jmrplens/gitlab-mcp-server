@@ -21,7 +21,8 @@ func FormatUserListMarkdown(out Output) string {
 	if out.UpdatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdUpdated, toolutil.FormatTime(out.UpdatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'ff_user_list_update' to modify user XIDs",
 		"Use action 'ff_user_list_delete' to remove this user list",
 	)
@@ -39,14 +40,16 @@ func FormatListUserListsMarkdown(out ListOutput) string {
 	}
 	b.WriteString("| IID | Name | User XIDs |\n|---|---|---|\n")
 	for _, l := range out.UserLists {
-		fmt.Fprintf(&b, "| %d | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %s |\n",
 			l.IID,
 			toolutil.EscapeMdTableCell(l.Name),
 			toolutil.EscapeMdTableCell(l.UserXIDs),
 		)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'ff_user_list_get' with user_list_iid for full details",
 		"Use action 'ff_user_list_create' to add a new user list",
 	)

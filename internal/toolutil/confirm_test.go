@@ -3,6 +3,7 @@ package toolutil
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -161,4 +162,122 @@ func TestCancelledResult(t *testing.T) {
 	if tc.Text != msg {
 		t.Errorf("expected %q, got %q", msg, tc.Text)
 	}
+}
+
+// confirmTestImpl is a shared MCP implementation descriptor for in-memory
+// confirm sessions.
+var confirmTestImpl = &mcp.Implementation{Name: "confirm-test", Version: "1.0.0"}
+
+// newConfirmSession wires a server and client with the supplied elicitation
+// handler so tests can drive the user confirmation path end-to-end.
+func newConfirmSession(t *testing.T, handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)) *mcp.ServerSession {
+	t.Helper()
+
+	server := mcp.NewServer(confirmTestImpl, nil)
+	client := mcp.NewClient(confirmTestImpl, &mcp.ClientOptions{ElicitationHandler: handler})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(context.Background(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	cs, err := client.Connect(context.Background(), ct, nil)
+	if err != nil {
+		_ = ss.Close()
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = cs.Close()
+		_ = ss.Close()
+	})
+	return ss
+}
+
+// TestConfirmAction_UnsupportedProceeds verifies that [ConfirmAction] returns
+// nil (proceed) when the client does not support elicitation.
+func TestConfirmAction_UnsupportedProceeds(t *testing.T) {
+	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "noop"}}
+	if got := ConfirmAction(context.Background(), req, "Proceed?"); got != nil {
+		t.Errorf("ConfirmAction(unsupported) = %+v, want nil", got)
+	}
+}
+
+// TestConfirmAction_ConfirmedProceeds verifies that an accepted elicitation
+// (confirmed=true) lets the destructive action proceed with a nil result.
+func TestConfirmAction_ConfirmedProceeds(t *testing.T) {
+	ss := newConfirmSession(t, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
+	})
+
+	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
+	if got := ConfirmAction(context.Background(), req, "Delete?"); got != nil {
+		t.Errorf("ConfirmAction(confirmed) = %+v, want nil", got)
+	}
+}
+
+// TestConfirmAction_ConfirmedFalseCancels verifies that an elicitation
+// response with confirmed=false returns a CancelledResult.
+func TestConfirmAction_ConfirmedFalseCancels(t *testing.T) {
+	ss := newConfirmSession(t, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": false}}, nil
+	})
+
+	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
+	got := ConfirmAction(context.Background(), req, "Delete?")
+	if got == nil {
+		t.Fatal("ConfirmAction(denied) = nil, want CancelledResult")
+	}
+	if !strings.Contains(surfaceToolText(got), "canceled") {
+		t.Errorf("canceled text = %q, want it to contain 'canceled'", surfaceToolText(got))
+	}
+}
+
+// TestConfirmAction_DeclinedCancels verifies that a user-declined elicitation
+// returns a CancelledResult and surfaces the user-canceled message.
+func TestConfirmAction_DeclinedCancels(t *testing.T) {
+	ss := newConfirmSession(t, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "decline"}, nil
+	})
+
+	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
+	got := ConfirmAction(context.Background(), req, "Delete?")
+	if got == nil {
+		t.Fatal("ConfirmAction(declined) = nil, want CancelledResult")
+	}
+}
+
+// TestConfirmAction_NilReqProceeds verifies that a nil request causes
+// [ConfirmAction] to skip elicitation and return nil.
+func TestConfirmAction_NilReqProceeds(t *testing.T) {
+	if got := ConfirmAction(context.Background(), nil, "Proceed?"); got != nil {
+		t.Errorf("ConfirmAction(nil req) = %+v, want nil", got)
+	}
+}
+
+// TestConfirmAction_UnknownActionProceeds verifies that elicitation errors
+// other than ErrDeclined/ErrCancelled are treated as a fallback to proceed
+// (returning nil) so the destructive action can still run.
+func TestConfirmAction_UnknownActionProceeds(t *testing.T) {
+	ss := newConfirmSession(t, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "weird-action"}, nil
+	})
+
+	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
+	if got := ConfirmAction(context.Background(), req, "Delete?"); got != nil {
+		t.Errorf("ConfirmAction(unknown action) = %+v, want nil", got)
+	}
+}
+
+// surfaceToolText concatenates text content of a CallToolResult for assertions.
+func surfaceToolText(result *mcp.CallToolResult) string {
+	if result == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, c := range result.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			b.WriteString(tc.Text)
+		}
+	}
+	return b.String()
 }

@@ -85,7 +85,8 @@ func appendEntryIndex(entryIndexes []int, entryIndex int) []int {
 }
 
 func searchDocumentIndexTokens(document searchDocument) []string {
-	tokens := make([]string, 0,
+	tokens := make(
+		[]string, 0,
 		10+
 			len(document.IDWords)+
 			len(document.DomainWords)+

@@ -75,7 +75,8 @@ func AnalyzePipelineFailure(ctx context.Context, req *mcp.CallToolRequest, clien
 
 	tracker.Step(ctx, 4, 5, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, analyzePipelineFailurePrompt, data,
+	result, err := samplingClient.Analyze(
+		ctx, analyzePipelineFailurePrompt, data,
 		sampling.WithTemperature(0.2),
 		sampling.WithModelPriorities(0.2, 0.3, 0.8),
 	)
@@ -213,7 +214,8 @@ func FormatAnalyzePipelineFailureMarkdown(a AnalyzePipelineFailureOutput) string
 	if a.Model != "" {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", a.Model)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_pipeline_retry` to re-run the failed pipeline",
 		"Use `gitlab_list_pipeline_jobs` to inspect individual job logs",
 	)

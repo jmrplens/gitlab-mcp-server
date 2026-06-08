@@ -26,7 +26,8 @@ func FormatOutputMarkdown(out Output) string {
 			fmt.Fprintf(&b, "| %d | %d | %s | %d |\n", r.ID, r.AccessLevel, r.AccessLevelDescription, r.RequiredApprovalCount)
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_protected_environment_update to modify settings",
 		"Use gitlab_group_protected_environment_unprotect to remove protection",
 	)
@@ -43,14 +44,16 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteListSummary(&b, len(out.Environments), out.Pagination)
 	b.WriteString("| Name | Approval Count | Deploy Levels | Rules |\n| --- | --- | --- | --- |\n")
 	for _, e := range out.Environments {
-		fmt.Fprintf(&b, "| %s | %d | %d | %d |\n",
+		fmt.Fprintf(
+			&b, "| %s | %d | %d | %d |\n",
 			toolutil.EscapeMdTableCell(e.Name),
 			e.RequiredApprovalCount,
 			len(e.DeployAccessLevels),
 			len(e.ApprovalRules),
 		)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_protected_environment_get with an environment name for details",
 		"Use gitlab_group_protected_environment_protect to add new protection",
 	)

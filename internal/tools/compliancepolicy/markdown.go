@@ -19,7 +19,8 @@ func FormatOutputMarkdown(out Output) string {
 		fmt.Fprintf(&sb, "| CSP Namespace ID | _not set_ |\n")
 	}
 	sb.WriteString("\n")
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_update_compliance_policy_settings` to modify these settings",
 	)
 	return sb.String()

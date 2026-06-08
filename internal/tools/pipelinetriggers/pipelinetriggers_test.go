@@ -28,7 +28,8 @@ const fmtUnexpErr = "unexpected error: %v"
 func TestListTriggers_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/triggers", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSONWithPagination(w, http.StatusOK,
+		testutil.RespondJSONWithPagination(
+			w, http.StatusOK,
 			`[{"id":10,"description":"deploy","token":"abc123","owner":{"id":1,"name":"Admin"}}]`,
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"},
 		)
@@ -385,7 +386,8 @@ func TestListTriggers_CancelledContext(t *testing.T) {
 func TestListTriggers_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/1/triggers" {
-			testutil.RespondJSONWithPagination(w, http.StatusOK,
+			testutil.RespondJSONWithPagination(
+				w, http.StatusOK,
 				`[{"id":1,"description":"t1","token":"a"},{"id":2,"description":"t2","token":"b"}]`,
 				testutil.PaginationHeaders{Page: "2", PerPage: "2", Total: "5", TotalPages: "3", NextPage: "3", PrevPage: "1"},
 			)

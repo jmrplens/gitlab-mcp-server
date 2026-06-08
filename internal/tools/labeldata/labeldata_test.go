@@ -64,3 +64,71 @@ func TestToMarkdown(t *testing.T) {
 		t.Fatalf("ToMarkdown() = %+v, want all shared fields", got)
 	}
 }
+
+// TestPriorityFromNullable covers the three nullability states handled by
+// the converter: specified with a value, explicitly null, and unspecified.
+// GitLab's nullable priority field must collapse to (0, false) in the
+// latter two cases so downstream consumers can distinguish "no priority"
+// from "priority 0".
+func TestPriorityFromNullable(t *testing.T) {
+	tests := []struct {
+		name          string
+		nullable      gl.Nullable[int64]
+		wantPriority  int64
+		wantSpecified bool
+	}{
+		{
+			name:          "specified with positive value",
+			nullable:      gl.NewNullableWithValue(int64(5)),
+			wantPriority:  5,
+			wantSpecified: true,
+		},
+		{
+			name:          "specified with zero value",
+			nullable:      gl.NewNullableWithValue(int64(0)),
+			wantPriority:  0,
+			wantSpecified: true,
+		},
+		{
+			name:          "explicit null",
+			nullable:      gl.NewNullNullable[int64](),
+			wantPriority:  0,
+			wantSpecified: false,
+		},
+		{
+			name:          "unspecified (zero value)",
+			nullable:      gl.Nullable[int64]{},
+			wantPriority:  0,
+			wantSpecified: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotPriority, gotSpecified := priorityFromNullable(tt.nullable)
+			if gotPriority != tt.wantPriority {
+				t.Errorf("priority = %d, want %d", gotPriority, tt.wantPriority)
+			}
+			if gotSpecified != tt.wantSpecified {
+				t.Errorf("specified = %t, want %t", gotSpecified, tt.wantSpecified)
+			}
+		})
+	}
+}
+
+// TestOutputConverters_PropagateNullPriority verifies the converters surface
+// the explicit-null branch of priorityFromNullable so callers can tell a
+// "cleared" priority from an unset one.
+func TestOutputConverters_PropagateNullPriority(t *testing.T) {
+	nullPriority := gl.NewNullNullable[int64]()
+
+	project := ProjectOutput(&gl.Label{ID: 7, Name: "needs-info", Priority: nullPriority})
+	if project.Priority != 0 || project.PrioritySpecified {
+		t.Fatalf("ProjectOutput priority = (%d, %t), want (0, false) for null nullable", project.Priority, project.PrioritySpecified)
+	}
+
+	group := GroupOutput(&gl.GroupLabel{ID: 7, Name: "needs-info", Priority: nullPriority})
+	if group.Priority != 0 || group.PrioritySpecified {
+		t.Fatalf("GroupOutput priority = (%d, %t), want (0, false) for null nullable", group.Priority, group.PrioritySpecified)
+	}
+}

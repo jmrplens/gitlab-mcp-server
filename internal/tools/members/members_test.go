@@ -36,7 +36,8 @@ const (
 func TestProjectMembersList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectMembers {
-			testutil.RespondJSONWithPagination(w, http.StatusOK,
+			testutil.RespondJSONWithPagination(
+				w, http.StatusOK,
 				`[{"id":1,"username":"jdoe","name":"John Doe","state":"active","access_level":30,"web_url":"https://gitlab.example.com/jdoe"},{"id":2,"username":"asmith","name":"Alice Smith","state":"active","access_level":40,"web_url":"https://gitlab.example.com/asmith"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"},
 			)
@@ -81,7 +82,8 @@ func TestProjectMembersList_WithQuery(t *testing.T) {
 			if r.URL.Query().Get("query") != "alice" {
 				t.Errorf("expected query param 'alice', got %q", r.URL.Query().Get("query"))
 			}
-			testutil.RespondJSON(w, http.StatusOK,
+			testutil.RespondJSON(
+				w, http.StatusOK,
 				`[{"id":2,"username":"asmith","name":"Alice Smith","state":"active","access_level":40,"web_url":"https://gitlab.example.com/asmith"}]`,
 			)
 			return
@@ -193,7 +195,8 @@ func TestProjectMembersList_WithPagination(t *testing.T) {
 			if r.URL.Query().Get("per_page") != "5" {
 				t.Errorf("expected per_page=5, got %q", r.URL.Query().Get("per_page"))
 			}
-			testutil.RespondJSONWithPagination(w, http.StatusOK,
+			testutil.RespondJSONWithPagination(
+				w, http.StatusOK,
 				`[{"id":6,"username":"user6","name":"User Six","state":"active","access_level":30,"web_url":"https://gitlab.example.com/user6"}]`,
 				testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "6", TotalPages: "2", PrevPage: "1"},
 			)

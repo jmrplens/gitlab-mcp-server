@@ -96,7 +96,8 @@ func TestRunnerTraceSummaryAndResourceHelpers(t *testing.T) {
 }
 
 func TestEvaluatePreparedCase_UsesRenderedPromptAndTypedSteps(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "fixture/project"}}),
 	)
 	prepared := PreparedCase{
@@ -127,7 +128,8 @@ func TestEvaluatePreparedCase_UsesRenderedPromptAndTypedSteps(t *testing.T) {
 }
 
 func TestEvaluateTask_AcceptsOptionalCapabilityBridgePreludeSkip(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("resources", resourceListTool, map[string]any{}),
 		toolUseResponse("tools", resourceReadTool, map[string]any{"uri": "gitlab://tools"}),
 	)
@@ -159,7 +161,8 @@ func TestEvaluateTask_AcceptsOptionalCapabilityBridgePreludeSkip(t *testing.T) {
 }
 
 func TestEvaluateTask_AcceptsDirectDynamicExecuteWithoutFind(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("exec", dynamicExecuteActionTool, map[string]any{"action": actionProjectGet, "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
 	)
 	task := evalTask{ID: "MT-DYN-DIRECT-001", Steps: []evalStep{

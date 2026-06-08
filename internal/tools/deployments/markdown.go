@@ -14,7 +14,8 @@ type deploymentNotFoundOutput struct {
 }
 
 func formatDeploymentNotFound(out deploymentNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Deployment", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Deployment", out.Identifier,
 		"Use gitlab_deployment_list with project_id to list deployments",
 		"Verify the deployment_id is correct for this project",
 	)
@@ -48,7 +49,8 @@ func FormatOutputMarkdown(d Output) string {
 	if d.PipelineWebURL != "" {
 		fmt.Fprintf(&b, "| Pipeline | [#%d](%s) |\n", d.ID, d.PipelineWebURL)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_environment action 'list' to see all environments",
 		"Use gitlab_merge_request to see related merge request details",
 	)
@@ -70,7 +72,8 @@ func FormatListMarkdown(out ListOutput) string {
 			d.ID, d.IID, toolutil.EscapeMdTableCell(d.Ref), d.Status, toolutil.EscapeMdTableCell(d.EnvironmentName), toolutil.EscapeMdTableCell(d.UserName))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get' with a deployment_id to see details",
 		"Use gitlab_environment action 'list' to see all environments",
 	)

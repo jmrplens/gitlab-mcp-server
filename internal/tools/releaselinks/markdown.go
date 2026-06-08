@@ -15,7 +15,8 @@ func FormatOutputMarkdown(l Output) string {
 	fmt.Fprintf(&b, toolutil.FmtMdURL, l.URL)
 	fmt.Fprintf(&b, "- **Type**: %s\n", l.LinkType)
 	fmt.Fprintf(&b, "- **External**: %v\n", l.External)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'link_update' to modify this link",
 		"Use action 'link_delete' to remove this link",
 	)
@@ -39,7 +40,8 @@ func FormatBatchMarkdown(out CreateBatchOutput) string {
 			fmt.Fprintf(&b, "- %s\n", f)
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'link_list' to view all links for this release",
 	)
@@ -61,7 +63,8 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n", l.ID, toolutil.EscapeMdTableCell(l.Name), toolutil.EscapeMdTableCell(l.LinkType), toolutil.MdTitleLink(l.Name, l.URL))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'link_create' to add a new release asset link",
 		"Use action 'link_create_batch' to add multiple asset links in one call",

@@ -30,7 +30,8 @@ func FormatOutputMarkdown(out Output) string {
 		sb.WriteString("| ID | Name | Color | Editable state |\n")
 		sb.WriteString("|----|------|-------|----------------|\n")
 		for _, attribute := range out.SecurityAttributes {
-			fmt.Fprintf(&sb, "| `%d` | %s | `%s` | `%s` |\n",
+			fmt.Fprintf(
+				&sb, "| `%d` | %s | `%s` | `%s` |\n",
 				attribute.ID,
 				toolutil.EscapeMdTableCell(attribute.Name),
 				attribute.Color,
@@ -38,7 +39,8 @@ func FormatOutputMarkdown(out Output) string {
 			)
 		}
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_create_security_attribute` to add attributes under this category",
 		"Use `gitlab_update_security_category` to rename or describe this category",
 	)

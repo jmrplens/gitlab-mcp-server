@@ -17,7 +17,8 @@ func FormatOutputMarkdown(out Output) string {
 	var sb strings.Builder
 	sb.WriteString("## Security Attribute\n\n")
 	writeAttributeTable(&sb, out)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_update_security_attribute` to edit this attribute",
 		"Use `gitlab_update_project_security_attributes` to apply attributes to a project",
 	)
@@ -39,14 +40,16 @@ func FormatCreateMarkdown(out CreateOutput) string {
 		if attribute.SecurityCategory != nil {
 			category = toolutil.EscapeMdTableCell(attribute.SecurityCategory.Name)
 		}
-		fmt.Fprintf(&sb, "| `%d` | %s | `%s` | %s |\n",
+		fmt.Fprintf(
+			&sb, "| `%d` | %s | `%s` | %s |\n",
 			attribute.ID,
 			toolutil.EscapeMdTableCell(attribute.Name),
 			toolutil.EscapeMdTableCell(attribute.Color),
 			category,
 		)
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_update_project_security_attributes` to apply attributes to a project",
 		"Use `gitlab_bulk_update_security_attributes` to apply attributes to many groups or projects",

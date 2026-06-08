@@ -16,7 +16,8 @@ func FormatOutputMarkdown(c Output) string {
 	fmt.Fprintf(&b, "- **Author**: %s <%s>\n", c.AuthorName, c.AuthorEmail)
 	fmt.Fprintf(&b, "- **Date**: %s\n", toolutil.FormatTime(c.CommittedDate))
 	fmt.Fprintf(&b, toolutil.FmtMdURL, c.WebURL)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'commit_get' with this SHA to see full commit details and stats",
 		"Use action 'commit_diff' to see file changes for this commit",
 		"Use action 'commit_refs' to see branches/tags containing this commit",
@@ -39,7 +40,8 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| [%s](%s) | %s | %s | %s |\n", c.ShortID, c.WebURL, toolutil.EscapeMdTableCell(c.Title), toolutil.EscapeMdTableCell(c.AuthorName), toolutil.FormatTime(c.CommittedDate))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'commit_get' with a SHA to see commit summary",
 		"Use action 'commit_diff' to see file changes for a specific commit",
@@ -64,7 +66,8 @@ func FormatDetailMarkdown(c DetailOutput) string {
 		fmt.Fprintf(&b, "\n### Message\n\n%s\n", toolutil.WrapGFMBody(c.Message))
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdURLNewline, c.WebURL)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_commit_diff` to view file changes",
 		"Use `gitlab_commit_cherry_pick` to apply this commit to another branch",
 	)
@@ -94,7 +97,8 @@ func FormatDiffMarkdown(out DiffOutput) string {
 		fmt.Fprintf(&b, toolutil.FmtRow3Str, status, toolutil.EscapeMdTableCell(d.OldPath), toolutil.EscapeMdTableCell(d.NewPath))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_file_get` to view a specific changed file",
 		"Use `gitlab_commit_comment_create` to comment on the changes",
 	)
@@ -115,7 +119,8 @@ func FormatRefsMarkdown(out RefsOutput) string {
 		fmt.Fprintf(&b, "| %s | %s |\n", r.Type, toolutil.EscapeMdTableCell(r.Name))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_branch_get` to view branch details",
 		"Use `gitlab_tag_get` to view tag details",
 	)
@@ -144,7 +149,8 @@ func FormatCommentsMarkdown(out CommentsOutput) string {
 		fmt.Fprintf(&b, toolutil.FmtRow4Str, toolutil.EscapeMdTableCell(c.Author), toolutil.EscapeMdTableCell(c.Note), toolutil.EscapeMdTableCell(path), line)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_commit_comment_create` to add a comment",
 		"Use `gitlab_commit_get` to view the commit details",
 	)
@@ -160,7 +166,8 @@ func FormatCommentMarkdown(c CommentOutput) string {
 	if c.Path != "" {
 		fmt.Fprintf(&b, "- **Path**: %s (line %d)\n", c.Path, c.Line)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_commit_comments` to list all comments",
 		"Use `gitlab_file_get` to view the referenced file",
 	)
@@ -181,7 +188,8 @@ func FormatStatusesMarkdown(out StatusesOutput) string {
 		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s |\n", s.ID, s.Status, toolutil.EscapeMdTableCell(s.Name), toolutil.EscapeMdTableCell(s.Ref), toolutil.EscapeMdTableCell(s.Description))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_commit_status_set` to update a status",
 		"Use `gitlab_commit_get` to view commit details",
 	)
@@ -201,7 +209,8 @@ func FormatStatusMarkdown(s StatusOutput) string {
 	if s.TargetURL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, s.TargetURL)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_commit_status_set` to update this status",
 		"Use `gitlab_commit_statuses` to see all statuses",
 	)
@@ -224,7 +233,8 @@ func FormatMRsByCommitMarkdown(out MRsByCommitOutput) string {
 			toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch),
 			toolutil.EscapeMdTableCell(mr.Author))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_mr_get` to view MR details",
 		"Use `gitlab_mr_changes_get` to see MR diff",
 	)
@@ -239,7 +249,8 @@ func FormatGPGSignatureMarkdown(sig GPGSignatureOutput) string {
 	fmt.Fprintf(&b, "- **Key User**: %s <%s>\n", sig.KeyUserName, sig.KeyUserEmail)
 	fmt.Fprintf(&b, "- **Key ID**: %d\n", sig.KeyID)
 	fmt.Fprintf(&b, "- **Primary Key ID**: %s\n", sig.KeyPrimaryKeyID)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_commit_get` to view the full commit details",
 	)
 	return b.String()

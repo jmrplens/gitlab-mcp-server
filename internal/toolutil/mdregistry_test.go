@@ -5,6 +5,7 @@
 package toolutil
 
 import (
+	"reflect"
 	"sync"
 	"testing"
 
@@ -268,4 +269,124 @@ func TestFormatVoidOutput_ReturnsEmojiPlusMessage(t *testing.T) {
 	if got != want {
 		t.Fatalf("formatVoidOutput = %q, want %q", got, want)
 	}
+}
+
+// TestRegisterMarkdownPair_RegistersBothTypes verifies that RegisterMarkdownPair
+// registers two distinct string formatters and MarkdownForResult dispatches
+// each to the correct renderer.
+func TestRegisterMarkdownPair_RegistersBothTypes(t *testing.T) {
+	stringFormatters = sync.Map{}
+	resultFormatters = sync.Map{}
+
+	type pairA struct{ A string }
+	type pairB struct{ B string }
+
+	RegisterMarkdownPair(
+		func(v pairA) string { return "A:" + v.A },
+		func(v pairB) string { return "B:" + v.B },
+	)
+
+	if got := MarkdownForResult(pairA{A: "x"}); got == nil || !extractText(got).startsWith("A:") {
+		t.Errorf("pairA dispatch = %+v, want A:x", got)
+	}
+	if got := MarkdownForResult(pairB{B: "y"}); got == nil || !extractText(got).startsWith("B:") {
+		t.Errorf("pairB dispatch = %+v, want B:y", got)
+	}
+}
+
+// TestRegisterMarkdownTriple_RegistersAllTypes verifies that RegisterMarkdownTriple
+// registers three distinct string formatters and MarkdownForResult dispatches
+// each correctly.
+func TestRegisterMarkdownTriple_RegistersAllTypes(t *testing.T) {
+	stringFormatters = sync.Map{}
+	resultFormatters = sync.Map{}
+
+	type tripleA struct{ A string }
+	type tripleB struct{ B string }
+	type tripleC struct{ C string }
+
+	RegisterMarkdownTriple(
+		func(v tripleA) string { return "A:" + v.A },
+		func(v tripleB) string { return "B:" + v.B },
+		func(v tripleC) string { return "C:" + v.C },
+	)
+
+	if got := MarkdownForResult(tripleA{A: "1"}); got == nil || !extractText(got).startsWith("A:") {
+		t.Errorf("tripleA dispatch = %+v, want A:1", got)
+	}
+	if got := MarkdownForResult(tripleB{B: "2"}); got == nil || !extractText(got).startsWith("B:") {
+		t.Errorf("tripleB dispatch = %+v, want B:2", got)
+	}
+	if got := MarkdownForResult(tripleC{C: "3"}); got == nil || !extractText(got).startsWith("C:") {
+		t.Errorf("tripleC dispatch = %+v, want C:3", got)
+	}
+}
+
+// TestRegisterMarkdown_TypeMismatchReturnsEmpty exercises the defensive
+// type-assertion branch in RegisterMarkdown when the stored closure receives
+// a non-matching concrete type.
+func TestRegisterMarkdown_TypeMismatchReturnsEmpty(t *testing.T) {
+	stringFormatters = sync.Map{}
+	resultFormatters = sync.Map{}
+
+	RegisterMarkdown(func(v mdTestOutput) string { return "## " + v.Name })
+
+	// Inject a wrong-type value via the registry directly to exercise the
+	// defensive `if !ok { return "" }` branch.
+	loaded, loadOK := stringFormatters.Load(reflect.TypeFor[mdTestOutput]())
+	if !loadOK {
+		t.Fatal("formatter not registered for mdTestOutput")
+	}
+	if fn, assertOK := loaded.(func(any) string); assertOK {
+		if got := fn(mdTestListOutput{}); got != "" {
+			t.Errorf("type-mismatch dispatch = %q, want empty string", got)
+		}
+	} else {
+		t.Fatalf("registered string formatter has unexpected type: %T", loaded)
+	}
+}
+
+// TestRegisterMarkdownResult_TypeMismatchReturnsNil exercises the defensive
+// type-assertion branch in RegisterMarkdownResult when the stored closure
+// receives a non-matching concrete type.
+func TestRegisterMarkdownResult_TypeMismatchReturnsNil(t *testing.T) {
+	stringFormatters = sync.Map{}
+	resultFormatters = sync.Map{}
+
+	RegisterMarkdownResult(func(v mdTestResultOutput) *mcp.CallToolResult {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: v.URL}}}
+	})
+
+	loaded, loadOK := resultFormatters.Load(reflect.TypeFor[mdTestResultOutput]())
+	if !loadOK {
+		t.Fatal("result formatter not registered for mdTestResultOutput")
+	}
+	if fn, assertOK := loaded.(func(any) *mcp.CallToolResult); assertOK {
+		if got := fn(mdTestListOutput{}); got != nil {
+			t.Errorf("type-mismatch dispatch = %+v, want nil", got)
+		}
+	} else {
+		t.Fatalf("registered result formatter has unexpected type: %T", loaded)
+	}
+}
+
+// extractText returns the first text-content entry of a CallToolResult or "".
+func extractText(result *mcp.CallToolResult) textPrefix {
+	if result == nil {
+		return textPrefix("")
+	}
+	for _, c := range result.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			return textPrefix(tc.Text)
+		}
+	}
+	return textPrefix("")
+}
+
+// textPrefix is a tiny string type with a startsWith helper to keep
+// the assertions above readable.
+type textPrefix string
+
+func (s textPrefix) startsWith(prefix string) bool {
+	return len(s) >= len(prefix) && string(s[:len(prefix)]) == prefix
 }

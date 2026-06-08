@@ -19,7 +19,8 @@ func FormatListMarkdown(out ListOutput) string {
 	sb.WriteString("| Name | Version | Package Manager | Vulns | Licenses |\n")
 	sb.WriteString("|------|---------|-----------------|-------|----------|\n")
 	for _, d := range out.Dependencies {
-		fmt.Fprintf(&sb, "| %s | %s | %s | %d | %d |\n",
+		fmt.Fprintf(
+			&sb, "| %s | %s | %s | %d | %d |\n",
 			toolutil.EscapeMdTableCell(d.Name),
 			toolutil.EscapeMdTableCell(d.Version),
 			d.PackageManager,

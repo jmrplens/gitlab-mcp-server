@@ -16,7 +16,8 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&sb, "| ID | %d |\n", out.ID)
 	fmt.Fprintf(&sb, "| Name | `%s` |\n", out.Name)
 	fmt.Fprintf(&sb, "| Project ID | %d |\n", out.ProjectID)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_delete_project_alias` to remove this alias",
 		"Use `gitlab_list_project_aliases` to view all aliases",
 	)

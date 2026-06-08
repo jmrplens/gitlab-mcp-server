@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
@@ -71,6 +72,27 @@ func TestRun_InvalidFlagReturnsError(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Fatalf("stdout = %q, want empty", stdout.String())
 	}
+}
+
+// TestRun_EncodeErrorIsReturned verifies that the JSON encode error path is
+// returned to the caller when stdout rejects writes.
+//
+// The test swaps stdout for a writer that always errors so the encoder's
+// Write call fails, ensuring the encode-error branch is covered.
+func TestRun_EncodeErrorIsReturned(t *testing.T) {
+	err := run(nil, errWriter{})
+	if err == nil {
+		t.Fatal("run() error = nil, want encode error")
+	}
+	if !strings.Contains(err.Error(), "encode") {
+		t.Fatalf("run() error = %v, want encode context", err)
+	}
+}
+
+type errWriter struct{}
+
+func (errWriter) Write([]byte) (int, error) {
+	return 0, errors.New("encode write failed")
 }
 
 // TestSchemaArgs_SortsTopLevelPropertiesAndNormalizesTypes verifies Docker

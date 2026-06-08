@@ -1602,7 +1602,8 @@ func logDynamicSearch(query string, matches []scoredActionEntry, fuzzyUsed, ambi
 		topAction = matches[0].entry.ID
 		lowConfidence = matches[0].lowConfidence
 	}
-	slog.Debug("dynamic search completed",
+	slog.Debug(
+		"dynamic search completed",
 		"query_len", len(query),
 		"result_count", len(matches),
 		"fuzzy_used", fuzzyUsed,

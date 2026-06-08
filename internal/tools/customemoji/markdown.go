@@ -31,7 +31,8 @@ func FormatListMarkdown(out ListOutput) string {
 			created = toolutil.EscapeMdTableCell(e.CreatedAt)
 		}
 
-		fmt.Fprintf(&sb, "| :%s: | %s | %s |\n",
+		fmt.Fprintf(
+			&sb, "| :%s: | %s | %s |\n",
 			toolutil.EscapeMdTableCell(e.Name),
 			external,
 			created,
@@ -63,7 +64,8 @@ func FormatCreateMarkdown(out CreateOutput) string {
 	if out.Emoji.CreatedAt != "" {
 		fmt.Fprintf(&sb, "| Created | %s |\n", toolutil.EscapeMdTableCell(out.Emoji.CreatedAt))
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_list_custom_emoji` to view all custom emoji",
 		"Use `gitlab_delete_custom_emoji` to remove this emoji",

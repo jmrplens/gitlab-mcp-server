@@ -1441,7 +1441,8 @@ func validateMarkdownTables(md string) []tableIssue {
 				lineNum: lineNum,
 				description: fmt.Sprintf(
 					"column mismatch: line has %d pipes, header (line %d) has %d pipes",
-					pipes, tableStart, headerPipes),
+					pipes, tableStart, headerPipes,
+				),
 			})
 		}
 	}

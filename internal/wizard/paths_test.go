@@ -3,6 +3,8 @@
 package wizard
 
 import (
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -192,5 +194,157 @@ func TestAllConfigPaths_NonEmpty(t *testing.T) {
 				t.Errorf("%s returned empty string", name)
 			}
 		})
+	}
+}
+
+// TestDefaultInstallDir_CurrentPlatform exercises the platform-specific
+// branch on the current OS so the function is covered even when running
+// on a non-Linux/Windows machine.
+func TestDefaultInstallDir_CurrentPlatform(t *testing.T) {
+	dir := DefaultInstallDir()
+	switch runtime.GOOS {
+	case "windows":
+		// Either LOCALAPPDATA-derived or fallback to AppData/Local.
+		home, _ := os.UserHomeDir()
+		if dir == "" {
+			t.Fatal("DefaultInstallDir returned empty on Windows")
+		}
+		if !strings.Contains(dir, "gitlab-mcp-server") {
+			t.Errorf("DefaultInstallDir = %q, want to contain app name", dir)
+		}
+		_ = home
+	default:
+		if !strings.HasSuffix(dir, ".local/bin") {
+			t.Errorf("DefaultInstallDir = %q, want suffix .local/bin on %s", dir, runtime.GOOS)
+		}
+	}
+}
+
+// TestConfigDir_CurrentPlatform exercises configDir on the current OS
+// to cover the platform-specific branch.
+func TestConfigDir_CurrentPlatform(t *testing.T) {
+	dir := configDir("testapp")
+	if dir == "" {
+		t.Fatal("configDir returned empty")
+	}
+	if !strings.HasSuffix(dir, "testapp") {
+		t.Errorf("configDir = %q, want suffix testapp", dir)
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		// macOS uses Library/Application Support/<app>
+		if !strings.Contains(dir, "Library/Application Support/testapp") {
+			t.Errorf("configDir = %q, want to contain 'Library/Application Support/testapp' on darwin", dir)
+		}
+	case "windows":
+		// Either APPDATA-derived or AppData/Roaming.
+		if !strings.Contains(dir, "testapp") {
+			t.Errorf("configDir = %q, want to contain app name on windows", dir)
+		}
+	default:
+		// Linux/BSD: XDG_CONFIG_HOME if set, else ~/.config.
+		xdg := os.Getenv("XDG_CONFIG_HOME")
+		if xdg != "" {
+			if dir != filepath.Join(xdg, "testapp") {
+				t.Errorf("configDir = %q, want %q when XDG_CONFIG_HOME is set", dir, filepath.Join(xdg, "testapp"))
+			}
+		} else if !strings.Contains(dir, ".config/testapp") {
+			t.Errorf("configDir = %q, want to contain .config/testapp on %s", dir, runtime.GOOS)
+		}
+	}
+}
+
+// TestZedConfigPath_CurrentPlatform exercises the zedConfigPath branch
+// for the current OS.
+func TestZedConfigPath_CurrentPlatform(t *testing.T) {
+	p := zedConfigPath()
+	if p == "" {
+		t.Fatal("zedConfigPath returned empty")
+	}
+	if !strings.HasSuffix(p, "settings.json") {
+		t.Errorf("zedConfigPath = %q, want suffix settings.json", p)
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		if !strings.Contains(p, ".config/zed/settings.json") {
+			t.Errorf("zedConfigPath = %q, want to contain .config/zed/settings.json on darwin", p)
+		}
+	case "windows":
+		if !strings.Contains(p, "Zed") {
+			t.Errorf("zedConfigPath = %q, want to contain Zed on windows", p)
+		}
+	default:
+		xdg := os.Getenv("XDG_CONFIG_HOME")
+		if xdg != "" {
+			if p != filepath.Join(xdg, "zed", "settings.json") {
+				t.Errorf("zedConfigPath = %q, want %q", p, filepath.Join(xdg, "zed", "settings.json"))
+			}
+		} else if !strings.Contains(p, ".config/zed/settings.json") {
+			t.Errorf("zedConfigPath = %q, want to contain .config/zed/settings.json on %s", p, runtime.GOOS)
+		}
+	}
+}
+
+// TestCrushConfigPath_CurrentPlatform exercises crushConfigPath on the
+// current OS to cover platform branches.
+func TestCrushConfigPath_CurrentPlatform(t *testing.T) {
+	p := crushConfigPath()
+	if p == "" {
+		t.Fatal("crushConfigPath returned empty")
+	}
+	if !strings.HasSuffix(p, "crush.json") {
+		t.Errorf("crushConfigPath = %q, want suffix crush.json", p)
+	}
+	switch runtime.GOOS {
+	case "windows":
+		if !strings.Contains(p, "crush") {
+			t.Errorf("crushConfigPath = %q, want to contain crush on windows", p)
+		}
+	case "darwin":
+		// On macOS, configDir returns ~/Library/Application Support/...
+		if !strings.Contains(p, "Library/Application Support/crush/crush.json") {
+			t.Errorf("crushConfigPath = %q, want to contain Library/Application Support/crush/crush.json on darwin", p)
+		}
+	default:
+		xdg := os.Getenv("XDG_CONFIG_HOME")
+		var want string
+		if xdg != "" {
+			want = filepath.Join(xdg, "crush", "crush.json")
+		} else {
+			home, _ := os.UserHomeDir()
+			want = filepath.Join(home, ".config", "crush", "crush.json")
+		}
+		if p != want {
+			t.Errorf("crushConfigPath = %q, want %q", p, want)
+		}
+	}
+}
+
+// TestZedConfigPath_WindowsAPPDATA verifies zedConfigPath uses APPDATA on
+// Windows when the env variable is set.
+func TestZedConfigPath_WindowsAPPDATA(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows-only test")
+	}
+	t.Setenv("APPDATA", `C:\Users\test\AppData\Roaming`)
+	p := zedConfigPath()
+	want := `C:\Users\test\AppData\Roaming\Zed\settings.json`
+	if p != want {
+		t.Errorf("zedConfigPath = %q, want %q", p, want)
+	}
+}
+
+// TestZedConfigPath_WindowsFallback verifies zedConfigPath falls back to
+// AppData/Roaming when APPDATA is unset.
+func TestZedConfigPath_WindowsFallback(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows-only test")
+	}
+	t.Setenv("APPDATA", "")
+	home, _ := os.UserHomeDir()
+	p := zedConfigPath()
+	want := filepath.Join(home, "AppData", "Roaming", "Zed", "settings.json")
+	if p != want {
+		t.Errorf("zedConfigPath = %q, want %q", p, want)
 	}
 }

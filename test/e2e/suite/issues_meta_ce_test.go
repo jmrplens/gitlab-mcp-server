@@ -904,7 +904,8 @@ func setupIterationFixture(ctx context.Context, t *testing.T) (iterationFixture,
 		t.Logf("iteration fixture: mutation succeeded but issue.iteration is nil — GitLab dropped the assignment without erroring")
 		return iterationFixture{}, false
 	}
-	t.Logf("iteration fixture: mutation set iteration %s (%q, state=%s) on issue !%s",
+	t.Logf(
+		"iteration fixture: mutation set iteration %s (%q, state=%s) on issue !%s",
 		assignResp.Data.IssueSetIteration.Issue.Iteration.ID,
 		assignResp.Data.IssueSetIteration.Issue.Iteration.Title,
 		assignResp.Data.IssueSetIteration.Issue.Iteration.State,

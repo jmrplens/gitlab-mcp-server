@@ -26,7 +26,8 @@ func FormatRepositoryMarkdown(out RepositoryOutput) string {
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, "| Created At | %s |\n", toolutil.FormatTime(out.CreatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'registry_tag_list' to list tags in this repository",
 		"Use action 'registry_delete' to delete this repository",
 	)
@@ -48,7 +49,8 @@ func FormatRepositoryListMarkdown(out RepositoryListOutput) string {
 		fmt.Fprintf(&b, "| %s | %s | %d |\n", r.Name, r.Path, r.TagsCount)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'registry_get' with repository_id for full details",
 	)
 	return b.String()
@@ -72,7 +74,8 @@ func FormatTagMarkdown(out TagOutput) string {
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, "| Created At | %s |\n", toolutil.FormatTime(out.CreatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'registry_tag_delete' to remove this tag",
 	)
 	return b.String()
@@ -93,7 +96,8 @@ func FormatTagListMarkdown(out TagListOutput) string {
 		fmt.Fprintf(&b, "| %s | %s | %d |\n", t.Name, t.Path, t.TotalSize)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'registry_tag_get' with tag name for full details",
 		"Use action 'registry_tag_delete_bulk' to clean up old tags",
 	)
@@ -108,7 +112,8 @@ func FormatProtectionRuleMarkdown(out ProtectionRuleOutput) string {
 	fmt.Fprintf(&b, "| Repository Path Pattern | %s |\n", out.RepositoryPathPattern)
 	fmt.Fprintf(&b, "| Min Access Level (Push) | %s |\n", out.MinimumAccessLevelForPush)
 	fmt.Fprintf(&b, "| Min Access Level (Delete) | %s |\n", out.MinimumAccessLevelForDelete)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'registry_rule_update' to modify access levels",
 		"Use action 'registry_rule_delete' to remove this rule",
 	)
@@ -131,7 +136,8 @@ func FormatProtectionRuleListMarkdown(out ProtectionRuleListOutput) string {
 			r.RepositoryPathPattern, r.MinimumAccessLevelForPush, r.MinimumAccessLevelForDelete)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'registry_rule_create' to add a new rule",
 	)
 	return b.String()

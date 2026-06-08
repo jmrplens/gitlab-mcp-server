@@ -17,7 +17,8 @@ func FormatUploadMarkdown(u UploadOutput) string {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, u.FullURL)
 	}
 	fmt.Fprintf(&b, "- **Markdown**: `%s`\n", u.Markdown)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use the Markdown reference in issue or MR descriptions to embed this file",
 	)

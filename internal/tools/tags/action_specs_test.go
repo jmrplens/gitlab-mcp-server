@@ -169,3 +169,32 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// tagSpec — branch coverage
+// ---------------------------------------------------------------------------
+
+// TestTagSpec_IdempotentNonDestructive covers the case where a spec is
+// idempotent=true but route.Destructive=false: this branch (the `case
+// idempotent:` arm in tagSpec's second switch) is not exercised by any
+// production call site, so it is verified directly.
+func TestTagSpec_IdempotentNonDestructive(t *testing.T) {
+	route := toolutil.ActionRoute{
+		Handler: func(_ context.Context, _ map[string]any) (any, error) {
+			return nil, nil //nolint:nilnil // test fixture: handler is never invoked
+		},
+		Destructive: false,
+	}
+	spec := tagSpec("custom", route, "gitlab_tag_custom", false, true)
+	if spec.Name != "custom" {
+		t.Errorf("expected spec.Name = custom, got %q", spec.Name)
+	}
+	// The idempotent + non-destructive + non-readonly path produces an
+	// update-style spec (not destructive, not create, not read).
+	if spec.ReadOnly {
+		t.Errorf("expected non-readonly spec")
+	}
+	if spec.Destructive {
+		t.Errorf("expected non-destructive spec for idempotent non-destructive route")
+	}
+}

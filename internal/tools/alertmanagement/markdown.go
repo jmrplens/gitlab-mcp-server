@@ -21,7 +21,8 @@ func FormatListMarkdown(out ListMetricImagesOutput) string {
 		fmt.Fprintf(&sb, "| %d | %s | %s |\n", img.ID, toolutil.EscapeMdTableCell(img.Filename), toolutil.MdTitleLink(img.Filename, img.URL))
 	}
 	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_upload_alert_metric_image` to add a new metric image",
 	)
@@ -34,7 +35,8 @@ func FormatImageMarkdown(img MetricImageItem) string {
 	fmt.Fprintf(&b, "## Metric Image\n\n- **ID**: %d\n- **Filename**: %s\n", img.ID, img.Filename)
 	fmt.Fprintf(&b, toolutil.FmtMdURL, img.URL)
 	fmt.Fprintf(&b, "- **URL Text**: %s\n", img.URLText)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_list_alert_metric_images` to see all metric images for an alert",
 	)

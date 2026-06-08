@@ -21,7 +21,8 @@ func FormatMarkdown(out ResolveOutput) string {
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdVisibility, out.Visibility)
 	fmt.Fprintf(&b, "\nUse `project_id: %d` or `project_id: \"%s\"` for subsequent operations.\n", out.ID, out.PathWithNamespace)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"If the task asks to verify project metadata after discovery, call gitlab_project action 'get' with this project_id before repository operations",
 		"Use the project_id in subsequent tool calls to operate on this project",

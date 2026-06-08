@@ -68,13 +68,15 @@ func PreStartUpdate(ctx context.Context, cfg Config) (result *PreStartResult) {
 		return &PreStartResult{}
 	}
 
-	slog.Info("autoupdate: new version available",
+	slog.Info(
+		"autoupdate: new version available",
 		"current_version", info.CurrentVersion,
 		"latest_version", info.LatestVersion,
 	)
 
 	if cfg.Mode == ModeCheck {
-		slog.Warn("autoupdate: check-only mode — update available but not applying",
+		slog.Warn(
+			"autoupdate: check-only mode — update available but not applying",
 			"latest_version", info.LatestVersion,
 		)
 		return &PreStartResult{NewVersion: info.LatestVersion}

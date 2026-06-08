@@ -77,7 +77,8 @@ func AnalyzeCIConfig(ctx context.Context, req *mcp.CallToolRequest, client *gitl
 	data := FormatCIConfigForAnalysis(lintResult)
 	tracker.Step(ctx, 3, 4, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, analyzeCIConfigPrompt, data,
+	result, err := samplingClient.Analyze(
+		ctx, analyzeCIConfigPrompt, data,
 		sampling.WithTemperature(0.2),
 		sampling.WithModelPriorities(0.3, 0.3, 0.7),
 	)
@@ -156,7 +157,8 @@ func FormatAnalyzeCIConfigMarkdown(a AnalyzeCIConfigOutput) string {
 	if a.Model != "" {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", a.Model)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_ci_lint` to validate updated CI configuration",
 		"Use `gitlab_ci_variable_get` to review referenced variables",
 	)

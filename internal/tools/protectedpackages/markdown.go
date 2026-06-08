@@ -22,7 +22,8 @@ func FormatOutputMarkdown(r Output) string {
 	if r.MinimumAccessLevelForDelete != "" {
 		fmt.Fprintf(&b, "- **Min Delete Level**: %s\n", r.MinimumAccessLevelForDelete)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_update_package_protection_rule` to modify this rule",
 		"Use `gitlab_delete_package_protection_rule` to remove it",
 	)
@@ -39,7 +40,8 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | Pattern | Type | Min Push | Min Delete |\n")
 	b.WriteString("| --: | ------- | ---- | -------- | ---------- |\n")
 	for _, r := range out.Rules {
-		fmt.Fprintf(&b, "| %d | `%s` | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | `%s` | %s | %s | %s |\n",
 			r.ID,
 			toolutil.EscapeMdTableCell(r.PackageNamePattern),
 			toolutil.EscapeMdTableCell(r.PackageType),

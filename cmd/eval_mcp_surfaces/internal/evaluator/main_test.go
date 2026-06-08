@@ -2503,7 +2503,8 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 		ExpectedAction: "project.list",
 	}
 	prompt := taskPrompt(task)
-	assertTaskPromptContains(t, prompt,
+	assertTaskPromptContains(
+		t, prompt,
 		"exactly one tool call",
 		"A schema lookup before the task call is a failure",
 		"Do not look up schemas for ordinary parameter names already supplied by the task prompt",
@@ -4858,7 +4859,8 @@ func TestFailureDiagnosticCategory_ClassifiesCommonLiveErrors(t *testing.T) {
 
 // TestEvaluateTask_UsesSchemaLookupThenFinalCall verifies EvaluateTask uses schema lookup then final call.
 func TestEvaluateTask_UsesSchemaLookupThenFinalCall(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("schema", "gitlab_server", map[string]any{"action": "schema_get", "params": map[string]any{"tool": "gitlab_project", "action": "get"}}),
 		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
 	)
@@ -4872,7 +4874,8 @@ func TestEvaluateTask_UsesSchemaLookupThenFinalCall(t *testing.T) {
 
 // TestEvaluateTask_UsesResourceLookupThenFinalCall verifies resource bridge calls do not count as final task calls.
 func TestEvaluateTask_UsesResourceLookupThenFinalCall(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("resources", resourceListTool, map[string]any{}),
 		toolUseResponse("tools-detail", resourceReadTool, map[string]any{"uri": "gitlab://tools"}),
 		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
@@ -4897,7 +4900,8 @@ func TestEvaluateTask_UsesResourceLookupThenFinalCall(t *testing.T) {
 
 // TestEvaluateTask_ExpectedResourceBridgeStepAdvancesScenario verifies expected bridge calls count as workflow steps.
 func TestEvaluateTask_ExpectedResourceBridgeStepAdvancesScenario(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("resources", resourceListTool, map[string]any{}),
 		toolUseResponse("tools-detail", resourceReadTool, map[string]any{"uri": "gitlab://tools/project.get"}),
 		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
@@ -4985,7 +4989,8 @@ func TestBuildCatalogSession_ExposesFullCapabilitySurface(t *testing.T) {
 
 // TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation verifies EvaluateTask when records trace for prompt tool use and validation.
 func TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("final", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
 	)
 	task := evalTask{ID: "MT-002", Prompt: "Find project `my-org/tools/gitlab-mcp-server`.", ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}
@@ -5015,7 +5020,8 @@ func TestEvaluateTask_RecordsTraceForPromptToolUseAndValidation(t *testing.T) {
 
 // TestEvaluateTask_RepairsUnknownSchemaParam verifies EvaluateTask when repairs unknown schema param.
 func TestEvaluateTask_RepairsUnknownSchemaParam(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("bad", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "iid": 7}}),
 		toolUseResponse("good", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
 	)
@@ -5030,7 +5036,8 @@ func TestEvaluateTask_RepairsUnknownSchemaParam(t *testing.T) {
 // TestEvaluateTask_RepairsNoToolUseResponse verifies the evaluator prompts for
 // a tool call when a provider returns prose without a tool_use block.
 func TestEvaluateTask_RepairsNoToolUseResponse(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		modelResponse{Content: []modelContentBlock{{Type: "text", Text: "I can do that."}}},
 		toolUseResponse("good", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
 	)
@@ -5052,7 +5059,8 @@ func TestEvaluateTask_RepairsNoToolUseResponse(t *testing.T) {
 
 // TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting verifies EvaluateTask when invalid matching call uses MCP error when executing.
 func TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("bad", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{}}),
 		toolUseResponse("good", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
 	)
@@ -5082,7 +5090,8 @@ func TestEvaluateTask_InvalidMatchingCallUsesMCPErrorWhenExecuting(t *testing.T)
 
 // TestEvaluateTask_WrongReadOnlyCallUsesMCPWhenExecuting verifies EvaluateTask when wrong read only call uses MCP when executing.
 func TestEvaluateTask_WrongReadOnlyCallUsesMCPWhenExecuting(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("search", "gitlab_search", map[string]any{"action": "projects", "params": map[string]any{"query": "my-org/tools/gitlab-mcp-server"}}),
 		toolUseResponse("good", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
 	)
@@ -5195,7 +5204,8 @@ func TestValidationBadParam_ExtractsSchemaFormattedMissingRequired(t *testing.T)
 
 // TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn verifies EvaluateTask when repairs multiple invalid tool calls from same turn.
 func TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		multiToolUseResponse(
 			modelContentBlock{Type: "tool_use", ID: "bad-project", Name: "gitlab", Input: map[string]any{"action": "project.get", "project_id": "my-org/tools/gitlab-mcp-server"}},
 			modelContentBlock{Type: "tool_use", ID: "bad-file", Name: "gitlab", Input: map[string]any{"action": "repository.file_get", "project_id": "my-org/tools/gitlab-mcp-server", "file_path": "README.md", "ref": "main"}},
@@ -5216,7 +5226,8 @@ func TestEvaluateTask_RepairsMultipleInvalidToolCallsFromSameTurn(t *testing.T) 
 
 // TestEvaluateTask_RetriesTransientSimulation verifies EvaluateTask when retries transient simulation.
 func TestEvaluateTask_RetriesTransientSimulation(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("first", "gitlab_pipeline", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "pipeline_id": 12345}}),
 		toolUseResponse("retry", "gitlab_pipeline", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "pipeline_id": 12345}}),
 	)
@@ -5230,7 +5241,8 @@ func TestEvaluateTask_RetriesTransientSimulation(t *testing.T) {
 
 // TestEvaluateTask_PoisonedOutputDoesNotChangeNextExpectedTool verifies EvaluateTask when poisoned output does not change next expected tool.
 func TestEvaluateTask_PoisonedOutputDoesNotChangeNextExpectedTool(t *testing.T) {
-	runner := newScriptedRunner(t,
+	runner := newScriptedRunner(
+		t,
 		toolUseResponse("file", "gitlab_repository", map[string]any{"action": "file_get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "file_path": "README.md", "ref": "main"}}),
 		toolUseResponse("project", "gitlab_project", map[string]any{"action": "get", "params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server"}}),
 	)

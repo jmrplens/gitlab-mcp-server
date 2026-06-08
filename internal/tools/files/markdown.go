@@ -40,7 +40,8 @@ func FormatOutputMarkdown(f Output) string {
 	case "binary":
 		b.WriteString("- **Content type**: binary (content omitted — not viewable as text)\n")
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'file_update' to modify this file",
 		"Use action 'file_blame' to see who changed each line",
 		"Use action 'file_delete' to remove this file",
@@ -72,7 +73,8 @@ func FormatFileInfoMarkdown(out FileInfoOutput) string {
 	if out.LastCommitID != "" {
 		fmt.Fprintf(&b, "- **Last commit ID**: %s\n", out.LastCommitID)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_file_get` to verify the file content",
 		"Use `gitlab_commit_list` to see the commit history",
 	)
@@ -98,7 +100,8 @@ func FormatBlameMarkdown(out BlameOutput) string {
 		}
 		b.WriteString("```\n\n")
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_commit_get` to view commit details for a blame range",
 		"Use `gitlab_file_get` to view the current file content",
 	)
@@ -120,7 +123,8 @@ func FormatMetaDataMarkdown(out MetaDataOutput) string {
 	if out.ExecuteFilemode {
 		b.WriteString("- **Executable**: yes\n")
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_file_get` to read the file content",
 		"Use `gitlab_file_blame` to see blame information",
 	)
@@ -138,7 +142,8 @@ func FormatRawMarkdown(out RawOutput) string {
 		b.WriteByte('\n')
 	}
 	b.WriteString("```\n")
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_file_update` to modify this file",
 		"Use `gitlab_file_blame` to see who last changed each line",
 	)
@@ -161,7 +166,8 @@ func FormatRawBinaryMarkdown(out RawOutput) string {
 	fmt.Fprintf(&b, "## Binary File: %s\n\n", out.FilePath)
 	fmt.Fprintf(&b, fmtSizeBytes, out.Size)
 	b.WriteString("- **Content type**: binary (content omitted — not viewable as text)\n")
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_file_metadata` to get additional file properties",
 	)
 	return b.String()

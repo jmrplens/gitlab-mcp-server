@@ -22,7 +22,8 @@ func FormatOutputMarkdown(o Output) string {
 	if o.Project != nil {
 		fmt.Fprintf(&sb, "| Project | %s (ID: %d) |\n", o.Project.PathWithNamespace, o.Project.ID)
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_retrieve_all_project_storage_moves` to view all moves",
 	)
 	return sb.String()
@@ -52,7 +53,8 @@ func FormatListMarkdown(o ListOutput) string {
 func FormatScheduleAllMarkdown(o ScheduleAllOutput) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Schedule All Project Storage Moves\n\n%s\n", o.Message)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_retrieve_all_project_storage_moves` to monitor progress",
 	)
 	return sb.String()

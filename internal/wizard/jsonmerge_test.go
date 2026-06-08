@@ -299,3 +299,26 @@ func TestWriteJSONFile_WriteFileFails(t *testing.T) {
 		t.Errorf("error = %v, want to contain 'writing'", err)
 	}
 }
+
+// TestSkipJSONCBlockComment_TerminatorFound verifies skipJSONCBlockComment
+// returns the position immediately after the "*/" terminator.
+func TestSkipJSONCBlockComment_TerminatorFound(t *testing.T) {
+	data := []byte("hello world */ after")
+	// Start at index of '*' (i.e. 12). Function should advance past "*/".
+	if got := skipJSONCBlockComment(data, 12); got != 14 {
+		t.Errorf("skipJSONCBlockComment after */ = %d, want 14", got)
+	}
+}
+
+// TestSkipJSONCBlockComment_Unterminated verifies skipJSONCBlockComment
+// returns the end position when no terminator is found in the input.
+func TestSkipJSONCBlockComment_Unterminated(t *testing.T) {
+	data := []byte("hello world no terminator")
+	// Start at index 6 (where scanning begins). The function will
+	// exhaust the buffer without finding "*/" and return the last
+	// valid start index.
+	got := skipJSONCBlockComment(data, 6)
+	if got != len(data)-1 {
+		t.Errorf("skipJSONCBlockComment unterminated = %d, want %d", got, len(data)-1)
+	}
+}
