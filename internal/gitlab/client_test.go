@@ -175,6 +175,32 @@ func TestNewClient_SkipTLSVerifyBuildsInsecureTransport(t *testing.T) {
 	}
 }
 
+// TestNewClient_DisableRetries verifies that [NewClient] succeeds with
+// DisableRetries=true, exercising the `gl.WithoutRetries()` option branch
+// that is not covered by the default tests.
+func TestNewClient_DisableRetries(t *testing.T) {
+	srv := stubVersionServer(t, http.StatusOK)
+	defer srv.Close()
+
+	cfg := &config.Config{
+		GitLabURL:      srv.URL,
+		GitLabToken:    testValidToken,
+		DisableRetries: true,
+	}
+
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+	if client == nil {
+		t.Fatal("NewClient() returned nil client")
+	}
+	// Verify the client still works with retries disabled.
+	if _, err = client.Ping(context.Background()); err != nil {
+		t.Errorf("Ping() unexpected error with DisableRetries=true: %v", err)
+	}
+}
+
 // stubVersionServer creates an httptest server that responds to /api/v4/version.
 func stubVersionServer(t *testing.T, statusCode int) *httptest.Server {
 	t.Helper()

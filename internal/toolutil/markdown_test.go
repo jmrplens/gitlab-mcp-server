@@ -225,6 +225,148 @@ func TestFormatStorageMoveListMarkdown(t *testing.T) {
 	})
 }
 
+// TestNewStorageMoveEntityMarkdown verifies the constructor populates every
+// field of the optional entity view model used by storage move tools.
+func TestNewStorageMoveEntityMarkdown(t *testing.T) {
+	got := NewStorageMoveEntityMarkdown("Group", "team|ops", "https://gitlab.example.com/groups/team-ops", 42)
+	if got == nil {
+		t.Fatal("expected non-nil entity")
+	}
+	if got.Label != "Group" || got.Name != "team|ops" ||
+		got.URL != "https://gitlab.example.com/groups/team-ops" || got.ID != 42 {
+		t.Errorf("entity = %+v, want populated fields", got)
+	}
+}
+
+// TestNewStorageMoveMarkdown verifies the shared storage move constructor
+// populates all fields, including the optional entity reference.
+func TestNewStorageMoveMarkdown(t *testing.T) {
+	entity := &StorageMoveEntityMarkdown{Label: "Snippet", Name: "example", URL: "https://example.com", ID: 7}
+	createdAt := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
+
+	got := NewStorageMoveMarkdown(99, "finished", "default", "storage2", createdAt, entity)
+
+	if got.ID != 99 || got.State != "finished" ||
+		got.SourceStorageName != "default" || got.DestinationStorageName != "storage2" {
+		t.Errorf("storage move = %+v, want populated scalar fields", got)
+	}
+	if !got.CreatedAt.Equal(createdAt) {
+		t.Errorf("CreatedAt = %v, want %v", got.CreatedAt, createdAt)
+	}
+	if got.Entity != entity {
+		t.Errorf("Entity = %+v, want %+v", got.Entity, entity)
+	}
+
+	// nil entity branch
+	none := NewStorageMoveMarkdown(1, "started", "a", "b", createdAt, nil)
+	if none.Entity != nil {
+		t.Error("Entity should be nil when constructed with nil input")
+	}
+}
+
+// TestStorageMoveMarkdowns verifies the generic converter produces one
+// shared Markdown view model per package-specific input value.
+func TestStorageMoveMarkdowns(t *testing.T) {
+	type pkgMove struct {
+		id    int64
+		state string
+	}
+	inputs := []pkgMove{{id: 1, state: "finished"}, {id: 2, state: "started"}}
+
+	convert := func(pm pkgMove) StorageMoveMarkdown {
+		return StorageMoveMarkdown{ID: pm.id, State: pm.state}
+	}
+
+	got := StorageMoveMarkdowns(inputs, convert)
+	if len(got) != 2 {
+		t.Fatalf("got %d markdowns, want 2", len(got))
+	}
+	if got[0].ID != 1 || got[0].State != "finished" {
+		t.Errorf("got[0] = %+v, want {ID:1 State:finished}", got[0])
+	}
+	if got[1].ID != 2 || got[1].State != "started" {
+		t.Errorf("got[1] = %+v, want {ID:2 State:started}", got[1])
+	}
+
+	// Empty input slice → empty output slice
+	empty := StorageMoveMarkdowns([]pkgMove{}, convert)
+	if len(empty) != 0 {
+		t.Errorf("empty input = %d items, want 0", len(empty))
+	}
+}
+
+// TestFormatStorageMoveCollectionMarkdown verifies the generic collection
+// renderer maps package-specific moves and delegates to the list renderer
+// (empty + populated scenarios).
+func TestFormatStorageMoveCollectionMarkdown(t *testing.T) {
+	type pkgMove struct {
+		id   int64
+		name string
+	}
+	convert := func(pm pkgMove) StorageMoveMarkdown {
+		return StorageMoveMarkdown{
+			ID:                     pm.id,
+			State:                  "finished",
+			SourceStorageName:      "default",
+			DestinationStorageName: "storage2",
+			CreatedAt:              time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC),
+			Entity: &StorageMoveEntityMarkdown{
+				Label: "Project", Name: pm.name, URL: "https://example.com/p/" + pm.name, ID: pm.id,
+			},
+		}
+	}
+
+	t.Run("populated", func(t *testing.T) {
+		moves := []pkgMove{{id: 1, name: "alpha"}, {id: 2, name: "beta"}}
+		md := FormatStorageMoveCollectionMarkdown(
+			moves,
+			PaginationOutput{Page: 1},
+			convert,
+			"Project Storage Moves",
+			"No project storage moves found.",
+			"Project",
+		)
+		for _, want := range []string{
+			"## Project Storage Moves",
+			"| ID | State | Source | Destination | Project | Created |",
+			"| 1 | finished | default | storage2 | [alpha](https://example.com/p/alpha) | 2026-06-01 12:00:00 |",
+			"_Page 1, 2 moves shown._",
+		} {
+			if !strings.Contains(md, want) {
+				t.Errorf("missing %q in:\n%s", want, md)
+			}
+		}
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		md := FormatStorageMoveCollectionMarkdown(
+			[]pkgMove{},
+			PaginationOutput{},
+			convert,
+			"Project Storage Moves",
+			"No project storage moves found.",
+			"Project",
+		)
+		for _, want := range []string{
+			"## Project Storage Moves",
+			"No project storage moves found.",
+		} {
+			if !strings.Contains(md, want) {
+				t.Errorf("missing %q in:\n%s", want, md)
+			}
+		}
+	})
+}
+
+// TestFormatCICDVariableMarkdownEmptyKey verifies the CI/CD variable detail
+// renderer returns an empty string when the variable Key is empty.
+func TestFormatCICDVariableMarkdownEmptyKey(t *testing.T) {
+	md := FormatCICDVariableMarkdown(CICDVariableMarkdown{Key: ""}, CICDVariableMarkdownOptions{Title: "Variable"})
+	if md != "" {
+		t.Errorf("expected empty string for empty key, got %q", md)
+	}
+}
+
 // TestFormatCICDVariableMarkdown verifies the shared CI/CD variable detail renderer.
 func TestFormatCICDVariableMarkdown(t *testing.T) {
 	md := FormatCICDVariableMarkdown(CICDVariableMarkdown{

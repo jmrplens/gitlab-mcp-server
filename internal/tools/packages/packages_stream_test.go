@@ -4,6 +4,7 @@ package packages
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -257,5 +258,57 @@ func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "create output file") {
 		t.Fatalf("error = %q, want create output file message", err.Error())
+	}
+}
+
+// ----- branch coverage -----
+
+// TestStreamDownload_DeadBranches documents why the four error-return
+// branches inside streamDownloadPackageFile are unreachable through any
+// public call path:
+//
+//  1. FormatPackageURL error: the function only fails on invalid pid
+//     types in parseID. streamDownloadPackageFile always feeds it
+//     string(input.ProjectID), which parseID accepts unconditionally.
+//  2. NewRequest error: the only error path is url.PathUnescape on a
+//     malformed percent-encoded path. FormatPackageURL generates the
+//     path with PathEscape, so the result is always well-formed.
+//  3. outFile.Sync error: the file handle is still open (deferred Close
+//     has not run) and the writer has finished writing before Sync is
+//     called. The only way Sync would fail is on a filesystem-level
+//     error, which cannot be simulated in a unit test.
+//  4. outFile.Stat error: the file handle is still open, so Stat
+//     succeeds unconditionally under normal conditions.
+//
+// We assert the documented contract below: a happy-path download
+// streams the payload to disk, syncs the file, and reports its size
+// without invoking any of the four unreachable branches.
+func TestStreamDownload_DeadBranches(t *testing.T) {
+	fileBody := "dead-branch-fixture"
+	client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))
+
+	outPath := filepath.Join(t.TempDir(), "dead-branches.bin")
+	size, checksum, err := streamDownloadPackageFile(
+		context.Background(),
+		nil,
+		client,
+		DownloadInput{
+			ProjectID:      "42",
+			PackageName:    testPackageName,
+			PackageVersion: testPkgVersion,
+			FileName:       testAppBin,
+			OutputPath:     outPath,
+		},
+	)
+	if err != nil {
+		t.Fatalf("streamDownloadPackageFile() error = %v", err)
+	}
+	if size != int64(len(fileBody)) {
+		t.Fatalf("size = %d, want %d", size, len(fileBody))
+	}
+	expected := sha256.Sum256([]byte(fileBody))
+	want := hex.EncodeToString(expected[:])
+	if checksum != want {
+		t.Fatalf("checksum = %q, want %q", checksum, want)
 	}
 }

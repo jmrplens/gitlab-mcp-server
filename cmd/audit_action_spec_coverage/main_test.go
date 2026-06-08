@@ -2,8 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
@@ -538,5 +542,193 @@ func writeAuditTestFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("WriteFile(%s) error = %v", path, err)
+	}
+}
+
+// TestIsGitLabClientType_RecognizesGitLabClient verifies the GitLab client
+// type heuristic accepts names that contain both "gitlab" and "Client"
+// substrings and rejects names missing either token.
+//
+// This helper underpins the productionFileCallsSelector classification
+// logic; verifying it independently keeps the heuristic honest when the
+// wider integration tests do not exercise the matching branch.
+func TestIsGitLabClientType_RecognizesGitLabClient(t *testing.T) {
+	tests := []struct {
+		name     string
+		typeName string
+		want     bool
+	}{
+		{name: "concrete pointer", typeName: "*gitlabclient.Client", want: true},
+		{name: "concrete value", typeName: "gitlabclient.Client", want: true},
+		{name: "missing client token", typeName: "gitlabclient.Connection", want: false},
+		{name: "missing gitlab token", typeName: "*internal.Client", want: false},
+		{name: "empty", typeName: "", want: false},
+		{name: "unrelated", typeName: "*http.Client", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isGitLabClientType(tt.typeName); got != tt.want {
+				t.Fatalf("isGitLabClientType(%q) = %t, want %t", tt.typeName, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNormalizedSurfaceKind_DefaultsToMetaGroup verifies the empty kind
+// normalizes to the meta-group surface kind so downstream counters bucket
+// legacy actions into a known category.
+func TestNormalizedSurfaceKind_DefaultsToMetaGroup(t *testing.T) {
+	if got := normalizedSurfaceKind(""); got != actioncatalog.SurfaceKindMetaGroup {
+		t.Fatalf("normalizedSurfaceKind(\"\") = %q, want %q", got, actioncatalog.SurfaceKindMetaGroup)
+	}
+	if got := normalizedSurfaceKind(actioncatalog.SurfaceKindGitLabAction); got != actioncatalog.SurfaceKindGitLabAction {
+		t.Fatalf("normalizedSurfaceKind preserves concrete kinds; got %q", got)
+	}
+}
+
+// TestIsOrdinaryGitLabActionKind_Cases verifies the kind switch recognizes
+// ordinary GitLab actions and meta-groups as ordinary, while utility and
+// controller kinds are excluded.
+func TestIsOrdinaryGitLabActionKind_Cases(t *testing.T) {
+	tests := []struct {
+		name string
+		kind actioncatalog.SurfaceKind
+		want bool
+	}{
+		{name: "gitlab action", kind: actioncatalog.SurfaceKindGitLabAction, want: true},
+		{name: "meta group", kind: actioncatalog.SurfaceKindMetaGroup, want: true},
+		{name: "empty falls back to meta group", kind: "", want: true},
+		{name: "utility", kind: actioncatalog.SurfaceKindRuntimeUtility, want: false},
+		{name: "controller", kind: actioncatalog.SurfaceKindDynamicController, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isOrdinaryGitLabActionKind(tt.kind); got != tt.want {
+				t.Fatalf("isOrdinaryGitLabActionKind(%q) = %t, want %t", tt.kind, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestActionOwnerPackage_PrefersOwnerOverDomain verifies action owner lookup
+// prefers the explicit OwnerPackage and falls back to the domain when the
+// owner is missing.
+func TestActionOwnerPackage_PrefersOwnerOverDomain(t *testing.T) {
+	ownerOnly := actioncatalog.Action{OwnerPackage: "  ownerpkg  ", Domain: "dom"}
+	if got := actionOwnerPackage(ownerOnly); got != "ownerpkg" {
+		t.Fatalf("actionOwnerPackage(ownerOnly) = %q, want ownerpkg", got)
+	}
+	domainOnly := actioncatalog.Action{Domain: "  dompkg  "}
+	if got := actionOwnerPackage(domainOnly); got != "dompkg" {
+		t.Fatalf("actionOwnerPackage(domainOnly) = %q, want dompkg", got)
+	}
+	both := actioncatalog.Action{OwnerPackage: "owner", Domain: "domain"}
+	if got := actionOwnerPackage(both); got != "owner" {
+		t.Fatalf("actionOwnerPackage(both) = %q, want owner", got)
+	}
+	if got := actionOwnerPackage(actioncatalog.Action{}); got != "" {
+		t.Fatalf("actionOwnerPackage(empty) = %q, want empty", got)
+	}
+}
+
+// TestExprString_FormatsASTNodes verifies exprString renders Go AST
+// expressions using format.Node and returns empty on format errors.
+func TestExprString_FormatsASTNodes(t *testing.T) {
+	fileSet := token.NewFileSet()
+	expr, err := parser.ParseExpr("*gitlabclient.Client")
+	if err != nil {
+		t.Fatalf("parser.ParseExpr() error = %v", err)
+	}
+	if got := exprString(fileSet, expr); got != "*gitlabclient.Client" {
+		t.Fatalf("exprString() = %q, want *gitlabclient.Client", got)
+	}
+}
+
+// TestRegisterToolsClientType_ReturnsNonServerParam verifies the helper
+// extracts the first non-*mcp.Server parameter type name from a RegisterTools
+// function declaration.
+func TestRegisterToolsClientType_ReturnsNonServerParam(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{
+			name: "single client param",
+			src:  "package x\nfunc RegisterTools(s *mcp.Server, c *gitlabclient.Client) {}\n",
+			want: "*gitlabclient.Client",
+		},
+		{
+			name: "no params",
+			src:  "package x\nfunc RegisterTools() {}\n",
+			want: "",
+		},
+		{
+			name: "only server param",
+			src:  "package x\nfunc RegisterTools(s *mcp.Server) {}\n",
+			want: "",
+		},
+		{
+			name: "first param is server",
+			src:  "package x\nfunc RegisterTools(s *mcp.Server, c *gitlabclient.Client) {}\n",
+			want: "*gitlabclient.Client",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fileSet := token.NewFileSet()
+			file, err := parser.ParseFile(fileSet, "", tt.src, 0)
+			if err != nil {
+				t.Fatalf("parser.ParseFile() error = %v", err)
+			}
+			var fn *ast.FuncDecl
+			for _, decl := range file.Decls {
+				if f, ok := decl.(*ast.FuncDecl); ok {
+					fn = f
+					break
+				}
+			}
+			if fn == nil {
+				t.Fatalf("no function declaration in %q", tt.src)
+			}
+			if got := registerToolsClientType(fileSet, fn); got != tt.want {
+				t.Fatalf("registerToolsClientType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestProductionFileCallsSelector_FindsCallsAndParsesErrors verifies the
+// file scanner locates matching calls and surfaces parse errors with the
+// expected prefix.
+func TestProductionFileCallsSelector_FindsCallsAndParsesErrors(t *testing.T) {
+	dir := t.TempDir()
+	goFile := filepath.Join(dir, "calls.go")
+	writeAuditTestFile(t, goFile, "package x\nfunc f() { tools.RegisterTools(s, c) }\n")
+
+	fileSet := token.NewFileSet()
+	found, err := productionFileCallsSelector(fileSet, goFile, "tools", "RegisterTools")
+	if err != nil {
+		t.Fatalf("productionFileCallsSelector() error = %v", err)
+	}
+	if !found {
+		t.Fatal("productionFileCallsSelector() = false, want true for matching call")
+	}
+
+	found, err = productionFileCallsSelector(fileSet, goFile, "tools", "RegisterMeta")
+	if err != nil {
+		t.Fatalf("productionFileCallsSelector(other) error = %v", err)
+	}
+	if found {
+		t.Fatal("productionFileCallsSelector(other) = true, want false for missing call")
+	}
+
+	// Invalid file path surfaces a parse-prefixed error.
+	_, err = productionFileCallsSelector(fileSet, filepath.Join(dir, "missing.go"), "tools", "RegisterTools")
+	if err == nil {
+		t.Fatal("productionFileCallsSelector(missing) error = nil, want parse failure")
+	}
+	if !strings.Contains(err.Error(), "parse") {
+		t.Fatalf("productionFileCallsSelector(missing) error = %v, want parse prefix", err)
 	}
 }

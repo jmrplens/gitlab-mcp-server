@@ -336,6 +336,30 @@ func TestReplaceExecutable_ResolveError(t *testing.T) {
 	}
 }
 
+// TestDownloadToStaging_SelfupdateUpdaterError verifies that downloadToStaging
+// propagates errors from the selfupdate constructor without touching the
+// filesystem.
+func TestDownloadToStaging_SelfupdateUpdaterError(t *testing.T) {
+	orig := selfupdateUpdater
+	t.Cleanup(func() { selfupdateUpdater = orig })
+	selfupdateUpdater = func(_ selfupdate.Source) (*selfupdate.Updater, error) {
+		return nil, errors.New("constructor failure")
+	}
+
+	u := NewUpdaterWithSource(Config{
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	}, &downloadableMockSource{})
+
+	_, _, err := u.downloadToStaging(context.Background())
+	if err == nil {
+		t.Fatal("expected error from selfupdateUpdater stub")
+	}
+	if !strings.Contains(err.Error(), "constructor failure") {
+		t.Errorf("err = %v, want to contain 'constructor failure'", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // PreStartUpdate ExecFailed path (C6 audit finding)
 // ---------------------------------------------------------------------------
@@ -653,6 +677,49 @@ func TestPreStartUpdate_UnixExecSuccess(t *testing.T) {
 	}
 	if result.ExecFailed {
 		t.Error("expected ExecFailed=false when execSelf succeeds")
+	}
+}
+
+// TestPreStartUpdate_SetJustUpdatedError verifies the branch in PreStartUpdate
+// where SetJustUpdated returns an error (e.g. environment is read-only). The
+// pre-start check must still report the new version, just without invoking
+// the re-exec guard. On Windows the SetJustUpdated branch is not reached.
+func TestPreStartUpdate_SetJustUpdatedError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("SetJustUpdated branch not reached on Windows")
+	}
+
+	// Make the test run in a clean env so the inner JustUpdated() check
+	// observes the value our stub wrote.
+	t.Cleanup(func() { os.Unsetenv(envJustUpdated) })
+
+	orig := SetJustUpdated
+	t.Cleanup(func() { SetJustUpdated = orig })
+	SetJustUpdated = func() error { return errors.New("setenv failed") }
+
+	exe := stubExecSelf(t, nil)
+	_ = exe
+
+	rel := newMockReleaseForPlatform("v7.0.0", "", "")
+	src := &downloadableMockSource{
+		releases:     []selfupdate.SourceRelease{rel},
+		downloadData: fakeBinary(),
+	}
+	stubNewGitHubSource(t, src)
+
+	result := PreStartUpdate(t.Context(), Config{
+		Mode:           ModeAuto,
+		Repository:     "group/project",
+		CurrentVersion: "1.0.0",
+	})
+	if !result.Updated {
+		t.Error("expected Updated=true even when SetJustUpdated fails")
+	}
+	if result.NewVersion != "7.0.0" {
+		t.Errorf("NewVersion = %q, want %q", result.NewVersion, "7.0.0")
+	}
+	if result.ExecFailed {
+		t.Error("expected ExecFailed=false")
 	}
 }
 

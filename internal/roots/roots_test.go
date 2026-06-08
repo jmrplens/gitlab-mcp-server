@@ -7,7 +7,9 @@ package roots
 
 import (
 	"context"
+	"reflect"
 	"testing"
+	"unsafe"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -523,5 +525,50 @@ func TestClientSupportsRoots_RootsV2Capability(t *testing.T) {
 
 	if !ClientSupportsRoots(serverSession) {
 		t.Error("ClientSupportsRoots() = false with RootsV2 capability set, want true")
+	}
+}
+
+// TestClientSupportsRoots_NilInitializeParams verifies the defensive
+// return-when-params-nil branch in [ClientSupportsRoots]. The MCP SDK always
+// populates InitializeParams after a successful handshake, so we simulate
+// the pre-initialize state by clearing the unexported state field via
+// reflection+unsafe. This exercises the `params == nil` arm of the
+// `params == nil || params.Capabilities == nil` guard.
+func TestClientSupportsRoots_NilInitializeParams(t *testing.T) {
+	ctx := context.Background()
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "v0.0.1"}, nil)
+	serverSession, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		clientSession.Close()
+		serverSession.Wait()
+	})
+
+	// Confirm the session is normally roots-capable before we clear params.
+	if !ClientSupportsRoots(serverSession) {
+		t.Fatal("precondition: expected ClientSupportsRoots to be true with default client")
+	}
+
+	// Clear the unexported state.InitializeParams field to simulate a
+	// session that has not yet completed initialize. This is the only
+	// way to hit the `params == nil` branch because the SDK always
+	// populates params after a successful handshake.
+	ssVal := reflect.ValueOf(serverSession).Elem()
+	stateField := ssVal.FieldByName("state")
+	statePtr := unsafe.Pointer(stateField.UnsafeAddr())
+	realState := (*mcp.ServerSessionState)(statePtr)
+	realState.InitializeParams = nil
+
+	if ClientSupportsRoots(serverSession) {
+		t.Error("ClientSupportsRoots() = true with nil InitializeParams, want false")
 	}
 }

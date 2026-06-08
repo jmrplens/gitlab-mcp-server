@@ -43,6 +43,37 @@ func TestRepositoryRoot_NotFound(t *testing.T) {
 	}
 }
 
+// TestRepositoryRoot_AbsError verifies RepositoryRoot surfaces the
+// underlying error from filepath.Abs when the working directory is
+// unreadable. The test chdirs into a fresh temp directory and then
+// revokes all permissions, causing os.Getwd (called from filepath.Abs)
+// to fail with EACCES. The error is wrapped in a PathError with op
+// "stat" and path "."; RepositoryRoot must propagate that error.
+func TestRepositoryRoot_AbsError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root, cannot revoke permissions to fail Getwd")
+	}
+
+	tmp := t.TempDir()
+	t.Chdir(tmp)
+
+	// Drop all permissions on the cwd so getcwd(3) cannot read "." to
+	// resolve the path; it returns EACCES, which filepath.Abs surfaces
+	// as a PathError { Op: "stat", Path: ".", Err: EACCES }.
+	if err := os.Chmod(tmp, 0o000); err != nil {
+		t.Fatalf("chmod tmp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(tmp, 0o700) })
+
+	_, err := RepositoryRoot("relative")
+	if err == nil {
+		t.Fatal("RepositoryRoot() error = nil, want error from filepath.Abs")
+	}
+	if strings.Contains(err.Error(), "go.mod not found") {
+		t.Fatalf("RepositoryRoot() error = %q, want Abs error, not NotFound", err)
+	}
+}
+
 // TestFatalf_WritesMessageAndExits verifies Fatalf writes the formatted
 // diagnostic to stderr and exits with status 1, matching command-line behavior.
 func TestFatalf_WritesMessageAndExits(t *testing.T) {

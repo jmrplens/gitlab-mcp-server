@@ -141,7 +141,10 @@ func splitRepository(path string) (owner, repo string, err error) {
 }
 
 // selfupdateUpdater creates a go-selfupdate Updater with checksum validation.
-func selfupdateUpdater(src selfupdate.Source) (*selfupdate.Updater, error) {
+// It is a package-level variable so tests can stub the underlying selfupdate
+// constructor to exercise the error paths in CheckForUpdate, ApplyUpdate,
+// and downloadToStaging without touching the real go-selfupdate library.
+var selfupdateUpdater = func(src selfupdate.Source) (*selfupdate.Updater, error) {
 	u, err := selfupdate.NewUpdater(selfupdate.Config{
 		Source:    src,
 		Validator: &selfupdate.ChecksumValidator{UniqueFilename: "checksums.txt"},
@@ -435,7 +438,9 @@ func JustUpdated() bool {
 }
 
 // SetJustUpdated sets the environment variable that prevents re-exec loops.
-func SetJustUpdated() error {
+// It is a package-level variable so tests can stub the underlying os.Setenv
+// call to exercise the pre-start error paths.
+var SetJustUpdated = func() error {
 	return os.Setenv(envJustUpdated, "1")
 }
 

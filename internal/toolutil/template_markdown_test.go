@@ -78,3 +78,21 @@ func TestFormatTemplateDetailMarkdown_PlainFields(t *testing.T) {
 		t.Fatalf("plain markdown should not render bulleted detail fields:\n%s", md)
 	}
 }
+
+// TestFormatTemplateDetailMarkdown_ContentWithoutHeading verifies the shared
+// template detail renderer still fences the content block in a code fence
+// when the caller did not supply a ContentHeading.
+func TestFormatTemplateDetailMarkdown_ContentWithoutHeading(t *testing.T) {
+	md := FormatTemplateDetailMarkdown(TemplateDetailMarkdown{
+		Title:   "License: MIT",
+		Key:     "mit",
+		Content: "permission text",
+	})
+
+	if !strings.Contains(md, "```\npermission text\n```") {
+		t.Fatalf("expected unfenced-heading content block in:\n%s", md)
+	}
+	if strings.Contains(md, "###") {
+		t.Fatalf("expected no content heading section, got:\n%s", md)
+	}
+}

@@ -23,6 +23,23 @@ func TestRegisterSurfaceToolFromSpec_NilServer(t *testing.T) {
 	RegisterSurfaceToolFromSpec(nil, NewActionSpec("noop", ActionRoute{}, ActionSpecOptions{}), SurfaceToolRegisterOptions{})
 }
 
+// TestRegisterSurfaceToolFromSpec_InvalidSpecPanics verifies that
+// RegisterSurfaceToolFromSpec panics when IndividualToolFromActionSpec cannot
+// project the spec (e.g. no individual tool name configured).
+func TestRegisterSurfaceToolFromSpec_InvalidSpecPanics(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	// Missing IndividualTool.Name — IndividualToolFromActionSpec returns an
+	// error, which RegisterSurfaceToolFromSpec must surface as a panic.
+	spec := NewActionSpec("noop", ActionRoute{}, ActionSpecOptions{})
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic for invalid ActionSpec, got none")
+		}
+	}()
+	RegisterSurfaceToolFromSpec(server, spec, SurfaceToolRegisterOptions{Description: "noop"})
+}
+
 // TestRegisterSurfaceToolFromSpec_DestructiveDeclineStopsRoute verifies catalog-backed individual tools centralize destructive confirmation.
 func TestRegisterSurfaceToolFromSpec_DestructiveDeclineStopsRoute(t *testing.T) {
 	var called atomic.Bool

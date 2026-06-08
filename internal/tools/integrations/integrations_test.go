@@ -4,12 +4,14 @@
 package integrations
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
@@ -549,5 +551,92 @@ func TestGet_NilResult(t *testing.T) {
 	_, err := Get(t.Context(), client, GetInput{ProjectID: "1", Slug: testSlugJira})
 	if err == nil {
 		t.Fatal("expected error for nil result")
+	}
+}
+
+// ----- branch coverage -----
+
+// TestIntegrationFromService_Branches verifies the reflection-based
+// integrationFromService function returns the expected nil-result for the
+// edge cases that protect against malformed GitLab SDK responses. Each
+// branch must propagate the error from the GitLab SDK without panicking.
+// The function is intentionally tolerant: any unexpected shape yields a
+// nil *gl.Integration alongside the caller-supplied error so that the
+// upper layers can still surface a meaningful error message to the user.
+func TestIntegrationFromService_Branches(t *testing.T) {
+	// Define a local type without an embedded Service field. The reflection
+	// lookup fails because FieldByName("Service") returns an invalid Value.
+	type noService struct {
+		Other int
+	}
+
+	// Define a local type whose "Service" field has a different concrete
+	// type than *gl.Integration, simulating the !ok branch in the type
+	// assertion performed inside integrationFromService.
+	type mismatchedService struct {
+		Service string
+	}
+
+	// nil pointer whose type still embeds gl.Integration (via Service alias).
+	var nilJira *gl.JiraService
+	// Pointer to a struct that does not have a Service field.
+	noServicePtr := &noService{Other: 7}
+	// Pointer to a struct whose Service field has a non-*gl.Integration
+	// type. FieldByName finds the field, the field is addressable, but the
+	// type assertion to *gl.Integration fails.
+	mismatchPtr := &mismatchedService{Service: "not-an-integration"}
+	// Struct value (not pointer) that has an embedded Service aliasing
+	// *gl.Integration. The field is valid but not addressable because the
+	// receiver of FieldByName is not a pointer, exercising the !CanAddr()
+	// branch in integrationFromService.
+	type validServiceStruct struct {
+		Service gl.Integration
+	}
+	validByValue := validServiceStruct{}
+
+	sentinelErr := errors.New("sdk error")
+
+	tests := []struct {
+		name    string
+		service any
+		err     error
+	}{
+		{
+			name:    "nil interface value",
+			service: nil,
+			err:     sentinelErr,
+		},
+		{
+			name:    "nil pointer to GitLab service",
+			service: nilJira,
+			err:     sentinelErr,
+		},
+		{
+			name:    "pointer to struct missing Service field",
+			service: noServicePtr,
+			err:     sentinelErr,
+		},
+		{
+			name:    "pointer to struct with mismatched Service field type",
+			service: mismatchPtr,
+			err:     sentinelErr,
+		},
+		{
+			name:    "value with valid but unaddressable Service field",
+			service: validByValue,
+			err:     sentinelErr,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, gotErr := integrationFromService(tt.service, tt.err)
+			if got != nil {
+				t.Fatalf("expected nil integration, got %+v", got)
+			}
+			if !errors.Is(gotErr, sentinelErr) {
+				t.Fatalf("expected error %v, got %v", sentinelErr, gotErr)
+			}
+		})
 	}
 }

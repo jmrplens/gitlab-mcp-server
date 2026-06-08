@@ -253,6 +253,31 @@ func TestWriteToFile_ReaderError(t *testing.T) {
 	}
 }
 
+// TestWriteToFile_ChmodContract documents the contract enforced by the
+// writeToFile chmod error branch: when os.Chmod fails, the function must
+// remove the staging file and return a wrapped error containing
+// "setting staging file permissions". The branch itself is defensive —
+// it can only be triggered by an external condition that prevents
+// modifying file metadata (e.g. read-only mount, immutable flag), which
+// cannot be set up reliably inside a unit test on every host. The
+// surrounding branches (Create, Copy, Close, size, magic) are covered
+// by the other TestWriteToFile_* tests.
+func TestWriteToFile_ChmodContract(t *testing.T) {
+	// Contract: on chmod failure, the staging file is removed and the
+	// returned error wraps the underlying failure with the
+	// "setting staging file permissions" prefix used by production code.
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod path not reached on Windows")
+	}
+	if os.Getuid() == 0 {
+		t.Skip("chmod restrictions do not apply when running as root")
+	}
+	// We cannot reliably make chmod fail in a portable unit test, so
+	// this case remains a documented contract rather than a runtime
+	// assertion. The test simply records the expectation.
+	t.Log("chmod error branch is defensive; no reliable way to trigger from a unit test")
+}
+
 // TestWriteToFile_TooSmallAfterCopy verifies that writeToFile removes the
 // file when the reader provides data smaller than minBinarySize but the copy
 // itself succeeds without error.

@@ -107,3 +107,48 @@ func TestWorkspaceRootsResource_Empty(t *testing.T) {
 		t.Error("Hint should not be empty even with no roots")
 	}
 }
+
+// TestMarshalWorkspaceRootsJSON_AllFieldsPopulated verifies the JSON helper
+// serializes every populated field of WorkspaceRootsOutput with correct
+// content type and a single resource contents entry. It is the direct
+// counterpart to the resource-level tests and locks the success-path
+// contract. The error branch is unreachable in practice because
+// WorkspaceRootsOutput only contains primitive JSON-marshalable types; any
+// future field addition must keep that invariant.
+func TestMarshalWorkspaceRootsJSON_AllFieldsPopulated(t *testing.T) {
+	payload := WorkspaceRootsOutput{
+		Roots: []WorkspaceRootOutput{
+			{URI: "file:///home/user/my-project", Name: "my-project"},
+			{URI: "file:///home/user/other-repo", Name: "other-repo"},
+		},
+		Hint: "discovery hint",
+	}
+
+	result, err := marshalWorkspaceRootsJSON(payload)
+	if err != nil {
+		t.Fatalf("marshalWorkspaceRootsJSON() error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if len(result.Contents) != 1 {
+		t.Fatalf("len(Contents) = %d, want 1", len(result.Contents))
+	}
+	if result.Contents[0].MIMEType != mimeJSON {
+		t.Errorf("MIMEType = %q, want %q", result.Contents[0].MIMEType, mimeJSON)
+	}
+
+	var roundTripped WorkspaceRootsOutput
+	if err = json.Unmarshal([]byte(result.Contents[0].Text), &roundTripped); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(roundTripped.Roots) != 2 {
+		t.Fatalf("round-tripped roots = %+v, want 2 entries", roundTripped.Roots)
+	}
+	if roundTripped.Roots[0].URI != "file:///home/user/my-project" || roundTripped.Roots[0].Name != "my-project" {
+		t.Errorf("round-tripped root[0] = %+v", roundTripped.Roots[0])
+	}
+	if roundTripped.Hint != "discovery hint" {
+		t.Errorf("Hint = %q, want %q", roundTripped.Hint, "discovery hint")
+	}
+}

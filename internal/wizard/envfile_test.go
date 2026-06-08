@@ -279,6 +279,94 @@ func TestLoadExistingConfigFromPath_OnlyComments(t *testing.T) {
 	}
 }
 
+// TestLoadExistingConfigFromPath_LinesWithoutEquals verifies that malformed
+// lines lacking the '=' separator are silently skipped, while well-formed
+// entries on the same file are still parsed correctly.
+func TestLoadExistingConfigFromPath_LinesWithoutEquals(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, EnvFileName)
+
+	content := "GITLAB_URL=https://gitlab.example.com\n" +
+		"GITLAB_TOKEN=test-token-abcdef1234567890\n" +
+		"this-line-has-no-equals-sign\n" +
+		"ANOTHER_BAD_LINE\n"
+
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing test file: %v", err)
+	}
+
+	cfg, found := loadExistingConfigFromPath(path)
+	if !found {
+		t.Fatal("expected found=true for file with valid entries alongside malformed lines")
+	}
+	if cfg.GitLabURL != "https://gitlab.example.com" {
+		t.Errorf("GitLabURL = %q, want %q", cfg.GitLabURL, "https://gitlab.example.com")
+	}
+	if cfg.GitLabToken != "test-token-abcdef1234567890" {
+		t.Errorf("GitLabToken = %q, want %q", cfg.GitLabToken, "test-token-abcdef1234567890")
+	}
+}
+
+// TestLoadExistingConfigFromPath_OnlyLinesWithoutEquals verifies that an env
+// file containing only malformed lines (no '=' separator) returns found=false
+// since no parseable vars are extracted.
+func TestLoadExistingConfigFromPath_OnlyLinesWithoutEquals(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, EnvFileName)
+
+	content := "no-equals-here\nanother-bad-line\nyet-another\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing test file: %v", err)
+	}
+
+	cfg, found := loadExistingConfigFromPath(path)
+	if found {
+		t.Error("expected found=false when all lines lack '=' separator")
+	}
+	_ = cfg
+}
+
+// TestLoadExistingConfigFromPath_InvalidToolSurfaceFallback verifies that an
+// invalid TOOL_SURFACE value triggers the toolSurfaceFromEnv fallback path
+// that derives the tool surface from META_TOOLS (or its default).
+func TestLoadExistingConfigFromPath_InvalidToolSurfaceFallback(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, EnvFileName)
+
+	content := "GITLAB_URL=https://gitlab.example.com\n" +
+		"GITLAB_TOKEN=test-token-abcdef1234567890\n" +
+		"TOOL_SURFACE=not-a-valid-value\n" +
+		"META_TOOLS=false\n"
+
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("writing test file: %v", err)
+	}
+
+	cfg, found := loadExistingConfigFromPath(path)
+	if !found {
+		t.Fatal("expected found=true for valid env file with invalid TOOL_SURFACE")
+	}
+	if cfg.MetaTools {
+		t.Error("MetaTools should be false (META_TOOLS=false), exercising the fallback branch")
+	}
+}
+
+// TestToolSurfaceFromEnv_InvalidValueFallsBackToMetaTools verifies the
+// toolSurfaceFromEnv function returns a non-empty surface and a sensible
+// metaTools flag when ParseToolSurface rejects the TOOL_SURFACE value.
+func TestToolSurfaceFromEnv_InvalidValueFallsBackToMetaTools(t *testing.T) {
+	surface, metaTools := toolSurfaceFromEnv(map[string]string{
+		"TOOL_SURFACE": "garbage-value",
+		"META_TOOLS":   "false",
+	})
+	if surface == "" {
+		t.Error("expected non-empty surface from fallback")
+	}
+	if metaTools {
+		t.Error("metaTools = true, want false from META_TOOLS=false fallback")
+	}
+}
+
 // TestLoadExistingConfigFromPath_OnlyPreferences verifies preference-only env
 // files are parsed but do not count as an existing GitLab connection.
 func TestLoadExistingConfigFromPath_OnlyPreferences(t *testing.T) {

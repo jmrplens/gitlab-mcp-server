@@ -791,3 +791,241 @@ func TestActionSpecValidate_RejectsNonNormalizedTags(t *testing.T) {
 		t.Fatalf("Validate() error = %v, want non-normalized tag rejection", err)
 	}
 }
+
+// TestValidateActionSpecAliasesAgainstNames_AliasEqualsCanonical verifies the
+// early-continue branch when an alias matches the spec's own canonical name
+// (after normalization). The function must not flag self-referential aliases,
+// but must still surface collisions with canonical names of other specs.
+func TestValidateActionSpecAliasesAgainstNames_AliasEqualsCanonical(t *testing.T) {
+	spec := ActionSpec{Name: "LIST", Aliases: []string{"list", "show"}}
+	canonicalNames := map[string]struct{}{"show": {}}
+
+	// "list" alias matches canonicalName → skipped; "show" alias is in
+	// canonicalNames → error returned for the second alias.
+	if err := validateActionSpecAliasesAgainstNames(spec, canonicalNames); err == nil ||
+		!strings.Contains(err.Error(), "duplicates canonical action name") {
+		t.Fatalf("validateActionSpecAliasesAgainstNames() = %v, want canonical-name collision for 'show'", err)
+	}
+}
+
+// TestValidateActionSpecAliasesAgainstNames_NoCollision verifies the function
+// returns nil when none of the aliases collide with known canonical names.
+func TestValidateActionSpecAliasesAgainstNames_NoCollision(t *testing.T) {
+	spec := ActionSpec{Name: "list", Aliases: []string{"show", "fetch"}}
+	canonicalNames := map[string]struct{}{"get": {}}
+
+	if err := validateActionSpecAliasesAgainstNames(spec, canonicalNames); err != nil {
+		t.Fatalf("validateActionSpecAliasesAgainstNames() = %v, want nil", err)
+	}
+}
+
+// TestValidateActionAliasSpecs_DuplicateAliasSameTarget verifies the
+// duplicate-alias-with-same-target branch of validateActionAliasSpecs is
+// silently accepted (the seen map is keyed on alias name, target is canonical).
+func TestValidateActionAliasSpecs_DuplicateAliasSameTarget(t *testing.T) {
+	aliases := []ActionAliasSpec{
+		{Alias: "old", Target: "delete", Source: "dynamic", Reason: "first target"},
+		{Alias: "old", Target: "delete", Source: "dynamic", Reason: "second same target"},
+	}
+	if err := validateActionAliasSpecs("delete", aliases); err != nil {
+		t.Fatalf("validateActionAliasSpecs(same targets) error = %v, want nil", err)
+	}
+}
+
+// TestValidateActionAliasSpecs_NoSourceAndNoReason covers the empty Source
+// and empty Reason validation branches for action aliases.
+func TestValidateActionAliasSpecs_NoSourceAndNoReason(t *testing.T) {
+	tests := []struct {
+		name    string
+		aliases []ActionAliasSpec
+		want    string
+	}{
+		{
+			name:    "no source",
+			aliases: []ActionAliasSpec{{Alias: "old", Target: "delete", Reason: "r"}},
+			want:    "has no source",
+		},
+		{
+			name:    "no reason",
+			aliases: []ActionAliasSpec{{Alias: "old", Target: "delete", Source: "dynamic"}},
+			want:    "has no reason",
+		},
+		{
+			name:    "deprecated without removal version",
+			aliases: []ActionAliasSpec{{Alias: "old", Target: "delete", Source: "dynamic", Deprecated: true, Reason: "r"}},
+			want:    "has no removal version",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validateActionAliasSpecs("delete", tt.aliases); err == nil ||
+				!strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("validateActionAliasSpecs() = %v, want %q", err, tt.want)
+			}
+		})
+	}
+}
+
+// TestValidateParameterAliasSpecs_DuplicateAliasSameTarget verifies the
+// duplicate-alias-with-same-target branch is accepted, and that the conflicting
+// target branch returns the expected error.
+func TestValidateParameterAliasSpecs_DuplicateAliasSameTarget(t *testing.T) {
+	schema := testActionSpecSchema("project_id", "namespace_id")
+	sameTarget := []ParameterAliasSpec{
+		{Alias: "p", Target: "project_id", Source: "dynamic", Reason: "first"},
+		{Alias: "p", Target: "project_id", Source: "dynamic", Reason: "second"},
+	}
+	if err := validateParameterAliasSpecs("get", schema, sameTarget); err != nil {
+		t.Fatalf("validateParameterAliasSpecs(same targets) error = %v, want nil", err)
+	}
+	conflicting := []ParameterAliasSpec{
+		{Alias: "p", Target: "project_id", Source: "dynamic", Reason: "first"},
+		{Alias: "p", Target: "namespace_id", Source: "dynamic", Reason: "second"},
+	}
+	if err := validateParameterAliasSpecs("get", schema, conflicting); err == nil ||
+		!strings.Contains(err.Error(), "targets both") {
+		t.Fatalf("validateParameterAliasSpecs(conflicting) = %v, want both-targets error", err)
+	}
+}
+
+// TestValidateParameterAliasSpecs_NoSource covers the "no source" branch of
+// validateParameterAliasSpecs that the public API tests do not exercise.
+func TestValidateParameterAliasSpecs_NoSource(t *testing.T) {
+	schema := testActionSpecSchema("project_id")
+	aliases := []ParameterAliasSpec{{Alias: "p", Target: "project_id", Reason: "r"}}
+	if err := validateParameterAliasSpecs("get", schema, aliases); err == nil ||
+		!strings.Contains(err.Error(), "has no source") {
+		t.Fatalf("validateParameterAliasSpecs() = %v, want 'has no source' error", err)
+	}
+}
+
+// TestSchemaHasPropertyPath covers the direct helper: empty path, top-level
+// match, missing top-level, and nested match.
+func TestSchemaHasPropertyPath(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"project_id": map[string]any{"type": "string"},
+			"items": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"file_path": map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"empty path", "", false},
+		{"whitespace path", "  ", false},
+		{"top level match", "project_id", true},
+		{"nested match", "items.file_path", true},
+		{"missing top level", "missing", false},
+		{"missing nested", "items.missing", false},
+		{"no properties", "x", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := schemaHasPropertyPath(schema, tt.path); got != tt.want {
+				t.Errorf("schemaHasPropertyPath(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSchemaHasPropertyPathFrom_NoProperties exercises the "no properties key"
+// defensive branch in the recursive resolver.
+func TestSchemaHasPropertyPathFrom_NoProperties(t *testing.T) {
+	schema := map[string]any{"type": "object"} // no "properties"
+	if schemaHasPropertyPathFrom(schema, schema, []string{"x"}) {
+		t.Error("schemaHasPropertyPathFrom(no properties) = true, want false")
+	}
+}
+
+// TestResolveSchemaRef covers all branches of the $ref resolver: missing ref,
+// unsupported prefix, missing $defs, missing definition, and successful
+// resolution.
+func TestResolveSchemaRef(t *testing.T) {
+	tests := []struct {
+		name string
+		root map[string]any
+		sch  map[string]any
+		want map[string]any
+	}{
+		{
+			name: "no ref returns schema unchanged",
+			root: map[string]any{},
+			sch:  map[string]any{"type": "string"},
+			want: map[string]any{"type": "string"},
+		},
+		{
+			name: "unsupported ref prefix returns schema unchanged",
+			root: map[string]any{},
+			sch:  map[string]any{"$ref": "#/components/schemas/Foo"},
+			want: map[string]any{"$ref": "#/components/schemas/Foo"},
+		},
+		{
+			name: "missing $defs returns schema unchanged",
+			root: map[string]any{},
+			sch:  map[string]any{"$ref": "#/$defs/Foo"},
+			want: map[string]any{"$ref": "#/$defs/Foo"},
+		},
+		{
+			name: "missing definition returns schema unchanged",
+			root: map[string]any{"$defs": map[string]any{}},
+			sch:  map[string]any{"$ref": "#/$defs/Foo"},
+			want: map[string]any{"$ref": "#/$defs/Foo"},
+		},
+		{
+			name: "successful $ref resolution",
+			root: map[string]any{
+				"$defs": map[string]any{
+					"Foo": map[string]any{"type": "integer"},
+				},
+			},
+			sch:  map[string]any{"$ref": "#/$defs/Foo"},
+			want: map[string]any{"type": "integer"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveSchemaRef(tt.root, tt.sch)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("resolveSchemaRef() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestValidateInputSchemaOverrides_NoInputSchema covers the branch in
+// validateInputSchemaOverrides that rejects overrides when the spec has no
+// input schema at all.
+func TestValidateInputSchemaOverrides_NoInputSchema(t *testing.T) {
+	spec := ActionSpec{
+		Name: "no-schema",
+		InputSchemaOverrides: []InputSchemaOverride{
+			SchemaPropertyOverride("foo", map[string]any{"type": "string"}),
+		},
+	}
+	if err := validateInputSchemaOverrides(spec); err == nil ||
+		!strings.Contains(err.Error(), "without an input schema") {
+		t.Fatalf("validateInputSchemaOverrides() = %v, want missing-schema error", err)
+	}
+}
+
+// TestSchemaOverrideTargetFrom_NoProperties covers the "no properties" branch
+// of the recursive schema resolver used by input schema overrides.
+func TestSchemaOverrideTargetFrom_NoProperties(t *testing.T) {
+	root := map[string]any{"type": "object"} // no "properties"
+	if got := schemaOverrideTargetFrom(root, root, []string{"foo"}); got != nil {
+		t.Errorf("schemaOverrideTargetFrom(no properties) = %v, want nil", got)
+	}
+}

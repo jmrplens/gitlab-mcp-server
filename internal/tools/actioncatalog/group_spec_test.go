@@ -203,3 +203,68 @@ func TestGroupOptions_BaseDomainControlsActionID(t *testing.T) {
 		t.Fatal("catalog unexpectedly kept derived project_alias.get action")
 	}
 }
+
+// ----- branch coverage -----
+
+// TestCatalogGroupSpec_Validate_DeadBranches documents why the
+// "action name is required" and "duplicate action id" branches inside
+// CatalogGroupSpec.Validate are unreachable through the public API:
+//
+//   - The empty-name branch is shadowed by toolutil.ActionSpec.Validate(),
+//     which is invoked at the top of every loop iteration and returns
+//     "action spec name is required" for any Name whose trimmed form is
+//     empty. By the time control reaches the post-trim empty check, the
+//     name is already guaranteed non-empty.
+//
+//   - The duplicate action ID branch cannot fire because the loop also
+//     guards against duplicate names (the seenActionNames check) and
+//     catalogGroupActionID derives the action ID from `<domain>.<name>`.
+//     Two actions with the same name therefore collide on the name
+//     check first, and the ID check is never reached.
+//
+// The test asserts the documented contract: an empty action name and a
+// duplicate action name are both rejected, but the rejection originates
+// from the upstream layer (toolutil.ActionSpec.Validate and the
+// seenActionNames guard) rather than from the dead branches.
+func TestCatalogGroupSpec_Validate_DeadBranches(t *testing.T) {
+	makeSpec := func(name string) toolutil.ActionSpec {
+		return toolutil.NewActionSpec(name, testRoute(false), toolutil.ActionSpecOptions{
+			ReadOnly:     true,
+			Idempotent:   true,
+			OwnerPackage: "projects",
+		})
+	}
+
+	t.Run("empty action name rejected by upstream validation", func(t *testing.T) {
+		group := CatalogGroupSpec{
+			ToolName:     "gitlab_dup",
+			OwnerPackage: "projects",
+			Actions:      []toolutil.ActionSpec{makeSpec("   ")},
+		}
+		err := group.Validate()
+		if err == nil {
+			t.Fatal("Validate() error = nil, want rejection for whitespace-only action name")
+		}
+		if !strings.Contains(err.Error(), "action spec name is required") {
+			t.Fatalf("err = %q, want it to come from toolutil.ActionSpec.Validate", err.Error())
+		}
+	})
+
+	t.Run("duplicate action name rejected by seenActionNames guard", func(t *testing.T) {
+		group := CatalogGroupSpec{
+			ToolName:     "gitlab_dup",
+			OwnerPackage: "projects",
+			Actions: []toolutil.ActionSpec{
+				makeSpec("get"),
+				makeSpec("get"),
+			},
+		}
+		err := group.Validate()
+		if err == nil {
+			t.Fatal("Validate() error = nil, want rejection for duplicate action name")
+		}
+		if !strings.Contains(err.Error(), "duplicate action") {
+			t.Fatalf("err = %q, want it to mention 'duplicate action'", err.Error())
+		}
+	})
+}

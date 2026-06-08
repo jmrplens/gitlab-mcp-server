@@ -190,6 +190,145 @@ func TestIsJSONFieldName_Scenarios(t *testing.T) {
 	}
 }
 
+// TestCountStringLiterals_IgnoresUnquotableLiterals verifies that
+// countStringLiterals silently skips BasicLit values that fail
+// strconv.Unquote. This branch is defensive dead code in practice because
+// parser.ParseFile only produces quotable STRING tokens; we exercise the
+// branch by parsing a valid file, then swapping the literal value to an
+// unterminated raw string and walking it through countStringLiterals.
+func TestCountStringLiterals_IgnoresUnquotableLiterals(t *testing.T) {
+	node := parseSource(t, "package sample\nconst bad = \"valid_initial_value\"\n")
+	// Locate the basic literal in the parsed source and replace its value
+	// with a token that strconv.Unquote rejects.
+	for _, decl := range node.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for _, v := range vs.Values {
+				if lit, ok := v.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					lit.Value = "`unterminated"
+				}
+			}
+		}
+	}
+	got := countStringLiterals(node)
+	// After replacement, the only string in the AST has an unquotable
+	// value, so countStringLiterals must return an empty map.
+	if len(got) != 0 {
+		t.Errorf("countStringLiterals() = %v, want empty (unquotable literal should be skipped)", got)
+	}
+}
+
+// TestCollectStringValues_IgnoresUnquotableLiterals verifies that
+// collectStringValues silently skips literal values that strconv.Unquote
+// rejects, leaving dest unchanged.
+func TestCollectStringValues_IgnoresUnquotableLiterals(t *testing.T) {
+	node := parseSource(t, "package sample\nvar bad = \"valid_initial_value\"\n")
+	for _, decl := range node.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for _, v := range vs.Values {
+				if lit, ok := v.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					lit.Value = "`unterminated"
+				}
+			}
+		}
+	}
+	dest := map[string]bool{}
+	collectStringValues(node.Decls[0].(*ast.GenDecl), dest)
+	if len(dest) != 0 {
+		t.Errorf("dest = %v, want empty (unquotable literal should be skipped)", dest)
+	}
+}
+
+// TestPrintDuplicates_WindowsPathSeparator verifies printDuplicates strips
+// the Windows path separator as well as the Unix one when shortening
+// filenames.
+func TestPrintDuplicates_WindowsPathSeparator(t *testing.T) {
+	var stdout bytes.Buffer
+	printDuplicates(&stdout, `dir\subdir\file.go`, []entry{
+		{val: "duplicated literal", count: 4},
+	})
+	output := stdout.String()
+	if !strings.Contains(output, "=== file.go ===") {
+		t.Errorf("output = %q, want shortened basename after Windows path separator", output)
+	}
+}
+
+// TestFindDupes_ReadError writes a path that does not exist and verifies the
+// function returns cleanly with a stderr message rather than panicking.
+func TestFindDupes_ReadError(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	findDupes(filepath.Join(t.TempDir(), "does_not_exist.go"), &stdout, &stderr)
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty on read error", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "read error") {
+		t.Errorf("stderr = %q, want 'read error' prefix", stderr.String())
+	}
+}
+
+// TestFindDupes_ParseError writes a malformed Go file and verifies the
+// function returns cleanly with a stderr message rather than panicking.
+func TestFindDupes_ParseError(t *testing.T) {
+	dir := t.TempDir()
+	filename := filepath.Join(dir, "broken.go")
+	if err := os.WriteFile(filename, []byte("this is not go code @@@"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	findDupes(filename, &stdout, &stderr)
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty on parse error", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "parse error") {
+		t.Errorf("stderr = %q, want 'parse error' prefix", stderr.String())
+	}
+}
+
+// TestFindDupes_NoDuplicates writes a Go file with no duplicate string
+// literals long enough to be reported, and verifies that the function
+// produces no output.
+func TestFindDupes_NoDuplicates(t *testing.T) {
+	dir := t.TempDir()
+	filename := filepath.Join(dir, "unique.go")
+	source := `package unique
+
+func f() {
+	_ = "abc"
+	_ = "def"
+	_ = "ghi"
+}
+`
+	if err := os.WriteFile(filename, []byte(source), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	findDupes(filename, &stdout, &stderr)
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want empty when no duplicates", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want empty when no duplicates", stderr.String())
+	}
+}
+
 func parseSource(t *testing.T, source string) *ast.File {
 	t.Helper()
 	node, err := parser.ParseFile(token.NewFileSet(), "sample.go", source, 0)
