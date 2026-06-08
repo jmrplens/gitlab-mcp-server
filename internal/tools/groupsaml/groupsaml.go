@@ -81,7 +81,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 type AddInput struct {
 	GroupID       string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	SAMLGroupName string `json:"saml_group_name" jsonschema:"Name of the SAML group,required"`
-	AccessLevel   int    `json:"access_level" jsonschema:"Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner),required"`
+	AccessLevel   int    `json:"access_level" jsonschema:"Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported),required"`
 	MemberRoleID  *int64 `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
 	Provider      string `json:"provider,omitempty" jsonschema:"SAML provider name"`
 }

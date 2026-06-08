@@ -23,7 +23,7 @@ type ListGroupInput struct {
 // CreateInstanceInput holds parameters for creating an instance member role.
 type CreateInstanceInput struct {
 	Name            string `json:"name"              jsonschema:"Name of the custom role,required"`
-	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer),required"`
+	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 25=Security Manager where supported),required"`
 	Description     string `json:"description,omitempty" jsonschema:"Description of the custom role"`
 	Permissions
 }
@@ -258,7 +258,7 @@ func CreateInstance(ctx context.Context, client *gitlabclient.Client, in CreateI
 	role, _, err := client.GL().MemberRolesService.CreateInstanceMemberRole(opts)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create instance member role", err, http.StatusBadRequest,
-			"requires admin + self-managed Ultimate; base_access_level must be 10/20/30/40 (Guest/Reporter/Developer/Maintainer); name must be unique; permissions are a list of valid permission strings")
+			"requires admin + self-managed Ultimate; base_access_level must be 10/20/25/30/40 (Guest/Reporter/Security Manager/Developer/Maintainer); name must be unique; permissions are a list of valid permission strings")
 	}
 	return toOutput(role), nil
 }

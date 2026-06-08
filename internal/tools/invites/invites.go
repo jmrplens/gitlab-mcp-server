@@ -35,7 +35,7 @@ type ProjectInvitesInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Email       string               `json:"email,omitempty" jsonschema:"Email address to invite (either email or user_id required)"`
 	UserID      int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
-	AccessLevel int                  `json:"access_level" jsonschema:"Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner),required"`
+	AccessLevel int                  `json:"access_level" jsonschema:"Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported),required"`
 	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the invitation (YYYY-MM-DD)"`
 }
 
@@ -44,7 +44,7 @@ type GroupInvitesInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	Email       string               `json:"email,omitempty" jsonschema:"Email address to invite (either email or user_id required)"`
 	UserID      int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
-	AccessLevel int                  `json:"access_level" jsonschema:"Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner),required"`
+	AccessLevel int                  `json:"access_level" jsonschema:"Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported),required"`
 	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the invitation (YYYY-MM-DD)"`
 }
 
@@ -185,7 +185,7 @@ func sendInvitation(ctx context.Context, scopeID toolutil.StringOrInt, operation
 			return InviteResultOutput{}, toolutil.WrapErrWithHint(operation, err, forbiddenHint)
 		}
 		return InviteResultOutput{}, toolutil.WrapErrWithStatusHint(operation, err, http.StatusBadRequest,
-			"valid access_level: 10 (Guest), 20 (Reporter), 30 (Developer), 40 (Maintainer), 50 (Owner); expires_at format: YYYY-MM-DD; user may already be a member")
+			"valid access_level: 10 (Guest), 20 (Reporter), 25 (Security Manager), 30 (Developer), 40 (Maintainer), 50 (Owner); expires_at format: YYYY-MM-DD; user may already be a member")
 	}
 
 	return toInviteResultOutput(result), nil

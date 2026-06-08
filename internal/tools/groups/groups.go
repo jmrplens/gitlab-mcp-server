@@ -99,7 +99,7 @@ type SubgroupsListInput struct {
 	Search         string               `json:"search,omitempty"        jsonschema:"Filter subgroups by name or path"`
 	AllAvailable   bool                 `json:"all_available,omitempty" jsonschema:"Show all subgroups accessible by the authenticated user"`
 	Owned          bool                 `json:"owned,omitempty"         jsonschema:"Limit to subgroups explicitly owned by the authenticated user"`
-	MinAccessLevel int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	MinAccessLevel int                  `json:"min_access_level,omitempty" jsonschema:"Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner,25=Security Manager where supported)"`
 	OrderBy        string               `json:"order_by,omitempty"      jsonschema:"Order subgroups by field (name, path, id, similarity)"`
 	Sort           string               `json:"sort,omitempty"          jsonschema:"Sort direction (asc, desc)"`
 	Statistics     bool                 `json:"statistics,omitempty"    jsonschema:"Include group statistics (storage, counts)"`

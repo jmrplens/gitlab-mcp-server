@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,872 |
-| Unit test functions                                   | 10,593 |
-| E2E test functions                                    |    279 |
+| Total test functions                                  | 10,889 |
+| Unit test functions                                   | 10,609 |
+| E2E test functions                                    |    280 |
 | cmd test functions                                    |    783 |
-| Test files (internal/)                                |    441 |
+| Test files (internal/)                                |    442 |
 | Test files (cmd/)                                     |     52 |
 | Test files (test/e2e/suite/)                          |    137 |
 | Tool sub-packages tested                              |    175 |
@@ -35,8 +35,8 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,726 | 89.5% |
-| `TestFunc` (no underscore)             |   843 |  7.8% |
+| `TestFunc_Scenario` (2-part)           | 9,741 | 89.5% |
+| `TestFunc` (no underscore)             |   845 |  7.8% |
 | `TestFunc_Scenario_Expected` (3+ part) |   303 |  2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,903 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          7,622 |        339 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            279 |        137 | build-tagged real GitLab integration suite                                                      |
+| Tool sub-packages (175) |          7,638 |        340 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            280 |        137 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            783 |         52 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,872** |    **630** |                                                                                                 |
+| **Total**               |     **10,889** |    **631** |                                                                                                 |
 
 ### Core Packages
 
@@ -199,7 +199,7 @@
 | impersonationtokens     |        38 |          2 |   100.0% |         5 |
 | importservice           |        26 |          1 |   100.0% |         5 |
 | instancevariables       |        40 |          2 |   100.0% |         5 |
-| integrations            |        32 |          2 |   100.0% |         4 |
+| integrations            |        48 |          3 |    95.5% |         7 |
 | invites                 |        32 |          1 |   100.0% |         4 |
 | issuediscussions        |        38 |          2 |   100.0% |         6 |
 | issuelinks              |        43 |          2 |   100.0% |         4 |
@@ -289,7 +289,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        79 |          2 |   100.0% |         6 |
-| **Total**               | **7,622** |    **339** |          | **1,129** |
+| **Total**               | **7,638** |    **340** |          | **1,132** |
 
 </details>
 
@@ -436,7 +436,7 @@
 | impersonationtokens     |   100.0% |
 | importservice           |   100.0% |
 | instancevariables       |   100.0% |
-| integrations            |   100.0% |
+| integrations            |    95.5% |
 | invites                 |   100.0% |
 | issuediscussions        |   100.0% |
 | issuelinks              |   100.0% |

@@ -133,7 +133,7 @@ type AddInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
 	UserID       int64                `json:"user_id,omitempty"       jsonschema:"User ID to add (provide user_id or username),required"`
 	Username     string               `json:"username,omitempty"      jsonschema:"Username to add (provide user_id or username)"`
-	AccessLevel  int                  `json:"access_level"            jsonschema:"Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)"`
+	AccessLevel  int                  `json:"access_level"            jsonschema:"Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)"`
 	ExpiresAt    string               `json:"expires_at,omitempty"    jsonschema:"Membership expiration date (YYYY-MM-DD)"`
 	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
 }

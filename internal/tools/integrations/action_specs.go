@@ -14,11 +14,24 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		integrationReadSpec("integration_get", toolutil.RouteAction(client, Get), "gitlab_get_integration"),
 		integrationDeleteSpec("integration_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_integration"),
 		integrationCreateSpec("integration_set_jira", toolutil.RouteAction(client, SetJira), "gitlab_set_jira_integration"),
+
+		// Group-level Datadog integration (GitLab.com Premium/Ultimate only).
+		groupDatadogReadSpec("integration_get_group_datadog", toolutil.RouteAction(client, GetGroupDatadog), "gitlab_get_group_datadog_integration"),
+		groupDatadogCreateSpec("integration_set_group_datadog", toolutil.RouteAction(client, SetGroupDatadog), "gitlab_set_group_datadog_integration"),
+		groupDatadogDeleteSpec("integration_delete_group_datadog", toolutil.DestructiveAction(client, deleteGroupDatadogOutput), "gitlab_delete_group_datadog_integration"),
 	}
 }
 
 func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
 	if err := Delete(ctx, client, input); err != nil {
+		return toolutil.DeleteOutput{}, err
+	}
+	_, out, _ := toolutil.DeleteResult("integration")
+	return out, nil
+}
+
+func deleteGroupDatadogOutput(ctx context.Context, client *gitlabclient.Client, input DeleteGroupDatadogInput) (toolutil.DeleteOutput, error) {
+	if err := DeleteGroupDatadog(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
 	}
 	_, out, _ := toolutil.DeleteResult("integration")
@@ -37,6 +50,18 @@ func integrationDeleteSpec(name string, route toolutil.ActionRoute, individualTo
 	return toolutil.NewDeleteActionSpec(name, route, integrationOptions(individualTool))
 }
 
+func groupDatadogReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewReadActionSpec(name, route, groupDatadogOptions(individualTool))
+}
+
+func groupDatadogCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewCreateActionSpec(name, route, groupDatadogOptions(individualTool))
+}
+
+func groupDatadogDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewDeleteActionSpec(name, route, groupDatadogOptions(individualTool))
+}
+
 func integrationOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute integrations domain action.", Tags: []string{"project", "integration"},
@@ -45,4 +70,15 @@ func integrationOptions(individualTool string) toolutil.ActionSpecOptions {
 		OwnerPackage:   "integrations",
 		IndividualTool: toolutil.IndividualToolSpec{Name: individualTool, Title: toolutil.TitleFromName(individualTool)},
 	}
+}
+
+// groupDatadogOptions returns the spec options shared by the three group-level
+// Datadog integration actions. The endpoint is GitLab.com Premium/Ultimate
+// only, so we mark the edition explicitly.
+func groupDatadogOptions(individualTool string) toolutil.ActionSpecOptions {
+	opts := integrationOptions(individualTool)
+	opts.Tags = []string{"group", "integration", "datadog"}
+	opts.RelatedActions = []string{"group.get"}
+	opts.Edition = "premium"
+	return opts
 }

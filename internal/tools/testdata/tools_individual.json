@@ -6,7 +6,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)",
+          "description": "Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 25=Security Manager where supported)",
           "type": "integer"
         },
         "group_id": {
@@ -80,7 +80,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)",
+          "description": "Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 25=Security Manager where supported)",
           "type": "integer"
         },
         "project_id": {
@@ -7732,7 +7732,7 @@
           "type": "string"
         },
         "target_access_levels": {
-          "description": "Access levels to target (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Access levels to target (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner,25=Security Manager where supported)",
           "items": {
             "type": "integer"
           },
@@ -9298,7 +9298,7 @@
           ]
         },
         "base_access_level": {
-          "description": "Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)",
+          "description": "Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 25=Security Manager where supported)",
           "type": "integer"
         },
         "description": {
@@ -12420,6 +12420,58 @@
       "required": [
         "group_id",
         "badge_id"
+      ],
+      "type": "object",
+      "x_destructive": true
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "message"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    }
+  },
+  {
+    "name": "gitlab_delete_group_datadog_integration",
+    "description": "Use to execute integrations domain action.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "description": "Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.",
+          "type": "boolean"
+        },
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
       ],
       "type": "object",
       "x_destructive": true
@@ -24504,6 +24556,98 @@
     }
   },
   {
+    "name": "gitlab_get_group_datadog_integration",
+    "description": "Use to execute integrations domain action.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "integration": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "api_url": {
+              "type": "string"
+            },
+            "archive_trace_events": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "datadog_env": {
+              "type": "string"
+            },
+            "datadog_service": {
+              "type": "string"
+            },
+            "datadog_site": {
+              "type": "string"
+            },
+            "datadog_tags": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "slug",
+            "active"
+          ],
+          "type": "object"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "integration"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    }
+  },
+  {
     "name": "gitlab_get_group_dora_metrics",
     "description": "Get DORA metrics for a GitLab group. Requires metric type (deployment_frequency, lead_time_for_changes, time_to_restore_service, change_failure_rate). Supports date range and interval filtering. Returns: list of date/value data points. See also: gitlab_get_project_dora_metrics, gitlab_environment_list.",
     "inputSchema": {
@@ -33384,7 +33528,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)",
+          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
           "type": "integer"
         },
         "email": {
@@ -34248,7 +34392,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)",
+          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
           "type": "integer"
         },
         "group_id": {
@@ -34739,7 +34883,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)",
           "type": "integer"
         },
         "expires_at": {
@@ -34840,7 +34984,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "New access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "New access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)",
           "type": "integer"
         },
         "expires_at": {
@@ -38732,7 +38876,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)",
+          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
           "type": "integer"
         },
         "group_id": {
@@ -39825,7 +39969,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)",
+          "description": "Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); 25=Security Manager is not valid for group shares",
           "type": "integer"
         },
         "group_id": {
@@ -57060,7 +57204,7 @@
   },
   {
     "name": "gitlab_list_integrations",
-    "description": "List all integrations (services) configured for a project, including their active status.\n\nReturns: JSON array of integrations with status.\n\nSee also: gitlab_get_integration, gitlab_set_jira_integration",
+    "description": "Use to execute integrations domain action.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -87334,7 +87478,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)",
+          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
           "type": "integer"
         },
         "email": {
@@ -87634,7 +87778,7 @@
           ]
         },
         "min_access_level": {
-          "description": "Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)",
+          "description": "Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
           "type": "integer"
         },
         "order_by": {
@@ -88398,7 +88542,7 @@
           "type": "string"
         },
         "shared_min_access_level": {
-          "description": "Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)",
+          "description": "Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
           "type": "integer"
         },
         "shared_visible_only": {
@@ -88536,7 +88680,7 @@
       "additionalProperties": false,
       "properties": {
         "min_access_level": {
-          "description": "Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)",
+          "description": "Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
           "type": "integer"
         },
         "page": {
@@ -89990,7 +90134,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)",
           "type": "integer"
         },
         "expires_at": {
@@ -91937,7 +92081,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer)",
+          "description": "Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 25=Security Manager is not valid for project shares",
           "type": "integer"
         },
         "group_id": {
@@ -107930,6 +108074,134 @@
     }
   },
   {
+    "name": "gitlab_set_group_datadog_integration",
+    "description": "Use to execute integrations domain action.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "api_key": {
+          "description": "Datadog API key (write-only; never returned by the get endpoint)",
+          "type": "string"
+        },
+        "api_url": {
+          "description": "Datadog API URL (e.g. https://api.datadoghq.com)",
+          "type": "string"
+        },
+        "archive_trace_events": {
+          "description": "Forward CI job trace events to Datadog",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "datadog_env": {
+          "description": "Datadog env tag forwarded with every log/metric",
+          "type": "string"
+        },
+        "datadog_service": {
+          "description": "Datadog service tag forwarded with every log/metric",
+          "type": "string"
+        },
+        "datadog_site": {
+          "description": "Datadog site (e.g. datadoghq.com, datadoghq.eu, us3.datadoghq.com, us5.datadoghq.com, ap1.datadoghq.com)",
+          "type": "string"
+        },
+        "datadog_tags": {
+          "description": "Comma-separated Datadog tags forwarded with every log/metric",
+          "type": "string"
+        },
+        "group_id": {
+          "description": "Group ID or URL-encoded path",
+          "type": "string"
+        },
+        "use_inherited_settings": {
+          "description": "Inherit the Datadog configuration from the closest ancestor group that has one configured (overrides all per-field settings)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        }
+      },
+      "required": [
+        "group_id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "integration": {
+          "additionalProperties": false,
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "api_url": {
+              "type": "string"
+            },
+            "archive_trace_events": {
+              "type": [
+                "null",
+                "boolean"
+              ]
+            },
+            "created_at": {
+              "type": "string"
+            },
+            "datadog_env": {
+              "type": "string"
+            },
+            "datadog_service": {
+              "type": "string"
+            },
+            "datadog_site": {
+              "type": "string"
+            },
+            "datadog_tags": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updated_at": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "slug",
+            "active"
+          ],
+          "type": "object"
+        },
+        "next_steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "integration"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true
+    }
+  },
+  {
     "name": "gitlab_set_jira_integration",
     "description": "Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers.\n\nReturns: JSON with the configured Jira integration details.\n\nSee also: gitlab_list_integrations, gitlab_get_integration",
     "inputSchema": {
@@ -110944,7 +111216,7 @@
           "type": "string"
         },
         "min_access_level": {
-          "description": "Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)",
+          "description": "Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner,25=Security Manager where supported)",
           "type": "integer"
         },
         "order_by": {

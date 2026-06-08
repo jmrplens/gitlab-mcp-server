@@ -122,7 +122,7 @@ type CreateInput struct {
 	StartsAt           string  `json:"starts_at,omitempty" jsonschema:"Start time in ISO 8601 format"`
 	EndsAt             string  `json:"ends_at,omitempty" jsonschema:"End time in ISO 8601 format"`
 	Font               string  `json:"font,omitempty" jsonschema:"Font for the message"`
-	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	TargetAccessLevels []int64 `json:"target_access_levels,omitempty" jsonschema:"Access levels to target (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner,25=Security Manager where supported)"`
 	TargetPath         string  `json:"target_path,omitempty" jsonschema:"Target path to show message on"`
 	BroadcastType      string  `json:"broadcast_type,omitempty" jsonschema:"Type: banner or notification"`
 	Dismissable        *bool   `json:"dismissable,omitempty" jsonschema:"Whether message can be dismissed"`

@@ -2,7 +2,7 @@
 
 > **Diátaxis type**: Reference
 > **Domain**: Integrations, Badges, Topics, Epic Discussions, Import
-> **Individual tools**: 32
+> **Individual tools**: 35
 > **Meta-tools**: `gitlab_project` (integrations + badges), `gitlab_admin` (topics), `gitlab_epic_discussion`, `gitlab_import` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Integrations API](https://docs.gitlab.com/ee/api/integrations.html), [Badges API](https://docs.gitlab.com/ee/api/project_badges.html), [Topics API](https://docs.gitlab.com/ee/api/topics.html), [Epic Discussions API](https://docs.gitlab.com/ee/api/epic_discussions.html), [Import API](https://docs.gitlab.com/ee/api/import.html)
 > **Audience**: 👤 End users, AI assistant users
@@ -63,6 +63,33 @@ Delete (disable) a project integration by slug. Supports the same slugs as get, 
 Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers.
 
 | Annotation | **Create** |
+| ---------- | ---------- |
+
+---
+
+## Group Integrations (Datadog)
+
+The group-level Datadog integration is configured at the group scope and inherits down to descendant subgroups when `use_inherited_settings=true`. Requires GitLab.com Premium/Ultimate and Owner role on the group. The `api_key` field is write-only — the read endpoint never returns it.
+
+### `gitlab_get_group_datadog_integration`
+
+Read the Datadog integration configured on a group.
+
+| Annotation | **Read** |
+| ---------- | -------- |
+
+### `gitlab_set_group_datadog_integration`
+
+Create or update the Datadog integration on a group. At least one of `api_key`, `api_url`, `datadog_env`, `datadog_service`, `datadog_site`, `datadog_tags`, `archive_trace_events`, or `use_inherited_settings=true` must be supplied.
+
+| Annotation | **Create** |
+| ---------- | ---------- |
+
+### `gitlab_delete_group_datadog_integration`
+
+Remove the Datadog integration from a group. The stored `api_key` is cleared; deletion is irreversible.
+
+| Annotation | **Delete** |
 | ---------- | ---------- |
 
 ---

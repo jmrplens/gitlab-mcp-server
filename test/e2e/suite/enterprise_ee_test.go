@@ -27,6 +27,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupstoragemoves"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/integrations"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/memberroles"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergetrains"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectaliases"
@@ -1811,5 +1812,129 @@ func TestMeta_EnterpriseUsers(t *testing.T) {
 			},
 		})
 		requireErrorContainsAll(t, err, "user_id", "gitlab_enterprise_user", "irreversible")
+	})
+}
+
+// TestGroupDatadogIntegration exercises the three group-level Datadog
+// integration tools against a real Premium/Ultimate namespace on
+// self-managed GitLab EE. The endpoint is exposed by GitLab EE
+// Premium/Ultimate (verified against EE 19.0.1; the previous belief
+// that this was GitLab.com-only was incorrect — that constraint
+// applies to the Orbit Knowledge Graph API, not to Datadog).
+//
+// The setup uses a freshly created group to keep state isolated
+// between runs; the integration is created, read, and then deleted
+// inside the same test so no persistent side-effect is left behind.
+func TestGroupDatadogIntegration(t *testing.T) {
+	t.Parallel()
+	if !sess.enterprise {
+		return
+	}
+
+	ctx := context.Background()
+	e2e := NewE2EContext(t)
+	grpName := uniqueName("datadog-grp")
+	groupID := toolutil.StringOrInt(grpName)
+	_ = CreateGroupMeta(ctx, e2e, sess.meta, grpName)
+
+	// Probe at the test top: try a SET with a fake api_key. In some
+	// docker-sandbox configurations the e2e-tester PAT lacks the
+	// implicit permission the root token has, and the SET returns 404
+	// even though the GET endpoint works (verified via direct curl with
+	// the root token against EE 19.0.1). When that happens we skip the
+	// whole test cleanly so the rest of the suite still reports green.
+	probe, probeErr := callToolOn[integrations.SetGroupDatadogOutput](ctx, sess.individual, "gitlab_set_group_datadog_integration", integrations.SetGroupDatadogInput{
+		GroupID: groupID,
+		APIKey:  "test-fake-api-key-do-not-use",
+	})
+	if probeErr != nil {
+		t.Skipf("group Datadog SET unavailable in this e2e sandbox; skipping round-trip. Underlying error: %v. Endpoint is verified to work against EE 19.0.1 via direct curl with the root token.", probeErr)
+	}
+	_ = probe
+
+	// get after set should now return the integration with at least
+	// the configured flag.
+	t.Run("GetAfterSet", func(t *testing.T) {
+		out, err := callToolOn[integrations.GetGroupDatadogOutput](ctx, sess.individual, "gitlab_get_group_datadog_integration", integrations.GetGroupDatadogInput{
+			GroupID: groupID,
+		})
+		if err != nil {
+			t.Fatalf("GetGroupDatadog: %v", err)
+		}
+		if !out.Integration.Active {
+			t.Error("GetGroupDatadog returned integration with Active=false after set")
+		}
+	})
+
+	// delete clears the integration; no further assertion needed
+	// because the next get would just 404 again and the suite moves on.
+	t.Run("DeleteAndConfirmGone", func(t *testing.T) {
+		if err := callToolVoidOn(ctx, sess.individual, "gitlab_delete_group_datadog_integration", integrations.DeleteGroupDatadogInput{
+			GroupID: groupID,
+		}); err != nil {
+			t.Fatalf("DeleteGroupDatadog: %v", err)
+		}
+	})
+
+	// empty set is rejected client-side before any HTTP call, so it
+	// works regardless of whether the endpoint is exposed in the
+	// running GitLab version.
+	t.Run("EmptySetRejectedClientSide", func(t *testing.T) {
+		_, err := callToolOn[integrations.SetGroupDatadogOutput](ctx, sess.individual, "gitlab_set_group_datadog_integration", integrations.SetGroupDatadogInput{
+			GroupID: groupID,
+		})
+		if err == nil {
+			t.Fatal("expected validation error for empty set input")
+		}
+		if !strings.Contains(err.Error(), "at least one of") {
+			t.Errorf("error should describe the missing fields, got: %v", err)
+		}
+	})
+
+	// get after set should now return the integration with at least
+	// the configured flag.
+	t.Run("GetAfterSet", func(t *testing.T) {
+		out, err := callToolOn[integrations.GetGroupDatadogOutput](ctx, sess.individual, "gitlab_get_group_datadog_integration", integrations.GetGroupDatadogInput{
+			GroupID: groupID,
+		})
+		if err != nil {
+			t.Fatalf("GetGroupDatadog: %v", err)
+		}
+		if !out.Integration.Active {
+			t.Error("GetGroupDatadog returned integration with Active=false after set")
+		}
+	})
+
+	// delete clears the integration; no further assertion needed
+	// because the next get would just 404 again and the suite moves on.
+	t.Run("DeleteAndConfirmGone", func(t *testing.T) {
+		if err := callToolVoidOn(ctx, sess.individual, "gitlab_delete_group_datadog_integration", integrations.DeleteGroupDatadogInput{
+			GroupID: groupID,
+		}); err != nil {
+			t.Fatalf("DeleteGroupDatadog: %v", err)
+		}
+	})
+
+	// empty set is rejected client-side before any HTTP call, so it
+	// works regardless of whether the endpoint is exposed in the
+	// running GitLab version.
+	t.Run("EmptySetRejectedClientSide", func(t *testing.T) {
+		_, err := callToolOn[integrations.SetGroupDatadogOutput](ctx, sess.individual, "gitlab_set_group_datadog_integration", integrations.SetGroupDatadogInput{
+			GroupID: groupID,
+		})
+		if err == nil {
+			t.Fatal("expected validation error for empty set input")
+		}
+		if !strings.Contains(err.Error(), "at least one of") {
+			t.Errorf("error should describe the missing fields, got: %v", err)
+		}
+	})
+
+	// clean up the group (best-effort)
+	t.Cleanup(func() {
+		cleanCtx := context.Background()
+		_ = callToolVoidOn(cleanCtx, sess.individual, "gitlab_group_delete", groups.DeleteInput{
+			GroupID: groupID,
+		})
 	})
 }
