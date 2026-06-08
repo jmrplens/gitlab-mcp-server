@@ -35,7 +35,8 @@ func FormatOutputMarkdown(s Output) string {
 	if s.UpdatedAt != "" {
 		fmt.Fprintf(&b, "| Updated | %s |\n", toolutil.FormatTime(s.UpdatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use the selected tool surface's pipeline-schedule update action with the same project_id and schedule_id to modify schedule settings",
 		"Use the selected tool surface's pipeline-schedule run action with the same project_id and schedule_id to trigger this schedule immediately",
 		"Use the selected tool surface's pipeline-schedule delete action with the same project_id, schedule_id, and explicit confirm=true to remove this schedule",
@@ -58,7 +59,8 @@ func FormatListMarkdown(out ListOutput) string {
 			s.ID, toolutil.EscapeMdTableCell(s.Description), toolutil.EscapeMdTableCell(s.Ref), toolutil.EscapeMdTableCell(s.Cron), s.Active, toolutil.EscapeMdTableCell(s.OwnerName))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's pipeline-schedule get action with the same project_id and schedule_id for full details",
 		"Use the selected tool surface's pipeline-schedule create action with project_id to add a new schedule",
@@ -75,7 +77,8 @@ func FormatVariableMarkdown(v VariableOutput) string {
 	if v.VariableType != "" {
 		fmt.Fprintf(&b, "- **Type**: %s\n", v.VariableType)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use the selected tool surface's pipeline-schedule variable edit action with the same project_id, schedule_id, and key to change this variable",
 		"Use the selected tool surface's pipeline-schedule variable delete action with the same project_id, schedule_id, key, and explicit confirm=true to remove it",
 	)
@@ -97,7 +100,8 @@ func FormatTriggeredPipelinesMarkdown(out TriggeredPipelinesListOutput) string {
 			toolutil.MdTitleLink(fmt.Sprintf("#%d", p.ID), p.WebURL), p.IID, toolutil.EscapeMdTableCell(p.Ref), p.Status, p.Source)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's pipeline get action with pipeline_id for full details",
 	)

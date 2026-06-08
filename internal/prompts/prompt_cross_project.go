@@ -44,7 +44,8 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 			AuthorID:    new(userID),
 			State:       new("opened"),
 			ListOptions: gl.ListOptions{PerPage: maxListItems},
-		}, gl.WithContext(ctx))
+		}, gl.WithContext(ctx),
+	)
 	if errAuthored != nil {
 		slog.Warn("failed to list authored MRs", "error", errAuthored)
 	}
@@ -55,7 +56,8 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 			AssigneeID:  gl.AssigneeID(userID),
 			State:       new("opened"),
 			ListOptions: gl.ListOptions{PerPage: maxListItems},
-		}, gl.WithContext(ctx))
+		}, gl.WithContext(ctx),
+	)
 	if errAssigned != nil {
 		slog.Warn("failed to list assigned MRs", "error", errAssigned)
 	}
@@ -133,7 +135,8 @@ func handleMyPendingReviews(ctx context.Context, client *gitlabclient.Client, re
 			ReviewerID:  gl.ReviewerID(userID),
 			State:       new("opened"),
 			ListOptions: gl.ListOptions{PerPage: maxListItems},
-		}, gl.WithContext(ctx))
+		}, gl.WithContext(ctx),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list pending reviews: %w", err)
 	}
@@ -190,7 +193,8 @@ func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 			AssigneeID:  gl.AssigneeID(userID),
 			State:       new(state),
 			ListOptions: gl.ListOptions{PerPage: maxListItems},
-		}, gl.WithContext(ctx))
+		}, gl.WithContext(ctx),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list issues: %w", err)
 	}
@@ -279,7 +283,8 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 			State:        new("merged"),
 			CreatedAfter: &since,
 			ListOptions:  gl.ListOptions{PerPage: maxListItems},
-		}, gl.WithContext(ctx))
+		}, gl.WithContext(ctx),
+	)
 	if errMerged != nil {
 		slog.Warn("failed to list merged MRs", "error", errMerged)
 	}
@@ -290,7 +295,8 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 			ReviewerID:   gl.ReviewerID(userID),
 			UpdatedAfter: new(since),
 			ListOptions:  gl.ListOptions{PerPage: maxListItems},
-		}, gl.WithContext(ctx))
+		}, gl.WithContext(ctx),
+	)
 	if errReviewed != nil {
 		slog.Warn("failed to list reviewed MRs", "error", errReviewed)
 	}

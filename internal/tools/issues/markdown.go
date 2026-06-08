@@ -25,7 +25,8 @@ func FormatTodoMarkdown(t TodoOutput) string {
 	if t.TargetURL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURLNewline, t.TargetURL)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_todo_mark_done` to mark this todo as completed",
 		"Use `gitlab_issue_get` to view the referenced issue",
 	)
@@ -48,7 +49,8 @@ func FormatListAllMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(i.Author), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_issue_get` to view issue details",
 		"Use `gitlab_issue_update` to change state or labels",
@@ -68,7 +70,8 @@ func FormatTimeStatsMarkdown(ts TimeStatsOutput) string {
 	}
 	fmt.Fprintf(&b, "- **Estimate (seconds)**: %d\n", ts.TimeEstimate)
 	fmt.Fprintf(&b, "- **Spent (seconds)**: %d\n", ts.TotalTimeSpent)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_issue_update` to adjust time tracking",
 	)
 	return b.String()
@@ -87,7 +90,8 @@ func FormatParticipantsMarkdown(out ParticipantsOutput) string {
 	for _, p := range out.Participants {
 		fmt.Fprintf(&b, "| @%s | %s |\n", toolutil.EscapeMdTableCell(p.Username), toolutil.EscapeMdTableCell(p.Name))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_issue_get` to view the issue details",
 		"Use `gitlab_issue_note_create` to notify participants",
 	)
@@ -108,7 +112,8 @@ func FormatRelatedMRsMarkdown(out RelatedMRsOutput, heading string) string {
 		fmt.Fprintf(&b, "| !%d | %s | %s | @%s | %s → %s |\n", mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State, toolutil.EscapeMdTableCell(mr.Author), mr.SourceBranch, mr.TargetBranch)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_mr_get` to view MR details",
 		"Use `gitlab_mr_changes_get` to see MR diff",
 	)
@@ -167,7 +172,8 @@ func FormatMarkdown(i Output) string {
 		fmt.Fprintf(&b, "\n### Description\n\n%s%s\n", toolutil.WrapGFMBody(i.Description), toolutil.RichContentHint(toolutil.DetectRichContent(i.Description), i.WebURL))
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdURLNewline, i.WebURL)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_issue_note action 'list' to see comments on this issue",
 		"Use action 'update' to change title, labels, assignees, or milestone",
 		"Use action 'mrs_related' to find linked MRs",
@@ -199,7 +205,8 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(i.Author), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with an issue_iid to see full details and description",
 		"Use action 'create' to create a new issue",
@@ -224,7 +231,8 @@ func FormatListGroupMarkdown(out ListGroupOutput) string {
 		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), i.State, toolutil.EscapeMdTableCell(i.Author), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_issue_get` to view issue details",
 		"Use `gitlab_issue_create` to open a new issue",

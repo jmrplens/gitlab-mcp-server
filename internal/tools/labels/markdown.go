@@ -28,7 +28,8 @@ type labelNotFoundOutput struct {
 }
 
 func formatLabelNotFound(out labelNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Label", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Label", out.Identifier,
 		"Use gitlab_label_list with project_id to list labels",
 		"Labels can be referenced by ID or name - verify the value is correct",
 	)

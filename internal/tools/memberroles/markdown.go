@@ -45,7 +45,8 @@ func FormatOutputMarkdown(o Output) string {
 	writePermRow(&b, "Read Vulnerability", o.ReadVulnerability)
 	writePermRow(&b, "Remove Group", o.RemoveGroup)
 	writePermRow(&b, "Remove Project", o.RemoveProject)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_list_instance_member_roles` or `gitlab_list_group_member_roles` to view all roles",
 	)
 	return b.String()
@@ -71,14 +72,16 @@ func FormatListMarkdown(out ListOutput) string {
 		if r.GroupID != 0 {
 			gid = strconv.FormatInt(r.GroupID, 10)
 		}
-		fmt.Fprintf(&b, "| %d | %s | %d | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %d | %s |\n",
 			r.ID,
 			toolutil.EscapeMdTableCell(r.Name),
 			r.BaseAccessLevel,
 			gid,
 		)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_create_instance_member_role` or `gitlab_create_group_member_role` to define a new custom role",
 	)
 	return b.String()

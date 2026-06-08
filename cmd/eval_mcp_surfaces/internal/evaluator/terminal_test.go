@@ -45,18 +45,18 @@ func TestConfigureTerminalOutput_DefaultAndOverride(t *testing.T) {
 	restore := termio.SetOutputForTest(termio.NewOutput(&strings.Builder{}, false))
 	t.Cleanup(restore)
 
-	updated, close, err := configureTerminalOutput(options{Output: output})
+	updated, closeHook, err := configureTerminalOutput(options{Output: output})
 	if err != nil {
 		t.Fatalf("configureTerminalOutput() error = %v", err)
 	}
 	if updated.TerminalLog == "" {
 		t.Fatal("configureTerminalOutput() did not populate TerminalLog")
 	}
-	if close == nil {
+	if closeHook == nil {
 		t.Fatal("configureTerminalOutput() returned nil close hook")
 	}
-	if err := close(); err != nil {
-		t.Fatalf("close() error = %v", err)
+	if closeErr := closeHook(); closeErr != nil {
+		t.Fatalf("closeHook() error = %v", closeErr)
 	}
 
 	// An invalid path should surface an error and a nil cleanup hook so the
@@ -64,10 +64,10 @@ func TestConfigureTerminalOutput_DefaultAndOverride(t *testing.T) {
 	// Using a regular file as the log path's parent directory forces MkdirAll
 	// to fail with ENOTDIR.
 	blocker := filepath.Join(t.TempDir(), "blocker")
-	if err := os.WriteFile(blocker, []byte("not a dir"), 0o600); err != nil {
-		t.Fatalf("write blocker: %v", err)
+	if writeErr := os.WriteFile(blocker, []byte("not a dir"), 0o600); writeErr != nil {
+		t.Fatalf("write blocker: %v", writeErr)
 	}
-	if _, _, err := configureTerminalOutput(options{Output: output, TerminalLog: filepath.Join(blocker, "log.txt")}); err == nil {
+	if _, _, invalidErr := configureTerminalOutput(options{Output: output, TerminalLog: filepath.Join(blocker, "log.txt")}); invalidErr == nil {
 		t.Fatal("configureTerminalOutput(invalid) error = nil, want error")
 	}
 }

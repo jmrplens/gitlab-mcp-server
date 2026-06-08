@@ -17,7 +17,8 @@ func FormatOutputMarkdown(o Output) string {
 	fmt.Fprintf(&b, "- **External UID**: `%s`\n", o.ExternalUID)
 	fmt.Fprintf(&b, "- **User ID**: %d\n", o.UserID)
 	fmt.Fprintf(&b, "- **Active**: %t\n", o.Active)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_update_group_scim_identity` to modify the external UID",
 		"Use `gitlab_delete_group_scim_identity` to remove this identity",
 	)
@@ -36,7 +37,8 @@ func FormatListMarkdown(out ListOutput) string {
 	for _, id := range out.Identities {
 		fmt.Fprintf(&b, "| `%s` | %d | %t |\n", id.ExternalUID, id.UserID, id.Active)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_get_group_scim_identity` to view full identity details",
 	)
 	return b.String()

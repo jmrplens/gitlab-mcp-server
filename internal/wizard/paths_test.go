@@ -307,7 +307,7 @@ func TestCrushConfigPath_CurrentPlatform(t *testing.T) {
 		}
 	default:
 		xdg := os.Getenv("XDG_CONFIG_HOME")
-		want := ""
+		var want string
 		if xdg != "" {
 			want = filepath.Join(xdg, "crush", "crush.json")
 		} else {

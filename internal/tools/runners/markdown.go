@@ -20,7 +20,8 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&b, "| Paused | %s |\n", toolutil.BoolEmoji(out.Paused))
 	fmt.Fprintf(&b, "| Shared | %s |\n", toolutil.BoolEmoji(out.IsShared))
 	fmt.Fprintf(&b, "| Online | %s |\n", toolutil.BoolEmoji(out.Online))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get' for full runner configuration",
 		"Use action 'jobs' to see jobs executed by this runner",
 	)
@@ -55,7 +56,8 @@ func FormatDetailsMarkdown(out DetailsOutput) string {
 	if out.ContactedAt != "" {
 		fmt.Fprintf(&b, "| Last Contact | %s |\n", toolutil.FormatTime(out.ContactedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'update' to change runner settings",
 		"Use action 'update' with paused=true to pause or resume this runner",
 		"Use action 'jobs' to list jobs for this runner",
@@ -78,7 +80,8 @@ func FormatListMarkdown(out ListOutput) string {
 			r.ID, toolutil.EscapeMdTableCell(r.Name), r.RunnerType, r.Status, r.Paused, r.IsShared)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get' with runner_id for full configuration",
 		"Use action 'remove' to unregister a runner",
 	)

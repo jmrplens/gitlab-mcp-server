@@ -22,7 +22,8 @@ func FormatOutputMarkdown(b Output) string {
 			fmt.Fprintf(&sb, "| %d | %s | %d |\n", l.ID, toolutil.EscapeMdTableCell(l.Label), l.Position)
 		}
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use action 'list' to see all epic boards in a group",
 	)
 	return sb.String()
@@ -44,7 +45,8 @@ func FormatListMarkdown(out ListOutput) string {
 		if len(board.Labels) > 0 {
 			labels = strings.Join(board.Labels, ", ")
 		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %d |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %s | %d |\n",
 			board.ID,
 			toolutil.EscapeMdTableCell(board.Name),
 			toolutil.EscapeMdTableCell(labels),
@@ -52,7 +54,8 @@ func FormatListMarkdown(out ListOutput) string {
 		)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get' with board_id to see board details and lists",
 	)
 	return b.String()

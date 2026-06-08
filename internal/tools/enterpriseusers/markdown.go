@@ -29,7 +29,8 @@ func FormatOutputMarkdown(o Output) string {
 	if o.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, o.CreatedAt)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_disable_2fa_enterprise_user` to reset two-factor authentication",
 		"Use `gitlab_list_enterprise_users` to browse all enterprise users",
 	)
@@ -51,7 +52,8 @@ func FormatListMarkdown(out ListOutput) string {
 		if u.TwoFactorEnabled {
 			twoFA = "Yes"
 		}
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %s | %s | %s | %s |\n",
 			u.ID,
 			toolutil.EscapeMdTableCell(u.Username),
 			toolutil.EscapeMdTableCell(u.Name),

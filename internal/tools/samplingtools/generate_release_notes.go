@@ -94,7 +94,8 @@ func GenerateReleaseNotes(ctx context.Context, req *mcp.CallToolRequest, client 
 	data := FormatReleaseDataForAnalysis(input.From, input.To, cmp, mrs)
 	tracker.Step(ctx, 4, 5, "Requesting LLM release notes generation...")
 
-	result, err := samplingClient.Analyze(ctx, generateReleaseNotesPrompt, data,
+	result, err := samplingClient.Analyze(
+		ctx, generateReleaseNotesPrompt, data,
 		sampling.WithMaxTokens(4096),
 		sampling.WithTemperature(0.4),
 		sampling.WithModelPriorities(0.5, 0.6, 0.4),
@@ -168,7 +169,8 @@ func FormatGenerateReleaseNotesMarkdown(r GenerateReleaseNotesOutput) string {
 	if r.Model != "" {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", r.Model)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_release_create` to publish the release with these notes",
 		"Use `gitlab_release_link_create` to attach assets to the release",
 	)

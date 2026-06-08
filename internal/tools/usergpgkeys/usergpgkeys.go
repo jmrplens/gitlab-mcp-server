@@ -249,7 +249,8 @@ func FormatListMarkdownString(o ListOutput) string {
 				k.ID, toolutil.EscapeMdTableCell(keyPreview), toolutil.FormatTime(k.CreatedAt))
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_get_gpg_key` to view full key details",
 	)
 	return b.String()

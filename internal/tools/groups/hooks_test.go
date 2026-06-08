@@ -41,7 +41,8 @@ var groupHookListJSON = `[` + groupHookJSON + `]`
 func TestListHooks_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupHooks {
-			testutil.RespondJSONWithPagination(w, http.StatusOK, groupHookListJSON,
+			testutil.RespondJSONWithPagination(
+				w, http.StatusOK, groupHookListJSON,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"},
 			)
 			return

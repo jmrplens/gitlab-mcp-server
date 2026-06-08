@@ -14,7 +14,8 @@ type pipelineNotFoundOutput struct {
 }
 
 func formatPipelineNotFound(out pipelineNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Pipeline", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Pipeline", out.Identifier,
 		"Use gitlab_pipeline_list with project_id to list pipelines",
 		"Verify the pipeline_id is correct for this project",
 	)
@@ -40,7 +41,8 @@ func FormatListMarkdown(out ListOutput) string {
 			p.ID, p.WebURL, toolutil.PipelineStatusEmoji(p.Status), p.Status, toolutil.EscapeMdTableCell(p.Source), toolutil.EscapeMdTableCell(p.Ref), sha)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with a pipeline_id for full details",
 		"Use gitlab_job action 'list' with pipeline_id to see jobs",
@@ -87,7 +89,8 @@ func FormatDetailMarkdown(p DetailOutput) string {
 		fmt.Fprintf(&b, "- **Finished**: %s\n", toolutil.FormatTime(p.FinishedAt))
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdURL, p.WebURL)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_job action 'list' with this pipeline_id to see all jobs",
 		"Use action 'variables' to see pipeline variables",
 		"Use action 'test_report' to see test results",
@@ -109,7 +112,8 @@ func FormatVariablesMarkdown(out VariablesOutput) string {
 		fmt.Fprintf(&b, "| %s | %s | %s |\n",
 			toolutil.EscapeMdTableCell(v.Key), toolutil.EscapeMdTableCell(v.Value), v.VariableType)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_pipeline_get` to view pipeline details",
 	)
 	return b.String()
@@ -121,7 +125,8 @@ func FormatTestReportMarkdown(out TestReportOutput) string {
 	b.WriteString("## Pipeline Test Report\n\n")
 	writeTestReportTotals(&b, out.TotalCount, out.TotalTime, out.SuccessCount, out.FailedCount, out.SkippedCount, out.ErrorCount)
 	writeTestSuites(&b, testSuiteOutputs(out.TestSuites))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_job_list` to see individual job results",
 		"Use `gitlab_job_trace` to view job logs for failures",
 	)
@@ -134,7 +139,8 @@ func FormatTestReportSummaryMarkdown(out TestReportSummaryOutput) string {
 	b.WriteString("## Pipeline Test Report Summary\n\n")
 	writeTestReportTotals(&b, out.TotalCount, out.TotalTime, out.SuccessCount, out.FailedCount, out.SkippedCount, out.ErrorCount)
 	writeTestSuites(&b, testSuiteSummaryOutputs(out.TestSuites))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_pipeline_test_report` for full test details",
 		"Use `gitlab_job_list` to investigate failures",
 	)
@@ -210,12 +216,14 @@ func FormatWaitMarkdown(out WaitOutput) string {
 	b.WriteString("\n### Pipeline Details\n\n")
 	b.WriteString(FormatDetailMarkdown(out.Pipeline))
 	if out.TimedOut {
-		toolutil.WriteHints(&b,
+		toolutil.WriteHints(
+			&b,
 			"Pipeline is still running — call gitlab_pipeline_wait again to continue waiting",
 			"Use gitlab_pipeline_cancel to abort the pipeline",
 		)
 	} else if out.FinalStatus == "failed" {
-		toolutil.WriteHints(&b,
+		toolutil.WriteHints(
+			&b,
 			"Use gitlab_job action 'list' with scope 'failed' to find failed jobs",
 			"Use gitlab_pipeline_retry to retry failed jobs",
 		)

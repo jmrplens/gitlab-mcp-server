@@ -24,7 +24,8 @@ func FormatOutputMarkdown(o Output) string {
 	if o.ExpiresAt != "" {
 		fmt.Fprintf(&b, "| Expires | %s |\n", toolutil.FormatTime(o.ExpiresAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use the selected tool surface's deploy-token get action with the matching scope (project or group) and deploy_token_id to fetch this deploy token before changing it",
 		"Use the selected tool surface's deploy-token delete action with the matching scope (project or group), this deploy_token_id, and explicit confirm=true to revoke this deploy token",
 	)
@@ -47,7 +48,8 @@ func FormatListMarkdown(o ListOutput) string {
 			t.ID, t.Name, t.Username, strings.Join(t.Scopes, ", "), t.Revoked, t.Expired)
 	}
 	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's deploy-token get action with the matching scope (project or group) and deploy_token_id for full details",
 		"Use the selected tool surface's deploy-token create action with the matching scope (project or group) to generate a new deploy token",

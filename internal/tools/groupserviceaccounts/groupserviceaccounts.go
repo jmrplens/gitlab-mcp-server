@@ -319,7 +319,8 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&b, toolutil.FmtMdName, out.Name)
 	fmt.Fprintf(&b, toolutil.FmtMdUsername, out.Username)
 	fmt.Fprintf(&b, toolutil.FmtMdEmail, out.Email)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_service_account_update to modify this account",
 		"Use gitlab_group_service_account_pat_create to create a token",
 	)
@@ -336,7 +337,8 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteListSummary(&b, len(out.Accounts), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Username", "Email"))
 	for _, a := range out.Accounts {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %s | %s |\n",
 			a.ID,
 			toolutil.EscapeMdTableCell(a.Name),
 			toolutil.EscapeMdTableCell(a.Username),
@@ -364,7 +366,8 @@ func FormatPATOutputMarkdown(out PATOutput) string {
 	if out.Token != "" {
 		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_service_account_pat_revoke to revoke this token",
 	)
 	return b.String()
@@ -380,7 +383,8 @@ func FormatListPATMarkdown(out ListPATOutput) string {
 	toolutil.WriteListSummary(&b, len(out.Tokens), out.Pagination)
 	b.WriteString(toolutil.MarkdownTableHeader("ID", "Name", "Active", "Revoked", "Scopes"))
 	for _, t := range out.Tokens {
-		fmt.Fprintf(&b, "| %d | %s | %t | %t | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %t | %t | %s |\n",
 			t.ID,
 			toolutil.EscapeMdTableCell(t.Name),
 			t.Active,

@@ -34,7 +34,8 @@ func FormatListMarkdown(out ListOutput) string {
 		if primaryID != "" && primaryID != v.Title {
 			title = fmt.Sprintf("%s (%s)", v.Title, primaryID)
 		}
-		fmt.Fprintf(&sb, "| %s | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&sb, "| %s | %s | %s | %s | %s | %s |\n",
 			severityBadge(v.Severity),
 			toolutil.EscapeMdTableCell(title),
 			toolutil.EscapeMdTableCell(v.State),
@@ -60,7 +61,8 @@ func FormatGetMarkdown(out GetOutput) string {
 	writeVulnerabilityIdentifiers(&sb, v.Identifiers)
 	writeVulnerabilityDescription(&sb, v.Description)
 
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_dismiss_vulnerability` to dismiss this finding",
 		"Use `gitlab_confirm_vulnerability` to confirm this finding",
 		"Use `gitlab_resolve_vulnerability` to mark as resolved",
@@ -147,7 +149,8 @@ func writeVulnerabilityIdentifier(sb *strings.Builder, id IdentifierItem) {
 	if id.URL != "" {
 		name = fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(id.Name), id.URL)
 	}
-	fmt.Fprintf(sb, "| %s | %s | %s | %s |\n",
+	fmt.Fprintf(
+		sb, "| %s | %s | %s | %s |\n",
 		name,
 		toolutil.EscapeMdTableCell(id.ExternalType),
 		toolutil.EscapeMdTableCell(id.ExternalID),
@@ -183,7 +186,8 @@ func FormatMutationMarkdown(out MutationOutput, action string) string {
 		fmt.Fprintf(&sb, "| Dismissal Reason | %s |\n", toolutil.EscapeMdTableCell(v.DismissalReason))
 	}
 
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_get_vulnerability` to view the full vulnerability details",
 		"Use `gitlab_list_vulnerabilities` to view all project vulnerabilities",
 	)
@@ -229,7 +233,8 @@ func FormatSeverityCountMarkdown(out SeverityCountOutput) string {
 	fmt.Fprintf(&sb, "| ℹ️ INFO | %d |\n", out.Info)
 	fmt.Fprintf(&sb, "| ❓ UNKNOWN | %d |\n", out.Unknown)
 	fmt.Fprintf(&sb, "| **Total** | **%d** |\n", out.Total)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_list_vulnerabilities` to view individual findings",
 		"Use `gitlab_pipeline_security_summary` for pipeline-specific scan results",
 	)
@@ -268,7 +273,8 @@ func FormatPipelineSecuritySummaryMarkdown(out PipelineSecuritySummaryOutput) st
 	writeScannerRow("Cluster Image Scanning", out.ClusterImageScanning)
 
 	fmt.Fprintf(&sb, "\n**Total Vulnerabilities: %d**\n", out.TotalVulnerabilities)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_list_vulnerabilities` to view individual findings",
 		"Use `gitlab_vulnerability_severity_count` for severity breakdown",
 	)

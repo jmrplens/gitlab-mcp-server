@@ -26,7 +26,8 @@ func FormatProjectMarkdown(o ProjectOutput) string {
 	if o.UpdatedAt != "" {
 		fmt.Fprintf(&b, "\n**Updated**: %s\n", o.UpdatedAt)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_update_project_secret_push_protection` to toggle security features",
 	)
 	return b.String()
@@ -43,7 +44,8 @@ func FormatGroupMarkdown(o GroupOutput) string {
 			fmt.Fprintf(&b, "- %s\n", e)
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_update_group_secret_push_protection` to toggle group security settings",
 	)
 	return b.String()

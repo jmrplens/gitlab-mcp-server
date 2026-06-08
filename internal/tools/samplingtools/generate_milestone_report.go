@@ -92,7 +92,8 @@ func GenerateMilestoneReport(ctx context.Context, req *mcp.CallToolRequest, clie
 	data := FormatMilestoneForAnalysis(milestone, msIssues, msMRs)
 	tracker.Step(ctx, 4, 5, "Requesting LLM report generation...")
 
-	result, err := samplingClient.Analyze(ctx, generateMilestoneReportPrompt, data,
+	result, err := samplingClient.Analyze(
+		ctx, generateMilestoneReportPrompt, data,
 		sampling.WithMaxTokens(4096),
 		sampling.WithTemperature(0.3),
 		sampling.WithModelPriorities(0.4, 0.5, 0.5),
@@ -173,7 +174,8 @@ func FormatGenerateMilestoneReportMarkdown(r GenerateMilestoneReportOutput) stri
 	if r.Model != "" {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", r.Model)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_milestone_update` to adjust dates or status",
 		"Use `gitlab_list_milestone_issues` to review open items",
 	)

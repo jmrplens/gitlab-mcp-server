@@ -387,7 +387,7 @@ func TestFormatMarkdownTableFile_ReadError(t *testing.T) {
 	}
 	defer rootFS.Close()
 
-	if err := os.Remove(target); err != nil {
+	if err := os.Remove(target); err != nil { //nolint:govet // shadow of outer err is intentional; reset before reuse
 		t.Fatalf("remove: %v", err)
 	}
 	_, err = formatMarkdownTableFile(rootFS, "doc.md", false)

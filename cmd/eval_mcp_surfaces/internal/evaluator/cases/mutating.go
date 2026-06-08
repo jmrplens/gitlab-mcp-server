@@ -32,17 +32,20 @@ func mutatingEvalCases() []Case {
 		baseMutatingEvalCase("MT-081", "Start the guided merge request creation flow for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_interactive_mr_create", "", params("project_id"), nil)),
 		baseMutatingEvalCase("MT-082", "Start the guided project creation flow.", readStep("gitlab_interactive_project_create", "", nil, params("project_id"))),
 		baseMutatingEvalCase("MT-083", "Start the guided release creation flow for project `my-org/tools/gitlab-mcp-server`.", readStep("gitlab_interactive_release_create", "", params("project_id"), nil)),
-		baseMutatingEvalCase("MS-008", "Troubleshoot runner ID `99` for project `my-org/tools/gitlab-mcp-server`: list project runners, inspect runner jobs, fetch trace for job `999`, then set paused=true on the runner.",
+		baseMutatingEvalCase(
+			"MS-008", "Troubleshoot runner ID `99` for project `my-org/tools/gitlab-mcp-server`: list project runners, inspect runner jobs, fetch trace for job `999`, then set paused=true on the runner.",
 			readStep("gitlab_runner", "list_project", params("project_id"), params("status")),
 			readStep("gitlab_runner", "jobs", params("runner_id"), params("status")),
 			readStep("gitlab_job", "trace", params("project_id", "job_id"), nil),
 			readStep("gitlab_runner", "update", params("runner_id", "paused"), nil),
 		),
-		baseMutatingEvalCase("MS-011", "Resolve remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git`, then start guided issue creation for the resolved project `my-org/tools/gitlab-mcp-server`.",
+		baseMutatingEvalCase(
+			"MS-011", "Resolve remote URL `https://gitlab.example.com/my-org/tools/gitlab-mcp-server.git`, then start guided issue creation for the resolved project `my-org/tools/gitlab-mcp-server`.",
 			readStep("gitlab_discover_project", "", params("remote_url"), nil),
 			readStep("gitlab_interactive_issue_create", "", params("project_id"), nil),
 		),
-		baseMutatingEvalCase("MS-038", "Publish the local fixture files `__PACKAGE_RELEASE_FILES__` from directory `__PACKAGE_RELEASE_DIR__` to GitLab Generic Packages in project `my-org/tools/gitlab-mcp-server` as package `__PACKAGE_RELEASE_PACKAGE__` version `__PACKAGE_RELEASE_VERSION__`, then create release `__PACKAGE_RELEASE_TAG__` from ref `main` named `Evaluation package release`, and link each uploaded package file to that release as a package asset. Upload the package files first, then generate the release, then link the returned package URLs; do not construct package URLs manually.",
+		baseMutatingEvalCase(
+			"MS-038", "Publish the local fixture files `__PACKAGE_RELEASE_FILES__` from directory `__PACKAGE_RELEASE_DIR__` to GitLab Generic Packages in project `my-org/tools/gitlab-mcp-server` as package `__PACKAGE_RELEASE_PACKAGE__` version `__PACKAGE_RELEASE_VERSION__`, then create release `__PACKAGE_RELEASE_TAG__` from ref `main` named `Evaluation package release`, and link each uploaded package file to that release as a package asset. Upload the package files first, then generate the release, then link the returned package URLs; do not construct package URLs manually.",
 			readStep("gitlab_package", "publish_directory", params("project_id", "package_name", "package_version", "directory_path"), params("include_pattern")),
 			readStep("gitlab_release", "create", params("project_id", "tag_name", "ref"), params("name", "description")),
 			readStep("gitlab_release", "link_create_batch", params("project_id", "tag_name", "links"), nil),

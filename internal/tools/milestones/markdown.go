@@ -14,7 +14,8 @@ type milestoneNotFoundOutput struct {
 }
 
 func formatMilestoneNotFound(out milestoneNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Milestone", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Milestone", out.Identifier,
 		"Use gitlab_milestone_list with project_id to list milestones",
 		"Verify the milestone IID is correct for this project",
 	)
@@ -38,7 +39,8 @@ func FormatListMarkdownString(v ListOutput) string {
 		if m.Expired {
 			expired = "Yes"
 		}
-		fmt.Fprintf(&b, "| [%d](%s) | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| [%d](%s) | %s | %s | %s | %s |\n",
 			m.IID, m.WebURL,
 			toolutil.EscapeMdTableCell(m.Title),
 			m.State,
@@ -47,7 +49,8 @@ func FormatListMarkdownString(v ListOutput) string {
 		)
 	}
 	toolutil.WritePagination(&b, v.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'milestone_get' with milestone_iid to see details",
 		"Use action 'milestone_create' to create a new milestone",
@@ -85,7 +88,8 @@ func FormatMarkdown(v Output) string {
 	if v.UpdatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdUpdated, toolutil.FormatTime(v.UpdatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'milestone_issues' to list issues in this milestone",
 		"Use action 'milestone_merge_requests' to list MRs in this milestone",
 	)
@@ -106,7 +110,8 @@ func FormatIssuesMarkdownString(v MilestoneIssuesOutput) string {
 		if issue.CreatedAt != "" {
 			created = issue.CreatedAt
 		}
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| [#%d](%s) | %s | %s | %s |\n",
 			issue.IID,
 			issue.WebURL,
 			toolutil.EscapeMdTableCell(issue.Title),
@@ -115,7 +120,8 @@ func FormatIssuesMarkdownString(v MilestoneIssuesOutput) string {
 		)
 	}
 	toolutil.WritePagination(&b, v.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use gitlab_issue action 'get' with issue IID for full details",
 		"Use action 'milestone_merge_requests' to view MRs in this milestone",
@@ -142,7 +148,8 @@ func FormatMergeRequestsMarkdownString(v MilestoneMergeRequestsOutput) string {
 		if mr.CreatedAt != "" {
 			created = mr.CreatedAt
 		}
-		fmt.Fprintf(&b, "| [!%d](%s) | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| [!%d](%s) | %s | %s | %s | %s | %s |\n",
 			mr.IID,
 			mr.WebURL,
 			toolutil.EscapeMdTableCell(mr.Title),
@@ -153,7 +160,8 @@ func FormatMergeRequestsMarkdownString(v MilestoneMergeRequestsOutput) string {
 		)
 	}
 	toolutil.WritePagination(&b, v.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use gitlab_merge_request action 'get' with MR IID for full details",
 		"Use action 'milestone_issues' to view issues in this milestone",

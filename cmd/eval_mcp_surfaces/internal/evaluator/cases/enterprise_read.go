@@ -42,13 +42,15 @@ func enterpriseReadEvalCases() []Case {
 		baseEnterpriseReadEvalCase("MT-189", "List project service accounts in project `my-org/tools/gitlab-mcp-server` with one result per page.", readStep("gitlab_project", "service_account_list", params("project_id"), params("per_page"))),
 		baseEnterpriseReadEvalCase("MT-190", "List group protected branch rules for group `my-org`.", readStep("gitlab_group", "protected_branch_list", params("group_id"), params("search", "per_page"))),
 		baseEnterpriseReadEvalCase("MT-191", "List group protected environments for group `my-org`.", readStep("gitlab_group", "protected_env_list", params("group_id"), params("per_page"))),
-		baseEnterpriseReadEvalCase("MS-010", "Build a group compliance snapshot for group `my-org`: list top-level groups, get group `my-org`, list group audit events, then fetch the compliance policy configuration.",
+		baseEnterpriseReadEvalCase(
+			"MS-010", "Build a group compliance snapshot for group `my-org`: list top-level groups, get group `my-org`, list group audit events, then fetch the compliance policy configuration.",
 			readStep("gitlab_group", "list", nil, params("top_level_only")),
 			readStep("gitlab_group", "get", params("group_id"), nil),
 			readStep("gitlab_audit_event", "list_group", params("group_id"), params("created_after", "created_before")),
 			readStep("gitlab_compliance_policy", "get", nil, nil),
 		),
-		baseEnterpriseReadEvalCase("MS-044", "Build an Enterprise read-only inventory for project `my-org/tools/gitlab-mcp-server` and group `my-org`: get project security settings, list project service accounts, list group protected branches, list group protected environments, then list group epic boards.",
+		baseEnterpriseReadEvalCase(
+			"MS-044", "Build an Enterprise read-only inventory for project `my-org/tools/gitlab-mcp-server` and group `my-org`: get project security settings, list project service accounts, list group protected branches, list group protected environments, then list group epic boards.",
 			readStep("gitlab_project", "security_settings_get", params("project_id"), nil),
 			readStep("gitlab_project", "service_account_list", params("project_id"), params("per_page")),
 			readStep("gitlab_group", "protected_branch_list", params("group_id"), params("per_page")),

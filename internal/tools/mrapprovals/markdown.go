@@ -26,7 +26,8 @@ func FormatStateMarkdown(s StateOutput) string {
 		approvedBy := strings.Join(r.ApprovedByNames, ", ")
 		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s | %s |\n", r.ID, toolutil.EscapeMdTableCell(r.Name), r.RuleType, r.ApprovalsRequired, approved, toolutil.EscapeMdTableCell(approvedBy))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'approve' to approve this MR",
 		"Use action 'unapprove' to withdraw approval",
 	)
@@ -48,7 +49,8 @@ func FormatRulesMarkdown(out RulesOutput) string {
 		eligible := strings.Join(r.EligibleNames, ", ")
 		fmt.Fprintf(&b, "| %d | %s | %s | %d | %s | %s |\n", r.ID, toolutil.EscapeMdTableCell(r.Name), r.RuleType, r.ApprovalsRequired, approved, toolutil.EscapeMdTableCell(eligible))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'approval_rule_create' to add new rules",
 		"Use action 'approval_rule_update' or 'approval_rule_delete' to manage existing rules",
 	)
@@ -82,7 +84,8 @@ func FormatConfigMarkdown(c ConfigOutput) string {
 	if len(c.SuggestedNames) > 0 {
 		fmt.Fprintf(&b, "\n**Suggested approvers**: %s\n", strings.Join(c.SuggestedNames, ", "))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'approve' or 'unapprove' to change approval status",
 		"Use action 'approval_rules' to see all configured rules",
 	)
@@ -108,7 +111,8 @@ func FormatRuleMarkdown(r RuleOutput) string {
 	if len(r.GroupNames) > 0 {
 		fmt.Fprintf(&b, "| Groups | %s |\n", strings.Join(r.GroupNames, ", "))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'approval_rule_update' to modify this rule",
 		"Use action 'approval_rule_delete' to remove this rule",
 	)

@@ -14,7 +14,8 @@ type tagNotFoundOutput struct {
 }
 
 func formatTagNotFound(out tagNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Tag", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Tag", out.Identifier,
 		"Use gitlab_tag_list with project_id to list tags",
 		"Verify the tag name is spelled correctly (case-sensitive)",
 	)
@@ -38,7 +39,8 @@ func FormatOutputMarkdownString(t Output) string {
 	if t.CreatedAt != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(t.CreatedAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'delete' to remove this tag",
 		"Use gitlab_release action 'create' with this tag to create a release",
 	)
@@ -65,7 +67,8 @@ func FormatListMarkdownString(out ListOutput) string {
 		fmt.Fprintf(&b, "| %s | %s | %v |\n", toolutil.EscapeMdTableCell(t.Name), toolutil.EscapeMdTableCell(t.Target), t.Protected)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get' with a tag_name to see tag details",
 		"Use action 'create' to create a new tag",
 	)
@@ -97,7 +100,8 @@ func FormatSignatureMarkdownString(out SignatureOutput) string {
 	if issuer.CrlURL != "" {
 		fmt.Fprintf(&b, "- **CRL URL**: %s\n", issuer.CrlURL)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get' to see full tag details",
 		"Use action 'list' to browse all tags",
 	)
@@ -125,7 +129,8 @@ func FormatProtectedTagMarkdownString(out ProtectedTagOutput) string {
 	} else {
 		b.WriteString("No create access levels defined.\n")
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'list_protected' to see all protected tags",
 		"Use action 'unprotect' to remove tag protection",
 	)
@@ -156,7 +161,8 @@ func FormatListProtectedTagsMarkdownString(out ListProtectedTagsOutput) string {
 		fmt.Fprintf(&b, "| %s | %s |\n", toolutil.EscapeMdTableCell(t.Name), strings.Join(levels, ", "))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get_protected' with tag name for full details",
 		"Use action 'protect' to add a new protected tag",
 	)

@@ -13,7 +13,8 @@ func FormatOutputMarkdown(v Output) string {
 // FormatListMarkdown renders a paginated list of group CI/CD variables as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
 	variables := out.Variables
-	return toolutil.FormatCICDVariableCollectionMarkdown(variables, out.Pagination, toMarkdownVariable, "Group CI/CD Variables", "No group CI/CD variables found.\n", true,
+	return toolutil.FormatCICDVariableCollectionMarkdown(
+		variables, out.Pagination, toMarkdownVariable, "Group CI/CD Variables", "No group CI/CD variables found.\n", true,
 		"Use action 'get' with key for full details",
 		"Use action 'create' to add a new group variable",
 	)

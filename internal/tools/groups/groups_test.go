@@ -47,7 +47,8 @@ var subgroupsJSON = `[{"id":100,"name":"monitoring","path":"monitoring","full_pa
 func TestGroupList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroups {
-			testutil.RespondJSONWithPagination(w, http.StatusOK, groupListJSON,
+			testutil.RespondJSONWithPagination(
+				w, http.StatusOK, groupListJSON,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"},
 			)
 			return
@@ -223,7 +224,8 @@ func TestGroupGet_CancelledContext(t *testing.T) {
 func TestGroupMembersList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupMembers {
-			testutil.RespondJSONWithPagination(w, http.StatusOK, groupMembersJSON,
+			testutil.RespondJSONWithPagination(
+				w, http.StatusOK, groupMembersJSON,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"},
 			)
 			return
@@ -327,7 +329,8 @@ func TestGroupMembersList_CancelledContext(t *testing.T) {
 func TestSubgroupsList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupSubgroups {
-			testutil.RespondJSONWithPagination(w, http.StatusOK, subgroupsJSON,
+			testutil.RespondJSONWithPagination(
+				w, http.StatusOK, subgroupsJSON,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"},
 			)
 			return
@@ -875,7 +878,8 @@ func TestGroupTransferProject_MissingProjectID(t *testing.T) {
 func TestGroupListProjects_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroup99Projects {
-			testutil.RespondJSONWithPagination(w, http.StatusOK, groupProjectsJSON,
+			testutil.RespondJSONWithPagination(
+				w, http.StatusOK, groupProjectsJSON,
 				testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"},
 			)
 			return
@@ -981,7 +985,8 @@ func TestList_WithPagination(t *testing.T) {
 		if got := q.Get("per_page"); got != "5" {
 			t.Errorf("query param per_page = %q, want %q", got, "5")
 		}
-		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
+		testutil.RespondJSONWithPagination(
+			w, http.StatusOK, `[]`,
 			testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "10", TotalPages: "2"},
 		)
 	}))

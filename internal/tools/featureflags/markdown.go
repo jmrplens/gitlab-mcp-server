@@ -35,7 +35,8 @@ func FormatFeatureFlagMarkdown(out Output) string {
 				toolutil.EscapeMdTableCell(scopes))
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'feature_flag_update' to toggle active/inactive",
 		"Use action 'feature_flag_delete' to remove this feature flag",
 	)
@@ -60,7 +61,8 @@ func FormatListFeatureFlagsMarkdown(out ListOutput) string {
 			len(f.Strategies))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'feature_flag_get' with name for full flag details and strategies",
 		"Use action 'feature_flag_create' to add a new feature flag",
 	)

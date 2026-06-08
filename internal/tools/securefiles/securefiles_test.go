@@ -261,7 +261,8 @@ func TestList_WithPagination(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		testutil.RespondJSONWithPagination(w, http.StatusOK,
+		testutil.RespondJSONWithPagination(
+			w, http.StatusOK,
 			`[{"id":1,"name":"key.pem","checksum":"abc","checksum_algorithm":"sha256"},{"id":2,"name":"cert.pem","checksum":"def","checksum_algorithm":"sha256"}]`,
 			testutil.PaginationHeaders{Page: "2", PerPage: "2", Total: "5", TotalPages: "3", NextPage: "3", PrevPage: "1"},
 		)

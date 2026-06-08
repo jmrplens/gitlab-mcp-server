@@ -21,7 +21,8 @@ func FormatOutputMarkdown(out Output) string {
 	}
 	fmt.Fprintf(&b, "- **Resolve Discussion**: %v\n", out.ResolveDiscussion)
 	fmt.Fprintf(&b, "\n### Body\n\n%s\n", toolutil.WrapGFMBody(out.Note))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'draft_note_publish' with draft_note_id to publish this note",
 		"Use action 'draft_note_update' to modify before publishing",
 		"Use action 'draft_note_delete' to discard this draft",
@@ -52,7 +53,8 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| %d | %d | %s | %s |\n", d.ID, d.AuthorID, commit, toolutil.EscapeMdTableCell(note))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'draft_note_get' with draft_note_id for full content",
 		"Use action 'draft_note_publish_all' to publish all drafts at once",
 	)

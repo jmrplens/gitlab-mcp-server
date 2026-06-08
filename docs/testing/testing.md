@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,863 |
-| Unit test functions                                   | 10,584 |
+| Total test functions                                  | 10,869 |
+| Unit test functions                                   | 10,590 |
 | E2E test functions                                    |    279 |
 | cmd test functions                                    |    784 |
 | Test files (internal/)                                |    441 |
@@ -35,7 +35,7 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,717 | 89.5% |
+| `TestFunc_Scenario` (2-part)           | 9,723 | 89.5% |
 | `TestFunc` (no underscore)             |   843 |  7.8% |
 | `TestFunc_Scenario_Expected` (3+ part) |   303 |  2.8% |
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          1,893 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          1,899 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          7,622 |        339 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            279 |        137 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            784 |         52 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,863** |    **630** |                                                                                                 |
+| **Total**               |     **10,869** |    **630** |                                                                                                 |
 
 ### Core Packages
 
@@ -73,9 +73,9 @@
 | sampling     |        84 |    99.5% | Package sampling provides a client for requesting LLM analysis through MCP sampling and for executing allow-listed tool calls during iterative analysis.                                                          |
 | serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | testutil     |        28 |    95.9% | Package testutil provides shared test utilities for MCP tool tests.                                                                                                                                               |
-| toolutil     |       556 |    98.6% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
+| toolutil     |       562 |    98.5% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard       |       273 |    90.6% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **1,893** |          |                                                                                                                                                                                                                   |
+| **Subtotal** | **1,899** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -343,7 +343,7 @@
 | sampling    |    99.5% |
 | serverpool  |    99.6% |
 | testutil    |    95.9% |
-| toolutil    |    98.6% |
+| toolutil    |    98.5% |
 | wizard      |    90.6% |
 
 ### Tool Sub-Packages

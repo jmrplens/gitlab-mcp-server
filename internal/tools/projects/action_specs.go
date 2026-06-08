@@ -65,7 +65,8 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
 		projectCreateSpec("create_for_user", toolutil.RouteAction(client, CreateForUser), "gitlab_project_create_for_user", "admin"),
 	}
 	if enterprise {
-		specs = append(specs,
+		specs = append(
+			specs,
 			projectPremiumSpec(projectReadSpec("push_rule_get", toolutil.RouteAction(client, GetPushRules), "gitlab_project_get_push_rules", "push_rule")),
 			projectPremiumSpec(projectCreateSpec("push_rule_add", toolutil.RouteAction(client, AddPushRule), "gitlab_project_add_push_rule", "push_rule")),
 			projectPremiumSpec(projectMutationSpec("push_rule_edit", toolutil.RouteAction(client, EditPushRule), "gitlab_project_edit_push_rule", "push_rule")),

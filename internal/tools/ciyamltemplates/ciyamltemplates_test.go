@@ -130,7 +130,8 @@ func TestList_CancelledContext(t *testing.T) {
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/templates/gitlab_ci_ymls" {
-			testutil.RespondJSONWithPagination(w, http.StatusOK,
+			testutil.RespondJSONWithPagination(
+				w, http.StatusOK,
 				`[{"key":"Go","name":"Go"},{"key":"Python","name":"Python"}]`,
 				testutil.PaginationHeaders{Page: "1", PerPage: "2", Total: "5", TotalPages: "3", NextPage: "2"},
 			)

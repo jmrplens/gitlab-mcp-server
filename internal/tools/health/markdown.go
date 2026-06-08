@@ -46,7 +46,8 @@ func FormatMarkdownString(s Output) string {
 	if s.Error != "" {
 		fmt.Fprintf(&b, "- **Error**: %s\n", s.Error)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_project action 'list' to explore available projects",
 		"Use gitlab_user action 'me' to see current user details",
 	)

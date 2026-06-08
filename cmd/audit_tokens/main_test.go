@@ -157,7 +157,7 @@ func TestTotalTokens_EmptyInput(t *testing.T) {
 // sums action counts across all route keys.
 func TestCountActions_AggregatesAcrossRoutes(t *testing.T) {
 	// Build a route map with three actions split across two tools.
-	noop := func(_ context.Context, _ map[string]any) (any, error) { return nil, nil }
+	noop := func(_ context.Context, _ map[string]any) (any, error) { return nil, nil } //nolint:nilnil // test fixture: always no-ops
 	routes := map[string]toolutil.ActionMap{
 		"gitlab_project": {
 			"get":   {Handler: noop},

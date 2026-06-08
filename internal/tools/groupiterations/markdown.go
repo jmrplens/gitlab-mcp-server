@@ -12,7 +12,8 @@ func FormatListMarkdown(out ListOutput) string {
 
 // FormatOutputMarkdown formats a single group iteration.
 func FormatOutputMarkdown(out Output) string {
-	return iterationdata.FormatOutputMarkdown(out,
+	return iterationdata.FormatOutputMarkdown(
+		out,
 		"Use `gitlab_list_group_iterations` to view all iterations",
 	)
 }

@@ -86,7 +86,8 @@ func AnalyzeMRChanges(ctx context.Context, req *mcp.CallToolRequest, client *git
 
 	tracker.Step(ctx, 3, 4, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, analyzeMRPrompt, data,
+	result, err := samplingClient.Analyze(
+		ctx, analyzeMRPrompt, data,
 		sampling.WithTemperature(0.2),
 		sampling.WithModelPriorities(0.2, 0.2, 0.8),
 	)
@@ -154,7 +155,8 @@ func FormatAnalyzeMRChangesMarkdown(a AnalyzeMRChangesOutput) string {
 	if a.Model != "" {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", a.Model)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_add_mr_note` to comment on specific findings",
 		"Use `gitlab_mr_approve` or `gitlab_mr_update` to act on the review",
 	)

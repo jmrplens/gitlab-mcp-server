@@ -19,7 +19,8 @@ func FormatOutputMarkdown(out Output) string {
 	if out.Provider != "" {
 		fmt.Fprintf(&b, "- **Provider**: %s\n", out.Provider)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_saml_link_delete to remove this link",
 	)
 	return b.String()
@@ -35,7 +36,8 @@ func FormatListMarkdown(out ListOutput) string {
 	fmt.Fprintf(&b, "**%d SAML link(s)**\n\n", len(out.Links))
 	b.WriteString("| Name | Access Level | Provider |\n| --- | --- | --- |\n")
 	for _, l := range out.Links {
-		fmt.Fprintf(&b, "| %s | %d | %s |\n",
+		fmt.Fprintf(
+			&b, "| %s | %d | %s |\n",
 			toolutil.EscapeMdTableCell(l.Name),
 			l.AccessLevel,
 			toolutil.EscapeMdTableCell(l.Provider),

@@ -24,7 +24,8 @@ func FormatMarkdown(out Output, metric string) string {
 		fmt.Fprintf(&sb, "| %s | %.4f |\n", m.Date, m.Value)
 	}
 	fmt.Fprintf(&sb, "\n**Total data points:** %d\n", len(out.Metrics))
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_deployment_list` to correlate with deployment activity",
 	)
 	return sb.String()

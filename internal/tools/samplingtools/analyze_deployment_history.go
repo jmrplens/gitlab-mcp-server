@@ -86,7 +86,8 @@ func AnalyzeDeploymentHistory(ctx context.Context, req *mcp.CallToolRequest, cli
 	data := FormatDeploymentHistoryForAnalysis(depList, input.Environment)
 	tracker.Step(ctx, 3, 4, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, analyzeDeploymentHistoryPrompt, data,
+	result, err := samplingClient.Analyze(
+		ctx, analyzeDeploymentHistoryPrompt, data,
 		sampling.WithMaxTokens(2048),
 		sampling.WithTemperature(0.2),
 		sampling.WithModelPriorities(0.4, 0.5, 0.5),
@@ -162,7 +163,8 @@ func FormatAnalyzeDeploymentHistoryMarkdown(a AnalyzeDeploymentHistoryOutput) st
 	if a.Model != "" {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", a.Model)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_deployment_list` to drill into specific deployments",
 		"Use `gitlab_environment_list` to review environment configuration",
 	)

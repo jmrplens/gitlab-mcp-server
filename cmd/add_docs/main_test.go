@@ -181,10 +181,10 @@ func TestHelperDocRuleMatches_CombinesMixedConstraints(t *testing.T) {
 		t.Fatal("mixed rule matched name missing required marker")
 	}
 
-	if !((helperDocRule{prefixes: []string{"is"}}).matches("isProject")) {
+	if !(helperDocRule{prefixes: []string{"is"}}).matches("isProject") {
 		t.Fatal("prefix-only rule did not match by prefix")
 	}
-	if !((helperDocRule{contains: []string{"Available"}}).matches("projectAvailable")) {
+	if !(helperDocRule{contains: []string{"Available"}}).matches("projectAvailable") {
 		t.Fatal("contains-only rule did not match by marker")
 	}
 }

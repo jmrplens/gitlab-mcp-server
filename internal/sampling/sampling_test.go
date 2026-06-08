@@ -1327,7 +1327,8 @@ func TestAnalyzeWithTools_WithToolChoice(t *testing.T) {
 
 	tools := []*mcp.Tool{{Name: "my_tool"}}
 	choice := &mcp.ToolChoice{Mode: "required"}
-	_, err = samplingClient.AnalyzeWithTools(ctx, "test", "data", executor,
+	_, err = samplingClient.AnalyzeWithTools(
+		ctx, "test", "data", executor,
 		WithTools(tools),
 		WithToolChoice(choice),
 		WithModelHints(testModelClaude),
@@ -1873,7 +1874,8 @@ func TestAnalyzeWithTools_IntegrationWithTemperatureAndStops(t *testing.T) {
 
 	samplingClient := Client{session: ss}
 	executor := &mockToolExecutor{}
-	_, err = samplingClient.AnalyzeWithTools(ctx, "p", "d", executor,
+	_, err = samplingClient.AnalyzeWithTools(
+		ctx, "p", "d", executor,
 		WithTemperature(0.7),
 		WithStopSequences("HALT"),
 	)

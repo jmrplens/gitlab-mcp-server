@@ -115,7 +115,8 @@ func AnalyzeIssueScope(ctx context.Context, req *mcp.CallToolRequest, client *gi
 
 	tracker.Step(ctx, 5, 6, "Requesting LLM analysis...")
 
-	result, err := samplingClient.Analyze(ctx, analyzeIssueScopePrompt, data,
+	result, err := samplingClient.Analyze(
+		ctx, analyzeIssueScopePrompt, data,
 		sampling.WithTemperature(0.3),
 		sampling.WithModelPriorities(0.3, 0.4, 0.6),
 	)
@@ -218,7 +219,8 @@ func FormatAnalyzeIssueScopeMarkdown(a AnalyzeIssueScopeOutput) string {
 	if a.Model != "" {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", a.Model)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_issue_update` to refine scope, labels, or milestone",
 		"Use `gitlab_add_issue_note` to document scope decisions",
 	)

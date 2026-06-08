@@ -18,7 +18,8 @@ func FormatDownloadMarkdown(o DownloadOutput) string {
 	fmt.Fprintf(&sb, "| Filename | %s |\n", o.Filename)
 	fmt.Fprintf(&sb, "| Size | %d bytes |\n", o.SizeBytes)
 	sb.WriteString("\n_Content is base64-encoded in the structured JSON output._\n")
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_package_list` to browse available model packages",
 	)
 	return sb.String()

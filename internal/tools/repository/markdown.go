@@ -28,7 +28,8 @@ func FormatTreeMarkdown(out TreeOutput) string {
 		fmt.Fprintf(&b, "| %s | %s | %s |\n", icon, toolutil.EscapeMdTableCell(n.Name), toolutil.EscapeMdTableCell(n.Path))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_repository action 'file_get' with a file path to read file content",
 		"Use gitlab_repository action 'compare' to see differences between branches or commits",
 	)
@@ -76,7 +77,8 @@ func FormatCompareMarkdown(out CompareOutput) string {
 	if out.WebURL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURLNewline, out.WebURL)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_commit_get` to view a specific commit",
 		"Use `gitlab_file_get` to read a changed file",
 	)
@@ -100,7 +102,8 @@ func FormatContributorsMarkdown(out ContributorsOutput) string {
 			c.Commits, c.Additions, c.Deletions)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_commit_list` to view commits by a contributor",
 	)
 	return b.String()
@@ -121,7 +124,8 @@ func FormatBlobMarkdown(out BlobOutput) string {
 	default:
 		fmt.Fprintf(&b, "- **Content**: text (%d chars)\n", len(out.Content))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_repository_raw_blob` for decoded text content",
 	)
 	return b.String()
@@ -144,7 +148,8 @@ func FormatRawBlobContentMarkdown(out RawBlobContentOutput) string {
 		b.WriteString(out.Content)
 		b.WriteString("\n```\n")
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_file_get` to view file with metadata",
 	)
 	return b.String()
@@ -178,7 +183,8 @@ func FormatArchiveMarkdown(out ArchiveOutput) string {
 		fmt.Fprintf(&b, "- **SHA/Ref**: %s\n", out.SHA)
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdURL, out.URL)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_repository_tree` to browse the repository instead",
 	)
@@ -207,7 +213,8 @@ func FormatChangelogDataMarkdown(out ChangelogDataOutput) string {
 	}
 	b.WriteString(out.Notes)
 	b.WriteString("\n")
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_repository_changelog_add` to commit this changelog to the repository",
 		"Use `gitlab_release_create` to create a release with these notes",
 	)

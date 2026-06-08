@@ -40,7 +40,8 @@ func FormatBoardMarkdown(out BoardOutput) string {
 				label, l.Position, l.MaxIssueCount, l.MaxIssueWeight)
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'board_list_create' to add columns to this board",
 		"Use action 'board_update' to modify board settings",
 		"Use action 'board_delete' to remove this board",
@@ -67,7 +68,8 @@ func FormatListBoardsMarkdown(out ListBoardsOutput) string {
 			len(bd.Lists))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'board_get' with board_id for full details",
 		"Use action 'board_create' to add a new board",
 	)
@@ -95,7 +97,8 @@ func FormatBoardListMarkdown(out BoardListOutput) string {
 	if out.MilestoneTitle != "" {
 		fmt.Fprintf(&b, "**Milestone**: %s\n", out.MilestoneTitle)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'board_list_update' to change position or limits",
 		"Use action 'board_list_delete' to remove this list",
 	)
@@ -117,7 +120,8 @@ func FormatListBoardListsMarkdown(out ListBoardListsOutput) string {
 			label, l.Position, l.MaxIssueCount, l.MaxIssueWeight)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'board_list_create' to add a new list",
 	)
 	return b.String()

@@ -40,7 +40,8 @@ func FormatListMarkdown(out ListOutput) string {
 			m.HasFailures, toolutil.FormatTime(m.CreatedAt))
 	}
 	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		toolutil.HintPreserveLinks,
 		"Use gitlab_get_bulk_import with id for full details",
 		"Use gitlab_list_bulk_import_entities to inspect entities of a migration",
@@ -89,7 +90,8 @@ func FormatListEntitiesMarkdown(out ListEntitiesOutput) string {
 			e.HasFailures)
 	}
 	toolutil.WritePagination(&sb, out.Pagination)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		toolutil.HintPreserveLinks,
 		"Use gitlab_get_bulk_import_entity for full details on a single entity",
 		"Use gitlab_list_bulk_import_entity_failures to inspect failure diagnostics",
@@ -139,7 +141,8 @@ func FormatEntityFailuresMarkdown(out ListEntityFailuresOutput) string {
 			toolutil.EscapeMdTableCell(f.SourceURL),
 			toolutil.FormatTime(f.CreatedAt))
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		toolutil.HintPreserveLinks,
 		"Inspect exception_class and pipeline_class to triage import errors",
 	)

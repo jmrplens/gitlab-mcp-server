@@ -72,7 +72,8 @@ func formatEventListMarkdown(title, emptyText string, events []markdownEvent, pa
 		fmt.Fprintf(&b, "- **%s**%s by %s — %s\n", e.ActionName, target, author, toolutil.FormatTime(e.CreatedAt))
 	}
 	b.WriteString(toolutil.FormatPagination(pagination))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Filter events using action and target_type parameters",
 	)

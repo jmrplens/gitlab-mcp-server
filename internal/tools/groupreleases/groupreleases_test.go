@@ -169,7 +169,8 @@ func TestList_Pagination(t *testing.T) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupReleases {
 			testutil.AssertQueryParam(t, r, "page", "2")
 			testutil.AssertQueryParam(t, r, "per_page", "10")
-			testutil.RespondJSONWithPagination(w, http.StatusOK,
+			testutil.RespondJSONWithPagination(
+				w, http.StatusOK,
 				`[{"tag_name":"v0.9.0","name":"Old Release"}]`,
 				testutil.PaginationHeaders{
 					Page:       "2",

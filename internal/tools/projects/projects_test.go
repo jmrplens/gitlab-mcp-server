@@ -3133,7 +3133,8 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 	if out.ID != 1 {
 		t.Errorf(fmtIDWant1, out.ID)
 	}
-	assertJSONKeys(t, capturedBody,
+	assertJSONKeys(
+		t, capturedBody,
 		"url",
 		"token",
 		"signing_token",
@@ -3204,7 +3205,8 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 	if out.URL != "https://example.com/hook-updated" {
 		t.Errorf("URL = %q, want updated URL", out.URL)
 	}
-	assertJSONKeys(t, capturedBody,
+	assertJSONKeys(
+		t, capturedBody,
 		"url",
 		"token",
 		"signing_token",

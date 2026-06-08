@@ -2,6 +2,7 @@ package evaluator
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -81,7 +82,10 @@ func toString(v any) string {
 	if s, ok := v.(string); ok {
 		return s
 	}
-	b, _ := json.Marshal(v)
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
 	return string(b)
 }
 

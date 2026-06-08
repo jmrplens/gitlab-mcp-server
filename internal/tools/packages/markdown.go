@@ -23,7 +23,8 @@ func FormatPublishMarkdown(out PublishOutput) string {
 	if out.URL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, out.URL)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'publish_and_link' to also create a release asset link in one step",
 		"Use action 'publish_directory' to batch-upload all files from a directory",
 		"Use action 'list' to see all packages in this project",
@@ -40,7 +41,8 @@ func FormatDownloadMarkdown(out DownloadOutput) string {
 	if out.SHA256 != "" {
 		fmt.Fprintf(&b, "- **SHA256**: %s\n", out.SHA256)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'file_list' to see all files in this package",
 		"Use action 'list' to browse other packages in the project",
 	)
@@ -59,7 +61,8 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | Name | Version | Type | Status | Pipeline |\n")
 	b.WriteString(toolutil.TblSep6Col)
 	for _, p := range out.Packages {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %s | %s | %s | %s |\n",
 			p.ID,
 			toolutil.EscapeMdTableCell(p.Name),
 			toolutil.EscapeMdTableCell(p.Version),
@@ -69,7 +72,8 @@ func FormatListMarkdown(out ListOutput) string {
 		)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'file_list' with a package_id to see individual files",
 		"Use action 'delete' to remove a package",
@@ -116,7 +120,8 @@ func FormatFileListMarkdown(out FileListOutput) string {
 		if len(sha) > 12 {
 			sha = sha[:12] + "…"
 		}
-		fmt.Fprintf(&b, "| %d | %s | %d | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %d | %s |\n",
 			f.PackageFileID,
 			toolutil.EscapeMdTableCell(f.FileName),
 			f.Size,
@@ -124,7 +129,8 @@ func FormatFileListMarkdown(out FileListOutput) string {
 		)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'download' to retrieve a specific file",
 		"Use action 'file_delete' to remove a single file",
 	)
@@ -148,7 +154,8 @@ func FormatPublishAndLinkMarkdown(out PublishAndLinkOutput) string {
 	if out.ReleaseLink.URL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, out.ReleaseLink.URL)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Repeat for more files, or use 'publish_directory' to batch-upload a directory",
 		"Use gitlab_release action 'get' to verify the release links",
 	)
@@ -169,7 +176,8 @@ func FormatPublishDirMarkdown(out PublishDirOutput) string {
 			if len(sha) > 12 {
 				sha = sha[:12] + "…"
 			}
-			fmt.Fprintf(&b, "| %s | %d | %s |\n",
+			fmt.Fprintf(
+				&b, "| %s | %d | %s |\n",
 				toolutil.EscapeMdTableCell(p.FileName),
 				p.Size,
 				sha,
@@ -182,7 +190,8 @@ func FormatPublishDirMarkdown(out PublishDirOutput) string {
 			fmt.Fprintf(&b, "- %s\n", e)
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use 'publish_and_link' to also create release asset links for each file",
 		"Use gitlab_release to create/manage releases and link these packages",
 		"Use action 'list' to verify the uploaded packages",

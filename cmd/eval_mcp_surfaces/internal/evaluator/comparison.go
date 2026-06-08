@@ -148,7 +148,8 @@ func writeEvaluationComparison(b *strings.Builder, inputs []comparisonInput) {
 	fmt.Fprintf(b, "| Label | Tool | Action | First pass | Schema lookup | Repair | Safety | Final |\n")
 	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, input := range evals {
-		fmt.Fprintf(b, "| `%s` | %s | %s | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			b, "| `%s` | %s | %s | %s | %s | %s | %s | %s |\n",
 			escapeTable(input.Label),
 			formatMetric(input.Metrics[metricToolSelection]),
 			formatMetric(input.Metrics[metricActionSelection]),
@@ -172,7 +173,8 @@ func writeMetricDeltaTable(b *strings.Builder, evals []comparisonInput) {
 	fmt.Fprintf(b, "| Label | Tool | Action | First pass | Repair | Safety | Final |\n")
 	fmt.Fprintf(b, "| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, input := range evals[1:] {
-		fmt.Fprintf(b, "| `%s` | %s | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			b, "| `%s` | %s | %s | %s | %s | %s | %s |\n",
 			escapeTable(input.Label),
 			formatDelta(input.Metrics[metricToolSelection]-baseline.Metrics[metricToolSelection]),
 			formatDelta(input.Metrics[metricActionSelection]-baseline.Metrics[metricActionSelection]),

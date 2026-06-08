@@ -63,7 +63,7 @@ func TestRepositoryRoot_AbsError(t *testing.T) {
 	if err := os.Chmod(tmp, 0o000); err != nil {
 		t.Fatalf("chmod tmp: %v", err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(tmp, 0o700) })
+	t.Cleanup(func() { _ = os.Chmod(tmp, 0o700) }) //nolint:gosec // test fixture; needs exec bit for cleanup traversal
 
 	_, err := RepositoryRoot("relative")
 	if err == nil {

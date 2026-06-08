@@ -163,7 +163,8 @@ func applyRunnerListFields(req runnerListRequest, setType, setStatus func(*strin
 
 func buildListRunnersOptions(req runnerListRequest) *gl.ListRunnersOptions {
 	opts := &gl.ListRunnersOptions{Paused: req.Paused}
-	applyRunnerListFields(req,
+	applyRunnerListFields(
+		req,
 		func(value *string) { opts.Type = value },
 		func(value *string) { opts.Status = value },
 		func(value *[]string) { opts.TagList = value },
@@ -175,7 +176,8 @@ func buildListRunnersOptions(req runnerListRequest) *gl.ListRunnersOptions {
 
 func buildProjectRunnersOptions(req runnerListRequest) *gl.ListProjectRunnersOptions {
 	opts := &gl.ListProjectRunnersOptions{}
-	applyRunnerListFields(req,
+	applyRunnerListFields(
+		req,
 		func(value *string) { opts.Type = value },
 		func(value *string) { opts.Status = value },
 		func(value *[]string) { opts.TagList = value },
@@ -187,7 +189,8 @@ func buildProjectRunnersOptions(req runnerListRequest) *gl.ListProjectRunnersOpt
 
 func buildGroupRunnersOptions(req runnerListRequest) *gl.ListGroupsRunnersOptions {
 	opts := &gl.ListGroupsRunnersOptions{}
-	applyRunnerListFields(req,
+	applyRunnerListFields(
+		req,
 		func(value *string) { opts.Type = value },
 		func(value *string) { opts.Status = value },
 		func(value *[]string) { opts.TagList = value },

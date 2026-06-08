@@ -17,7 +17,8 @@ func FormatOutputMarkdown(out Output) string {
 	writeAccessLevels(&b, "Push Access Levels", out.PushAccessLevels)
 	writeAccessLevels(&b, "Merge Access Levels", out.MergeAccessLevels)
 	writeAccessLevels(&b, "Unprotect Access Levels", out.UnprotectAccessLevels)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_protected_branch_update to modify settings",
 		"Use gitlab_group_protected_branch_unprotect to remove protection",
 	)
@@ -45,14 +46,16 @@ func FormatListMarkdown(out ListOutput) string {
 	toolutil.WriteListSummary(&b, len(out.Branches), out.Pagination)
 	b.WriteString("| ID | Name | Force Push | Code Owner |\n| --- | --- | --- | --- |\n")
 	for _, br := range out.Branches {
-		fmt.Fprintf(&b, "| %d | %s | %t | %t |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %t | %t |\n",
 			br.ID,
 			toolutil.EscapeMdTableCell(br.Name),
 			br.AllowForcePush,
 			br.CodeOwnerApprovalRequired,
 		)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_group_protected_branch_get with a branch name for details",
 		"Use gitlab_group_protected_branch_protect to add new rules",
 	)

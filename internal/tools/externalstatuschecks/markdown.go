@@ -14,7 +14,8 @@ func FormatMergeCheckMarkdown(out MergeStatusCheckOutput) string {
 	fmt.Fprintf(&b, toolutil.FmtMdID, out.ID)
 	fmt.Fprintf(&b, "- **External URL**: %s\n", out.ExternalURL)
 	fmt.Fprintf(&b, toolutil.FmtMdStatus, out.Status)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_set_project_mr_external_status_check_status to update the status",
 		"Use gitlab_retry_failed_external_status_check_for_project_mr to retry a failed check",
 	)
@@ -35,7 +36,8 @@ func FormatProjectCheckMarkdown(out ProjectStatusCheckOutput) string {
 			fmt.Fprintf(&b, "  - %s (ID: %d)\n", pb.Name, pb.ID)
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_update_project_external_status_check to modify this check",
 		"Use gitlab_delete_project_external_status_check to remove this check",
 		"Use gitlab_list_project_external_status_checks to see all checks",
@@ -55,7 +57,8 @@ func FormatListMergeMarkdown(out ListMergeStatusCheckOutput) string {
 	b.WriteString("| ID | Name | External URL | Status |\n")
 	b.WriteString(toolutil.TblSep4Col)
 	for _, c := range out.Items {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %s | %s |\n",
 			c.ID,
 			toolutil.EscapeMdTableCell(c.Name),
 			toolutil.EscapeMdTableCell(c.ExternalURL),
@@ -63,7 +66,8 @@ func FormatListMergeMarkdown(out ListMergeStatusCheckOutput) string {
 		)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use gitlab_set_project_mr_external_status_check_status to update a check status",
 		"Use gitlab_retry_failed_external_status_check_for_project_mr to retry a failed check",
@@ -83,7 +87,8 @@ func FormatListProjectMarkdown(out ListProjectStatusCheckOutput) string {
 	b.WriteString("| ID | Name | External URL | HMAC | Protected Branches |\n")
 	b.WriteString(toolutil.TblSep5Col)
 	for _, c := range out.Items {
-		fmt.Fprintf(&b, "| %d | %s | %s | %s | %d |\n",
+		fmt.Fprintf(
+			&b, "| %d | %s | %s | %s | %d |\n",
 			c.ID,
 			toolutil.EscapeMdTableCell(c.Name),
 			toolutil.EscapeMdTableCell(c.ExternalURL),
@@ -92,7 +97,8 @@ func FormatListProjectMarkdown(out ListProjectStatusCheckOutput) string {
 		)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use gitlab_create_project_external_status_check to add a new check",
 		"Use gitlab_update_project_external_status_check to modify a check",

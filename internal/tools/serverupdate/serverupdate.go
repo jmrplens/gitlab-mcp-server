@@ -126,7 +126,8 @@ func applyDeferredFallback(ctx context.Context, updater *autoupdate.Updater, out
 	out.Message = fmt.Sprintf(
 		"Update %s downloaded and placed at the original binary path via rename trick. "+
 			"Restart the server to use the new version.",
-		newVersion)
+		newVersion,
+	)
 
 	return out, nil
 }

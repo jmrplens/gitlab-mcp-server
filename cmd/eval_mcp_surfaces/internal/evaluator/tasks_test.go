@@ -91,16 +91,16 @@ func TestMetaToolRouteForAction_MatchesKnownAndRejectsUnknown(t *testing.T) {
 		t.Fatalf("metaToolRouteForAction(project.get) = (%q, %q, %t), want gitlab_project/get/true", tool, action, ok)
 	}
 
-	if _, _, ok := metaToolRouteForAction("project.missing", routes); ok {
+	if _, _, hasMatch := metaToolRouteForAction("project.missing", routes); hasMatch {
 		t.Fatal("metaToolRouteForAction(missing) = true, want false")
 	}
-	if _, _, ok := metaToolRouteForAction("malformed", routes); ok {
+	if _, _, hasMatch := metaToolRouteForAction("malformed", routes); hasMatch {
 		t.Fatal("metaToolRouteForAction(malformed) = true, want false")
 	}
-	if _, _, ok := metaToolRouteForAction(".missing", routes); ok {
+	if _, _, hasMatch := metaToolRouteForAction(".missing", routes); hasMatch {
 		t.Fatal("metaToolRouteForAction(empty domain) = true, want false")
 	}
-	if _, _, ok := metaToolRouteForAction("missing.", routes); ok {
+	if _, _, hasMatch := metaToolRouteForAction("missing.", routes); hasMatch {
 		t.Fatal("metaToolRouteForAction(empty action) = true, want false")
 	}
 }

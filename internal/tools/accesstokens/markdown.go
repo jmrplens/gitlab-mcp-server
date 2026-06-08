@@ -32,7 +32,8 @@ func FormatOutputMarkdown(out Output) string {
 	if out.Token != "" {
 		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_project_access_token_revoke`, `gitlab_group_access_token_revoke`, or `gitlab_personal_access_token_revoke` to revoke this token from the matching scope",
 		"Use `gitlab_project_access_token_rotate`, `gitlab_group_access_token_rotate`, or `gitlab_personal_access_token_rotate` to rotate this token from the matching scope",
 	)
@@ -61,7 +62,8 @@ func FormatListMarkdown(out ListOutput) string {
 	}
 	b.WriteString("\n")
 	b.WriteString(toolutil.FormatPagination(out.Pagination))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get' with token_id for full details",
 		"Use action 'create' to generate a new access token",
 	)

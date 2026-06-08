@@ -9,7 +9,8 @@ import (
 
 // FormatOutputMarkdown formats a single snippet storage move as a Markdown table.
 func FormatOutputMarkdown(o Output) string {
-	return toolutil.FormatStorageMoveDetailMarkdown(storageMoveMarkdown(o), "Snippet Storage Move",
+	return toolutil.FormatStorageMoveDetailMarkdown(
+		storageMoveMarkdown(o), "Snippet Storage Move",
 		"Use `gitlab_retrieve_all_snippet_storage_moves` to view all moves",
 	)
 }
@@ -24,7 +25,8 @@ func FormatListMarkdown(o ListOutput) string {
 func FormatScheduleAllMarkdown(o ScheduleAllOutput) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "## Schedule All Snippet Storage Moves\n\n%s\n", o.Message)
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		"Use `gitlab_retrieve_all_snippet_storage_moves` to monitor progress",
 	)
 	return sb.String()

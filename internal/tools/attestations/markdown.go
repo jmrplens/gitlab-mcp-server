@@ -35,7 +35,8 @@ func FormatOutputMarkdown(o Output) string {
 	if o.ExpireAt != "" {
 		fmt.Fprintf(&b, "- **Expires**: %s\n", o.ExpireAt)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_download_attestation` to download this attestation's content",
 		"Use `gitlab_list_attestations` to view all attestations for the project",
 	)
@@ -52,7 +53,8 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | IID | Build | Status | Predicate Kind | Created |\n")
 	b.WriteString("| --: | --: | ----: | ------ | -------------- | ------- |\n")
 	for _, a := range out.Attestations {
-		fmt.Fprintf(&b, "| %d | %d | %d | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| %d | %d | %d | %s | %s | %s |\n",
 			a.ID,
 			a.IID,
 			a.BuildID,
@@ -74,7 +76,8 @@ func FormatDownloadMarkdown(o DownloadOutput) string {
 	fmt.Fprintf(&b, "## Attestation Download (IID %d)\n\n", o.AttestationIID)
 	fmt.Fprintf(&b, "- **Size**: %d bytes\n", o.Size)
 	b.WriteString("- **Content**: Base64-encoded in the `content_base64` field\n")
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_list_attestations` to view all attestations for the project",
 	)
 	return b.String()

@@ -25,7 +25,8 @@ func FormatMarkdownString(out Output) string {
 	if out.UnconfirmedEmail != "" {
 		fmt.Fprintf(&b, "- **Unconfirmed email**: %s\n", out.UnconfirmedEmail)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_project_service_account_update to modify this account",
 		"Use gitlab_project_service_account_pat_create to create a token",
 	)
@@ -75,7 +76,8 @@ func FormatPATMarkdownString(out PATOutput) string {
 	if out.Token != "" {
 		fmt.Fprintf(&b, "- **Token**: `%s`\n", out.Token)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use gitlab_project_service_account_pat_rotate to rotate this token",
 		"Use gitlab_project_service_account_pat_revoke to revoke this token",
 	)

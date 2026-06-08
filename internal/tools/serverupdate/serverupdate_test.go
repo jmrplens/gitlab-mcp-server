@@ -542,14 +542,14 @@ type fakeRelease struct {
 	assetName string
 }
 
-func (f *fakeRelease) GetID() int64                                  { return 1 }
-func (f *fakeRelease) GetTagName() string                            { return f.tag }
-func (f *fakeRelease) GetDraft() bool                                { return false }
-func (f *fakeRelease) GetPrerelease() bool                           { return false }
-func (f *fakeRelease) GetPublishedAt() time.Time                     { return time.Time{} }
-func (f *fakeRelease) GetReleaseNotes() string                       { return "" }
-func (f *fakeRelease) GetName() string                               { return f.tag }
-func (f *fakeRelease) GetURL() string                                { return "" }
+func (f *fakeRelease) GetID() int64              { return 1 }
+func (f *fakeRelease) GetTagName() string        { return f.tag }
+func (f *fakeRelease) GetDraft() bool            { return false }
+func (f *fakeRelease) GetPrerelease() bool       { return false }
+func (f *fakeRelease) GetPublishedAt() time.Time { return time.Time{} }
+func (f *fakeRelease) GetReleaseNotes() string   { return "" }
+func (f *fakeRelease) GetName() string           { return f.tag }
+func (f *fakeRelease) GetURL() string            { return "" }
 func (f *fakeRelease) GetAssets() []selfupdate.SourceAsset {
 	return []selfupdate.SourceAsset{
 		&fakeAsset{name: f.assetName, id: 1},
@@ -559,11 +559,14 @@ func (f *fakeRelease) GetAssets() []selfupdate.SourceAsset {
 
 // fakeAsset implements selfupdate.SourceAsset with the minimal fields used
 // by DetectLatest to match assets to the current platform.
-type fakeAsset struct{ name string; id int64 }
+type fakeAsset struct {
+	name string
+	id   int64
+}
 
-func (a *fakeAsset) GetID() int64                { return a.id }
-func (a *fakeAsset) GetName() string             { return a.name }
-func (a *fakeAsset) GetSize() int                { return 1024 * 1024 }
+func (a *fakeAsset) GetID() int64                  { return a.id }
+func (a *fakeAsset) GetName() string               { return a.name }
+func (a *fakeAsset) GetSize() int                  { return 1024 * 1024 }
 func (a *fakeAsset) GetBrowserDownloadURL() string { return "" }
 
 // newSuccessUpdater constructs an autoupdate.Updater backed by

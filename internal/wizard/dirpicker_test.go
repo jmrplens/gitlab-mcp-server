@@ -95,10 +95,10 @@ func TestIsFixedSystemDir(t *testing.T) {
 	t.Run("existing non-writable directory", func(t *testing.T) {
 		dir := t.TempDir()
 		// Remove write bits so the directory is "fixed".
-		if err := os.Chmod(dir, 0o555); err != nil {
+		if err := os.Chmod(dir, 0o555); err != nil { //nolint:gosec // test fixture requires removing write bits
 			t.Skipf("cannot chmod: %v", err)
 		}
-		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) //nolint:gosec // restore default perms for cleanup
 		if !isFixedSystemDir(dir) {
 			t.Errorf("isFixedSystemDir(%q) = false, want true", dir)
 		}
@@ -109,10 +109,10 @@ func TestIsFixedSystemDir(t *testing.T) {
 		// Make the directory writable for group/other so the function
 		// must reject it (otherwise group/other write bits are already
 		// cleared by t.TempDir on most systems).
-		if err := os.Chmod(dir, 0o777); err != nil {
+		if err := os.Chmod(dir, 0o777); err != nil { //nolint:gosec // test fixture requires granting write bits
 			t.Skipf("cannot chmod: %v", err)
 		}
-		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+		t.Cleanup(func() { _ = os.Chmod(dir, 0o755) }) //nolint:gosec // restore default perms for cleanup
 		if isFixedSystemDir(dir) {
 			t.Errorf("isFixedSystemDir(%q writable) = true, want false", dir)
 		}
@@ -126,7 +126,7 @@ func TestIsFixedSystemDir(t *testing.T) {
 
 	t.Run("file (not directory) rejected", func(t *testing.T) {
 		file := filepath.Join(t.TempDir(), "afile")
-		if err := os.WriteFile(file, []byte("hi"), 0o555); err != nil {
+		if err := os.WriteFile(file, []byte("hi"), 0o555); err != nil { //nolint:gosec // test fixture requires removing write bits
 			t.Fatal(err)
 		}
 		if isFixedSystemDir(file) {
@@ -140,7 +140,7 @@ func TestIsFixedSystemDir(t *testing.T) {
 func TestIsExecutableFile(t *testing.T) {
 	t.Run("executable file", func(t *testing.T) {
 		bin := filepath.Join(t.TempDir(), "bin")
-		if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil { //nolint:gosec // test fixture requires executable bit
 			t.Fatal(err)
 		}
 		if !isExecutableFile(bin) {
@@ -150,7 +150,7 @@ func TestIsExecutableFile(t *testing.T) {
 
 	t.Run("non-executable file", func(t *testing.T) {
 		bin := filepath.Join(t.TempDir(), "bin")
-		if err := os.WriteFile(bin, []byte("hi"), 0o644); err != nil {
+		if err := os.WriteFile(bin, []byte("hi"), 0o644); err != nil { //nolint:gosec // test fixture requires read-only perms
 			t.Fatal(err)
 		}
 		if isExecutableFile(bin) {

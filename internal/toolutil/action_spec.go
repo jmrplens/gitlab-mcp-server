@@ -668,6 +668,9 @@ func schemaHasPropertyPath(schema map[string]any, target string) bool {
 }
 
 func schemaHasPropertyPathFrom(root, schema map[string]any, parts []string) bool {
+	if len(parts) == 0 {
+		return false
+	}
 	schema = resolveSchemaRef(root, schema)
 	properties, ok := schema["properties"].(map[string]any)
 	if !ok {
@@ -681,6 +684,9 @@ func schemaHasPropertyPathFrom(root, schema map[string]any, parts []string) bool
 		return true
 	}
 	child = resolveSchemaRef(root, child)
+	if child == nil {
+		return false
+	}
 	if items, hasItems := child["items"].(map[string]any); hasItems {
 		child = resolveSchemaRef(root, items)
 	}

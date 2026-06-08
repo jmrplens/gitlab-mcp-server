@@ -61,7 +61,8 @@ func FormatOutputMarkdown(e Output) string {
 	if e.Description != "" {
 		fmt.Fprintf(&b, "\n%s\n", toolutil.WrapGFMBody(e.Description))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'update' with iid to modify this epic",
 		"Use action 'epic_get_links' with iid to see child epics",
@@ -85,7 +86,8 @@ func FormatListMarkdown(out ListOutput) string {
 		if len(e.Labels) > 0 {
 			labels = strings.Join(e.Labels, ", ")
 		}
-		fmt.Fprintf(&b, "| &%d | %s | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| &%d | %s | %s | %s | %s | %s |\n",
 			e.IID,
 			toolutil.MdTitleLink(toolutil.EscapeMdTableCell(e.Title), e.WebURL),
 			e.State,
@@ -94,7 +96,8 @@ func FormatListMarkdown(out ListOutput) string {
 			toolutil.FormatTime(e.CreatedAt),
 		)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with iid to see full details",
 		"Use action 'create' to add a new epic",
@@ -113,7 +116,8 @@ func FormatLinksMarkdown(out LinksOutput) string {
 	b.WriteString("| IID | Title | State | Author | Created |\n")
 	b.WriteString(toolutil.TblSep5Col)
 	for _, e := range out.ChildEpics {
-		fmt.Fprintf(&b, "| &%d | %s | %s | %s | %s |\n",
+		fmt.Fprintf(
+			&b, "| &%d | %s | %s | %s | %s |\n",
 			e.IID,
 			toolutil.MdTitleLink(toolutil.EscapeMdTableCell(e.Title), e.WebURL),
 			e.State,
@@ -121,7 +125,8 @@ func FormatLinksMarkdown(out LinksOutput) string {
 			toolutil.FormatTime(e.CreatedAt),
 		)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with iid to see child epic details",
 	)

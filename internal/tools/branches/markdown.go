@@ -14,7 +14,8 @@ type branchNotFoundOutput struct {
 }
 
 func formatBranchNotFound(out branchNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult("Branch", out.Identifier,
+	return toolutil.NotFoundResult(
+		"Branch", out.Identifier,
 		"Use gitlab_branch_list with project_id to list available branches",
 		"Verify the branch name is spelled correctly (case-sensitive)",
 	)
@@ -31,7 +32,8 @@ func FormatOutputMarkdown(br Output) string {
 	if br.WebURL != "" {
 		fmt.Fprintf(&b, toolutil.FmtMdURL, br.WebURL)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use the selected tool surface's merge-request create action to open an MR from this branch",
 		"Use the selected tool surface's repository commit-list action with the same project_id and ref_name to see recent commits on this branch",
 		"Use the selected tool surface's branch delete action with the same project_id, branch_name, and explicit confirm=true to remove the branch after merging",
@@ -58,7 +60,8 @@ func FormatListMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| %s | %v | %v | %v |\n", name, br.Protected, br.Default, br.Merged)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's branch get action with project_id and branch_name to see full details",
 		"Use the selected tool surface's branch create action with project_id, branch_name, and ref to create a new branch",
@@ -75,7 +78,8 @@ func FormatProtectedMarkdown(pb ProtectedOutput) string {
 	fmt.Fprintf(&b, "- **Push Access Level**: %d\n", pb.PushAccessLevel)
 	fmt.Fprintf(&b, "- **Merge Access Level**: %d\n", pb.MergeAccessLevel)
 	fmt.Fprintf(&b, "- **Allow Force Push**: %v\n", pb.AllowForcePush)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use the selected tool surface's branch get_protected action with the same project_id and branch_name when a workflow asks to fetch this protection before updating it",
 		"Use the selected tool surface's branch update_protected action with the same project_id and branch_name to change protection settings",
 		"Use the selected tool surface's branch unprotect action with the same project_id, branch_name, and explicit confirm=true to remove branch protection",
@@ -98,7 +102,8 @@ func FormatProtectedListMarkdown(out ProtectedListOutput) string {
 		fmt.Fprintf(&b, "| %s | %d | %d | %v |\n", toolutil.EscapeMdTableCell(pb.Name), pb.PushAccessLevel, pb.MergeAccessLevel, pb.AllowForcePush)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's branch get_protected action with the same project_id and branch_name for full details before update/unprotect workflows",
 		"Use the selected tool surface's branch protect action with project_id and branch_name to add branch protection",

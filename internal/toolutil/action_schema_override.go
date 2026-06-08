@@ -78,6 +78,9 @@ func schemaOverrideTarget(root map[string]any, propertyPath string) map[string]a
 }
 
 func schemaOverrideTargetFrom(root, schema map[string]any, parts []string) map[string]any {
+	if len(parts) == 0 {
+		return nil
+	}
 	schema = resolveSchemaRef(root, schema)
 	properties, ok := schema["properties"].(map[string]any)
 	if !ok {
@@ -90,6 +93,9 @@ func schemaOverrideTargetFrom(root, schema map[string]any, parts []string) map[s
 	child = resolveSchemaRef(root, child)
 	if len(parts) == 1 {
 		return child
+	}
+	if child == nil {
+		return nil
 	}
 	if items, hasItems := child["items"].(map[string]any); hasItems {
 		child = resolveSchemaRef(root, items)

@@ -206,12 +206,12 @@ func TestCountStringLiterals_IgnoresUnquotableLiterals(t *testing.T) {
 			continue
 		}
 		for _, spec := range gd.Specs {
-			vs, ok := spec.(*ast.ValueSpec)
-			if !ok {
+			vs, isValueSpec := spec.(*ast.ValueSpec)
+			if !isValueSpec {
 				continue
 			}
 			for _, v := range vs.Values {
-				if lit, ok := v.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				if lit, isLit := v.(*ast.BasicLit); isLit && lit.Kind == token.STRING {
 					lit.Value = "`unterminated"
 				}
 			}
@@ -236,12 +236,12 @@ func TestCollectStringValues_IgnoresUnquotableLiterals(t *testing.T) {
 			continue
 		}
 		for _, spec := range gd.Specs {
-			vs, ok := spec.(*ast.ValueSpec)
-			if !ok {
+			vs, isValueSpec := spec.(*ast.ValueSpec)
+			if !isValueSpec {
 				continue
 			}
 			for _, v := range vs.Values {
-				if lit, ok := v.(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				if lit, isLit := v.(*ast.BasicLit); isLit && lit.Kind == token.STRING {
 					lit.Value = "`unterminated"
 				}
 			}

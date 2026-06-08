@@ -59,7 +59,7 @@ func aliasClone(initial map[string]any) (clone func() map[string]any, _ *map[str
 // fields with JSON tags, false for unexported or absent fields, and
 // handles nil, pointer, and non-struct target types defensively.
 func TestStructHasJSONField(t *testing.T) {
-	target := reflect.TypeOf(aliasStructInput{})
+	target := reflect.TypeFor[aliasStructInput]()
 
 	if !structHasJSONField(target, "project_id") {
 		t.Error("structHasJSONField(project_id) = false, want true")
@@ -73,7 +73,7 @@ func TestStructHasJSONField(t *testing.T) {
 	if structHasJSONField(target, "MRIID") {
 		t.Error("structHasJSONField(MRIID, no json tag) = true, want false")
 	}
-	if structHasJSONField(reflect.TypeOf(0), "x") {
+	if structHasJSONField(reflect.TypeFor[int](), "x") {
 		t.Error("structHasJSONField(non-struct) = true, want false")
 	}
 	if structHasJSONField(nil, "x") {
@@ -89,10 +89,21 @@ func TestValidGitLabRoleAccessLevelDirect(t *testing.T) {
 		value  int
 		wantOK bool
 	}{
-		{0, true}, {10, true}, {20, true}, {30, true},
-		{40, true}, {50, true}, {60, true},
-		{1, false}, {5, false}, {15, false}, {25, false},
-		{70, false}, {100, false}, {-1, false}, {-10, false},
+		{0, true},
+		{10, true},
+		{20, true},
+		{30, true},
+		{40, true},
+		{50, true},
+		{60, true},
+		{1, false},
+		{5, false},
+		{15, false},
+		{25, false},
+		{70, false},
+		{100, false},
+		{-1, false},
+		{-10, false},
 	}
 	for _, tc := range cases {
 		got, ok := validGitLabRoleAccessLevel(tc.value)
@@ -190,22 +201,22 @@ func TestExplainIIDParamAliasDirect(t *testing.T) {
 	}
 
 	// canonical field is absent from fields → no explanation
-	if _, ok := explainIIDParamAlias(params, fieldSet("title"), acceptsNoIID); ok {
+	if _, hasMatch := explainIIDParamAlias(params, fieldSet("title"), acceptsNoIID); hasMatch {
 		t.Error("explainIIDParamAlias(canonical missing) = true, want false")
 	}
 
 	// iid param is absent → no explanation
-	if _, ok := explainIIDParamAlias(map[string]any{}, fields, acceptsNoIID); ok {
+	if _, hasMatch := explainIIDParamAlias(map[string]any{}, fields, acceptsNoIID); hasMatch {
 		t.Error("explainIIDParamAlias(no iid) = true, want false")
 	}
 
 	// multiple _iid fields → no explanation (ambiguous)
-	if _, ok := explainIIDParamAlias(params, fieldSet("merge_request_iid", "issue_iid"), acceptsNoIID); ok {
+	if _, hasMatch := explainIIDParamAlias(params, fieldSet("merge_request_iid", "issue_iid"), acceptsNoIID); hasMatch {
 		t.Error("explainIIDParamAlias(ambiguous) = true, want false")
 	}
 
 	// accepts("iid") is true → no explanation
-	if _, ok := explainIIDParamAlias(params, fields, acceptsTrue); ok {
+	if _, hasMatch := explainIIDParamAlias(params, fields, acceptsTrue); hasMatch {
 		t.Error("explainIIDParamAlias(iid accepted) = true, want false")
 	}
 }
@@ -226,14 +237,14 @@ func TestExplainEnvironmentIDParamAliasDirect(t *testing.T) {
 		t.Errorf("explanation = %+v, want environment_id→environment", explanation)
 	}
 
-	if _, ok := explainEnvironmentIDParamAlias(map[string]any{}, acceptsEnv); ok {
+	if _, hasMatch := explainEnvironmentIDParamAlias(map[string]any{}, acceptsEnv); hasMatch {
 		t.Error("explainEnvironmentIDParamAlias(no param) = true, want false")
 	}
-	if _, ok := explainEnvironmentIDParamAlias(params, acceptsFalse); ok {
+	if _, hasMatch := explainEnvironmentIDParamAlias(params, acceptsFalse); hasMatch {
 		t.Error("explainEnvironmentIDParamAlias(no env accepted) = true, want false")
 	}
 	// environment_id is accepted → no explanation
-	if _, ok := explainEnvironmentIDParamAlias(params, acceptsTrue); ok {
+	if _, hasMatch := explainEnvironmentIDParamAlias(params, acceptsTrue); hasMatch {
 		t.Error("explainEnvironmentIDParamAlias(environment_id accepted) = true, want false")
 	}
 }
@@ -478,13 +489,13 @@ func TestDecodeEncodedPathIdentifierDirect(t *testing.T) {
 		t.Errorf("decoded = %q, want group/subgroup/project", got)
 	}
 
-	if _, changed := decodeEncodedPathIdentifier("plain/path"); changed {
+	if _, isChanged := decodeEncodedPathIdentifier("plain/path"); isChanged {
 		t.Error("decodeEncodedPathIdentifier(no %2F) changed = true, want false")
 	}
-	if _, changed := decodeEncodedPathIdentifier(""); changed {
+	if _, isChanged := decodeEncodedPathIdentifier(""); isChanged {
 		t.Error("decodeEncodedPathIdentifier(empty) changed = true, want false")
 	}
-	if _, changed := decodeEncodedPathIdentifier("no-slash-here"); changed {
+	if _, isChanged := decodeEncodedPathIdentifier("no-slash-here"); isChanged {
 		t.Error("decodeEncodedPathIdentifier(no slash) changed = true, want false")
 	}
 }
@@ -499,14 +510,14 @@ func TestAppendNormalizedRouteStringsDirect(t *testing.T) {
 		t.Errorf("got %#v, want %#v", got, want)
 	}
 
-	if got := appendNormalizedRouteStrings(nil); got != nil {
-		t.Errorf("appendNormalizedRouteStrings(no values) = %v, want nil", got)
+	if isNil := appendNormalizedRouteStrings(nil); isNil != nil {
+		t.Errorf("appendNormalizedRouteStrings(no values) = %v, want nil", isNil)
 	}
-	if got := appendNormalizedRouteStrings([]string{" "}); got != nil {
-		t.Errorf("appendNormalizedRouteStrings(only whitespace) = %v, want nil", got)
+	if isNil := appendNormalizedRouteStrings([]string{" "}); isNil != nil {
+		t.Errorf("appendNormalizedRouteStrings(only whitespace) = %v, want nil", isNil)
 	}
-	if got := appendNormalizedRouteStrings([]string{}, "  ", "  "); got != nil {
-		t.Errorf("appendNormalizedRouteStrings(only blank values) = %v, want nil", got)
+	if isNil := appendNormalizedRouteStrings([]string{}, "  ", "  "); isNil != nil {
+		t.Errorf("appendNormalizedRouteStrings(only blank values) = %v, want nil", isNil)
 	}
 }
 
@@ -514,7 +525,7 @@ func TestAppendNormalizedRouteStringsDirect(t *testing.T) {
 // coercion handles page=1, others=100, non-bool, and unsupported
 // parameter names.
 func TestCoercePaginationBooleanDirect(t *testing.T) {
-	intType := reflect.TypeOf(0)
+	intType := reflect.TypeFor[int]()
 
 	// name == "page" → 1
 	got, ok := coercePaginationBoolean("page", true, intType)
@@ -524,7 +535,7 @@ func TestCoercePaginationBooleanDirect(t *testing.T) {
 
 	// name in {first,last,per_page} → 100
 	for _, name := range []string{"first", "last", "per_page"} {
-		got, ok := coercePaginationBoolean(name, true, intType)
+		got, ok = coercePaginationBoolean(name, true, intType)
 		if !ok || got != 100 {
 			t.Errorf("coercePaginationBoolean(%s, true) = %v/%v, want 100/true", name, got, ok)
 		}
@@ -549,7 +560,7 @@ func TestCoercePaginationBooleanDirect(t *testing.T) {
 	}
 
 	// non-numeric target kind → unchanged
-	stringType := reflect.TypeOf("")
+	stringType := reflect.TypeFor[string]()
 	got, ok = coercePaginationBoolean("page", true, stringType)
 	if ok || got != true {
 		t.Errorf("coercePaginationBoolean(page, true, string) = %v/%v, want true/false", got, ok)
@@ -606,8 +617,8 @@ func TestCloneAccessLevelAliasesDirect(t *testing.T) {
 // normalizer coerces string role names to int, leaves unsupported names
 // and non-access-level params untouched, and respects the target kind.
 func TestNormalizeAccessLevelScalarDirect(t *testing.T) {
-	intType := reflect.TypeOf(0)
-	stringType := reflect.TypeOf("")
+	intType := reflect.TypeFor[int]()
+	stringType := reflect.TypeFor[string]()
 
 	got, ok := normalizeAccessLevelScalar("push_access_level", "maintainer", intType)
 	if !ok || got != 40 {
@@ -627,7 +638,7 @@ func TestNormalizeAccessLevelScalarDirect(t *testing.T) {
 	}
 
 	// pointer to int → still works
-	got, ok = normalizeAccessLevelScalar("access_level", "owner", reflect.TypeOf((*int)(nil)))
+	got, ok = normalizeAccessLevelScalar("access_level", "owner", reflect.TypeFor[*int]())
 	if !ok || got != 50 {
 		t.Errorf("normalizeAccessLevelScalar(*int) = %v/%v, want 50/true", got, ok)
 	}
@@ -679,17 +690,17 @@ func TestHasStructuredApprovalPrincipalDirect(t *testing.T) {
 // reflection helpers across a representative set of Go types.
 func TestIsStringSliceTypeAndIsStringTypeDirect(t *testing.T) {
 	cases := []struct {
-		name      string
-		typ       reflect.Type
-		isString  bool
-		isSlice   bool
+		name     string
+		typ      reflect.Type
+		isString bool
+		isSlice  bool
 	}{
-		{"string", reflect.TypeOf(""), true, false},
-		{"*string", reflect.TypeOf((*string)(nil)), true, false},
-		{"[]string", reflect.TypeOf([]string{}), false, true},
-		{"[]int", reflect.TypeOf([]int{}), false, false},
-		{"int", reflect.TypeOf(0), false, false},
-		{"bool", reflect.TypeOf(false), false, false},
+		{"string", reflect.TypeFor[string](), true, false},
+		{"*string", reflect.TypeFor[*string](), true, false},
+		{"[]string", reflect.TypeFor[[]string](), false, true},
+		{"[]int", reflect.TypeFor[[]int](), false, false},
+		{"int", reflect.TypeFor[int](), false, false},
+		{"bool", reflect.TypeFor[bool](), false, false},
 	}
 	for _, tc := range cases {
 		if got := isStringType(tc.typ); got != tc.isString {
@@ -729,31 +740,44 @@ func TestSchemaPropertyHasTypeDirect(t *testing.T) {
 // role strings, scalar values that cannot be interpreted, and
 // non-slice targets.
 func TestCoerceStructuredValueDirect(t *testing.T) {
-	sliceType := reflect.TypeOf([]accessLevelEntryInput{})
+	sliceType := reflect.TypeFor[[]accessLevelEntryInput]()
 	elemType := sliceType.Elem()
+	_ = elemType // documented for direct use elsewhere
+}
 
-	// map input with access_level key → wrapped as single-element slice
+// TestCoerceStructuredValue_MapWithAccessLevelKey verifies the helper
+// wraps a map containing the access_level key into a single-element slice.
+func TestCoerceStructuredValue_MapWithAccessLevelKey(t *testing.T) {
+	sliceType := reflect.TypeFor[[]accessLevelEntryInput]()
 	value, ok := coerceStructuredValue("access_level", map[string]any{"access_level": 30}, sliceType)
 	if !ok {
-		t.Error("coerceStructuredValue(map) = false, want true")
+		t.Fatal("coerceStructuredValue(map) = false, want true")
 	}
 	gotSlice, isSlice := value.([]any)
 	if !isSlice || len(gotSlice) != 1 {
 		t.Fatalf("value = %v (type %T), want []any with 1 entry", value, value)
 	}
+}
 
-	// map input is always wrapped (with normalized fields) regardless of keys
-	value, ok = coerceStructuredValue("access_level", map[string]any{"name": "x"}, sliceType)
+// TestCoerceStructuredValue_MapWithoutAccessLevelKeyIsStillWrapped verifies
+// the helper wraps any map input regardless of the keys it carries.
+func TestCoerceStructuredValue_MapWithoutAccessLevelKeyIsStillWrapped(t *testing.T) {
+	sliceType := reflect.TypeFor[[]accessLevelEntryInput]()
+	value, ok := coerceStructuredValue("access_level", map[string]any{"name": "x"}, sliceType)
 	if !ok {
-		t.Error("coerceStructuredValue(map) = false, want true (map always wrapped)")
+		t.Fatal("coerceStructuredValue(map) = false, want true (map always wrapped)")
 	}
 	wrapped2, isSlice := value.([]any)
 	if !isSlice || len(wrapped2) != 1 {
 		t.Errorf("value = %v, want []any with 1 entry", value)
 	}
+}
 
-	// scalar access-level string → wrapped into [{access_level: int}]
-	value, ok = coerceStructuredValue("access_level", "maintainer", sliceType)
+// TestCoerceStructuredValue_ScalarAccessLevelString verifies a scalar role
+// string is wrapped into a single-element slice keyed by access_level.
+func TestCoerceStructuredValue_ScalarAccessLevelString(t *testing.T) {
+	sliceType := reflect.TypeFor[[]accessLevelEntryInput]()
+	value, ok := coerceStructuredValue("access_level", "maintainer", sliceType)
 	if !ok {
 		t.Fatal("coerceStructuredValue(maintainer) = false, want true")
 	}
@@ -765,10 +789,14 @@ func TestCoerceStructuredValueDirect(t *testing.T) {
 	if !isMap || m["access_level"] != 40 {
 		t.Errorf("wrapped[0] = %v, want {access_level: 40}", wrapped[0])
 	}
+}
 
-	// []any input containing role strings and a map → role string coerced
+// TestCoerceStructuredValue_SliceWithMixedRoleStringsAndMaps verifies a
+// []any input containing role strings and a map is coerced element-wise.
+func TestCoerceStructuredValue_SliceWithMixedRoleStringsAndMaps(t *testing.T) {
+	sliceType := reflect.TypeFor[[]accessLevelEntryInput]()
 	items := []any{"developer", map[string]any{"access_level": 60}}
-	value, ok = coerceStructuredValue("access_level", items, sliceType)
+	value, ok := coerceStructuredValue("access_level", items, sliceType)
 	if !ok {
 		t.Fatal("coerceStructuredValue([]any) = false, want true")
 	}
@@ -783,23 +811,26 @@ func TestCoerceStructuredValueDirect(t *testing.T) {
 	if !reflect.DeepEqual(updated[1], items[1]) {
 		t.Errorf("updated[1] = %v, want unchanged %v", updated[1], items[1])
 	}
+}
 
-	// non-slice target → fall through to scalar normalizer
-	intType := reflect.TypeOf(0)
-	value, ok = coerceStructuredValue("title", "hello", intType)
+// TestCoerceStructuredValue_NonSliceTargetFallsThrough verifies the helper
+// returns the input unchanged when the target type is not a slice.
+func TestCoerceStructuredValue_NonSliceTargetFallsThrough(t *testing.T) {
+	intType := reflect.TypeFor[int]()
+	value, ok := coerceStructuredValue("title", "hello", intType)
 	if ok || value != "hello" {
 		t.Errorf("coerceStructuredValue(title) = %v/%v, want hello/false", value, ok)
 	}
+}
 
-	// slice with non-struct elem → unchanged
-	stringSliceType := reflect.TypeOf([]string{})
-	value, ok = coerceStructuredValue("access_level", "maintainer", stringSliceType)
+// TestCoerceStructuredValue_SliceWithNonStructElemUnchanged verifies the
+// helper leaves the input unchanged when the slice element is not a struct.
+func TestCoerceStructuredValue_SliceWithNonStructElemUnchanged(t *testing.T) {
+	stringSliceType := reflect.TypeFor[[]string]()
+	value, ok := coerceStructuredValue("access_level", "maintainer", stringSliceType)
 	if ok {
 		t.Errorf("coerceStructuredValue(non-struct slice) = %v/true, want false", value)
 	}
-
-	// sanity: elem type also used directly
-	_ = elemType
 }
 
 // TestGitLabRoleAccessLevelStringAliases verifies that all canonical
@@ -810,14 +841,24 @@ func TestGitLabRoleAccessLevelStringAliases(t *testing.T) {
 		role string
 		want int
 	}{
-		{"guest", 10}, {"guests", 10},
-		{"reporter", 20}, {"reporters", 20},
-		{"developer", 30}, {"developers", 30},
-		{"maintainer", 40}, {"maintainers", 40},
-		{"owner", 50}, {"owners", 50},
-		{"admin", 60}, {"admins", 60},
-		{"administrator", 60}, {"administrators", 60},
-		{"no access", 0}, {"no one", 0}, {"nobody", 0}, {"none", 0},
+		{"guest", 10},
+		{"guests", 10},
+		{"reporter", 20},
+		{"reporters", 20},
+		{"developer", 30},
+		{"developers", 30},
+		{"maintainer", 40},
+		{"maintainers", 40},
+		{"owner", 50},
+		{"owners", 50},
+		{"admin", 60},
+		{"admins", 60},
+		{"administrator", 60},
+		{"administrators", 60},
+		{"no access", 0},
+		{"no one", 0},
+		{"nobody", 0},
+		{"none", 0},
 		// case-insensitive
 		{"MAINTAINER", 40},
 	}
@@ -843,7 +884,7 @@ func TestGitLabRoleAccessLevelStringAliases(t *testing.T) {
 // has no fields, when a value is not a string, and when the field is
 // not a string slice type.
 func TestCoerceSingleStringSlicesDirect(t *testing.T) {
-	intType := reflect.TypeOf(0)
+	intType := reflect.TypeFor[int]()
 	sliceStructType := reflect.TypeOf(struct {
 		Labels []string `json:"labels"`
 	}{})
@@ -871,7 +912,7 @@ func TestCoerceSingleStringSlicesDirect(t *testing.T) {
 // TestCoerceStringListParamsDirect verifies the comma-separated
 // string helper for the labels-style field family.
 func TestCoerceStringListParamsDirect(t *testing.T) {
-	intType := reflect.TypeOf(0)
+	intType := reflect.TypeFor[int]()
 
 	// non-struct target → unchanged
 	params := map[string]any{"labels": "bug,feature"}
@@ -883,7 +924,7 @@ func TestCoerceStringListParamsDirect(t *testing.T) {
 	type labelsInput struct {
 		Labels string `json:"labels"`
 	}
-	labelsType := reflect.TypeOf(labelsInput{})
+	labelsType := reflect.TypeFor[labelsInput]()
 	params = map[string]any{"labels": []string{"bug", "feature"}}
 	got := coerceStringListParams(params, labelsType)
 	if got["labels"] != "bug,feature" {
@@ -894,7 +935,7 @@ func TestCoerceStringListParamsDirect(t *testing.T) {
 // TestCoerceStringIDNumbersDirect verifies the numeric→string coercion
 // for the id/_id/_iid parameter family.
 func TestCoerceStringIDNumbersDirect(t *testing.T) {
-	intType := reflect.TypeOf(0)
+	intType := reflect.TypeFor[int]()
 
 	// non-struct target → unchanged
 	params := map[string]any{"id": 42}
@@ -906,13 +947,13 @@ func TestCoerceStringIDNumbersDirect(t *testing.T) {
 	type idInput struct {
 		ID int `json:"id"`
 	}
-	idType := reflect.TypeOf(idInput{})
+	idType := reflect.TypeFor[idInput]()
 	_ = idType
 	// the target must be a string field for the coercion to apply
 	type stringIDInput struct {
 		ID string `json:"id"`
 	}
-	stringIDType := reflect.TypeOf(stringIDInput{})
+	stringIDType := reflect.TypeFor[stringIDInput]()
 	params = map[string]any{"id": 42}
 	got := coerceStringIDNumbers(params, stringIDType)
 	if got["id"] != "42" {
@@ -924,7 +965,7 @@ func TestCoerceStringIDNumbersDirect(t *testing.T) {
 // standard integer/float parameter shapes, including the empty-fields
 // early return.
 func TestCoerceNumericParamsDirect(t *testing.T) {
-	intType := reflect.TypeOf(0)
+	intType := reflect.TypeFor[int]()
 
 	// non-struct target → unchanged
 	params := map[string]any{"count": "5"}
@@ -960,7 +1001,7 @@ func TestCoerceFloatValueDirect(t *testing.T) {
 // TestCoerceSliceValueForTargetTypeDirect verifies the slice element
 // coercion helper, including the non-numeric-element early return.
 func TestCoerceSliceValueForTargetTypeDirect(t *testing.T) {
-	stringType := reflect.TypeOf("")
+	stringType := reflect.TypeFor[string]()
 
 	// non-numeric elem → unchanged
 	value, changed, err := coerceSliceValueForTargetType("ids", []string{"a", "b"}, stringType)
@@ -1097,7 +1138,7 @@ func TestCollectJSONFieldTypesDirect(t *testing.T) {
 		ID int `json:"id"`
 	}
 	fields := map[string]reflect.Type{}
-	collectJSONFieldTypes(reflect.TypeOf(outer{}), fields)
+	collectJSONFieldTypes(reflect.TypeFor[outer](), fields)
 	if _, ok := fields["name"]; !ok {
 		t.Error("collectJSONFieldTypes missing embedded 'name' field")
 	}
@@ -1129,7 +1170,7 @@ func TestMetaToolParameterGuidanceSummaryEmptyItem(t *testing.T) {
 }
 
 // TestEnrichWithHints_NonObjectJSONResult verifies the JSON-result
-// path that requires the marshalled result to start with '{'. Result
+// path that requires the marshaled result to start with '{'. Result
 // values that marshal to non-object JSON (e.g. arrays) are returned
 // unchanged without crashing.
 func TestEnrichWithHints_NonObjectJSONResult(t *testing.T) {

@@ -181,7 +181,7 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 func TestTagSpec_IdempotentNonDestructive(t *testing.T) {
 	route := toolutil.ActionRoute{
 		Handler: func(_ context.Context, _ map[string]any) (any, error) {
-			return nil, nil
+			return nil, nil //nolint:nilnil // test fixture: handler is never invoked
 		},
 		Destructive: false,
 	}

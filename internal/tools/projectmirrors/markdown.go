@@ -40,7 +40,8 @@ func FormatOutputMarkdown(m Output) string {
 	if m.LastUpdateAt != "" {
 		fmt.Fprintf(&b, "- **Last Update**: %s\n", m.LastUpdateAt)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_edit_project_mirror` to modify this mirror's settings",
 		"Use `gitlab_force_push_mirror_update` to trigger an immediate sync",
 		"Use `gitlab_get_project_mirror_public_key` to retrieve the SSH public key",
@@ -58,7 +59,8 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | URL | Enabled | Status | Protected Only |\n")
 	b.WriteString("| --: | --- | :-----: | ------ | :------------: |\n")
 	for _, m := range out.Mirrors {
-		fmt.Fprintf(&b, "| %d | `%s` | %t | %s | %t |\n",
+		fmt.Fprintf(
+			&b, "| %d | `%s` | %t | %s | %t |\n",
 			m.ID,
 			toolutil.EscapeMdTableCell(m.URL),
 			m.Enabled,
@@ -81,7 +83,8 @@ func FormatPublicKeyMarkdown(pk PublicKeyOutput) string {
 	b.WriteString("```\n")
 	b.WriteString(pk.PublicKey)
 	b.WriteString("\n```\n")
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_list_project_mirrors` to view all configured mirrors",
 	)
 	return b.String()

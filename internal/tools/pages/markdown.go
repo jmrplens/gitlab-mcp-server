@@ -24,7 +24,8 @@ func FormatPagesMarkdown(out Output) string {
 			fmt.Fprintf(&sb, "| %s | %s | %s | %s |\n", toolutil.MdTitleLink(d.URL, d.URL), toolutil.FormatTime(d.CreatedAt), d.PathPrefix, d.RootDirectory)
 		}
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		toolutil.HintPreserveLinks,
 		hintDomainGet,
 	)
@@ -47,7 +48,8 @@ func FormatDomainMarkdown(out DomainOutput) string {
 		fmt.Fprintf(&sb, "| Cert Subject | %s |\n", out.Certificate.Subject)
 		fmt.Fprintf(&sb, "| Cert Expired | %v |\n", out.Certificate.Expired)
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_pages_domain_update` to modify domain settings",
 	)
@@ -64,7 +66,8 @@ func FormatDomainListMarkdown(out ListDomainsOutput) string {
 	for _, d := range out.Domains {
 		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", d.Domain, toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectPath, d.ProjectID))
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		toolutil.HintPreserveLinks,
 		hintDomainGet,
 	)
@@ -81,7 +84,8 @@ func FormatAllDomainsMarkdown(out ListAllDomainsOutput) string {
 	for _, d := range out.Domains {
 		fmt.Fprintf(&sb, "| %s | %s | %v | %v | %s |\n", d.Domain, toolutil.MdTitleLink(d.URL, d.URL), d.Verified, d.AutoSslEnabled, projectDisplay(d.ProjectPath, d.ProjectID))
 	}
-	toolutil.WriteHints(&sb,
+	toolutil.WriteHints(
+		&sb,
 		toolutil.HintPreserveLinks,
 		hintDomainGet,
 	)

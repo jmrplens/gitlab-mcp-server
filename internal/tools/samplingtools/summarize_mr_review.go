@@ -102,7 +102,8 @@ func SummarizeMRReview(ctx context.Context, req *mcp.CallToolRequest, client *gi
 
 	tracker.Step(ctx, 4, 5, "Requesting LLM summary...")
 
-	result, err := samplingClient.Analyze(ctx, summarizeMRReviewPrompt, data,
+	result, err := samplingClient.Analyze(
+		ctx, summarizeMRReviewPrompt, data,
 		sampling.WithMaxTokens(2048),
 		sampling.WithTemperature(0.3),
 		sampling.WithModelPriorities(0.4, 0.5, 0.5),
@@ -196,7 +197,8 @@ func FormatSummarizeMRReviewMarkdown(s SummarizeMRReviewOutput) string {
 	if s.Model != "" {
 		fmt.Fprintf(&b, "\n*Model: %s*\n", s.Model)
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_add_mr_note` to post the summary as a review comment",
 		"Use `gitlab_mr_approve` or `gitlab_mr_update` to act on the review",
 	)

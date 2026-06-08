@@ -79,7 +79,8 @@ func ListProject(ctx context.Context, client *gitlabclient.Client, input ListPro
 		},
 	}
 	requests, resp, err := client.GL().AccessRequests.ListProjectAccessRequests(
-		string(input.ProjectID), opts, gl.WithContext(ctx))
+		string(input.ProjectID), opts, gl.WithContext(ctx),
+	)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("access_request_list_project", err, http.StatusNotFound,
 			"verify project_id with gitlab_project_get; listing access requests requires Maintainer role or higher")
@@ -114,7 +115,8 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 		},
 	}
 	requests, resp, err := client.GL().AccessRequests.ListGroupAccessRequests(
-		string(input.GroupID), opts, gl.WithContext(ctx))
+		string(input.GroupID), opts, gl.WithContext(ctx),
+	)
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("access_request_list_group", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get; listing access requests requires Owner role")
@@ -141,7 +143,8 @@ func RequestProject(ctx context.Context, client *gitlabclient.Client, input Requ
 		return Output{}, toolutil.ErrFieldRequired("project_id")
 	}
 	ar, _, err := client.GL().AccessRequests.RequestProjectAccess(
-		string(input.ProjectID), gl.WithContext(ctx))
+		string(input.ProjectID), gl.WithContext(ctx),
+	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_request_project", err, http.StatusConflict,
 			"the authenticated user may already be a member or have a pending request; check gitlab_project_member_get; project must allow access requests in its settings")
@@ -164,7 +167,8 @@ func RequestGroup(ctx context.Context, client *gitlabclient.Client, input Reques
 		return Output{}, toolutil.ErrFieldRequired("group_id")
 	}
 	ar, _, err := client.GL().AccessRequests.RequestGroupAccess(
-		string(input.GroupID), gl.WithContext(ctx))
+		string(input.GroupID), gl.WithContext(ctx),
+	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_request_group", err, http.StatusConflict,
 			"the authenticated user may already be a member or have a pending request; group must allow access requests (Owner-controlled setting)")
@@ -197,7 +201,8 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 		opts.AccessLevel = &lvl
 	}
 	ar, _, err := client.GL().AccessRequests.ApproveProjectAccessRequest(
-		string(input.ProjectID), input.UserID, opts, gl.WithContext(ctx))
+		string(input.ProjectID), input.UserID, opts, gl.WithContext(ctx),
+	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_approve_project", err, http.StatusNotFound,
 			"verify user_id with gitlab_access_request_list_project; access_level must be valid (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); approving requires Maintainer role")
@@ -230,7 +235,8 @@ func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input Approv
 		opts.AccessLevel = &lvl
 	}
 	ar, _, err := client.GL().AccessRequests.ApproveGroupAccessRequest(
-		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx))
+		string(input.GroupID), input.UserID, opts, gl.WithContext(ctx),
+	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_approve_group", err, http.StatusNotFound,
 			"verify user_id with gitlab_access_request_list_group; access_level must be valid (10/20/30/40/50=Owner); approving requires Owner role")
@@ -257,7 +263,8 @@ func DenyProject(ctx context.Context, client *gitlabclient.Client, input DenyPro
 		return toolutil.ErrFieldRequired("user_id")
 	}
 	_, err := client.GL().AccessRequests.DenyProjectAccessRequest(
-		string(input.ProjectID), input.UserID, gl.WithContext(ctx))
+		string(input.ProjectID), input.UserID, gl.WithContext(ctx),
+	)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("access_request_deny_project", err, http.StatusNotFound,
 			"verify user_id with gitlab_access_request_list_project; denying requires Maintainer role; the request must still be pending")
@@ -284,7 +291,8 @@ func DenyGroup(ctx context.Context, client *gitlabclient.Client, input DenyGroup
 		return toolutil.ErrFieldRequired("user_id")
 	}
 	_, err := client.GL().AccessRequests.DenyGroupAccessRequest(
-		string(input.GroupID), input.UserID, gl.WithContext(ctx))
+		string(input.GroupID), input.UserID, gl.WithContext(ctx),
+	)
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("access_request_deny_group", err, http.StatusNotFound,
 			"verify user_id with gitlab_access_request_list_group; denying requires Owner role; the request must still be pending")

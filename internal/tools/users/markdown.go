@@ -45,7 +45,8 @@ func FormatMarkdownString(u Output) string {
 				toolutil.EscapeMdTableCell(identity.ExternUID), identity.GroupID, identity.Active)
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'get_status' to check user's current status",
 		"Use action 'ssh_keys' to list SSH keys",
 	)
@@ -74,7 +75,8 @@ func FormatListMarkdownString(o ListOutput) string {
 		}
 	}
 	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with user_id to see full user details",
 	)
@@ -102,7 +104,8 @@ func FormatStatusMarkdownString(o StatusOutput) string {
 	if o.ClearStatusAt != "" {
 		fmt.Fprintf(&b, "- **Clear At**: %s\n", toolutil.FormatTime(o.ClearStatusAt))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_set_user_status` to update your status",
 	)
 	return b.String()
@@ -152,7 +155,8 @@ func FormatSSHKeyListMarkdownString(o SSHKeyListOutput) string {
 		}
 	}
 	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_list_ssh_keys` to view all SSH keys",
 	)
 	return b.String()
@@ -175,7 +179,8 @@ func FormatEmailListMarkdownString(o EmailListOutput) string {
 			fmt.Fprintf(&b, "| %d | %s | %s |\n", e.ID, toolutil.EscapeMdTableCell(e.Email), toolutil.FormatTime(e.ConfirmedAt))
 		}
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_user_current` to view your full profile",
 	)
 	return b.String()
@@ -201,7 +206,8 @@ func FormatContributionEventsMarkdownString(o ContributionEventsOutput) string {
 		}
 	}
 	toolutil.WritePagination(&b, o.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use `gitlab_get_user` to view user profile details",
 	)
@@ -221,7 +227,8 @@ func FormatAssociationsCountMarkdownString(o AssociationsCountOutput) string {
 	fmt.Fprintf(&b, "- **Projects**: %d\n", o.ProjectsCount)
 	fmt.Fprintf(&b, "- **Issues**: %d\n", o.IssuesCount)
 	fmt.Fprintf(&b, "- **Merge Requests**: %d\n", o.MergeRequestsCount)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_get_user` to view the user's profile",
 		"Use `gitlab_list_user_contribution_events` to see recent activity",
 	)

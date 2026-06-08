@@ -163,7 +163,8 @@ var caseFixtureSpecsByName = buildCaseFixtureSpecsByName()
 
 func buildCaseFixtureSpecsByName() map[string]CaseFixtureSpec {
 	fixtures := baseMutatingFixtureSpecs()
-	fixtures = append(fixtures,
+	fixtures = append(
+		fixtures,
 		PipelineJobFixture,
 		MergeRequestDiscussionFixture,
 		MergeRequestSourceFixture,

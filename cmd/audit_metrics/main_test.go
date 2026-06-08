@@ -125,7 +125,8 @@ func TestCountToolPackageDirsAt_IncludesPackagesWithoutRegisterGo(t *testing.T) 
 // TestCountCatalogDomains_UsesCanonicalActionDomains verifies domain metrics are
 // based on Action.Domain rather than individual tool name segments.
 func TestCountCatalogDomains_UsesCanonicalActionDomains(t *testing.T) {
-	catalog := catalogWithActions(t,
+	catalog := catalogWithActions(
+		t,
 		catalogActionFixture{toolName: "gitlab_project", actionName: "get", specBacked: true},
 		catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true},
 		catalogActionFixture{toolName: "gitlab_issue", actionName: "get", specBacked: true},
@@ -195,12 +196,14 @@ func TestPrintDynamicSearchMetrics_IncludesAllSurfaces(t *testing.T) {
 // separates spec-backed enterprise actions from actions missing ActionSpecs.
 func TestAuditEnterpriseActionSpecs_ClassifiesEnterpriseDelta(t *testing.T) {
 	base := catalogWithActions(t, catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true})
-	selfManagedEnterprise := catalogWithActions(t,
+	selfManagedEnterprise := catalogWithActions(
+		t,
 		catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true},
 		catalogActionFixture{toolName: "gitlab_geo", actionName: "list", specBacked: true},
 		catalogActionFixture{toolName: "gitlab_missing_spec", actionName: "list"},
 	)
-	gitLabComEnterprise := catalogWithActions(t,
+	gitLabComEnterprise := catalogWithActions(
+		t,
 		catalogActionFixture{toolName: "gitlab_project", actionName: "list", specBacked: true},
 		catalogActionFixture{toolName: "gitlab_geo", actionName: "list", specBacked: true},
 		catalogActionFixture{toolName: "gitlab_orbit", actionName: "status", specBacked: true},
@@ -439,7 +442,7 @@ func TestCountSourceFiles_CountsGoFilesUnderInternal(t *testing.T) {
 // printer sorts entries by count and shows the ... overflow message.
 func TestPrintDomainTable_LimitsToTop20AndShowsEllipsis(t *testing.T) {
 	domains := map[string]int{}
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		domains[fmt.Sprintf("domain%02d", i)] = 25 - i
 	}
 

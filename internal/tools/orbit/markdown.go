@@ -34,7 +34,8 @@ func init() {
 // formatOrbitNotFound returns a [*mcp.CallToolResult] with actionable hints when an Orbit resource is not found.
 // Used by all Orbit MCP tool handlers to provide LLM-friendly error output for HTTP 404.
 func formatOrbitNotFound(out orbitNotFoundOutput) *mcp.CallToolResult {
-	return toolutil.NotFoundResult(out.Resource, out.Identifier,
+	return toolutil.NotFoundResult(
+		out.Resource, out.Identifier,
 		"Verify GitLab Orbit is enabled on GitLab.com for the requested token",
 		"Check that the token can access a Knowledge Graph-enabled namespace or project",
 	)
@@ -88,7 +89,8 @@ func FormatSchemaMarkdown(out SchemaOutput) string {
 		b.WriteString("\n| Domain | Description | Nodes |\n")
 		b.WriteString("|---|---|---|\n")
 		for _, domain := range out.Domains {
-			fmt.Fprintf(&b, "| %s | %s | %s |\n",
+			fmt.Fprintf(
+				&b, "| %s | %s | %s |\n",
 				toolutil.EscapeMdTableCell(domain.Name),
 				toolutil.EscapeMdTableCell(domain.Description),
 				toolutil.EscapeMdTableCell(strings.Join(domain.NodeNames, ", ")),
@@ -115,7 +117,8 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 	b.WriteString("|---|---|\n")
 	for _, tool := range out.Tools {
 		safeName := strings.ReplaceAll(tool.Name, "`", "")
-		fmt.Fprintf(&b, "| `%s` | %s |\n",
+		fmt.Fprintf(
+			&b, "| `%s` | %s |\n",
 			toolutil.EscapeMdTableCell(safeName),
 			toolutil.EscapeMdTableCell(tool.Description),
 		)
@@ -208,7 +211,8 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 			for _, item := range domain.Items {
 				counts = append(counts, fmt.Sprintf("%s: %d", item.Name, item.Count))
 			}
-			fmt.Fprintf(&b, "| %s | %s |\n",
+			fmt.Fprintf(
+				&b, "| %s | %s |\n",
 				toolutil.EscapeMdTableCell(domain.Name),
 				toolutil.EscapeMdTableCell(strings.Join(counts, ", ")),
 			)

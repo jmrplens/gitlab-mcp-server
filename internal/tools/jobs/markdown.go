@@ -44,7 +44,8 @@ func FormatOutputMarkdown(j Output) string {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(j.CreatedAt))
 	}
 	fmt.Fprintf(&b, toolutil.FmtMdURL, j.WebURL)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'trace' to view the full job log output",
 		"Use action 'retry' to re-run this job",
 		"Use action 'cancel' to cancel a running job",
@@ -68,7 +69,8 @@ func FormatListMarkdown(out ListOutput) string {
 			j.ID, j.WebURL, toolutil.EscapeMdTableCell(j.Name), toolutil.EscapeMdTableCell(j.Stage), toolutil.PipelineStatusEmoji(j.Status), j.Status, j.Duration)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with a job_id to see job details",
 		"Use action 'trace' to view job log output",
@@ -86,7 +88,8 @@ func FormatTraceMarkdown(t TraceOutput) string {
 	b.WriteString("```\n")
 	b.WriteString(t.Trace)
 	b.WriteString(fmtCodeFenceEnd)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_job_get` to see job details",
 		"Use `gitlab_job_retry` to retry this job",
 	)
@@ -114,7 +117,8 @@ func FormatBridgeListMarkdown(out BridgeListOutput) string {
 			toolutil.PipelineStatusEmoji(br.Status), br.Status, br.Duration, ds)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_pipeline_get` to view the downstream pipeline",
 	)
 	return b.String()
@@ -133,7 +137,8 @@ func FormatArtifactsMarkdown(out ArtifactsOutput) string {
 		b.WriteString("- " + toolutil.EmojiWarning + " **Truncated**: content exceeds 1MB limit\n")
 	}
 	b.WriteString("- **Content**: base64-encoded archive (use a decoder to extract)\n")
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_job_download_single_artifact` to get a specific file",
 	)
 	return b.String()
@@ -154,7 +159,8 @@ func FormatSingleArtifactMarkdown(out SingleArtifactOutput) string {
 	b.WriteString(fmtCodeFenceEnd)
 	b.WriteString(out.Content)
 	b.WriteString(fmtCodeFenceEnd)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use `gitlab_job_artifacts` to download the full artifacts archive",
 	)
 	return b.String()
@@ -185,12 +191,14 @@ func FormatWaitMarkdown(out WaitOutput) string {
 	b.WriteString("\n### Job Details\n\n")
 	b.WriteString(FormatOutputMarkdown(out.Job))
 	if out.TimedOut {
-		toolutil.WriteHints(&b,
+		toolutil.WriteHints(
+			&b,
 			"Job is still running — call gitlab_job_wait again to continue waiting",
 			"Use gitlab_job_cancel to abort the job",
 		)
 	} else if out.FinalStatus == "failed" {
-		toolutil.WriteHints(&b,
+		toolutil.WriteHints(
+			&b,
 			"Use gitlab_job action 'trace' to see the job log for failure details",
 			"Use gitlab_job action 'retry' to retry the failed job",
 		)

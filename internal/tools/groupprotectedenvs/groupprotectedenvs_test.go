@@ -56,7 +56,8 @@ func TestList(t *testing.T) {
 			name:  "returns paginated results",
 			input: ListInput{GroupID: "mygroup"},
 			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				testutil.RespondJSONWithPagination(w, http.StatusOK,
+				testutil.RespondJSONWithPagination(
+					w, http.StatusOK,
 					`[{"name":"staging","deploy_access_levels":[],"required_approval_count":0,"approval_rules":[]}]`,
 					testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1", NextPage: ""},
 				)

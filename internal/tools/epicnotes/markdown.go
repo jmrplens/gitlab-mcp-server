@@ -17,7 +17,8 @@ func FormatOutputMarkdown(n Output) string {
 		b.WriteString("- **System note**\n")
 	}
 	fmt.Fprintf(&b, "\n%s\n", toolutil.WrapGFMBody(n.Body))
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use action 'epic_note_update' with note_id to edit this note",
 		"Use action 'epic_note_delete' with note_id to remove this note",
 	)
@@ -40,7 +41,8 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("\n")
 	b.WriteString(toolutil.FormatGraphQLPagination(out.Pagination, len(out.Notes)))
 	b.WriteString("\n")
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'epic_note_get' with note_id to read a specific note",
 		"Use action 'epic_note_create' to add a new note to this epic",

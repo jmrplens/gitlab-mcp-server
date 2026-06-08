@@ -24,7 +24,8 @@ func FormatTriggerMarkdown(out Output) string {
 	if out.LastUsed != "" {
 		fmt.Fprintf(&b, "| Last Used | %s |\n", toolutil.FormatTime(out.LastUsed))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		"Use the selected tool surface's pipeline-trigger update action with the same project_id and trigger_id to modify this trigger",
 		"Use the selected tool surface's pipeline-trigger run action with the same project_id, ref, and this token to execute a pipeline",
 		"Use the selected tool surface's pipeline-trigger delete action with the same project_id, trigger_id, and explicit confirm=true to remove this trigger",
@@ -51,7 +52,8 @@ func FormatListTriggersMarkdown(out ListOutput) string {
 			toolutil.FormatTime(t.LastUsed))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's pipeline-trigger get action with the same project_id and trigger_id for full details",
 		"Use the selected tool surface's pipeline-trigger create action with project_id to add a new pipeline trigger",
@@ -71,7 +73,8 @@ func FormatRunOutputMarkdown(out RunOutput) string {
 	if out.WebURL != "" {
 		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(fmt.Sprintf("Pipeline #%d", out.PipelineID), out.WebURL))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use the selected tool surface's pipeline get action with pipeline_id to monitor progress",
 	)

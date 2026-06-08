@@ -23,7 +23,8 @@ func FormatMemberMarkdown(out Output) string {
 	if out.WebURL != "" {
 		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(out.Username, out.WebURL))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'group_member_edit' to change access level",
 		"Use action 'group_member_remove' to remove this member",
@@ -42,7 +43,8 @@ func FormatShareMarkdown(out ShareOutput) string {
 	if out.WebURL != "" {
 		fmt.Fprintf(&b, "| URL | %s |\n", toolutil.MdTitleLink(out.Name, out.WebURL))
 	}
-	toolutil.WriteHints(&b,
+	toolutil.WriteHints(
+		&b,
 		toolutil.HintPreserveLinks,
 		"Use action 'members' to see all members in the group",
 		"Use action 'group_member_unshare' to revoke this share",
