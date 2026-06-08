@@ -489,6 +489,16 @@ func TestDecodeEncodedPathIdentifierDirect(t *testing.T) {
 		t.Errorf("decoded = %q, want group/subgroup/project", got)
 	}
 
+	// URL percent-encoding is case-insensitive: lowercase %2f must
+	// decode the same as uppercase %2F.
+	gotLower, changedLower := decodeEncodedPathIdentifier("group%2fsubgroup%2fproject")
+	if !changedLower {
+		t.Fatal("decodeEncodedPathIdentifier(%2f) changed = false, want true")
+	}
+	if gotLower != "group/subgroup/project" {
+		t.Errorf("decoded = %q, want group/subgroup/project", gotLower)
+	}
+
 	if _, isChanged := decodeEncodedPathIdentifier("plain/path"); isChanged {
 		t.Error("decodeEncodedPathIdentifier(no %2F) changed = true, want false")
 	}
@@ -1030,7 +1040,7 @@ func TestCoerceSchemaArrayValueDirect(t *testing.T) {
 }
 
 // TestStringListToCSVDirect verifies the string-list→CSV helper
-// rejects unsupported input types.
+// rejects unsupported input types and joins homogeneous string slices.
 func TestStringListToCSVDirect(t *testing.T) {
 	// non-slice input → empty
 	if csv, ok := stringListToCSV("not-a-list"); ok || csv != "" {
@@ -1043,6 +1053,10 @@ func TestStringListToCSVDirect(t *testing.T) {
 	// []any with all strings → joined CSV
 	if csv, ok := stringListToCSV([]any{"a", "b"}); !ok || csv != "a,b" {
 		t.Errorf("stringListToCSV([]any) = %q/%v, want a,b/true", csv, ok)
+	}
+	// []string → joined CSV (concrete slice type)
+	if csv, ok := stringListToCSV([]string{"a", "b"}); !ok || csv != "a,b" {
+		t.Errorf("stringListToCSV([]string) = %q/%v, want a,b/true", csv, ok)
 	}
 }
 

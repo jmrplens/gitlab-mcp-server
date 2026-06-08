@@ -363,7 +363,6 @@ func TestPrintRow_FormatsWithLabelAndValue(t *testing.T) {
 		printRow("Test metric", 42)
 	})
 
-	want := "Test metric"
 	// Padding to metricLabelWidth characters followed by "42".
 	if !strings.Contains(output, "  Test metric") {
 		t.Fatalf("printRow() missing padded label:\n%q", output)
@@ -371,11 +370,8 @@ func TestPrintRow_FormatsWithLabelAndValue(t *testing.T) {
 	if !strings.Contains(output, "42\n") {
 		t.Fatalf("printRow() missing value and newline:\n%q", output)
 	}
-	if !strings.HasPrefix(output, want[:0]+"  ") {
-		// Just confirm the row starts with the leading two-space indent.
-		if output[:2] != "  " {
-			t.Fatalf("printRow() output should start with two-space indent: %q", output)
-		}
+	if !strings.HasPrefix(output, "  ") {
+		t.Fatalf("printRow() output should start with two-space indent: %q", output)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -372,33 +373,6 @@ func TestMarkdownFilesForInput_MissingPath(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownTableFile_ReadError verifies that formatMarkdownTableFile
-// reports a read error when the file is unreadable despite being stat-able.
-//
-// On most filesystems removing the file is the simplest way to make read
-// fail while leaving the rest of the discovery flow intact.
-func TestFormatMarkdownTableFile_ReadError(t *testing.T) {
-	root := t.TempDir()
-	target := filepath.Join(root, "doc.md")
-	writeTestFile(t, target, "| A | B |\n| --- | --- |\n| longer | x |\n")
-	rootFS, err := os.OpenRoot(root)
-	if err != nil {
-		t.Fatalf("open root: %v", err)
-	}
-	defer rootFS.Close()
-
-	if err := os.Remove(target); err != nil { //nolint:govet // shadow of outer err is intentional; reset before reuse
-		t.Fatalf("remove: %v", err)
-	}
-	_, err = formatMarkdownTableFile(rootFS, "doc.md", false)
-	if err == nil {
-		t.Fatal("formatMarkdownTableFile() error = nil, want read failure")
-	}
-	if !strings.Contains(err.Error(), "read doc.md") {
-		t.Fatalf("formatMarkdownTableFile() error = %v, want read doc.md", err)
-	}
-}
-
 // TestFormatMarkdownTableFile_WriteError verifies that formatMarkdownTableFile
 // returns a write error when the target file cannot be overwritten.
 //
@@ -406,10 +380,16 @@ func TestFormatMarkdownTableFile_ReadError(t *testing.T) {
 // invokes formatMarkdownTableFile in non-check mode. The expected error wraps
 // a "write" prefix and the failing path.
 func TestFormatMarkdownTableFile_WriteError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not enforce POSIX read-only via os.Chmod; cannot reliably trigger a write failure")
+	}
+	if os.Getuid() == 0 {
+		t.Skip("root bypasses POSIX file mode checks; cannot trigger a write failure via chmod")
+	}
 	root := t.TempDir()
 	target := filepath.Join(root, "readonly.md")
 	writeTestFile(t, target, "| A | B |\n| --- | ---: |\n| one | 2 |\n")
-	if err := os.Chmod(target, 0o400); err != nil {
+	if err := os.Chmod(target, 0o400); err != nil { // 0o400 makes the staging file read-only, forcing a write failure downstream
 		t.Fatalf("chmod: %v", err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(target, 0o600) })

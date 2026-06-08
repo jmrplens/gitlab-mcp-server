@@ -4,8 +4,6 @@
 package main
 
 import (
-	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -250,7 +248,7 @@ func TestPtrBool_FormatsPointer(t *testing.T) {
 // writes the no-violations message when there are no findings.
 func TestPrintReport_EmptyViolationsWritesNoViolationsMessage(t *testing.T) {
 	// Not parallel: captureStdout rebinds os.Stdout.
-	output := captureStdoutMain(t, func() {
+	output := captureStdout(t, func() {
 		printReport(
 			[]*mcp.Tool{{Name: "gitlab_x"}},
 			[]*mcp.Tool{{Name: "gitlab_y"}},
@@ -285,7 +283,7 @@ func TestPrintReport_GroupsViolationsByCategory(t *testing.T) {
 		{tool: "tool_b", category: "description", detail: "too short"},
 	}
 
-	output := captureStdoutMain(t, func() {
+	output := captureStdout(t, func() {
 		printReport(individual, nil, violations, nil)
 	})
 
@@ -316,7 +314,7 @@ func TestPrintReport_ListsAllMetaToolsAndTruncatesDescription(t *testing.T) {
 	// exercise the "All Tools" section, including the meta-tools table.
 	vs := []violation{{tool: "tool_a", category: "naming", detail: "bad"}}
 
-	output := captureStdoutMain(t, func() {
+	output := captureStdout(t, func() {
 		printReport(individual, meta, vs, nil)
 	})
 
@@ -329,32 +327,4 @@ func TestPrintReport_ListsAllMetaToolsAndTruncatesDescription(t *testing.T) {
 	if !strings.Contains(output, "...") {
 		t.Fatalf("printReport() output missing truncated description marker:\n%s", output)
 	}
-}
-
-// captureStdoutMain supports capture stdout assertions in main_test.go. The
-// same helper exists in register_meta_audit_test.go (in the same package); we
-// use a distinct name to avoid redeclaration when both files are compiled.
-func captureStdoutMain(t *testing.T, action func()) string {
-	t.Helper()
-	originalStdout := os.Stdout
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("Pipe() error = %v", err)
-	}
-	os.Stdout = writer
-
-	action()
-
-	os.Stdout = originalStdout
-	if closeErr := writer.Close(); closeErr != nil {
-		t.Fatalf("Close() writer error = %v", closeErr)
-	}
-	output, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("ReadAll() error = %v", err)
-	}
-	if closeErr := reader.Close(); closeErr != nil {
-		t.Fatalf("Close() reader error = %v", closeErr)
-	}
-	return string(output)
 }

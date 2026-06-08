@@ -93,6 +93,9 @@ func stubLinuxDialogToolPaths(t *testing.T, paths map[string]string) {
 // non-writable, existing directories.
 func TestIsFixedSystemDir(t *testing.T) {
 	t.Run("existing non-writable directory", func(t *testing.T) {
+		if os.PathSeparator == '\\' {
+			t.Skip("Windows does not support directory write permission restriction via Chmod")
+		}
 		dir := t.TempDir()
 		// Remove write bits so the directory is "fixed".
 		if err := os.Chmod(dir, 0o555); err != nil { //nolint:gosec // test fixture requires removing write bits
@@ -139,6 +142,9 @@ func TestIsFixedSystemDir(t *testing.T) {
 // of the path's mode and rejects non-files / non-existent paths.
 func TestIsExecutableFile(t *testing.T) {
 	t.Run("executable file", func(t *testing.T) {
+		if os.PathSeparator == '\\' {
+			t.Skip("Windows does not support executable permission bits")
+		}
 		bin := filepath.Join(t.TempDir(), "bin")
 		if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil { //nolint:gosec // test fixture requires executable bit
 			t.Fatal(err)

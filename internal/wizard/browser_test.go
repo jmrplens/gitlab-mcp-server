@@ -144,16 +144,12 @@ func TestOpenBrowser_NonLinux(t *testing.T) {
 	case "darwin":
 		stub = "open"
 	case "windows":
-		// rundll32 is in System32; we cannot easily shadow it. We
-		// instead exercise the function and accept either a nil
-		// error (rundll32 was found and started) or a start error
-		// (covered by the same returned error type). The test is
-		// still a valid coverage exercise.
-		_ = binDir
-		if err := openBrowser("http://127.0.0.1:65535/test"); err != nil {
-			t.Logf("openBrowser on windows returned (acceptable): %v", err)
-		}
-		return
+		// Rundll32 lives in System32 and cannot be shadowed via PATH.
+		// Calling openBrowser() here would spawn a real browser window
+		// on the developer's host, which is a disruptive side effect
+		// for a unit test. Skip the live launch; the Windows branch is
+		// covered indirectly via compile-time type checking.
+		t.Skip("Windows cannot shadow rundll32 via PATH; skipping live browser launch")
 	default:
 		t.Skipf("unexpected GOOS: %s", runtime.GOOS)
 	}

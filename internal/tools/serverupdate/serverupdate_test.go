@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"runtime"
 	"strings"
 	"testing"
@@ -585,8 +586,9 @@ func newSuccessUpdater(t *testing.T) *autoupdate.Updater {
 // version, and a Windows-specific message. To reach this branch we need
 // an updater whose backing source returns a valid release plus a binary
 // body that satisfies writeToFile (size + magic bytes). The autoupdate
-// package's resolveExecutable variable is private, so the staging file
-// is created next to the production binary — when that directory is
+// package's resolveExecutable variable is now a package-level var
+// (stubbed by the autoupdate package's tests), so the staging file is
+// created next to the production binary — when that directory is
 // writable and the production binary is not locked, the chain succeeds
 // end-to-end.
 func TestApplyDeferredFallback_Success(t *testing.T) {
@@ -596,13 +598,20 @@ func TestApplyDeferredFallback_Success(t *testing.T) {
 	got, err := applyDeferredFallback(t.Context(), updater, out, errors.New("apply failed"))
 	if err != nil {
 		// On hosts where the production binary's directory is not
-		// writable, the test cannot reach the success branch. The
-		// success branch is still covered by the in-package
-		// autoupdate test TestDownloadAndReplace_ReplaceFails, which
-		// uses the same DownloadAndReplace pipeline with a temp-dir
-		// resolveExecutable stub. We document the contract here.
-		t.Logf("applyDeferredFallback could not reach success path on this host: %v", err)
-		return
+		// writable (or the binary is locked), the test cannot reach
+		// the success branch. The success branch is still covered by
+		// the in-package autoupdate test
+		// TestDownloadAndReplace_ReplaceFails, which uses the same
+		// DownloadAndReplace pipeline with a temp-dir
+		// resolveExecutable stub. Skip explicitly so the intent is
+		// visible in test reports; any other error indicates a
+		// regression and must fail the test.
+		if strings.Contains(err.Error(), "rename") ||
+			strings.Contains(err.Error(), "permission") ||
+			errors.Is(err, fs.ErrPermission) {
+			t.Skipf("environment-specific replace constraint: %v", err)
+		}
+		t.Fatalf("applyDeferredFallback failed: %v", err)
 	}
 	if !got.Applied {
 		t.Error("expected Applied=true on success")

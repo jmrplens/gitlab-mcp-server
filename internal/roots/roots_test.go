@@ -563,7 +563,13 @@ func TestClientSupportsRoots_NilInitializeParams(t *testing.T) {
 	// way to hit the `params == nil` branch because the SDK always
 	// populates params after a successful handshake.
 	ssVal := reflect.ValueOf(serverSession).Elem()
+	if !ssVal.IsValid() {
+		t.Skip("go-sdk ServerSession internals changed; cannot reflect into it")
+	}
 	stateField := ssVal.FieldByName("state")
+	if !stateField.IsValid() || !stateField.CanAddr() {
+		t.Skip("go-sdk ServerSession internals changed; cannot simulate nil InitializeParams safely")
+	}
 	statePtr := unsafe.Pointer(stateField.UnsafeAddr())
 	realState := (*mcp.ServerSessionState)(statePtr)
 	realState.InitializeParams = nil

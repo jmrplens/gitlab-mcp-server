@@ -50,6 +50,9 @@ func TestRepositoryRoot_NotFound(t *testing.T) {
 // to fail with EACCES. The error is wrapped in a PathError with op
 // "stat" and path "."; RepositoryRoot must propagate that error.
 func TestRepositoryRoot_AbsError(t *testing.T) {
+	if os.PathSeparator == '\\' {
+		t.Skip("Windows does not support directory read permission restriction via Chmod")
+	}
 	if os.Getuid() == 0 {
 		t.Skip("running as root, cannot revoke permissions to fail Getwd")
 	}

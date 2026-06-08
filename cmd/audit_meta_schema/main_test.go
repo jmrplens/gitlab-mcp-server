@@ -4,7 +4,6 @@
 package main
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -35,12 +34,8 @@ func TestHuman_AllMagnitudes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := human(tt.n)
-			if !strings.HasSuffix(got, tt.want[strings.LastIndex(tt.want, " "):]) {
-				t.Fatalf("human(%d) = %q, want suffix %q", tt.n, got, tt.want)
-			}
-			if !strings.Contains(got, strings.SplitN(tt.want, " ", 2)[0]) {
-				t.Fatalf("human(%d) = %q, want prefix %q", tt.n, got, tt.want)
+			if got := human(tt.n); got != tt.want {
+				t.Fatalf("human(%d) = %q, want %q", tt.n, got, tt.want)
 			}
 		})
 	}

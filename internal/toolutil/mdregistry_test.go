@@ -341,6 +341,8 @@ func TestRegisterMarkdown_TypeMismatchReturnsEmpty(t *testing.T) {
 		if got := fn(mdTestListOutput{}); got != "" {
 			t.Errorf("type-mismatch dispatch = %q, want empty string", got)
 		}
+	} else {
+		t.Fatalf("registered string formatter has unexpected type: %T", loaded)
 	}
 }
 
@@ -363,6 +365,8 @@ func TestRegisterMarkdownResult_TypeMismatchReturnsNil(t *testing.T) {
 		if got := fn(mdTestListOutput{}); got != nil {
 			t.Errorf("type-mismatch dispatch = %+v, want nil", got)
 		}
+	} else {
+		t.Fatalf("registered result formatter has unexpected type: %T", loaded)
 	}
 }
 

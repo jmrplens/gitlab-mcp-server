@@ -182,6 +182,11 @@ func TestCreateIssueReturnsIssue(t *testing.T) {}
 	if len(records[0]) != len(wantHeader) {
 		t.Fatalf("CSV header = %v, want %v", records[0], wantHeader)
 	}
+	for i, col := range wantHeader {
+		if records[0][i] != col {
+			t.Errorf("CSV header[%d] = %q, want %q", i, records[0][i], col)
+		}
+	}
 	patterns := map[string]string{}
 	for _, rec := range records[1:] {
 		if len(rec) >= 3 {
