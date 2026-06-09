@@ -91,8 +91,18 @@ type resourceSnapshot struct {
 func TestMain(m *testing.M) {
 	configureE2EStartupEnvironment()
 
-	enterprise := strings.EqualFold(os.Getenv("GITLAB_ENTERPRISE"), "true")
+	envEnterprise := strings.EqualFold(os.Getenv("GITLAB_ENTERPRISE"), "true")
 	glClient := mustE2EGitLabClient()
+	// Detect the actual GitLab edition from /api/v4/version. The
+	// GITLAB_ENTERPRISE env var is the *requested* mode (used as the
+	// default when detection fails), but the real edition is what
+	// controls whether EE features work end-to-end. When the env asks
+	// for EE but GitLab reports CE, downgrade the flag so EE tests
+	// skip rather than fail with 404s on protected envs, epics, etc.
+	enterprise := envEnterprise && glClient.DetectEnterprise(context.Background(), envEnterprise)
+	if envEnterprise && !enterprise {
+		log.Printf("e2e: GITLAB_ENTERPRISE=true but GitLab /api/v4/version reports enterprise=false; running EE tests as CE")
+	}
 	username := mustE2EUsername(glClient)
 	runtime := startE2ERuntime(glClient, enterprise)
 	sess = runtime.sessions
