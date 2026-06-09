@@ -133,33 +133,27 @@ func isRetryableError(err error) bool {
 // other codes return false so callers fall through to requireNoError and
 // surface the real failure.
 //
-// Uses the same anchored phrase matching as isRetryableError ("404 not found",
-// "403 forbidden") to avoid false positives when substrings like "404" appear
-// inside project IDs, commit SHAs, or resource names.
+// Matches the status code in either of two forms:
+//   - "<code> <reason phrase>" (e.g. "400 Bad Request" from net/http) — the
+//     anchored phrase form avoids false positives when "400" appears inside
+//     project IDs, commit SHAs, or resource names.
+//   - ": <code> " as a standalone token (e.g. "POST url: 400 message") —
+//     this is the format go-gitlab emits in *ErrorResponse.Error() and
+//     which gets propagated verbatim through our tool wrapping. The
+//     leading ": " is what disambiguates from numeric substrings in paths.
 func isHTTPStatus(err error, code int) bool {
 	if err == nil {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	switch code {
-	case 400:
-		// Anchor on the reason phrase to avoid false positives on IDs
-		// or SHAs that happen to contain "400".
-		return strings.Contains(msg, "400 bad request")
-	case 401:
-		return strings.Contains(msg, "401 unauthorized")
-	case 403:
-		return strings.Contains(msg, "403 forbidden")
-	case 404:
-		return strings.Contains(msg, "404 not found")
-	case 422:
-		return strings.Contains(msg, "422 unprocessable")
-	case 500:
-		return strings.Contains(msg, "500 internal server")
-	case 502:
-		return strings.Contains(msg, "502 bad gateway")
-	case 503:
-		return strings.Contains(msg, "503 service unavailable")
+	codeStr := strconv.Itoa(code)
+	if phrase := strings.ToLower(http.StatusText(code)); phrase != "" {
+		if strings.Contains(msg, codeStr+" "+phrase) {
+			return true
+		}
+	}
+	if strings.Contains(msg, ": "+codeStr+" ") {
+		return true
 	}
 	return false
 }
