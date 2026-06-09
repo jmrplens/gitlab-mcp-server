@@ -316,24 +316,11 @@ func unshareGroupOutput(ctx context.Context, client *gitlabclient.Client, input 
 // Converters
 // ──────────────────────────────────────────────.
 
-// groupAccessLevelNames maps GitLab access level values to human-readable labels.
-var groupAccessLevelNames = map[gl.AccessLevelValue]string{
-	gl.NoPermissions:              "No access",
-	gl.MinimalAccessPermissions:   "Minimal access",
-	gl.GuestPermissions:           "Guest",
-	gl.ReporterPermissions:        "Reporter",
-	gl.SecurityManagerPermissions: "Security Manager",
-	gl.DeveloperPermissions:       "Developer",
-	gl.MaintainerPermissions:      "Maintainer",
-	gl.OwnerPermissions:           "Owner",
-}
-
 // accessLevelDescription returns the GitLab role label for an access level.
+// Delegates to the canonical mapping in [toolutil.AccessLevelDescription] so
+// group and project members use a single source of truth.
 func accessLevelDescription(level gl.AccessLevelValue) string {
-	if name, ok := groupAccessLevelNames[level]; ok {
-		return name
-	}
-	return "Unknown"
+	return toolutil.AccessLevelDescription(level)
 }
 
 // convertMember maps a GitLab group member into the MCP output shape.

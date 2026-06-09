@@ -702,10 +702,13 @@ func TestAccessLevelDescription_AllLevels(t *testing.T) {
 		{0, "No access"},
 		{5, "Minimal access"},
 		{10, "Guest"},
+		{15, "Planner"},
 		{20, "Reporter"},
+		{25, "Security Manager"},
 		{30, "Developer"},
 		{40, "Maintainer"},
 		{50, "Owner"},
+		{60, "Admin"},
 		{99, "Unknown"},
 	}
 	for _, tt := range tests {

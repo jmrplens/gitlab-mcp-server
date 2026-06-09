@@ -18,10 +18,13 @@ func TestAccessLevelDescription(t *testing.T) {
 	}{
 		{"no access", gl.NoPermissions, "No access"},
 		{"guest", gl.GuestPermissions, "Guest"},
+		{"planner", gl.PlannerPermissions, "Planner"},
 		{"reporter", gl.ReporterPermissions, "Reporter"},
+		{"security manager", gl.SecurityManagerPermissions, "Security Manager"},
 		{"developer", gl.DeveloperPermissions, "Developer"},
 		{"maintainer", gl.MaintainerPermissions, "Maintainer"},
 		{"owner", gl.OwnerPermissions, "Owner"},
+		{"admin", gl.AdminPermissions, "Admin"},
 		{"minimal", gl.MinimalAccessPermissions, "Minimal access"},
 		{"unknown value", gl.AccessLevelValue(99), "Unknown"},
 	}
