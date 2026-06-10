@@ -32432,6 +32432,11 @@
       "properties": {
         "branch_filter_strategy": {
           "description": "Branch filter strategy (wildcard, regex, all_branches)",
+          "enum": [
+            "wildcard",
+            "regex",
+            "all_branches"
+          ],
           "type": "string"
         },
         "confidential_issues_events": {
@@ -32847,6 +32852,11 @@
       "properties": {
         "branch_filter_strategy": {
           "description": "Branch filter strategy (wildcard, regex, all_branches)",
+          "enum": [
+            "wildcard",
+            "regex",
+            "all_branches"
+          ],
           "type": "string"
         },
         "confidential_issues_events": {
