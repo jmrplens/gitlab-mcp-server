@@ -1892,11 +1892,14 @@ func TestGroupDatadogIntegration(t *testing.T) {
 			t.Fatalf("GET: %v", err)
 		}
 		defer resp.Body.Close()
-		io.Copy(io.Discard, resp.Body)
+		// Read the body once; both the optional JSON decode below and
+		// the test log (when the round-trip goes sideways) want the
+		// raw payload, so we keep it in a buffer rather than draining
+		// it into io.Discard first.
+		raw, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode == http.StatusOK {
-			if decErr := json.NewDecoder(resp.Body).Decode(&out); decErr != nil {
-				// body already consumed; rebuild a fresh request
-				t.Fatalf("decode response: %v", decErr)
+			if decErr := json.Unmarshal(raw, &out); decErr != nil {
+				t.Fatalf("decode response: %v; body=%s", decErr, strings.TrimSpace(string(raw)))
 			}
 		}
 		return resp.StatusCode, out
