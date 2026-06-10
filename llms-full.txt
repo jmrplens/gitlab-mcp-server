@@ -3247,7 +3247,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -3263,7 +3263,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -3271,7 +3271,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
 ```
 
 </details>
@@ -3279,7 +3279,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_subscribe</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -3295,7 +3295,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_update</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -7291,7 +7291,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -7307,7 +7307,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -7315,7 +7315,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
 ```
 
 </details>
@@ -7331,7 +7331,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_subscribe</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -7347,7 +7347,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_update</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -16427,6 +16427,7 @@ Create a new label in a GitLab group with a name, color (hex), optional descript
 
 **Parameters:**
 
+- `archived` (boolean): Whether to create the label in archived state
 - `color` (string) (required): Label color in hex format (e.g. #FF0000)
 - `description` (string): Label description
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -16503,6 +16504,7 @@ Update an existing group label. Can change name, color, description, or priority
 
 **Parameters:**
 
+- `archived` (boolean): Set true to archive, false to unarchive
 - `color` (string): New label color in hex format
 - `description` (string): New label description
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -18363,6 +18365,7 @@ Create a new label in a GitLab project with a name, color (hex), optional descri
 
 **Parameters:**
 
+- `archived` (boolean): Whether to create the label in archived state
 - `color` (string) (required): Label color in hex format (e.g. #FF0000)
 - `description` (string): Label description
 - `name` (string) (required): Label name
@@ -18448,6 +18451,7 @@ Update an existing project label. Can change name, color, description, or priori
 
 **Parameters:**
 
+- `archived` (boolean): Set true to archive, false to unarchive
 - `color` (string): New label color in hex format
 - `description` (string): New label description
 - `label_id` (string) (required): Label ID or name

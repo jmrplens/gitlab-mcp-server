@@ -33852,6 +33852,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "description": "Whether to create the label in archived state",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "color": {
           "description": "Label color in hex format (e.g. #FF0000)",
           "type": "string"
@@ -33883,6 +33890,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "closed_issues_count": {
           "type": "integer"
         },
@@ -33937,7 +33947,8 @@
         "open_merge_requests_count",
         "priority",
         "is_project_label",
-        "subscribed"
+        "subscribed",
+        "archived"
       ],
       "type": "object"
     },
@@ -34027,6 +34038,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "closed_issues_count": {
           "type": "integer"
         },
@@ -34081,7 +34095,8 @@
         "open_merge_requests_count",
         "priority",
         "is_project_label",
-        "subscribed"
+        "subscribed",
+        "archived"
       ],
       "type": "object"
     },
@@ -34143,6 +34158,9 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "closed_issues_count": {
                 "type": "integer"
               },
@@ -34197,7 +34215,8 @@
               "open_merge_requests_count",
               "priority",
               "is_project_label",
-              "subscribed"
+              "subscribed",
+              "archived"
             ],
             "type": "object"
           },
@@ -34289,6 +34308,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "closed_issues_count": {
           "type": "integer"
         },
@@ -34343,7 +34365,8 @@
         "open_merge_requests_count",
         "priority",
         "is_project_label",
-        "subscribed"
+        "subscribed",
+        "archived"
       ],
       "type": "object"
     },
@@ -34411,6 +34434,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "description": "Set true to archive, false to unarchive",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "color": {
           "description": "New label color in hex format",
           "type": "string"
@@ -34445,6 +34475,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "closed_issues_count": {
           "type": "integer"
         },
@@ -34499,7 +34532,8 @@
         "open_merge_requests_count",
         "priority",
         "is_project_label",
-        "subscribed"
+        "subscribed",
+        "archived"
       ],
       "type": "object"
     },
@@ -51203,6 +51237,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "description": "Whether to create the label in archived state",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "color": {
           "description": "Label color in hex format (e.g. #FF0000)",
           "type": "string"
@@ -51234,6 +51275,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "closed_issues_count": {
           "type": "integer"
         },
@@ -51288,7 +51332,8 @@
         "open_merge_requests_count",
         "priority",
         "is_project_label",
-        "subscribed"
+        "subscribed",
+        "archived"
       ],
       "type": "object"
     },
@@ -51378,6 +51423,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "closed_issues_count": {
           "type": "integer"
         },
@@ -51432,7 +51480,8 @@
         "open_merge_requests_count",
         "priority",
         "is_project_label",
-        "subscribed"
+        "subscribed",
+        "archived"
       ],
       "type": "object"
     },
@@ -51486,6 +51535,9 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "closed_issues_count": {
                 "type": "integer"
               },
@@ -51540,7 +51592,8 @@
               "open_merge_requests_count",
               "priority",
               "is_project_label",
-              "subscribed"
+              "subscribed",
+              "archived"
             ],
             "type": "object"
           },
@@ -51684,6 +51737,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "closed_issues_count": {
           "type": "integer"
         },
@@ -51738,7 +51794,8 @@
         "open_merge_requests_count",
         "priority",
         "is_project_label",
-        "subscribed"
+        "subscribed",
+        "archived"
       ],
       "type": "object"
     },
@@ -51806,6 +51863,13 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "description": "Set true to archive, false to unarchive",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "color": {
           "description": "New label color in hex format",
           "type": "string"
@@ -51840,6 +51904,9 @@
     "outputSchema": {
       "additionalProperties": false,
       "properties": {
+        "archived": {
+          "type": "boolean"
+        },
         "closed_issues_count": {
           "type": "integer"
         },
@@ -51894,7 +51961,8 @@
         "open_merge_requests_count",
         "priority",
         "is_project_label",
-        "subscribed"
+        "subscribed",
+        "archived"
       ],
       "type": "object"
     },

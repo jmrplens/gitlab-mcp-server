@@ -4,6 +4,7 @@ package grouplabels
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -172,6 +173,43 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
+// TestCreate_ArchivedFlag verifica que el flag Archived se envía en
+// el body de la request cuando se setea (client-go v2.38.0 añadió
+// Archived a CreateGroupLabelOptions; la herramienta MCP debe
+// encaminar el *bool del usuario).
+func TestCreate_ArchivedFlag(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathGroupLabels {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"bug","color":"#d9534f","archived":true}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	archived := true
+	out, err := Create(context.Background(), client, CreateInput{
+		GroupID: "10",
+		Name:    "bug",
+		Color:   "#d9534f",
+		Archived: &archived,
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if !out.Archived {
+		t.Error("out.Archived = false, want true")
+	}
+	if !strings.Contains(capturedBody, `"archived":true`) {
+		t.Errorf("request body should contain \"archived\":true, got: %s", capturedBody)
+	}
+}
+
 // TestCreate_EmptyGroupID verifies Create when empty group ID.
 func TestCreate_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -204,6 +242,41 @@ func TestUpdate_Success(t *testing.T) {
 	}
 	if out.Name != "bug-fix" {
 		t.Errorf("Name = %q, want %q", out.Name, "bug-fix")
+	}
+}
+
+// TestUpdate_ArchivedFlag verifica que el flag Archived se envía en
+// el body de la request y que la respuesta lo surfaces en la salida.
+func TestUpdate_ArchivedFlag(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathLabel1 {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"bug-fix","color":"#00ff00","archived":true}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	archived := true
+	out, err := Update(context.Background(), client, UpdateInput{
+		GroupID: "10",
+		LabelID: "1",
+		NewName: "bug-fix",
+		Archived: &archived,
+	})
+	if err != nil {
+		t.Fatalf("Update() inesperado error: %v", err)
+	}
+	if !out.Archived {
+		t.Error("out.Archived = false, want true")
+	}
+	if !strings.Contains(capturedBody, `"archived":true`) {
+		t.Errorf("request body should contain \"archived\":true, got: %s", capturedBody)
 	}
 }
 
