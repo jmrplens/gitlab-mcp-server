@@ -39,6 +39,10 @@ type HookInput struct {
 	ConfidentialNoteEvents   *bool  `json:"confidential_note_events,omitempty"   jsonschema:"Trigger on confidential note events"`
 	EnableSSLVerification    *bool  `json:"enable_ssl_verification,omitempty"    jsonschema:"Enable SSL verification for the hook endpoint"`
 	PushEventsBranchFilter   string `json:"push_events_branch_filter,omitempty"  jsonschema:"Branch filter for push events (e.g. 'main')"`
+	BranchFilterStrategy     string `json:"branch_filter_strategy,omitempty"      jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
+	EmojiEvents              *bool  `json:"emoji_events,omitempty"                jsonschema:"Trigger on emoji events"`
+	ResourceAccessTokenEvents *bool  `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
+	ProjectEvents            *bool  `json:"project_events,omitempty"               jsonschema:"Trigger on project events (group-level)"`
 }
 
 // ListHooksInput defines parameters for listing group hooks.
@@ -108,6 +112,11 @@ type HookOutput struct {
 	FeatureFlagEvents        bool              `json:"feature_flag_events"`
 	MilestoneEvents          bool              `json:"milestone_events"`
 	VulnerabilityEvents      bool              `json:"vulnerability_events"`
+	EmojiEvents              bool              `json:"emoji_events"`
+	ResourceAccessTokenEvents bool              `json:"resource_access_token_events"`
+	ProjectEvents            bool              `json:"project_events"`
+	PushEventsBranchFilter   string            `json:"push_events_branch_filter,omitempty"`
+	BranchFilterStrategy     string            `json:"branch_filter_strategy,omitempty"`
 	TokenPresent             bool              `json:"token_present"`
 	SigningTokenPresent      bool              `json:"signing_token_present"`
 	CreatedAt                string            `json:"created_at,omitempty"`
@@ -147,6 +156,11 @@ func hookToOutput(h *gl.GroupHook) HookOutput {
 		FeatureFlagEvents:        h.FeatureFlagEvents,
 		MilestoneEvents:          h.MilestoneEvents,
 		VulnerabilityEvents:      h.VulnerabilityEvents,
+		EmojiEvents:              h.EmojiEvents,
+		ResourceAccessTokenEvents: h.ResourceAccessTokenEvents,
+		ProjectEvents:            h.ProjectEvents,
+		PushEventsBranchFilter:   h.PushEventsBranchFilter,
+		BranchFilterStrategy:     h.BranchFilterStrategy,
 		TokenPresent:             h.TokenPresent,
 		SigningTokenPresent:      h.SigningTokenPresent,
 	}
@@ -245,6 +259,9 @@ func applyGroupHookIdentityOptions(input HookInput, opts *gl.AddGroupHookOptions
 	if input.PushEventsBranchFilter != "" {
 		opts.PushEventsBranchFilter = new(input.PushEventsBranchFilter)
 	}
+	if input.BranchFilterStrategy != "" {
+		opts.BranchFilterStrategy = new(input.BranchFilterStrategy)
+	}
 }
 
 func applyGroupHookEventOptions(input HookInput, opts *gl.AddGroupHookOptions) {
@@ -299,6 +316,15 @@ func applyGroupHookEventOptions(input HookInput, opts *gl.AddGroupHookOptions) {
 	if input.ConfidentialNoteEvents != nil {
 		opts.ConfidentialNoteEvents = input.ConfidentialNoteEvents
 	}
+	if input.EmojiEvents != nil {
+		opts.EmojiEvents = input.EmojiEvents
+	}
+	if input.ResourceAccessTokenEvents != nil {
+		opts.ResourceAccessTokenEvents = input.ResourceAccessTokenEvents
+	}
+	if input.ProjectEvents != nil {
+		opts.ProjectEvents = input.ProjectEvents
+	}
 }
 
 // applyAddHookOpts builds the AddGroupHookOptions from HookInput.
@@ -315,6 +341,7 @@ func groupEditHookOptionsFromAdd(opts *gl.AddGroupHookOptions) *gl.EditGroupHook
 		Description:              opts.Description,
 		PushEvents:               opts.PushEvents,
 		PushEventsBranchFilter:   opts.PushEventsBranchFilter,
+		BranchFilterStrategy:     opts.BranchFilterStrategy,
 		IssuesEvents:             opts.IssuesEvents,
 		ConfidentialIssuesEvents: opts.ConfidentialIssuesEvents,
 		MergeRequestsEvents:      opts.MergeRequestsEvents,
@@ -331,6 +358,9 @@ func groupEditHookOptionsFromAdd(opts *gl.AddGroupHookOptions) *gl.EditGroupHook
 		SubGroupEvents:           opts.SubGroupEvents,
 		MemberEvents:             opts.MemberEvents,
 		VulnerabilityEvents:      opts.VulnerabilityEvents,
+		EmojiEvents:              opts.EmojiEvents,
+		ResourceAccessTokenEvents: opts.ResourceAccessTokenEvents,
+		ProjectEvents:            opts.ProjectEvents,
 		EnableSSLVerification:    opts.EnableSSLVerification,
 		Token:                    opts.Token,
 		SigningToken:             opts.SigningToken,

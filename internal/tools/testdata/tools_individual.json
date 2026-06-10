@@ -32430,6 +32430,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "branch_filter_strategy": {
+          "description": "Branch filter strategy (wildcard, regex, all_branches)",
+          "type": "string"
+        },
         "confidential_issues_events": {
           "description": "Trigger on confidential issue events",
           "type": [
@@ -32454,6 +32458,13 @@
         "description": {
           "description": "Hook description",
           "type": "string"
+        },
+        "emoji_events": {
+          "description": "Trigger on emoji events",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "enable_ssl_verification": {
           "description": "Enable SSL verification for the hook endpoint",
@@ -32526,6 +32537,13 @@
             "boolean"
           ]
         },
+        "project_events": {
+          "description": "Trigger on project events (group-level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "push_events": {
           "description": "Trigger on push events",
           "type": [
@@ -32539,6 +32557,13 @@
         },
         "releases_events": {
           "description": "Trigger on release events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "resource_access_token_events": {
+          "description": "Trigger on resource access token events",
           "type": [
             "null",
             "boolean"
@@ -32598,6 +32623,9 @@
         "alert_status": {
           "type": "string"
         },
+        "branch_filter_strategy": {
+          "type": "string"
+        },
         "confidential_issues_events": {
           "type": "boolean"
         },
@@ -32615,6 +32643,9 @@
         },
         "disabled_until": {
           "type": "string"
+        },
+        "emoji_events": {
+          "type": "boolean"
         },
         "enable_ssl_verification": {
           "type": "boolean"
@@ -32661,10 +32692,19 @@
         "pipeline_events": {
           "type": "boolean"
         },
+        "project_events": {
+          "type": "boolean"
+        },
         "push_events": {
           "type": "boolean"
         },
+        "push_events_branch_filter": {
+          "type": "string"
+        },
         "releases_events": {
+          "type": "boolean"
+        },
+        "resource_access_token_events": {
           "type": "boolean"
         },
         "signing_token_present": {
@@ -32729,6 +32769,9 @@
         "feature_flag_events",
         "milestone_events",
         "vulnerability_events",
+        "emoji_events",
+        "resource_access_token_events",
+        "project_events",
         "token_present",
         "signing_token_present"
       ],
@@ -32802,6 +32845,10 @@
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
+        "branch_filter_strategy": {
+          "description": "Branch filter strategy (wildcard, regex, all_branches)",
+          "type": "string"
+        },
         "confidential_issues_events": {
           "description": "Trigger on confidential issue events",
           "type": [
@@ -32826,6 +32873,13 @@
         "description": {
           "description": "Hook description",
           "type": "string"
+        },
+        "emoji_events": {
+          "description": "Trigger on emoji events",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "enable_ssl_verification": {
           "description": "Enable SSL verification for the hook endpoint",
@@ -32902,6 +32956,13 @@
             "boolean"
           ]
         },
+        "project_events": {
+          "description": "Trigger on project events (group-level)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "push_events": {
           "description": "Trigger on push events",
           "type": [
@@ -32915,6 +32976,13 @@
         },
         "releases_events": {
           "description": "Trigger on release events",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "resource_access_token_events": {
+          "description": "Trigger on resource access token events",
           "type": [
             "null",
             "boolean"
@@ -32975,6 +33043,9 @@
         "alert_status": {
           "type": "string"
         },
+        "branch_filter_strategy": {
+          "type": "string"
+        },
         "confidential_issues_events": {
           "type": "boolean"
         },
@@ -32992,6 +33063,9 @@
         },
         "disabled_until": {
           "type": "string"
+        },
+        "emoji_events": {
+          "type": "boolean"
         },
         "enable_ssl_verification": {
           "type": "boolean"
@@ -33038,10 +33112,19 @@
         "pipeline_events": {
           "type": "boolean"
         },
+        "project_events": {
+          "type": "boolean"
+        },
         "push_events": {
           "type": "boolean"
         },
+        "push_events_branch_filter": {
+          "type": "string"
+        },
         "releases_events": {
+          "type": "boolean"
+        },
+        "resource_access_token_events": {
           "type": "boolean"
         },
         "signing_token_present": {
@@ -33106,6 +33189,9 @@
         "feature_flag_events",
         "milestone_events",
         "vulnerability_events",
+        "emoji_events",
+        "resource_access_token_events",
+        "project_events",
         "token_present",
         "signing_token_present"
       ],
@@ -33144,6 +33230,9 @@
         "alert_status": {
           "type": "string"
         },
+        "branch_filter_strategy": {
+          "type": "string"
+        },
         "confidential_issues_events": {
           "type": "boolean"
         },
@@ -33161,6 +33250,9 @@
         },
         "disabled_until": {
           "type": "string"
+        },
+        "emoji_events": {
+          "type": "boolean"
         },
         "enable_ssl_verification": {
           "type": "boolean"
@@ -33207,10 +33299,19 @@
         "pipeline_events": {
           "type": "boolean"
         },
+        "project_events": {
+          "type": "boolean"
+        },
         "push_events": {
           "type": "boolean"
         },
+        "push_events_branch_filter": {
+          "type": "string"
+        },
         "releases_events": {
+          "type": "boolean"
+        },
+        "resource_access_token_events": {
           "type": "boolean"
         },
         "signing_token_present": {
@@ -33275,6 +33376,9 @@
         "feature_flag_events",
         "milestone_events",
         "vulnerability_events",
+        "emoji_events",
+        "resource_access_token_events",
+        "project_events",
         "token_present",
         "signing_token_present"
       ],
@@ -33321,6 +33425,9 @@
               "alert_status": {
                 "type": "string"
               },
+              "branch_filter_strategy": {
+                "type": "string"
+              },
               "confidential_issues_events": {
                 "type": "boolean"
               },
@@ -33338,6 +33445,9 @@
               },
               "disabled_until": {
                 "type": "string"
+              },
+              "emoji_events": {
+                "type": "boolean"
               },
               "enable_ssl_verification": {
                 "type": "boolean"
@@ -33384,10 +33494,19 @@
               "pipeline_events": {
                 "type": "boolean"
               },
+              "project_events": {
+                "type": "boolean"
+              },
               "push_events": {
                 "type": "boolean"
               },
+              "push_events_branch_filter": {
+                "type": "string"
+              },
               "releases_events": {
+                "type": "boolean"
+              },
+              "resource_access_token_events": {
                 "type": "boolean"
               },
               "signing_token_present": {
@@ -33452,6 +33571,9 @@
               "feature_flag_events",
               "milestone_events",
               "vulnerability_events",
+              "emoji_events",
+              "resource_access_token_events",
+              "project_events",
               "token_present",
               "signing_token_present"
             ],
