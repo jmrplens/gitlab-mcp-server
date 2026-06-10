@@ -1862,7 +1862,7 @@ func TestGroupDatadogIntegration(t *testing.T) {
 	if gitlabURL == "" {
 		t.Skipf("GITLAB_URL not set; cannot make direct API calls")
 	}
-	httpDo := func(t *testing.T, method, path, body string) int {
+	httpDo := func(t *testing.T, method, path, body string) (int, string) {
 		t.Helper()
 		req, err := http.NewRequestWithContext(ctx, method, gitlabURL+path, strings.NewReader(body))
 		if err != nil {
@@ -1877,10 +1877,10 @@ func TestGroupDatadogIntegration(t *testing.T) {
 			t.Fatalf("%s %s: %v", method, path, err)
 		}
 		defer resp.Body.Close()
-		io.Copy(io.Discard, resp.Body)
-		return resp.StatusCode
+		raw, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, strings.TrimSpace(string(raw))
 	}
-	putDatadog := func(t *testing.T, body string) int {
+	putDatadog := func(t *testing.T, body string) (int, string) {
 		return httpDo(t, http.MethodPut, "/api/v4/groups/"+grpName+"/integrations/datadog", body)
 	}
 	getDatadog := func(t *testing.T) (int, integrations.GetGroupDatadogOutput) {
@@ -1902,17 +1902,20 @@ func TestGroupDatadogIntegration(t *testing.T) {
 		return resp.StatusCode, out
 	}
 	delDatadog := func(t *testing.T) int {
-		return httpDo(t, http.MethodDelete, "/api/v4/groups/"+grpName+"/integrations/datadog", "")
+		status, _ := httpDo(t, http.MethodDelete, "/api/v4/groups/"+grpName+"/integrations/datadog", "")
+		return status
 	}
 
 	// SET with a fake api_key. The GitLab API validates api_key as a
-	// required field even when use_inherited_settings=true, so we
-	// provide a placeholder. The key is never read or used; the
-	// test cleans up via delete below.
+	// required field AND checks its format (a plain alphanumeric
+	// token, no dashes or other punctuation — Datadog keys are
+	// 32+ char hex/alnum strings). We provide a 32-char hex-shaped
+	// placeholder; the value is never read or used (we never call
+	// Datadog), the test cleans up via delete below.
 	t.Run("SetWithFakeAPIKey", func(t *testing.T) {
-		status := putDatadog(t, `{"api_key":"test-fake-api-key-do-not-use"}`)
+		status, body := putDatadog(t, `{"api_key":"0123456789abcdef0123456789abcdef"}`)
 		if status != http.StatusOK {
-			t.Fatalf("PUT /groups/:id/integrations/datadog = %d, want 200", status)
+			t.Fatalf("PUT /groups/:id/integrations/datadog = %d, want 200; body=%s", status, body)
 		}
 	})
 
