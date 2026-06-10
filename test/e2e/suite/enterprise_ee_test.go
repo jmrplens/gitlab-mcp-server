@@ -1836,9 +1836,16 @@ func TestGroupDatadogIntegration(t *testing.T) {
 
 	ctx := context.Background()
 	e2e := NewE2EContext(t)
-	grpName := uniqueName("datadog-grp")
+	// Use the fixture's actual group path/ID for the round-trip URLs
+	// below. CreateGroupMeta generates its own uniqueName internally
+	// (a different one than what we would generate here), so passing
+	// a separately-rolled grpName to the URL would 404 — the group
+	// the fixture created has a different name than the one in the
+	// URL. Using the fixture's recorded path keeps the call site in
+	// sync with the resource ledger for the cleanup pass.
+	grp := CreateGroupMeta(ctx, e2e, sess.meta, "datadog-grp")
+	grpName := grp.Path
 	groupID := toolutil.StringOrInt(grpName)
-	_ = CreateGroupMeta(ctx, e2e, sess.meta, grpName)
 
 	// Direct HTTP helpers backed by the E2E_ROOT_TOKEN. The e2e-tester
 	// PAT (which the MCP server uses for tool calls) hits a 404 on the
