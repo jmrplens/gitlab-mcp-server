@@ -28,6 +28,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/externalstatuschecks"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/geo"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouplabels"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/integrations"
@@ -1972,3 +1973,115 @@ func TestGroupDatadogIntegration(t *testing.T) {
 	})
 }
 
+
+// TestMeta_GroupLabelArchive verifies the group-label Archived flag
+// (exposed by the MCP surface in commit 6f42ed6c). Archiving
+// labels is a Premium/Ultimate feature, so the test lives in
+// the EE suite and only runs when the session is configured
+// for enterprise GitLab.
+//
+// The subtest sequence exercises every relevant tool path:
+//   - group_label_create  with archived=true
+//   - group_label_list    to confirm the round-trip
+//   - group_label_update  toggling archived back to false
+//   - group_label_delete  to clean up
+func TestMeta_GroupLabelArchive(t *testing.T) {
+	t.Parallel()
+	if !sess.enterprise {
+		return
+	}
+	if sess.meta == nil {
+		t.Skip("meta session not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	// Create a fresh group so the label stays isolated from other
+	// tests in the suite and can be torn down cleanly.
+	grpName := uniqueName("lbl-archive")
+	grp := CreateGroupMeta(ctx, NewE2EContext(t), sess.meta, grpName)
+
+	const labelName = "e2e-archive"
+	const color = "#428BCA"
+
+	// Create the label in archived state. The Archived flag is a
+	// *bool on CreateInput so we set the pointer explicitly; the
+	// default (nil) would omit the field entirely.
+	archived := true
+	t.Run("CreateArchived", func(t *testing.T) {
+		out, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_label_create",
+			"params": map[string]any{
+				"group_id": grp.Path,
+				"name":     labelName,
+				"color":    color,
+				"archived": &archived,
+			},
+		})
+		requireNoError(t, err, "group_label_create archived=true")
+		if !out.Archived {
+			t.Errorf("out.Archived = false, want true after Create with archived=true")
+		}
+		if out.Name != labelName {
+			t.Errorf("out.Name = %q, want %q", out.Name, labelName)
+		}
+		t.Logf("Created archived group label %s (ID=%d)", out.Name, out.ID)
+	})
+
+	// List and verify the label surfaces as archived.
+	t.Run("ListShowsArchived", func(t *testing.T) {
+		out, err := callToolOn[grouplabels.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_label_list",
+			"params": map[string]any{"group_id": grp.Path},
+		})
+		requireNoError(t, err, "group_label_list")
+		var found *grouplabels.Output
+		for i, l := range out.Labels {
+			if l.Name == labelName {
+				found = &out.Labels[i]
+				break
+			}
+		}
+		if found == nil {
+			t.Fatalf("created label %q not in list of %d labels", labelName, len(out.Labels))
+		}
+		if !found.Archived {
+			t.Errorf("found.Archived = false, want true on round-trip from list")
+		}
+	})
+
+	// Update back to unarchived. This exercises the Update
+	// Archived branch on the MCP tool and confirms the flag is
+	// round-trippable in both directions.
+	unarchived := false
+	t.Run("UpdateUnarchives", func(t *testing.T) {
+		out, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_label_update",
+			"params": map[string]any{
+				"group_id": grp.Path,
+				"label_id": labelName,
+				"archived": &unarchived,
+			},
+		})
+		requireNoError(t, err, "group_label_update archived=false")
+		if out.Archived {
+			t.Errorf("out.Archived = true, want false after Update with archived=false")
+		}
+		t.Logf("Unarchived label %s (ID=%d)", out.Name, out.ID)
+	})
+
+	// Best-effort cleanup of the label so a re-run doesn't see
+	// stale state. The group itself is torn down by the resource
+	// ledger at end of test.
+	t.Cleanup(func() {
+		cleanCtx := context.Background()
+		_ = callToolVoidOn(cleanCtx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_label_delete",
+			"params": map[string]any{
+				"group_id": grp.Path,
+				"label_id": labelName,
+			},
+		})
+	})
+}
