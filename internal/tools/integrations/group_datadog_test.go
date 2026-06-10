@@ -112,6 +112,30 @@ func TestGetGroupDatadog_Forbidden(t *testing.T) {
 	}
 }
 
+// TestGetGroupDatadog_NilIntegration covers the rare case where the
+// GitLab API returns HTTP 200 with a valid JSON null. The handler must
+// return a structured error rather than panic on the nil dereference.
+func TestGetGroupDatadog_NilIntegration(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if matchGroupDatadogPath(r.URL.Path) && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			// Valid JSON null → integration is nil
+			_, _ = w.Write([]byte("null"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := GetGroupDatadog(t.Context(), client, GetGroupDatadogInput{GroupID: testGroupPath})
+	if err == nil {
+		t.Fatal("expected error for nil integration")
+	}
+	if !strings.Contains(err.Error(), "nil") {
+		t.Errorf("error should mention nil, got: %v", err)
+	}
+}
+
 // SetGroupDatadog.
 
 // TestSetGroupDatadog_Success verifies SetGroupDatadog with a representative
@@ -195,6 +219,34 @@ func TestSetGroupDatadog_EmptyInputRejected(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "at least one of") {
 		t.Errorf("error should describe the missing fields, got: %v", err)
+	}
+}
+
+// TestSetGroupDatadog_NilIntegration covers the rare case where the
+// GitLab API returns HTTP 200 with a valid JSON null on the PUT. The
+// handler must return a structured error rather than panic on the
+// nil dereference (mirrors the GET path's nil guard).
+func TestSetGroupDatadog_NilIntegration(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if matchGroupDatadogPath(r.URL.Path) && r.Method == http.MethodPut {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			// Valid JSON null → integration is nil
+			_, _ = w.Write([]byte("null"))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := SetGroupDatadog(t.Context(), client, SetGroupDatadogInput{
+		GroupID: testGroupPath,
+		APIKey:  "placeholder",
+	})
+	if err == nil {
+		t.Fatal("expected error for nil integration")
+	}
+	if !strings.Contains(err.Error(), "nil") {
+		t.Errorf("error should mention nil, got: %v", err)
 	}
 }
 
@@ -332,7 +384,11 @@ func TestFormatGetGroupDatadogMarkdown_Full(t *testing.T) {
 	result := FormatGetGroupDatadogMarkdown(GetGroupDatadogOutput{
 		Integration: GroupDatadogItem{
 			ID:                 1,
+			Title:              "Datadog Production",
+			Slug:               "datadog",
 			Active:             true,
+			CreatedAt:          "2026-01-02T03:04:05.000Z",
+			UpdatedAt:          "2026-06-08T11:12:13.000Z",
 			APIURL:             testAPIURL,
 			DatadogEnv:         "prod",
 			DatadogService:     "gitlab",
@@ -343,6 +399,25 @@ func TestFormatGetGroupDatadogMarkdown_Full(t *testing.T) {
 	})
 	if result == nil {
 		t.Fatal(errExpNonNilResult)
+	}
+	// Every populated field should make it into the rendered markdown.
+	text := firstMarkdownText(t, result)
+	wantSubs := []string{
+		"Datadog Production",       // fallback non-default for Title
+		"Slug",                      // fallback non-default for Slug
+		"API URL",                   // i.APIURL != "" branch
+		"Datadog Env",               // i.DatadogEnv != "" branch
+		"Datadog Service",           // i.DatadogService != "" branch
+		"Datadog Site",              // i.DatadogSite != "" branch
+		"Datadog Tags",              // i.DatadogTags != "" branch
+		"Archive Trace Events",      // i.ArchiveTraceEvents != nil branch
+		"Created",                   // i.CreatedAt != "" branch
+		"Updated",                   // i.UpdatedAt != "" branch
+	}
+	for _, want := range wantSubs {
+		if !strings.Contains(text, want) {
+			t.Errorf("markdown should contain %q, got: %s", want, text)
+		}
 	}
 }
 
@@ -362,6 +437,81 @@ func TestFormatSetGroupDatadogMarkdown(t *testing.T) {
 		if !strings.Contains(tc.Text, "Group Datadog Integration Updated") {
 			t.Errorf("markdown should mention the update heading, got: %s", tc.Text)
 		}
+	}
+}
+
+// TestFormatSetGroupDatadogMarkdown_Full exercises every populated
+// field on the set-output formatter (mirrors the get-output Full test).
+func TestFormatSetGroupDatadogMarkdown_Full(t *testing.T) {
+	archive := true
+	result := FormatSetGroupDatadogMarkdown(SetGroupDatadogOutput{
+		Integration: GroupDatadogItem{
+			ID:              1,
+			Title:           "Datadog Production",
+			Slug:            "datadog",
+			Active:          true,
+			APIURL:          testAPIURL,
+			DatadogEnv:      "prod",
+			DatadogService:  "gitlab",
+			DatadogSite:     testDatadogSite,
+			DatadogTags:     "team:platform",
+			ArchiveTraceEvents: &archive,
+		},
+	})
+	if result == nil {
+		t.Fatal(errExpNonNilResult)
+	}
+	text := firstMarkdownText(t, result)
+	wantSubs := []string{
+		"Datadog Production",  // fallback non-default for Title
+		"API URL",              // i.APIURL != "" branch
+		"Datadog Env",          // i.DatadogEnv != "" branch
+		"Datadog Service",      // i.DatadogService != "" branch
+		"Datadog Site",         // i.DatadogSite != "" branch
+		"Datadog Tags",         // i.DatadogTags != "" branch
+		"Archive Trace Events", // i.ArchiveTraceEvents != nil branch
+	}
+	for _, want := range wantSubs {
+		if !strings.Contains(text, want) {
+			t.Errorf("markdown should contain %q, got: %s", want, text)
+		}
+	}
+}
+
+// TestDeleteGroupDatadogOutput_Success covers the destructive output
+// wrapper used by the action-spec route. It calls DeleteGroupDatadog
+// and then produces the standard DeleteResult shape on success.
+func TestDeleteGroupDatadogOutput_Success(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if matchGroupDatadogPath(r.URL.Path) && r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := deleteGroupDatadogOutput(t.Context(), client, DeleteGroupDatadogInput{GroupID: testGroupPath})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Status == "" && out.Message == "" {
+		t.Error("expected non-empty Status or Message in DeleteOutput")
+	}
+}
+
+// TestDeleteGroupDatadogOutput_Forbidden covers the error path of the
+// destructive output wrapper.
+func TestDeleteGroupDatadogOutput_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+
+	_, err := deleteGroupDatadogOutput(t.Context(), client, DeleteGroupDatadogInput{GroupID: testGroupPath})
+	if err == nil {
+		t.Fatal("expected error for 403")
+	}
+	if !strings.Contains(err.Error(), "403") {
+		t.Errorf("error should mention 403, got: %v", err)
 	}
 }
 
