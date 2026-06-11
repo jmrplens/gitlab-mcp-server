@@ -1003,6 +1003,35 @@ func TestReleaseLinkBatchEntries_NoChanges(t *testing.T) {
 	}
 }
 
+// TestReleaseLinkBatchEntries_DuplicateRecord verifies the record-once dedup
+// inside normalizeReleaseLinkBatchEntries: the second link that hits the same
+// alias→target key must NOT trigger a second record() call.
+func TestReleaseLinkBatchEntries_DuplicateRecord(t *testing.T) {
+	clone := func() map[string]any { return map[string]any{} }
+	var calls []string
+	record := func(alias, target, reason string) {
+		calls = append(calls, alias+"->"+target)
+	}
+	// Two links that each carry link_url; only the first should record the
+	// "links.link_url" -> "links.url" alias. The second hits the recorded[key]
+	// dedup and is dropped.
+	params := map[string]any{
+		"links": []any{
+			map[string]any{"link_url": "https://a"},
+			map[string]any{"link_url": "https://b"},
+		},
+	}
+	if !normalizeReleaseLinkBatchEntries(clone, params, record) {
+		t.Error("expected changed=true for two link_url entries")
+	}
+	if got, want := len(calls), 1; got != want {
+		t.Errorf("record() called %d times, want %d (dedup should drop the second call). calls=%v", got, want, calls)
+	}
+	if len(calls) > 0 && calls[0] != "links.link_url->links.url" {
+		t.Errorf("first record() = %q, want %q", calls[0], "links.link_url->links.url")
+	}
+}
+
 // TestEnvironmentAccessLevelValue_RoleLabelsAndNumericValues verifies the
 // environment access level value parser accepts both label strings and numbers.
 func TestEnvironmentAccessLevelValue_RoleLabelsAndNumericValues(t *testing.T) {
@@ -1082,6 +1111,37 @@ func TestGitLabAccessLevelValue_InvalidLevel(t *testing.T) {
 	// Float64 with whole-number value should succeed.
 	if level, ok := gitlabAccessLevelValue(float64(40)); !ok || level != 40 {
 		t.Errorf("expected float64(40) → 40, got level=%d ok=%v", level, ok)
+	}
+}
+
+// TestGitLabAccessLevelValue_ExtendedAliases verifies the new access-level
+// aliases (Minimal access, Planner, Security Manager) that the v2.38.0
+// access-level surface introduced. Each label and its underscore/stripped
+// variant must resolve to the documented numeric value.
+func TestGitLabAccessLevelValue_ExtendedAliases(t *testing.T) {
+	cases := []struct {
+		value     any
+		wantLevel int
+		wantOK    bool
+	}{
+		{value: "minimal access", wantLevel: 5, wantOK: true},
+		{value: "Minimal Access", wantLevel: 5, wantOK: true},
+		{value: "minimal", wantLevel: 5, wantOK: true},
+		{value: "planner", wantLevel: 15, wantOK: true},
+		{value: "Planners", wantLevel: 15, wantOK: true},
+		{value: "security manager", wantLevel: 25, wantOK: true},
+		{value: "security_manager", wantLevel: 25, wantOK: true},
+		{value: "SecurityManager", wantLevel: 25, wantOK: true},
+		// Numeric string of a newly-valid level should also resolve.
+		{value: "5", wantLevel: 5, wantOK: true},
+		{value: "15", wantLevel: 15, wantOK: true},
+		{value: "60", wantLevel: 60, wantOK: true},
+	}
+	for _, tc := range cases {
+		got, ok := gitlabAccessLevelValue(tc.value)
+		if ok != tc.wantOK || got != tc.wantLevel {
+			t.Errorf("gitlabAccessLevelValue(%#v) = %d, %v; want %d, %v", tc.value, got, ok, tc.wantLevel, tc.wantOK)
+		}
 	}
 }
 
