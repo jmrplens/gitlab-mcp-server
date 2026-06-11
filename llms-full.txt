@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.1.3 | up to 1033 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
+> Version 2.1.3 | up to 1036 tools | 33 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -3247,7 +3247,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -3263,7 +3263,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -3271,7 +3271,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
 ```
 
 </details>
@@ -3279,7 +3279,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_subscribe</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -3295,7 +3295,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>group_label_update</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -3463,7 +3463,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_add</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","token_present","signing_token_present"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_events":{"type":"boolean"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","emoji_events","resource_access_token_events","project_events","token_present","signing_token_present"],"type":"object"}
 ```
 
 </details>
@@ -3479,7 +3479,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_edit</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","token_present","signing_token_present"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_events":{"type":"boolean"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","emoji_events","resource_access_token_events","project_events","token_present","signing_token_present"],"type":"object"}
 ```
 
 </details>
@@ -3487,7 +3487,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","token_present","signing_token_present"],"type":"object"}
+{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_events":{"type":"boolean"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","emoji_events","resource_access_token_events","project_events","token_present","signing_token_present"],"type":"object"}
 ```
 
 </details>
@@ -3495,7 +3495,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>hook_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"hooks":{"items":{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"push_events":{"type":"boolean"},"releases_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","token_present","signing_token_present"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["hooks","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"hooks":{"items":{"additionalProperties":false,"properties":{"alert_status":{"type":"string"},"branch_filter_strategy":{"type":"string"},"confidential_issues_events":{"type":"boolean"},"confidential_note_events":{"type":"boolean"},"created_at":{"type":"string"},"deployment_events":{"type":"boolean"},"description":{"type":"string"},"disabled_until":{"type":"string"},"emoji_events":{"type":"boolean"},"enable_ssl_verification":{"type":"boolean"},"feature_flag_events":{"type":"boolean"},"group_id":{"type":"integer"},"id":{"type":"integer"},"issues_events":{"type":"boolean"},"job_events":{"type":"boolean"},"member_events":{"type":"boolean"},"merge_requests_events":{"type":"boolean"},"milestone_events":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"note_events":{"type":"boolean"},"pipeline_events":{"type":"boolean"},"project_events":{"type":"boolean"},"push_events":{"type":"boolean"},"push_events_branch_filter":{"type":"string"},"releases_events":{"type":"boolean"},"resource_access_token_events":{"type":"boolean"},"signing_token_present":{"type":"boolean"},"subgroup_events":{"type":"boolean"},"tag_push_events":{"type":"boolean"},"token_present":{"type":"boolean"},"url":{"type":"string"},"url_variables":{"items":{"additionalProperties":false,"properties":{"key":{"type":"string"}},"required":["key"],"type":"object"},"type":["null","array"]},"vulnerability_events":{"type":"boolean"},"wiki_page_events":{"type":"boolean"}},"required":["id","url","group_id","push_events","tag_push_events","merge_requests_events","issues_events","note_events","job_events","pipeline_events","wiki_page_events","deployment_events","releases_events","subgroup_events","member_events","confidential_issues_events","confidential_note_events","enable_ssl_verification","feature_flag_events","milestone_events","vulnerability_events","emoji_events","resource_access_token_events","project_events","token_present","signing_token_present"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["hooks","pagination"],"type":"object"}
 ```
 
 </details>
@@ -6599,8 +6599,11 @@ Action guidance:
 - import_from_file: Import a project from an uploaded archive file payload.
 - import_status: Get import status for a project import operation.
 - integration_delete: Use to execute integrations domain action.
+- integration_delete_group_datadog: Use to execute integrations domain action.
 - integration_get: Use to execute integrations domain action.
+- integration_get_group_datadog: Use to execute integrations domain action.
 - integration_list: Use to execute integrations domain action.
+- integration_set_group_datadog: Use to execute integrations domain action.
 - integration_set_jira: Use to execute integrations domain action.
 - label_create: Create a label in a project with required name and color, plus optional description and priority.
 - label_delete: Use to execute labels domain action.
@@ -7237,6 +7240,14 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 </details>
 
+<details><summary>integration_delete_group_datadog</summary>
+
+```json
+{"additionalProperties":false,"properties":{"message":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"status":{"type":"string"}},"required":["status","message"],"type":"object"}
+```
+
+</details>
+
 <details><summary>integration_get</summary>
 
 ```json
@@ -7245,10 +7256,26 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 
 </details>
 
+<details><summary>integration_get_group_datadog</summary>
+
+```json
+{"additionalProperties":false,"properties":{"integration":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"api_url":{"type":"string"},"archive_trace_events":{"type":["null","boolean"]},"created_at":{"type":"string"},"datadog_env":{"type":"string"},"datadog_service":{"type":"string"},"datadog_site":{"type":"string"},"datadog_tags":{"type":"string"},"id":{"type":"integer"},"slug":{"type":"string"},"title":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","title","slug","active"],"type":"object"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["integration"],"type":"object"}
+```
+
+</details>
+
 <details><summary>integration_list</summary>
 
 ```json
 {"additionalProperties":false,"properties":{"integrations":{"items":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"created_at":{"type":"string"},"id":{"type":"integer"},"slug":{"type":"string"},"title":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","title","slug","active"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["integrations"],"type":"object"}
+```
+
+</details>
+
+<details><summary>integration_set_group_datadog</summary>
+
+```json
+{"additionalProperties":false,"properties":{"integration":{"additionalProperties":false,"properties":{"active":{"type":"boolean"},"api_url":{"type":"string"},"archive_trace_events":{"type":["null","boolean"]},"created_at":{"type":"string"},"datadog_env":{"type":"string"},"datadog_service":{"type":"string"},"datadog_site":{"type":"string"},"datadog_tags":{"type":"string"},"id":{"type":"integer"},"slug":{"type":"string"},"title":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","title","slug","active"],"type":"object"},"next_steps":{"items":{"type":"string"},"type":["null","array"]}},"required":["integration"],"type":"object"}
 ```
 
 </details>
@@ -7264,7 +7291,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -7280,7 +7307,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_get</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -7288,7 +7315,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"labels":{"items":{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["labels","pagination"],"type":"object"}
 ```
 
 </details>
@@ -7304,7 +7331,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_subscribe</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -7320,7 +7347,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>label_update</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed"],"type":"object"}
+{"additionalProperties":false,"properties":{"archived":{"type":"boolean"},"closed_issues_count":{"type":"integer"},"color":{"type":"string"},"description":{"type":"string"},"id":{"type":"integer"},"is_project_label":{"type":"boolean"},"name":{"type":"string"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"open_issues_count":{"type":"integer"},"open_merge_requests_count":{"type":"integer"},"priority":{"type":"integer"},"subscribed":{"type":"boolean"},"text_color":{"type":"string"}},"required":["id","name","color","text_color","description","open_issues_count","closed_issues_count","open_merge_requests_count","priority","is_project_label","subscribed","archived"],"type":"object"}
 ```
 
 </details>
@@ -11367,7 +11394,7 @@ Returns: JSON with resource data. Lists include pagination (page, per_page, tota
 
 Instance-level:
 - list_instance: no params
-- create_instance: name*, base_access_level* (10/20/30/40/50), description, permissions (object)
+- create_instance: name*, base_access_level* (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid), description, permissions (object)
 - delete_instance: member_role_id*
 
 Group-level:
@@ -11861,7 +11888,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Individual Tools
 
-When `TOOL_SURFACE=individual`, up to 1033 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1027.
+When `TOOL_SURFACE=individual`, up to 1036 individual tools are registered on GitLab.com Enterprise/Premium; self-managed Enterprise/Premium registers 1030.
 Grouped by domain:
 
 ### access (8 tools)
@@ -11872,7 +11899,7 @@ Approve a group access request. Optionally set the access level (10=Guest, 20=Re
 
 **Parameters:**
 
-- `access_level` (integer): Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)
+- `access_level` (integer): Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner)
 - `group_id` (string) (required): Group ID or path
 - `user_id` (integer) (required): User ID of the access requester
 
@@ -11884,7 +11911,7 @@ Approve a project access request. Optionally set the access level (10=Guest, 20=
 
 **Parameters:**
 
-- `access_level` (integer): Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)
+- `access_level` (integer): Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer)
 - `project_id` (string) (required): Project ID or path
 - `user_id` (integer) (required): User ID of the access requester
 
@@ -12495,7 +12522,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_branch_protect
 
-Protect a GitLab repository branch by setting push and merge access levels (0=no access, 30=developer, 40=maintainer, 60=admin). Protected branches cannot be force-pushed or deleted. Returns: branch name, push/merge access levels, allow_force_push, and code_owner_approval_required. See also: gitlab_branch_unprotect, gitlab_protected_branches_list.
+Protect a GitLab repository branch by setting push and merge access levels (0=no access, 30=developer, 40=maintainer). Protected branches cannot be force-pushed or deleted. Returns: branch name, push/merge access levels, allow_force_push, and code_owner_approval_required. See also: gitlab_branch_unprotect, gitlab_protected_branches_list.
 
 **Parameters:**
 
@@ -12913,7 +12940,7 @@ Create a broadcast message. Requires admin access.
 - `font` (string): Font for the message
 - `message` (string) (required): Message text. Supports Markdown.
 - `starts_at` (string): Start time in ISO 8601 format
-- `target_access_levels` (array of integers): Access levels to target (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)
+- `target_access_levels` (array of integers): Access levels to target (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)
 - `target_path` (string): Target path to show message on
 - `theme` (string): Theme: indigo, light-indigo, blue, light-blue, green, light-green, red, light-red
 
@@ -13054,7 +13081,7 @@ Create a custom member role for a GitLab group. Define name, base access level, 
 - `admin_vulnerability` (boolean): Allow admin vulnerability
 - `admin_web_hook` (boolean): Allow admin webhooks
 - `archive_project` (boolean): Allow archive project
-- `base_access_level` (integer) (required): Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)
+- `base_access_level` (integer) (required): Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid)
 - `description` (string): Description of the custom role
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `manage_deploy_tokens` (boolean): Allow manage deploy tokens
@@ -13112,7 +13139,7 @@ Create a custom member role at the GitLab instance level. Define name, base acce
 - `admin_vulnerability` (boolean): Allow admin vulnerability
 - `admin_web_hook` (boolean): Allow admin webhooks
 - `archive_project` (boolean): Allow archive project
-- `base_access_level` (integer) (required): Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)
+- `base_access_level` (integer) (required): Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid)
 - `description` (string): Description of the custom role
 - `manage_deploy_tokens` (boolean): Allow manage deploy tokens
 - `manage_group_access_tokens` (boolean): Allow manage group access tokens
@@ -13368,7 +13395,7 @@ Deactivate an active GitLab user (admin only). Deactivated users cannot login bu
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
-### delete (47 tools)
+### delete (48 tools)
 
 #### gitlab_delete_alert_metric_image
 
@@ -13580,6 +13607,17 @@ Remove a badge from a group.
 **Parameters:**
 
 - `badge_id` (integer) (required): Badge ID
+- `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
+- `group_id` (string) (required): Group ID or URL-encoded path
+
+Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
+
+#### gitlab_delete_group_datadog_integration
+
+Remove the Datadog integration from a group. The stored api_key is cleared; deletion is irreversible. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).
+
+**Parameters:**
+
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `group_id` (string) (required): Group ID or URL-encoded path
 
@@ -15058,7 +15096,7 @@ Generate polished release notes using LLM-assisted analysis via MCP sampling. Co
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### get (89 tools)
+### get (90 tools)
 
 #### gitlab_get_appearance
 
@@ -15321,6 +15359,16 @@ Get a specific group badge by ID.
 **Parameters:**
 
 - `badge_id` (integer) (required): Badge ID
+- `group_id` (string) (required): Group ID or URL-encoded path
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+#### gitlab_get_group_datadog_integration
+
+Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.
+
+**Parameters:**
+
 - `group_id` (string) (required): Group ID or URL-encoded path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -15968,7 +16016,7 @@ Create a new group access token with specified name, scopes, access level, and o
 
 **Parameters:**
 
-- `access_level` (integer): Access level: 10 (guest), 20 (reporter), 30 (developer), 40 (maintainer), 50 (owner)
+- `access_level` (integer): Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner); 60=Admin is not valid for group access tokens
 - `description` (string): Token description
 - `expires_at` (string): Expiry date in YYYY-MM-DD format
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -16240,10 +16288,12 @@ Add a new webhook to a GitLab group. Requires URL; optionally configure event tr
 
 **Parameters:**
 
+- `branch_filter_strategy` (string): Branch filter strategy (wildcard, regex, all_branches)
 - `confidential_issues_events` (boolean): Trigger on confidential issue events
 - `confidential_note_events` (boolean): Trigger on confidential note events
 - `deployment_events` (boolean): Trigger on deployment events
 - `description` (string): Hook description
+- `emoji_events` (boolean): Trigger on emoji events
 - `enable_ssl_verification` (boolean): Enable SSL verification for the hook endpoint
 - `feature_flag_events` (boolean): Trigger on feature flag events
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -16255,9 +16305,11 @@ Add a new webhook to a GitLab group. Requires URL; optionally configure event tr
 - `name` (string): Hook name
 - `note_events` (boolean): Trigger on comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
+- `project_events` (boolean): Trigger on project events (group-level)
 - `push_events` (boolean): Trigger on push events
 - `push_events_branch_filter` (string): Branch filter for push events (e.g. 'main')
 - `releases_events` (boolean): Trigger on release events
+- `resource_access_token_events` (boolean): Trigger on resource access token events
 - `signing_token` (string): Write-only signing token for webhook signature validation
 - `subgroup_events` (boolean): Trigger on subgroup events
 - `tag_push_events` (boolean): Trigger on tag push events
@@ -16286,10 +16338,12 @@ Edit an existing group webhook. Supports changing URL, events, SSL verification,
 
 **Parameters:**
 
+- `branch_filter_strategy` (string): Branch filter strategy (wildcard, regex, all_branches)
 - `confidential_issues_events` (boolean): Trigger on confidential issue events
 - `confidential_note_events` (boolean): Trigger on confidential note events
 - `deployment_events` (boolean): Trigger on deployment events
 - `description` (string): Hook description
+- `emoji_events` (boolean): Trigger on emoji events
 - `enable_ssl_verification` (boolean): Enable SSL verification for the hook endpoint
 - `feature_flag_events` (boolean): Trigger on feature flag events
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -16302,9 +16356,11 @@ Edit an existing group webhook. Supports changing URL, events, SSL verification,
 - `name` (string): Hook name
 - `note_events` (boolean): Trigger on comment events
 - `pipeline_events` (boolean): Trigger on pipeline events
+- `project_events` (boolean): Trigger on project events (group-level)
 - `push_events` (boolean): Trigger on push events
 - `push_events_branch_filter` (string): Branch filter for push events (e.g. 'main')
 - `releases_events` (boolean): Trigger on release events
+- `resource_access_token_events` (boolean): Trigger on resource access token events
 - `signing_token` (string): Write-only signing token for webhook signature validation
 - `subgroup_events` (boolean): Trigger on subgroup events
 - `tag_push_events` (boolean): Trigger on tag push events
@@ -16344,7 +16400,7 @@ Invite a user to a group by email or user ID. Requires access_level (10=Guest, 2
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `email` (string): Email address to invite (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -16371,6 +16427,7 @@ Create a new label in a GitLab group with a name, color (hex), optional descript
 
 **Parameters:**
 
+- `archived` (boolean): Whether to create the label in archived state
 - `color` (string) (required): Label color in hex format (e.g. #FF0000)
 - `description` (string): Label description
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -16447,6 +16504,7 @@ Update an existing group label. Can change name, color, description, or priority
 
 **Parameters:**
 
+- `archived` (boolean): Set true to archive, false to unarchive
 - `color` (string): New label color in hex format
 - `description` (string): New label description
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -16464,7 +16522,7 @@ Add an LDAP group link to a GitLab group (by CN or filter).
 
 - `cn` (string): LDAP Common Name (CN)
 - `filter` (string): LDAP filter
-- `group_access` (integer) (required): Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)
+- `group_access` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin for group LDAP)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID
 - `provider` (string) (required): LDAP provider name
@@ -16535,7 +16593,7 @@ Add a member to a GitLab group. Specify user by user_id or username, and set acc
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `user_id` (integer): User ID to add
@@ -16549,7 +16607,7 @@ Edit a member of a GitLab group. Update access level or expiration date for an e
 
 **Parameters:**
 
-- `access_level` (integer): New access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): New membership expiration date (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `user_id` (integer) (required): User ID
@@ -16906,7 +16964,7 @@ Add a SAML group link to a GitLab group.
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)
+- `access_level` (integer) (required): Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID
 - `provider` (string): SAML provider name
@@ -17059,7 +17117,7 @@ Share a GitLab group with another group, granting the shared group a specified a
 **Parameters:**
 
 - `expires_at` (string): Share expiration date (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)
+- `group_access` (integer) (required): Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares
 - `group_id` (string) (required): Group ID or URL-encoded path to share
 - `share_group_id` (integer) (required): Group ID to share with
 
@@ -18307,6 +18365,7 @@ Create a new label in a GitLab project with a name, color (hex), optional descri
 
 **Parameters:**
 
+- `archived` (boolean): Whether to create the label in archived state
 - `color` (string) (required): Label color in hex format (e.g. #FF0000)
 - `description` (string): Label description
 - `name` (string) (required): Label name
@@ -18392,6 +18451,7 @@ Update an existing project label. Can change name, color, description, or priori
 
 **Parameters:**
 
+- `archived` (boolean): Set true to archive, false to unarchive
 - `color` (string): New label color in hex format
 - `description` (string): New label description
 - `label_id` (string) (required): Label ID or name
@@ -21481,7 +21541,7 @@ Create a new project access token with specified name, scopes, access level, and
 
 **Parameters:**
 
-- `access_level` (integer): Access level: 10 (guest), 20 (reporter), 30 (developer), 40 (maintainer)
+- `access_level` (integer): Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer); 50=Owner and 60=Admin are not valid for project access tokens
 - `description` (string): Token description
 - `expires_at` (string): Expiry date in YYYY-MM-DD format
 - `name` (string) (required): Token name
@@ -22074,7 +22134,7 @@ Invite a user to a project by email or user ID. Requires access_level (10=Guest,
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `email` (string): Email address to invite (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -22119,7 +22179,7 @@ List GitLab projects accessible to the authenticated user. Supports filtering by
 - `last_activity_after` (string): Return projects with last activity after date (ISO 8601 format)
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where current user is a member
-- `min_access_level` (integer): Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)
+- `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `order_by` (string): Order projects by id, name, path, created_at, updated_at, or last_activity_at.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
@@ -22165,7 +22225,7 @@ List ancestor groups of a project. Supports filtering by search, shared groups, 
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `search` (string): Search by group name
-- `shared_min_access_level` (integer): Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)
+- `shared_min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `shared_visible_only` (boolean): Only show shared groups visible to the current user
 - `skip_groups` (array of integers): Array of group IDs to exclude
 - `with_shared` (boolean): Include shared groups (default true)
@@ -22178,7 +22238,7 @@ List groups that have been invited/shared to a project. Supports filtering by se
 
 **Parameters:**
 
-- `min_access_level` (integer): Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner)
+- `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -22272,7 +22332,7 @@ Add a user as a project member. Requires user_id (from gitlab_search_users or gi
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `member_role_id` (integer): Custom member role ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -22299,7 +22359,7 @@ Edit a project member's access level or expiration. Requires access_level (10=Gu
 
 **Parameters:**
 
-- `access_level` (integer) (required): New access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `member_role_id` (integer): Custom member role ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -22516,7 +22576,7 @@ Share a project with a group, granting the specified access level. Optionally se
 **Parameters:**
 
 - `expires_at` (string): Expiration date for the share (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer)
+- `group_access` (integer) (required): Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares
 - `group_id` (integer) (required): Group ID to share with
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -24239,7 +24299,7 @@ Check MCP server connectivity, GitLab reachability, and authenticated identity d
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
-### set (6 tools)
+### set (7 tools)
 
 #### gitlab_set_custom_attribute
 
@@ -24270,6 +24330,24 @@ Set or create a feature flag (admin). Requires name and value. Supports scoping 
 - `repository` (string): GitLab repository path
 - `user` (string): GitLab username
 - `value` (any) (required): Value to set (true, false, integer percentage, or string)
+
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
+
+#### gitlab_set_group_datadog_integration
+
+Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, archive_trace_events, or use_inherited_settings=true must be supplied.
+
+**Parameters:**
+
+- `api_key` (string): Datadog API key (write-only; never returned by the get endpoint)
+- `api_url` (string): Datadog API URL (e.g. https://api.datadoghq.com)
+- `archive_trace_events` (boolean): Forward CI job trace events to Datadog
+- `datadog_env` (string): Datadog env tag forwarded with every log/metric
+- `datadog_service` (string): Datadog service tag forwarded with every log/metric
+- `datadog_site` (string): Datadog site (e.g. datadoghq.com, datadoghq.eu, us3.datadoghq.com, us5.datadoghq.com, ap1.datadoghq.com)
+- `datadog_tags` (string): Comma-separated Datadog tags forwarded with every log/metric
+- `group_id` (string) (required): Group ID or URL-encoded path
+- `use_inherited_settings` (boolean): Inherit the Datadog configuration from the closest ancestor group that has one configured (overrides all per-field settings)
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -24655,7 +24733,7 @@ List descendant subgroups of a GitLab group. Returns each subgroup's name, path,
 
 - `all_available` (boolean): Show all subgroups accessible by the authenticated user
 - `group_id` (string) (required): Group ID or URL-encoded path
-- `min_access_level` (integer): Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)
+- `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)
 - `order_by` (string): Order subgroups by field (name, path, id, similarity)
 - `owned` (boolean): Limit to subgroups explicitly owned by the authenticated user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.

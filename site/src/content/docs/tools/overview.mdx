@@ -11,7 +11,7 @@ All modes cover the same GitLab API surface. They differ in packaging: individua
 
 ### Individual mode
 
-In individual mode, the server registers one tool per GitLab operation: **867 tools** for CE, **1027 tools** for self-managed Enterprise/Premium, or **1033 tools** on GitLab.com Enterprise/Premium when Orbit is available. This provides maximum granularity but consumes significant LLM context tokens for tool discovery.
+In individual mode, the server registers one tool per GitLab operation: **867 tools** for CE, **1030 tools** for self-managed Enterprise/Premium, or **1036 tools** on GitLab.com Enterprise/Premium when Orbit is available. This provides maximum granularity but consumes significant LLM context tokens for tool discovery.
 
 ### Meta-tool mode
 
@@ -130,7 +130,7 @@ When the Enterprise/Premium catalog is enabled, the server registers 16 addition
 
 `gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_vulnerability`, `gitlab_security_attribute`, `gitlab_security_category`, `gitlab_security_finding`
 
-On GitLab.com Enterprise/Premium, the catalog also registers `gitlab_orbit` with five read-only Knowledge Graph actions: `status`, `schema`, `tools`, `query`, and `graph_status`.
+On GitLab.com Enterprise/Premium, the catalog also registers `gitlab_orbit` with six read-only Knowledge Graph actions: `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`.
 
 :::note
 Enterprise tools require a GitLab Premium or Ultimate license on your instance. Forcing the Enterprise/Premium catalog on a Community Edition instance will register the tools but API calls will return permission errors.

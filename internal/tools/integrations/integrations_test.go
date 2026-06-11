@@ -38,6 +38,24 @@ func matchIntegrationPath(path, suffix string) bool {
 		strings.HasSuffix(path, "/integrations/"+suffix)
 }
 
+// firstMarkdownText returns the text of the first TextContent in a
+// CallToolResult. Used by markdown formatter tests to assert on the
+// rendered output without re-implementing the content extraction
+// inline in every test.
+func firstMarkdownText(t *testing.T, r *mcp.CallToolResult) string {
+	t.Helper()
+	if r == nil {
+		t.Fatal("CallToolResult is nil")
+	}
+	for _, c := range r.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			return tc.Text
+		}
+	}
+	t.Fatal("no TextContent in CallToolResult")
+	return ""
+}
+
 // List.
 
 // TestList_Success verifies List when success.

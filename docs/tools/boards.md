@@ -133,14 +133,14 @@ Get details of a single project label by ID or name, including color, descriptio
 
 ### `gitlab_label_create`
 
-Create a new label in a GitLab project with a name, color (hex), optional description, and optional priority.
+Create a new label in a GitLab project with a name, color (hex), optional description, optional priority, and optional `archived` flag. Archived labels are hidden from the default label picker but retained for filtering and reporting.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_label_update`
 
-Update an existing project label. Can change name, color, description, or priority. Only specified fields are modified.
+Update an existing project label. Can change name, color, description, priority, or the `archived` flag. Only specified fields are modified.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

@@ -4,6 +4,7 @@ package labels
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -205,6 +206,43 @@ func TestLabelCreate_Success(t *testing.T) {
 	}
 }
 
+// TestLabelCreate_ArchivedFlag verifies the Archived flag is sent
+// in the request body when set. The v2.38.0 client-go addition
+// (client-go MR !2913) added Archived to CreateLabelOptions;
+// the MCP tool must plumb the user-provided *bool through.
+func TestLabelCreate_ArchivedFlag(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProjectLabels {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":3,"name":"enhancement","color":"#00FF00","archived":true}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	archived := true
+	out, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42",
+		Name:      "enhancement",
+		Color:     "#00FF00",
+		Archived:  &archived,
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if !out.Archived {
+		t.Error("out.Archived = false, want true")
+	}
+	if !strings.Contains(capturedBody, "\"archived\":true") {
+		t.Errorf("request body should contain \"archived\":true, got: %s", capturedBody)
+	}
+}
+
 // TestLabelCreate_MissingProject verifies LabelCreate when missing project.
 func TestLabelCreate_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -238,6 +276,43 @@ func TestLabelUpdate_Success(t *testing.T) {
 	}
 	if out.Name != "critical-bug" {
 		t.Errorf("out.Name = %q, want %q", out.Name, "critical-bug")
+	}
+}
+
+// TestLabelUpdate_ArchivedFlag verifies the Archived flag is sent
+// in the request body when set, and that the response's Archived
+// field surfaces in the output (covers both the v2.38.0 read
+// field and the v2.38.0 write field on UpdateLabelOptions).
+func TestLabelUpdate_ArchivedFlag(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathLabelBug {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"critical-bug","color":"#FF0000","archived":true}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	archived := true
+	out, err := Update(context.Background(), client, UpdateInput{
+		ProjectID: "42",
+		LabelID:   "bug",
+		NewName:   "critical-bug",
+		Archived:  &archived,
+	})
+	if err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+	if !out.Archived {
+		t.Error("out.Archived = false, want true")
+	}
+	if !strings.Contains(capturedBody, "\"archived\":true") {
+		t.Errorf("request body should contain \"archived\":true, got: %s", capturedBody)
 	}
 }
 

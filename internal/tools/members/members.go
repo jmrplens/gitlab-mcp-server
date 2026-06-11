@@ -133,7 +133,7 @@ type AddInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
 	UserID       int64                `json:"user_id,omitempty"       jsonschema:"User ID to add (provide user_id or username),required"`
 	Username     string               `json:"username,omitempty"      jsonschema:"Username to add (provide user_id or username)"`
-	AccessLevel  int                  `json:"access_level"            jsonschema:"Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)"`
+	AccessLevel  int                  `json:"access_level"            jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
 	ExpiresAt    string               `json:"expires_at,omitempty"    jsonschema:"Membership expiration date (YYYY-MM-DD)"`
 	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
 }
@@ -142,7 +142,7 @@ type AddInput struct {
 type EditInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"              jsonschema:"Project ID or URL-encoded path,required"`
 	UserID       int64                `json:"user_id"                 jsonschema:"User ID of the member to edit,required"`
-	AccessLevel  int                  `json:"access_level"            jsonschema:"New access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)"`
+	AccessLevel  int                  `json:"access_level"            jsonschema:"New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
 	ExpiresAt    string               `json:"expires_at,omitempty"    jsonschema:"Membership expiration date (YYYY-MM-DD)"`
 	MemberRoleID int64                `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
 }
@@ -261,7 +261,7 @@ func Edit(ctx context.Context, client *gitlabclient.Client, input EditInput) (Ou
 			return Output{}, toolutil.WrapErrWithHint("memberEdit", err, "you need at least the same or higher access level as the target member")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("memberEdit", err, http.StatusBadRequest,
-			"access_level must be one of 10/20/30/40/50; expires_at must be YYYY-MM-DD format; member_role_id (if provided) must exist for the namespace (Premium/Ultimate)")
+			"access_level must be one of 5/10/15/20/25/30/40/50/60 (Minimal/Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner/Admin where supported); expires_at must be YYYY-MM-DD format; member_role_id (if provided) must exist for the namespace (Premium/Ultimate)")
 	}
 	return ToOutput(m), nil
 }

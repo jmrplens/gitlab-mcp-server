@@ -70,7 +70,7 @@ graph TD
         SPECS[domain ActionSpecs<br/>176 internal/tools packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1027 self-managed / 1033 GitLab.com Enterprise tools]
+        IND[individual projection<br/>1030 self-managed / 1036 GitLab.com Enterprise tools]
         META[meta projection<br/>33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise tools]
         DYN[dynamic projection<br/>2 visible find / execute tools]
         SAMP[sampling support<br/>11 LLM-assisted actions]
@@ -84,7 +84,7 @@ graph TD
         SAMPLING[sampling<br/>LLM analysis client]
         ELICIT[elicitation<br/>User input client]
         ICN[icons<br/>50 SVG domain icons]
-        SRV[MCP Server<br/>go-sdk/mcp v1.6.0]
+        SRV[MCP Server<br/>go-sdk/mcp v1.6.1]
         STDIO[StdioTransport]
         HTTP[StreamableHTTPHandler]
         POOL[serverpool<br/>Per-token+URL server pool & LRU cache]
@@ -177,7 +177,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package family — contains 1027 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1033 total in that catalog, organized across 176 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
+The largest package family — contains 1030 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1036 total in that catalog, organized across 176 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](development/tool-surfaces-and-action-core.md).
 

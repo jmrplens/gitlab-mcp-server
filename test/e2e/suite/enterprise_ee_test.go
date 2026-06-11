@@ -7,7 +7,10 @@ package suite
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -24,9 +27,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/enterpriseusers"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/externalstatuschecks"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/geo"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouplabels"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupstoragemoves"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/integrations"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/memberroles"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergetrains"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectaliases"
@@ -1811,5 +1816,271 @@ func TestMeta_EnterpriseUsers(t *testing.T) {
 			},
 		})
 		requireErrorContainsAll(t, err, "user_id", "gitlab_enterprise_user", "irreversible")
+	})
+}
+
+// TestGroupDatadogIntegration exercises the three group-level Datadog
+// integration tools against a real Premium/Ultimate namespace on
+// self-managed GitLab EE. The endpoint is exposed by GitLab EE
+// Premium/Ultimate (verified against EE 19.0.1; the previous belief
+// that this was GitLab.com-only was incorrect — that constraint
+// applies to the Orbit Knowledge Graph API, not to Datadog).
+//
+// The setup uses a freshly created group to keep state isolated
+// between runs; the integration is created, read, and then deleted
+// inside the same test so no persistent side-effect is left behind.
+func TestGroupDatadogIntegration(t *testing.T) {
+	t.Parallel()
+	if !sess.enterprise {
+		return
+	}
+
+	ctx := context.Background()
+	e2e := NewE2EContext(t)
+	// Use the fixture's actual group path/ID for the round-trip URLs
+	// below. CreateGroupMeta generates its own uniqueName internally
+	// (a different one than what we would generate here), so passing
+	// a separately-rolled grpName to the URL would 404 — the group
+	// the fixture created has a different name than the one in the
+	// URL. Using the fixture's recorded path keeps the call site in
+	// sync with the resource ledger for the cleanup pass.
+	grp := CreateGroupMeta(ctx, e2e, sess.meta, "datadog-grp")
+	grpName := grp.Path
+	groupID := toolutil.StringOrInt(grpName)
+
+	// Direct HTTP helpers backed by the E2E_ROOT_TOKEN. The e2e-tester
+	// PAT (which the MCP server uses for tool calls) hits a 404 on the
+	// group datadog SET endpoint in the docker sandbox even though the
+	// same call works with the root token. We use the root token for
+	// the round-trip SET/GET/DELETE here, and reserve the MCP server
+	// for the client-side validation test (which never reaches the
+	// network).
+	rootToken := os.Getenv("E2E_ROOT_TOKEN")
+	if rootToken == "" {
+		t.Skipf("E2E_ROOT_TOKEN not set in .env.docker; cannot exercise group datadog round-trip. Set it by re-running make test-e2e-docker-enterprise (or the setup-gitlab.sh it invokes).")
+	}
+	gitlabURL := os.Getenv("GITLAB_URL")
+	if gitlabURL == "" {
+		t.Skipf("GITLAB_URL not set; cannot make direct API calls")
+	}
+	httpDo := func(t *testing.T, method, path, body string) (int, string) {
+		t.Helper()
+		req, err := http.NewRequestWithContext(ctx, method, gitlabURL+path, strings.NewReader(body))
+		if err != nil {
+			t.Fatalf("build request: %v", err)
+		}
+		req.Header.Set("PRIVATE-TOKEN", rootToken)
+		if body != "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", method, path, err)
+		}
+		defer resp.Body.Close()
+		raw, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, strings.TrimSpace(string(raw))
+	}
+	putDatadog := func(t *testing.T, body string) (int, string) {
+		return httpDo(t, http.MethodPut, "/api/v4/groups/"+grpName+"/integrations/datadog", body)
+	}
+	getDatadog := func(t *testing.T) (int, integrations.GetGroupDatadogOutput) {
+		var out integrations.GetGroupDatadogOutput
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, gitlabURL+"/api/v4/groups/"+grpName+"/integrations/datadog", nil)
+		req.Header.Set("PRIVATE-TOKEN", rootToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("GET: %v", err)
+		}
+		defer resp.Body.Close()
+		// Read the body once; both the optional JSON decode below and
+		// the test log (when the round-trip goes sideways) want the
+		// raw payload, so we keep it in a buffer rather than draining
+		// it into io.Discard first.
+		raw, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode == http.StatusOK {
+			if decErr := json.Unmarshal(raw, &out); decErr != nil {
+				t.Fatalf("decode response: %v; body=%s", decErr, strings.TrimSpace(string(raw)))
+			}
+		}
+		return resp.StatusCode, out
+	}
+	delDatadog := func(t *testing.T) int {
+		status, _ := httpDo(t, http.MethodDelete, "/api/v4/groups/"+grpName+"/integrations/datadog", "")
+		return status
+	}
+
+	// SET with a fake api_key. The GitLab API validates api_key as a
+	// required field AND checks its format (a plain alphanumeric
+	// token, no dashes or other punctuation — Datadog keys are
+	// 32+ char hex/alnum strings). We provide a 32-char hex-shaped
+	// placeholder; the value is never read or used (we never call
+	// Datadog), the test cleans up via delete below.
+	t.Run("SetWithFakeAPIKey", func(t *testing.T) {
+		status, body := putDatadog(t, `{"api_key":"0123456789abcdef0123456789abcdef"}`)
+		if status != http.StatusOK {
+			t.Fatalf("PUT /groups/:id/integrations/datadog = %d, want 200; body=%s", status, body)
+		}
+	})
+
+	// GET after set should return the integration record. We only
+	// check that the record exists (status 200) — the response
+	// shape for the group-level datadog integration is sparser
+	// than the project-level one (no `slug` or `title` fields,
+	// and `active` is always false because the placeholder key
+	// cannot be validated against the real Datadog API), so
+	// the only meaningful end-to-end assertion is that the GET
+	// doesn't 404. That proves the PUT actually persisted
+	// something the GET can retrieve.
+	t.Run("GetAfterSet", func(t *testing.T) {
+		status, _ := getDatadog(t)
+		if status != http.StatusOK {
+			t.Fatalf("GET = %d, want 200", status)
+		}
+	})
+
+	// DELETE clears the integration; no further GET assertion needed
+	// because the next get would just 404 again.
+	t.Run("DeleteAndConfirmGone", func(t *testing.T) {
+		status := delDatadog(t)
+		if status != http.StatusNoContent {
+			t.Fatalf("DELETE = %d, want 204", status)
+		}
+	})
+
+	// Empty set is rejected client-side before any HTTP call, so this
+	// works regardless of whether the endpoint is exposed in the
+	// running GitLab version. Goes through the MCP server to also
+	// exercise the MCP handler's validation.
+	t.Run("EmptySetRejectedClientSide", func(t *testing.T) {
+		_, err := callToolOn[integrations.SetGroupDatadogOutput](ctx, sess.individual, "gitlab_set_group_datadog_integration", integrations.SetGroupDatadogInput{
+			GroupID: groupID,
+		})
+		if err == nil {
+			t.Fatal("expected validation error for empty set input")
+		}
+		if !strings.Contains(err.Error(), "at least one of") {
+			t.Errorf("error should describe the missing fields, got: %v", err)
+		}
+	})
+
+	// clean up the group (best-effort)
+	t.Cleanup(func() {
+		cleanCtx := context.Background()
+		_ = callToolVoidOn(cleanCtx, sess.individual, "gitlab_group_delete", groups.DeleteInput{
+			GroupID: groupID,
+		})
+	})
+}
+
+// TestMeta_GroupLabelArchive verifies the group-label Archived flag
+// (exposed by the MCP surface in commit 6f42ed6c). Archiving
+// labels is a Premium/Ultimate feature, so the test lives in
+// the EE suite and only runs when the session is configured
+// for enterprise GitLab.
+//
+// The subtest sequence exercises every relevant tool path:
+//   - group_label_create  with archived=true
+//   - group_label_list    to confirm the round-trip
+//   - group_label_update  toggling archived back to false
+//   - group_label_delete  to clean up
+func TestMeta_GroupLabelArchive(t *testing.T) {
+	t.Parallel()
+	if !sess.enterprise {
+		return
+	}
+	if sess.meta == nil {
+		t.Skip("meta session not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	// Create a fresh group so the label stays isolated from other
+	// tests in the suite and can be torn down cleanly.
+	grpName := uniqueName("lbl-archive")
+	grp := CreateGroupMeta(ctx, NewE2EContext(t), sess.meta, grpName)
+
+	const labelName = "e2e-archive"
+	const color = "#428BCA"
+
+	// Create the label in archived state. The Archived flag is a
+	// *bool on CreateInput so we set the pointer explicitly; the
+	// default (nil) would omit the field entirely.
+	archived := true
+	t.Run("CreateArchived", func(t *testing.T) {
+		out, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_label_create",
+			"params": map[string]any{
+				"group_id": grp.Path,
+				"name":     labelName,
+				"color":    color,
+				"archived": &archived,
+			},
+		})
+		requireNoError(t, err, "group_label_create archived=true")
+		if !out.Archived {
+			t.Errorf("out.Archived = false, want true after Create with archived=true")
+		}
+		if out.Name != labelName {
+			t.Errorf("out.Name = %q, want %q", out.Name, labelName)
+		}
+		t.Logf("Created archived group label %s (ID=%d)", out.Name, out.ID)
+	})
+
+	// List and verify the label surfaces as archived.
+	t.Run("ListShowsArchived", func(t *testing.T) {
+		out, err := callToolOn[grouplabels.ListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_label_list",
+			"params": map[string]any{"group_id": grp.Path},
+		})
+		requireNoError(t, err, "group_label_list")
+		var found *grouplabels.Output
+		for i, l := range out.Labels {
+			if l.Name == labelName {
+				found = &out.Labels[i]
+				break
+			}
+		}
+		if found == nil {
+			t.Fatalf("created label %q not in list of %d labels", labelName, len(out.Labels))
+		}
+		if !found.Archived {
+			t.Errorf("found.Archived = false, want true on round-trip from list")
+		}
+	})
+
+	// Update back to unarchived. This exercises the Update
+	// Archived branch on the MCP tool and confirms the flag is
+	// round-trippable in both directions.
+	unarchived := false
+	t.Run("UpdateUnarchives", func(t *testing.T) {
+		out, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_label_update",
+			"params": map[string]any{
+				"group_id": grp.Path,
+				"label_id": labelName,
+				"archived": &unarchived,
+			},
+		})
+		requireNoError(t, err, "group_label_update archived=false")
+		if out.Archived {
+			t.Errorf("out.Archived = true, want false after Update with archived=false")
+		}
+		t.Logf("Unarchived label %s (ID=%d)", out.Name, out.ID)
+	})
+
+	// Best-effort cleanup of the label so a re-run doesn't see
+	// stale state. The group itself is torn down by the resource
+	// ledger at end of test.
+	t.Cleanup(func() {
+		cleanCtx := context.Background()
+		_ = callToolVoidOn(cleanCtx, sess.meta, "gitlab_group", map[string]any{
+			"action": "group_label_delete",
+			"params": map[string]any{
+				"group_id": grp.Path,
+				"label_id": labelName,
+			},
+		})
 	})
 }

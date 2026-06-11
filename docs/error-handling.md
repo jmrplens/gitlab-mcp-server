@@ -278,7 +278,7 @@ Actionable hints were added across the entire codebase to help LLMs self-correct
 | **Total hinted error sites**                   | **1,144**                         |
 | `WrapErrWithMessage` (skip-category, retained) | 354                               |
 | `NotFoundResult` (informational 404s)          | 27 handlers; 22 source references |
-| `internal/tools` packages with hints           | 156 of 172                        |
+| `internal/tools` packages with hints           | 156 of 176                        |
 | Source files with hints                        | 176                               |
 
 The call-site counts above are source-level counts from `rg` over `internal/`; package totals can be verified with `go list ./internal/tools/...`. `NotFoundResult` is listed by handler coverage and source references because shared formatters cover multiple get-handler variants.

@@ -36,6 +36,7 @@ type CreateInput struct {
 	Color       string               `json:"color"                 jsonschema:"Label color in hex format (e.g. #FF0000),required"`
 	Description string               `json:"description,omitempty" jsonschema:"Label description"`
 	Priority    int64                `json:"priority,omitempty"    jsonschema:"Label priority (lower is higher priority, 0 means no priority)"`
+	Archived    *bool                `json:"archived,omitempty"    jsonschema:"Whether to create the label in archived state"`
 }
 
 // UpdateInput defines parameters for updating a group label.
@@ -46,6 +47,7 @@ type UpdateInput struct {
 	Color       string               `json:"color,omitempty"       jsonschema:"New label color in hex format"`
 	Description string               `json:"description,omitempty" jsonschema:"New label description"`
 	Priority    int64                `json:"priority,omitempty"    jsonschema:"New label priority (0 to remove)"`
+	Archived    *bool                `json:"archived,omitempty"    jsonschema:"Set true to archive, false to unarchive"`
 }
 
 // DeleteInput defines parameters for deleting a group label.
@@ -128,6 +130,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if input.Priority > 0 {
 		opts.Priority = gl.NewNullableWithValue(input.Priority)
 	}
+	if input.Archived != nil {
+		opts.Archived = input.Archived
+	}
 	l, _, err := client.GL().GroupLabels.CreateGroupLabel(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("groupLabelCreate", err, http.StatusBadRequest,
@@ -156,6 +161,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}
 	if input.Priority > 0 {
 		opts.Priority = gl.NewNullableWithValue(input.Priority)
+	}
+	if input.Archived != nil {
+		opts.Archived = input.Archived
 	}
 	l, _, err := client.GL().GroupLabels.UpdateGroupLabel(string(input.GroupID), string(input.LabelID), opts, gl.WithContext(ctx))
 	if err != nil {

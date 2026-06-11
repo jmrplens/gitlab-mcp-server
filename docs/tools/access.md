@@ -15,6 +15,23 @@ The access & authentication domain covers project/group/personal access tokens, 
 
 With `TOOL_SURFACE=meta`, the 62 individual tools below are consolidated into the `gitlab_access` meta-tool. It dispatches access token, deploy token, deploy key, access request, and invitation workflows through action prefixes such as `token_*`, `deploy_token_*`, `deploy_key_*`, `request_*`, `approve_*`, `deny_*`, and `invite_*`.
 
+### Access Levels
+
+GitLab assigns numeric access levels to members. The full set recognized by this server is:
+
+| Value | Label            | Notes                                                            |
+| ----: | ---------------- | ---------------------------------------------------------------- |
+|     0 | No access        | Implicit only                                                    |
+|     5 | Minimal access   | Guests with limited permissions                                  |
+|    10 | Guest            | Basic read-only access                                           |
+|    15 | Planner          | Premium/Ultimate: guest + planning board management              |
+|    20 | Reporter         | Read + create issues, MRs, and run CI                            |
+|    25 | Security Manager | Premium/Ultimate: configure security features and review reports |
+|    30 | Developer        | Push, merge, and run CI                                          |
+|    40 | Maintainer       | Project administration without destructive actions               |
+|    50 | Owner            | Full project or group administration                             |
+|    60 | Admin            | Instance-level administrator (group admin role)                  |
+
 ### Common Questions
 
 > "List access tokens for project 42"

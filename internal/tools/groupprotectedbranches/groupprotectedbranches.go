@@ -225,7 +225,7 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 	b, _, err := client.GL().GroupProtectedBranches.ProtectRepositoryBranches(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("protectGroupBranch", err, http.StatusBadRequest,
-			"requires Owner + Premium/Ultimate; name supports wildcards (e.g. 'release/*'); push_access_level and merge_access_level: 0=No one, 30=Developer, 40=Maintainer; allow_force_push=false recommended")
+			"requires Owner + Premium/Ultimate; name supports wildcards (e.g. 'release/*'); push_access_level and merge_access_level: 0=No one, 30=Developer, 40=Maintainer, 60=Admin; allow_force_push=false recommended")
 	}
 	return toOutput(b), nil
 }

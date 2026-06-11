@@ -11,11 +11,11 @@ Las meta-herramientas son un modo de operación explícito de GitLab MCP Server,
 
 ## ¿Por qué meta-herramientas?
 
-Los LLMs tienen ventanas de contexto limitadas. Cuando un servidor MCP registra cientos de herramientas individuales (hasta 1033 en GitLab.com Enterprise/Premium), solo las descripciones de las herramientas consumen una gran porción de los tokens disponibles, dejando menos espacio para la conversación real.
+Los LLMs tienen ventanas de contexto limitadas. Cuando un servidor MCP registra cientos de herramientas individuales (hasta 1036 en GitLab.com Enterprise/Premium con Orbit), solo las descripciones de las herramientas consumen una gran porción de los tokens disponibles, dejando menos espacio para la conversación real.
 
 | Modo              | Nº de herramientas | Overhead de tokens | Funcionalidad               |
 | ----------------- | ------------------ | ------------------ | --------------------------- |
-| Individual        | 867 / 1027 / 1033  | Muy alto           | Completa                    |
+| Individual        | 867 / 1030 / 1036  | Muy alto           | Completa                    |
 | Meta (base)       | 33                 | Bajo               | Completa                    |
 | Meta (enterprise) | 49 / 50            | Bajo               | Completa + Premium/Ultimate |
 
@@ -156,7 +156,7 @@ La respuesta del detalle por acción incluye el schema de `params` y la forma de
 }
 ```
 
-`gitlab_orbit` solo se registra para conexiones GitLab.com Enterprise/Premium y expone cinco acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `query` y `graph_status`.
+`gitlab_orbit` solo se registra para conexiones GitLab.com Enterprise/Premium y expone seis acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `dsl`, `query` y `graph_status`.
 
 ## Referencia de meta-herramientas clave
 

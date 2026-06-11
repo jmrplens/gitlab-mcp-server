@@ -104,8 +104,9 @@ All Go test files live in the `suite/` subdirectory (package `suite`):
 | File                       | Purpose                                              |
 | -------------------------- | ---------------------------------------------------- |
 | `suite/setup_test.go`      | TestMain, 6 MCP sessions, helpers, shared state      |
-| `suite/fixture_test.go`    | Self-contained GitLab resource builders               |
-| `suite/*_test.go`          | 91 domain-specific test files                         |
+| `suite/fixture_ce_test.go` | Self-contained GitLab resource builders (CE runtime) |
+| `suite/fixture_ee_test.go` | Self-contained GitLab resource builders (EE runtime) |
+| `suite/*_test.go`          | 137 domain-specific test files                        |
 
 ### MCP Sessions
 

@@ -184,7 +184,7 @@ func RequestGroup(ctx context.Context, client *gitlabclient.Client, input Reques
 type ApproveProjectInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	UserID      int64                `json:"user_id" jsonschema:"User ID of the access requester,required"`
-	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)"`
+	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer)"`
 }
 
 // ApproveProject approves a project access request.
@@ -205,7 +205,7 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_approve_project", err, http.StatusNotFound,
-			"verify user_id with gitlab_access_request_list_project; access_level must be valid (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); approving requires Maintainer role")
+			"verify user_id with gitlab_access_request_list_project; access_level must be valid (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer); approving requires Maintainer role")
 	}
 	return convertAccessRequest(ar), nil
 }
@@ -218,7 +218,7 @@ func ApproveProject(ctx context.Context, client *gitlabclient.Client, input Appr
 type ApproveGroupInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or path,required"`
 	UserID      int64                `json:"user_id" jsonschema:"User ID of the access requester,required"`
-	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)"`
+	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner)"`
 }
 
 // ApproveGroup approves a group access request.
@@ -239,7 +239,7 @@ func ApproveGroup(ctx context.Context, client *gitlabclient.Client, input Approv
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("access_request_approve_group", err, http.StatusNotFound,
-			"verify user_id with gitlab_access_request_list_group; access_level must be valid (10/20/30/40/50=Owner); approving requires Owner role")
+			"verify user_id with gitlab_access_request_list_group; access_level must be valid (5/10/15/20/25/30/40/50; 60=Admin not valid for access requests); approving requires Owner role")
 	}
 	return convertAccessRequest(ar), nil
 }

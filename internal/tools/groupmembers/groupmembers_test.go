@@ -233,6 +233,46 @@ func TestShareGroup_MissingGroupAccess(t *testing.T) {
 	}
 }
 
+// TestShareGroup_InvalidGroupAccess verifies ShareGroup rejects access levels
+// that the project-group share API does not accept. The pre-flight validation
+// surfaces a precise message listing the valid range and the values that are
+// NOT valid for project group shares (Minimal access 5, Planner 15,
+// Security Manager 25, Admin 60).
+func TestShareGroup_InvalidGroupAccess(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	// 60=Admin is one of the new levels that the validation explicitly rejects.
+	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 60})
+	if err == nil {
+		t.Fatal("expected error for invalid group_access=60")
+	}
+	if !strings.Contains(err.Error(), "10/20/30/40") {
+		t.Errorf("expected error to mention valid 10/20/30/40 range, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "not valid for project group shares") {
+		t.Errorf("expected error to mention non-shareable levels, got: %v", err)
+	}
+}
+
+// TestShareGroup_BadRequestHint verifies the 400 status hint surfaced when
+// the GitLab API rejects the share payload. The hint must list the valid
+// 10/20/30/40 range so callers can correct their input without having to
+// consult the API docs.
+func TestShareGroup_BadRequestHint(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"message": "400 Bad request - invalid group_access"}`))
+	})
+	client := testutil.NewTestClient(t, mux)
+	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10, GroupAccess: 30})
+	if err == nil {
+		t.Fatal("expected error for 400 response")
+	}
+	if !strings.Contains(err.Error(), "group_access must be one of 10/20/30/40") {
+		t.Errorf("expected 400 hint to mention valid 10/20/30/40 range, got: %v", err)
+	}
+}
+
 // ----------------------------------------------
 // UnshareGroup
 // ----------------------------------------------.
@@ -702,10 +742,13 @@ func TestAccessLevelDescription_AllLevels(t *testing.T) {
 		{0, "No access"},
 		{5, "Minimal access"},
 		{10, "Guest"},
+		{15, "Planner"},
 		{20, "Reporter"},
+		{25, "Security Manager"},
 		{30, "Developer"},
 		{40, "Maintainer"},
 		{50, "Owner"},
+		{60, "Admin"},
 		{99, "Unknown"},
 	}
 	for _, tt := range tests {

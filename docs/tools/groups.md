@@ -143,14 +143,14 @@ Get details of a specific group webhook by hook ID. Returns URL, enabled events,
 
 ### `gitlab_group_hook_add`
 
-Add a new webhook to a GitLab group. Requires URL; optionally configure event triggers, SSL verification, secret token, write-only signing token, and branch filter.
+Add a new webhook to a GitLab group. Requires URL; optionally configure event triggers, SSL verification, secret token, write-only signing token, branch filter, and `branch_filter_strategy` (`wildcard`, `regex`, or `all_branches`). The full set of supported event flags includes push, tag push, push_events_branch_filter, branch_filter_strategy, issues, confidential issues, merge requests, note, confidential note, job, pipeline, wiki page, subgroup, member, release, deployment, feature flag, milestone, vulnerability, emoji, resource access token, and project events.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_group_hook_edit`
 
-Edit an existing group webhook. Supports changing URL, events, SSL verification, secret token, write-only signing token, and branch filter.
+Edit an existing group webhook. Supports changing URL, events, SSL verification, secret token, write-only signing token, branch filter, and `branch_filter_strategy` (`wildcard`, `regex`, or `all_branches`). Event flags include push, tag push, push_events_branch_filter, branch_filter_strategy, issues, confidential issues, merge requests, note, confidential note, job, pipeline, wiki page, subgroup, member, release, deployment, feature flag, milestone, vulnerability, emoji, resource access token, and project events.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
@@ -241,14 +241,14 @@ Get details of a single group label by ID or name, including color, description,
 
 ### `gitlab_group_label_create`
 
-Create a new label in a GitLab group with a name, color (hex), optional description, and optional priority.
+Create a new label in a GitLab group with a name, color (hex), optional description, optional priority, and optional `archived` flag (Premium/Ultimate). Archived labels are hidden from the default label picker but retained for filtering and reporting.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_group_label_update`
 
-Update an existing group label. Can change name, color, description, or priority. Only specified fields are modified.
+Update an existing group label. Can change name, color, description, priority, or the `archived` flag (Premium/Ultimate). Only specified fields are modified.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

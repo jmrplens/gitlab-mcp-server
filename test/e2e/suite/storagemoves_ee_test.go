@@ -65,14 +65,15 @@ func TestMeta_GroupStorageMoves_Graceful404(t *testing.T) {
 		t.Logf("group storage move list-for-group 404 error path validated: %v", err)
 	})
 
-	t.Run("Meta/GroupStorageMove/ScheduleInvalid_Graceful422", func(t *testing.T) {
-		// Schedule with an invalid storage name returns 422 (validation)
-		// rather than 404 because the route exists. This confirms the
-		// tool distinguishes between routing (404) and validation (422).
-		// The schedule_* actions accept `destination_storage_name` (and
-		// optionally `source_storage_name`); a non-existent storage
-		// shard triggers 422 because the route is wired up but the
-		// shard name is rejected.
+	t.Run("Meta/GroupStorageMove/ScheduleInvalid_GracefulError", func(t *testing.T) {
+		// Schedule with an invalid storage name is rejected by GitLab
+		// before the move runs. The status code varies by GitLab
+		// version: 422 (validation) on releases that surface the
+		// error as unprocessable, 400 (bad request) on releases that
+		// surface it as a parameter validation error, and 404 if the
+		// route is not wired up at all. The point of this subtest is
+		// not the specific code, but that the tool returns a
+		// structured error instead of crashing.
 		_, err := callToolOn[groupstoragemoves.Output](ctx, sess.meta, "gitlab_storage_move", map[string]any{
 			"action": "schedule_group",
 			"params": map[string]any{
@@ -84,8 +85,8 @@ func TestMeta_GroupStorageMoves_Graceful404(t *testing.T) {
 			t.Log("group storage move schedule returned no error")
 			return
 		}
-		if !isHTTPStatus(err, 404) && !isHTTPStatus(err, 422) {
-			t.Fatalf("group storage move schedule error was not 404/422: %v", err)
+		if !isHTTPStatus(err, 400) && !isHTTPStatus(err, 404) && !isHTTPStatus(err, 422) {
+			t.Fatalf("group storage move schedule error was not 400/404/422: %v", err)
 		}
 		t.Logf("group storage move schedule error path validated: %v", err)
 	})

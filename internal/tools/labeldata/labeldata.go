@@ -22,6 +22,7 @@ type Output struct {
 	PrioritySpecified      bool   `json:"-"`
 	IsProjectLabel         bool   `json:"is_project_label"`
 	Subscribed             bool   `json:"subscribed"`
+	Archived               bool   `json:"archived"`
 }
 
 // ProjectOutput converts a GitLab project label to shared output fields.
@@ -41,6 +42,7 @@ func ProjectOutput(label *gl.Label) Output {
 		Priority:               label.Priority,
 		IsProjectLabel:         label.IsProjectLabel,
 		Subscribed:             label.Subscribed,
+		Archived:               label.Archived,
 	})
 }
 
@@ -61,6 +63,7 @@ func GroupOutput(label *gl.GroupLabel) Output {
 		Priority:               label.Priority,
 		IsProjectLabel:         label.IsProjectLabel,
 		Subscribed:             label.Subscribed,
+		Archived:               label.Archived,
 	})
 }
 
@@ -109,6 +112,7 @@ type labelFields struct {
 	Priority               gl.Nullable[int64]
 	IsProjectLabel         bool
 	Subscribed             bool
+	Archived               bool
 }
 
 func outputFromFields(fields labelFields) Output {
@@ -126,6 +130,7 @@ func outputFromFields(fields labelFields) Output {
 		PrioritySpecified:      prioritySpecified,
 		IsProjectLabel:         fields.IsProjectLabel,
 		Subscribed:             fields.Subscribed,
+		Archived:               fields.Archived,
 	}
 }
 

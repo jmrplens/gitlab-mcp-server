@@ -23,7 +23,7 @@ type ListGroupInput struct {
 // CreateInstanceInput holds parameters for creating an instance member role.
 type CreateInstanceInput struct {
 	Name            string `json:"name"              jsonschema:"Name of the custom role,required"`
-	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer),required"`
+	BaseAccessLevel int    `json:"base_access_level" jsonschema:"Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid),required"`
 	Description     string `json:"description,omitempty" jsonschema:"Description of the custom role"`
 	Permissions
 }
@@ -32,7 +32,7 @@ type CreateInstanceInput struct {
 type CreateGroupInput struct {
 	GroupID         toolutil.StringOrInt `json:"group_id"          jsonschema:"Group ID or URL-encoded path,required"`
 	Name            string               `json:"name"              jsonschema:"Name of the custom role,required"`
-	BaseAccessLevel int                  `json:"base_access_level" jsonschema:"Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer),required"`
+	BaseAccessLevel int                  `json:"base_access_level" jsonschema:"Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid),required"`
 	Description     string               `json:"description,omitempty" jsonschema:"Description of the custom role"`
 	Permissions
 }
@@ -258,7 +258,7 @@ func CreateInstance(ctx context.Context, client *gitlabclient.Client, in CreateI
 	role, _, err := client.GL().MemberRolesService.CreateInstanceMemberRole(opts)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create instance member role", err, http.StatusBadRequest,
-			"requires admin + self-managed Ultimate; base_access_level must be 10/20/30/40 (Guest/Reporter/Developer/Maintainer); name must be unique; permissions are a list of valid permission strings")
+			"requires admin + self-managed Ultimate; base_access_level must be 5/10/15/20/25/30/40/50 (Minimal/Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner); 60=Admin is not valid; name must be unique; permissions are a list of valid permission strings")
 	}
 	return toOutput(role), nil
 }
@@ -284,7 +284,7 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 			return Output{}, toolutil.WrapErrWithHint("create group member role", err, groupMemberRoleSelfManagedHint)
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("create group member role", err, http.StatusBadRequest,
-			"requires Owner + Ultimate; base_access_level 10/20/30/40; name unique within group; permissions must be valid; group_id must reference a top-level group")
+			"requires Owner + Ultimate; base_access_level 5/10/15/20/25/30/40/50 (60=Admin is not valid); name unique within group; permissions must be valid; group_id must reference a top-level group")
 	}
 	return toOutput(role), nil
 }

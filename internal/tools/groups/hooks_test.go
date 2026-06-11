@@ -28,7 +28,7 @@ const (
 )
 
 // groupHookJSON stores the package-level group hook JSON state.
-var groupHookJSON = `{"id":10,"url":"https://example.com/hook","name":"CI Hook","description":"Triggers CI","group_id":99,"push_events":true,"merge_requests_events":true,"issues_events":false,"tag_push_events":false,"note_events":false,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":false,"milestone_events":true,"feature_flag_events":true,"subgroup_events":false,"member_events":false,"vulnerability_events":true,"confidential_issues_events":false,"confidential_note_events":false,"enable_ssl_verification":true,"alert_status":"executable","disabled_until":"2026-01-16T10:00:00Z","url_variables":[{"key":"env","value":"prod"}],"token_present":true,"signing_token_present":true,"created_at":"2026-01-15T10:00:00Z"}`
+var groupHookJSON = `{"id":10,"url":"https://example.com/hook","name":"CI Hook","description":"Triggers CI","group_id":99,"push_events":true,"merge_requests_events":true,"issues_events":false,"tag_push_events":false,"note_events":false,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":false,"releases_events":false,"milestone_events":true,"feature_flag_events":true,"subgroup_events":false,"member_events":false,"vulnerability_events":true,"confidential_issues_events":false,"confidential_note_events":false,"enable_ssl_verification":true,"alert_status":"executable","disabled_until":"2026-01-16T10:00:00Z","url_variables":[{"key":"env","value":"prod"}],"token_present":true,"signing_token_present":true,"created_at":"2026-01-15T10:00:00Z","emoji_events":true,"resource_access_token_events":true,"project_events":true,"push_events_branch_filter":"main","branch_filter_strategy":"wildcard"}`
 
 // groupHookListJSON stores the package-level group hook list JSON state.
 var groupHookListJSON = `[` + groupHookJSON + `]`
@@ -123,6 +123,21 @@ func TestGetHook_Success(t *testing.T) {
 	if !out.TokenPresent || !out.SigningTokenPresent {
 		t.Error("expected token presence flags to be true")
 	}
+	if !out.EmojiEvents {
+		t.Error("out.EmojiEvents = false, want true")
+	}
+	if !out.ResourceAccessTokenEvents {
+		t.Error("out.ResourceAccessTokenEvents = false, want true")
+	}
+	if !out.ProjectEvents {
+		t.Error("out.ProjectEvents = false, want true")
+	}
+	if out.PushEventsBranchFilter != "main" {
+		t.Errorf("out.PushEventsBranchFilter = %q, want %q", out.PushEventsBranchFilter, "main")
+	}
+	if out.BranchFilterStrategy != "wildcard" {
+		t.Errorf("out.BranchFilterStrategy = %q, want %q", out.BranchFilterStrategy, "wildcard")
+	}
 }
 
 // TestGetHook_APIError verifies GetHook when API error.
@@ -161,12 +176,17 @@ func TestAddHook_Success(t *testing.T) {
 	out, err := AddHook(context.Background(), client, AddHookInput{
 		GroupID: "99",
 		HookInput: HookInput{
-			URL:                 testHookURL,
-			SigningToken:        "signing-secret",
-			PushEvents:          &push,
-			MilestoneEvents:     &push,
-			FeatureFlagEvents:   &push,
-			VulnerabilityEvents: &push,
+			URL:                       testHookURL,
+			SigningToken:              "signing-secret",
+			PushEvents:                &push,
+			MilestoneEvents:           &push,
+			FeatureFlagEvents:         &push,
+			VulnerabilityEvents:       &push,
+			EmojiEvents:               &push,
+			ResourceAccessTokenEvents: &push,
+			ProjectEvents:             &push,
+			PushEventsBranchFilter:    "main",
+			BranchFilterStrategy:      "wildcard",
 		},
 	})
 	if err != nil {
@@ -175,7 +195,11 @@ func TestAddHook_Success(t *testing.T) {
 	if out.ID != 10 {
 		t.Errorf("out.ID = %d, want 10", out.ID)
 	}
-	for _, want := range []string{"signing_token", "milestone_events", "feature_flag_events", "vulnerability_events"} {
+	for _, want := range []string{
+		"signing_token", "milestone_events", "feature_flag_events", "vulnerability_events",
+		"emoji_events", "resource_access_token_events", "project_events",
+		"push_events_branch_filter", "branch_filter_strategy",
+	} {
 		if !strings.Contains(capturedBody, want) {
 			t.Errorf("request body missing %q: %s", want, capturedBody)
 		}

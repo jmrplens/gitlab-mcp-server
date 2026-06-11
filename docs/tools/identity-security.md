@@ -172,12 +172,12 @@ No parameters required.
 
 Create a custom member role at instance level.
 
-| Parameter           | Type   | Required | Description                                                                      |
-| ------------------- | ------ | :------: | -------------------------------------------------------------------------------- |
-| `name`              | string |   Yes    | Role name                                                                        |
-| `base_access_level` | int    |   Yes    | Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner) |
-| `description`       | string |    No    | Role description                                                                 |
-| `permissions`       | object |    No    | Permission overrides (20 boolean fields)                                         |
+| Parameter           | Type   | Required | Description                                                                                                                                                |
+| ------------------- | ------ | :------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`              | string |   Yes    | Role name                                                                                                                                                  |
+| `base_access_level` | int    |   Yes    | Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid) |
+| `description`       | string |    No    | Role description                                                                                                                                           |
+| `permissions`       | object |    No    | Permission overrides (20 boolean fields)                                                                                                                   |
 
 **Annotation**: Create
 

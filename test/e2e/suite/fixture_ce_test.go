@@ -133,33 +133,27 @@ func isRetryableError(err error) bool {
 // other codes return false so callers fall through to requireNoError and
 // surface the real failure.
 //
-// Uses the same anchored phrase matching as isRetryableError ("404 not found",
-// "403 forbidden") to avoid false positives when substrings like "404" appear
-// inside project IDs, commit SHAs, or resource names.
+// Matches the status code in either of two forms:
+//   - "<code> <reason phrase>" (e.g. "400 Bad Request" from net/http) — the
+//     anchored phrase form avoids false positives when "400" appears inside
+//     project IDs, commit SHAs, or resource names.
+//   - ": <code> " as a standalone token (e.g. "POST url: 400 message") —
+//     this is the format go-gitlab emits in *ErrorResponse.Error() and
+//     which gets propagated verbatim through our tool wrapping. The
+//     leading ": " is what disambiguates from numeric substrings in paths.
 func isHTTPStatus(err error, code int) bool {
 	if err == nil {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	switch code {
-	case 400:
-		// Anchor on the reason phrase to avoid false positives on IDs
-		// or SHAs that happen to contain "400".
-		return strings.Contains(msg, "400 bad request")
-	case 401:
-		return strings.Contains(msg, "401 unauthorized")
-	case 403:
-		return strings.Contains(msg, "403 forbidden")
-	case 404:
-		return strings.Contains(msg, "404 not found")
-	case 422:
-		return strings.Contains(msg, "422 unprocessable")
-	case 500:
-		return strings.Contains(msg, "500 internal server")
-	case 502:
-		return strings.Contains(msg, "502 bad gateway")
-	case 503:
-		return strings.Contains(msg, "503 service unavailable")
+	codeStr := strconv.Itoa(code)
+	if phrase := strings.ToLower(http.StatusText(code)); phrase != "" {
+		if strings.Contains(msg, codeStr+" "+phrase) {
+			return true
+		}
+	}
+	if strings.Contains(msg, ": "+codeStr+" ") {
+		return true
 	}
 	return false
 }
@@ -351,13 +345,58 @@ func CreateGroupMeta(ctx context.Context, e2e *E2EContext, session *mcp.ClientSe
 }
 
 // unprotectMain removes protection from the main branch so commits can
-// be pushed. Uses the GitLab client directly for efficiency.
+// be pushed, and waits until the protection rule is actually gone before
+// returning. Uses the GitLab client directly for efficiency.
+//
+// The previous single-shot variant was racy: under Docker load the
+// Unprotect call would return without error, but the protection rule
+// was still observable in a follow-up GetProtectedBranch() because the
+// change propagates asynchronously. Subsequent commits then failed with
+// 403 Forbidden - "You are not allowed to push into this branch".
+//
+// We now call Unprotect (idempotent) and then poll GetProtectedBranch
+// until it returns 404, with a bounded wait budget. If the branch
+// remains protected after the budget, we log a warning (non-fatal, same
+// behavior as the previous variant) so the test's own assertion produces
+// the actionable error message.
 func unprotectMain(ctx context.Context, t *testing.T, proj ProjectFixture) {
 	t.Helper()
-	_ = ctx
-	_, err := sess.glClient.GL().ProtectedBranches.UnprotectRepositoryBranches(int(proj.ID), defaultBranch)
+	pid := int(proj.ID)
+
+	// Idempotent: safe to call when the branch is already unprotected.
+	if _, err := sess.glClient.GL().ProtectedBranches.UnprotectRepositoryBranches(pid, defaultBranch); err != nil {
+		t.Logf("unprotect main (idempotent, may already be unprotected): %v", err)
+	}
+
+	// Wait for sidekiq to process the unprotect job before polling; under
+	// Docker load the rule can sit in the queue for several seconds.
+	drainSidekiq(ctx, t, sess.glClient)
+
+	// Wait for the protection rule to actually disappear. Under Docker load
+	// the change can take a few seconds to propagate through the API even
+	// after sidekiq has drained.
+	maxWait := e2eTimeout(30*time.Second, 60*time.Second)
+	pollCtx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
+
+	err := Poll(pollCtx, 500*time.Millisecond, maxWait, func() (bool, string, error) {
+		_, resp, getErr := sess.glClient.GL().ProtectedBranches.GetProtectedBranch(pid, defaultBranch, gl.WithContext(pollCtx))
+		if getErr == nil {
+			return false, fmt.Sprintf("branch %q still protected in project %d", defaultBranch, pid), nil
+		}
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return true, fmt.Sprintf("branch %q unprotected in project %d", defaultBranch, pid), nil
+		}
+		// Transient errors (5xx, network) -> keep polling.
+		if resp == nil || resp.StatusCode >= 500 {
+			return false, fmt.Sprintf("get protected branch %q in project %d: %v", defaultBranch, pid, getErr), nil
+		}
+		// Non-retryable 4xx that's not 404.
+		return false, fmt.Sprintf("get protected branch %q in project %d: HTTP %d", defaultBranch, pid, resp.StatusCode),
+			fmt.Errorf("get protected branch: %w", getErr)
+	})
 	if err != nil {
-		t.Logf("unprotect main (non-fatal, may already be unprotected): %v", err)
+		t.Logf("unprotect main did not converge within %s (non-fatal): %v", maxWait, err)
 	}
 }
 

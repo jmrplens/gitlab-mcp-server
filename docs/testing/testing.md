@@ -18,16 +18,16 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,872 |
-| Unit test functions                                   | 10,593 |
-| E2E test functions                                    |    279 |
+| Total test functions                                  | 10,899 |
+| Unit test functions                                   | 10,618 |
+| E2E test functions                                    |    281 |
 | cmd test functions                                    |    783 |
-| Test files (internal/)                                |    441 |
+| Test files (internal/)                                |    442 |
 | Test files (cmd/)                                     |     52 |
 | Test files (test/e2e/suite/)                          |    137 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     19 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  90.9% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  91.0% |
 | Overall coverage (`go test ./internal/...`)           |  94.5% |
 | Average package coverage                              |  96.4% |
 
@@ -35,8 +35,8 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,726 | 89.5% |
-| `TestFunc` (no underscore)             |   843 |  7.8% |
+| `TestFunc_Scenario` (2-part)           | 9,751 | 89.5% |
+| `TestFunc` (no underscore)             |   845 |  7.8% |
 | `TestFunc_Scenario_Expected` (3+ part) |   303 |  2.8% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,903 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          7,622 |        339 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            279 |        137 | build-tagged real GitLab integration suite                                                      |
+| Tool sub-packages (175) |          7,647 |        340 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            281 |        137 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            783 |         52 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,872** |    **630** |                                                                                                 |
+| **Total**               |     **10,899** |    **631** |                                                                                                 |
 
 ### Core Packages
 
@@ -117,7 +117,7 @@
 | accessrequests          |        41 |          2 |   100.0% |         8 |
 | accesstokens            |        91 |          2 |   100.0% |        18 |
 | actioncatalog           |        31 |          4 |    99.1% |         0 |
-| actioncompat            |        42 |          2 |    99.8% |         0 |
+| actioncompat            |        42 |          2 |    99.2% |         0 |
 | adminspecs              |         5 |          1 |   100.0% |        91 |
 | alertmanagement         |        28 |          2 |    98.9% |         4 |
 | appearance              |        10 |          1 |   100.0% |         2 |
@@ -178,7 +178,7 @@
 | groupepicboards         |        10 |          2 |   100.0% |         2 |
 | groupimportexport       |        27 |          1 |   100.0% |         3 |
 | groupiterations         |        20 |          1 |   100.0% |         1 |
-| grouplabels             |        48 |          2 |   100.0% |         7 |
+| grouplabels             |        50 |          2 |   100.0% |         7 |
 | groupldap               |        11 |          2 |   100.0% |         4 |
 | groupmarkdownuploads    |        31 |          2 |   100.0% |         3 |
 | groupmembers            |        59 |          2 |   100.0% |         7 |
@@ -199,7 +199,7 @@
 | impersonationtokens     |        38 |          2 |   100.0% |         5 |
 | importservice           |        26 |          1 |   100.0% |         5 |
 | instancevariables       |        40 |          2 |   100.0% |         5 |
-| integrations            |        32 |          2 |   100.0% |         4 |
+| integrations            |        53 |          3 |   100.0% |         7 |
 | invites                 |        32 |          1 |   100.0% |         4 |
 | issuediscussions        |        38 |          2 |   100.0% |         6 |
 | issuelinks              |        43 |          2 |   100.0% |         4 |
@@ -211,7 +211,7 @@
 | jobtokenscope           |        48 |          2 |   100.0% |         8 |
 | keys                    |        20 |          1 |   100.0% |         2 |
 | labeldata               |         6 |          1 |   100.0% |         0 |
-| labels                  |        55 |          1 |   100.0% |         8 |
+| labels                  |        57 |          1 |   100.0% |         8 |
 | license                 |        18 |          2 |   100.0% |         3 |
 | licensetemplates        |        20 |          1 |   100.0% |         2 |
 | markdown                |         8 |          1 |   100.0% |         1 |
@@ -289,7 +289,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        79 |          2 |   100.0% |         6 |
-| **Total**               | **7,622** |    **339** |          | **1,129** |
+| **Total**               | **7,647** |    **340** |          | **1,132** |
 
 </details>
 
@@ -354,7 +354,7 @@
 | accessrequests          |   100.0% |
 | accesstokens            |   100.0% |
 | actioncatalog           |    99.1% |
-| actioncompat            |    99.8% |
+| actioncompat            |    99.2% |
 | adminspecs              |   100.0% |
 | alertmanagement         |    98.9% |
 | appearance              |   100.0% |
@@ -637,6 +637,8 @@ make test-e2e-docker-enterprise
 
 The Enterprise target runs with the `e2e enterprise` build tags, so common harness files plus `test/e2e/suite/*_ee_test.go` Enterprise/Premium tests are compiled and executed. CE-only tests live in `test/e2e/suite/*_ce_test.go` and remain in `make test-e2e-docker`, while Enterprise-specific fixture behavior can be tuned independently.
 
+The E2E harness also re-validates the GitLab edition at runtime by calling `GET /api/v4/version`. When `GITLAB_ENTERPRISE=true` is requested but the fixture reports CE, the session downgrades to CE and `*_ee_test.go` tests skip cleanly with a logged reason instead of failing outright. This keeps the suite safe against accidental CE/EE mismatches.
+
 Docker mode enables pipeline and job tests that require a CI runner. It also starts an internal `e2e-fixture` HTTP service and configures GitLab to allow local outbound requests, so project webhook, push mirror, and custom emoji tests use deterministic in-network endpoints instead of public Internet access.
 
 #### Test Reports
@@ -692,7 +694,7 @@ Docker validation snapshots are written under `dist/e2e-reports/` after `make te
 
 #### Fixture Cleanup
 
-Test fixtures (`fixture_test.go`) register `t.Cleanup` handlers that **permanently delete** projects created during tests. GitLab's Delayed Deletion feature requires a two-step process:
+Test fixtures (`fixture_ce_test.go` / `fixture_ee_test.go`) register `t.Cleanup` handlers that **permanently delete** projects created during tests. GitLab's Delayed Deletion feature requires a two-step process:
 
 1. Mark the project for deletion (`DELETE /projects/:id`)
 2. Permanently remove it (`DELETE /projects/:id?permanently_remove=true&full_path=...`)
@@ -875,9 +877,10 @@ test/e2e/
 │   ├── register-runner.sh
 │   ├── setup-gitlab.sh
 │   └── wait-for-gitlab.sh
-└── suite/                    # Go test package (109 test files)
+└── suite/                    # Go test package (137 test files)
     ├── setup_test.go         # MCP server setup, helpers, shared state
-    ├── fixture_test.go       # Self-contained GitLab resource builders
+    ├── fixture_ce_test.go    # Self-contained GitLab CE resource builders
+    ├── fixture_ee_test.go    # Self-contained GitLab EE resource builders
     └── *_test.go             # Domain-specific test files
 ```
 

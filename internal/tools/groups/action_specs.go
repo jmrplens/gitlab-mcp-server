@@ -136,6 +136,17 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		options.IndividualTool.Description = "Create a GitLab group or subgroup. Returns: created group metadata including ID, full path, and visibility. See also: gitlab_group_get, gitlab_group_update, gitlab_group_delete."
 	case "gitlab_group_members_list":
 		options.RelatedActions = []string{actionGroupGet, "group.projects", "group.member_add"}
+	case "gitlab_group_hook_add", "gitlab_group_hook_edit":
+		// branch_filter_strategy is an enum on the GitLab side (wildcard,
+		// regex, all_branches). The jsonschema tag on HookInput already
+		// lists the three values in the description; this override adds
+		// the same values as a proper schema enum so the LLM can rely
+		// on validation rather than just textual inference.
+		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
+			toolutil.SchemaPropertyOverride("branch_filter_strategy", map[string]any{
+				"enum": []any{"wildcard", "regex", "all_branches"},
+			}),
+		}
 	}
 
 	return options
