@@ -345,13 +345,58 @@ func CreateGroupMeta(ctx context.Context, e2e *E2EContext, session *mcp.ClientSe
 }
 
 // unprotectMain removes protection from the main branch so commits can
-// be pushed. Uses the GitLab client directly for efficiency.
+// be pushed, and waits until the protection rule is actually gone before
+// returning. Uses the GitLab client directly for efficiency.
+//
+// The previous single-shot variant was racy: under Docker load the
+// Unprotect call would return without error, but the protection rule
+// was still observable in a follow-up GetProtectedBranch() because the
+// change propagates asynchronously. Subsequent commits then failed with
+// 403 Forbidden - "You are not allowed to push into this branch".
+//
+// We now call Unprotect (idempotent) and then poll GetProtectedBranch
+// until it returns 404, with a bounded wait budget. If the branch
+// remains protected after the budget, we log a warning (non-fatal, same
+// behavior as the previous variant) so the test's own assertion produces
+// the actionable error message.
 func unprotectMain(ctx context.Context, t *testing.T, proj ProjectFixture) {
 	t.Helper()
-	_ = ctx
-	_, err := sess.glClient.GL().ProtectedBranches.UnprotectRepositoryBranches(int(proj.ID), defaultBranch)
+	pid := int(proj.ID)
+
+	// Idempotent: safe to call when the branch is already unprotected.
+	if _, err := sess.glClient.GL().ProtectedBranches.UnprotectRepositoryBranches(pid, defaultBranch); err != nil {
+		t.Logf("unprotect main (idempotent, may already be unprotected): %v", err)
+	}
+
+	// Wait for sidekiq to process the unprotect job before polling; under
+	// Docker load the rule can sit in the queue for several seconds.
+	drainSidekiq(ctx, t, sess.glClient)
+
+	// Wait for the protection rule to actually disappear. Under Docker load
+	// the change can take a few seconds to propagate through the API even
+	// after sidekiq has drained.
+	maxWait := e2eTimeout(30*time.Second, 60*time.Second)
+	pollCtx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
+
+	err := Poll(pollCtx, 500*time.Millisecond, maxWait, func() (bool, string, error) {
+		_, resp, getErr := sess.glClient.GL().ProtectedBranches.GetProtectedBranch(pid, defaultBranch, gl.WithContext(pollCtx))
+		if getErr == nil {
+			return false, fmt.Sprintf("branch %q still protected in project %d", defaultBranch, pid), nil
+		}
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return true, fmt.Sprintf("branch %q unprotected in project %d", defaultBranch, pid), nil
+		}
+		// Transient errors (5xx, network) -> keep polling.
+		if resp == nil || resp.StatusCode >= 500 {
+			return false, fmt.Sprintf("get protected branch %q in project %d: %v", defaultBranch, pid, getErr), nil
+		}
+		// Non-retryable 4xx that's not 404.
+		return false, fmt.Sprintf("get protected branch %q in project %d: HTTP %d", defaultBranch, pid, resp.StatusCode),
+			fmt.Errorf("get protected branch: %w", getErr)
+	})
 	if err != nil {
-		t.Logf("unprotect main (non-fatal, may already be unprotected): %v", err)
+		t.Logf("unprotect main did not converge within %s (non-fatal): %v", maxWait, err)
 	}
 }
 
