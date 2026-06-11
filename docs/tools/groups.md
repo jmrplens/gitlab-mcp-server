@@ -143,14 +143,14 @@ Get details of a specific group webhook by hook ID. Returns URL, enabled events,
 
 ### `gitlab_group_hook_add`
 
-Add a new webhook to a GitLab group. Requires URL; optionally configure event triggers, SSL verification, secret token, write-only signing token, branch filter, and `branch_filter_strategy` (`wildcard`, `regex`, or `all_branches`). The full set of supported event flags includes push, push_events_branch_filter, branch_filter_strategy, issues, confidential issues, merge requests, note, confidential note, subgroup, member, create, delete, modify, release, deployment, feature flag, milestone, vulnerability, emoji, resource access token, and project events.
+Add a new webhook to a GitLab group. Requires URL; optionally configure event triggers, SSL verification, secret token, write-only signing token, branch filter, and `branch_filter_strategy` (`wildcard`, `regex`, or `all_branches`). The full set of supported event flags includes push, tag push, push_events_branch_filter, branch_filter_strategy, issues, confidential issues, merge requests, note, confidential note, job, pipeline, wiki page, subgroup, member, release, deployment, feature flag, milestone, vulnerability, emoji, resource access token, and project events.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_group_hook_edit`
 
-Edit an existing group webhook. Supports changing URL, events, SSL verification, secret token, write-only signing token, branch filter, and `branch_filter_strategy` (`wildcard`, `regex`, or `all_branches`). Event flags include push, push_events_branch_filter, branch_filter_strategy, issues, confidential issues, merge requests, note, confidential note, subgroup, member, create, delete, modify, release, deployment, feature flag, milestone, vulnerability, emoji, resource access token, and project events.
+Edit an existing group webhook. Supports changing URL, events, SSL verification, secret token, write-only signing token, branch filter, and `branch_filter_strategy` (`wildcard`, `regex`, or `all_branches`). Event flags include push, tag push, push_events_branch_filter, branch_filter_strategy, issues, confidential issues, merge requests, note, confidential note, job, pipeline, wiki page, subgroup, member, release, deployment, feature flag, milestone, vulnerability, emoji, resource access token, and project events.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

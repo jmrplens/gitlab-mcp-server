@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -46,10 +47,10 @@ func groupDatadogToItem(g *gl.GroupDatadogIntegration) GroupDatadogItem {
 		DatadogTags:    g.DatadogTags,
 	}
 	if g.CreatedAt != nil {
-		item.CreatedAt = g.CreatedAt.String()
+		item.CreatedAt = g.CreatedAt.UTC().Format(time.RFC3339)
 	}
 	if g.UpdatedAt != nil {
-		item.UpdatedAt = g.UpdatedAt.String()
+		item.UpdatedAt = g.UpdatedAt.UTC().Format(time.RFC3339)
 	}
 	item.ArchiveTraceEvents = g.ArchiveTraceEvents
 	return item
@@ -69,12 +70,12 @@ type GetGroupDatadogOutput struct {
 }
 
 // GetGroupDatadog retrieves the Datadog integration configured for a group.
-// Requires Owner role on the group; the endpoint is GitLab.com Enterprise/Premium only.
+// Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).
 func GetGroupDatadog(ctx context.Context, client *gitlabclient.Client, input GetGroupDatadogInput) (GetGroupDatadogOutput, error) {
 	integration, _, err := client.GL().Integrations.GetGroupDatadogIntegration(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
 		return GetGroupDatadogOutput{}, toolutil.WrapErrWithStatusHint("get_group_datadog_integration", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get; the Datadog integration must be active on the group; this endpoint requires GitLab.com Premium/Ultimate")
+			"verify group_id with gitlab_group_get; the Datadog integration must be active on the group; requires Owner role on the group and GitLab Premium/Ultimate")
 	}
 	if integration == nil {
 		return GetGroupDatadogOutput{}, toolutil.WrapErrWithMessage("get_group_datadog_integration",
@@ -107,13 +108,14 @@ type SetGroupDatadogOutput struct {
 }
 
 // SetGroupDatadog creates or updates the Datadog integration for a group.
-// Requires Owner role; requires GitLab.com Premium/Ultimate.
+// Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).
 func SetGroupDatadog(ctx context.Context, client *gitlabclient.Client, input SetGroupDatadogInput) (SetGroupDatadogOutput, error) {
-	if input.UseInheritedSettings == nil && input.APIKey == "" && input.APIURL == "" &&
+	useInherited := input.UseInheritedSettings != nil && *input.UseInheritedSettings
+	if !useInherited && input.APIKey == "" && input.APIURL == "" &&
 		input.DatadogEnv == "" && input.DatadogService == "" && input.DatadogSite == "" &&
 		input.DatadogTags == "" && input.ArchiveTraceEvents == nil {
 		return SetGroupDatadogOutput{}, toolutil.WrapErrWithMessage("set_group_datadog_integration",
-			toolutil.ErrFieldRequired("at least one of: api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, archive_trace_events, use_inherited_settings"))
+			toolutil.ErrFieldRequired("at least one of: api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, archive_trace_events, use_inherited_settings=true"))
 	}
 
 	opts := &gl.GroupDatadogIntegrationOptions{}
@@ -145,7 +147,7 @@ func SetGroupDatadog(ctx context.Context, client *gitlabclient.Client, input Set
 	integration, _, err := client.GL().Integrations.SetGroupDatadogIntegration(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return SetGroupDatadogOutput{}, toolutil.WrapErrWithStatusHint("set_group_datadog_integration", err, http.StatusForbidden,
-			"requires Owner role on the group and GitLab.com Premium/Ultimate; verify group_id with gitlab_group_get; api_key is mandatory unless use_inherited_settings=true")
+			"requires Owner role on the group and GitLab Premium/Ultimate (self-managed EE or GitLab.com); verify group_id with gitlab_group_get; api_key is mandatory unless use_inherited_settings=true")
 	}
 	if integration == nil {
 		return SetGroupDatadogOutput{}, toolutil.WrapErrWithMessage("set_group_datadog_integration",
@@ -167,7 +169,7 @@ type DeleteGroupDatadogInput struct {
 func DeleteGroupDatadog(ctx context.Context, client *gitlabclient.Client, input DeleteGroupDatadogInput) error {
 	if _, err := client.GL().Integrations.DeleteGroupDatadogIntegration(string(input.GroupID), gl.WithContext(ctx)); err != nil {
 		return toolutil.WrapErrWithStatusHint("delete_group_datadog_integration", err, http.StatusForbidden,
-			"requires Owner role on the group and GitLab.com Premium/Ultimate; verify group_id with gitlab_group_get; deletion is irreversible (the stored API key is cleared)")
+			"requires Owner role on the group and GitLab Premium/Ultimate (self-managed EE or GitLab.com); verify group_id with gitlab_group_get; deletion is irreversible (the stored API key is cleared)")
 	}
 	return nil
 }

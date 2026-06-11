@@ -173,10 +173,10 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_ArchivedFlag verifica que el flag Archived se envía en
-// el body de la request cuando se setea (client-go v2.38.0 añadió
-// Archived a CreateGroupLabelOptions; la herramienta MCP debe
-// encaminar el *bool del usuario).
+// TestCreate_ArchivedFlag verifies that the Archived flag is sent in
+// the request body when set (client-go v2.38.0 added Archived to
+// CreateGroupLabelOptions; the MCP tool must forward the *bool
+// from the user).
 func TestCreate_ArchivedFlag(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -245,8 +245,8 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_ArchivedFlag verifica que el flag Archived se envía en
-// el body de la request y que la respuesta lo surfaces en la salida.
+// TestUpdate_ArchivedFlag verifies that the Archived flag is sent in
+// the request body and that the response surfaces it in the output.
 func TestUpdate_ArchivedFlag(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -270,7 +270,7 @@ func TestUpdate_ArchivedFlag(t *testing.T) {
 		Archived: &archived,
 	})
 	if err != nil {
-		t.Fatalf("Update() inesperado error: %v", err)
+		t.Fatalf("Update() unexpected error: %v", err)
 	}
 	if !out.Archived {
 		t.Error("out.Archived = false, want true")

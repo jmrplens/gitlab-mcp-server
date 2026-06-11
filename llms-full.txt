@@ -1700,7 +1700,7 @@ Action guidance:
 - get_protected: Use to execute branches domain action.
 - list: List repository branches for one project with optional search and pagination. Use this before branch-level operations and when selecting refs for compare/MR flows.
 - list_protected: Use to execute branches domain action.
-- protect: Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer. 60=Admin is not valid for project branches.
+- protect: Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer.
 - rule_list: Use to audit aggregated branch rules, including protections and approval-related state, for a project path.
 - unprotect: Use to execute branches domain action.
 - update_protected: Use to execute branches domain action.
@@ -1709,8 +1709,8 @@ Parameter guidance:
 - create.ref: git_ref; source: Existing branch/tag/commit used as creation source.
 - get.branch_name: git_branch; source: Branch name from task context or branch list output.
 - list.project_id: scope_project; source: Project numeric ID or full path containing branches.
-- protect.merge_access_level: branch_protection_merge_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer. 60=Admin is not valid for project branches.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
-- protect.push_access_level: branch_protection_push_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer. 60=Admin is not valid for project branches.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
+- protect.merge_access_level: branch_protection_merge_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
+- protect.push_access_level: branch_protection_push_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
 - rule_list.project_path: scope_project; source: Full project path used by GraphQL branch rule query.
 
 Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). Delete and unprotect are destructive and irreversible.
@@ -12529,9 +12529,9 @@ Protect a GitLab repository branch by setting push and merge access levels (0=no
 - `allow_force_push` (boolean): Allow force push to this branch
 - `branch_name` (string) (required): Branch name or wildcard (e.g. 'main' or 'release/*')
 - `code_owner_approval_required` (boolean): Require CODEOWNERS approval for changes to matching files
-- `merge_access_level` (integer): Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer. 60=Admin is not valid for project branches.
+- `merge_access_level` (integer): Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer.
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `push_access_level` (integer): Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer. 60=Admin is not valid for project branches.
+- `push_access_level` (integer): Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -13614,7 +13614,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_delete_group_datadog_integration
 
-Use to execute integrations domain action.
+Remove the Datadog integration from a group. The stored api_key is cleared; deletion is irreversible. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).
 
 **Parameters:**
 
@@ -15365,7 +15365,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_group_datadog_integration
 
-Use to execute integrations domain action.
+Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.
 
 **Parameters:**
 
@@ -16964,7 +16964,7 @@ Add a SAML group link to a GitLab group.
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin for group SAML)
+- `access_level` (integer) (required): Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID
 - `provider` (string): SAML provider name
@@ -18960,7 +18960,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_integrations
 
-Use to execute integrations domain action.
+List all integrations (services) configured for a project, including their active status.
 
 **Parameters:**
 
@@ -22359,7 +22359,7 @@ Edit a project member's access level or expiration. Requires access_level (10=Gu
 
 **Parameters:**
 
-- `access_level` (integer) (required): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
+- `access_level` (integer) (required): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `member_role_id` (integer): Custom member role ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -24335,7 +24335,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_set_group_datadog_integration
 
-Use to execute integrations domain action.
+Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, archive_trace_events, or use_inherited_settings=true must be supplied.
 
 **Parameters:**
 

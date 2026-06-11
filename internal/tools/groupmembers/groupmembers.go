@@ -255,6 +255,11 @@ func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInp
 	if input.GroupAccess == 0 {
 		return ShareOutput{}, toolutil.WrapErrWithMessage("group_share", toolutil.ErrFieldRequired("group_access"))
 	}
+	switch input.GroupAccess {
+	case 10, 20, 30, 40:
+	default:
+		return ShareOutput{}, toolutil.WrapErrWithMessage("group_share", errors.New("group_access must be one of 10/20/30/40 (Guest/Reporter/Developer/Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project group shares"))
+	}
 	opts := &gl.ShareWithGroupOptions{
 		GroupID:     new(input.ShareGroupID),
 		GroupAccess: new(gl.AccessLevelValue(input.GroupAccess)),
@@ -273,6 +278,10 @@ func ShareGroup(ctx context.Context, client *gitlabclient.Client, input ShareInp
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ShareOutput{}, toolutil.WrapErrWithHint("group_share", err,
 				"sharing requires Owner role on this group AND Maintainer+ on the target group; cross-hierarchy sharing may be disabled in group/instance settings")
+		}
+		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			return ShareOutput{}, toolutil.WrapErrWithHint("group_share", err,
+				"group_access must be one of 10/20/30/40 (Guest/Reporter/Developer/Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project group shares")
 		}
 		return ShareOutput{}, toolutil.WrapErrWithStatusHint("group_share", err, http.StatusNotFound,
 			"verify group_id and share_group_id with gitlab_group_get \u2014 share_group_id must be a numeric group ID, not a path")

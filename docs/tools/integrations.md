@@ -69,7 +69,7 @@ Configure the Jira integration for a project. Sets up the connection to a Jira i
 
 ## Group Integrations (Datadog)
 
-The group-level Datadog integration is configured at the group scope and inherits down to descendant subgroups when `use_inherited_settings=true`. Requires GitLab.com Premium/Ultimate and Owner role on the group. The `api_key` field is write-only — the read endpoint never returns it.
+The group-level Datadog integration is configured at the group scope and inherits down to descendant subgroups when `use_inherited_settings=true`. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The `api_key` field is write-only — the read endpoint never returns it.
 
 ### `gitlab_get_group_datadog_integration`
 
