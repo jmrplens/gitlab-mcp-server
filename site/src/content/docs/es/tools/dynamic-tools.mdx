@@ -9,9 +9,9 @@ Esta página es la guía de usuario. Para el contrato autoritativo a nivel de ca
 
 El conjunto de herramientas dinámico es el modo de bajo consumo de tokens de GitLab MCP Server. Mantiene disponible todo el catálogo de acciones de GitLab, pero muestra a tu cliente de IA solo dos herramientas públicas:
 
-| Herramienta           | Qué hace                                                                                                |
-| --------------------- | ------------------------------------------------------------------------------------------------------- |
-| `gitlab_find_action`  | Encuentra la acción correcta de GitLab y devuelve parámetros exactos, ejemplos y metadatos de seguridad |
+| Herramienta             | Qué hace                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `gitlab_find_action`    | Encuentra la acción correcta de GitLab y devuelve parámetros exactos, ejemplos y metadatos de seguridad |
 | `gitlab_execute_action` | Ejecuta la acción elegida tras validar el ID de acción y los parámetros                                 |
 
 El modo dinámico de find/execute es la superficie predeterminada. Las meta-herramientas siguen disponibles con `TOOL_SURFACE=meta` para clientes que prefieren despachadores consolidados por dominio.
@@ -99,9 +99,9 @@ Cada herramienta dinámica devuelve un resultado MCP normal: Markdown en `conten
 
 ## Qué devuelve cada llamada
 
-| Llamada               | Qué recibe el asistente                                                                                                                                                                                                          | Cómo debe usarlo el asistente                                                                     |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `gitlab_find_action`  | IDs de acción canónicos ordenados con `input_schema` exacto, meta-herramienta base, dominio, acción, URI de schema, indicador destructivo, parámetros requeridos, pistas de uso, ejemplos, explicaciones opcionales y puntuación | Elegir el mejor candidato `domain.action` y construir `params` desde el schema                    |
+| Llamada                 | Qué recibe el asistente                                                                                                                                                                                                          | Cómo debe usarlo el asistente                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `gitlab_find_action`    | IDs de acción canónicos ordenados con `input_schema` exacto, meta-herramienta base, dominio, acción, URI de schema, indicador destructivo, parámetros requeridos, pistas de uso, ejemplos, explicaciones opcionales y puntuación | Elegir el mejor candidato `domain.action` y construir `params` desde el schema                    |
 | `gitlab_execute_action` | La respuesta existente de la acción desde el handler base, normalmente Markdown y JSON estructurado                                                                                                                              | Usar los datos devueltos para responder al usuario, o reparar a partir de errores `isError: true` |
 
 Encontrar acciones es deliberadamente barato comparado con anunciar todas las operaciones de GitLab en `tools/list`. El modelo solo paga por schemas detallados cuando necesita una acción concreta.

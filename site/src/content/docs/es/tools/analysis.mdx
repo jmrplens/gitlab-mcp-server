@@ -40,11 +40,11 @@ Las herramientas de análisis requieren que el cliente MCP soporte la **capacida
 
 El catálogo de análisis está disponible desde cualquier superficie de herramientas:
 
-| Superficie                | Cómo llamar análisis                                                                                                                                      |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Superficie                | Cómo llamar análisis                                                                                                                                        |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dinámica predeterminada   | Usa `gitlab_find_action` para encontrar la acción canónica `analyze.*`, y luego llama a `gitlab_execute_action` con ese ID de acción y parámetros validados |
-| Meta-herramientas         | Usa la meta-herramienta `gitlab_analyze` con acciones como `pipeline_failure`, `mr_security` o `release_notes`                                            |
-| Herramientas individuales | Llama directamente a la herramienta especializada, como `gitlab_analyze_pipeline_failure`                                                                 |
+| Meta-herramientas         | Usa la meta-herramienta `gitlab_analyze` con acciones como `pipeline_failure`, `mr_security` o `release_notes`                                              |
+| Herramientas individuales | Llama directamente a la herramienta especializada, como `gitlab_analyze_pipeline_failure`                                                                   |
 
 ## Herramientas de análisis disponibles
 
