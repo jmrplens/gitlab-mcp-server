@@ -27,8 +27,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/enterpriseusers"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/externalstatuschecks"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/geo"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouplabels"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupscim"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupstoragemoves"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/integrations"
@@ -1972,7 +1972,6 @@ func TestGroupDatadogIntegration(t *testing.T) {
 		})
 	})
 }
-
 
 // TestMeta_GroupLabelArchive verifies the group-label Archived flag
 // (exposed by the MCP surface in commit 6f42ed6c). Archiving

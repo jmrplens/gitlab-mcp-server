@@ -54,11 +54,11 @@ type EnableDisableInput struct {
 
 // EnableDisable enables or disables error tracking for a project.
 func EnableDisable(ctx context.Context, client *gitlabclient.Client, input EnableDisableInput) (SettingsOutput, error) {
-	opts := &gl.EnableDisableErrorTrackingOptions{
+	opts := &gl.UpdateErrorTrackingSettingsOptions{
 		Active:     input.Active,
 		Integrated: input.Integrated,
 	}
-	s, _, err := client.GL().ErrorTracking.EnableDisableErrorTracking(string(input.ProjectID), opts, gl.WithContext(ctx))
+	s, _, err := client.GL().ErrorTracking.UpdateErrorTrackingSettings(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return SettingsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_enable_disable_error_tracking", err, http.StatusBadRequest,
 			"requires Maintainer role; active=true requires error tracking to be configured (Sentry or GitLab-integrated); integrated_error_tracking flag toggles between Sentry and GitLab backend")

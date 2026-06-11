@@ -176,17 +176,17 @@ func TestAddHook_Success(t *testing.T) {
 	out, err := AddHook(context.Background(), client, AddHookInput{
 		GroupID: "99",
 		HookInput: HookInput{
-			URL:                      testHookURL,
-			SigningToken:             "signing-secret",
-			PushEvents:               &push,
-			MilestoneEvents:          &push,
-			FeatureFlagEvents:        &push,
-			VulnerabilityEvents:      &push,
-			EmojiEvents:              &push,
+			URL:                       testHookURL,
+			SigningToken:              "signing-secret",
+			PushEvents:                &push,
+			MilestoneEvents:           &push,
+			FeatureFlagEvents:         &push,
+			VulnerabilityEvents:       &push,
+			EmojiEvents:               &push,
 			ResourceAccessTokenEvents: &push,
-			ProjectEvents:            &push,
-			PushEventsBranchFilter:   "main",
-			BranchFilterStrategy:     "wildcard",
+			ProjectEvents:             &push,
+			PushEventsBranchFilter:    "main",
+			BranchFilterStrategy:      "wildcard",
 		},
 	})
 	if err != nil {

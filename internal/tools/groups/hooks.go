@@ -15,34 +15,34 @@ import (
 
 // HookInput defines common parameters for creating or editing a group hook.
 type HookInput struct {
-	URL                      string `json:"url,omitempty"                        jsonschema:"Webhook URL (required for add)"`
-	Name                     string `json:"name,omitempty"                       jsonschema:"Hook name"`
-	Description              string `json:"description,omitempty"                jsonschema:"Hook description"`
-	Token                    string `json:"token,omitempty"                      jsonschema:"Secret token for payload validation"`
-	SigningToken             string `json:"signing_token,omitempty"              jsonschema:"Write-only signing token for webhook signature validation"`
-	PushEvents               *bool  `json:"push_events,omitempty"                jsonschema:"Trigger on push events"`
-	TagPushEvents            *bool  `json:"tag_push_events,omitempty"            jsonschema:"Trigger on tag push events"`
-	MergeRequestsEvents      *bool  `json:"merge_requests_events,omitempty"      jsonschema:"Trigger on merge request events"`
-	IssuesEvents             *bool  `json:"issues_events,omitempty"              jsonschema:"Trigger on issue events"`
-	NoteEvents               *bool  `json:"note_events,omitempty"                jsonschema:"Trigger on comment events"`
-	JobEvents                *bool  `json:"job_events,omitempty"                 jsonschema:"Trigger on job events"`
-	PipelineEvents           *bool  `json:"pipeline_events,omitempty"            jsonschema:"Trigger on pipeline events"`
-	WikiPageEvents           *bool  `json:"wiki_page_events,omitempty"           jsonschema:"Trigger on wiki page events"`
-	DeploymentEvents         *bool  `json:"deployment_events,omitempty"          jsonschema:"Trigger on deployment events"`
-	ReleasesEvents           *bool  `json:"releases_events,omitempty"            jsonschema:"Trigger on release events"`
-	MilestoneEvents          *bool  `json:"milestone_events,omitempty"           jsonschema:"Trigger on milestone events"`
-	FeatureFlagEvents        *bool  `json:"feature_flag_events,omitempty"        jsonschema:"Trigger on feature flag events"`
-	SubGroupEvents           *bool  `json:"subgroup_events,omitempty"            jsonschema:"Trigger on subgroup events"`
-	MemberEvents             *bool  `json:"member_events,omitempty"              jsonschema:"Trigger on member events"`
-	VulnerabilityEvents      *bool  `json:"vulnerability_events,omitempty"       jsonschema:"Trigger on vulnerability events"`
-	ConfidentialIssuesEvents *bool  `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
-	ConfidentialNoteEvents   *bool  `json:"confidential_note_events,omitempty"   jsonschema:"Trigger on confidential note events"`
-	EnableSSLVerification    *bool  `json:"enable_ssl_verification,omitempty"    jsonschema:"Enable SSL verification for the hook endpoint"`
-	PushEventsBranchFilter   string `json:"push_events_branch_filter,omitempty"  jsonschema:"Branch filter for push events (e.g. 'main')"`
-	BranchFilterStrategy     string `json:"branch_filter_strategy,omitempty"      jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
-	EmojiEvents              *bool  `json:"emoji_events,omitempty"                jsonschema:"Trigger on emoji events"`
+	URL                       string `json:"url,omitempty"                        jsonschema:"Webhook URL (required for add)"`
+	Name                      string `json:"name,omitempty"                       jsonschema:"Hook name"`
+	Description               string `json:"description,omitempty"                jsonschema:"Hook description"`
+	Token                     string `json:"token,omitempty"                      jsonschema:"Secret token for payload validation"`
+	SigningToken              string `json:"signing_token,omitempty"              jsonschema:"Write-only signing token for webhook signature validation"`
+	PushEvents                *bool  `json:"push_events,omitempty"                jsonschema:"Trigger on push events"`
+	TagPushEvents             *bool  `json:"tag_push_events,omitempty"            jsonschema:"Trigger on tag push events"`
+	MergeRequestsEvents       *bool  `json:"merge_requests_events,omitempty"      jsonschema:"Trigger on merge request events"`
+	IssuesEvents              *bool  `json:"issues_events,omitempty"              jsonschema:"Trigger on issue events"`
+	NoteEvents                *bool  `json:"note_events,omitempty"                jsonschema:"Trigger on comment events"`
+	JobEvents                 *bool  `json:"job_events,omitempty"                 jsonschema:"Trigger on job events"`
+	PipelineEvents            *bool  `json:"pipeline_events,omitempty"            jsonschema:"Trigger on pipeline events"`
+	WikiPageEvents            *bool  `json:"wiki_page_events,omitempty"           jsonschema:"Trigger on wiki page events"`
+	DeploymentEvents          *bool  `json:"deployment_events,omitempty"          jsonschema:"Trigger on deployment events"`
+	ReleasesEvents            *bool  `json:"releases_events,omitempty"            jsonschema:"Trigger on release events"`
+	MilestoneEvents           *bool  `json:"milestone_events,omitempty"           jsonschema:"Trigger on milestone events"`
+	FeatureFlagEvents         *bool  `json:"feature_flag_events,omitempty"        jsonschema:"Trigger on feature flag events"`
+	SubGroupEvents            *bool  `json:"subgroup_events,omitempty"            jsonschema:"Trigger on subgroup events"`
+	MemberEvents              *bool  `json:"member_events,omitempty"              jsonschema:"Trigger on member events"`
+	VulnerabilityEvents       *bool  `json:"vulnerability_events,omitempty"       jsonschema:"Trigger on vulnerability events"`
+	ConfidentialIssuesEvents  *bool  `json:"confidential_issues_events,omitempty" jsonschema:"Trigger on confidential issue events"`
+	ConfidentialNoteEvents    *bool  `json:"confidential_note_events,omitempty"   jsonschema:"Trigger on confidential note events"`
+	EnableSSLVerification     *bool  `json:"enable_ssl_verification,omitempty"    jsonschema:"Enable SSL verification for the hook endpoint"`
+	PushEventsBranchFilter    string `json:"push_events_branch_filter,omitempty"  jsonschema:"Branch filter for push events (e.g. 'main')"`
+	BranchFilterStrategy      string `json:"branch_filter_strategy,omitempty"      jsonschema:"Branch filter strategy (wildcard, regex, all_branches)"`
+	EmojiEvents               *bool  `json:"emoji_events,omitempty"                jsonschema:"Trigger on emoji events"`
 	ResourceAccessTokenEvents *bool  `json:"resource_access_token_events,omitempty" jsonschema:"Trigger on resource access token events"`
-	ProjectEvents            *bool  `json:"project_events,omitempty"               jsonschema:"Trigger on project events (group-level)"`
+	ProjectEvents             *bool  `json:"project_events,omitempty"               jsonschema:"Trigger on project events (group-level)"`
 }
 
 // ListHooksInput defines parameters for listing group hooks.
@@ -86,40 +86,40 @@ type HookURLVariable struct {
 // HookOutput represents a GitLab group webhook.
 type HookOutput struct {
 	toolutil.HintableOutput
-	ID                       int64             `json:"id"`
-	URL                      string            `json:"url"`
-	Name                     string            `json:"name,omitempty"`
-	Description              string            `json:"description,omitempty"`
-	GroupID                  int64             `json:"group_id"`
-	PushEvents               bool              `json:"push_events"`
-	TagPushEvents            bool              `json:"tag_push_events"`
-	MergeRequestsEvents      bool              `json:"merge_requests_events"`
-	IssuesEvents             bool              `json:"issues_events"`
-	NoteEvents               bool              `json:"note_events"`
-	JobEvents                bool              `json:"job_events"`
-	PipelineEvents           bool              `json:"pipeline_events"`
-	WikiPageEvents           bool              `json:"wiki_page_events"`
-	DeploymentEvents         bool              `json:"deployment_events"`
-	ReleasesEvents           bool              `json:"releases_events"`
-	SubGroupEvents           bool              `json:"subgroup_events"`
-	MemberEvents             bool              `json:"member_events"`
-	ConfidentialIssuesEvents bool              `json:"confidential_issues_events"`
-	ConfidentialNoteEvents   bool              `json:"confidential_note_events"`
-	EnableSSLVerification    bool              `json:"enable_ssl_verification"`
-	AlertStatus              string            `json:"alert_status,omitempty"`
-	DisabledUntil            string            `json:"disabled_until,omitempty"`
-	URLVariables             []HookURLVariable `json:"url_variables,omitempty"`
-	FeatureFlagEvents        bool              `json:"feature_flag_events"`
-	MilestoneEvents          bool              `json:"milestone_events"`
-	VulnerabilityEvents      bool              `json:"vulnerability_events"`
-	EmojiEvents              bool              `json:"emoji_events"`
+	ID                        int64             `json:"id"`
+	URL                       string            `json:"url"`
+	Name                      string            `json:"name,omitempty"`
+	Description               string            `json:"description,omitempty"`
+	GroupID                   int64             `json:"group_id"`
+	PushEvents                bool              `json:"push_events"`
+	TagPushEvents             bool              `json:"tag_push_events"`
+	MergeRequestsEvents       bool              `json:"merge_requests_events"`
+	IssuesEvents              bool              `json:"issues_events"`
+	NoteEvents                bool              `json:"note_events"`
+	JobEvents                 bool              `json:"job_events"`
+	PipelineEvents            bool              `json:"pipeline_events"`
+	WikiPageEvents            bool              `json:"wiki_page_events"`
+	DeploymentEvents          bool              `json:"deployment_events"`
+	ReleasesEvents            bool              `json:"releases_events"`
+	SubGroupEvents            bool              `json:"subgroup_events"`
+	MemberEvents              bool              `json:"member_events"`
+	ConfidentialIssuesEvents  bool              `json:"confidential_issues_events"`
+	ConfidentialNoteEvents    bool              `json:"confidential_note_events"`
+	EnableSSLVerification     bool              `json:"enable_ssl_verification"`
+	AlertStatus               string            `json:"alert_status,omitempty"`
+	DisabledUntil             string            `json:"disabled_until,omitempty"`
+	URLVariables              []HookURLVariable `json:"url_variables,omitempty"`
+	FeatureFlagEvents         bool              `json:"feature_flag_events"`
+	MilestoneEvents           bool              `json:"milestone_events"`
+	VulnerabilityEvents       bool              `json:"vulnerability_events"`
+	EmojiEvents               bool              `json:"emoji_events"`
 	ResourceAccessTokenEvents bool              `json:"resource_access_token_events"`
-	ProjectEvents            bool              `json:"project_events"`
-	PushEventsBranchFilter   string            `json:"push_events_branch_filter,omitempty"`
-	BranchFilterStrategy     string            `json:"branch_filter_strategy,omitempty"`
-	TokenPresent             bool              `json:"token_present"`
-	SigningTokenPresent      bool              `json:"signing_token_present"`
-	CreatedAt                string            `json:"created_at,omitempty"`
+	ProjectEvents             bool              `json:"project_events"`
+	PushEventsBranchFilter    string            `json:"push_events_branch_filter,omitempty"`
+	BranchFilterStrategy      string            `json:"branch_filter_strategy,omitempty"`
+	TokenPresent              bool              `json:"token_present"`
+	SigningTokenPresent       bool              `json:"signing_token_present"`
+	CreatedAt                 string            `json:"created_at,omitempty"`
 }
 
 // HookListOutput holds a paginated list of group hooks.
@@ -132,37 +132,37 @@ type HookListOutput struct {
 // hookToOutput converts a GitLab API [gl.GroupHook] to the MCP tool output format.
 func hookToOutput(h *gl.GroupHook) HookOutput {
 	out := HookOutput{
-		ID:                       h.ID,
-		URL:                      h.URL,
-		Name:                     h.Name,
-		Description:              h.Description,
-		GroupID:                  h.GroupID,
-		PushEvents:               h.PushEvents,
-		TagPushEvents:            h.TagPushEvents,
-		MergeRequestsEvents:      h.MergeRequestsEvents,
-		IssuesEvents:             h.IssuesEvents,
-		NoteEvents:               h.NoteEvents,
-		JobEvents:                h.JobEvents,
-		PipelineEvents:           h.PipelineEvents,
-		WikiPageEvents:           h.WikiPageEvents,
-		DeploymentEvents:         h.DeploymentEvents,
-		ReleasesEvents:           h.ReleasesEvents,
-		SubGroupEvents:           h.SubGroupEvents,
-		MemberEvents:             h.MemberEvents,
-		ConfidentialIssuesEvents: h.ConfidentialIssuesEvents,
-		ConfidentialNoteEvents:   h.ConfidentialNoteEvents,
-		EnableSSLVerification:    h.EnableSSLVerification,
-		AlertStatus:              h.AlertStatus,
-		FeatureFlagEvents:        h.FeatureFlagEvents,
-		MilestoneEvents:          h.MilestoneEvents,
-		VulnerabilityEvents:      h.VulnerabilityEvents,
-		EmojiEvents:              h.EmojiEvents,
+		ID:                        h.ID,
+		URL:                       h.URL,
+		Name:                      h.Name,
+		Description:               h.Description,
+		GroupID:                   h.GroupID,
+		PushEvents:                h.PushEvents,
+		TagPushEvents:             h.TagPushEvents,
+		MergeRequestsEvents:       h.MergeRequestsEvents,
+		IssuesEvents:              h.IssuesEvents,
+		NoteEvents:                h.NoteEvents,
+		JobEvents:                 h.JobEvents,
+		PipelineEvents:            h.PipelineEvents,
+		WikiPageEvents:            h.WikiPageEvents,
+		DeploymentEvents:          h.DeploymentEvents,
+		ReleasesEvents:            h.ReleasesEvents,
+		SubGroupEvents:            h.SubGroupEvents,
+		MemberEvents:              h.MemberEvents,
+		ConfidentialIssuesEvents:  h.ConfidentialIssuesEvents,
+		ConfidentialNoteEvents:    h.ConfidentialNoteEvents,
+		EnableSSLVerification:     h.EnableSSLVerification,
+		AlertStatus:               h.AlertStatus,
+		FeatureFlagEvents:         h.FeatureFlagEvents,
+		MilestoneEvents:           h.MilestoneEvents,
+		VulnerabilityEvents:       h.VulnerabilityEvents,
+		EmojiEvents:               h.EmojiEvents,
 		ResourceAccessTokenEvents: h.ResourceAccessTokenEvents,
-		ProjectEvents:            h.ProjectEvents,
-		PushEventsBranchFilter:   h.PushEventsBranchFilter,
-		BranchFilterStrategy:     h.BranchFilterStrategy,
-		TokenPresent:             h.TokenPresent,
-		SigningTokenPresent:      h.SigningTokenPresent,
+		ProjectEvents:             h.ProjectEvents,
+		PushEventsBranchFilter:    h.PushEventsBranchFilter,
+		BranchFilterStrategy:      h.BranchFilterStrategy,
+		TokenPresent:              h.TokenPresent,
+		SigningTokenPresent:       h.SigningTokenPresent,
 	}
 	if len(h.URLVariables) > 0 {
 		out.URLVariables = make([]HookURLVariable, len(h.URLVariables))
@@ -265,65 +265,39 @@ func applyGroupHookIdentityOptions(input HookInput, opts *gl.AddGroupHookOptions
 }
 
 func applyGroupHookEventOptions(input HookInput, opts *gl.AddGroupHookOptions) {
-	if input.PushEvents != nil {
-		opts.PushEvents = input.PushEvents
+	// Table-driven assignment keeps cyclomatic complexity flat as new
+	// event-flag fields are added to HookInput. The slice pairs each
+	// input pointer with the destination field pointer on the GitLab
+	// options struct; the loop handles the nil-check once.
+	pairs := []struct {
+		src *bool
+		dst **bool
+	}{
+		{input.PushEvents, &opts.PushEvents},
+		{input.TagPushEvents, &opts.TagPushEvents},
+		{input.MergeRequestsEvents, &opts.MergeRequestsEvents},
+		{input.IssuesEvents, &opts.IssuesEvents},
+		{input.NoteEvents, &opts.NoteEvents},
+		{input.JobEvents, &opts.JobEvents},
+		{input.PipelineEvents, &opts.PipelineEvents},
+		{input.WikiPageEvents, &opts.WikiPageEvents},
+		{input.DeploymentEvents, &opts.DeploymentEvents},
+		{input.ReleasesEvents, &opts.ReleasesEvents},
+		{input.MilestoneEvents, &opts.MilestoneEvents},
+		{input.FeatureFlagEvents, &opts.FeatureFlagEvents},
+		{input.SubGroupEvents, &opts.SubGroupEvents},
+		{input.MemberEvents, &opts.MemberEvents},
+		{input.VulnerabilityEvents, &opts.VulnerabilityEvents},
+		{input.ConfidentialIssuesEvents, &opts.ConfidentialIssuesEvents},
+		{input.ConfidentialNoteEvents, &opts.ConfidentialNoteEvents},
+		{input.EmojiEvents, &opts.EmojiEvents},
+		{input.ResourceAccessTokenEvents, &opts.ResourceAccessTokenEvents},
+		{input.ProjectEvents, &opts.ProjectEvents},
 	}
-	if input.TagPushEvents != nil {
-		opts.TagPushEvents = input.TagPushEvents
-	}
-	if input.MergeRequestsEvents != nil {
-		opts.MergeRequestsEvents = input.MergeRequestsEvents
-	}
-	if input.IssuesEvents != nil {
-		opts.IssuesEvents = input.IssuesEvents
-	}
-	if input.NoteEvents != nil {
-		opts.NoteEvents = input.NoteEvents
-	}
-	if input.JobEvents != nil {
-		opts.JobEvents = input.JobEvents
-	}
-	if input.PipelineEvents != nil {
-		opts.PipelineEvents = input.PipelineEvents
-	}
-	if input.WikiPageEvents != nil {
-		opts.WikiPageEvents = input.WikiPageEvents
-	}
-	if input.DeploymentEvents != nil {
-		opts.DeploymentEvents = input.DeploymentEvents
-	}
-	if input.ReleasesEvents != nil {
-		opts.ReleasesEvents = input.ReleasesEvents
-	}
-	if input.MilestoneEvents != nil {
-		opts.MilestoneEvents = input.MilestoneEvents
-	}
-	if input.FeatureFlagEvents != nil {
-		opts.FeatureFlagEvents = input.FeatureFlagEvents
-	}
-	if input.SubGroupEvents != nil {
-		opts.SubGroupEvents = input.SubGroupEvents
-	}
-	if input.MemberEvents != nil {
-		opts.MemberEvents = input.MemberEvents
-	}
-	if input.VulnerabilityEvents != nil {
-		opts.VulnerabilityEvents = input.VulnerabilityEvents
-	}
-	if input.ConfidentialIssuesEvents != nil {
-		opts.ConfidentialIssuesEvents = input.ConfidentialIssuesEvents
-	}
-	if input.ConfidentialNoteEvents != nil {
-		opts.ConfidentialNoteEvents = input.ConfidentialNoteEvents
-	}
-	if input.EmojiEvents != nil {
-		opts.EmojiEvents = input.EmojiEvents
-	}
-	if input.ResourceAccessTokenEvents != nil {
-		opts.ResourceAccessTokenEvents = input.ResourceAccessTokenEvents
-	}
-	if input.ProjectEvents != nil {
-		opts.ProjectEvents = input.ProjectEvents
+	for _, p := range pairs {
+		if p.src != nil {
+			*p.dst = p.src
+		}
 	}
 }
 
@@ -336,34 +310,34 @@ func applyAddHookOpts(input HookInput) *gl.AddGroupHookOptions {
 
 func groupEditHookOptionsFromAdd(opts *gl.AddGroupHookOptions) *gl.EditGroupHookOptions {
 	return &gl.EditGroupHookOptions{
-		URL:                      opts.URL,
-		Name:                     opts.Name,
-		Description:              opts.Description,
-		PushEvents:               opts.PushEvents,
-		PushEventsBranchFilter:   opts.PushEventsBranchFilter,
-		BranchFilterStrategy:     opts.BranchFilterStrategy,
-		IssuesEvents:             opts.IssuesEvents,
-		ConfidentialIssuesEvents: opts.ConfidentialIssuesEvents,
-		MergeRequestsEvents:      opts.MergeRequestsEvents,
-		TagPushEvents:            opts.TagPushEvents,
-		NoteEvents:               opts.NoteEvents,
-		ConfidentialNoteEvents:   opts.ConfidentialNoteEvents,
-		JobEvents:                opts.JobEvents,
-		PipelineEvents:           opts.PipelineEvents,
-		WikiPageEvents:           opts.WikiPageEvents,
-		DeploymentEvents:         opts.DeploymentEvents,
-		FeatureFlagEvents:        opts.FeatureFlagEvents,
-		ReleasesEvents:           opts.ReleasesEvents,
-		MilestoneEvents:          opts.MilestoneEvents,
-		SubGroupEvents:           opts.SubGroupEvents,
-		MemberEvents:             opts.MemberEvents,
-		VulnerabilityEvents:      opts.VulnerabilityEvents,
-		EmojiEvents:              opts.EmojiEvents,
+		URL:                       opts.URL,
+		Name:                      opts.Name,
+		Description:               opts.Description,
+		PushEvents:                opts.PushEvents,
+		PushEventsBranchFilter:    opts.PushEventsBranchFilter,
+		BranchFilterStrategy:      opts.BranchFilterStrategy,
+		IssuesEvents:              opts.IssuesEvents,
+		ConfidentialIssuesEvents:  opts.ConfidentialIssuesEvents,
+		MergeRequestsEvents:       opts.MergeRequestsEvents,
+		TagPushEvents:             opts.TagPushEvents,
+		NoteEvents:                opts.NoteEvents,
+		ConfidentialNoteEvents:    opts.ConfidentialNoteEvents,
+		JobEvents:                 opts.JobEvents,
+		PipelineEvents:            opts.PipelineEvents,
+		WikiPageEvents:            opts.WikiPageEvents,
+		DeploymentEvents:          opts.DeploymentEvents,
+		FeatureFlagEvents:         opts.FeatureFlagEvents,
+		ReleasesEvents:            opts.ReleasesEvents,
+		MilestoneEvents:           opts.MilestoneEvents,
+		SubGroupEvents:            opts.SubGroupEvents,
+		MemberEvents:              opts.MemberEvents,
+		VulnerabilityEvents:       opts.VulnerabilityEvents,
+		EmojiEvents:               opts.EmojiEvents,
 		ResourceAccessTokenEvents: opts.ResourceAccessTokenEvents,
-		ProjectEvents:            opts.ProjectEvents,
-		EnableSSLVerification:    opts.EnableSSLVerification,
-		Token:                    opts.Token,
-		SigningToken:             opts.SigningToken,
+		ProjectEvents:             opts.ProjectEvents,
+		EnableSSLVerification:     opts.EnableSSLVerification,
+		Token:                     opts.Token,
+		SigningToken:              opts.SigningToken,
 	}
 }
 

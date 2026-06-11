@@ -403,16 +403,16 @@ func TestFormatGetGroupDatadogMarkdown_Full(t *testing.T) {
 	// Every populated field should make it into the rendered markdown.
 	text := firstMarkdownText(t, result)
 	wantSubs := []string{
-		"Datadog Production",       // fallback non-default for Title
-		"Slug",                      // fallback non-default for Slug
-		"API URL",                   // i.APIURL != "" branch
-		"Datadog Env",               // i.DatadogEnv != "" branch
-		"Datadog Service",           // i.DatadogService != "" branch
-		"Datadog Site",              // i.DatadogSite != "" branch
-		"Datadog Tags",              // i.DatadogTags != "" branch
-		"Archive Trace Events",      // i.ArchiveTraceEvents != nil branch
-		"Created",                   // i.CreatedAt != "" branch
-		"Updated",                   // i.UpdatedAt != "" branch
+		"Datadog Production",   // fallback non-default for Title
+		"Slug",                 // fallback non-default for Slug
+		"API URL",              // i.APIURL != "" branch
+		"Datadog Env",          // i.DatadogEnv != "" branch
+		"Datadog Service",      // i.DatadogService != "" branch
+		"Datadog Site",         // i.DatadogSite != "" branch
+		"Datadog Tags",         // i.DatadogTags != "" branch
+		"Archive Trace Events", // i.ArchiveTraceEvents != nil branch
+		"Created",              // i.CreatedAt != "" branch
+		"Updated",              // i.UpdatedAt != "" branch
 	}
 	for _, want := range wantSubs {
 		if !strings.Contains(text, want) {
@@ -446,15 +446,15 @@ func TestFormatSetGroupDatadogMarkdown_Full(t *testing.T) {
 	archive := true
 	result := FormatSetGroupDatadogMarkdown(SetGroupDatadogOutput{
 		Integration: GroupDatadogItem{
-			ID:              1,
-			Title:           "Datadog Production",
-			Slug:            "datadog",
-			Active:          true,
-			APIURL:          testAPIURL,
-			DatadogEnv:      "prod",
-			DatadogService:  "gitlab",
-			DatadogSite:     testDatadogSite,
-			DatadogTags:     "team:platform",
+			ID:                 1,
+			Title:              "Datadog Production",
+			Slug:               "datadog",
+			Active:             true,
+			APIURL:             testAPIURL,
+			DatadogEnv:         "prod",
+			DatadogService:     "gitlab",
+			DatadogSite:        testDatadogSite,
+			DatadogTags:        "team:platform",
 			ArchiveTraceEvents: &archive,
 		},
 	})
@@ -463,7 +463,7 @@ func TestFormatSetGroupDatadogMarkdown_Full(t *testing.T) {
 	}
 	text := firstMarkdownText(t, result)
 	wantSubs := []string{
-		"Datadog Production",  // fallback non-default for Title
+		"Datadog Production",   // fallback non-default for Title
 		"API URL",              // i.APIURL != "" branch
 		"Datadog Env",          // i.DatadogEnv != "" branch
 		"Datadog Service",      // i.DatadogService != "" branch

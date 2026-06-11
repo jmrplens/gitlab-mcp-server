@@ -69,146 +69,173 @@ func runMetaGroupCoreOperations(t *testing.T, ctx context.Context, grpName strin
 func runMetaGroupHookOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
 	t.Helper()
 	var hookID int64
-	t.Run("HookAdd", func(t *testing.T) {
-		if !sess.enterprise {
-			return
-		}
-		requireTruef(t, groupID > 0, "groupID not set")
-		out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "hook_add",
-			"params": map[string]any{
-				"group_id":    groupIDStr,
-				"url":         "https://example.com/hook",
-				"push_events": true,
-			},
-		})
-		requireNoError(t, err, "hook_add")
-		hookID = out.ID
-		t.Logf("Added hook %d", hookID)
-	})
+	t.Run("HookAdd", func(t *testing.T) { metaGroupHookAdd(t, ctx, groupID, groupIDStr, &hookID) })
+	t.Run("HookList", func(t *testing.T) { metaGroupHookList(t, ctx, groupID, groupIDStr) })
+	t.Run("HookGet", func(t *testing.T) { metaGroupHookGet(t, ctx, groupID, groupIDStr, &hookID) })
+	t.Run("HookEdit", func(t *testing.T) { metaGroupHookEdit(t, ctx, groupID, groupIDStr, &hookID) })
+	t.Run("HookDelete", func(t *testing.T) { metaGroupHookDelete(t, ctx, groupID, groupIDStr, &hookID) })
+	t.Run("HookNewEventFields", func(t *testing.T) { metaGroupHookNewEventFields(t, ctx, groupID, groupIDStr, &hookID) })
+}
 
-	t.Run("HookList", func(t *testing.T) {
-		if !sess.enterprise {
-			return
-		}
-		requireTruef(t, groupID > 0, "groupID not set")
-		out, err := callToolOn[groups.HookListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "hook_list",
-			"params": map[string]any{"group_id": groupIDStr},
-		})
-		requireNoError(t, err, "hook_list")
-		requireTruef(t, len(out.Hooks) >= 1, "expected at least 1 hook")
-		t.Logf("Listed %d hooks", len(out.Hooks))
-	})
+// The following metaGroupHook* helpers are the bodies of each subtest
+// in runMetaGroupHookOperations. They live in their own functions so
+// the orchestrator stays well under the gocognit budget; each helper
+// also gets a clean complexity score on its own. The shared hookID is
+// passed by pointer so successive subtests can observe writes.
 
-	t.Run("HookGet", func(t *testing.T) {
-		if !sess.enterprise {
-			return
-		}
-		requireTruef(t, hookID > 0, "hookID not set")
-		out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "hook_get",
-			"params": map[string]any{"group_id": groupIDStr, "hook_id": hookID},
-		})
-		requireNoError(t, err, "hook_get")
-		requireTruef(t, out.ID == hookID, "hook ID mismatch")
-		t.Logf("Got hook %d", out.ID)
+// metaGroupHookAdd creates a new group webhook and records its ID in
+// the shared hookID slot for downstream subtests.
+func metaGroupHookAdd(t *testing.T, ctx context.Context, groupID int64, groupIDStr string, hookID *int64) {
+	t.Helper()
+	if !sess.enterprise {
+		return
+	}
+	requireTruef(t, groupID > 0, "groupID not set")
+	out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "hook_add",
+		"params": map[string]any{
+			"group_id":    groupIDStr,
+			"url":         "https://example.com/hook",
+			"push_events": true,
+		},
 	})
+	requireNoError(t, err, "hook_add")
+	*hookID = out.ID
+	t.Logf("Added hook %d", *hookID)
+}
 
-	t.Run("HookEdit", func(t *testing.T) {
-		if !sess.enterprise {
-			return
-		}
-		requireTruef(t, hookID > 0, "hookID not set")
-		out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "hook_edit",
-			"params": map[string]any{
-				"group_id":      groupIDStr,
-				"hook_id":       hookID,
-				"url":           "https://example.com/hook-updated",
-				"issues_events": true,
-			},
-		})
-		requireNoError(t, err, "hook_edit")
-		t.Logf("Edited hook %d", out.ID)
+// metaGroupHookList verifies the hook added by metaGroupHookAdd is
+// visible in the group-hook listing.
+func metaGroupHookList(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {
+	t.Helper()
+	if !sess.enterprise {
+		return
+	}
+	requireTruef(t, groupID > 0, "groupID not set")
+	out, err := callToolOn[groups.HookListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "hook_list",
+		"params": map[string]any{"group_id": groupIDStr},
 	})
+	requireNoError(t, err, "hook_list")
+	requireTruef(t, len(out.Hooks) >= 1, "expected at least 1 hook")
+	t.Logf("Listed %d hooks", len(out.Hooks))
+}
 
-	t.Run("HookDelete", func(t *testing.T) {
-		if !sess.enterprise {
-			return
-		}
-		requireTruef(t, hookID > 0, "hookID not set")
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "hook_delete",
-			"params": map[string]any{"group_id": groupIDStr, "hook_id": hookID},
-		})
-		requireNoError(t, err, "hook_delete")
-		t.Logf("Deleted hook %d", hookID)
+// metaGroupHookGet fetches the hook by ID and asserts the response
+// matches the shared hookID.
+func metaGroupHookGet(t *testing.T, ctx context.Context, groupID int64, groupIDStr string, hookID *int64) {
+	t.Helper()
+	if !sess.enterprise {
+		return
+	}
+	requireTruef(t, *hookID > 0, "hookID not set")
+	out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "hook_get",
+		"params": map[string]any{"group_id": groupIDStr, "hook_id": *hookID},
 	})
+	requireNoError(t, err, "hook_get")
+	requireTruef(t, out.ID == *hookID, "hook ID mismatch")
+	t.Logf("Got hook %d", out.ID)
+}
 
-	// HookNewEventFields verifies the five event-flag fields added in
-	// client-go v2.36.0 / exposed in the MCP group-hook surface by
-	// commit 9579447c:
-	//   * emoji_events               (CE-available)
-	//   * resource_access_token_events (EE-only, Premium/Ultimate)
-	//   * project_events              (EE-only, Premium/Ultimate)
-	//   * push_events_branch_filter   (CE-available)
-	//   * branch_filter_strategy      (CE-available)
-	// The subtest runs only when sess.enterprise is true so that the
-	// three EE fields are accepted by the GitLab API. On CE, the
-	// GitLab API would silently ignore (or 400 on) the EE flags and
-	// the assertion would fail.
-	t.Run("HookNewEventFields", func(t *testing.T) {
-		if !sess.enterprise {
-			t.Skipf("skipping: resource_access_token_events / project_events are EE-only")
-			return
-		}
-		requireTruef(t, hookID > 0, "hookID not set")
-		out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "hook_edit",
-			"params": map[string]any{
-				"group_id":                     groupIDStr,
-				"hook_id":                      hookID,
-				"emoji_events":                 true,
-				"resource_access_token_events": true,
-				"project_events":               true,
-				"push_events_branch_filter":    "main",
-				"branch_filter_strategy":       "wildcard",
-			},
-		})
-		requireNoError(t, err, "hook_edit new event fields")
-		// Verify the read model reflects every newly-set field.
-		if !out.EmojiEvents {
-			t.Error("out.EmojiEvents = false, want true after edit")
-		}
-		if !out.ResourceAccessTokenEvents {
-			t.Error("out.ResourceAccessTokenEvents = false, want true after edit")
-		}
-		if !out.ProjectEvents {
-			t.Error("out.ProjectEvents = false, want true after edit")
-		}
-		if out.PushEventsBranchFilter != "main" {
-			t.Errorf("out.PushEventsBranchFilter = %q, want %q", out.PushEventsBranchFilter, "main")
-		}
-		if out.BranchFilterStrategy != "wildcard" {
-			t.Errorf("out.BranchFilterStrategy = %q, want %q", out.BranchFilterStrategy, "wildcard")
-		}
-		// GET and re-assert to confirm the values round-trip
-		// through the GitLab API, not just the edit response echo.
-		getOut, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "hook_get",
-			"params": map[string]any{"group_id": groupIDStr, "hook_id": hookID},
-		})
-		requireNoError(t, err, "hook_get after edit")
-		if !getOut.EmojiEvents || !getOut.ResourceAccessTokenEvents || !getOut.ProjectEvents {
-			t.Errorf("round-trip mismatch: emoji=%v resource_access=%v project=%v",
-				getOut.EmojiEvents, getOut.ResourceAccessTokenEvents, getOut.ProjectEvents)
-		}
-		if getOut.PushEventsBranchFilter != "main" || getOut.BranchFilterStrategy != "wildcard" {
-			t.Errorf("round-trip mismatch: branch_filter=%q strategy=%q",
-				getOut.PushEventsBranchFilter, getOut.BranchFilterStrategy)
-		}
+// metaGroupHookEdit updates the hook URL and toggles issues_events.
+func metaGroupHookEdit(t *testing.T, ctx context.Context, groupID int64, groupIDStr string, hookID *int64) {
+	t.Helper()
+	if !sess.enterprise {
+		return
+	}
+	requireTruef(t, *hookID > 0, "hookID not set")
+	out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "hook_edit",
+		"params": map[string]any{
+			"group_id":      groupIDStr,
+			"hook_id":       *hookID,
+			"url":           "https://example.com/hook-updated",
+			"issues_events": true,
+		},
 	})
+	requireNoError(t, err, "hook_edit")
+	t.Logf("Edited hook %d", out.ID)
+}
+
+// metaGroupHookDelete removes the hook created by metaGroupHookAdd.
+func metaGroupHookDelete(t *testing.T, ctx context.Context, groupID int64, groupIDStr string, hookID *int64) {
+	t.Helper()
+	if !sess.enterprise {
+		return
+	}
+	requireTruef(t, *hookID > 0, "hookID not set")
+	err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "hook_delete",
+		"params": map[string]any{"group_id": groupIDStr, "hook_id": *hookID},
+	})
+	requireNoError(t, err, "hook_delete")
+	t.Logf("Deleted hook %d", *hookID)
+}
+
+// metaGroupHookNewEventFields verifies the five event-flag fields added
+// in client-go v2.36.0 / exposed in the MCP group-hook surface by
+// commit 9579447c:
+//   - emoji_events                  (CE-available)
+//   - resource_access_token_events  (EE-only, Premium/Ultimate)
+//   - project_events                (EE-only, Premium/Ultimate)
+//   - push_events_branch_filter     (CE-available)
+//   - branch_filter_strategy        (CE-available)
+//
+// The subtest runs only when sess.enterprise is true so the three EE
+// fields are accepted by the GitLab API. On CE, the API would silently
+// ignore (or 400 on) the EE flags and the assertion would fail.
+func metaGroupHookNewEventFields(t *testing.T, ctx context.Context, groupID int64, groupIDStr string, hookID *int64) {
+	t.Helper()
+	if !sess.enterprise {
+		t.Skipf("skipping: resource_access_token_events / project_events are EE-only")
+		return
+	}
+	requireTruef(t, *hookID > 0, "hookID not set")
+	out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "hook_edit",
+		"params": map[string]any{
+			"group_id":                     groupIDStr,
+			"hook_id":                      *hookID,
+			"emoji_events":                 true,
+			"resource_access_token_events": true,
+			"project_events":               true,
+			"push_events_branch_filter":    "main",
+			"branch_filter_strategy":       "wildcard",
+		},
+	})
+	requireNoError(t, err, "hook_edit new event fields")
+	// Verify the read model reflects every newly-set field.
+	if !out.EmojiEvents {
+		t.Error("out.EmojiEvents = false, want true after edit")
+	}
+	if !out.ResourceAccessTokenEvents {
+		t.Error("out.ResourceAccessTokenEvents = false, want true after edit")
+	}
+	if !out.ProjectEvents {
+		t.Error("out.ProjectEvents = false, want true after edit")
+	}
+	if out.PushEventsBranchFilter != "main" {
+		t.Errorf("out.PushEventsBranchFilter = %q, want %q", out.PushEventsBranchFilter, "main")
+	}
+	if out.BranchFilterStrategy != "wildcard" {
+		t.Errorf("out.BranchFilterStrategy = %q, want %q", out.BranchFilterStrategy, "wildcard")
+	}
+	// GET and re-assert to confirm the values round-trip through the
+	// GitLab API, not just the edit response echo.
+	getOut, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "hook_get",
+		"params": map[string]any{"group_id": groupIDStr, "hook_id": *hookID},
+	})
+	requireNoError(t, err, "hook_get after edit")
+	if !getOut.EmojiEvents || !getOut.ResourceAccessTokenEvents || !getOut.ProjectEvents {
+		t.Errorf("round-trip mismatch: emoji=%v resource_access=%v project=%v",
+			getOut.EmojiEvents, getOut.ResourceAccessTokenEvents, getOut.ProjectEvents)
+	}
+	if getOut.PushEventsBranchFilter != "main" || getOut.BranchFilterStrategy != "wildcard" {
+		t.Errorf("round-trip mismatch: branch_filter=%q strategy=%q",
+			getOut.PushEventsBranchFilter, getOut.BranchFilterStrategy)
+	}
 }
 
 func runMetaGroupBadgeOperations(t *testing.T, ctx context.Context, groupID int64, groupIDStr string) {

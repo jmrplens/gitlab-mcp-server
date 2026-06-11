@@ -194,9 +194,9 @@ func TestCreate_ArchivedFlag(t *testing.T) {
 
 	archived := true
 	out, err := Create(context.Background(), client, CreateInput{
-		GroupID: "10",
-		Name:    "bug",
-		Color:   "#d9534f",
+		GroupID:  "10",
+		Name:     "bug",
+		Color:    "#d9534f",
 		Archived: &archived,
 	})
 	if err != nil {
@@ -264,9 +264,9 @@ func TestUpdate_ArchivedFlag(t *testing.T) {
 
 	archived := true
 	out, err := Update(context.Background(), client, UpdateInput{
-		GroupID: "10",
-		LabelID: "1",
-		NewName: "bug-fix",
+		GroupID:  "10",
+		LabelID:  "1",
+		NewName:  "bug-fix",
 		Archived: &archived,
 	})
 	if err != nil {
