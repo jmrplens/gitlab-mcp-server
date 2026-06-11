@@ -40,11 +40,11 @@ Analysis tools require the MCP client to support the **sampling capability**. No
 
 The analysis catalog is available from every tool surface:
 
-| Surface          | How to call analysis                                                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Surface          | How to call analysis                                                                                                                          |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Dynamic default  | Use `gitlab_find_action` to find the canonical `analyze.*` action, then call `gitlab_execute_action` with that action ID and validated params |
-| Meta-tools       | Use the `gitlab_analyze` meta-tool with actions such as `pipeline_failure`, `mr_security`, or `release_notes`                               |
-| Individual tools | Call the specialized tool directly, such as `gitlab_analyze_pipeline_failure`                                                               |
+| Meta-tools       | Use the `gitlab_analyze` meta-tool with actions such as `pipeline_failure`, `mr_security`, or `release_notes`                                 |
+| Individual tools | Call the specialized tool directly, such as `gitlab_analyze_pipeline_failure`                                                                 |
 
 ## Available analysis tools
 

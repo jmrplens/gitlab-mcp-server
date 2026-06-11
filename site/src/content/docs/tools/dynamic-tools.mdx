@@ -9,9 +9,9 @@ This page is the user-facing overview. For the authoritative field-level contrac
 
 The dynamic toolset is the low-token mode for GitLab MCP Server. It keeps the complete GitLab action catalog available, but shows your AI client only two public tools:
 
-| Tool                  | What it does                                                                              |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `gitlab_find_action`  | Finds the right GitLab action and returns exact parameters, examples, and safety metadata |
+| Tool                    | What it does                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| `gitlab_find_action`    | Finds the right GitLab action and returns exact parameters, examples, and safety metadata |
 | `gitlab_execute_action` | Executes the selected action after validating the action ID and parameters                |
 
 Dynamic find/execute is the default tool surface. Meta-tools remain available with `TOOL_SURFACE=meta` for clients that prefer consolidated domain dispatchers.
@@ -99,9 +99,9 @@ Each dynamic tool returns a normal MCP tool result: Markdown in `content`, JSON 
 
 ## What each call returns
 
-| Call                  | What the assistant receives                                                                                                                                                                      | How the assistant should use it                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| `gitlab_find_action`  | Ranked canonical action IDs with exact `input_schema`, backing meta-tool, domain, action, schema URI, destructive flag, required params, usage hints, examples, optional explanations, and score | Pick the best `domain.action` candidate and build `params` from the schema        |
+| Call                    | What the assistant receives                                                                                                                                                                      | How the assistant should use it                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `gitlab_find_action`    | Ranked canonical action IDs with exact `input_schema`, backing meta-tool, domain, action, schema URI, destructive flag, required params, usage hints, examples, optional explanations, and score | Pick the best `domain.action` candidate and build `params` from the schema        |
 | `gitlab_execute_action` | The existing action response from the backing handler, usually Markdown plus structured JSON                                                                                                     | Use the returned data to answer the user, or repair from `isError: true` feedback |
 
 Find is deliberately cheap compared with advertising every GitLab operation in `tools/list`. The model pays for detailed schemas only when it needs a specific action.
