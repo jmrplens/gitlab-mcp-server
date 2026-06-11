@@ -147,7 +147,7 @@ func SetGroupDatadog(ctx context.Context, client *gitlabclient.Client, input Set
 	integration, _, err := client.GL().Integrations.SetGroupDatadogIntegration(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return SetGroupDatadogOutput{}, toolutil.WrapErrWithStatusHint("set_group_datadog_integration", err, http.StatusForbidden,
-			"requires Owner role on the group and GitLab Premium/Ultimate (self-managed EE or GitLab.com); verify group_id with gitlab_group_get; api_key is mandatory unless use_inherited_settings=true")
+			"requires Owner role on the group and GitLab Premium/Ultimate (self-managed EE or GitLab.com); verify group_id with gitlab_group_get; provide at least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, archive_trace_events, or use_inherited_settings=true")
 	}
 	if integration == nil {
 		return SetGroupDatadogOutput{}, toolutil.WrapErrWithMessage("set_group_datadog_integration",
