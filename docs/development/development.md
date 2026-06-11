@@ -276,11 +276,12 @@ GITLAB_SKIP_TLS_VERIFY=true
 
 #### E2E Test Structure
 
-| File                             | Description                                           |
-| -------------------------------- | ----------------------------------------------------- |
-| `test/e2e/suite/setup_test.go`   | Shared state, MCP server setup, helpers, drainSidekiq |
-| `test/e2e/suite/fixture_test.go` | Self-contained GitLab resource builders               |
-| `test/e2e/suite/*_test.go`       | 91 domain-specific test files (individual + meta)     |
+| File                                | Description                                           |
+| ----------------------------------- | ----------------------------------------------------- |
+| `test/e2e/suite/setup_test.go`      | Shared state, MCP server setup, helpers, drainSidekiq |
+| `test/e2e/suite/fixture_ce_test.go` | Self-contained GitLab CE resource builders            |
+| `test/e2e/suite/fixture_ee_test.go` | Self-contained GitLab EE resource builders            |
+| `test/e2e/suite/*_test.go`          | 137 domain-specific test files (individual + meta)    |
 
 ## MCP Inspector
 
@@ -464,8 +465,8 @@ Install the Go extension and add to `.vscode/mcp.json`:
 
 | Dependency                               | Version | Purpose                         |
 | ---------------------------------------- | ------- | ------------------------------- |
-| `github.com/modelcontextprotocol/go-sdk` | v1.6.0  | MCP server framework            |
-| `gitlab.com/gitlab-org/api/client-go/v2` | v2.24.1 | Official GitLab REST API client |
+| `github.com/modelcontextprotocol/go-sdk` | v1.6.1  | MCP server framework            |
+| `gitlab.com/gitlab-org/api/client-go/v2` | v2.38.0 | Official GitLab REST API client |
 | `github.com/joho/godotenv`               | v1.5.1  | .env file loading for dev       |
 
 ## External References

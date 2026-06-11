@@ -427,7 +427,7 @@ func ProtectTag(ctx context.Context, client *gitlabclient.Client, input ProtectT
 			return ProtectedTagOutput{}, toolutil.WrapErrWithHint("tagProtect", err, "a protected tag rule for this name already exists")
 		}
 		return ProtectedTagOutput{}, toolutil.WrapErrWithStatusHint("tagProtect", err, http.StatusForbidden,
-			"protecting tags requires Maintainer or Owner role; create_access_level must be one of 0 (no access), 30 (Developer), 40 (Maintainer)")
+			"protecting tags requires Maintainer or Owner role; create_access_level must be one of 0 (no access), 30 (Developer), 40 (Maintainer); 60=Admin is not valid for project tags")
 	}
 	return protectedTagOutputFromGL(pt), nil
 }

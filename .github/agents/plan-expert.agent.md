@@ -36,11 +36,11 @@ This project is a **Model Context Protocol (MCP) server** in Go exposing GitLab 
 | Component          | Technology                                              |
 | ------------------ | ------------------------------------------------------- |
 | Language           | Go 1.26.4                                               |
-| MCP SDK            | `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.0    |
-| GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v2` v2.29.0        |
+| MCP SDK            | `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.1    |
+| GitLab Client      | `gitlab.com/gitlab-org/api/client-go/v2` v2.38.0        |
 | Self-Update        | `github.com/creativeprojects/go-selfupdate` v1.5.2     |
 | Transport          | stdio (primary), HTTP (optional)                        |
-| Architecture       | 172 domain sub-packages under `internal/tools/`         |
+| Architecture       | 176 domain sub-packages under `internal/tools/`         |
 | Test Infrastructure| `net/http/httptest` mocks, `testutil.NewTestClient`     |
 | Static Analysis    | golangci-lint v2 (Go linters/formatters), govulncheck, markdownlint |
 
@@ -114,7 +114,7 @@ You operate in different modes depending on the type of plan requested. Always i
 **Key questions to investigate**:
 
 - Does this contradict any existing ADR?
-- How does this affect the 172 sub-package structure?
+- How does this affect the 176 sub-package structure?
 - What is the impact on HTTP mode vs stdio mode?
 - Does this require changes to the MCP SDK usage patterns?
 

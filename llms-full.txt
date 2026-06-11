@@ -1700,7 +1700,7 @@ Action guidance:
 - get_protected: Use to execute branches domain action.
 - list: List repository branches for one project with optional search and pagination. Use this before branch-level operations and when selecting refs for compare/MR flows.
 - list_protected: Use to execute branches domain action.
-- protect: Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer.
+- protect: Protect a branch and set branch protection access levels. Use numeric integers for access levels: 0 means No access, 30 means Developer, and 40 means Maintainer. 60=Admin is not valid for project branches.
 - rule_list: Use to audit aggregated branch rules, including protections and approval-related state, for a project path.
 - unprotect: Use to execute branches domain action.
 - update_protected: Use to execute branches domain action.
@@ -1709,8 +1709,8 @@ Parameter guidance:
 - create.ref: git_ref; source: Existing branch/tag/commit used as creation source.
 - get.branch_name: git_branch; source: Branch name from task context or branch list output.
 - list.project_id: scope_project; source: Project numeric ID or full path containing branches.
-- protect.merge_access_level: branch_protection_merge_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
-- protect.push_access_level: branch_protection_push_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
+- protect.merge_access_level: branch_protection_merge_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer. 60=Admin is not valid for project branches.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
+- protect.push_access_level: branch_protection_push_access_level; source: Use integer access levels only: 0 for No access, 30 for Developer, 40 for Maintainer. 60=Admin is not valid for project branches.; avoid: Do not send labels such as maintainer or developers when an integer is possible.
 - rule_list.project_path: scope_project; source: Full project path used by GraphQL branch rule query.
 
 Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL). Delete and unprotect are destructive and irreversible.
@@ -11394,7 +11394,7 @@ Returns: JSON with resource data. Lists include pagination (page, per_page, tota
 
 Instance-level:
 - list_instance: no params
-- create_instance: name*, base_access_level* (10/20/30/40/50), description, permissions (object)
+- create_instance: name*, base_access_level* (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid), description, permissions (object)
 - delete_instance: member_role_id*
 
 Group-level:
@@ -11899,7 +11899,7 @@ Approve a group access request. Optionally set the access level (10=Guest, 20=Re
 
 **Parameters:**
 
-- `access_level` (integer): Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 25=Security Manager where supported)
+- `access_level` (integer): Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner)
 - `group_id` (string) (required): Group ID or path
 - `user_id` (integer) (required): User ID of the access requester
 
@@ -11911,7 +11911,7 @@ Approve a project access request. Optionally set the access level (10=Guest, 20=
 
 **Parameters:**
 
-- `access_level` (integer): Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 25=Security Manager where supported)
+- `access_level` (integer): Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer)
 - `project_id` (string) (required): Project ID or path
 - `user_id` (integer) (required): User ID of the access requester
 
@@ -12529,9 +12529,9 @@ Protect a GitLab repository branch by setting push and merge access levels (0=no
 - `allow_force_push` (boolean): Allow force push to this branch
 - `branch_name` (string) (required): Branch name or wildcard (e.g. 'main' or 'release/*')
 - `code_owner_approval_required` (boolean): Require CODEOWNERS approval for changes to matching files
-- `merge_access_level` (integer): Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer.
+- `merge_access_level` (integer): Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer. 60=Admin is not valid for project branches.
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `push_access_level` (integer): Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer.
+- `push_access_level` (integer): Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer. 60=Admin is not valid for project branches.
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -12940,7 +12940,7 @@ Create a broadcast message. Requires admin access.
 - `font` (string): Font for the message
 - `message` (string) (required): Message text. Supports Markdown.
 - `starts_at` (string): Start time in ISO 8601 format
-- `target_access_levels` (array of integers): Access levels to target (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner,25=Security Manager where supported)
+- `target_access_levels` (array of integers): Access levels to target (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)
 - `target_path` (string): Target path to show message on
 - `theme` (string): Theme: indigo, light-indigo, blue, light-blue, green, light-green, red, light-red
 
@@ -13081,7 +13081,7 @@ Create a custom member role for a GitLab group. Define name, base access level, 
 - `admin_vulnerability` (boolean): Allow admin vulnerability
 - `admin_web_hook` (boolean): Allow admin webhooks
 - `archive_project` (boolean): Allow archive project
-- `base_access_level` (integer) (required): Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)
+- `base_access_level` (integer) (required): Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid)
 - `description` (string): Description of the custom role
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `manage_deploy_tokens` (boolean): Allow manage deploy tokens
@@ -13139,7 +13139,7 @@ Create a custom member role at the GitLab instance level. Define name, base acce
 - `admin_vulnerability` (boolean): Allow admin vulnerability
 - `admin_web_hook` (boolean): Allow admin webhooks
 - `archive_project` (boolean): Allow archive project
-- `base_access_level` (integer) (required): Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 25=Security Manager where supported)
+- `base_access_level` (integer) (required): Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid)
 - `description` (string): Description of the custom role
 - `manage_deploy_tokens` (boolean): Allow manage deploy tokens
 - `manage_group_access_tokens` (boolean): Allow manage group access tokens
@@ -16016,7 +16016,7 @@ Create a new group access token with specified name, scopes, access level, and o
 
 **Parameters:**
 
-- `access_level` (integer): Access level: 10 (guest), 20 (reporter), 30 (developer), 40 (maintainer), 50 (owner)
+- `access_level` (integer): Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner); 60=Admin is not valid for group access tokens
 - `description` (string): Token description
 - `expires_at` (string): Expiry date in YYYY-MM-DD format
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -16400,7 +16400,7 @@ Invite a user to a group by email or user ID. Requires access_level (10=Guest, 2
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `email` (string): Email address to invite (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -16522,7 +16522,7 @@ Add an LDAP group link to a GitLab group (by CN or filter).
 
 - `cn` (string): LDAP Common Name (CN)
 - `filter` (string): LDAP filter
-- `group_access` (integer) (required): Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)
+- `group_access` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin for group LDAP)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID
 - `provider` (string) (required): LDAP provider name
@@ -16593,7 +16593,7 @@ Add a member to a GitLab group. Specify user by user_id or username, and set acc
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `user_id` (integer): User ID to add
@@ -16607,7 +16607,7 @@ Edit a member of a GitLab group. Update access level or expiration date for an e
 
 **Parameters:**
 
-- `access_level` (integer): New access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)
+- `access_level` (integer): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): New membership expiration date (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `user_id` (integer) (required): User ID
@@ -16964,7 +16964,7 @@ Add a SAML group link to a GitLab group.
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin for group SAML)
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `member_role_id` (integer): Custom member role ID
 - `provider` (string): SAML provider name
@@ -17117,7 +17117,7 @@ Share a GitLab group with another group, granting the shared group a specified a
 **Parameters:**
 
 - `expires_at` (string): Share expiration date (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); 25=Security Manager is not valid for group shares
+- `group_access` (integer) (required): Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares
 - `group_id` (string) (required): Group ID or URL-encoded path to share
 - `share_group_id` (integer) (required): Group ID to share with
 
@@ -21541,7 +21541,7 @@ Create a new project access token with specified name, scopes, access level, and
 
 **Parameters:**
 
-- `access_level` (integer): Access level: 10 (guest), 20 (reporter), 30 (developer), 40 (maintainer)
+- `access_level` (integer): Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer); 50=Owner and 60=Admin are not valid for project access tokens
 - `description` (string): Token description
 - `expires_at` (string): Expiry date in YYYY-MM-DD format
 - `name` (string) (required): Token name
@@ -22134,7 +22134,7 @@ Invite a user to a project by email or user ID. Requires access_level (10=Guest,
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `email` (string): Email address to invite (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -22179,7 +22179,7 @@ List GitLab projects accessible to the authenticated user. Supports filtering by
 - `last_activity_after` (string): Return projects with last activity after date (ISO 8601 format)
 - `last_activity_before` (string): Return projects with last activity before date (ISO 8601 format)
 - `membership` (boolean): Limit to projects where current user is a member
-- `min_access_level` (integer): Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)
+- `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `order_by` (string): Order projects by id, name, path, created_at, updated_at, or last_activity_at.
 - `owned` (boolean): Limit to projects explicitly owned by the current user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
@@ -22225,7 +22225,7 @@ List ancestor groups of a project. Supports filtering by search, shared groups, 
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `search` (string): Search by group name
-- `shared_min_access_level` (integer): Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)
+- `shared_min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `shared_visible_only` (boolean): Only show shared groups visible to the current user
 - `skip_groups` (array of integers): Array of group IDs to exclude
 - `with_shared` (boolean): Include shared groups (default true)
@@ -22238,7 +22238,7 @@ List groups that have been invited/shared to a project. Supports filtering by se
 
 **Parameters:**
 
-- `min_access_level` (integer): Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)
+- `min_access_level` (integer): Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -22332,7 +22332,7 @@ Add a user as a project member. Requires user_id (from gitlab_search_users or gi
 
 **Parameters:**
 
-- `access_level` (integer) (required): Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)
+- `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `member_role_id` (integer): Custom member role ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -22359,7 +22359,7 @@ Edit a project member's access level or expiration. Requires access_level (10=Gu
 
 **Parameters:**
 
-- `access_level` (integer) (required): New access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)
+- `access_level` (integer) (required): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `member_role_id` (integer): Custom member role ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -22576,7 +22576,7 @@ Share a project with a group, granting the specified access level. Optionally se
 **Parameters:**
 
 - `expires_at` (string): Expiration date for the share (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 25=Security Manager is not valid for project shares
+- `group_access` (integer) (required): Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares
 - `group_id` (integer) (required): Group ID to share with
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -24733,7 +24733,7 @@ List descendant subgroups of a GitLab group. Returns each subgroup's name, path,
 
 - `all_available` (boolean): Show all subgroups accessible by the authenticated user
 - `group_id` (string) (required): Group ID or URL-encoded path
-- `min_access_level` (integer): Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner,25=Security Manager where supported)
+- `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)
 - `order_by` (string): Order subgroups by field (name, path, id, similarity)
 - `owned` (boolean): Limit to subgroups explicitly owned by the authenticated user
 - `page` (integer): Page number to fetch, 1-based. Defaults to 1. Use the next_page field from the previous response to paginate forward.

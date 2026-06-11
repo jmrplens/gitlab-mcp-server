@@ -59,7 +59,7 @@ type AddInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	UserID      int64                `json:"user_id,omitempty" jsonschema:"User ID to add,required"`
 	Username    string               `json:"username,omitempty" jsonschema:"Username to add (alternative to user_id)"`
-	AccessLevel int                  `json:"access_level" jsonschema:"Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)"`
+	AccessLevel int                  `json:"access_level" jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
 	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Membership expiration date (YYYY-MM-DD)"`
 }
 
@@ -67,7 +67,7 @@ type AddInput struct {
 type EditInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	UserID      int64                `json:"user_id" jsonschema:"User ID,required"`
-	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"New access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)"`
+	AccessLevel int                  `json:"access_level,omitempty" jsonschema:"New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
 	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"New membership expiration date (YYYY-MM-DD)"`
 }
 
@@ -83,7 +83,7 @@ type RemoveInput struct {
 type ShareInput struct {
 	GroupID      toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path to share,required"`
 	ShareGroupID int64                `json:"share_group_id" jsonschema:"Group ID to share with,required"`
-	GroupAccess  int                  `json:"group_access" jsonschema:"Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); 25=Security Manager is not valid for group shares"`
+	GroupAccess  int                  `json:"group_access" jsonschema:"Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares"`
 	ExpiresAt    string               `json:"expires_at,omitempty" jsonschema:"Share expiration date (YYYY-MM-DD)"`
 }
 
@@ -170,7 +170,7 @@ func AddMember(ctx context.Context, client *gitlabclient.Client, input AddInput)
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return Output{}, toolutil.WrapErrWithHint("group_member_add", err,
-				"access_level must be one of 10/20/25/30/40/50 (Guest/Reporter/Security Manager/Developer/Maintainer/Owner); expires_at must be YYYY-MM-DD")
+				"access_level must be one of 5/10/15/20/25/30/40/50/60 (Minimal/Guest/Planner/Reporter/Security Manager/Developer/Maintainer/Owner/Admin where supported); expires_at must be YYYY-MM-DD")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("group_member_add", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get and user_id/username with gitlab_list_users")

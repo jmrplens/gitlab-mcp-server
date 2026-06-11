@@ -169,7 +169,7 @@ internal/tools/
 ├── errors.go                # Error helpers (bridge to toolutil)
 ├── markdown.go              # Markdown formatting (bridge to toolutil)
 ├── logging.go               # Tool call logging (bridge to toolutil)
-└── <domain>/                # 165 domain sub-packages
+└── <domain>/                # 176 domain sub-packages
     ├── action_specs.go      # Canonical ActionSpecs for catalog-backed tool surfaces
     ├── <domain>.go          # Typed input/output structs + handlers
     ├── <domain>_test.go     # Table-driven unit tests

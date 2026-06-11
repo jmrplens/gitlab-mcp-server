@@ -6,7 +6,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 25=Security Manager where supported)",
+          "description": "Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner)",
           "type": "integer"
         },
         "group_id": {
@@ -80,7 +80,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level to grant (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 25=Security Manager where supported)",
+          "description": "Access level to grant (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer)",
           "type": "integer"
         },
         "project_id": {
@@ -4384,7 +4384,7 @@
           ]
         },
         "merge_access_level": {
-          "description": "Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer.",
+          "description": "Access level for merge: 0=No access, 30=Developer, 40=Maintainer. Use an integer. 60=Admin is not valid for project branches.",
           "enum": [
             0,
             30,
@@ -4397,7 +4397,7 @@
           "type": "string"
         },
         "push_access_level": {
-          "description": "Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer.",
+          "description": "Access level for push: 0=No access, 30=Developer, 40=Maintainer. Use an integer. 60=Admin is not valid for project branches.",
           "enum": [
             0,
             30,
@@ -7732,7 +7732,7 @@
           "type": "string"
         },
         "target_access_levels": {
-          "description": "Access levels to target (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner,25=Security Manager where supported)",
+          "description": "Access levels to target (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)",
           "items": {
             "type": "integer"
           },
@@ -8789,7 +8789,7 @@
           ]
         },
         "base_access_level": {
-          "description": "Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer)",
+          "description": "Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid)",
           "type": "integer"
         },
         "description": {
@@ -9298,7 +9298,7 @@
           ]
         },
         "base_access_level": {
-          "description": "Base access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 25=Security Manager where supported)",
+          "description": "Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid)",
           "type": "integer"
         },
         "description": {
@@ -30134,7 +30134,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level: 10 (guest), 20 (reporter), 30 (developer), 40 (maintainer), 50 (owner)",
+          "description": "Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner); 60=Admin is not valid for group access tokens",
           "type": "integer"
         },
         "description": {
@@ -33660,7 +33660,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
+          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
           "type": "integer"
         },
         "email": {
@@ -34558,7 +34558,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
+          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin for group LDAP)",
           "type": "integer"
         },
         "group_id": {
@@ -35049,7 +35049,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)",
+          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
           "type": "integer"
         },
         "expires_at": {
@@ -35150,7 +35150,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "New access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)",
+          "description": "New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
           "type": "integer"
         },
         "expires_at": {
@@ -39042,7 +39042,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
+          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin for group SAML)",
           "type": "integer"
         },
         "group_id": {
@@ -40135,7 +40135,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); 25=Security Manager is not valid for group shares",
+          "description": "Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares",
           "type": "integer"
         },
         "group_id": {
@@ -82161,7 +82161,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level: 10 (guest), 20 (reporter), 30 (developer), 40 (maintainer)",
+          "description": "Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer); 50=Owner and 60=Admin are not valid for project access tokens",
           "type": "integer"
         },
         "description": {
@@ -87678,7 +87678,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
+          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
           "type": "integer"
         },
         "email": {
@@ -87978,7 +87978,7 @@
           ]
         },
         "min_access_level": {
-          "description": "Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
+          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
           "type": "integer"
         },
         "order_by": {
@@ -88742,7 +88742,7 @@
           "type": "string"
         },
         "shared_min_access_level": {
-          "description": "Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
+          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
           "type": "integer"
         },
         "shared_visible_only": {
@@ -88880,7 +88880,7 @@
       "additionalProperties": false,
       "properties": {
         "min_access_level": {
-          "description": "Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)",
+          "description": "Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
           "type": "integer"
         },
         "page": {
@@ -90334,7 +90334,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner, 25=Security Manager where supported)",
+          "description": "Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
           "type": "integer"
         },
         "expires_at": {
@@ -90496,7 +90496,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "New access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner)",
+          "description": "New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)",
           "type": "integer"
         },
         "expires_at": {
@@ -92281,7 +92281,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 25=Security Manager is not valid for project shares",
+          "description": "Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares",
           "type": "integer"
         },
         "group_id": {
@@ -111416,7 +111416,7 @@
           "type": "string"
         },
         "min_access_level": {
-          "description": "Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner,25=Security Manager where supported)",
+          "description": "Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)",
           "type": "integer"
         },
         "order_by": {

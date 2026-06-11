@@ -10,8 +10,8 @@
 | Attribute     | Value                                               |
 | ------------- | --------------------------------------------------- |
 | Language      | Go 1.26.4                                           |
-| MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.29.0       |
+| MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.6.1 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.38.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
 | Version       | 2.1.3                                               |
@@ -20,7 +20,7 @@
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | 1027 self-managed Enterprise/Premium; 1033 on GitLab.com Enterprise/Premium with Orbit                     |
+| MCP Tools (individual)    | 1030 self-managed Enterprise/Premium; 1036 on GitLab.com Enterprise/Premium with Orbit                     |
 | Meta-mode tools           | 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise (Orbit)                                    |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
 | MCP Resources             | 46 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
@@ -28,8 +28,8 @@
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 6 (logging, progress, roots, sampling, elicitation, completions)                                             |
 | MCP Icons                 | 50 domain SVG icons (base64 data URIs, `Sizes: ["any"]`) on all tools, resources, and prompts                |
-| Source files (tools)      | 737 non-test Go files under `internal/tools/`                                                                |
-| Test files (tools)        | 347 test files under `internal/tools/`                                                                       |
+| Source files (tools)      | 738 non-test Go files under `internal/tools/`                                                                |
+| Test files (tools)        | 352 test files under `internal/tools/`                                                                       |
 | Go packages               | 215 total; 176 under `internal/tools/...`                                                                    |
 
 ## Project Structure
@@ -41,7 +41,6 @@ gitlab-mcp-server/
 │   ├── add_docs/                # AST-based tool: adds godoc comments to undocumented symbols
 │   ├── audit_action_spec_coverage/ # Audits ActionSpec catalog coverage
 │   ├── audit_dynamic_aliases/   # Audits dynamic discovery aliases
-│   ├── audit_eval_coverage/     # Audits evaluation case coverage
 │   ├── audit_godocs/            # Audits Go documentation coverage
 │   ├── audit_meta_schema/       # Audits meta-tool schema generation
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
@@ -84,6 +83,7 @@ gitlab-mcp-server/
 │   │   ├── files/               # Repository file tools
 │   │   ├── groups/              # Group tools
 │   │   ├── health/              # Health/version check tools
+│   │   ├── integrations/        # Project and group integration tools (incl. group Datadog)
 │   │   ├── issuelinks/          # Issue link tools
 │   │   ├── issuenotes/          # Issue note tools
 │   │   ├── issues/              # Issue CRUD tools
@@ -134,9 +134,10 @@ gitlab-mcp-server/
 │   ├── .env.docker              # Docker mode environment variables
 │   ├── README.md                # E2E documentation
 │   ├── scripts/                 # E2E provisioning scripts (setup, runner, wait)
-│   └── suite/                   # Go test package (91 test files)
+│   └── suite/                   # Go test package (137 test files)
 │       ├── setup_test.go        # MCP server/client setup, test helpers, shared state
-│       └── fixture_test.go      # Self-contained GitLab resource builders
+│       └── fixture_ce_test.go   # Self-contained GitLab resource builders (CE runtime)
+│       └── fixture_ee_test.go   # Self-contained GitLab resource builders (EE runtime)
 ├── plan/                        # Implementation plans for features
 ├── .github/                     # AI assistance infrastructure
 │   ├── copilot-instructions.md  # GitHub Copilot context (auto-loaded by VS Code)
@@ -473,7 +474,7 @@ ADRs document key decisions in `docs/adr/`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (176 `internal/tools` packages, 1027 self-managed tools / 1033 GitLab.com Enterprise tools) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (176 `internal/tools` packages, 1030 self-managed tools / 1036 GitLab.com Enterprise tools) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |

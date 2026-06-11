@@ -11,7 +11,7 @@ Todos los modos cubren la misma superficie de API de GitLab. Cambia el empaqueta
 
 ### Modo individual
 
-En modo individual, el servidor registra una herramienta por operación de GitLab: **867 herramientas** para CE, **1027 herramientas** para Enterprise/Premium autoalojado, o **1033 herramientas** en GitLab.com Enterprise/Premium cuando Orbit está disponible. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
+En modo individual, el servidor registra una herramienta por operación de GitLab: **867 herramientas** para CE, **1030 herramientas** para Enterprise/Premium autoalojado, o **1036 herramientas** en GitLab.com Enterprise/Premium cuando Orbit está disponible. Esto proporciona la máxima granularidad pero consume una cantidad significativa de tokens de contexto del LLM para el descubrimiento de herramientas.
 
 ### Modo meta-herramientas
 
@@ -130,7 +130,7 @@ Cuando el catálogo Enterprise/Premium está habilitado, el servidor registra 16
 
 `gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_vulnerability`, `gitlab_security_attribute`, `gitlab_security_category`, `gitlab_security_finding`
 
-En GitLab.com Enterprise/Premium, el catálogo también registra `gitlab_orbit` con cinco acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `query` y `graph_status`.
+En GitLab.com Enterprise/Premium, el catálogo también registra `gitlab_orbit` con seis acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `dsl`, `query` y `graph_status`.
 
 :::note
 Las herramientas Enterprise requieren una licencia de GitLab Premium o Ultimate en tu instancia. Forzar el catálogo Enterprise/Premium en una instancia Community Edition registrará las herramientas, pero las llamadas a la API devolverán errores de permisos.

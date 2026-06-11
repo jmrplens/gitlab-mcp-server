@@ -165,7 +165,7 @@ type ListInput struct {
 	Sort                     string `json:"sort,omitempty"       jsonschema:"Sort direction (asc, desc)"`
 	Topic                    string `json:"topic,omitempty"      jsonschema:"Filter by topic name"`
 	Simple                   bool   `json:"simple,omitempty"     jsonschema:"Return only limited fields (faster for large result sets)"`
-	MinAccessLevel           int    `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)"`
+	MinAccessLevel           int    `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
 	LastActivityAfter        string `json:"last_activity_after,omitempty"  jsonschema:"Return projects with last activity after date (ISO 8601 format)"`
 	LastActivityBefore       string `json:"last_activity_before,omitempty" jsonschema:"Return projects with last activity before date (ISO 8601 format)"`
 	Starred                  *bool  `json:"starred,omitempty"              jsonschema:"Limit to projects starred by the current user"`
@@ -1810,7 +1810,7 @@ type ListProjectGroupsInput struct {
 	WithShared           *bool                `json:"with_shared,omitempty"         jsonschema:"Include shared groups (default true)"`
 	SharedVisibleOnly    *bool                `json:"shared_visible_only,omitempty" jsonschema:"Only show shared groups visible to the current user"`
 	SkipGroups           []int64              `json:"skip_groups,omitempty"         jsonschema:"Array of group IDs to exclude"`
-	SharedMinAccessLevel int                  `json:"shared_min_access_level,omitempty" jsonschema:"Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)"`
+	SharedMinAccessLevel int                  `json:"shared_min_access_level,omitempty" jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
 	toolutil.PaginationInput
 }
 
@@ -1928,7 +1928,7 @@ func ListProjectStarrers(ctx context.Context, client *gitlabclient.Client, input
 type ShareProjectInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id"   jsonschema:"Project ID or URL-encoded path,required"`
 	GroupID     int64                `json:"group_id"     jsonschema:"Group ID to share with,required"`
-	GroupAccess int                  `json:"group_access" jsonschema:"Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 25=Security Manager is not valid for project shares,required"`
+	GroupAccess int                  `json:"group_access" jsonschema:"Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares,required"`
 	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the share (YYYY-MM-DD)"`
 }
 
@@ -2027,7 +2027,7 @@ func DeleteSharedProjectFromGroup(ctx context.Context, client *gitlabclient.Clie
 type ListInvitedGroupsInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Search         string               `json:"search,omitempty"          jsonschema:"Search by group name"`
-	MinAccessLevel int                  `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported)"`
+	MinAccessLevel int                  `json:"min_access_level,omitempty" jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
 	toolutil.PaginationInput
 }
 

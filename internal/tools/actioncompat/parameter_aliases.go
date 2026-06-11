@@ -762,17 +762,23 @@ func gitlabAccessLevelValue(value any) (int, bool) {
 	normalized := strings.ToLower(strings.TrimSpace(text))
 	if accessLevel, err := strconv.Atoi(normalized); err == nil {
 		switch accessLevel {
-		case 10, 20, 30, 40, 50:
+		case 5, 10, 15, 20, 25, 30, 40, 50, 60:
 			return accessLevel, true
 		default:
 			return 0, false
 		}
 	}
 	switch normalized {
+	case "minimal", "minimal access":
+		return 5, true
 	case "guest", "guests":
 		return 10, true
+	case "planner", "planners":
+		return 15, true
 	case "reporter", "reporters":
 		return 20, true
+	case "security manager", "security_manager", "securitymanager":
+		return 25, true
 	case "developer", "developers":
 		return 30, true
 	case "maintainer", "maintainers":
@@ -876,7 +882,7 @@ func GitLabAccessLevelValue(value any) (int, bool) {
 
 func validGitLabAccessLevel(accessLevel int) (int, bool) {
 	switch accessLevel {
-	case 10, 20, 30, 40, 50:
+	case 5, 10, 15, 20, 25, 30, 40, 50, 60:
 		return accessLevel, true
 	default:
 		return 0, false

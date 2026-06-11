@@ -11,11 +11,11 @@ Meta-tools are an explicit operating mode of GitLab MCP Server, enabled with `TO
 
 ## Why meta-tools?
 
-LLMs have limited context windows. When an MCP server registers hundreds of individual tools (up to 1033 on GitLab.com Enterprise/Premium), the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
+LLMs have limited context windows. When an MCP server registers hundreds of individual tools (up to 1036 on GitLab.com Enterprise/Premium with Orbit), the tool descriptions alone consume a large portion of the available tokens, leaving less room for the actual conversation.
 
 | Mode              | Tool Count        | Token Overhead | Functionality           |
 | ----------------- | ----------------- | -------------- | ----------------------- |
-| Individual        | 867 / 1027 / 1033 | Very high      | Full                    |
+| Individual        | 867 / 1030 / 1036 | Very high      | Full                    |
 | Meta (base)       | 33                | Low            | Full                    |
 | Meta (enterprise) | 49 / 50           | Low            | Full + Premium/Ultimate |
 
@@ -156,7 +156,7 @@ The per-action detail response includes the `params` schema and the final call s
 }
 ```
 
-`gitlab_orbit` is registered only for GitLab.com Enterprise/Premium connections and exposes five read-only Knowledge Graph actions: `status`, `schema`, `tools`, `query`, and `graph_status`.
+`gitlab_orbit` is registered only for GitLab.com Enterprise/Premium connections and exposes six read-only Knowledge Graph actions: `status`, `schema`, `tools`, `dsl`, `query`, and `graph_status`.
 
 ## Key meta-tools reference
 

@@ -72,7 +72,7 @@ type AddInput struct {
 	GroupID      string `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	CN           string `json:"cn,omitempty" jsonschema:"LDAP Common Name (CN)"`
 	Filter       string `json:"filter,omitempty" jsonschema:"LDAP filter"`
-	GroupAccess  int    `json:"group_access" jsonschema:"Access level (10=Guest 20=Reporter 30=Developer 40=Maintainer 50=Owner, 25=Security Manager where supported),required"`
+	GroupAccess  int    `json:"group_access" jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin for group LDAP),required"`
 	Provider     string `json:"provider" jsonschema:"LDAP provider name,required"`
 	MemberRoleID *int64 `json:"member_role_id,omitempty" jsonschema:"Custom member role ID"`
 }

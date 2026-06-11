@@ -354,6 +354,9 @@ Import a repository from Bitbucket Server into GitLab.
 | 30 | `gitlab_import_github_gists` | Import Service | Create |
 | 31 | `gitlab_import_from_bitbucket_cloud` | Import Service | Create |
 | 32 | `gitlab_import_from_bitbucket_server` | Import Service | Create |
+| 33 | `gitlab_get_group_datadog_integration` | Group Integrations (Datadog) | Read |
+| 34 | `gitlab_set_group_datadog_integration` | Group Integrations (Datadog) | Create |
+| 35 | `gitlab_delete_group_datadog_integration` | Group Integrations (Datadog) | Delete |
 
 ### Destructive Tools (Require Confirmation)
 
@@ -364,6 +367,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - `gitlab_delete_group_badge` — removes a badge from a group
 - `gitlab_delete_topic` — deletes a project topic (admin)
 - `gitlab_delete_epic_discussion_note` — deletes a note from an epic discussion
+- `gitlab_delete_group_datadog_integration` — removes the Datadog integration from a group
 
 ---
 

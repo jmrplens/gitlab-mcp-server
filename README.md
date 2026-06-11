@@ -51,7 +51,7 @@ Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_P
 
 ## Highlights
 
-- **1027 MCP tools** on self-managed Enterprise/Premium, or **1033 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 176 packages under `internal/tools`: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security attributes, security categories, templates, admin settings, access tokens, deploy keys, Orbit, and more
+- **1030 MCP tools** on self-managed Enterprise/Premium, or **1036 on GitLab.com Enterprise/Premium** with experimental Orbit Knowledge Graph support — broad GitLab REST API v4 + GraphQL coverage across 176 packages under `internal/tools`: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security attributes, security categories, templates, admin settings, access tokens, deploy keys, Orbit, and more
 - **Default dynamic toolset** — exposes only `gitlab_find_action` and `gitlab_execute_action` while keeping the same canonical GitLab action catalog. Optional domain meta-tools remain available with `TOOL_SURFACE=meta`: 33 base, 49 on self-managed Enterprise/Premium, or 50 on GitLab.com Enterprise/Premium
 - **AI model tool-use evaluation** — automated schema-only and Docker-backed runs against populated GitLab CE and licensed Enterprise instances measure tool/action selection, parameter shaping, recovery from GitLab errors, and destructive-action safety across Anthropic, Google, OpenAI, and Qwen. Published summaries appear in the managed evaluation block below; see [AI Model Evaluation Results](docs/testing/model-results.md)
 - **11 sampling actions** — LLM-assisted code review, issue analysis, pipeline failure diagnosis, security review, release notes, milestone reports, and more via `gitlab_analyze` meta-tool (MCP sampling capability)
@@ -248,7 +248,7 @@ Three registration modes, controlled by `TOOL_SURFACE`:
 | ----------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Dynamic Toolset** (default) | 2 visible tools                                                                    | Low-token find/execute surface over the canonical action catalog.                                                                                                 |
 | **Meta-Tools**                | 33 base GitLab/interactive tools; `gitlab_server` is a separate maintenance helper | Domain-grouped dispatchers with `action` parameter. Enable with `TOOL_SURFACE=meta`; see the full 33/49/50 catalog in [Meta-Tools Reference](docs/meta-tools.md). |
-| **Individual**                | 867 CE / 1027 self-managed enterprise / 1033 GitLab.com Enterprise                 | Every GitLab operation as a separate MCP tool.                                                                                                                    |
+| **Individual**                | 867 CE / 1030 self-managed enterprise / 1036 GitLab.com Enterprise                 | Every GitLab operation as a separate MCP tool.                                                                                                                    |
 
 For dynamic experiments where resources and prompts dominate initial context, set `CAPABILITY_SURFACE=minimal` (stdio) or `--capability-surface=minimal` (HTTP). Minimal keeps `gitlab://workspace/roots` plus the surface-aware `gitlab://tools` manifest so dynamic, meta, and individual deployments can still read accepted call shapes. The default remains `full`.
 
@@ -260,7 +260,7 @@ The detailed meta-tool catalog now lives in [Meta-Tools Reference](docs/meta-too
 
 | MCP Capability  | Support                                              |
 | --------------- | ---------------------------------------------------- |
-| **Tools**       | Up to 1033 individual / 33–50 meta                   |
+| **Tools**       | Up to 1036 individual / 33–50 meta                   |
 | **Resources**   | 46 (static + templates)                              |
 | **Prompts**     | 37 templates                                         |
 | **Completions** | Project, user, group, branch, tag                    |
@@ -365,8 +365,8 @@ Full documentation is available at **[jmrplens.github.io/gitlab-mcp-server](http
 | Component     | Technology                                       |
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.26+                                         |
-| MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.0  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.29.0 |
+| MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.1  |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.38.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Building from Source
