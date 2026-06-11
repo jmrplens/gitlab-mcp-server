@@ -82,7 +82,7 @@ Delete all branches that have been merged into the default branch. The default b
 
 ### `gitlab_branch_protect`
 
-Protect a GitLab repository branch by setting push and merge access levels (0=no access, 30=developer, 40=maintainer, 60=admin). Protected branches cannot be force-pushed or deleted.
+Protect a GitLab repository branch by setting push and merge access levels (0=no access, 30=developer, 40=maintainer). Protected branches cannot be force-pushed or deleted.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

@@ -12522,7 +12522,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_branch_protect
 
-Protect a GitLab repository branch by setting push and merge access levels (0=no access, 30=developer, 40=maintainer, 60=admin). Protected branches cannot be force-pushed or deleted. Returns: branch name, push/merge access levels, allow_force_push, and code_owner_approval_required. See also: gitlab_branch_unprotect, gitlab_protected_branches_list.
+Protect a GitLab repository branch by setting push and merge access levels (0=no access, 30=developer, 40=maintainer). Protected branches cannot be force-pushed or deleted. Returns: branch name, push/merge access levels, allow_force_push, and code_owner_approval_required. See also: gitlab_branch_unprotect, gitlab_protected_branches_list.
 
 **Parameters:**
 
