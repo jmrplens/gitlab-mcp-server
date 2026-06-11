@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "postbuild": "node -e \"const fs=require('fs'),path=require('path');for(const rel of fs.readdirSync('dist',{recursive:true})){if(!rel.endsWith('.html'))continue;const p=path.join('dist',rel);if(!fs.statSync(p).isFile())continue;const s=fs.readFileSync(p,'utf8').replace(/[ \\t]+$/gm,'');fs.writeFileSync(p,s);}\"",
+    "postbuild": "node -e \"const fs=require('fs'),path=require('path');for(const rel of fs.readdirSync('dist',{recursive:true})){if(!rel.endsWith('.html'))continue;const p=path.join('dist',rel);if(!fs.statSync(p).isFile())continue;const s=fs.readFileSync(p,'utf8').replace(/\\s+$/gm,'');fs.writeFileSync(p,s);}\"",
     "preview": "astro preview",
     "check": "astro check",
     "eslint": "eslint .",
