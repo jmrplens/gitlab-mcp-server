@@ -53,7 +53,7 @@ func FormatStatusMarkdown(out StatusOutput) string {
 	b.WriteString("## Orbit Status\n\n")
 	if out.FormattedText != "" {
 		b.WriteString(fencedBlock("text", out.FormattedText))
-		toolutil.WriteHints(&b, "Use gitlab_orbit graph_status to inspect indexing status for a namespace or project")
+		toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` to inspect indexing status for a namespace or project")
 		return b.String()
 	}
 	if out.Status == "" && len(out.Components) == 0 {
@@ -74,7 +74,7 @@ func FormatStatusMarkdown(out StatusOutput) string {
 			fmt.Fprintf(&b, "| %s | %s | %s |\n", component.Name, component.Status, replicas)
 		}
 	}
-	toolutil.WriteHints(&b, "Use gitlab_orbit graph_status to inspect indexing status for a namespace or project")
+	toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` to inspect indexing status for a namespace or project")
 	return b.String()
 }
 
@@ -101,8 +101,8 @@ func FormatSchemaMarkdown(out SchemaOutput) string {
 		}
 	}
 	toolutil.WriteHints(&b,
-		"Use gitlab_orbit tools to inspect the live query/tool manifest",
-		"Use gitlab_orbit query after choosing a supported query shape from the manifest")
+		"Use `gitlab_orbit_tools` to inspect the live query/tool manifest",
+		"Use `gitlab_orbit_query` after choosing a supported query shape from the manifest")
 	return b.String()
 }
 
@@ -127,8 +127,8 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 		)
 	}
 	toolutil.WriteHints(&b,
-		"Use the returned parameters JSON to build gitlab_orbit query input",
-		"Use gitlab_orbit schema to understand node and edge names")
+		"Use the returned parameters JSON to build `gitlab_orbit_query` input",
+		"Use `gitlab_orbit_schema` to understand node and edge names")
 	return b.String()
 }
 
@@ -148,8 +148,8 @@ func FormatDSLMarkdown(out DSLOutput) string {
 	}
 	b.WriteString(fencedBlock(language, out.Content))
 	toolutil.WriteHints(&b,
-		"Use gitlab_orbit query after choosing a supported query shape from the DSL",
-		"Use gitlab_orbit schema to understand node and edge names")
+		"Use `gitlab_orbit_query` after choosing a supported query shape from the DSL",
+		"Use `gitlab_orbit_schema` to understand node and edge names")
 	return b.String()
 }
 
@@ -161,7 +161,7 @@ func FormatQueryMarkdown(out QueryOutput) string {
 	b.WriteString("## Orbit Query Result\n\n")
 	if out.FormattedText != "" {
 		b.WriteString(fencedBlock("text", out.FormattedText))
-		toolutil.WriteHints(&b, "Use gitlab_orbit graph_status if query results look stale or incomplete")
+		toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` if query results look stale or incomplete")
 		return b.String()
 	}
 	writeKV(&b, "Query type", out.QueryType)
@@ -178,7 +178,7 @@ func FormatQueryMarkdown(out QueryOutput) string {
 		b.WriteString("\n### Result\n\n")
 		b.WriteString(fencedBlock("json", prettyAny(out.Result)))
 	}
-	toolutil.WriteHints(&b, "Use gitlab_orbit graph_status if query results look stale or incomplete")
+	toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` if query results look stale or incomplete")
 	return b.String()
 }
 
@@ -190,7 +190,7 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	b.WriteString("## Orbit Graph Status\n\n")
 	if out.FormattedText != "" {
 		b.WriteString(fencedBlock("text", out.FormattedText))
-		toolutil.WriteHints(&b, "Use gitlab_orbit query after indexing reaches a healthy state")
+		toolutil.WriteHints(&b, "Use `gitlab_orbit_query` after indexing reaches a healthy state")
 		return b.String()
 	}
 	if out.Projects != nil {
@@ -221,7 +221,7 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 			)
 		}
 	}
-	toolutil.WriteHints(&b, "Use gitlab_orbit query after indexing reaches a healthy state")
+	toolutil.WriteHints(&b, "Use `gitlab_orbit_query` after indexing reaches a healthy state")
 	return b.String()
 }
 
