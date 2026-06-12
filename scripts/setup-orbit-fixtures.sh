@@ -75,7 +75,12 @@ H_JSON=(-H "Content-Type: application/json")
 
 # Resolve namespace id
 echo ">>> resolving namespace '$NAMESPACE' on $GITLAB_URL"
-NAMESPACE_ID=$(curl -sS "${H_AUTH[@]}" "$API/groups/$NAMESPACE" \
+# URL-encode the namespace so nested subgroups (e.g. team/platform)
+# resolve correctly under /groups/<encoded-namespace>. Without this
+# the request would be interpreted as /groups/team/platform (a
+# 404) instead of /groups/team%2Fplatform.
+NAMESPACE_ENC=$(printf %s "$NAMESPACE" | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read(), safe=""))')
+NAMESPACE_ID=$(curl -sS "${H_AUTH[@]}" "$API/groups/$NAMESPACE_ENC" \
   | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
 echo "    namespace id: $NAMESPACE_ID"
 
@@ -108,7 +113,11 @@ except Exception: pass' 2>/dev/null)
     echo "$id"
     return
   fi
-  api_post "$(dirname "$get_path")" "$post_json" \
+  # Strip the query string before computing the POST path so that
+  # ensure_resource "/projects/$KG_ID/milestones?title=foo" POSTs to
+  # /projects/$KG_ID/milestones rather than to /projects/$KG_ID.
+  local post_path="${get_path%%\?*}"
+  api_post "$(dirname "$post_path")" "$post_json" \
     | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("id",""))'
 }
 
@@ -170,12 +179,14 @@ JSON
     echo "    → mirroring from $mirror_from (this may take several minutes)" >&2
     git clone --quiet --mirror "$mirror_from" "$ROOT_DIR/.tmp-orbit-mirror-$path" 2>&1 | tail -3 >&2
     (cd "$ROOT_DIR/.tmp-orbit-mirror-$path" && \
-      git push --quiet --force "https://oauth2:$GITLAB_COM_TOKEN@${GITLAB_URL#https://}//$NAMESPACE/$path.git" 'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*' 2>&1 | tail -3) >&2 || true
+      git -c "http.extraHeader=PRIVATE-TOKEN: $GITLAB_COM_TOKEN" \
+        push --quiet --force "${GITLAB_URL}/$NAMESPACE/$path.git" 'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*' 2>&1 | tail -3) >&2 || true
     rm -rf "$ROOT_DIR/.tmp-orbit-mirror-$path"
   else
     local work="$ROOT_DIR/.tmp-orbit-push-$path"
     rm -rf "$work"
-    git clone --quiet "https://oauth2:$GITLAB_COM_TOKEN@${GITLAB_URL#https://}//$NAMESPACE/$path.git" "$work" 2>&1 | tail -3 >&2
+    git -c "http.extraHeader=PRIVATE-TOKEN: $GITLAB_COM_TOKEN" \
+      clone --quiet "${GITLAB_URL}/$NAMESPACE/$path.git" "$work" 2>&1 | tail -3 >&2
     # Remove the auto-generated README so the local one wins on push
     rm -f "$work/README.md"
     rsync -a --exclude='.git/' "$fixture_dir/" "$work/"
@@ -259,7 +270,11 @@ for issue_data in \
   '5|Tighten ruff rules in CI|ci,enhancement'
 do
   IFS='|' read -r num title labels <<< "$issue_data"
-  api_post "/projects/$KG_ID/issues" "$(cat <<JSON
+  # ensure_resource with the ?search=<title> query makes the loop
+  # idempotent: re-running the script won't keep appending duplicate
+  # issues with the same title.
+  issue_title_enc=$(printf %s "$title" | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read()))')
+  ensure_resource "/projects/$KG_ID/issues?search=$issue_title_enc" "$(cat <<JSON
 {
   "title": "$title",
   "description": "Fixture issue for Knowledge Graph coverage. Used by gitlab-mcp-server Orbit tools to exercise the plan and ci domains.",
@@ -275,7 +290,10 @@ for env_data in \
   'production|https://example.com'
 do
   IFS='|' read -r env_name ext_url <<< "$env_data"
-  api_post "/projects/$KG_ID/environments" "$(cat <<JSON
+  # ensure_resource with the ?name=<env> query makes the loop
+  # idempotent: re-running the script won't keep appending duplicate
+  # environments with the same name.
+  ensure_resource "/projects/$KG_ID/environments?name=$env_name" "$(cat <<JSON
 {"name":"$env_name","external_url":"$ext_url"}
 JSON
 )" >/dev/null
@@ -293,7 +311,8 @@ except Exception: pass' 2>/dev/null)
 if [ -z "$existing_mr" ]; then
   work="$ROOT_DIR/.tmp-orbit-mr-$KG_ID"
   rm -rf "$work"
-  git clone --quiet "https://oauth2:$GITLAB_COM_TOKEN@${GITLAB_URL#https://}//$NAMESPACE/kg-fixtures.git" "$work" 2>&1 | tail -2
+  git -c "http.extraHeader=PRIVATE-TOKEN: $GITLAB_COM_TOKEN" \
+    clone --quiet "${GITLAB_URL}/$NAMESPACE/kg-fixtures.git" "$work" 2>&1 | tail -2
   (
     cd "$work"
     git config user.email "orbit-fixtures@local"
