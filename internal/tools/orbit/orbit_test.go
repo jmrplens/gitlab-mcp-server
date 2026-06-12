@@ -164,8 +164,8 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		if string(got["query"]) != `{"query_type":"traversal"}` {
-			t.Fatalf("query body = %s, want traversal query", got["query"])
+		if string(got["query"]) != `{"node":{"entity":"Project","id":"p","node_ids":[1]},"query_type":"traversal"}` {
+			t.Fatalf("query body = %s, want traversal query with node_ids", got["query"])
 		}
 		if string(got["response_format"]) != `"raw"` {
 			t.Fatalf("response_format = %s, want raw", got["response_format"])
@@ -179,7 +179,10 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 	}))
 
 	out, err := Query(context.Background(), client, QueryInput{
-		Query:               map[string]any{"query_type": "traversal"},
+		Query: map[string]any{
+			"query_type": "traversal",
+			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		},
 		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "raw"},
 	})
 	if err != nil {
@@ -214,7 +217,10 @@ func TestQuery_LLMResponseFormat_UsesRawResponse(t *testing.T) {
 	}))
 
 	out, err := Query(context.Background(), client, QueryInput{
-		Query:               map[string]any{"query_type": "traversal"},
+		Query: map[string]any{
+			"query_type": "traversal",
+			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		},
 		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
 	})
 	if err != nil {
@@ -237,7 +243,10 @@ func TestQuery_LLMResponseFormat_RawError(t *testing.T) {
 	}))
 
 	_, err := Query(context.Background(), client, QueryInput{
-		Query:               map[string]any{"query_type": "traversal"},
+		Query: map[string]any{
+			"query_type": "traversal",
+			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		},
 		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
 	})
 	if err == nil {
@@ -255,13 +264,23 @@ func TestQueryType_NonString_ReturnsEmpty(t *testing.T) {
 	}
 }
 
-// TestResponseFormatName_NilDefaultsToRaw verifies that responseFormatName treats a nil format as raw.
-//
-// The test covers the default branch used by Orbit handlers when the GitLab client option omits an
-// explicit response format. This preserves the public raw-format default expected by the tool schema.
-func TestResponseFormatName_NilDefaultsToRaw(t *testing.T) {
-	if got := responseFormatName(nil); got != string(gl.OrbitResponseFormatRaw) {
-		t.Fatalf("responseFormatName(nil) = %q, want raw", got)
+// TestResponseFormatName_NilReturnsEmpty verifies that responseFormatName returns
+// an empty string for a nil format pointer, signaling "use the API server-side
+// default" (which differs per endpoint: "json" for status/schema/tools,
+// "raw" for dsl/query). The corresponding [responseFormat] helper also
+// returns (nil, nil) for empty input so the SDK URL builder omits the
+// response_format parameter.
+func TestResponseFormatName_NilReturnsEmpty(t *testing.T) {
+	if got := responseFormatName(nil); got != "" {
+		t.Fatalf("responseFormatName(nil) = %q, want empty", got)
+	}
+	empty := gl.OrbitResponseFormatValue("")
+	if got := responseFormatName(&empty); got != "" {
+		t.Fatalf("responseFormatName(&\"\") = %q, want empty", got)
+	}
+	llm := gl.OrbitResponseFormatLLM
+	if got := responseFormatName(&llm); got != "llm" {
+		t.Fatalf("responseFormatName(&llm) = %q, want llm", got)
 	}
 }
 
@@ -340,7 +359,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				_, err := Status(context.Background(), client, StatusInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"}})
 				return err
 			},
-			want: "use raw or llm",
+			want: "use raw, llm, or json",
 		},
 		{
 			name: "empty query",
@@ -353,7 +372,19 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 		{
 			name: "unmarshalable query",
 			call: func() error {
-				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{"bad": func() {}}})
+				// A func value cannot be JSON-encoded. The query passes
+				// structural validation (it has query_type and node_ids) but
+				// fails the final json.Marshal step. This protects callers
+				// from passing unserializable values in the query map.
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
+					"query_type": "traversal",
+					"node": map[string]any{
+						"id":       "p",
+						"entity":   "Project",
+						"node_ids": []int{1},
+						"bad":      func() {},
+					},
+				}})
 				return err
 			},
 			want: "JSON object",
@@ -364,7 +395,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				_, err := Schema(context.Background(), client, SchemaInput{Format: "xml"})
 				return err
 			},
-			want: "use raw or llm",
+			want: "use raw, llm, or json",
 		},
 		{
 			name: "conflicting schema formats",
@@ -378,12 +409,19 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 			name: "invalid query response format",
 			call: func() error {
 				_, err := Query(context.Background(), client, QueryInput{
-					Query:               map[string]any{"query_type": "traversal"},
+					Query: map[string]any{
+						"query_type": "traversal",
+						"node": map[string]any{
+							"id":       "p",
+							"entity":   "Project",
+							"node_ids": []int{1},
+						},
+					},
 					ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"},
 				})
 				return err
 			},
-			want: "use raw or llm",
+			want: "use raw, llm, or json",
 		},
 		{
 			name: "invalid dsl response format",
@@ -391,7 +429,70 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				_, err := DSL(context.Background(), client, DSLInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"}})
 				return err
 			},
-			want: "use raw or llm",
+			want: "use raw, llm, or json",
+		},
+		{
+			name: "missing query_type",
+			call: func() error {
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{}})
+				return err
+			},
+			want: "query_type is required",
+		},
+		{
+			name: "unknown query_type",
+			call: func() error {
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{"query_type": "search"}})
+				return err
+			},
+			want: "must be one of: traversal, aggregation, neighbors, path_finding",
+		},
+		{
+			name: "traversal without node_ids or filters",
+			call: func() error {
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
+					"query_type": "traversal",
+					"node":       map[string]any{"id": "p", "entity": "Project", "columns": []string{"id"}},
+				}})
+				return err
+			},
+			want: "node_ids or filters",
+		},
+		{
+			name: "traversal with id_range is also scoped",
+			call: func() error {
+				// id_range counts as a valid scope per the Orbit query
+				// language reference. This subtest uses its own client that
+				// returns 500 on every call so the test can confirm the
+				// request reached the wire (and thus passed client-side
+				// validation) without triggering the shared fixture's
+				// "handler should not be called" assertion.
+				allowClient := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(http.StatusInternalServerError)
+				}))
+				_, err := Query(context.Background(), allowClient, QueryInput{Query: map[string]any{
+					"query_type": "traversal",
+					"node": map[string]any{
+						"id":       "p",
+						"entity":   "Project",
+						"id_range": map[string]any{"start": 1, "end": 100},
+					},
+				}})
+				return err
+			},
+			want: "internal server error", // httptest handler returns 500
+		},
+		{
+			name: "path_finding with fewer than two nodes",
+			call: func() error {
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
+					"query_type": "path_finding",
+					"nodes":      []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}}},
+					"path":       map[string]any{"type": "shortest", "from": "p", "to": "p", "max_depth": 1},
+				}})
+				return err
+			},
+			want: "at least two top-level node",
 		},
 	}
 
@@ -462,7 +563,10 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 			path:   "/api/v4/orbit/query",
 			status: http.StatusForbidden,
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Query(ctx, client, QueryInput{Query: map[string]any{"query_type": "traversal"}})
+				_, err := Query(ctx, client, QueryInput{Query: map[string]any{
+					"query_type": "traversal",
+					"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+				}})
 				return err
 			},
 			want: "Knowledge Graph enabled",
@@ -482,7 +586,10 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 			path:   "/api/v4/orbit/query",
 			status: http.StatusTooManyRequests,
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Query(ctx, client, QueryInput{Query: map[string]any{"query_type": "traversal"}})
+				_, err := Query(ctx, client, QueryInput{Query: map[string]any{
+					"query_type": "traversal",
+					"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+				}})
 				return err
 			},
 			want: "rate-limited",
@@ -713,7 +820,10 @@ func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
 		{name: "gitlab_orbit_schema", args: map[string]any{}},
 		{name: "gitlab_orbit_tools", args: map[string]any{}},
 		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{"query_type": "traversal"}}},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{
+			"query_type": "traversal",
+			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		}}},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
 	}
 
@@ -747,7 +857,10 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 		{name: "gitlab_orbit_schema", args: map[string]any{}},
 		{name: "gitlab_orbit_tools", args: map[string]any{}},
 		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{"query_type": "traversal"}}},
+		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{
+			"query_type": "traversal",
+			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		}}},
 		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
 	}
 
