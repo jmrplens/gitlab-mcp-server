@@ -20,7 +20,9 @@ type orbitNotFoundOutput struct {
 
 // init registers all Markdown formatters for Orbit MCP tool outputs.
 //
-// Each formatter converts the tool output struct to a Markdown summary for LLM and user-facing documentation.
+// Each formatter converts a tool output struct into a Markdown summary
+// suitable for both LLM and user-facing documentation. The formatter
+// for [orbitNotFoundOutput] produces the standard 404 guidance.
 func init() {
 	toolutil.RegisterMarkdownResult(formatOrbitNotFound)
 	toolutil.RegisterMarkdown[StatusOutput](FormatStatusMarkdown)
@@ -31,8 +33,9 @@ func init() {
 	toolutil.RegisterMarkdown[GraphStatusOutput](FormatGraphStatusMarkdown)
 }
 
-// formatOrbitNotFound returns a [*mcp.CallToolResult] with actionable hints when an Orbit resource is not found.
-// Used by all Orbit MCP tool handlers to provide LLM-friendly error output for HTTP 404.
+// formatOrbitNotFound returns a [*mcp.CallToolResult] with actionable
+// hints when an Orbit resource is not found. Used by all Orbit MCP
+// tool handlers to provide LLM-friendly output for HTTP 404.
 func formatOrbitNotFound(out orbitNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		out.Resource, out.Identifier,
@@ -50,7 +53,7 @@ func FormatStatusMarkdown(out StatusOutput) string {
 	b.WriteString("## Orbit Status\n\n")
 	if out.FormattedText != "" {
 		b.WriteString(fencedBlock("text", out.FormattedText))
-		toolutil.WriteHints(&b, "Use gitlab_orbit graph_status to inspect indexing status for a namespace or project")
+		toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` to inspect indexing status for a namespace or project")
 		return b.String()
 	}
 	if out.Status == "" && len(out.Components) == 0 {
@@ -71,7 +74,7 @@ func FormatStatusMarkdown(out StatusOutput) string {
 			fmt.Fprintf(&b, "| %s | %s | %s |\n", component.Name, component.Status, replicas)
 		}
 	}
-	toolutil.WriteHints(&b, "Use gitlab_orbit graph_status to inspect indexing status for a namespace or project")
+	toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` to inspect indexing status for a namespace or project")
 	return b.String()
 }
 
@@ -98,8 +101,8 @@ func FormatSchemaMarkdown(out SchemaOutput) string {
 		}
 	}
 	toolutil.WriteHints(&b,
-		"Use gitlab_orbit tools to inspect the live query/tool manifest",
-		"Use gitlab_orbit query after choosing a supported query shape from the manifest")
+		"Use `gitlab_orbit_tools` to inspect the live query/tool manifest",
+		"Use `gitlab_orbit_query` after choosing a supported query shape from the manifest")
 	return b.String()
 }
 
@@ -124,8 +127,8 @@ func FormatToolsMarkdown(out ToolsOutput) string {
 		)
 	}
 	toolutil.WriteHints(&b,
-		"Use the returned parameters JSON to build gitlab_orbit query input",
-		"Use gitlab_orbit schema to understand node and edge names")
+		"Use the returned parameters JSON to build `gitlab_orbit_query` input",
+		"Use `gitlab_orbit_schema` to understand node and edge names")
 	return b.String()
 }
 
@@ -145,8 +148,8 @@ func FormatDSLMarkdown(out DSLOutput) string {
 	}
 	b.WriteString(fencedBlock(language, out.Content))
 	toolutil.WriteHints(&b,
-		"Use gitlab_orbit query after choosing a supported query shape from the DSL",
-		"Use gitlab_orbit schema to understand node and edge names")
+		"Use `gitlab_orbit_query` after choosing a supported query shape from the DSL",
+		"Use `gitlab_orbit_schema` to understand node and edge names")
 	return b.String()
 }
 
@@ -158,7 +161,7 @@ func FormatQueryMarkdown(out QueryOutput) string {
 	b.WriteString("## Orbit Query Result\n\n")
 	if out.FormattedText != "" {
 		b.WriteString(fencedBlock("text", out.FormattedText))
-		toolutil.WriteHints(&b, "Use gitlab_orbit graph_status if query results look stale or incomplete")
+		toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` if query results look stale or incomplete")
 		return b.String()
 	}
 	writeKV(&b, "Query type", out.QueryType)
@@ -175,7 +178,7 @@ func FormatQueryMarkdown(out QueryOutput) string {
 		b.WriteString("\n### Result\n\n")
 		b.WriteString(fencedBlock("json", prettyAny(out.Result)))
 	}
-	toolutil.WriteHints(&b, "Use gitlab_orbit graph_status if query results look stale or incomplete")
+	toolutil.WriteHints(&b, "Use `gitlab_orbit_graph_status` if query results look stale or incomplete")
 	return b.String()
 }
 
@@ -187,7 +190,7 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	b.WriteString("## Orbit Graph Status\n\n")
 	if out.FormattedText != "" {
 		b.WriteString(fencedBlock("text", out.FormattedText))
-		toolutil.WriteHints(&b, "Use gitlab_orbit query after indexing reaches a healthy state")
+		toolutil.WriteHints(&b, "Use `gitlab_orbit_query` after indexing reaches a healthy state")
 		return b.String()
 	}
 	if out.Projects != nil {
@@ -218,12 +221,13 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 			)
 		}
 	}
-	toolutil.WriteHints(&b, "Use gitlab_orbit query after indexing reaches a healthy state")
+	toolutil.WriteHints(&b, "Use `gitlab_orbit_query` after indexing reaches a healthy state")
 	return b.String()
 }
 
-// writeKV writes a Markdown bullet list item for a key-value pair, skipping empty values.
-// Used by all Orbit Markdown formatters for summary fields.
+// writeKV writes a Markdown bullet list item for a key-value pair,
+// skipping the entry when value is empty. Used by all Orbit Markdown
+// formatters for summary fields.
 func writeKV(b *strings.Builder, key, value string) {
 	if value == "" {
 		return
@@ -231,8 +235,9 @@ func writeKV(b *strings.Builder, key, value string) {
 	fmt.Fprintf(b, "- %s: %s\n", key, value)
 }
 
-// prettyAny returns a pretty-printed JSON string for any value, or falls back to fmt.Sprint on error.
-// Used to render Orbit query results in Markdown.
+// prettyAny returns a pretty-printed JSON string for any value, or
+// the result of [fmt.Sprint] when encoding fails. Used to render
+// Orbit query results in Markdown.
 func prettyAny(value any) string {
 	buf, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {

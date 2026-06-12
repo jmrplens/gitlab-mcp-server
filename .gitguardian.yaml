@@ -1,0 +1,30 @@
+# GitGuardian configuration. The CI runs `GitGuardian Security Checks`
+# (see .github/workflows) which flags any string that matches a real
+# secret pattern. Some of the project subtrees contain deliberate
+# "detector bait" so that downstream security tools exercise their
+# finding-creation paths:
+#
+#   - test/fixtures/orbit/security-fixtures/  GitLab Secret Detection
+#     fixture whose module-level constants are obvious placeholders
+#     but still match common secret formats (AKIA…, ghp_…, etc.) so
+#     that the analyzer emits real Finding records on GitLab.com.
+#
+# These strings are never used to authenticate against any real
+# service and the values themselves are clearly fake. The list
+# below tells the GitHub-side scanners to ignore the fixture
+# subtree so they don't generate alerts or block pushes, while
+# the GitLab.com-side Secret Detection still scans the file and
+# emits findings against the live analyzer.
+#
+# Documentation: https://docs.gitguardian.com/internal-repositories-monitoring/ggshield/reference/files#gitguardianyaml
+
+version: 2
+
+ignored_paths:
+  # Orbit security fixture: contains deliberate "secret-shaped"
+  # placeholders so the live GitLab.com Secret Detection analyzer
+  # has something to flag. The values are clearly fake (they
+  # include "FIXTURE" / "BAIT" / "EXAMPLE" markers) and the
+  # fixture is not deployed anywhere; the GitLab.com fixture
+  # repository keeps it under a dedicated namespace.
+  - "test/fixtures/orbit/security-fixtures/**"

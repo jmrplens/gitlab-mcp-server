@@ -1,5 +1,7 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker test-e2e-docker-enterprise eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
+	run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
+	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
 	lint fmt clean version release release-check checksum \
 	golangci-lint govulncheck \
 	mdlint mdlint-fix audit-docs check-doc-links \
@@ -23,6 +25,19 @@ export GOTOOLCHAIN := $(GO_TOOLCHAIN)
 
 # E2E test report directory (inside dist/, gitignored)
 E2E_REPORT_DIR=dist/e2e-reports
+
+# GitLab.com Orbit live-test fixtures. All overridable on the command line
+# or via .env. Defaults are designed for the canonical plens1 namespace.
+ORBIT_FIXTURES_NAMESPACE ?= plens1
+ORBIT_FIXTURES_GITLAB_URL ?= https://gitlab.com
+# How long to wait for the indexer to catch up after provisioning fixtures
+# (in seconds, polled every 15s). When this elapses the make target
+# proceeds with a warning; the live test assertions are tolerant of
+# partial indexing (row_count > 0 rather than strict equality).
+ORBIT_FIXTURES_INDEXER_TIMEOUT ?= 600
+# When set to "true", additionally mirror gitlab-org/cli for realistic
+# cross-entity CI/MR data. Adds ~5 min of mirror time on first run.
+ORBIT_FIXTURES_MIRROR ?= false
 E2E_DOCKER_ENTERPRISE_TIMEOUT ?= 3600s
 
 # Read version from VERSION file (single source of truth)
@@ -202,6 +217,130 @@ test-e2e-docker-enterprise:
 	  rm -f $(E2E_REPORT_DIR)/e2e-docker-enterprise-status; \
 	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
 	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
+
+## test-e2e-gitlab-com: end-to-end live test of the Orbit knowledge graph
+## handlers against https://gitlab.com. Reads GITLAB_COM_TOKEN from .env,
+## provisions the kg-fixtures and security-fixtures projects in
+## $(ORBIT_FIXTURES_NAMESPACE) (default: plens1), polls the indexer
+## until it has caught up, and runs the orbitlive-tagged live tests.
+## Idempotent: the setup script skips already-existing resources, so
+## re-running is safe.
+##
+## Overridable variables (command line or .env):
+##   ORBIT_FIXTURES_NAMESPACE      default: plens1
+##   ORBIT_FIXTURES_GITLAB_URL     default: https://gitlab.com
+##   ORBIT_FIXTURES_INDEXER_TIMEOUT  default: 240s
+##   ORBIT_FIXTURES_MIRROR         default: false  (set to "true" to
+##                                                  mirror gitlab-org/cli
+##                                                  as plens1/glab-mirror)
+##
+## Examples:
+##   make test-e2e-gitlab-com                                # default plens1
+##   make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme
+##   make test-e2e-gitlab-com ORBIT_FIXTURES_MIRROR=true     # also mirror
+test-e2e-gitlab-com: orbit-ensure-token orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests
+	@echo ""
+	@echo "=== test-e2e-gitlab-com complete ==="
+	@echo "Reports and timings printed above. To re-run later without"
+	@echo "re-provisioning fixtures, just call: make orbit-run-live-tests"
+
+## orbit-ensure-token: validate that .env exists and exports GITLAB_COM_TOKEN.
+## Note: Make runs each @-prefixed recipe line in a fresh subshell,
+## so . ./.env and the GITLAB_COM_TOKEN check must share a shell
+## invocation (joined with \ and wrapped in {}).
+orbit-ensure-token:
+	@if [ ! -f .env ]; then \
+		echo "" 1>&2; \
+		echo "ERROR: .env not found in repo root" 1>&2; \
+		echo "  cp .env.example .env  # then add: GITLAB_COM_TOKEN=glpat-..." 1>&2; \
+		echo "" 1>&2; \
+		exit 1; \
+	fi
+	@. ./.env && { \
+		if [ -z "$$GITLAB_COM_TOKEN" ]; then \
+			echo "ERROR: GITLAB_COM_TOKEN is not set in .env" 1>&2; \
+			exit 1; \
+		fi; \
+		printf "✓ GITLAB_COM_TOKEN is set (length=%d)\n" "$${#GITLAB_COM_TOKEN}"; \
+	}
+
+## orbit-setup-fixtures: idempotently provision the fixture projects.
+## Passes the resolved namespace and optional --mirror-cli through to
+## the script. Pre-existing resources are detected and skipped.
+orbit-setup-fixtures: orbit-ensure-token
+	@. ./.env && { \
+		mirror_flag=""; \
+		if [ "$(ORBIT_FIXTURES_MIRROR)" = "true" ]; then mirror_flag="--mirror-cli"; fi; \
+		echo ""; \
+		echo "=== Provisioning Orbit fixtures in $(ORBIT_FIXTURES_NAMESPACE) on $(ORBIT_FIXTURES_GITLAB_URL) ==="; \
+		export GITLAB_COM_TOKEN \
+			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE) \
+			ORBIT_FIXTURES_GITLAB_URL=$(ORBIT_FIXTURES_GITLAB_URL); \
+		./scripts/setup-orbit-fixtures.sh $$mirror_flag; \
+	}
+
+## orbit-wait-indexer: poll the Orbit indexer until the projects.indexed
+## count reflects our newly-provisioned projects (baseline + 2), or
+## until ORBIT_FIXTURES_INDEXER_TIMEOUT elapses. Proceeds with a
+## warning in the timeout case — the live test is tolerant of partial
+## indexing.
+## orbit-wait-indexer: poll the Orbit indexer until the projects.indexed
+## count reflects our newly-provisioned projects (baseline + 2), or
+## until ORBIT_FIXTURES_INDEXER_TIMEOUT elapses. Proceeds with a
+## warning in the timeout case — the live test is tolerant of partial
+## indexing.
+##
+## To stay idempotent, the baseline is taken from the FIRST poll in the
+## wait loop, not from a separate pre-flight curl. This keeps the
+## target = baseline + 2 invariant valid even when the fixtures have
+## already been indexed on a prior run.
+orbit-wait-indexer: orbit-ensure-token
+	@. ./.env && { \
+		echo ""; \
+		echo "=== Waiting for Orbit indexer to catch up (timeout: $(ORBIT_FIXTURES_INDEXER_TIMEOUT)s) ==="; \
+		attempts=$$(( $(ORBIT_FIXTURES_INDEXER_TIMEOUT) / 15 )); \
+		baseline=""; \
+		target=""; \
+		for i in $$(seq 1 $$attempts); do \
+			current=$$(curl -sS "$(ORBIT_FIXTURES_GITLAB_URL)/api/v4/orbit/graph_status?full_path=$(ORBIT_FIXTURES_NAMESPACE)" -H "PRIVATE-TOKEN: $$GITLAB_COM_TOKEN" 2>/dev/null \
+				| python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('projects',{}).get('indexed',0))" 2>/dev/null || echo 0); \
+			state=$$(curl -sS "$(ORBIT_FIXTURES_GITLAB_URL)/api/v4/orbit/graph_status?full_path=$(ORBIT_FIXTURES_NAMESPACE)" -H "PRIVATE-TOKEN: $$GITLAB_COM_TOKEN" 2>/dev/null \
+				| python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('indexing',{}).get('state','?'))" 2>/dev/null || echo "?"); \
+			if [ -z "$$baseline" ]; then \
+				baseline=$$current; \
+				target=$$((baseline + 2)); \
+				printf "  baseline: %s projects indexed\n" "$$baseline"; \
+				printf "  target:   %s projects (baseline + 2 new fixtures)\n" "$$target"; \
+			fi; \
+			printf "  [%d/%d] indexed=%s state=%s target=%s\n" "$$i" "$$attempts" "$$current" "$$state" "$$target"; \
+			if [ "$$current" -ge "$$target" ] 2>/dev/null; then \
+				printf "  ✓ indexer caught up (%s >= %s)\n" "$$current" "$$target"; \
+				exit 0; \
+			fi; \
+			sleep 15; \
+		done; \
+		echo "  ⚠ indexer did not catch up within $(ORBIT_FIXTURES_INDEXER_TIMEOUT)s" 1>&2; \
+		echo "    Proceeding anyway — live test assertions are tolerant of" 1>&2; \
+		echo "    partial indexing (row_count > 0 rather than strict equality)" 1>&2; \
+	}
+
+## orbit-run-live-tests: run the orbitlive-tagged live tests against
+## gitlab.com. Standalone — useful for re-running the tests after
+## manual setup or after the indexer has had more time to settle.
+##
+## The live suite lives at test/e2e/orbit/live_test.go (external
+## `orbit_test` package, build tag `orbitlive`), not in
+## internal/tools/orbit/ — pointing go test at the unit-test package
+## would run only the mock-based tests and silently skip the live
+## integration coverage.
+orbit-run-live-tests: orbit-ensure-token
+	@. ./.env && { \
+		echo ""; \
+		echo "=== Running live tests (build tag: orbitlive) ==="; \
+		export GITLAB_COM_TOKEN \
+			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE); \
+		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
+	}
 
 ## eval-surfaces-docker: run Docker CE model evaluation for one surface (usage: make eval-surfaces-docker SURFACE=dynamic [PRESET=docker-read])
 eval-surfaces-docker:

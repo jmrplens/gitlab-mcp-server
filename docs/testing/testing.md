@@ -18,11 +18,11 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 10,899 |
-| Unit test functions                                   | 10,618 |
+| Total test functions                                  | 10,928 |
+| Unit test functions                                   | 10,647 |
 | E2E test functions                                    |    281 |
 | cmd test functions                                    |    783 |
-| Test files (internal/)                                |    442 |
+| Test files (internal/)                                |    445 |
 | Test files (cmd/)                                     |     52 |
 | Test files (test/e2e/suite/)                          |    137 |
 | Tool sub-packages tested                              |    175 |
@@ -35,9 +35,9 @@
 
 | Pattern                                | Count |     % |
 | -------------------------------------- | ----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 9,751 | 89.5% |
-| `TestFunc` (no underscore)             |   845 |  7.8% |
-| `TestFunc_Scenario_Expected` (3+ part) |   303 |  2.8% |
+| `TestFunc_Scenario` (2-part)           | 9,777 | 89.5% |
+| `TestFunc` (no underscore)             |   845 |  7.7% |
+| `TestFunc_Scenario_Expected` (3+ part) |   306 |  2.8% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          1,903 |         90 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         12 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          7,647 |        340 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          7,676 |        343 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            281 |        137 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            783 |         52 | server entry point and developer command utilities                                              |
-| **Total**               |     **10,899** |    **631** |                                                                                                 |
+| **Total**               |     **10,928** |    **634** |                                                                                                 |
 
 ### Core Packages
 
@@ -117,7 +117,7 @@
 | accessrequests          |        41 |          2 |   100.0% |         8 |
 | accesstokens            |        91 |          2 |   100.0% |        18 |
 | actioncatalog           |        31 |          4 |    99.1% |         0 |
-| actioncompat            |        42 |          2 |    99.2% |         0 |
+| actioncompat            |        44 |          2 |   100.0% |         0 |
 | adminspecs              |         5 |          1 |   100.0% |        91 |
 | alertmanagement         |        28 |          2 |    98.9% |         4 |
 | appearance              |        10 |          1 |   100.0% |         2 |
@@ -181,7 +181,7 @@
 | grouplabels             |        50 |          2 |   100.0% |         7 |
 | groupldap               |        11 |          2 |   100.0% |         4 |
 | groupmarkdownuploads    |        31 |          2 |   100.0% |         3 |
-| groupmembers            |        59 |          2 |   100.0% |         7 |
+| groupmembers            |        61 |          2 |   100.0% |         7 |
 | groupmilestones         |        87 |          2 |   100.0% |         8 |
 | groupprotectedbranches  |        16 |          2 |   100.0% |         5 |
 | groupprotectedenvs      |        16 |          2 |   100.0% |         5 |
@@ -231,7 +231,7 @@
 | mrnotes                 |        37 |          2 |   100.0% |         5 |
 | namespaces              |        35 |          1 |    99.0% |         4 |
 | notifications           |        29 |          1 |   100.0% |         6 |
-| orbit                   |        31 |          1 |   100.0% |         6 |
+| orbit                   |        56 |          4 |   100.0% |         6 |
 | packages                |       112 |          5 |    99.0% |         8 |
 | pages                   |        55 |          2 |   100.0% |         9 |
 | pipelines               |       106 |          3 |   100.0% |        12 |
@@ -289,7 +289,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        59 |          2 |    99.4% |         6 |
 | workitems               |        79 |          2 |   100.0% |         6 |
-| **Total**               | **7,647** |    **340** |          | **1,132** |
+| **Total**               | **7,676** |    **343** |          | **1,132** |
 
 </details>
 
@@ -354,7 +354,7 @@
 | accessrequests          |   100.0% |
 | accesstokens            |   100.0% |
 | actioncatalog           |    99.1% |
-| actioncompat            |    99.2% |
+| actioncompat            |   100.0% |
 | adminspecs              |   100.0% |
 | alertmanagement         |    98.9% |
 | appearance              |   100.0% |
@@ -820,11 +820,52 @@ make test-race     # Run with race detector
 make test-e2e      # Run E2E tests (self-hosted GitLab) — generates JUnit + JSON reports
 make test-e2e-docker # Run E2E tests with ephemeral GitLab CE — generates JUnit + JSON reports
 make test-e2e-docker-enterprise # Run E2E tests with ephemeral GitLab EE + license
+make test-e2e-gitlab-com # Run Orbit live tests against GitLab.com (provisions fixtures, waits for indexer, then runs the orbitlive-tagged tests)
 make coverage      # Generate coverage report
 make lint          # Run consolidated golangci-lint checks
 make inspector     # Compile + launch MCP Inspector UI via stdio
 make inspector-stop # Stop Inspector and clean up temp binary
 ```
+
+### Orbit Live Tests
+
+The six `gitlab_orbit_*` tools have a separate `orbitlive`-gated live test suite at `test/e2e/orbit/live_test.go` that exercises the real `https://gitlab.com/api/v4/orbit/*` endpoints against a fixture-provisioned namespace. Unlike the `e2e`-tagged suite, these tests are **not** run by `make test` or any CI gate — they require a GitLab.com Personal Access Token and explicit opt-in.
+
+The suite is organized as four entry points:
+
+| Entry point                              | Subtests | What it exercises                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------- | -------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TestOrbitLiveGitLabCom`                 |       14 | All six handlers against the live API: status, schema, tools, DSL (default/llm/raw), query (traversal/aggregation/neighbors/path_finding/llm-format), and graph_status (full_path/namespace_id)                                                                                                    |
+| `TestOrbitLiveGitLabCom_ShapeDiscovery`  |        6 | Regression coverage of the canonical Query DSL shapes for each `query_type` variant — `aggregation_with_filter`, `aggregation_with_node_ids`, `neighbors_id_reference`, `path_finding_shortest`, and the default schema format                                                                     |
+| `TestOrbitLiveGitLabCom_Fixtures`        |        7 | Filter-based queries against the live `kg-fixtures` and `security-fixtures` projects, scoped by `ORBIT_FIXTURES_NAMESPACE` so the test is portable across developer namespaces                                                                                                                     |
+| `TestOrbitLiveGitLabCom_FeatureCoverage` |       14 | Comprehensive DSL surface: filter operators (`in`, `contains`, `gt`), multi-node traversal with `IN_PROJECT`, aggregations with `group_by` (node/property), `sum`/`max`/`avg`, `order_by`, virtual columns (`diff`, `content`), cursor pagination, `id_range` scope, and `options.dynamic_columns` |
+
+Total: **4 suites, 41 subtests** behind the `orbitlive` build tag.
+
+The Orbit indexer is eventually consistent. Subtests that match content the indexer has not yet picked up will report `row_count=0` and pass — they are informational, not strict equality. Re-run the live test a few minutes after `make test-e2e-gitlab-com` to allow the indexer to catch up.
+
+To run the full flow:
+
+```bash
+# Add a Personal Access Token (api scope) to .env first
+echo 'GITLAB_COM_TOKEN=glpat-...' >> .env
+
+# Default namespace is plens1; override with ORBIT_FIXTURES_NAMESPACE
+make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
+```
+
+To run only the live tests (when fixtures are already provisioned):
+
+```bash
+GITLAB_COM_TOKEN=glpat-... \
+  go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/
+
+# Just one suite
+GITLAB_COM_TOKEN=glpat-... \
+  go test -tags orbitlive -count=1 -v -run '^TestOrbitLiveGitLabCom_Fixtures$' ./test/e2e/orbit/
+```
+
+See [Orbit Live Test Fixtures](../development/orbit-fixtures.md) for fixture contents, the `scripts/setup-orbit-fixtures.sh` script, and the indexer caveat.
 
 ## Test Infrastructure
 
