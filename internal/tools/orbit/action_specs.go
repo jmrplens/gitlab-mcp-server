@@ -71,15 +71,15 @@ func orbitReadRoute[T, R any](client *gitlabclient.Client, fn func(context.Conte
 // natural-language queries such as "kg status" or "knowledge graph query". The
 // relatedActions slice is surfaced as `RelatedActions` so the LLM can chain calls
 // (e.g. schema → dsl → query) without re-discovering the catalog.
-func orbitReadSpec(name string, route toolutil.ActionRoute, individualTool, usage string, relatedActions []string, extraAliases []string) toolutil.ActionSpec {
+func orbitReadSpec(name string, route toolutil.ActionRoute, individualTool, usage string, relatedActions, extraAliases []string) toolutil.ActionSpec {
 	aliases := make([]string, 0, 1+len(extraAliases))
 	aliases = append(aliases, individualTool)
 	aliases = append(aliases, extraAliases...)
 	return toolutil.NewReadActionSpec(name, route, toolutil.ActionSpecOptions{
-		Aliases:        aliases,
-		Tags:           []string{"orbit", "knowledge_graph"},
-		Usage:          usage,
-		RelatedActions: relatedActions,
+		Aliases:          aliases,
+		Tags:             []string{"orbit", "knowledge_graph"},
+		Usage:            usage,
+		RelatedActions:   relatedActions,
 		OpenWorld:        true,
 		Edition:          "premium",
 		GitLabDotComOnly: true,

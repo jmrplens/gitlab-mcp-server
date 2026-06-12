@@ -295,4 +295,3 @@ func TestValidateQuery_RejectsNeighborsShape(t *testing.T) {
 		t.Fatalf("validateQuery() error = %q, want neighbors shape message", err)
 	}
 }
-

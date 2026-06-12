@@ -102,7 +102,7 @@ to see what the indexer knows.
 
 ## Project layout
 
-```
+```text
 test/fixtures/orbit/
 ├── kg-fixtures/
 │   ├── README.md
