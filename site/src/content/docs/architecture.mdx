@@ -114,6 +114,15 @@ Every ordinary GitLab operation is defined once in the canonical action catalog.
 
 Because all surfaces share the same catalog entry, schemas, read-only filtering, destructive-action confirmations, safe-mode previews, scope filtering, Markdown formatting, and JSON output stay consistent across modes.
 
+```mermaid
+graph LR
+    catalog[Canonical action catalog] --> meta["Meta-tools<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit on GitLab.com Enterprise"]
+    catalog --> individual["Individual tools<br/>gitlab_list_issues, gitlab_create_project, ...<br/>+ 6 gitlab_orbit_* on GitLab.com Enterprise"]
+    catalog --> dynamic["Dynamic tools<br/>gitlab_find_action + gitlab_execute_action<br/>+ orbit.* domain IDs on GitLab.com Enterprise"]
+```
+
+Orbit is projected through the same catalog as every other domain: in meta mode it appears as the `gitlab_orbit` meta-tool with six actions; in individual mode it appears as six `gitlab_orbit_*` tools; in dynamic mode its actions are discoverable as `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query`, and `orbit.graph_status` through `gitlab_find_action`/`gitlab_execute_action`.
+
 ### Meta-tool mode
 
 With `TOOL_SURFACE=meta`, the server exposes a baseline of **33 domain-level meta-tools** instead of the individual catalog. Self-managed Enterprise/Premium environments add 16 Enterprise/Premium tools for 49 total, and GitLab.com Enterprise/Premium with Orbit (GitLab.com's Knowledge Graph feature) adds one more tool for 50 total. Each meta-tool groups related operations:

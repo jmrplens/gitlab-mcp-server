@@ -78,6 +78,10 @@ modernize-output.txt
 # Implementation plans (local working notes)
 plan/
 
+# Local temp working dirs created by fixture setup scripts
+.tmp-kg-fixtures/
+.tmp-*/
+
 # IDE
 .idea/
 .vscode/*

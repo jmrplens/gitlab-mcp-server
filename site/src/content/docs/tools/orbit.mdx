@@ -40,6 +40,48 @@ Self-managed GitLab instances do not register Orbit tools, even when the Enterpr
 4. (Optional) Call `action: "dsl"` to retrieve the Orbit query DSL schema or LLM grammar.
 5. Pass a JSON query object to `action: "query"` with `response_format` set to `raw` or `llm`.
 
+### Query DSL variants
+
+The `query` parameter on the `query` action is a JSON object whose `query_type` selects one of four variants. The diagram below summarizes the smallest accepted shape for each variant. A Mermaid `graph TD` is the right tool because the four variants share a single `query_type` discriminator and only diverge on the sibling keys — a tree makes the discriminants and required fields legible at a glance.
+
+```mermaid
+graph TD
+    Q["QueryInput<br/>(gitlab_orbit_query)"] --> QT{"query_type"}
+    QT -->|"traversal"| TR["node OR nodes<br/>+ entity, node_ids/filters/id_range<br/>+ relationships?, columns?, order_by?, limit?, cursor?"]
+    QT -->|"aggregation"| AG["nodes[]<br/>+ aggregations[] (function, target, alias)<br/>+ group_by?, aggregation_sort?"]
+    QT -->|"neighbors"| NB["node (bounded)<br/>+ neighbors.node<br/>+ direction?, rel_types?"]
+    QT -->|"path_finding"| PF["nodes[] (>=2, bounded)<br/>+ path {type, from, to, max_depth: 1..3, rel_types?}"]
+```
+
+### Discover → query workflow
+
+The recommended pattern is to discover the live schema first (`schema`, then optionally `dsl`), then execute a typed query through `query`. A `sequenceDiagram` is the right tool because the steps involve four distinct actors (AI client, MCP server, GitLab.com, the Orbit indexer) and the response boundaries matter — the LLM should not assume the schema returned by `dsl` is stable.
+
+```mermaid
+sequenceDiagram
+    participant LLM as AI Client
+    participant MCP as MCP Server
+    participant GL as GitLab.com API
+    participant IDX as Orbit Indexer
+
+    LLM->>MCP: gitlab_orbit_schema (response_format=llm)
+    MCP->>GL: GET /api/v4/orbit/schema
+    GL-->>MCP: ontology (nodes, edges, versions)
+    MCP-->>LLM: schema text
+
+    LLM->>MCP: gitlab_orbit_dsl (response_format=llm)
+    MCP->>GL: GET /api/v4/orbit/schema/dsl
+    GL-->>MCP: query DSL / LLM grammar
+    MCP-->>LLM: DSL text
+
+    LLM->>MCP: gitlab_orbit_query (query={query_type, ...})
+    MCP->>GL: POST /api/v4/orbit/query
+    GL->>IDX: resolve node_ids / filters
+    IDX-->>GL: indexed rows
+    GL-->>MCP: rows / aggregations / paths
+    MCP-->>LLM: result + markdown
+```
+
 ### Example: Check Orbit status
 
 ```json

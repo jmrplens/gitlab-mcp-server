@@ -42,14 +42,29 @@ is a no-op.
 
 ### What the script creates
 
-| Project | Content | Why |
-|---|---|---|
-| `<ns>/kg-fixtures` | Python package `acme.orders` (7 source files, 2 test files) + `.gitlab-ci.yml` (4 stages, 5 jobs, SAST, Secret-Detection) + 7 labels + 1 milestone + 5 issues + 2 environments + 1 squash-merged MR | Populates File, Definition, Directory, ImportedSymbol, Branch, MergeRequest, MergeRequestDiff, MergeRequestDiffFile, Note, Label, Milestone, WorkItem, Pipeline, Job, Stage, Environment |
-| `<ns>/security-fixtures` | Intentionally vulnerable code (hard-coded AWS keys, SQL injection, weak MD5 hashing, `eval()`) + 4 GitLab-managed security scanning templates | Populates Vulnerability, Finding, SecurityScan, VulnerabilityIdentifier, VulnerabilityOccurrence, VulnerabilityScanner |
+| Project                  | Content                                                                                                                                                                                             | Why                                                                                                                                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<ns>/kg-fixtures`       | Python package `acme.orders` (7 source files, 2 test files) + `.gitlab-ci.yml` (4 stages, 5 jobs, SAST, Secret-Detection) + 7 labels + 1 milestone + 5 issues + 2 environments + 1 squash-merged MR | Populates File, Definition, Directory, ImportedSymbol, Branch, MergeRequest, MergeRequestDiff, MergeRequestDiffFile, Note, Label, Milestone, WorkItem, Pipeline, Job, Stage, Environment |
+| `<ns>/security-fixtures` | Intentionally vulnerable code (hard-coded AWS keys, SQL injection, weak MD5 hashing, `eval()`) + 4 GitLab-managed security scanning templates                                                       | Populates Vulnerability, Finding, SecurityScan, VulnerabilityIdentifier, VulnerabilityOccurrence, VulnerabilityScanner                                                                   |
 
 The script provisions everything from `test/fixtures/orbit/{kg,security}-fixtures/`
 in this repo. The fixture content is committed and reproducible —
 no external state is needed.
+
+### Fixture reproduction flow
+
+The end-to-end fixture lifecycle has four phases: validate the environment, provision the namespace, push the projects, then let the indexer catch up. A `flowchart LR` is the right tool here because the phases are sequential and side-effecting (each one mutates state in the next), and readers need to see at a glance that nothing happens between setup and the live tests until the indexer has indexed the rows.
+
+```mermaid
+flowchart LR
+    A[setup-orbit-fixtures.sh] -->|idempotent POSTs| B[GitLab.com API]
+    B -->|creates| C[kg-fixtures project]
+    B -->|creates| D[security-fixtures project]
+    C -->|push events| E[Orbit indexer]
+    D -->|push events| E
+    E -->|scans & links| F[indexed rows]
+    F -->|query returns row_count > 0| G[live tests pass]
+```
 
 ## Optional: mirror a public GitLab repo
 
@@ -135,4 +150,30 @@ Override the fixture namespace with `ORBIT_FIXTURES_NAMESPACE`:
 GITLAB_COM_TOKEN=glpat-... \
 ORBIT_FIXTURES_NAMESPACE=acme-research \
   go test -tags orbitlive -count=1 -v -run 'TestOrbitLiveGitLabCom_Fixtures' ./test/e2e/orbit/
+```
+
+## Orchestrator: `make test-e2e-gitlab-com`
+
+The `make test-e2e-gitlab-com` target chains four sub-targets in order. The first three must succeed (in order) before the live tests run; `orbit-wait-indexer` proceeds with a warning if the indexer does not catch up in time, so the live tests are the source of truth for end-to-end readiness. A `sequenceDiagram` is the right tool here because the four sub-targets share a single `.env`-driven state, the make process is the actor that runs them, and the diagram clarifies that `orbit-ensure-token` is a prerequisite of every other step (it is listed as a dependency of all three, even though it only appears once in the visible top-level chain).
+
+```mermaid
+sequenceDiagram
+    participant Dev as Developer
+    participant Make as make test-e2e-gitlab-com
+    participant GL as GitLab.com API
+    participant IDX as Orbit Indexer
+    participant Go as go test
+
+    Dev->>Make: make test-e2e-gitlab-com
+    Make->>Make: orbit-ensure-token<br/>(validate .env, GITLAB_COM_TOKEN)
+    Make->>GL: orbit-setup-fixtures<br/>POST kg-fixtures + security-fixtures
+    GL-->>Make: 201 Created (or 200 if existing)
+    Make->>IDX: orbit-wait-indexer<br/>poll graph_status until baseline+2 indexed
+    IDX-->>Make: indexed count
+    alt indexed >= baseline+2
+        Make->>Go: orbit-run-live-tests<br/>go test -tags orbitlive ./test/e2e/orbit/
+    else timeout
+        Make->>Go: proceed with warning<br/>(live tests are tolerant)
+    end
+    Go-->>Dev: PASS / FAIL with row_count assertions
 ```

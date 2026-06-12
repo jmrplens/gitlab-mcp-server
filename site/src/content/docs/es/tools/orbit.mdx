@@ -40,6 +40,48 @@ Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuan
 4. (Opcional) Llama a `action: "dsl"` para obtener el esquema DSL o gramática LLM de Orbit.
 5. Pasa un objeto JSON de consulta a `action: "query"` con `response_format` en `raw` o `llm`.
 
+### Variantes del DSL de consulta
+
+El parámetro `query` de la acción `query` es un objeto JSON cuyo `query_type` selecciona una de cuatro variantes. El siguiente diagrama resume la forma mínima aceptada para cada variante. Un `graph TD` de Mermaid es la herramienta adecuada porque las cuatro variantes comparten un único discriminador `query_type` y solo divergen en las claves hermanas; un árbol hace que los discriminantes y campos requeridos sean legibles de un vistazo.
+
+```mermaid
+graph TD
+    Q["QueryInput<br/>(gitlab_orbit_query)"] --> QT{"query_type"}
+    QT -->|"traversal"| TR["node OR nodes<br/>+ entity, node_ids/filters/id_range<br/>+ relationships?, columns?, order_by?, limit?, cursor?"]
+    QT -->|"aggregation"| AG["nodes[]<br/>+ aggregations[] (function, target, alias)<br/>+ group_by?, aggregation_sort?"]
+    QT -->|"neighbors"| NB["node (bounded)<br/>+ neighbors.node<br/>+ direction?, rel_types?"]
+    QT -->|"path_finding"| PF["nodes[] (>=2, bounded)<br/>+ path {type, from, to, max_depth: 1..3, rel_types?}"]
+```
+
+### Flujo descubrir → consultar
+
+El patrón recomendado es descubrir primero el esquema vivo (`schema`, y opcionalmente `dsl`) y luego ejecutar una consulta tipada mediante `query`. Un `sequenceDiagram` es la herramienta adecuada porque los pasos involucran a cuatro actores distintos (cliente de IA, servidor MCP, GitLab.com e indexer de Orbit) y los límites de respuesta importan: el LLM no debe asumir que el esquema devuelto por `dsl` es estable.
+
+```mermaid
+sequenceDiagram
+    participant LLM as Cliente IA
+    participant MCP as Servidor MCP
+    participant GL as API GitLab.com
+    participant IDX as Indexer Orbit
+
+    LLM->>MCP: gitlab_orbit_schema (response_format=llm)
+    MCP->>GL: GET /api/v4/orbit/schema
+    GL-->>MCP: ontología (nodos, aristas, versiones)
+    MCP-->>LLM: texto del esquema
+
+    LLM->>MCP: gitlab_orbit_dsl (response_format=llm)
+    MCP->>GL: GET /api/v4/orbit/schema/dsl
+    GL-->>MCP: DSL de consulta / gramática LLM
+    MCP-->>LLM: texto del DSL
+
+    LLM->>MCP: gitlab_orbit_query (query={query_type, ...})
+    MCP->>GL: POST /api/v4/orbit/query
+    GL->>IDX: resolver node_ids / filters
+    IDX-->>GL: filas indexadas
+    GL-->>MCP: filas / agregaciones / caminos
+    MCP-->>LLM: resultado + markdown
+```
+
 ### Ejemplo: Comprobar estado de Orbit
 
 ```json

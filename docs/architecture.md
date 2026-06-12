@@ -271,6 +271,15 @@ The meta-tool pattern groups related tools under a single MCP endpoint with an `
 
 Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, the `gitlab://tools` manifest, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
 
+Orbit is projected through the same catalog as every other domain. In meta mode it appears as the `gitlab_orbit` meta-tool with six actions; in individual mode it appears as six `gitlab_orbit_*` tools; in dynamic mode its actions are discoverable as `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query`, and `orbit.graph_status` through `gitlab_find_action`/`gitlab_execute_action`.
+
+```mermaid
+graph LR
+    catalog[Canonical action catalog] --> meta["Meta-tools<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit on GitLab.com Enterprise"]
+    catalog --> individual["Individual tools<br/>gitlab_list_issues, gitlab_create_project, ...<br/>+ 6 gitlab_orbit_* on GitLab.com Enterprise"]
+    catalog --> dynamic["Dynamic tools<br/>gitlab_find_action + gitlab_execute_action<br/>+ orbit.* domain IDs on GitLab.com Enterprise"]
+```
+
 ```mermaid
 sequenceDiagram
     participant LLM as AI Client
