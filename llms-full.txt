@@ -20761,7 +20761,7 @@ Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
 
 **Parameters:**
 
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -20774,7 +20774,7 @@ Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, projec
 - `full_path` (string): Full path of a group or project to inspect, for example gitlab-org/gitlab. Set exactly one scope field.
 - `namespace_id` (integer): Namespace/group ID to inspect. Set exactly one of namespace_id, project_id, or full_path.
 - `project_id` (integer): Project ID to inspect. Set exactly one of namespace_id, project_id, or full_path.
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -20785,7 +20785,7 @@ Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation
 **Parameters:**
 
 - `query` (object) (required): Orbit query DSL JSON object. The query_type must be one of: traversal, aggregation, neighbors, path_finding. See QueryInput docstring for the shape of each variant.
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -20807,7 +20807,7 @@ Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
 
 **Parameters:**
 
-- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

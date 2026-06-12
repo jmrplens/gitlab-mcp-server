@@ -57,13 +57,20 @@ func newLiveClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
-// summarize runs a single live check under a 30s timeout, logs a
+// summarize runs a single live check under a 60s timeout, logs a
 // short PASS/FAIL summary, and records the result as a subtest of t.
 // The fn is expected to return a JSON-marshalable value or an error.
+//
+// The 60s budget is wide enough to absorb a slow /api/v4/orbit/query
+// response (the path_finding shape can scan a non-trivial slice of
+// the graph even with a small `max_depth`); the Orbit knowledge
+// graph service is the slowest of the six endpoints. Tighter
+// budgets (e.g. 30s) produced flaky CI on a re-run right after
+// setup, when the indexer had only just finished catching up.
 func summarize(t *testing.T, name string, fn func(context.Context) (any, error)) {
 	t.Helper()
 	t.Run(name, func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		out, err := fn(ctx)
 		if err != nil {

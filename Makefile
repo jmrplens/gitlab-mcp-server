@@ -34,7 +34,7 @@ ORBIT_FIXTURES_GITLAB_URL ?= https://gitlab.com
 # (in seconds, polled every 15s). When this elapses the make target
 # proceeds with a warning; the live test assertions are tolerant of
 # partial indexing (row_count > 0 rather than strict equality).
-ORBIT_FIXTURES_INDEXER_TIMEOUT ?= 240
+ORBIT_FIXTURES_INDEXER_TIMEOUT ?= 600
 # When set to "true", additionally mirror gitlab-org/cli for realistic
 # cross-entity CI/MR data. Adds ~5 min of mirror time on first run.
 ORBIT_FIXTURES_MIRROR ?= false
