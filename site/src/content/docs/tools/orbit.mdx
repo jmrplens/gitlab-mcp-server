@@ -239,7 +239,7 @@ make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
 
 # When fixtures are already provisioned, run only the tests
 GITLAB_COM_TOKEN=glpat-... \
-  go test -tags orbitlive -count=1 -v -timeout 300s ./internal/tools/orbit/
+  go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/
 ```
 
 See [Orbit live test fixtures](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/orbit-fixtures.md) for the fixture layout, the `scripts/setup-orbit-fixtures.sh` reproducer, and the indexer caveat (transient `error` state is normal and the tests are informational, not strict equality).

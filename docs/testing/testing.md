@@ -858,11 +858,11 @@ To run only the live tests (when fixtures are already provisioned):
 
 ```bash
 GITLAB_COM_TOKEN=glpat-... \
-  go test -tags orbitlive -count=1 -v -timeout 300s ./internal/tools/orbit/
+  go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/
 
 # Just one suite
 GITLAB_COM_TOKEN=glpat-... \
-  go test -tags orbitlive -count=1 -v -run '^TestOrbitLiveGitLabCom_Fixtures$' ./internal/tools/orbit/
+  go test -tags orbitlive -count=1 -v -run '^TestOrbitLiveGitLabCom_Fixtures$' ./test/e2e/orbit/
 ```
 
 See [Orbit Live Test Fixtures](../development/orbit-fixtures.md) for fixture contents, the `scripts/setup-orbit-fixtures.sh` script, and the indexer caveat.

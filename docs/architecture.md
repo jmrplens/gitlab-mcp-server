@@ -70,8 +70,8 @@ graph TD
         SPECS[domain ActionSpecs<br/>176 internal/tools packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1030 self-managed / 1036 GitLab.com Enterprise tools]
-        META[meta projection<br/>33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise tools]
+        IND[individual projection<br/>1030 self-managed / 1036 GitLab.com Premium/Ultimate tools]
+        META[meta projection<br/>33 base / 49 self-managed enterprise / 50 GitLab.com Premium/Ultimate tools]
         DYN[dynamic projection<br/>2 visible find / execute tools]
         SAMP[sampling support<br/>11 LLM-assisted actions]
         ELIC[elicitation support<br/>4 interactive actions]
@@ -275,9 +275,9 @@ Orbit is projected through the same catalog as every other domain. In meta mode 
 
 ```mermaid
 graph LR
-    catalog[Canonical action catalog] --> meta["Meta-tools<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit on GitLab.com Enterprise"]
-    catalog --> individual["Individual tools<br/>gitlab_list_issues, gitlab_create_project, ...<br/>+ 6 gitlab_orbit_* on GitLab.com Enterprise"]
-    catalog --> dynamic["Dynamic tools<br/>gitlab_find_action + gitlab_execute_action<br/>+ orbit.* domain IDs on GitLab.com Enterprise"]
+    catalog[Canonical action catalog] --> meta["Meta-tools<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit on GitLab.com Premium/Ultimate"]
+    catalog --> individual["Individual tools<br/>gitlab_list_issues, gitlab_create_project, ...<br/>+ 6 gitlab_orbit_* on GitLab.com Premium/Ultimate"]
+    catalog --> dynamic["Dynamic tools<br/>gitlab_find_action + gitlab_execute_action<br/>+ orbit.* domain IDs on GitLab.com Premium/Ultimate"]
 ```
 
 ```mermaid

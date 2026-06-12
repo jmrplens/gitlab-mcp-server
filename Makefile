@@ -261,7 +261,7 @@ orbit-ensure-token:
 			echo "ERROR: GITLAB_COM_TOKEN is not set in .env" 1>&2; \
 			exit 1; \
 		fi; \
-		printf "✓ GITLAB_COM_TOKEN is set (token=...%s)\n" "$${GITLAB_COM_TOKEN: -4}"; \
+		printf "✓ GITLAB_COM_TOKEN is set (length=%d)\n" "$${#GITLAB_COM_TOKEN}"; \
 	}
 
 ## orbit-setup-fixtures: idempotently provision the fixture projects.
@@ -284,21 +284,34 @@ orbit-setup-fixtures: orbit-ensure-token
 ## until ORBIT_FIXTURES_INDEXER_TIMEOUT elapses. Proceeds with a
 ## warning in the timeout case — the live test is tolerant of partial
 ## indexing.
+## orbit-wait-indexer: poll the Orbit indexer until the projects.indexed
+## count reflects our newly-provisioned projects (baseline + 2), or
+## until ORBIT_FIXTURES_INDEXER_TIMEOUT elapses. Proceeds with a
+## warning in the timeout case — the live test is tolerant of partial
+## indexing.
+##
+## To stay idempotent, the baseline is taken from the FIRST poll in the
+## wait loop, not from a separate pre-flight curl. This keeps the
+## target = baseline + 2 invariant valid even when the fixtures have
+## already been indexed on a prior run.
 orbit-wait-indexer: orbit-ensure-token
 	@. ./.env && { \
 		echo ""; \
 		echo "=== Waiting for Orbit indexer to catch up (timeout: $(ORBIT_FIXTURES_INDEXER_TIMEOUT)s) ==="; \
-		baseline=$$(curl -sS "$(ORBIT_FIXTURES_GITLAB_URL)/api/v4/orbit/graph_status?full_path=$(ORBIT_FIXTURES_NAMESPACE)" -H "PRIVATE-TOKEN: $$GITLAB_COM_TOKEN" 2>/dev/null \
-			| python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('projects',{}).get('indexed',0))" 2>/dev/null || echo 0); \
-		target=$$((baseline + 2)); \
-		printf "  baseline: %s projects indexed\n" "$$baseline"; \
-		printf "  target:   %s projects (baseline + 2 new fixtures)\n" "$$target"; \
 		attempts=$$(( $(ORBIT_FIXTURES_INDEXER_TIMEOUT) / 15 )); \
+		baseline=""; \
+		target=""; \
 		for i in $$(seq 1 $$attempts); do \
 			current=$$(curl -sS "$(ORBIT_FIXTURES_GITLAB_URL)/api/v4/orbit/graph_status?full_path=$(ORBIT_FIXTURES_NAMESPACE)" -H "PRIVATE-TOKEN: $$GITLAB_COM_TOKEN" 2>/dev/null \
 				| python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('projects',{}).get('indexed',0))" 2>/dev/null || echo 0); \
 			state=$$(curl -sS "$(ORBIT_FIXTURES_GITLAB_URL)/api/v4/orbit/graph_status?full_path=$(ORBIT_FIXTURES_NAMESPACE)" -H "PRIVATE-TOKEN: $$GITLAB_COM_TOKEN" 2>/dev/null \
 				| python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('indexing',{}).get('state','?'))" 2>/dev/null || echo "?"); \
+			if [ -z "$$baseline" ]; then \
+				baseline=$$current; \
+				target=$$((baseline + 2)); \
+				printf "  baseline: %s projects indexed\n" "$$baseline"; \
+				printf "  target:   %s projects (baseline + 2 new fixtures)\n" "$$target"; \
+			fi; \
 			printf "  [%d/%d] indexed=%s state=%s target=%s\n" "$$i" "$$attempts" "$$current" "$$state" "$$target"; \
 			if [ "$$current" -ge "$$target" ] 2>/dev/null; then \
 				printf "  ✓ indexer caught up (%s >= %s)\n" "$$current" "$$target"; \
@@ -314,13 +327,19 @@ orbit-wait-indexer: orbit-ensure-token
 ## orbit-run-live-tests: run the orbitlive-tagged live tests against
 ## gitlab.com. Standalone — useful for re-running the tests after
 ## manual setup or after the indexer has had more time to settle.
+##
+## The live suite lives at test/e2e/orbit/live_test.go (external
+## `orbit_test` package, build tag `orbitlive`), not in
+## internal/tools/orbit/ — pointing go test at the unit-test package
+## would run only the mock-based tests and silently skip the live
+## integration coverage.
 orbit-run-live-tests: orbit-ensure-token
 	@. ./.env && { \
 		echo ""; \
 		echo "=== Running live tests (build tag: orbitlive) ==="; \
 		export GITLAB_COM_TOKEN \
 			ORBIT_FIXTURES_NAMESPACE=$(ORBIT_FIXTURES_NAMESPACE); \
-		go test -tags orbitlive -count=1 -v -timeout 300s ./internal/tools/orbit/; \
+		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
 	}
 
 ## eval-surfaces-docker: run Docker CE model evaluation for one surface (usage: make eval-surfaces-docker SURFACE=dynamic [PRESET=docker-read])

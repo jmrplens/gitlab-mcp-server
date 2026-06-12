@@ -84,7 +84,7 @@ make test-e2e-gitlab-com
 make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
 
 # Or, when fixtures are already provisioned, run only the tests:
-GITLAB_COM_TOKEN=glpat-... go test -tags orbitlive -count=1 -v ./internal/tools/orbit/
+GITLAB_COM_TOKEN=glpat-... go test -tags orbitlive -count=1 -v ./test/e2e/orbit/
 ```
 
 See [Orbit live test fixtures](docs/development/orbit-fixtures.md) for the fixture layout, the indexer caveat, and the `--mirror-cli` option that adds a real `gitlab-org/cli` mirror for larger graph queries.

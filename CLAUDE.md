@@ -213,7 +213,7 @@ go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Wi
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
 
 # Orbit live tests against GitLab.com (requires GITLAB_COM_TOKEN; auto-provisions fixtures)
-GITLAB_COM_TOKEN=glpat-... go test -tags orbitlive -count=1 -v ./internal/tools/orbit/
+GITLAB_COM_TOKEN=glpat-... go test -tags orbitlive -count=1 -v ./test/e2e/orbit/
 make test-e2e-gitlab-com                                # Orchestrated: ensure token, setup fixtures, wait indexer, run live tests
 
 # Surface evaluator (Docker GitLab fixture)

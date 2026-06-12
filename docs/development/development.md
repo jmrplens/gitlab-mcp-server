@@ -387,7 +387,7 @@ make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
 
 # When fixtures are already provisioned, skip setup and run only the tests
 GITLAB_COM_TOKEN=glpat-... \
-  go test -tags orbitlive -count=1 -v -timeout 300s ./internal/tools/orbit/
+  go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/
 ```
 
 `make test-e2e-gitlab-com` chains four sub-targets: `orbit-ensure-token` (validates `GITLAB_COM_TOKEN` is exported), `orbit-setup-fixtures` (runs `scripts/setup-orbit-fixtures.sh`), `orbit-wait-indexer` (polls `/api/v4/orbit/graph_status` until the indexer reports the projects as indexed), and `orbit-run-live-tests` (runs `go test -tags orbitlive ...`). Each sub-target is independently runnable.
