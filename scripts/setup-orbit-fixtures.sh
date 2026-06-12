@@ -202,17 +202,26 @@ JSON
     # this, the persisted `origin` remote (clean URL, no creds) has
     # no credentials and the push returns HTTP Basic: Access
     # denied. See: https://gitlab.com/help/topics/git/troubleshooting_git.md
+    #
+    # Note: only http.extraHeader is persisted. The user.email /
+    # user.name identity for the bot is passed inline to `git
+    # commit -c user.email=… -c user.name=…` below; per-command
+    # `-c` flags do not write to `.git/config`, so the surrounding
+    # main repo's git config (or any other cwd the script is
+    # invoked from) is not contaminated by the bot identity.
     (cd "$work" && \
-      git config --local http.extraHeader "PRIVATE-TOKEN: $GITLAB_COM_TOKEN" && \
-      git config user.email "orbit-fixtures@local" && \
-      git config user.name  "Orbit Fixtures Bot")
+      git config --local http.extraHeader "PRIVATE-TOKEN: $GITLAB_COM_TOKEN")
     # Remove the auto-generated README so the local one wins on push
     rm -f "$work/README.md"
     rsync -a --exclude='.git/' "$fixture_dir/" "$work/"
     (
       cd "$work"
-      git add -A
-      git commit -m "Initial fixture content" --quiet
+      git -c user.email="orbit-fixtures@local" \
+          -c user.name="Orbit Fixtures Bot" \
+        add -A
+      git -c user.email="orbit-fixtures@local" \
+          -c user.name="Orbit Fixtures Bot" \
+        commit -m "Initial fixture content" --quiet
       git push --quiet -u origin main 2>&1 | tail -3 >&2
     )
     rm -rf "$work"

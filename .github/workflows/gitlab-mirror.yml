@@ -68,7 +68,16 @@ jobs:
             '+refs/heads/*:refs/heads/*' \
             '+refs/tags/*:refs/tags/*'
           git -C mirror.git remote add gitlab "$GITLAB_MIRROR_REPO"
-          git -C mirror.git push --prune gitlab \
+          # --force is required: the GitHub side routinely rewrites main
+          # (e.g. when a force-push is needed to scrub a leaked bot
+          # identity, or when a squash commit is amended in place).
+          # Plain `git push` rejects non-fast-forward updates with
+          # "rejected - non-fast-forward", which would break the mirror
+          # silently whenever main is rewritten. The leading `+` on the
+          # refspec is the equivalent form, but `--force` is explicit
+          # and easier to grep for. --prune keeps the GitLab side tidy
+          # by removing refs that have been deleted on GitHub.
+          git -C mirror.git push --force --prune gitlab \
             '+refs/heads/*:refs/heads/*' \
             '+refs/tags/*:refs/tags/*'
 
