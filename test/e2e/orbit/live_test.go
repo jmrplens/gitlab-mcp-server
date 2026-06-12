@@ -1,15 +1,25 @@
 //go:build orbitlive
 
-// live_gitlab_com_test.go exercises every public orbit handler against
-// https://gitlab.com using the GITLAB_COM_TOKEN from the environment.
+// live_test.go is the live integration test surface for the orbit package.
 // It is gated behind the `orbitlive` build tag so it never runs in the
-// normal `go test ./...` sweep. Run it explicitly with:
+// default `go test ./...` sweep. Run it explicitly with:
 //
-//	GITLAB_COM_TOKEN=... go test -tags orbitlive -count=1 -v ./internal/tools/orbit/
+//	set -a && . ./.env && set +a && \
+//	  go test -tags orbitlive -count=1 -v -timeout 240s ./test/e2e/orbit/
 //
-// The test reports each handler as PASS / FAIL with a one-line summary so
-// we can see at a glance which tools are wired correctly to the live API.
-package orbit
+// Or end-to-end (provisions fixtures, waits for the indexer, runs
+// the tests) via the project Make target:
+//
+//	set -a && . ./.env && set +a && \
+//	  make test-e2e-gitlab-com
+//
+// The test lives under test/e2e/orbit/ (external `orbit_test` package)
+// so it is co-located with the rest of the e2e surface and can be
+// run or evolved independently of the mock-based e2e suite in
+// test/e2e/suite/. It uses the real GitLab.com REST API (not httptest
+// mocks) and exercises every public orbit handler plus the full
+// query DSL surface end-to-end.
+package orbit_test
 
 import (
 	"context"
@@ -21,6 +31,12 @@ import (
 	"time"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	// Import the orbit package under test. The test lives in
+	// test/e2e/orbit/ (external test package) so it can also be
+	// runnable on its own against any GitLab instance with the
+	// `orbitlive` build tag, without pulling in the full e2e
+	// suite from test/e2e/suite/.
+	orbit "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/orbit"
 )
 
 const liveGitLabComURL = "https://gitlab.com"
@@ -95,7 +111,7 @@ func testOrbitLiveGitLabComDiscovery(t *testing.T) {
 func testOrbitLiveReadOnlyHandlers(t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
 	summarize(t, "Status", func(ctx context.Context) (any, error) {
-		out, err := Status(ctx, client, StatusInput{})
+		out, err := orbit.Status(ctx, client, orbit.StatusInput{})
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +120,7 @@ func testOrbitLiveReadOnlyHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 
 	summarize(t, "Schema", func(ctx context.Context) (any, error) {
-		out, err := Schema(ctx, client, SchemaInput{})
+		out, err := orbit.Schema(ctx, client, orbit.SchemaInput{})
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +132,7 @@ func testOrbitLiveReadOnlyHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 
 	summarize(t, "Tools", func(ctx context.Context) (any, error) {
-		out, err := Tools(ctx, client, ToolsInput{})
+		out, err := orbit.Tools(ctx, client, orbit.ToolsInput{})
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +150,7 @@ func testOrbitLiveReadOnlyHandlers(t *testing.T, client *gitlabclient.Client) {
 func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
 	summarize(t, "DSL_default", func(ctx context.Context) (any, error) {
-		out, err := DSL(ctx, client, DSLInput{})
+		out, err := orbit.DSL(ctx, client, orbit.DSLInput{})
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +158,7 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 
 	summarize(t, "DSL_llm", func(ctx context.Context) (any, error) {
-		out, err := DSL(ctx, client, DSLInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"}})
+		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormatInput: orbit.ResponseFormatInput{ResponseFormat: "llm"}})
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +166,7 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 
 	summarize(t, "DSL_raw", func(ctx context.Context) (any, error) {
-		out, err := DSL(ctx, client, DSLInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: "raw"}})
+		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormatInput: orbit.ResponseFormatInput{ResponseFormat: "raw"}})
 		if err != nil {
 			return nil, err
 		}
@@ -166,7 +182,7 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
 	summarize(t, "Query_traversal_minimal", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -184,7 +200,7 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 
 	summarize(t, "Query_traversal_with_filter", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -207,7 +223,7 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 
 	summarize(t, "Query_aggregation", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -236,8 +252,8 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 
 	summarize(t, "Query_llm_format", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
-			ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
+			ResponseFormatInput: orbit.ResponseFormatInput{ResponseFormat: "llm"},
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -268,7 +284,7 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client) {
 		// node_ids/filters) plus a `neighbors: {node: <id>}` reference.
 		// `neighbors.node` is a string that references the top-level
 		// node's `id` (not the entity name).
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "neighbors",
 				"node": map[string]any{
@@ -293,7 +309,7 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client) {
 		// max_depth: 1..3}`. `path.type` is the algorithm enum
 		// (shortest | all_shortest | any); `from`/`to` are string id
 		// references to the top-level nodes.
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "path_finding",
 				"nodes": []any{
@@ -330,7 +346,7 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client) {
 func testOrbitLiveGraphStatusHandlers(t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
 	summarize(t, "GraphStatus_full_path", func(ctx context.Context) (any, error) {
-		out, err := GraphStatus(ctx, client, GraphStatusInput{FullPath: "plens1"})
+		out, err := orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{FullPath: "plens1"})
 		if err != nil {
 			return nil, err
 		}
@@ -346,7 +362,7 @@ func testOrbitLiveGraphStatusHandlers(t *testing.T, client *gitlabclient.Client)
 	})
 
 	summarize(t, "GraphStatus_namespace_id", func(ctx context.Context) (any, error) {
-		out, err := GraphStatus(ctx, client, GraphStatusInput{NamespaceID: 134059988})
+		out, err := orbit.GraphStatus(ctx, client, orbit.GraphStatusInput{NamespaceID: 134059988})
 		if err != nil {
 			return nil, err
 		}
@@ -370,7 +386,7 @@ func TestOrbitLiveGitLabCom_ShapeDiscovery(t *testing.T) {
 	// Aggregation with a filter scope: canonical shape is `nodes: [{...,
 	// filters: {...}}]` plus `aggregations: [{function, target, alias}]`.
 	summarize(t, "Aggregation_with_filter", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -396,7 +412,7 @@ func TestOrbitLiveGitLabCom_ShapeDiscovery(t *testing.T) {
 
 	// Aggregation with explicit node_ids: alternative to filters.
 	summarize(t, "Aggregation_with_node_ids", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -422,7 +438,7 @@ func TestOrbitLiveGitLabCom_ShapeDiscovery(t *testing.T) {
 	// The `neighbors.node` value is the top-level node's `id` (not the
 	// entity name).
 	summarize(t, "Neighbors_id_reference", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "neighbors",
 				"node": map[string]any{
@@ -445,7 +461,7 @@ func TestOrbitLiveGitLabCom_ShapeDiscovery(t *testing.T) {
 	// max_depth}`. `path.type` is the algorithm (shortest | all_shortest |
 	// any); from/to are id references to the top-level nodes.
 	summarize(t, "PathFinding_shortest", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "path_finding",
 				"nodes": []any{
@@ -477,7 +493,7 @@ func TestOrbitLiveGitLabCom_ShapeDiscovery(t *testing.T) {
 	// Schema with the default response format (handler omits the
 	// response_format parameter so the API applies its own default of "json").
 	summarize(t, "Schema_default_format", func(ctx context.Context) (any, error) {
-		out, err := Schema(ctx, client, SchemaInput{})
+		out, err := orbit.Schema(ctx, client, orbit.SchemaInput{})
 		if err != nil {
 			return nil, err
 		}
@@ -531,7 +547,7 @@ func testOrbitLiveFixtures(t *testing.T) {
 	)
 
 	summarize(t, "Project_kg_fixtures_filter", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -551,7 +567,7 @@ func testOrbitLiveFixtures(t *testing.T) {
 	})
 
 	summarize(t, "Project_security_fixtures_filter", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -575,7 +591,7 @@ func testOrbitLiveFixtures(t *testing.T) {
 		// active milestone (the KG coverage one); the assertion is
 		// row_count > 0 to remain portable across namespaces that may
 		// already have other active milestones.
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -602,7 +618,7 @@ func testOrbitLiveFixtures(t *testing.T) {
 		// Count Python source files. The File entity does not expose
 		// a project_id filter, so we count by path suffix across the
 		// whole namespace. Each fixture project contributes 8-9 .py files.
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -628,7 +644,7 @@ func testOrbitLiveFixtures(t *testing.T) {
 	summarize(t, "MergeRequest_in_kg_fixtures", func(ctx context.Context) (any, error) {
 		// Fetch the squash-merged MR the setup script creates. The MR
 		// id is dynamic per instance, so we filter by source_branch.
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -654,7 +670,7 @@ func testOrbitLiveFixtures(t *testing.T) {
 		// 1 medium weak-hash) via the SAST and Secret Detection
 		// templates. The exact number depends on how many analyzers
 		// have finished; the assertion is row_count > 0.
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -682,7 +698,7 @@ func testOrbitLiveFixtures(t *testing.T) {
 		// The canonical neighbors shape needs a filter on the top-level
 		// node plus a `neighbors: {node: <id>}` reference. We discover
 		// the project by full_path so the test stays portable.
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "neighbors",
 				"node": map[string]any{
@@ -759,7 +775,7 @@ func testOrbitLiveFeatureCoverageFiltersAndTraversal(t *testing.T, client *gitla
 	// Filter operators (in, contains, gt) and the multi-node
 	// traversal with IN_PROJECT relationship.
 	summarize(t, "Filter_in_operator_severity", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -778,7 +794,7 @@ func testOrbitLiveFeatureCoverageFiltersAndTraversal(t *testing.T, client *gitla
 	})
 
 	summarize(t, "Filter_contains_operator_path", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -798,7 +814,7 @@ func testOrbitLiveFeatureCoverageFiltersAndTraversal(t *testing.T, client *gitla
 	})
 
 	summarize(t, "Filter_gt_operator", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -821,7 +837,7 @@ func testOrbitLiveFeatureCoverageFiltersAndTraversal(t *testing.T, client *gitla
 		// Classic "find MRs in a project" pattern. The relationship
 		// IN_PROJECT connects MergeRequest → Project; the alias mr is
 		// used in the columns block.
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"nodes": []any{
@@ -859,7 +875,7 @@ func testOrbitLiveFeatureCoverageAggregation(t *testing.T, client *gitlabclient.
 	// Aggregation functions: sum, max, avg on star_count plus
 	// group_by severity and group_by node with IN_PROJECT relationship.
 	summarize(t, "Aggregation_group_by_severity", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -886,7 +902,7 @@ func testOrbitLiveFeatureCoverageAggregation(t *testing.T, client *gitlabclient.
 	})
 
 	summarize(t, "Aggregation_group_by_node_with_relationship", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -919,7 +935,7 @@ func testOrbitLiveFeatureCoverageAggregation(t *testing.T, client *gitlabclient.
 	})
 
 	summarize(t, "Aggregation_sum_star_count", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -942,7 +958,7 @@ func testOrbitLiveFeatureCoverageAggregation(t *testing.T, client *gitlabclient.
 	})
 
 	summarize(t, "Aggregation_max_star_count", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -965,7 +981,7 @@ func testOrbitLiveFeatureCoverageAggregation(t *testing.T, client *gitlabclient.
 	})
 
 	summarize(t, "Aggregation_avg_star_count", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "aggregation",
 				"nodes": []any{
@@ -997,7 +1013,7 @@ func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclie
 	// order_by, virtual columns, cursor pagination, id_range scope,
 	// and options.dynamic_columns for neighbors hydration.
 	summarize(t, "Traversal_order_by_name_desc", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -1018,7 +1034,7 @@ func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclie
 	})
 
 	summarize(t, "Traversal_merge_request_with_diff_column", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -1038,7 +1054,7 @@ func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclie
 	})
 
 	summarize(t, "Traversal_file_with_content_column", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -1058,7 +1074,7 @@ func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclie
 	})
 
 	summarize(t, "Traversal_cursor_pagination", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -1079,7 +1095,7 @@ func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclie
 	})
 
 	summarize(t, "Traversal_id_range_scope", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
@@ -1097,7 +1113,7 @@ func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclie
 	})
 
 	summarize(t, "Neighbors_with_dynamic_columns_option", func(ctx context.Context) (any, error) {
-		out, err := Query(ctx, client, QueryInput{
+		out, err := orbit.Query(ctx, client, orbit.QueryInput{
 			Query: map[string]any{
 				"query_type": "neighbors",
 				"node": map[string]any{

@@ -829,7 +829,7 @@ make inspector-stop # Stop Inspector and clean up temp binary
 
 ### Orbit Live Tests
 
-The six `gitlab_orbit_*` tools have a separate `orbitlive`-gated live test suite at `internal/tools/orbit/live_gitlab_com_test.go` that exercises the real `https://gitlab.com/api/v4/orbit/*` endpoints against a fixture-provisioned namespace. Unlike the `e2e`-tagged suite, these tests are **not** run by `make test` or any CI gate — they require a GitLab.com Personal Access Token and explicit opt-in.
+The six `gitlab_orbit_*` tools have a separate `orbitlive`-gated live test suite at `test/e2e/orbit/live_test.go` that exercises the real `https://gitlab.com/api/v4/orbit/*` endpoints against a fixture-provisioned namespace. Unlike the `e2e`-tagged suite, these tests are **not** run by `make test` or any CI gate — they require a GitLab.com Personal Access Token and explicit opt-in.
 
 The suite is organized as four entry points:
 

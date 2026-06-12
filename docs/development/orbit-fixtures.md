@@ -1,6 +1,6 @@
 # Orbit live test fixtures
 
-The Orbit handler live tests in `internal/tools/orbit/live_gitlab_com_test.go`
+The Orbit handler live tests in `test/e2e/orbit/live_test.go`
 exercise the real `https://gitlab.com/api/v4/orbit/*` endpoints against
 the `plens1` group on gitlab.com. Those tests are gated behind the
 `orbitlive` build tag and require `GITLAB_COM_TOKEN` in the environment.
@@ -121,12 +121,12 @@ so the Orbit indexer can process them within a couple of minutes.
 ## Running the live tests
 
 ```bash
-# Unit + integration tests
+# Unit + integration tests (does not run the live tests, which need the orbitlive tag)
 go test ./internal/tools/orbit/
 
 # Live integration test (gated by build tag and token)
 GITLAB_COM_TOKEN=glpat-... \
-  go test -tags orbitlive -count=1 -v ./internal/tools/orbit/
+  go test -tags orbitlive -count=1 -v ./test/e2e/orbit/
 ```
 
 Override the fixture namespace with `ORBIT_FIXTURES_NAMESPACE`:
@@ -134,5 +134,5 @@ Override the fixture namespace with `ORBIT_FIXTURES_NAMESPACE`:
 ```bash
 GITLAB_COM_TOKEN=glpat-... \
 ORBIT_FIXTURES_NAMESPACE=acme-research \
-  go test -tags orbitlive -count=1 -v -run 'TestOrbitLiveGitLabCom_Fixtures' ./internal/tools/orbit/
+  go test -tags orbitlive -count=1 -v -run 'TestOrbitLiveGitLabCom_Fixtures' ./test/e2e/orbit/
 ```

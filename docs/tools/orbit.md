@@ -98,7 +98,7 @@ Execute a read-only Orbit Knowledge Graph query. The `query` parameter must be a
 
 ### How the 4 query types work
 
-`gitlab_orbit_query` accepts a single `query` object whose `query_type` selects one of four variants. The full JSON Schema is served live by `/api/v4/orbit/dsl`; the table below shows the smallest accepted shape for each variant, which the live tests at `internal/tools/orbit/live_gitlab_com_test.go` exercise against the `plens1` namespace.
+`gitlab_orbit_query` accepts a single `query` object whose `query_type` selects one of four variants. The full JSON Schema is served live by `/api/v4/orbit/dsl`; the table below shows the smallest accepted shape for each variant, which the live tests at `test/e2e/orbit/live_test.go` exercise against the `plens1` namespace.
 
 | Variant           | Required shape                                                                                                                              | Purpose                                              |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |

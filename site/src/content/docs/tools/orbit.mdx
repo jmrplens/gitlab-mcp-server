@@ -186,7 +186,7 @@ These resources remain available with `CAPABILITY_SURFACE=full` or `minimal`, re
 
 ## Run the live tests
 
-Orbit ships with a build-tag-gated live test suite at `internal/tools/orbit/live_gitlab_com_test.go` that exercises each handler against the real `https://gitlab.com/api/v4/orbit/*` endpoints. The suite has four entry points and 41 subtests covering all six handlers, the canonical Query DSL shapes, fixture-based smoke tests, and the full DSL feature surface. The orchestrator `make test-e2e-gitlab-com` provisions `kg-fixtures` and `security-fixtures` projects in your namespace (idempotent), waits for the Orbit indexer to catch up, then runs the tests:
+Orbit ships with a build-tag-gated live test suite at `test/e2e/orbit/live_test.go` that exercises each handler against the real `https://gitlab.com/api/v4/orbit/*` endpoints. The suite has four entry points and 41 subtests covering all six handlers, the canonical Query DSL shapes, fixture-based smoke tests, and the full DSL feature surface. The orchestrator `make test-e2e-gitlab-com` provisions `kg-fixtures` and `security-fixtures` projects in your namespace (idempotent), waits for the Orbit indexer to catch up, then runs the tests:
 
 ```bash
 # Add a Personal Access Token (api scope) to .env first

@@ -374,7 +374,7 @@ See [Tool Surfaces And Canonical Action Core](tool-surfaces-and-action-core.md) 
 
 ### Orbit live-test fixtures
 
-The `orbitlive` build-tagged live tests in `internal/tools/orbit/live_gitlab_com_test.go` exercise the real `https://gitlab.com/api/v4/orbit/*` endpoints. They expect two projects in the configured namespace (`kg-fixtures` and `security-fixtures`) with a specific shape, plus optional mirror data. The reproduction script, the expected fixture layout, and the indexer caveat (transient `error` state) are documented in [Orbit Live Test Fixtures](orbit-fixtures.md).
+The `orbitlive` build-tagged live tests in `test/e2e/orbit/live_test.go` exercise the real `https://gitlab.com/api/v4/orbit/*` endpoints. They expect two projects in the configured namespace (`kg-fixtures` and `security-fixtures`) with a specific shape, plus optional mirror data. The reproduction script, the expected fixture layout, and the indexer caveat (transient `error` state) are documented in [Orbit Live Test Fixtures](orbit-fixtures.md).
 
 To run the full flow against GitLab.com — token validation, idempotent fixture provisioning, indexer catch-up wait, then the four live test suites (41 subtests) — use the orchestrated target:
 

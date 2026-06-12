@@ -34,7 +34,7 @@
 
 ### Orbit live tests
 
-The six read-only `gitlab_orbit_*` tools (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) target GitLab.com's experimental Knowledge Graph API. They have an `orbitlive`-gated live test suite at `internal/tools/orbit/live_gitlab_com_test.go` (4 suites, 41 subtests) that exercises the real `https://gitlab.com/api/v4/orbit/*` endpoints. The live test fixtures (`kg-fixtures`, `security-fixtures`) live under `test/fixtures/orbit/` and are provisioned by `scripts/setup-orbit-fixtures.sh`. End-to-end orchestration is exposed as `make test-e2e-gitlab-com` (runs setup, waits for the indexer, then runs the live tests). See [Orbit live test fixtures](docs/development/orbit-fixtures.md) for fixture contents, namespace configuration, and the indexer caveat.
+The six read-only `gitlab_orbit_*` tools (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) target GitLab.com's experimental Knowledge Graph API. They have an `orbitlive`-gated live test suite at `test/e2e/orbit/live_test.go` (4 suites, 41 subtests) that exercises the real `https://gitlab.com/api/v4/orbit/*` endpoints. The live test fixtures (`kg-fixtures`, `security-fixtures`) live under `test/fixtures/orbit/` and are provisioned by `scripts/setup-orbit-fixtures.sh`. End-to-end orchestration is exposed as `make test-e2e-gitlab-com` (runs setup, waits for the indexer, then runs the live tests). See [Orbit live test fixtures](docs/development/orbit-fixtures.md) for fixture contents, namespace configuration, and the indexer caveat.
 
 ## Project Structure
 

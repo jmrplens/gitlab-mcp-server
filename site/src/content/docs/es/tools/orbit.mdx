@@ -186,7 +186,7 @@ Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` en c
 
 ## Ejecutar las pruebas en vivo
 
-Orbit incluye una suite de pruebas en vivo protegida por build tag en `internal/tools/orbit/live_gitlab_com_test.go` que ejercita cada handler contra los endpoints reales `https://gitlab.com/api/v4/orbit/*`. La suite tiene cuatro puntos de entrada y 41 subtests que cubren los seis handlers, las formas canónicas del DSL de consulta, pruebas de humo basadas en fixtures, y toda la superficie de características del DSL. El orquestador `make test-e2e-gitlab-com` aprovisiona los proyectos `kg-fixtures` y `security-fixtures` en tu namespace (idempotente), espera a que el indexer de Orbit se ponga al día, y luego ejecuta las pruebas:
+Orbit incluye una suite de pruebas en vivo protegida por build tag en `test/e2e/orbit/live_test.go` que ejercita cada handler contra los endpoints reales `https://gitlab.com/api/v4/orbit/*`. La suite tiene cuatro puntos de entrada y 41 subtests que cubren los seis handlers, las formas canónicas del DSL de consulta, pruebas de humo basadas en fixtures, y toda la superficie de características del DSL. El orquestador `make test-e2e-gitlab-com` aprovisiona los proyectos `kg-fixtures` y `security-fixtures` en tu namespace (idempotente), espera a que el indexer de Orbit se ponga al día, y luego ejecuta las pruebas:
 
 ```bash
 # Añade un Personal Access Token (alcance api) a .env primero
