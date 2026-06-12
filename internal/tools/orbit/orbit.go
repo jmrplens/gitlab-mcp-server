@@ -17,6 +17,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// ResponseFormatInput is the shared response_format selector used by
+// the status, dsl, and query Orbit endpoints.
 type ResponseFormatInput struct {
 	// ResponseFormat selects the Orbit response shape. Allowed values:
 	//   - "raw"  — structured JSON (or TOON JSON, depending on endpoint)
@@ -37,14 +39,21 @@ type StatusInput struct {
 
 // SchemaInput holds parameters for retrieving the Orbit graph schema.
 type SchemaInput struct {
+	// Expand lists node names whose full properties and relationships
+	// should be hydrated in the response.
 	Expand []string `json:"expand,omitempty" jsonschema:"Node names to expand with full properties and relationships."`
-	Format string   `json:"format,omitempty" jsonschema:"Schema response format: raw, llm, or json. When omitted, the API server-side default is used (json)."`
-	// ResponseFormat is an alias for Format, accepted for compatibility with
-	// the public Orbit API documentation.
+	// Format selects the schema response shape. Allowed values: "raw",
+	// "llm", "json". Empty uses the API server-side default ("json").
+	Format string `json:"format,omitempty" jsonschema:"Schema response format: raw, llm, or json. When omitted, the API server-side default is used (json)."`
+	// ResponseFormat is an alias for Format, accepted for compatibility
+	// with the public Orbit API documentation. Must match Format when
+	// both are set; Format wins when only one is set.
 	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Alias for format. Must match format when both are set."`
 }
 
-// ToolsInput is the input for listing Orbit MCP tool manifests.
+// ToolsInput is the input for listing the Orbit MCP tool manifest.
+// The endpoint accepts no parameters; the type exists so the handler
+// signature is uniform with the other Orbit handlers.
 type ToolsInput struct{}
 
 // DSLInput holds parameters for retrieving the Orbit query DSL.
@@ -52,11 +61,15 @@ type DSLInput struct {
 	ResponseFormatInput
 }
 
-// DSLOutput is the raw Orbit query DSL response.
+// DSLOutput holds the Orbit query DSL response.
 type DSLOutput struct {
 	toolutil.HintableOutput
+	// ResponseFormat echoes the response_format that produced Content
+	// ("raw" for the JSON Schema body, "llm" for the text grammar).
 	ResponseFormat string `json:"response_format,omitempty"`
-	Content        string `json:"content,omitempty"`
+	// Content is the DSL body verbatim, encoded as JSON or text
+	// depending on ResponseFormat.
+	Content string `json:"content,omitempty"`
 }
 
 // QueryInput holds parameters for executing an Orbit Knowledge Graph query.
@@ -135,125 +148,197 @@ type QueryInput struct {
 
 // GraphStatusInput holds parameters for retrieving Orbit graph indexing status.
 type GraphStatusInput struct {
-	NamespaceID int64  `json:"namespace_id,omitempty" jsonschema:"Namespace/group ID to inspect. Set exactly one of namespace_id, project_id, or full_path."`
-	ProjectID   int64  `json:"project_id,omitempty"   jsonschema:"Project ID to inspect. Set exactly one of namespace_id, project_id, or full_path."`
-	FullPath    string `json:"full_path,omitempty"    jsonschema:"Full path of a group or project to inspect, for example gitlab-org/gitlab. Set exactly one scope field."`
+	// NamespaceID targets a group by ID. Mutually exclusive with ProjectID
+	// and FullPath; exactly one of the three must be set.
+	NamespaceID int64 `json:"namespace_id,omitempty" jsonschema:"Namespace/group ID to inspect. Set exactly one of namespace_id, project_id, or full_path."`
+	// ProjectID targets a project by ID. Mutually exclusive with
+	// NamespaceID and FullPath; exactly one of the three must be set.
+	ProjectID int64 `json:"project_id,omitempty" jsonschema:"Project ID to inspect. Set exactly one of namespace_id, project_id, or full_path."`
+	// FullPath targets a group or project by full path
+	// (e.g. "gitlab-org/gitlab"). Mutually exclusive with NamespaceID
+	// and ProjectID; exactly one of the three must be set.
+	FullPath string `json:"full_path,omitempty" jsonschema:"Full path of a group or project to inspect, for example gitlab-org/gitlab. Set exactly one scope field."`
 	ResponseFormatInput
 }
 
 // StatusReplicas describes ready and desired replica counts for an Orbit component.
 type StatusReplicas struct {
-	Ready   int64 `json:"ready"`
+	// Ready is the current number of healthy replicas.
+	Ready int64 `json:"ready"`
+	// Desired is the target number of replicas.
 	Desired int64 `json:"desired"`
 }
 
 // StatusComponent describes an Orbit subsystem status entry.
 type StatusComponent struct {
-	Name     string          `json:"name,omitempty"`
-	Status   string          `json:"status,omitempty"`
+	// Name is the subsystem identifier (e.g. "clickhouse", "api").
+	Name string `json:"name,omitempty"`
+	// Status is the subsystem health label (e.g. "healthy").
+	Status string `json:"status,omitempty"`
+	// Replicas are the ready/desired counts, or nil when the
+	// subsystem is stateless.
 	Replicas *StatusReplicas `json:"replicas,omitempty"`
-	Metrics  any             `json:"metrics,omitempty"`
+	// Metrics is the decoded raw JSON metrics payload for the subsystem.
+	Metrics any `json:"metrics,omitempty"`
 }
 
 // StatusOutput is the Orbit cluster health response.
 type StatusOutput struct {
 	toolutil.HintableOutput
-	FormattedText string            `json:"formatted_text,omitempty"`
-	Status        string            `json:"status,omitempty"`
-	Timestamp     string            `json:"timestamp,omitempty"`
-	Version       string            `json:"version,omitempty"`
-	Components    []StatusComponent `json:"components,omitempty"`
+	// FormattedText is the pre-formatted text body returned by the
+	// server when the caller selected the "llm" response format.
+	FormattedText string `json:"formatted_text,omitempty"`
+	// Status is the cluster-level health label.
+	Status string `json:"status,omitempty"`
+	// Timestamp is the server-side snapshot time, RFC3339.
+	Timestamp string `json:"timestamp,omitempty"`
+	// Version is the Orbit service version.
+	Version string `json:"version,omitempty"`
+	// Components are the per-subsystem status entries.
+	Components []StatusComponent `json:"components,omitempty"`
 }
 
 // SchemaDomain describes a logical grouping of Orbit graph node types.
 type SchemaDomain struct {
-	Name        string   `json:"name,omitempty"`
-	Description string   `json:"description,omitempty"`
-	NodeNames   []string `json:"node_names,omitempty"`
+	// Name is the domain identifier (e.g. "core", "sdlc").
+	Name string `json:"name,omitempty"`
+	// Description is the human-readable domain summary.
+	Description string `json:"description,omitempty"`
+	// NodeNames are the ontology node types in the domain.
+	NodeNames []string `json:"node_names,omitempty"`
 }
 
 // SchemaEdge describes an Orbit graph edge type.
 type SchemaEdge struct {
-	Name        string              `json:"name,omitempty"`
-	Description string              `json:"description,omitempty"`
-	Variants    []SchemaEdgeVariant `json:"variants,omitempty"`
+	// Name is the edge type identifier (e.g. "AUTHORED", "IN_PROJECT").
+	Name string `json:"name,omitempty"`
+	// Description is the human-readable edge summary.
+	Description string `json:"description,omitempty"`
+	// Variants are the valid source/target node-type pairs.
+	Variants []SchemaEdgeVariant `json:"variants,omitempty"`
 }
 
 // SchemaEdgeVariant describes a valid source/target pair for an Orbit edge.
 type SchemaEdgeVariant struct {
+	// SourceType is the source node type (e.g. "User").
 	SourceType string `json:"source_type,omitempty"`
+	// TargetType is the target node type (e.g. "Issue").
 	TargetType string `json:"target_type,omitempty"`
 }
 
 // SchemaOutput is the Orbit graph ontology response.
 type SchemaOutput struct {
 	toolutil.HintableOutput
-	SchemaVersion string         `json:"schema_version,omitempty"`
-	Domains       []SchemaDomain `json:"domains,omitempty"`
-	Nodes         []any          `json:"nodes,omitempty"`
-	Edges         []SchemaEdge   `json:"edges,omitempty"`
+	// SchemaVersion is the Orbit ontology version string.
+	SchemaVersion string `json:"schema_version,omitempty"`
+	// Domains are the logical groupings of node types.
+	Domains []SchemaDomain `json:"domains,omitempty"`
+	// Nodes are the decoded node-type definitions. The Orbit API
+	// evolves the node shape, so the SDK exposes the list as raw JSON
+	// values rather than fixed Go types.
+	Nodes []any `json:"nodes,omitempty"`
+	// Edges are the graph edge types.
+	Edges []SchemaEdge `json:"edges,omitempty"`
 }
 
 // ToolDefinition describes one MCP tool manifest entry served by Orbit.
 type ToolDefinition struct {
-	Name        string `json:"name,omitempty"`
+	// Name is the tool name as Orbit exposes it.
+	Name string `json:"name,omitempty"`
+	// Description is the tool's human-readable description.
 	Description string `json:"description,omitempty"`
-	Parameters  any    `json:"parameters,omitempty"`
+	// Parameters is the decoded JSON Schema for the tool's input.
+	Parameters any `json:"parameters,omitempty"`
 }
 
 // ToolsOutput is the Orbit MCP tool manifest response.
 type ToolsOutput struct {
 	toolutil.HintableOutput
+	// Tools is the list of MCP tools Orbit exposes.
 	Tools []ToolDefinition `json:"tools,omitempty"`
 }
 
 // QueryOutput is the result envelope returned by Orbit query execution.
 type QueryOutput struct {
 	toolutil.HintableOutput
-	FormattedText   string   `json:"formatted_text,omitempty"`
-	Result          any      `json:"result,omitempty"`
-	QueryType       string   `json:"query_type,omitempty"`
+	// FormattedText is the pre-formatted text body returned by the
+	// server when the caller selected the "llm" response format.
+	FormattedText string `json:"formatted_text,omitempty"`
+	// Result is the decoded result envelope returned for the
+	// "raw" or "json" response format. Its shape depends on the
+	// query_type: traversal returns a list of row objects,
+	// aggregation returns aggregation rows, neighbors returns the
+	// neighbor expansion, and path_finding returns the matching paths.
+	Result any `json:"result,omitempty"`
+	// QueryType echoes the query_type that produced this result
+	// (traversal, aggregation, neighbors, or path_finding).
+	QueryType string `json:"query_type,omitempty"`
+	// RawQueryStrings are the SQL strings the server executed for
+	// the request; useful for debugging slow or unexpected queries.
 	RawQueryStrings []string `json:"raw_query_strings,omitempty"`
-	RowCount        int64    `json:"row_count,omitempty"`
+	// RowCount is the number of rows in the result envelope.
+	RowCount int64 `json:"row_count,omitempty"`
 }
 
 // GraphStatusProjects describes indexed and known project counts.
 type GraphStatusProjects struct {
-	Indexed    int64 `json:"indexed"`
+	// Indexed is the number of projects whose Knowledge Graph is
+	// up to date in the index.
+	Indexed int64 `json:"indexed"`
+	// TotalKnown is the total number of projects eligible for indexing.
 	TotalKnown int64 `json:"total_known"`
 }
 
 // GraphStatusDomainItem describes a count for one Orbit graph node type.
 type GraphStatusDomainItem struct {
-	Name  string `json:"name,omitempty"`
-	Count int64  `json:"count"`
+	// Name is the node-type identifier (e.g. "MergeRequest").
+	Name string `json:"name,omitempty"`
+	// Count is the number of indexed nodes of this type.
+	Count int64 `json:"count"`
 }
 
 // GraphStatusDomain describes indexing counts for a graph domain.
 type GraphStatusDomain struct {
-	Name  string                  `json:"name,omitempty"`
+	// Name is the domain identifier (e.g. "SDLC").
+	Name string `json:"name,omitempty"`
+	// Items are the per-node-type counts in this domain.
 	Items []GraphStatusDomainItem `json:"items,omitempty"`
 }
 
 // GraphStatusIndexing describes the latest indexing pipeline state.
 type GraphStatusIndexing struct {
-	State           string `json:"state,omitempty"`
-	LastStartedAt   string `json:"last_started_at,omitempty"`
+	// State is the indexing pipeline state (e.g. "indexed", "running", "error").
+	State string `json:"state,omitempty"`
+	// LastStartedAt is the UTC RFC3339 timestamp of the last indexing run start.
+	LastStartedAt string `json:"last_started_at,omitempty"`
+	// LastCompletedAt is the UTC RFC3339 timestamp of the last successful indexing run.
 	LastCompletedAt string `json:"last_completed_at,omitempty"`
-	LastDurationMs  int64  `json:"last_duration_ms,omitempty"`
-	LastError       string `json:"last_error,omitempty"`
+	// LastDurationMs is the duration of the last indexing run in milliseconds.
+	LastDurationMs int64 `json:"last_duration_ms,omitempty"`
+	// LastError is the last indexing error message, or empty when the
+	// last run completed successfully.
+	LastError string `json:"last_error,omitempty"`
 }
 
 // GraphStatusOutput is the Orbit graph indexing status response.
 type GraphStatusOutput struct {
 	toolutil.HintableOutput
-	FormattedText string               `json:"formatted_text,omitempty"`
-	Projects      *GraphStatusProjects `json:"projects,omitempty"`
-	Domains       []GraphStatusDomain  `json:"domains,omitempty"`
-	Indexing      *GraphStatusIndexing `json:"indexing,omitempty"`
+	// FormattedText is the pre-formatted text body returned by the
+	// server when the caller selected the "llm" response format.
+	FormattedText string `json:"formatted_text,omitempty"`
+	// Projects summarizes the indexed vs. known project counts.
+	Projects *GraphStatusProjects `json:"projects,omitempty"`
+	// Domains are the per-domain indexing counts.
+	Domains []GraphStatusDomain `json:"domains,omitempty"`
+	// Indexing is the latest indexing pipeline state.
+	Indexing *GraphStatusIndexing `json:"indexing,omitempty"`
 }
 
-// Status retrieves Orbit cluster health.
+// Status retrieves the Orbit cluster health snapshot from GitLab.com.
+//
+// Endpoint: GET /api/v4/orbit/status. Returns subsystem components,
+// replica counts, version, and timestamp. Falls back to an informative
+// not-found result when the Orbit feature is not enabled.
 func Status(ctx context.Context, client *gitlabclient.Client, input StatusInput) (StatusOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return StatusOutput{}, err
@@ -274,7 +359,12 @@ func Status(ctx context.Context, client *gitlabclient.Client, input StatusInput)
 	return convertStatus(status), nil
 }
 
-// Schema retrieves the Orbit graph ontology.
+// Schema retrieves the Orbit graph ontology (domains, node types, edge
+// types) from GitLab.com.
+//
+// Endpoint: GET /api/v4/orbit/schema. The expand parameter hydrates the
+// named node types with full properties; format selects raw, llm, or
+// json response shapes.
 func Schema(ctx context.Context, client *gitlabclient.Client, input SchemaInput) (SchemaOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return SchemaOutput{}, err
@@ -299,7 +389,11 @@ func Schema(ctx context.Context, client *gitlabclient.Client, input SchemaInput)
 	return convertSchema(schema), nil
 }
 
-// Tools retrieves the Orbit MCP tool manifest.
+// Tools retrieves the Orbit MCP tool manifest and parameter schemas.
+//
+// Endpoint: GET /api/v4/orbit/tools. The manifest lists the tools Orbit
+// exposes alongside the JSON Schema of each tool's parameters; use it
+// to learn the canonical query shapes before calling Query.
 func Tools(ctx context.Context, client *gitlabclient.Client, _ ToolsInput) (ToolsOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ToolsOutput{}, err
@@ -312,7 +406,12 @@ func Tools(ctx context.Context, client *gitlabclient.Client, _ ToolsInput) (Tool
 	return convertTools(tools), nil
 }
 
-// DSL retrieves the Orbit query DSL body verbatim.
+// DSL retrieves the Orbit query DSL grammar or LLM-friendly schema
+// verbatim from GitLab.com.
+//
+// Endpoint: GET /api/v4/orbit/schema/dsl. With response_format="raw"
+// the body is a JSON Schema document; with response_format="llm" it
+// is a compact text grammar suitable for inclusion in an LLM prompt.
 func DSL(ctx context.Context, client *gitlabclient.Client, input DSLInput) (DSLOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return DSLOutput{}, err
@@ -333,7 +432,26 @@ func DSL(ctx context.Context, client *gitlabclient.Client, input DSLInput) (DSLO
 	return DSLOutput{ResponseFormat: responseFormatName(format), Content: content}, nil
 }
 
-// Query executes an Orbit Knowledge Graph query.
+// Query executes a read-only Orbit Knowledge Graph query on GitLab.com.
+//
+// Endpoint: POST /api/v4/orbit/query. The query body is validated by
+// [validateQuery] before being forwarded; see [QueryInput] for the full
+// DSL shape.
+//
+// The live API exposes four `oneOf` query_type variants:
+//
+//   - traversal    — multi-node joins with relationships, ordering, paging.
+//   - aggregation  — group-by plus count|sum|avg|min|max functions.
+//   - neighbors    — one-hop or two-hop expansion from a single node.
+//   - path_finding — shortest path between two top-level nodes (depth 1..3).
+//
+// When response_format is omitted, the handler defaults to "raw"
+// (structured JSON) rather than the API server-side default of "llm"
+// (compact TOON text). Structured JSON is strictly more useful for an
+// MCP tool: the LLM can iterate over result nodes directly, the SDK
+// decodes row_count, and downstream markdown formatters pretty-print
+// the envelope. Callers who want the compact TOON text can pass
+// response_format="llm" explicitly.
 func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (QueryOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return QueryOutput{}, err
@@ -349,13 +467,8 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 	request := &gl.OrbitQueryRequest{
 		Query: query,
 	}
-	// When the user did not pick a format, default to "raw" rather than
-	// the API server-side default ("llm" / TOON text). Structured JSON is
-	// strictly more useful for an MCP tool: the LLM can iterate over
-	// result.nodes directly, the SDK's [OrbitQueryResult] decodes the
-	// row_count, and downstream markdown formatters can pretty-print
-	// the envelope. Callers who want the compact TOON text can still
-	// pass response_format="llm" explicitly.
+	// Default to "raw" when the caller did not pick a format; see the
+	// Query function godoc for the LLM-friendly rationale.
 	rawFormat := gl.OrbitResponseFormatRaw
 	switch {
 	case hasFormat:
@@ -380,7 +493,12 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 	return convertQuery(result), nil
 }
 
-// GraphStatus retrieves Orbit graph indexing status for a namespace or project.
+// GraphStatus retrieves Orbit graph indexing status for a single
+// namespace, project, or full path on GitLab.com.
+//
+// Endpoint: GET /api/v4/orbit/graph_status. Exactly one of namespace_id,
+// project_id, or full_path must be set. Useful for verifying that the
+// indexer has caught up before running Query.
 func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphStatusInput) (GraphStatusOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return GraphStatusOutput{}, err
@@ -397,6 +515,10 @@ func GraphStatus(ctx context.Context, client *gitlabclient.Client, input GraphSt
 	return convertGraphStatus(status), nil
 }
 
+// schemaResponseFormat normalizes the SchemaInput format fields. The
+// input accepts both Format (primary) and ResponseFormat (alias) for
+// public-API compatibility; both must agree when set, and Format wins
+// when only one is set.
 func schemaResponseFormat(input SchemaInput) (*gl.OrbitResponseFormatValue, bool, error) {
 	format := strings.TrimSpace(input.Format)
 	responseFormatAlias := strings.TrimSpace(input.ResponseFormat)
@@ -410,23 +532,14 @@ func schemaResponseFormat(input SchemaInput) (*gl.OrbitResponseFormatValue, bool
 }
 
 // responseFormat normalizes a user-supplied format string to the SDK value
-// the GitLab Orbit API understands. Returns (nil, nil) when the input is
-// empty so the API applies its own server-side default (which differs per
-// endpoint: "json" for status/schema/tools, "raw" for dsl/query). Pass a
-// non-nil value to force a specific format.
-//
-// Allowed values: "raw", "llm", and "json" (accepted as an explicit JSON
-// request alias). The SDK's [gl.OrbitResponseFormatValue] is a plain string
-// type, so unknown server-side values can be passed through when needed.
-// responseFormat normalizes a user-supplied format string to the SDK value
 // the GitLab Orbit API understands. Returns (nil, false, nil) when the input
 // is empty so the API applies its own server-side default (which differs per
 // endpoint: "json" for status/schema/tools, "raw" for dsl/query). Pass an
 // explicit value to force a specific format.
 //
-// Allowed values: "raw", "llm", and "json" (accepted as an explicit JSON
-// request alias). The SDK's [gl.OrbitResponseFormatValue] is a plain string
-// type, so unknown server-side values can be passed through when needed.
+// Allowed values are "raw", "llm", and "json" (the latter is accepted as an
+// explicit JSON request alias). The SDK's [gl.OrbitResponseFormatValue] is a
+// plain string type, so unknown server-side values are rejected.
 func responseFormat(format, field string) (*gl.OrbitResponseFormatValue, bool, error) {
 	normalized := strings.ToLower(strings.TrimSpace(format))
 	if normalized == "" {
@@ -441,6 +554,9 @@ func responseFormat(format, field string) (*gl.OrbitResponseFormatValue, bool, e
 	}
 }
 
+// responseFormatName returns the string form of a format pointer, or
+// "" when the pointer is nil or the value is empty. The empty result
+// signals "use the API server-side default" to callers.
 func responseFormatName(format *gl.OrbitResponseFormatValue) string {
 	if format == nil {
 		return "" // empty = server-side default
@@ -448,9 +564,10 @@ func responseFormatName(format *gl.OrbitResponseFormatValue) string {
 	return string(*format)
 }
 
-// queryTypeAlternatives are the four Orbit query DSL variants the live
-// GitLab.com API exposes. The set is enforced client-side so the LLM gets
-// actionable errors instead of a generic "compile_error" from the server.
+// queryTypeAlternatives are the four query_type variants the live
+// GitLab.com API exposes (traversal, aggregation, neighbors, path_finding).
+// The set is enforced client-side so the LLM gets actionable errors
+// instead of a generic compile_error from the server.
 var queryTypeAlternatives = []string{"traversal", "aggregation", "neighbors", "path_finding"}
 
 // validateQuery performs lightweight client-side validation of an Orbit
@@ -523,6 +640,9 @@ func requireScopedNodes(query map[string]any, queryType string) error {
 		`{"id":"p","entity":"Project","filters":{"full_path":{"op":"starts_with","value":"plens1/"}}}`, queryType)
 }
 
+// collectQueryNodes returns every node selector from a query, accepting
+// either a singular top-level `node` or a `nodes` array. Non-map entries
+// are silently skipped to keep the validators resilient to user JSON.
 func collectQueryNodes(query map[string]any) []map[string]any {
 	var out []map[string]any
 	if single, singleOK := query["node"].(map[string]any); singleOK {
@@ -538,6 +658,11 @@ func collectQueryNodes(query map[string]any) []map[string]any {
 	return out
 }
 
+// nodeHasScope reports whether a node selector carries an explicit
+// scope: non-empty node_ids, non-empty filters, or an id_range whose
+// span is within the 100,000 limit. The Orbit API rejects unscoped
+// queries to prevent full edge table scans; this mirrors that check
+// client-side to surface a precise actionable error.
 func nodeHasScope(n map[string]any) bool {
 	if ids, ok := n["node_ids"].([]any); ok && len(ids) > 0 {
 		return true
@@ -617,6 +742,10 @@ func requireAtLeastTwoNodes(query map[string]any) error {
 	return nil
 }
 
+// queryType returns the query_type field of an Orbit query as a
+// string, or "" when the field is missing or of an unexpected type.
+// Used to label the Query output envelope regardless of the chosen
+// response format.
 func queryType(query map[string]any) string {
 	queryTypeValue, ok := query["query_type"].(string)
 	if !ok {
@@ -625,6 +754,9 @@ func queryType(query map[string]any) string {
 	return queryTypeValue
 }
 
+// graphStatusOptions validates that exactly one of namespace_id,
+// project_id, or full_path is set and translates the chosen scope
+// plus the optional response_format into the GitLab SDK options.
 func graphStatusOptions(input GraphStatusInput) (*gl.GetGraphStatusOptions, error) {
 	if input.NamespaceID < 0 {
 		return nil, errors.New("namespace_id must not be negative")
@@ -668,6 +800,12 @@ func graphStatusOptions(input GraphStatusInput) (*gl.GetGraphStatusOptions, erro
 	return opts, nil
 }
 
+// wrapOrbitErr classifies an HTTP error from the Orbit API and
+// attaches a domain-specific actionable hint. 404 becomes the
+// "Orbit is experimental" hint so callers know to check feature
+// gating; 403 hints at Knowledge Graph namespace access; 400 hints
+// at the query/format/scope parameters; 429 and 503 hint at
+// backoff; everything else uses the generic wrap.
 func wrapOrbitErr(op string, err error) error {
 	if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 		return toolutil.WrapErrWithHint(op, err,
@@ -692,6 +830,9 @@ func wrapOrbitErr(op string, err error) error {
 	return toolutil.WrapErr(op, err)
 }
 
+// convertStatus projects a GitLab SDK [gl.OrbitStatus] into the
+// MCP-tool [StatusOutput]. Nil component entries are dropped; raw
+// JSON metrics are decoded for friendlier Markdown rendering.
 func convertStatus(status *gl.OrbitStatus) StatusOutput {
 	if status == nil {
 		return StatusOutput{}
@@ -721,6 +862,10 @@ func convertStatus(status *gl.OrbitStatus) StatusOutput {
 	}
 }
 
+// convertSchema projects a GitLab SDK [gl.OrbitSchema] into the
+// MCP-tool [SchemaOutput]. Raw JSON node definitions are decoded so
+// downstream Markdown formatters can format them; nil entries in
+// domains, nodes, and edges are skipped.
 func convertSchema(schema *gl.OrbitSchema) SchemaOutput {
 	if schema == nil {
 		return SchemaOutput{}
@@ -764,6 +909,9 @@ func convertSchema(schema *gl.OrbitSchema) SchemaOutput {
 	}
 }
 
+// convertTools projects a GitLab SDK [gl.OrbitTools] into the
+// MCP-tool [ToolsOutput], decoding raw JSON parameter schemas for
+// downstream rendering and dropping nil entries.
 func convertTools(tools *gl.OrbitTools) ToolsOutput {
 	if tools == nil {
 		return ToolsOutput{}
@@ -782,6 +930,9 @@ func convertTools(tools *gl.OrbitTools) ToolsOutput {
 	return ToolsOutput{Tools: items}
 }
 
+// convertQuery projects a GitLab SDK [gl.OrbitQueryResult] into the
+// MCP-tool [QueryOutput], decoding the raw JSON result envelope so
+// downstream formatters can pretty-print it.
 func convertQuery(result *gl.OrbitQueryResult) QueryOutput {
 	if result == nil {
 		return QueryOutput{}
@@ -794,6 +945,10 @@ func convertQuery(result *gl.OrbitQueryResult) QueryOutput {
 	}
 }
 
+// decodeRaw parses a [json.RawMessage] into a generic value, falling
+// back to the raw bytes (as a string) when the payload is not valid
+// JSON. Returns nil for empty input so callers can treat absent
+// payloads as zero values.
 func decodeRaw(raw json.RawMessage) any {
 	if len(raw) == 0 {
 		return nil
@@ -805,6 +960,9 @@ func decodeRaw(raw json.RawMessage) any {
 	return value
 }
 
+// convertGraphStatus projects a GitLab SDK [gl.OrbitGraphStatus] into
+// the MCP-tool [GraphStatusOutput], normalizing pointer-typed
+// timestamps to UTC RFC3339 strings and dropping nil nested entries.
 func convertGraphStatus(status *gl.OrbitGraphStatus) GraphStatusOutput {
 	if status == nil {
 		return GraphStatusOutput{}

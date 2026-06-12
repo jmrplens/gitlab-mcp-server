@@ -20,7 +20,9 @@ type orbitNotFoundOutput struct {
 
 // init registers all Markdown formatters for Orbit MCP tool outputs.
 //
-// Each formatter converts the tool output struct to a Markdown summary for LLM and user-facing documentation.
+// Each formatter converts a tool output struct into a Markdown summary
+// suitable for both LLM and user-facing documentation. The formatter
+// for [orbitNotFoundOutput] produces the standard 404 guidance.
 func init() {
 	toolutil.RegisterMarkdownResult(formatOrbitNotFound)
 	toolutil.RegisterMarkdown[StatusOutput](FormatStatusMarkdown)
@@ -31,8 +33,9 @@ func init() {
 	toolutil.RegisterMarkdown[GraphStatusOutput](FormatGraphStatusMarkdown)
 }
 
-// formatOrbitNotFound returns a [*mcp.CallToolResult] with actionable hints when an Orbit resource is not found.
-// Used by all Orbit MCP tool handlers to provide LLM-friendly error output for HTTP 404.
+// formatOrbitNotFound returns a [*mcp.CallToolResult] with actionable
+// hints when an Orbit resource is not found. Used by all Orbit MCP
+// tool handlers to provide LLM-friendly output for HTTP 404.
 func formatOrbitNotFound(out orbitNotFoundOutput) *mcp.CallToolResult {
 	return toolutil.NotFoundResult(
 		out.Resource, out.Identifier,
@@ -222,8 +225,9 @@ func FormatGraphStatusMarkdown(out GraphStatusOutput) string {
 	return b.String()
 }
 
-// writeKV writes a Markdown bullet list item for a key-value pair, skipping empty values.
-// Used by all Orbit Markdown formatters for summary fields.
+// writeKV writes a Markdown bullet list item for a key-value pair,
+// skipping the entry when value is empty. Used by all Orbit Markdown
+// formatters for summary fields.
 func writeKV(b *strings.Builder, key, value string) {
 	if value == "" {
 		return
@@ -231,8 +235,9 @@ func writeKV(b *strings.Builder, key, value string) {
 	fmt.Fprintf(b, "- %s: %s\n", key, value)
 }
 
-// prettyAny returns a pretty-printed JSON string for any value, or falls back to fmt.Sprint on error.
-// Used to render Orbit query results in Markdown.
+// prettyAny returns a pretty-printed JSON string for any value, or
+// the result of [fmt.Sprint] when encoding fails. Used to render
+// Orbit query results in Markdown.
 func prettyAny(value any) string {
 	buf, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {

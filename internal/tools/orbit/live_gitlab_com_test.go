@@ -25,6 +25,9 @@ import (
 
 const liveGitLabComURL = "https://gitlab.com"
 
+// newLiveClient creates a GitLab.com client using the GITLAB_COM_TOKEN
+// environment variable, skipping the test when the token is unset.
+// Used as the shared client for every handler exercised in this file.
 func newLiveClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 	token := os.Getenv("GITLAB_COM_TOKEN")
@@ -38,6 +41,9 @@ func newLiveClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
+// summarize runs a single live check under a 30s timeout, logs a
+// short PASS/FAIL summary, and records the result as a subtest of t.
+// The fn is expected to return a JSON-marshalable value or an error.
 func summarize(t *testing.T, name string, fn func(context.Context) (any, error)) {
 	t.Helper()
 	t.Run(name, func(t *testing.T) {
@@ -61,10 +67,19 @@ func summarize(t *testing.T, name string, fn func(context.Context) (any, error))
 	})
 }
 
+// TestOrbitLiveGitLabCom is the top-level live smoke test that exercises
+// every public Orbit handler against GitLab.com. It verifies that each
+// handler can be called with a real token, returns a non-error result,
+// and decodes a representative payload. Subtests log a one-line PASS
+// summary so a failure is easy to spot.
 func TestOrbitLiveGitLabCom(t *testing.T) {
 	testOrbitLiveGitLabComDiscovery(t)
 }
 
+// testOrbitLiveGitLabComDiscovery runs the four handler groups
+// (read-only, dsl, query, graph_status) in sequence. It is split out
+// of [TestOrbitLiveGitLabCom] so individual groups can be invoked
+// from other live tests in this file.
 func testOrbitLiveGitLabComDiscovery(t *testing.T) {
 	t.Helper()
 	client := newLiveClient(t)
@@ -74,6 +89,9 @@ func testOrbitLiveGitLabComDiscovery(t *testing.T) {
 	testOrbitLiveGraphStatusHandlers(t, client)
 }
 
+// testOrbitLiveReadOnlyHandlers exercises [Status], [Schema], and
+// [Tools] with the GitLab.com Orbit service. Each subtest logs the
+// decoded fields as a one-line PASS summary.
 func testOrbitLiveReadOnlyHandlers(t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
 	summarize(t, "Status", func(ctx context.Context) (any, error) {
@@ -110,6 +128,9 @@ func testOrbitLiveReadOnlyHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 }
 
+// testOrbitLiveDSLHandlers exercises [DSL] in default, llm, and raw
+// response formats. The subtest names correspond to the response_format
+// the handler is invoked with.
 func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
 	summarize(t, "DSL_default", func(ctx context.Context) (any, error) {
@@ -137,6 +158,11 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 }
 
+// testOrbitLiveQueryHandlers exercises [Query] against the live API
+// with a representative query for each query_type variant: traversal
+// (with both node_ids and filters), aggregation, llm response format,
+// neighbors, and path_finding. Each subtest logs query_type and
+// row_count to surface a successful decode.
 func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
 	summarize(t, "Query_traversal_minimal", func(ctx context.Context) (any, error) {
@@ -297,6 +323,10 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 }
 
+// testOrbitLiveGraphStatusHandlers exercises [GraphStatus] with two
+// of the three supported scopes (full_path and namespace_id). The
+// project_id scope is omitted because it requires a project the
+// fixture setup script does not provision.
 func testOrbitLiveGraphStatusHandlers(t *testing.T, client *gitlabclient.Client) {
 	t.Helper()
 	summarize(t, "GraphStatus_full_path", func(ctx context.Context) (any, error) {
@@ -472,6 +502,17 @@ func TestOrbitLiveGitLabCom_Fixtures(t *testing.T) {
 	testOrbitLiveFixtures(t)
 }
 
+// testOrbitLiveFixtures exercises the four query_type variants
+// against the live fixture data the setup script provisions in any
+// GitLab namespace (defaults to plens1, configurable via
+// ORBIT_FIXTURES_NAMESPACE). All subtests use full_path-based filters
+// instead of hardcoded project ids so the test is portable across
+// namespaces.
+//
+// The Orbit indexer is eventually consistent: if a fresh push has not
+// been indexed yet, the affected subtest will log row_count=0 without
+// failing. Re-run the live test a few minutes after the setup script
+// completes to allow the indexer to catch up.
 func testOrbitLiveFixtures(t *testing.T) {
 	t.Helper()
 	client := newLiveClient(t)
@@ -677,6 +718,16 @@ func TestOrbitLiveGitLabCom_FeatureCoverage(t *testing.T) {
 	testOrbitLiveFeatureCoverage(t)
 }
 
+// testOrbitLiveFeatureCoverage exercises the full Orbit query DSL
+// surface against the live namespace: filter operators, multi-node
+// traversals with relationships, aggregations with group_by/sort/
+// sum/max/avg, order_by, virtual columns, cursor pagination, and
+// options.dynamic_columns. Each subtest is informational: it PASSes
+// as long as the API accepts the query and returns a valid envelope,
+// even if row_count=0 (the data may not match the filter in this
+// namespace). This is the comprehensive coverage test: every
+// documented query pattern the API supports is exercised at least
+// once against real data.
 func testOrbitLiveFeatureCoverage(t *testing.T) {
 	t.Helper()
 	client := newLiveClient(t)
@@ -686,6 +737,11 @@ func testOrbitLiveFeatureCoverage(t *testing.T) {
 	testOrbitLiveFeatureCoverageVirtualAndMeta(t, client, namespace)
 }
 
+// orbitFixturesNamespace returns the namespace under which
+// scripts/setup-orbit-fixtures.sh provisioned the fixtures. Defaults
+// to "plens1" but can be overridden by the developer running the test
+// against their own GitLab.com namespace via the
+// ORBIT_FIXTURES_NAMESPACE environment variable.
 func orbitFixturesNamespace() string {
 	ns := os.Getenv("ORBIT_FIXTURES_NAMESPACE")
 	if ns == "" {
@@ -694,6 +750,10 @@ func orbitFixturesNamespace() string {
 	return ns
 }
 
+// testOrbitLiveFeatureCoverageFiltersAndTraversal exercises the
+// `in`, `contains`, and `gt` filter operators and a multi-node
+// traversal that joins MergeRequest to Project through the
+// IN_PROJECT relationship.
 func testOrbitLiveFeatureCoverageFiltersAndTraversal(t *testing.T, client *gitlabclient.Client, namespace string) {
 	t.Helper()
 	// Filter operators (in, contains, gt) and the multi-node
@@ -790,6 +850,10 @@ func testOrbitLiveFeatureCoverageFiltersAndTraversal(t *testing.T, client *gitla
 	})
 }
 
+// testOrbitLiveFeatureCoverageAggregation exercises the aggregation
+// functions (count, sum, max, avg) plus the group_by alternatives:
+// group_by on a property (severity) and group_by on a node alias
+// joined via the IN_PROJECT relationship.
 func testOrbitLiveFeatureCoverageAggregation(t *testing.T, client *gitlabclient.Client, namespace string) {
 	t.Helper()
 	// Aggregation functions: sum, max, avg on star_count plus
@@ -924,6 +988,10 @@ func testOrbitLiveFeatureCoverageAggregation(t *testing.T, client *gitlabclient.
 	})
 }
 
+// testOrbitLiveFeatureCoverageVirtualAndMeta exercises order_by,
+// virtual columns (diff, content), cursor pagination, the id_range
+// scope, and the options.dynamic_columns knob for neighbors
+// hydration.
 func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclient.Client, namespace string) {
 	t.Helper()
 	// order_by, virtual columns, cursor pagination, id_range scope,
