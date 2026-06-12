@@ -28,10 +28,24 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def build_order(args: argparse.Namespace) -> Order:
-    """Translate parsed CLI args into a fully populated `Order`."""
+    """Translate parsed CLI args into a fully populated `Order`.
+
+    Rejects mismatched repeated flags (e.g. two SKUs but only one
+    quantity) with a clear error rather than silently dropping the
+    extra SKU via `zip`.
+    """
+    sku = list(args.sku)
+    qty = list(args.quantity)
+    price = list(args.unit_price_cents)
+    if not (len(sku) == len(qty) == len(price)):
+        raise SystemExit(
+            f"--sku, --quantity, and --unit-price-cents must be repeated the "
+            f"same number of times (got {len(sku)} SKU(s), {len(qty)} quantity, "
+            f"{len(price)} unit-price-cents)"
+        )
     order = Order(order_id=args.order_id, customer_id=args.customer_id)
-    for sku, qty, price in zip(args.sku, args.quantity, args.unit_price_cents):
-        order.add_item(OrderItem(sku=sku, quantity=qty, unit_price_cents=price))
+    for s, q, p in zip(sku, qty, price):
+        order.add_item(OrderItem(sku=s, quantity=q, unit_price_cents=p))
     return order
 
 

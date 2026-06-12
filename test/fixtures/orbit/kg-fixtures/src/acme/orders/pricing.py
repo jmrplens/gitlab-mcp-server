@@ -2,7 +2,7 @@
 the indexer to populate several `Definition` entities and a few
 `ImportedSymbol` cross-references (OrderItem is imported from models)."""
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from acme.orders.models import OrderItem
 
@@ -21,10 +21,10 @@ def apply_discount(subtotal_cents: int, percent: float) -> int:
         percent = 0.0
     if percent > 100:
         percent = 100.0
-    return int(round(subtotal_cents * (1 - percent / 100)))
+    return round(subtotal_cents * (1 - percent / 100))
 
 
-def compute_total(items: Iterable[OrderItem], discount_percent: float = 0.0, tax_cents: Optional[int] = None) -> int:
+def compute_total(items: Iterable[OrderItem], discount_percent: float = 0.0, tax_cents: int | None = None) -> int:
     """Compute the final order total in cents: subtotal - discount + tax.
 
     When `tax_cents` is None, tax defaults to zero.

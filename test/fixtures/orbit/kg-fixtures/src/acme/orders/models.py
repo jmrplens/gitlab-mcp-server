@@ -6,7 +6,6 @@ each class and its dunder methods as separate `Definition` entities.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
 
 
 class OrderStatus(str, Enum):
@@ -38,9 +37,9 @@ class Order:
 
     order_id: str
     customer_id: str
-    items: List[OrderItem] = field(default_factory=list)
+    items: list[OrderItem] = field(default_factory=list)
     status: OrderStatus = OrderStatus.PENDING
-    notes: Optional[str] = None
+    notes: str | None = None
 
     def add_item(self, item: OrderItem) -> None:
         """Append a line item to this order."""
