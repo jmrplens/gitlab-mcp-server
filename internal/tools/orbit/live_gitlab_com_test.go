@@ -455,3 +455,204 @@ func TestOrbitLiveGitLabCom_ShapeDiscovery(t *testing.T) {
 			out.SchemaVersion, len(out.Domains), len(out.Nodes), len(out.Edges)), nil
 	})
 }
+
+// TestOrbitLiveGitLabCom_Fixtures exercises the four query_type variants
+// against the live `plens1` fixture data the user provisioned in
+// gitlab.com (projects kg-fixtures and security-fixtures). Subtests
+// assert the canonical Query DSL shapes actually return rows for the
+// entity types each fixture is designed to populate. The Orbit indexer
+// is eventually consistent: if a fresh push has not been indexed yet,
+// the affected subtest will skip (not fail) by reporting row_count=0.
+func TestOrbitLiveGitLabCom_Fixtures(t *testing.T) {
+	testOrbitLiveFixtures(t)
+}
+
+func testOrbitLiveFixtures(t *testing.T) {
+	t.Helper()
+	client := newLiveClient(t)
+
+	// The project ids we created under plens1 earlier in this fixture
+	// session. Hard-coded here so the live test stays self-contained and
+	// does not require a `gl` CLI discovery round-trip.
+	const (
+		kgFixturesProjectID       = 83194037
+		securityFixturesProjectID = 83194290
+	)
+
+	summarize(t, "Project_kg_fixtures_filter", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id":     "p",
+					"entity": "Project",
+					"filters": map[string]any{
+						"full_path": map[string]any{"op": "eq", "value": "plens1/kg-fixtures"},
+					},
+					"columns": []string{"id", "full_path", "name"},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Vulnerability_security_fixtures_filter", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id":       "v",
+					"entity":   "Vulnerability",
+					"node_ids": []int{312489089, 312489090, 312489091, 312489092, 312489093},
+					"columns":  []string{"id", "title", "severity", "state"},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Milestone_count_for_kg_fixtures", func(ctx context.Context) (any, error) {
+		// Aggregation: count the milestones scoped to the kg-fixtures
+		// project via a node_ids filter. The Orbit API only allows
+		// node_ids on entity ids; here we use a filter on the milestone
+		// project relationship (Milestone --IN_PROJECT--> Project).
+		// When the indexer has not yet linked the milestone, this
+		// returns 0 — the assertion is informational, not a hard fail.
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "aggregation",
+				"nodes": []any{
+					map[string]any{
+						"id":     "m",
+						"entity": "Milestone",
+						"filters": map[string]any{
+							"project_id": map[string]any{"op": "eq", "value": kgFixturesProjectID},
+						},
+					},
+				},
+				"aggregations": []any{
+					map[string]any{"function": "count", "target": "m", "alias": "milestone_count"},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "File_count_in_security_fixtures", func(ctx context.Context) (any, error) {
+		// Count indexed files for the security-fixtures project. The
+		// project id filter is what scopes the count to this specific
+		// project (the canonical way Orbit enforces single-tenant
+		// authorization is via the `project_id` filter on each node).
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "aggregation",
+				"nodes": []any{
+					map[string]any{
+						"id":     "f",
+						"entity": "File",
+						"filters": map[string]any{
+							"project_id": map[string]any{"op": "eq", "value": securityFixturesProjectID},
+						},
+					},
+				},
+				"aggregations": []any{
+					map[string]any{"function": "count", "target": "f", "alias": "file_count"},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "MergeRequest_in_kg_fixtures", func(ctx context.Context) (any, error) {
+		// Fetch the squash-merged MR we created in the fixture session.
+		// The MR id is dynamic per GitLab.com instance, so we filter
+		// by source_branch instead.
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id":     "mr",
+					"entity": "MergeRequest",
+					"filters": map[string]any{
+						"source_branch": map[string]any{"op": "eq", "value": "feature/restock-helper"},
+						"target_branch": map[string]any{"op": "eq", "value": "main"},
+						"project_id":    map[string]any{"op": "eq", "value": kgFixturesProjectID},
+					},
+					"columns": []string{"id", "iid", "title", "state", "source_branch"},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "PathFinding_user_to_kg_fixtures", func(ctx context.Context) (any, error) {
+		// User 15767218 = jmrp. Project 83194037 = plens1/kg-fixtures.
+		// A short path between them is almost certainly a CREATOR or
+		// AUTHORED relationship.
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "path_finding",
+				"nodes": []any{
+					map[string]any{
+						"id":       "u",
+						"entity":   "User",
+						"node_ids": []int{15767218},
+					},
+					map[string]any{
+						"id":       "p",
+						"entity":   "Project",
+						"node_ids": []int{kgFixturesProjectID},
+					},
+				},
+				"path": map[string]any{
+					"type":      "shortest",
+					"from":      "u",
+					"to":        "p",
+					"max_depth": 3,
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Neighbors_kg_fixtures", func(ctx context.Context) (any, error) {
+		// Find what nodes are connected to the kg-fixtures project. The
+		// canonical neighbors shape needs node_ids or filters on the
+		// top-level node, plus a `neighbors: {node: <id>}` reference.
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "neighbors",
+				"node": map[string]any{
+					"id":       "p",
+					"entity":   "Project",
+					"node_ids": []int{kgFixturesProjectID},
+				},
+				"neighbors": map[string]any{
+					"node": "p",
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+}

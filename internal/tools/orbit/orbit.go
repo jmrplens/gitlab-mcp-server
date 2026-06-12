@@ -298,15 +298,21 @@ func Query(ctx context.Context, client *gitlabclient.Client, input QueryInput) (
 	request := &gl.OrbitQueryRequest{
 		Query: query,
 	}
-	if hasFormat {
+	// When the user did not pick a format, default to "raw" rather than
+	// the API server-side default ("llm" / TOON text). Structured JSON is
+	// strictly more useful for an MCP tool: the LLM can iterate over
+	// result.nodes directly, the SDK's [OrbitQueryResult] decodes the
+	// row_count, and downstream markdown formatters can pretty-print
+	// the envelope. Callers who want the compact TOON text can still
+	// pass response_format="llm" explicitly.
+	rawFormat := gl.OrbitResponseFormatRaw
+	switch {
+	case hasFormat:
 		request.ResponseFormat = format
+	case !hasFormat:
+		request.ResponseFormat = &rawFormat
 	}
-	// When the user did not pick a format, the API server-side default is
-	// "llm" for /orbit/query (compact TOON text), so we must use QueryRaw
-	// to avoid trying to JSON-decode a text response. When the user picked
-	// "llm" explicitly, do the same. Only "raw" (and "json", which we
-	// forward as "raw") goes through the JSON-decoding Query path.
-	useRaw := !hasFormat || *format == gl.OrbitResponseFormatLLM
+	useRaw := hasFormat && *format == gl.OrbitResponseFormatLLM
 	if useRaw {
 		var raw bytes.Buffer
 		_, err = client.GL().Orbit.QueryRaw(request, &raw, gl.WithContext(ctx))
