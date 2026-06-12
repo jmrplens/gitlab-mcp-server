@@ -38,8 +38,11 @@ func TestActionSpecs_OrderAndCount(t *testing.T) {
 		if specs[i].Name != want {
 			t.Fatalf("ActionSpecs()[%d].Name = %q, want %q", i, specs[i].Name, want)
 		}
-		if len(specs[i].Aliases) == 0 || specs[i].Aliases[0] != "gitlab_orbit_"+want {
-			t.Fatalf("ActionSpecs()[%d].Aliases[0] = %q, want first alias gitlab_orbit_%s (full list: %v)",
+		if len(specs[i].Aliases) == 0 {
+			t.Fatalf("ActionSpecs()[%d].Aliases = %v, want first alias gitlab_orbit_%s", i, specs[i].Aliases, want)
+		}
+		if specs[i].Aliases[0] != "gitlab_orbit_"+want {
+			t.Fatalf("ActionSpecs()[%d].Aliases[0] = %q, want gitlab_orbit_%s (full list: %v)",
 				i, specs[i].Aliases[0], want, specs[i].Aliases)
 		}
 		if specs[i].OwnerPackage != "orbit" {
@@ -263,7 +266,11 @@ func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := routes[tt.name].Handler(t.Context(), tt.args)
+			route, ok := routes[tt.name]
+			if !ok {
+				t.Fatalf("routes map missing %q; registration dropped an individual tool", tt.name)
+			}
+			result, err := route.Handler(t.Context(), tt.args)
 			if err != nil {
 				t.Fatalf("Route.Handler() error: %v", err)
 			}
@@ -300,7 +307,11 @@ func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := routes[tt.name].Handler(t.Context(), tt.args)
+			route, ok := routes[tt.name]
+			if !ok {
+				t.Fatalf("routes map missing %q; registration dropped an individual tool", tt.name)
+			}
+			result, err := route.Handler(t.Context(), tt.args)
 			if err != nil {
 				t.Fatalf("Route.Handler() error = %v, want nil", err)
 			}

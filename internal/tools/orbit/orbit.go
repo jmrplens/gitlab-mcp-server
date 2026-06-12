@@ -24,10 +24,17 @@ type ResponseFormatInput struct {
 	//   - "json" — explicit JSON request (accepted by /orbit/status, /orbit/schema,
 	//              /orbit/tools, and /orbit/query as an alias of "raw")
 	//
-	// When empty, the GitLab API server-side default is used (currently "raw"
-	// for /orbit/dsl and /orbit/query, "json" for /orbit/status, /orbit/schema,
-	// and /orbit/tools). Pass an explicit value to override.
-	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format: raw, llm, or json. When omitted, the API server-side default is used."`
+	// When empty, status / schema / tools / dsl fall back to the GitLab API
+	// server-side default (currently "raw" for /orbit/dsl, "json" for
+	// /orbit/status, /orbit/schema, and /orbit/tools). [Query] is the
+	// exception: when the field is omitted, [Query] forces "raw" rather
+	// than letting the server apply its "llm" default, because structured
+	// JSON is strictly more useful for an MCP tool (the LLM can iterate
+	// over result nodes directly, the SDK decodes row_count, and the
+	// downstream markdown formatter pretty-prints the envelope). Callers
+	// who want the compact TOON text can pass response_format="llm"
+	// explicitly.
+	ResponseFormat string `json:"response_format,omitempty" jsonschema:"Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty."`
 }
 
 // StatusInput holds parameters for retrieving Orbit cluster status.

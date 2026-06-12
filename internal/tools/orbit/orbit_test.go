@@ -646,7 +646,10 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 		{name: "tools", call: func() error { _, err := Tools(ctx, client, ToolsInput{}); return err }},
 		{name: "dsl", call: func() error { _, err := DSL(ctx, client, DSLInput{}); return err }},
 		{name: "query", call: func() error {
-			_, err := Query(ctx, client, QueryInput{Query: map[string]any{"query_type": "traversal"}})
+			_, err := Query(ctx, client, QueryInput{Query: map[string]any{
+				"query_type": "traversal",
+				"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+			}})
 			return err
 		}},
 		{name: "graph status", call: func() error {

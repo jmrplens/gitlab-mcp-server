@@ -1,6 +1,7 @@
 package orbit
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -206,7 +207,7 @@ func TestRequireNeighborsShape_RejectsMissingNodeRef(t *testing.T) {
 	if err == nil {
 		t.Fatal("requireNeighborsShape() error = nil, want missing-node-ref error")
 	}
-	if !strings.Contains(err.Error(), "neighbors.node must be a string") {
+	if !strings.Contains(err.Error(), "neighbors.node must be a non-empty string") {
 		t.Fatalf("requireNeighborsShape() error = %q, want missing-node-ref message", err)
 	}
 }
@@ -293,5 +294,97 @@ func TestValidateQuery_RejectsNeighborsShape(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "require a `neighbors` object") {
 		t.Fatalf("validateQuery() error = %q, want neighbors shape message", err)
+	}
+}
+
+// TestRequireNeighborsShape_RejectsUnboundedTopLevelNode verifies that
+// [requireNeighborsShape] surfaces a precise error when the top-level
+// `node` is present but not bounded by node_ids/filters/id_range.
+// The docstring and the Orbit query language reference both require
+// a bounded selector; without this check the live API returns a
+// confusing generic 400.
+func TestRequireNeighborsShape_RejectsUnboundedTopLevelNode(t *testing.T) {
+	err := requireNeighborsShape(map[string]any{
+		"query_type": "neighbors",
+		"node":       map[string]any{"id": "p", "entity": "Project"},
+		"neighbors":  map[string]any{"node": "p"},
+	})
+	if err == nil {
+		t.Fatal("requireNeighborsShape() error = nil, want unbounded-node error")
+	}
+	if !strings.Contains(err.Error(), "bounded by node_ids, filters, or id_range") {
+		t.Fatalf("requireNeighborsShape() error = %q, want unbounded-node message", err)
+	}
+}
+
+// TestRequireNeighborsShape_RejectsNodeRefMismatch verifies that
+// [requireNeighborsShape] surfaces a precise error when
+// `neighbors.node` does not reference the top-level `node.id`.
+// Mirrors the live API's compile_error for the same case so the
+// LLM gets a precise actionable error before the round trip.
+func TestRequireNeighborsShape_RejectsNodeRefMismatch(t *testing.T) {
+	err := requireNeighborsShape(map[string]any{
+		"query_type": "neighbors",
+		"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		"neighbors":  map[string]any{"node": "other"},
+	})
+	if err == nil {
+		t.Fatal("requireNeighborsShape() error = nil, want node-ref mismatch error")
+	}
+	if !strings.Contains(err.Error(), "must match the top-level node's `id`") {
+		t.Fatalf("requireNeighborsShape() error = %q, want node-ref mismatch message", err)
+	}
+}
+
+// TestCollectQueryNodes_AcceptsTypedSliceShape verifies that
+// [collectQueryNodes] recognises a `nodes` slice of `map[string]any`
+// values (the shape produced when callers build the query
+// programmatically in Go) in addition to the canonical `[]any`
+// shape that json.Unmarshal produces. Without the second branch a
+// programmatically-built query would be silently ignored and the
+// live API would reject it as unscoped.
+func TestCollectQueryNodes_AcceptsTypedSliceShape(t *testing.T) {
+	nodes := collectQueryNodes(map[string]any{
+		"nodes": []map[string]any{
+			{"id": "u", "entity": "User", "node_ids": []int{1}},
+			{"id": "p", "entity": "Project", "node_ids": []int{2}},
+		},
+	})
+	if len(nodes) != 2 {
+		t.Fatalf("collectQueryNodes() len = %d, want 2 (typed slice shape)", len(nodes))
+	}
+	if nodes[0]["id"] != "u" || nodes[1]["id"] != "p" {
+		t.Fatalf("collectQueryNodes() = %+v, want u and p in order", nodes)
+	}
+}
+
+// TestToInt64_CoercesJSONNumber verifies that [toInt64] understands
+// the [json.Number] type emitted by `json.Decoder.UseNumber()`. The
+// live API can be configured to decode the query body with UseNumber
+// to avoid float64 precision loss on large ids; without this branch
+// id_range span checks silently fail and scoped queries are rejected
+// downstream as "unscoped".
+func TestToInt64_CoercesJSONNumber(t *testing.T) {
+	tests := []struct {
+		name string
+		in   any
+		want int64
+		ok   bool
+	}{
+		{name: "integer json.Number", in: json.Number("42"), want: 42, ok: true},
+		{name: "float json.Number", in: json.Number("42.7"), want: 42, ok: true},
+		{name: "empty json.Number", in: json.Number(""), want: 0, ok: false},
+		{name: "non-numeric json.Number", in: json.Number("not-a-number"), want: 0, ok: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := toInt64(tt.in)
+			if ok != tt.ok {
+				t.Fatalf("toInt64(%v) ok = %t, want %t", tt.in, ok, tt.ok)
+			}
+			if ok && got != tt.want {
+				t.Fatalf("toInt64(%v) = %d, want %d", tt.in, got, tt.want)
+			}
+		})
 	}
 }

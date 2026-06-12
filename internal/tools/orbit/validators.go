@@ -89,6 +89,12 @@ func requireScopedNodes(query map[string]any, queryType string) error {
 // collectQueryNodes returns every node selector from a query, accepting
 // either a singular top-level `node` or a `nodes` array. Non-map entries
 // are silently skipped to keep the validators resilient to user JSON.
+//
+// The `nodes` slot accepts both `[]any` (the canonical JSON-decoded
+// shape) and `[]map[string]any` (the shape produced when the caller
+// builds the query programmatically in Go). Without the second branch,
+// a programmatically-constructed query would be silently ignored and
+// the user would see a confusing "no scope" error from the live API.
 func collectQueryNodes(query map[string]any) []map[string]any {
 	var out []map[string]any
 	if single, singleOK := query["node"].(map[string]any); singleOK {
@@ -100,6 +106,8 @@ func collectQueryNodes(query map[string]any) []map[string]any {
 				out = append(out, m)
 			}
 		}
+	} else if list, listOK := query["nodes"].([]map[string]any); listOK {
+		out = append(out, list...)
 	}
 	return out
 }
@@ -137,40 +145,60 @@ func nodeHasScope(n map[string]any) bool {
 	return false
 }
 
-// toInt64 coerces common numeric Go/JSON shapes (int, int64, float64,
-// json.Number) into an int64. Used by scope validators and the
-// id_range span check.
+// toInt64 coerces common numeric Go/JSON shapes (int, int64, float32,
+// float64, json.Number) into an int64. Used by scope validators and
+// the id_range span check. The json.Number branch matters when the
+// caller decodes the query with `json.Decoder.UseNumber()` — without
+// it, id_range span checks silently fail and scoped queries are
+// rejected as "unscoped" downstream.
 func toInt64(v any) (int64, bool) {
 	switch n := v.(type) {
 	case int:
 		return int64(n), true
 	case int64:
 		return n, true
-	case float64:
-		return int64(n), true
 	case float32:
 		return int64(n), true
+	case float64:
+		return int64(n), true
+	case json.Number:
+		if i, err := n.Int64(); err == nil {
+			return i, true
+		}
+		if f, err := n.Float64(); err == nil {
+			return int64(f), true
+		}
 	}
 	return 0, false
 }
 
 // requireNeighborsShape enforces the canonical neighbors query shape:
 // a top-level `node` (singular, not `nodes`) that is bounded by
-// node_ids or filters, plus a `neighbors` object with at least a
-// `node` string field that references the top-level node's id.
+// node_ids or filters, plus a `neighbors` object whose `node` string
+// references the top-level node's `id` exactly.
 func requireNeighborsShape(query map[string]any) error {
-	if _, hasNode := query["node"].(map[string]any); !hasNode {
+	node, hasNode := query["node"].(map[string]any)
+	if !hasNode {
 		return errors.New("neighbors queries require a top-level `node` (singular) with a bounded node selector; example: " +
 			`{"query_type":"neighbors","node":{"id":"p","entity":"Project","node_ids":[1]},"neighbors":{"node":"p"}}`)
+	}
+	if !nodeHasScope(node) {
+		return errors.New("neighbors queries require a top-level `node` bounded by node_ids, filters, or id_range (span <= 100,000); example: " +
+			`{"node":{"id":"p","entity":"Project","node_ids":[1]}}`)
 	}
 	neighbors, ok := query["neighbors"].(map[string]any)
 	if !ok {
 		return errors.New("neighbors queries require a `neighbors` object; example: " +
 			`{"neighbors":{"node":"p","direction":"both"}}`)
 	}
-	if _, hasNodeRef := neighbors["node"].(string); !hasNodeRef {
-		return errors.New("neighbors.node must be a string that references a top-level node's `id`; example: " +
+	ref, hasNodeRef := neighbors["node"].(string)
+	if !hasNodeRef || ref == "" {
+		return errors.New("neighbors.node must be a non-empty string that references a top-level node's `id`; example: " +
 			`{"neighbors":{"node":"p"}}`)
+	}
+	if declared, ok := node["id"].(string); ok && declared != "" && declared != ref {
+		return fmt.Errorf("neighbors.node %q must match the top-level node's `id` %q; example: "+
+			`{"node":{"id":"p",...},"neighbors":{"node":"p"}}`, ref, declared)
 	}
 	return nil
 }
