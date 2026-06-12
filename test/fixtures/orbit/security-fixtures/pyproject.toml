@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acme-orders-insecure"
+version = "0.1.0"
+description = "Intentionally insecure fixture used to populate the Orbit security domain."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest==8.3.3"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

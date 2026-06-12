@@ -372,6 +372,10 @@ When adding a normal GitLab operation, define the route once inside the owning `
 
 See [Tool Surfaces And Canonical Action Core](tool-surfaces-and-action-core.md) for the ownership rules across individual tools, meta-tools, dynamic mode, and the canonical action catalog.
 
+### Orbit live-test fixtures
+
+The `orbitlive` build-tagged live tests in `internal/tools/orbit/live_gitlab_com_test.go` exercise the real `https://gitlab.com/api/v4/orbit/*` endpoints. They expect two projects in the configured namespace (`kg-fixtures` and `security-fixtures`) with a specific shape, plus optional mirror data. The reproduction script, the expected fixture layout, and the indexer caveat (transient `error` state) are documented in [Orbit Live Test Fixtures](orbit-fixtures.md).
+
 ### Example: Adding a tools sub-package
 
 ```go

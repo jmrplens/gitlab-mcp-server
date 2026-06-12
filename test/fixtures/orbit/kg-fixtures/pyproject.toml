@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "acme-orders"
+version = "0.1.0"
+description = "Acme order-processing library — Knowledge Graph fixture for gitlab-mcp-server Orbit tools."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest==8.3.3"]
+
+[project.scripts]
+acme-orders = "acme.orders.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
