@@ -52,6 +52,9 @@ func TestList(t *testing.T) {
 	if out.Applications[0].ID != 1 {
 		t.Errorf("ID = %d, want 1", out.Applications[0].ID)
 	}
+	if out.Applications[0].Scopes == nil || len(out.Applications[0].Scopes) != 2 {
+		t.Errorf("Scopes = %v, want [\"api\", \"read_user\"]", out.Applications[0].Scopes)
+	}
 }
 
 // TestList_Error verifies List when error.
@@ -102,6 +105,9 @@ func TestCreate(t *testing.T) {
 	}
 	if out.Secret != "newsecret" {
 		t.Errorf("Secret = %q, want newsecret", out.Secret)
+	}
+	if out.Scopes == nil || len(out.Scopes) != 2 {
+		t.Errorf("Scopes = %v, want [\"api\", \"read_user\"]", out.Scopes)
 	}
 }
 
