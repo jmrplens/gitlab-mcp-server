@@ -8,6 +8,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// Canonical Orbit action IDs. They are referenced from the
+// RelatedActions slices of every spec, so a single source of truth
+// keeps the cross-links consistent and makes the chain (schema →
+// dsl → query → graph_status → query) easy to audit.
+const (
+	orbitActionStatus      = "orbit.status"
+	orbitActionSchema      = "orbit.schema"
+	orbitActionTools       = "orbit.tools"
+	orbitActionDSL         = "orbit.dsl"
+	orbitActionQuery       = "orbit.query"
+	orbitActionGraphStatus = "orbit.graph_status"
+)
+
 // ActionSpecs returns the canonical ActionSpec definitions for all GitLab.com Orbit MCP tools.
 //
 // Each ActionSpec describes a single public Orbit endpoint (status, schema, tools, dsl, query, graph_status)
@@ -18,27 +31,27 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
 		orbitReadSpec("status", orbitReadRoute(client, Status, "GitLab Orbit Status", "cluster status"), "gitlab_orbit_status",
 			"Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.",
-			[]string{"orbit.status"},
+			[]string{orbitActionStatus},
 			[]string{"kg.status", "knowledge_graph.status", "orbit.health", "kg.health"}),
 		orbitReadSpec("schema", orbitReadRoute(client, Schema, "GitLab Orbit Schema", "graph ontology"), "gitlab_orbit_schema",
 			"Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.",
-			[]string{"orbit.schema", "orbit.dsl"},
+			[]string{orbitActionSchema, orbitActionDSL},
 			[]string{"kg.schema", "knowledge_graph.schema", "kg.ontology", "knowledge_graph.ontology"}),
 		orbitReadSpec("tools", orbitReadRoute(client, Tools, "GitLab Orbit Tools", "tool manifest"), "gitlab_orbit_tools",
 			"List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.",
-			[]string{"orbit.tools"},
+			[]string{orbitActionTools},
 			[]string{"kg.tools", "knowledge_graph.tools", "kg.manifest", "knowledge_graph.manifest"}),
 		orbitReadSpec("dsl", orbitReadRoute(client, DSL, "GitLab Orbit DSL", "query DSL"), "gitlab_orbit_dsl",
 			"Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.",
-			[]string{"orbit.dsl", "orbit.query"},
+			[]string{orbitActionDSL, orbitActionQuery},
 			[]string{"kg.dsl", "knowledge_graph.dsl", "kg.grammar", "knowledge_graph.grammar"}),
 		orbitReadSpec("query", orbitReadRoute(client, Query, "GitLab Orbit Query", "submitted query"), "gitlab_orbit_query",
 			"Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding).",
-			[]string{"orbit.schema", "orbit.dsl", "orbit.graph_status"},
+			[]string{orbitActionSchema, orbitActionDSL, orbitActionGraphStatus},
 			[]string{"kg.query", "knowledge_graph.query", "orbit.search", "kg.search", "knowledge_graph.search"}),
 		orbitReadSpec("graph_status", orbitReadRoute(client, GraphStatus, "GitLab Orbit Graph Status", "requested namespace, project, or full_path"), "gitlab_orbit_graph_status",
 			"Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.",
-			[]string{"orbit.query"},
+			[]string{orbitActionQuery},
 			[]string{"kg.indexing", "kg.index_status", "knowledge_graph.indexing", "knowledge_graph.index_status"}),
 	}
 }
