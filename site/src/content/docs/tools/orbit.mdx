@@ -100,8 +100,15 @@ Self-managed GitLab instances do not register Orbit tools, even when the Enterpr
 		"action": "query",
 		"params": {
 			"query": {
-				"type": "Project",
-				"filters": { "namespace": "gitlab-org" }
+				"query_type": "traversal",
+				"node": {
+					"id": "p",
+					"entity": "Project",
+					"filters": {
+						"full_path": { "op": "starts_with", "value": "gitlab-org/" }
+					},
+					"columns": ["id", "full_path"]
+				}
 			},
 			"response_format": "llm"
 		}
@@ -176,3 +183,21 @@ In meta-tool mode, action parameter schemas are available through MCP resources:
 | `gitlab://tools/gitlab_orbit.graph_status` | Parameters for indexing status checks   |
 
 These resources remain available with `CAPABILITY_SURFACE=full` or `minimal`, regardless of `META_PARAM_SCHEMA` mode.
+
+## Run the live tests
+
+Orbit ships with a build-tag-gated live test suite at `internal/tools/orbit/live_gitlab_com_test.go` that exercises each handler against the real `https://gitlab.com/api/v4/orbit/*` endpoints. The suite has four entry points and 41 subtests covering all six handlers, the canonical Query DSL shapes, fixture-based smoke tests, and the full DSL feature surface. The orchestrator `make test-e2e-gitlab-com` provisions `kg-fixtures` and `security-fixtures` projects in your namespace (idempotent), waits for the Orbit indexer to catch up, then runs the tests:
+
+```bash
+# Add a Personal Access Token (api scope) to .env first
+echo 'GITLAB_COM_TOKEN=glpat-...' >> .env
+
+# Default namespace is plens1; override with ORBIT_FIXTURES_NAMESPACE
+make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
+
+# When fixtures are already provisioned, run only the tests
+GITLAB_COM_TOKEN=glpat-... \
+  go test -tags orbitlive -count=1 -v -timeout 300s ./internal/tools/orbit/
+```
+
+See [Orbit live test fixtures](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/orbit-fixtures.md) for the fixture layout, the `scripts/setup-orbit-fixtures.sh` reproducer, and the indexer caveat (transient `error` state is normal and the tests are informational, not strict equality).

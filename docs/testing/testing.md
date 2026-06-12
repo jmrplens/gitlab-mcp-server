@@ -820,11 +820,52 @@ make test-race     # Run with race detector
 make test-e2e      # Run E2E tests (self-hosted GitLab) — generates JUnit + JSON reports
 make test-e2e-docker # Run E2E tests with ephemeral GitLab CE — generates JUnit + JSON reports
 make test-e2e-docker-enterprise # Run E2E tests with ephemeral GitLab EE + license
+make test-e2e-gitlab-com # Run Orbit live tests against GitLab.com (provisions fixtures, waits for indexer, then runs the orbitlive-tagged tests)
 make coverage      # Generate coverage report
 make lint          # Run consolidated golangci-lint checks
 make inspector     # Compile + launch MCP Inspector UI via stdio
 make inspector-stop # Stop Inspector and clean up temp binary
 ```
+
+### Orbit Live Tests
+
+The six `gitlab_orbit_*` tools have a separate `orbitlive`-gated live test suite at `internal/tools/orbit/live_gitlab_com_test.go` that exercises the real `https://gitlab.com/api/v4/orbit/*` endpoints against a fixture-provisioned namespace. Unlike the `e2e`-tagged suite, these tests are **not** run by `make test` or any CI gate — they require a GitLab.com Personal Access Token and explicit opt-in.
+
+The suite is organized as four entry points:
+
+| Entry point                                | Subtests | What it exercises                                                                                                  |
+| ------------------------------------------ | -------: | ------------------------------------------------------------------------------------------------------------------ |
+| `TestOrbitLiveGitLabCom`                   |       14 | All six handlers against the live API: status, schema, tools, DSL (default/llm/raw), query (traversal/aggregation/neighbors/path_finding/llm-format), and graph_status (full_path/namespace_id) |
+| `TestOrbitLiveGitLabCom_ShapeDiscovery`    |        6 | Regression coverage of the canonical Query DSL shapes for each `query_type` variant — `aggregation_with_filter`, `aggregation_with_node_ids`, `neighbors_id_reference`, `path_finding_shortest`, and the default schema format |
+| `TestOrbitLiveGitLabCom_Fixtures`          |        7 | Filter-based queries against the live `kg-fixtures` and `security-fixtures` projects, scoped by `ORBIT_FIXTURES_NAMESPACE` so the test is portable across developer namespaces |
+| `TestOrbitLiveGitLabCom_FeatureCoverage`   |       14 | Comprehensive DSL surface: filter operators (`in`, `contains`, `gt`), multi-node traversal with `IN_PROJECT`, aggregations with `group_by` (node/property), `sum`/`max`/`avg`, `order_by`, virtual columns (`diff`, `content`), cursor pagination, `id_range` scope, and `options.dynamic_columns` |
+
+Total: **4 suites, 41 subtests** behind the `orbitlive` build tag.
+
+The Orbit indexer is eventually consistent. Subtests that match content the indexer has not yet picked up will report `row_count=0` and pass — they are informational, not strict equality. Re-run the live test a few minutes after `make test-e2e-gitlab-com` to allow the indexer to catch up.
+
+To run the full flow:
+
+```bash
+# Add a Personal Access Token (api scope) to .env first
+echo 'GITLAB_COM_TOKEN=glpat-...' >> .env
+
+# Default namespace is plens1; override with ORBIT_FIXTURES_NAMESPACE
+make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
+```
+
+To run only the live tests (when fixtures are already provisioned):
+
+```bash
+GITLAB_COM_TOKEN=glpat-... \
+  go test -tags orbitlive -count=1 -v -timeout 300s ./internal/tools/orbit/
+
+# Just one suite
+GITLAB_COM_TOKEN=glpat-... \
+  go test -tags orbitlive -count=1 -v -run '^TestOrbitLiveGitLabCom_Fixtures$' ./internal/tools/orbit/
+```
+
+See [Orbit Live Test Fixtures](../development/orbit-fixtures.md) for fixture contents, the `scripts/setup-orbit-fixtures.sh` script, and the indexer caveat.
 
 ## Test Infrastructure
 

@@ -56,3 +56,7 @@ Instruction files in `.github/instructions/` are automatically applied when edit
 Agents are invoked via GitHub Copilot Chat using `@agent-name`. Skills are task templates that can be triggered by any agent or directly in chat.
 
 For the full catalog with detailed descriptions and workflows, see [CLAUDE.md](CLAUDE.md).
+
+## Run live tests
+
+The six `gitlab_orbit_*` tools (GitLab.com Knowledge Graph) have an `orbitlive`-gated live test suite that hits `https://gitlab.com/api/v4/orbit/*` with a real token. The fixtures live under `test/fixtures/orbit/` and are provisioned by `scripts/setup-orbit-fixtures.sh`. See [Orbit live test fixtures](docs/development/orbit-fixtures.md) for the full reproduction flow, and run the orchestrated target as `make test-e2e-gitlab-com` (requires `GITLAB_COM_TOKEN` in `.env`).

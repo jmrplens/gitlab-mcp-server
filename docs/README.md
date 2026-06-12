@@ -38,6 +38,7 @@ Project documentation for gitlab-mcp-server — a Model Context Protocol server 
 | [AI Model Evaluation Results](testing/model-results.md)                                    | Curated model compatibility and benchmark snapshots                                              |
 | [Static Analysis](development/static-analysis.md)                                          | Consolidated static analysis with golangci-lint, govulncheck, and markdownlint                   |
 | [Godoc Compliance](development/godoc.md)                                                   | Godoc audit workflow for packages, exported symbols, and test functions                          |
+| [Orbit Live Test Fixtures](development/orbit-fixtures.md)                                  | Fixture projects, setup script, and indexer caveat for `make test-e2e-gitlab-com`                |
 
 ## Reference
 

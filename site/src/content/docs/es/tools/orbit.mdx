@@ -100,8 +100,15 @@ Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuan
 		"action": "query",
 		"params": {
 			"query": {
-				"type": "Project",
-				"filters": { "namespace": "gitlab-org" }
+				"query_type": "traversal",
+				"node": {
+					"id": "p",
+					"entity": "Project",
+					"filters": {
+						"full_path": { "op": "starts_with", "value": "gitlab-org/" }
+					},
+					"columns": ["id", "full_path"]
+				}
 			},
 			"response_format": "llm"
 		}
@@ -176,3 +183,21 @@ En modo meta-herramientas, los schemas de parámetros por acción están disponi
 | `gitlab://tools/gitlab_orbit.graph_status` | Parámetros para comprobar estado de indexación       |
 
 Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` en cualquier modo de `META_PARAM_SCHEMA`.
+
+## Ejecutar las pruebas en vivo
+
+Orbit incluye una suite de pruebas en vivo protegida por build tag en `internal/tools/orbit/live_gitlab_com_test.go` que ejercita cada handler contra los endpoints reales `https://gitlab.com/api/v4/orbit/*`. La suite tiene cuatro puntos de entrada y 41 subtests que cubren los seis handlers, las formas canónicas del DSL de consulta, pruebas de humo basadas en fixtures, y toda la superficie de características del DSL. El orquestador `make test-e2e-gitlab-com` aprovisiona los proyectos `kg-fixtures` y `security-fixtures` en tu namespace (idempotente), espera a que el indexer de Orbit se ponga al día, y luego ejecuta las pruebas:
+
+```bash
+# Añade un Personal Access Token (alcance api) a .env primero
+echo 'GITLAB_COM_TOKEN=glpat-...' >> .env
+
+# El namespace por defecto es plens1; anúlalo con ORBIT_FIXTURES_NAMESPACE
+make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
+
+# Cuando los fixtures ya están aprovisionados, ejecuta solo las pruebas
+GITLAB_COM_TOKEN=glpat-... \
+  go test -tags orbitlive -count=1 -v -timeout 300s ./internal/tools/orbit/
+```
+
+Consulta [Orbit live test fixtures](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/orbit-fixtures.md) para ver la disposición de los fixtures, el reproductor `scripts/setup-orbit-fixtures.sh`, y la advertencia sobre el indexer (el estado `error` transitorio es normal y las pruebas son informativas, no de igualdad estricta).
