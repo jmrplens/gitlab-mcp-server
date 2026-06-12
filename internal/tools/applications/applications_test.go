@@ -35,7 +35,7 @@ func TestList(t *testing.T) {
 			t.Fatalf(fmtUnexpMethod, r.Method)
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[
-			{"id": 1, "application_id": "app-1", "application_name": "My App", "secret": "sec", "callback_url": "http://localhost", "confidential": true}
+			{"id": 1, "application_id": "app-1", "application_name": "My App", "secret": "sec", "callback_url": "http://localhost", "confidential": true, "scopes": ["api", "read_user"]}
 		]`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -51,6 +51,9 @@ func TestList(t *testing.T) {
 	}
 	if out.Applications[0].ID != 1 {
 		t.Errorf("ID = %d, want 1", out.Applications[0].ID)
+	}
+	if out.Applications[0].Scopes == nil || len(out.Applications[0].Scopes) != 2 {
+		t.Errorf("Scopes = %v, want [\"api\", \"read_user\"]", out.Applications[0].Scopes)
 	}
 }
 
@@ -81,7 +84,8 @@ func TestCreate(t *testing.T) {
 			"application_name": "New App",
 			"secret": "newsecret",
 			"callback_url": "http://example.com/callback",
-			"confidential": false
+			"confidential": false,
+			"scopes": ["api", "read_user"]
 		}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -101,6 +105,9 @@ func TestCreate(t *testing.T) {
 	}
 	if out.Secret != "newsecret" {
 		t.Errorf("Secret = %q, want newsecret", out.Secret)
+	}
+	if out.Scopes == nil || len(out.Scopes) != 2 {
+		t.Errorf("Scopes = %v, want [\"api\", \"read_user\"]", out.Scopes)
 	}
 }
 
@@ -212,7 +219,7 @@ func TestList_WithPagination(t *testing.T) {
 				t.Errorf("expected page=2, got %s", r.URL.Query().Get("page"))
 			}
 			testutil.RespondJSON(w, http.StatusOK, `[
-				{"id": 5, "application_id": "app-5", "application_name": "Paged", "secret": "s", "callback_url": "http://cb", "confidential": false}
+				{"id": 5, "application_id": "app-5", "application_name": "Paged", "secret": "s", "callback_url": "http://cb", "confidential": false, "scopes": ["api"]}
 			]`)
 			return
 		}
@@ -238,7 +245,7 @@ func TestCreate_WithConfidential(t *testing.T) {
 		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodPost {
 			testutil.RespondJSON(w, http.StatusCreated, `{
 				"id": 10, "application_id": "app-10", "application_name": "Conf App",
-				"secret": "csec", "callback_url": "http://cb", "confidential": true
+				"secret": "csec", "callback_url": "http://cb", "confidential": true, "scopes": ["read_user"]
 			}`)
 			return
 		}
@@ -371,10 +378,10 @@ func newApplicationsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 
 	handler := http.NewServeMux()
 	handler.HandleFunc("GET /api/v4/applications", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"application_id":"a1","application_name":"App1","secret":"s","callback_url":"http://cb","confidential":true}]`)
+		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"application_id":"a1","application_name":"App1","secret":"s","callback_url":"http://cb","confidential":true,"scopes":["api","read_user"]}]`)
 	})
 	handler.HandleFunc("POST /api/v4/applications", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"application_id":"a2","application_name":"Test App","secret":"s2","callback_url":"http://cb","confidential":false}`)
+		testutil.RespondJSON(w, http.StatusCreated, `{"id":2,"application_id":"a2","application_name":"Test App","secret":"s2","callback_url":"http://cb","confidential":false,"scopes":["api"]}`)
 	})
 	handler.HandleFunc("DELETE /api/v4/applications/1", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

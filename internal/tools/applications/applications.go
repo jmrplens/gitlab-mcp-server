@@ -22,12 +22,13 @@ type ListInput struct {
 
 // ApplicationItem represents a single application.
 type ApplicationItem struct {
-	ID              int64  `json:"id"`
-	ApplicationID   string `json:"application_id"`
-	ApplicationName string `json:"application_name"`
-	Secret          string `json:"secret"`
-	CallbackURL     string `json:"callback_url"`
-	Confidential    bool   `json:"confidential"`
+	ID              int64    `json:"id"`
+	ApplicationID   string   `json:"application_id"`
+	ApplicationName string   `json:"application_name"`
+	Secret          string   `json:"secret"`
+	CallbackURL     string   `json:"callback_url"`
+	Confidential    bool     `json:"confidential"`
+	Scopes          []string `json:"scopes,omitempty"`
 }
 
 // ListOutput is the output for listing applications.
@@ -135,5 +136,6 @@ func toItem(a *gl.Application) ApplicationItem {
 		Secret:          a.Secret,
 		CallbackURL:     a.CallbackURL,
 		Confidential:    a.Confidential,
+		Scopes:          a.Scopes,
 	}
 }
