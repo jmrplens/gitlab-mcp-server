@@ -175,25 +175,42 @@ JSON
   echo "    ✓ created project id=$new_id" >&2
 
   # Push fixture content
+  #
+  # We use `git -c http.extraHeader=PRIVATE-TOKEN: …` to keep the
+  # token out of any URL that git might echo on a failed push. The
+  # `-c` flag is per-invocation, so it does NOT propagate to the
+  # cloned/mirrored repo's git config. After the clone, we
+  # therefore set the same http.extraHeader on the local repo so
+  # the subsequent `git push` (which uses the persisted `origin`
+  # remote, not the URL with embedded creds) also authenticates.
+  # The credential lives in `.git/config` for the lifetime of
+  # the work dir, which is removed immediately after the push.
   if [ -n "$mirror_from" ]; then
     echo "    → mirroring from $mirror_from (this may take several minutes)" >&2
     git clone --quiet --mirror "$mirror_from" "$ROOT_DIR/.tmp-orbit-mirror-$path" 2>&1 | tail -3 >&2
     (cd "$ROOT_DIR/.tmp-orbit-mirror-$path" && \
-      git -c "http.extraHeader=PRIVATE-TOKEN: $GITLAB_COM_TOKEN" \
-        push --quiet --force "${GITLAB_URL}/$NAMESPACE/$path.git" 'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*' 2>&1 | tail -3) >&2 || true
+      git config --local http.extraHeader "PRIVATE-TOKEN: $GITLAB_COM_TOKEN" && \
+      git push --quiet --force "${GITLAB_URL}/$NAMESPACE/$path.git" 'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*' 2>&1 | tail -3) >&2 || true
     rm -rf "$ROOT_DIR/.tmp-orbit-mirror-$path"
   else
     local work="$ROOT_DIR/.tmp-orbit-push-$path"
     rm -rf "$work"
     git -c "http.extraHeader=PRIVATE-TOKEN: $GITLAB_COM_TOKEN" \
       clone --quiet "${GITLAB_URL}/$NAMESPACE/$path.git" "$work" 2>&1 | tail -3 >&2
+    # Persist the same http.extraHeader on the local repo so the
+    # subsequent `git push -u origin main` authenticates. Without
+    # this, the persisted `origin` remote (clean URL, no creds) has
+    # no credentials and the push returns HTTP Basic: Access
+    # denied. See: https://gitlab.com/help/topics/git/troubleshooting_git.md
+    (cd "$work" && \
+      git config --local http.extraHeader "PRIVATE-TOKEN: $GITLAB_COM_TOKEN" && \
+      git config user.email "orbit-fixtures@local" && \
+      git config user.name  "Orbit Fixtures Bot")
     # Remove the auto-generated README so the local one wins on push
     rm -f "$work/README.md"
     rsync -a --exclude='.git/' "$fixture_dir/" "$work/"
     (
       cd "$work"
-      git config user.email "orbit-fixtures@local"
-      git config user.name  "Orbit Fixtures Bot"
       git add -A
       git commit -m "Initial fixture content" --quiet
       git push --quiet -u origin main 2>&1 | tail -3 >&2
