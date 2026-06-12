@@ -878,7 +878,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>application_create</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"application_id":{"type":"string"},"application_name":{"type":"string"},"callback_url":{"type":"string"},"confidential":{"type":"boolean"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"secret":{"type":"string"}},"required":["id","application_id","application_name","secret","callback_url","confidential"],"type":"object"}
+{"additionalProperties":false,"properties":{"application_id":{"type":"string"},"application_name":{"type":"string"},"callback_url":{"type":"string"},"confidential":{"type":"boolean"},"id":{"type":"integer"},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"scopes":{"items":{"type":"string"},"type":["null","array"]},"secret":{"type":"string"}},"required":["id","application_id","application_name","secret","callback_url","confidential"],"type":"object"}
 ```
 
 </details>
@@ -894,7 +894,7 @@ Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
 <details><summary>application_list</summary>
 
 ```json
-{"additionalProperties":false,"properties":{"applications":{"items":{"additionalProperties":false,"properties":{"application_id":{"type":"string"},"application_name":{"type":"string"},"callback_url":{"type":"string"},"confidential":{"type":"boolean"},"id":{"type":"integer"},"secret":{"type":"string"}},"required":["id","application_id","application_name","secret","callback_url","confidential"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["applications","pagination"],"type":"object"}
+{"additionalProperties":false,"properties":{"applications":{"items":{"additionalProperties":false,"properties":{"application_id":{"type":"string"},"application_name":{"type":"string"},"callback_url":{"type":"string"},"confidential":{"type":"boolean"},"id":{"type":"integer"},"scopes":{"items":{"type":"string"},"type":["null","array"]},"secret":{"type":"string"}},"required":["id","application_id","application_name","secret","callback_url","confidential"],"type":"object"},"type":["null","array"]},"next_steps":{"items":{"type":"string"},"type":["null","array"]},"pagination":{"additionalProperties":false,"properties":{"has_more":{"type":"boolean"},"next_page":{"type":"integer"},"page":{"type":"integer"},"per_page":{"type":"integer"},"prev_page":{"type":"integer"},"total_items":{"type":"integer"},"total_pages":{"type":"integer"}},"required":["page","per_page","total_items","total_pages","next_page","prev_page","has_more"],"type":"object"}},"required":["applications","pagination"],"type":"object"}
 ```
 
 </details>

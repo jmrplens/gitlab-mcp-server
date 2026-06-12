@@ -16,14 +16,15 @@ func FormatListMarkdown(out ListOutput) string {
 		sb.WriteString("No applications found.\n")
 		return sb.String()
 	}
-	sb.WriteString("| ID | Name | App ID | Callback URL | Confidential |\n|---|---|---|---|---|\n")
+	sb.WriteString("| ID | Name | App ID | Callback URL | Confidential | Scopes |\n|---|---|---|---|---|---|\n")
 	for _, a := range out.Applications {
-		fmt.Fprintf(&sb, "| %d | %s | %s | %s | %v |\n",
+		fmt.Fprintf(&sb, "| %d | %s | %s | %s | %v | %s |\n",
 			a.ID,
 			toolutil.EscapeMdTableCell(a.ApplicationName),
 			toolutil.EscapeMdTableCell(a.ApplicationID),
 			toolutil.EscapeMdTableCell(a.CallbackURL),
-			a.Confidential)
+			a.Confidential,
+			toolutil.EscapeMdTableCell(strings.Join(a.Scopes, ", ")))
 	}
 	toolutil.WritePagination(&sb, out.Pagination)
 	toolutil.WriteHints(&sb, "Use `gitlab_create_application` to register a new application")
@@ -41,6 +42,7 @@ func FormatCreateMarkdown(out CreateOutput) string {
 	fmt.Fprintf(&sb, "| Callback URL | %s |\n", toolutil.EscapeMdTableCell(out.CallbackURL))
 	fmt.Fprintf(&sb, "| Confidential | %v |\n", out.Confidential)
 	fmt.Fprintf(&sb, "| Secret | %s |\n", toolutil.EscapeMdTableCell(out.Secret))
+	fmt.Fprintf(&sb, "| Scopes | %s |\n", toolutil.EscapeMdTableCell(strings.Join(out.Scopes, ", ")))
 	toolutil.WriteHints(&sb, "Store the application secret securely — it cannot be retrieved later")
 	return sb.String()
 }

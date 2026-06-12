@@ -7679,6 +7679,15 @@
             "array"
           ]
         },
+        "scopes": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "secret": {
           "type": "string"
         }
@@ -52146,6 +52155,15 @@
               },
               "id": {
                 "type": "integer"
+              },
+              "scopes": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "secret": {
                 "type": "string"
