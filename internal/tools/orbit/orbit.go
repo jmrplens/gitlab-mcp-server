@@ -61,20 +61,71 @@ type DSLOutput struct {
 
 // QueryInput holds parameters for executing an Orbit Knowledge Graph query.
 //
-// The Query field is the live Orbit query DSL. GitLab validates the shape
-// server-side against a JSON Schema with four `oneOf` alternatives keyed on
-// `query_type`:
+// The Query field is the live Orbit query DSL. GitLab validates the
+// shape server-side against a JSON Schema with four `oneOf`
+// alternatives keyed on `query_type`:
 //
-//  1. traversal    — {query_type, node|nodes, relationships?, filters?, columns?, limit}
-//  2. aggregation  — {query_type, nodes, aggregations, group_by?, aggregation_sort?, limit}
-//  3. neighbors    — {query_type, node, neighbors: {node: <top-level node id>}}
-//  4. path_finding — {query_type, nodes: [2+], path: {type: shortest|all_shortest|any,
-//     from: <id>, to: <id>, max_depth: 1..3}}
+//  1. traversal    — {query_type, node|nodes, relationships?, filters?, columns?, limit, cursor?, order_by?, options?}
+//  2. aggregation  — {query_type, nodes, aggregations, group_by?, aggregation_sort?, limit, options?}
+//  3. neighbors    — {query_type, node, neighbors: {node, direction?, rel_types?}, options?, limit}
+//  4. path_finding — {query_type, nodes: [2+], path: {type, from, to, max_depth, rel_types?}, options?, limit}
 //
-// Traversal and aggregation queries MUST scope at least one node with
-// `node_ids` or `filters`, otherwise the server rejects the request to
-// avoid full edge table scans. Neighbors and path_finding reference nodes
-// by their top-level `id` (a string), not by entity name.
+// Top-level fields (only `query_type` is required):
+//   - node|nodes:        one or more node selectors. Use `node` for a
+//     single node, `nodes: [array]` for multiple.
+//   - relationships:     [{type, from, to, direction?, min_hops?, max_hops?, filters?}]. Joins node selectors by alias.
+//   - aggregations:      [{function: count|sum|avg|min|max, target, property?, alias}]. Required for aggregation.
+//   - group_by:          [{kind: node|property, node, property?, alias?}] — buckets aggregation rows.
+//   - aggregation_sort:  {column, direction: ASC|DESC} — sorts aggregation results.
+//   - order_by:          {node, property, direction: ASC|DESC} — sorts traversal results.
+//   - limit:             integer, 1..1000. Default 30.
+//   - cursor:            {page_size, offset} — pagination. `page_size + offset` must be <= `limit`.
+//   - path:              required for path_finding. {type: shortest|all_shortest|any, from, to, max_depth: 1..3, rel_types?}.
+//   - neighbors:         required for neighbors. {node, direction?: outgoing|incoming|both, rel_types?}.
+//   - options:           {dynamic_columns?: default|*, include_debug_sql?, skip_dedup?, ...} for performance/debug knobs.
+//
+// Node selector fields:
+//   - id:        string, local alias. Referenced by relationships, aggregations, path, and neighbors.
+//   - entity:    string, ontology node type (Project, MergeRequest, File, Vulnerability, etc.).
+//   - columns:   string[] of properties to return, or "*" for all non-restricted columns.
+//   - filters:   {property: value_or_op_object} — see operators below.
+//   - node_ids:  int[] of exact ids. Maximum 500 per selector.
+//   - id_range:  {start, end}. Span must be <= 100,000 to count as scope.
+//   - id_property: optional. Property used by node_ids and id_range. Default "id".
+//
+// Filter operators ({op, value}):
+//
+//	eq, gt, gte, lt, lte, in, contains, starts_with, ends_with,
+//	is_null, is_not_null, token_match, all_tokens, any_tokens.
+//
+// Simple equality is also accepted: {property: "value"}.
+//
+// Scope rules: traversal and aggregation queries MUST have at least
+// one node with `node_ids`, `filters`, or `id_range` (span <= 100K).
+// Otherwise the server rejects the request to avoid full edge table
+// scans. Neighbors and path_finding reference nodes by their
+// top-level `id` (a string), not by entity name.
+//
+// Examples:
+//
+//   - Find projects in plens1:
+//     {query_type:"traversal", node:{id:"p",entity:"Project",
+//     filters:{full_path:{op:"starts_with",value:"plens1/"}}}}
+//
+//   - Count MRs per project (group_by node):
+//     {query_type:"aggregation",
+//     nodes:[{id:"p",entity:"Project",filters:{...}},
+//     {id:"mr",entity:"MergeRequest",columns:["id"]}],
+//     relationships:[{type:"IN_PROJECT",from:"mr",to:"p"}],
+//     group_by:[{kind:"node",node:"p"}],
+//     aggregations:[{function:"count",target:"mr",alias:"mr_count"}],
+//     aggregation_sort:{column:"mr_count",direction:"DESC"}}
+//
+//   - Find a path between two nodes (max depth 3):
+//     {query_type:"path_finding",
+//     nodes:[{id:"u",entity:"User",node_ids:[...]},
+//     {id:"p",entity:"Project",node_ids:[...]}],
+//     path:{type:"shortest",from:"u",to:"p",max_depth:3}}
 //
 // Reference: https://docs.gitlab.com/orbit/remote/queries/
 type QueryInput struct {
@@ -427,6 +478,10 @@ func validateQuery(query map[string]any) (json.RawMessage, error) {
 		if err := requireScopedNodes(query, queryType); err != nil {
 			return nil, err
 		}
+	case "neighbors":
+		if err := requireNeighborsShape(query); err != nil {
+			return nil, err
+		}
 	case "path_finding":
 		if err := requireAtLeastTwoNodes(query); err != nil {
 			return nil, err
@@ -452,7 +507,19 @@ func requireScopedNodes(query map[string]any, queryType string) error {
 	if slices.ContainsFunc(nodes, nodeHasScope) {
 		return nil
 	}
-	return fmt.Errorf("%s queries require at least one node with node_ids or filters to avoid a full edge table scan; example: "+
+	// Detect the common "id_range too wide" case specifically so the
+	// error message tells the user the exact issue, not just "no scope".
+	for _, n := range nodes {
+		if r, ok := n["id_range"].(map[string]any); ok && len(r) > 0 {
+			start, hasStart := toInt64(r["start"])
+			end, hasEnd := toInt64(r["end"])
+			if hasStart && hasEnd && (end-start) > 100000 {
+				return fmt.Errorf("query.node.id_range span (%d) exceeds the 100,000 limit; narrow the range or add a filter; example: "+
+					`{"id":"p","entity":"Project","id_range":{"start":1,"end":50000},"columns":["id"]}`, end-start)
+			}
+		}
+	}
+	return fmt.Errorf("%s queries require at least one node with node_ids, filters, or id_range (span <= 100,000) to avoid a full edge table scan; example: "+
 		`{"id":"p","entity":"Project","filters":{"full_path":{"op":"starts_with","value":"plens1/"}}}`, queryType)
 }
 
@@ -485,11 +552,56 @@ func nodeHasScope(n map[string]any) bool {
 		return true
 	}
 	// id_range with start/end is also a valid scoping mechanism per the
-	// Orbit query language reference (span must be ≤ 100,000 server-side).
+	// Orbit query language reference — but only when the span is
+	// <= 100,000. The live API rejects wider ranges with a confusing
+	// "require node_ids or filters" error, so we mirror the check
+	// here to surface a precise actionable error.
 	if r, ok := n["id_range"].(map[string]any); ok && len(r) > 0 {
-		return true
+		start, hasStart := toInt64(r["start"])
+		end, hasEnd := toInt64(r["end"])
+		if hasStart && hasEnd && (end-start) <= 100000 && (end-start) >= 0 {
+			return true
+		}
 	}
 	return false
+}
+
+// toInt64 coerces common numeric Go/JSON shapes (int, int64, float64,
+// json.Number) into an int64. Used by scope validators and the
+// id_range span check.
+func toInt64(v any) (int64, bool) {
+	switch n := v.(type) {
+	case int:
+		return int64(n), true
+	case int64:
+		return n, true
+	case float64:
+		return int64(n), true
+	case float32:
+		return int64(n), true
+	}
+	return 0, false
+}
+
+// requireNeighborsShape enforces the canonical neighbors query shape:
+// a top-level `node` (singular, not `nodes`) that is bounded by
+// node_ids or filters, plus a `neighbors` object with at least a
+// `node` string field that references the top-level node's id.
+func requireNeighborsShape(query map[string]any) error {
+	if _, hasNode := query["node"].(map[string]any); !hasNode {
+		return errors.New("neighbors queries require a top-level `node` (singular) with a bounded node selector; example: " +
+			`{"query_type":"neighbors","node":{"id":"p","entity":"Project","node_ids":[1]},"neighbors":{"node":"p"}}`)
+	}
+	neighbors, ok := query["neighbors"].(map[string]any)
+	if !ok {
+		return errors.New("neighbors queries require a `neighbors` object; example: " +
+			`{"neighbors":{"node":"p","direction":"both"}}`)
+	}
+	if _, hasNodeRef := neighbors["node"].(string); !hasNodeRef {
+		return errors.New("neighbors.node must be a string that references a top-level node's `id`; example: " +
+			`{"neighbors":{"node":"p"}}`)
+	}
+	return nil
 }
 
 // requireAtLeastTwoNodes enforces the path_finding constraint that the

@@ -456,7 +456,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				}})
 				return err
 			},
-			want: "node_ids or filters",
+			want: "require at least one node",
 		},
 		{
 			name: "traversal with id_range is also scoped",

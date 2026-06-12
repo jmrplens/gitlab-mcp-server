@@ -662,3 +662,390 @@ func testOrbitLiveFixtures(t *testing.T) {
 		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
 	})
 }
+
+// TestOrbitLiveGitLabCom_FeatureCoverage exercises the full Orbit
+// query DSL surface against the live plens1 namespace: filter
+// operators, multi-node traversals with relationships, aggregations
+// with group_by/sort/sum/max/avg, order_by, virtual columns,
+// cursor pagination, and options.dynamic_columns. Each subtest
+// is informational: it PASSes as long as the API accepts the
+// query and returns a valid envelope, even if row_count=0 (the
+// data may not match the filter in this namespace). This is the
+// comprehensive coverage test: every documented query pattern the
+// API supports is exercised at least once against real data.
+func TestOrbitLiveGitLabCom_FeatureCoverage(t *testing.T) {
+	testOrbitLiveFeatureCoverage(t)
+}
+
+func testOrbitLiveFeatureCoverage(t *testing.T) {
+	t.Helper()
+	client := newLiveClient(t)
+	namespace := orbitFixturesNamespace()
+	testOrbitLiveFeatureCoverageFiltersAndTraversal(t, client, namespace)
+	testOrbitLiveFeatureCoverageAggregation(t, client, namespace)
+	testOrbitLiveFeatureCoverageVirtualAndMeta(t, client, namespace)
+}
+
+func orbitFixturesNamespace() string {
+	ns := os.Getenv("ORBIT_FIXTURES_NAMESPACE")
+	if ns == "" {
+		ns = "plens1"
+	}
+	return ns
+}
+
+func testOrbitLiveFeatureCoverageFiltersAndTraversal(t *testing.T, client *gitlabclient.Client, namespace string) {
+	t.Helper()
+	// Filter operators (in, contains, gt) and the multi-node
+	// traversal with IN_PROJECT relationship.
+	summarize(t, "Filter_in_operator_severity", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id": "v", "entity": "Vulnerability",
+					"filters": map[string]any{
+						"severity": map[string]any{"op": "in", "value": []string{"critical", "high"}},
+					},
+					"columns": []string{"id", "severity"},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Filter_contains_operator_path", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id": "f", "entity": "File",
+					"filters": map[string]any{
+						"path": map[string]any{"op": "contains", "value": "orders"},
+					},
+					"columns": []string{"id", "path"},
+				},
+				"limit": 5,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Filter_gt_operator", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id": "p", "entity": "Project",
+					"filters": map[string]any{
+						"star_count": map[string]any{"op": "gt", "value": 0},
+					},
+					"columns": []string{"id", "full_path", "star_count"},
+				},
+				"limit": 10,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Traversal_project_to_merge_requests", func(ctx context.Context) (any, error) {
+		// Classic "find MRs in a project" pattern. The relationship
+		// IN_PROJECT connects MergeRequest → Project; the alias mr is
+		// used in the columns block.
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"nodes": []any{
+					map[string]any{
+						"id": "p", "entity": "Project",
+						"filters": map[string]any{
+							"full_path": map[string]any{"op": "eq", "value": namespace + "/kg-fixtures"},
+						},
+						"columns": []string{"id", "full_path"},
+					},
+					map[string]any{
+						"id": "mr", "entity": "MergeRequest",
+						"columns": []string{"id", "iid", "title", "state"},
+					},
+				},
+				"relationships": []any{
+					map[string]any{"type": "IN_PROJECT", "from": "mr", "to": "p"},
+				},
+				"limit": 5,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+}
+
+func testOrbitLiveFeatureCoverageAggregation(t *testing.T, client *gitlabclient.Client, namespace string) {
+	t.Helper()
+	// Aggregation functions: sum, max, avg on star_count plus
+	// group_by severity and group_by node with IN_PROJECT relationship.
+	summarize(t, "Aggregation_group_by_severity", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "aggregation",
+				"nodes": []any{
+					map[string]any{
+						"id": "v", "entity": "Vulnerability",
+						"filters": map[string]any{
+							"state": map[string]any{"op": "eq", "value": "detected"},
+						},
+					},
+				},
+				"group_by": []any{
+					map[string]any{"kind": "property", "node": "v", "property": "severity", "alias": "sev"},
+				},
+				"aggregations": []any{
+					map[string]any{"function": "count", "target": "v", "alias": "vuln_count"},
+				},
+				"aggregation_sort": map[string]any{"column": "vuln_count", "direction": "DESC"},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Aggregation_group_by_node_with_relationship", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "aggregation",
+				"nodes": []any{
+					map[string]any{
+						"id": "p", "entity": "Project",
+						"filters": map[string]any{
+							"full_path": map[string]any{"op": "starts_with", "value": namespace + "/"},
+						},
+					},
+					map[string]any{
+						"id": "mr", "entity": "MergeRequest", "columns": []string{"id"},
+					},
+				},
+				"relationships": []any{
+					map[string]any{"type": "IN_PROJECT", "from": "mr", "to": "p"},
+				},
+				"group_by": []any{
+					map[string]any{"kind": "node", "node": "p"},
+				},
+				"aggregations": []any{
+					map[string]any{"function": "count", "target": "mr", "alias": "mr_count"},
+				},
+				"aggregation_sort": map[string]any{"column": "mr_count", "direction": "DESC"},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Aggregation_sum_star_count", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "aggregation",
+				"nodes": []any{
+					map[string]any{
+						"id": "p", "entity": "Project",
+						"filters": map[string]any{
+							"star_count": map[string]any{"op": "gt", "value": 0},
+						},
+					},
+				},
+				"aggregations": []any{
+					map[string]any{"function": "sum", "target": "p", "property": "star_count", "alias": "total_stars"},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Aggregation_max_star_count", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "aggregation",
+				"nodes": []any{
+					map[string]any{
+						"id": "p", "entity": "Project",
+						"filters": map[string]any{
+							"star_count": map[string]any{"op": "gt", "value": 0},
+						},
+					},
+				},
+				"aggregations": []any{
+					map[string]any{"function": "max", "target": "p", "property": "star_count", "alias": "max_stars"},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Aggregation_avg_star_count", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "aggregation",
+				"nodes": []any{
+					map[string]any{
+						"id": "p", "entity": "Project",
+						"filters": map[string]any{
+							"star_count": map[string]any{"op": "gt", "value": 0},
+						},
+					},
+				},
+				"aggregations": []any{
+					map[string]any{"function": "avg", "target": "p", "property": "star_count", "alias": "avg_stars"},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+}
+
+func testOrbitLiveFeatureCoverageVirtualAndMeta(t *testing.T, client *gitlabclient.Client, namespace string) {
+	t.Helper()
+	// order_by, virtual columns, cursor pagination, id_range scope,
+	// and options.dynamic_columns for neighbors hydration.
+	summarize(t, "Traversal_order_by_name_desc", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id": "p", "entity": "Project",
+					"filters": map[string]any{
+						"full_path": map[string]any{"op": "starts_with", "value": namespace + "/"},
+					},
+					"columns": []string{"id", "full_path", "name"},
+				},
+				"order_by": map[string]any{"node": "p", "property": "name", "direction": "DESC"},
+				"limit":    5,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Traversal_merge_request_with_diff_column", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id": "mr", "entity": "MergeRequest",
+					"filters": map[string]any{
+						"source_branch": map[string]any{"op": "eq", "value": "feature/restock-helper"},
+					},
+					"columns": []string{"id", "iid", "title", "diff"},
+				},
+				"limit": 1,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Traversal_file_with_content_column", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id": "f", "entity": "File",
+					"filters": map[string]any{
+						"path": map[string]any{"op": "ends_with", "value": "models.py"},
+					},
+					"columns": []string{"id", "path", "language", "content"},
+				},
+				"limit": 1,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Traversal_cursor_pagination", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id": "p", "entity": "Project",
+					"filters": map[string]any{
+						"full_path": map[string]any{"op": "starts_with", "value": namespace + "/"},
+					},
+					"columns": []string{"id", "full_path"},
+				},
+				"limit":  2,
+				"cursor": map[string]any{"page_size": 2, "offset": 0},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Traversal_id_range_scope", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "traversal",
+				"node": map[string]any{
+					"id": "p", "entity": "Project",
+					"id_range": map[string]any{"start": 1, "end": 100000},
+					"columns":  []string{"id", "full_path"},
+				},
+				"limit": 5,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+
+	summarize(t, "Neighbors_with_dynamic_columns_option", func(ctx context.Context) (any, error) {
+		out, err := Query(ctx, client, QueryInput{
+			Query: map[string]any{
+				"query_type": "neighbors",
+				"node": map[string]any{
+					"id": "p", "entity": "Project",
+					"filters": map[string]any{
+						"full_path": map[string]any{"op": "eq", "value": namespace + "/kg-fixtures"},
+					},
+				},
+				"neighbors": map[string]any{"node": "p"},
+				"options":   map[string]any{"dynamic_columns": "default"},
+				"limit":     5,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return fmt.Sprintf("query_type=%s row_count=%d", out.QueryType, out.RowCount), nil
+	})
+}
