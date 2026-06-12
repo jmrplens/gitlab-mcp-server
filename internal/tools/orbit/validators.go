@@ -100,13 +100,14 @@ func collectQueryNodes(query map[string]any) []map[string]any {
 	if single, singleOK := query["node"].(map[string]any); singleOK {
 		out = append(out, single)
 	}
-	if list, listOK := query["nodes"].([]any); listOK {
+	switch list := query["nodes"].(type) {
+	case []any:
 		for _, n := range list {
 			if m, isMap := n.(map[string]any); isMap {
 				out = append(out, m)
 			}
 		}
-	} else if list, listOK := query["nodes"].([]map[string]any); listOK {
+	case []map[string]any:
 		out = append(out, list...)
 	}
 	return out
@@ -196,7 +197,7 @@ func requireNeighborsShape(query map[string]any) error {
 		return errors.New("neighbors.node must be a non-empty string that references a top-level node's `id`; example: " +
 			`{"neighbors":{"node":"p"}}`)
 	}
-	if declared, ok := node["id"].(string); ok && declared != "" && declared != ref {
+	if declared, hasDeclaredID := node["id"].(string); hasDeclaredID && declared != "" && declared != ref {
 		return fmt.Errorf("neighbors.node %q must match the top-level node's `id` %q; example: "+
 			`{"node":{"id":"p",...},"neighbors":{"node":"p"}}`, ref, declared)
 	}

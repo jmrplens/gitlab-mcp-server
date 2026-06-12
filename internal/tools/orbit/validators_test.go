@@ -337,7 +337,7 @@ func TestRequireNeighborsShape_RejectsNodeRefMismatch(t *testing.T) {
 }
 
 // TestCollectQueryNodes_AcceptsTypedSliceShape verifies that
-// [collectQueryNodes] recognises a `nodes` slice of `map[string]any`
+// [collectQueryNodes] recognizes a `nodes` slice of `map[string]any`
 // values (the shape produced when callers build the query
 // programmatically in Go) in addition to the canonical `[]any`
 // shape that json.Unmarshal produces. Without the second branch a
