@@ -43,7 +43,7 @@ Measured with `go run ./cmd/gen_readme/` against the current base catalog. Total
 | `dynamic` / `minimal`                                 |             2 |               874 | n/a                 |              2,204 |           740 |        2,944 |
 | `meta` / `full`                                       |            34 |               874 | `opaque`            |             87,475 |        18,284 |      105,759 |
 | `meta` / `minimal`                                    |            34 |               874 | `opaque`            |             87,475 |           740 |       88,215 |
-| `individual` / `full`                                 |           870 |               870 | n/a                 |            476,558 |        18,284 |      494,842 |
+| `individual` / `full`                                 |           870 |               870 | n/a                 |            476,555 |        18,284 |      494,839 |
 
 Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_PARAM_SCHEMA=opaque` affects only visible meta-tool input schemas; dynamic mode gets exact action schemas from `gitlab_find_action`, and every surface advertises `gitlab://tools` plus `gitlab://tools/{id}` for on-demand action browsing and input schemas. Individual mode already exposes one schema per tool.
 
@@ -64,6 +64,30 @@ Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_P
 - **Transports**: stdio (default for desktop AI) and HTTP (Streamable HTTP for remote clients)
 - **Cross-platform**: Windows, Linux & macOS, amd64 & arm64
 - **Self-hosted GitLab** with self-signed TLS certificate support
+
+## Orbit live tests
+
+The six read-only `gitlab_orbit_*` tools (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) target GitLab.com's experimental Knowledge Graph API. They are exercised end-to-end by an `orbitlive`-gated test suite that hits the real `https://gitlab.com/api/v4/orbit/*` endpoints with a real token.
+
+To run the live tests against your own GitLab.com namespace:
+
+```bash
+# 1. Add a Personal Access Token with api scope to .env
+echo 'GITLAB_COM_TOKEN=glpat-...' >> .env
+
+# 2. Run the orchestrated target: ensures the token, provisions
+#    kg-fixtures + security-fixtures, waits for the indexer, then
+#    runs all four live test suites.
+make test-e2e-gitlab-com
+
+# Or point at a different namespace (default is plens1)
+make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
+
+# Or, when fixtures are already provisioned, run only the tests:
+GITLAB_COM_TOKEN=glpat-... go test -tags orbitlive -count=1 -v ./test/e2e/orbit/
+```
+
+See [Orbit live test fixtures](docs/development/orbit-fixtures.md) for the fixture layout, the indexer caveat, and the `--mirror-cli` option that adds a real `gitlab-org/cli` mirror for larger graph queries.
 
 ## Example Prompts
 
@@ -445,21 +469,21 @@ Numbers nobody asked for, but here they are anyway.
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       913 |     155,617 |
-| Unit tests (`_test.go`)  |       494 |     263,494 |
-| End-to-end tests         |       139 |      31,889 |
-| **Total**                | **1,546** | **451,000** |
+| Source (`.go`, non-test) |       914 |     156,158 |
+| Unit tests (`_test.go`)  |       497 |     264,324 |
+| End-to-end tests         |       140 |      33,031 |
+| **Total**                | **1,551** | **453,513** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  6,531 |
+| Source functions                |  6,537 |
 | — exported (public)             |  2,471 |
-| — unexported (private)          |  4,060 |
-| Unit test functions (`TestXxx`) | 10,630 |
-| Subtests (`t.Run(...)`)         |  2,583 |
-| End-to-end test functions       |    281 |
+| — unexported (private)          |  4,066 |
+| Unit test functions (`TestXxx`) | 10,659 |
+| Subtests (`t.Run(...)`)         |  2,588 |
+| End-to-end test functions       |    285 |
 
 ### Ratios worth noting
 
@@ -467,16 +491,16 @@ Numbers nobody asked for, but here they are anyway.
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.69× more tests than code |
 | Average source file length         |                 ~170 lines |
-| Average test file length           |                 ~533 lines |
-| Comment lines in source            |   12,137 (~7.8% of source) |
+| Average test file length           |                 ~531 lines |
+| Comment lines in source            |   12,479 (~8.0% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,143 |
-| `defer` statements                 |   793 |
+| `if err != nil` checks             | 6,191 |
+| `defer` statements                 |   794 |
 | `struct` types defined             | 2,345 |
 | `//nolint` suppressions            |    88 |
 | `TODO` / `FIXME` / `HACK` comments |     1 |
@@ -485,11 +509,11 @@ Numbers nobody asked for, but here they are anyway.
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   219 |
+| Go packages                    |   220 |
 | Direct dependencies (`go.mod`) |    11 |
 | Indirect dependencies          |    49 |
-| Git commits                    |   212 |
-| Unique contributors            |     2 |
+| Git commits                    |   208 |
+| Unique contributors            |     3 |
 
 ### Hall of fame
 
@@ -502,8 +526,8 @@ Numbers nobody asked for, but here they are anyway.
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~2,829 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 9,372 (impossible to avoid)                                                                          |
+| Source code printed at 55 lines/page | ~2,839 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 9,402 (impossible to avoid)                                                                          |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

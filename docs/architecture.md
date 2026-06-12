@@ -70,8 +70,8 @@ graph TD
         SPECS[domain ActionSpecs<br/>176 internal/tools packages]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1030 self-managed / 1036 GitLab.com Enterprise tools]
-        META[meta projection<br/>33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise tools]
+        IND[individual projection<br/>1030 self-managed / 1036 GitLab.com Premium/Ultimate tools]
+        META[meta projection<br/>33 base / 49 self-managed enterprise / 50 GitLab.com Premium/Ultimate tools]
         DYN[dynamic projection<br/>2 visible find / execute tools]
         SAMP[sampling support<br/>11 LLM-assisted actions]
         ELIC[elicitation support<br/>4 interactive actions]
@@ -270,6 +270,15 @@ Shared helpers for unit testing with httptest mocks:
 The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 29 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 33 base GitLab/interactive tools total. The Enterprise/Premium catalog adds 16 enterprise inline meta-tools, bringing the self-managed total to 49; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 50. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_ENTERPRISE=true`, while HTTP mode can force it with `--enterprise` or auto-detect it per token+URL pool entry.
 
 Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, the `gitlab://tools` manifest, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
+
+Orbit is projected through the same catalog as every other domain. In meta mode it appears as the `gitlab_orbit` meta-tool with six actions; in individual mode it appears as six `gitlab_orbit_*` tools; in dynamic mode its actions are discoverable as `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query`, and `orbit.graph_status` through `gitlab_find_action`/`gitlab_execute_action`.
+
+```mermaid
+graph LR
+    catalog[Canonical action catalog] --> meta["Meta-tools<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit on GitLab.com Premium/Ultimate"]
+    catalog --> individual["Individual tools<br/>gitlab_list_issues, gitlab_create_project, ...<br/>+ 6 gitlab_orbit_* on GitLab.com Premium/Ultimate"]
+    catalog --> dynamic["Dynamic tools<br/>gitlab_find_action + gitlab_execute_action<br/>+ orbit.* domain IDs on GitLab.com Premium/Ultimate"]
+```
 
 ```mermaid
 sequenceDiagram

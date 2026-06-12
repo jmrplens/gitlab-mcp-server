@@ -11523,12 +11523,12 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 Use {"action":"dsl","params":{...}}; only top-level keys are action and params.
 Action params schema: gitlab://tools/gitlab_orbit.<action>.
 Action guidance:
-- dsl: Retrieve the experimental GitLab Orbit query DSL schema or LLM grammar.
-- graph_status: Inspect experimental GitLab Orbit graph indexing status for one scope.
-- query: Execute a read-only experimental GitLab Orbit Knowledge Graph query.
-- schema: Inspect the experimental GitLab Orbit Knowledge Graph ontology.
-- status: Inspect experimental GitLab Orbit cluster health on GitLab.com.
-- tools: List the experimental GitLab Orbit MCP tool manifest and parameter schemas.
+- dsl: Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
+- graph_status: Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.
+- query: Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding).
+- schema: Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.
+- status: Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
+- tools: List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
 
 GitLab orbit actions.
 
@@ -20757,63 +20757,63 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_dsl
 
-Retrieve the experimental GitLab Orbit query DSL schema or LLM grammar.
+Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
 
 **Parameters:**
 
-- `response_format` (string): Response format to request: raw or llm. Defaults to raw.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_graph_status
 
-Inspect experimental GitLab Orbit graph indexing status for one scope.
+Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.
 
 **Parameters:**
 
 - `full_path` (string): Full path of a group or project to inspect, for example gitlab-org/gitlab. Set exactly one scope field.
 - `namespace_id` (integer): Namespace/group ID to inspect. Set exactly one of namespace_id, project_id, or full_path.
 - `project_id` (integer): Project ID to inspect. Set exactly one of namespace_id, project_id, or full_path.
-- `response_format` (string): Response format to request: raw or llm. Defaults to raw.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_query
 
-Execute a read-only experimental GitLab Orbit Knowledge Graph query.
+Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding).
 
 **Parameters:**
 
-- `query` (object) (required): Orbit query DSL JSON object
-- `response_format` (string): Response format to request: raw or llm. Defaults to raw.
+- `query` (object) (required): Orbit query DSL JSON object. The query_type must be one of: traversal, aggregation, neighbors, path_finding. See QueryInput docstring for the shape of each variant.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_schema
 
-Inspect the experimental GitLab Orbit Knowledge Graph ontology.
+Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.
 
 **Parameters:**
 
 - `expand` (array of strings): Node names to expand with full properties and relationships.
-- `format` (string): Schema response format to request: raw or llm. Defaults to raw.
-- `response_format` (string): Alias for format, accepted for compatibility with GitLab's public Orbit API documentation.
+- `format` (string): Schema response format: raw, llm, or json. When omitted, the API server-side default is used (json).
+- `response_format` (string): Alias for format. Must match format when both are set.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_status
 
-Inspect experimental GitLab Orbit cluster health on GitLab.com.
+Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
 
 **Parameters:**
 
-- `response_format` (string): Response format to request: raw or llm. Defaults to raw.
+- `response_format` (string): Response format: raw, llm, or json. When omitted, the API server-side default is used. Note: gitlab_orbit_query forces raw when this field is empty.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_orbit_tools
 
-List the experimental GitLab Orbit MCP tool manifest and parameter schemas.
+List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 

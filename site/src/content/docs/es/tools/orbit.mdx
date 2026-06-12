@@ -40,6 +40,48 @@ Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuan
 4. (Opcional) Llama a `action: "dsl"` para obtener el esquema DSL o gramática LLM de Orbit.
 5. Pasa un objeto JSON de consulta a `action: "query"` con `response_format` en `raw` o `llm`.
 
+### Variantes del DSL de consulta
+
+El parámetro `query` de la acción `query` es un objeto JSON cuyo `query_type` selecciona una de cuatro variantes. El siguiente diagrama resume la forma mínima aceptada para cada variante. Un `graph TD` de Mermaid es la herramienta adecuada porque las cuatro variantes comparten un único discriminador `query_type` y solo divergen en las claves hermanas; un árbol hace que los discriminantes y campos requeridos sean legibles de un vistazo.
+
+```mermaid
+graph TD
+    Q["QueryInput<br/>(gitlab_orbit_query)"] --> QT{"query_type"}
+    QT -->|"traversal"| TR["node OR nodes<br/>+ entity, node_ids/filters/id_range<br/>+ relationships?, columns?, order_by?, limit?, cursor?"]
+    QT -->|"aggregation"| AG["nodes[]<br/>+ aggregations[] (function, target, alias)<br/>+ group_by?, aggregation_sort?"]
+    QT -->|"neighbors"| NB["node (bounded)<br/>+ neighbors.node<br/>+ direction?, rel_types?"]
+    QT -->|"path_finding"| PF["nodes[] (>=2, bounded)<br/>+ path {type, from, to, max_depth: 1..3, rel_types?}"]
+```
+
+### Flujo descubrir → consultar
+
+El patrón recomendado es descubrir primero el esquema vivo (`schema`, y opcionalmente `dsl`) y luego ejecutar una consulta tipada mediante `query`. Un `sequenceDiagram` es la herramienta adecuada porque los pasos involucran a cuatro actores distintos (cliente de IA, servidor MCP, GitLab.com e indexer de Orbit) y los límites de respuesta importan: el LLM no debe asumir que el esquema devuelto por `dsl` es estable.
+
+```mermaid
+sequenceDiagram
+    participant LLM as Cliente IA
+    participant MCP as Servidor MCP
+    participant GL as API GitLab.com
+    participant IDX as Indexer Orbit
+
+    LLM->>MCP: gitlab_orbit_schema (response_format=llm)
+    MCP->>GL: GET /api/v4/orbit/schema
+    GL-->>MCP: ontología (nodos, aristas, versiones)
+    MCP-->>LLM: texto del esquema
+
+    LLM->>MCP: gitlab_orbit_dsl (response_format=llm)
+    MCP->>GL: GET /api/v4/orbit/schema/dsl
+    GL-->>MCP: DSL de consulta / gramática LLM
+    MCP-->>LLM: texto del DSL
+
+    LLM->>MCP: gitlab_orbit_query (query={query_type, ...})
+    MCP->>GL: POST /api/v4/orbit/query
+    GL->>IDX: resolver node_ids / filters
+    IDX-->>GL: filas indexadas
+    GL-->>MCP: filas / agregaciones / caminos
+    MCP-->>LLM: resultado + markdown
+```
+
 ### Ejemplo: Comprobar estado de Orbit
 
 ```json
@@ -100,8 +142,15 @@ Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuan
 		"action": "query",
 		"params": {
 			"query": {
-				"type": "Project",
-				"filters": { "namespace": "gitlab-org" }
+				"query_type": "traversal",
+				"node": {
+					"id": "p",
+					"entity": "Project",
+					"filters": {
+						"full_path": { "op": "starts_with", "value": "gitlab-org/" }
+					},
+					"columns": ["id", "full_path"]
+				}
 			},
 			"response_format": "llm"
 		}
@@ -176,3 +225,21 @@ En modo meta-herramientas, los schemas de parámetros por acción están disponi
 | `gitlab://tools/gitlab_orbit.graph_status` | Parámetros para comprobar estado de indexación       |
 
 Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` en cualquier modo de `META_PARAM_SCHEMA`.
+
+## Ejecutar las pruebas en vivo
+
+Orbit incluye una suite de pruebas en vivo protegida por build tag en `test/e2e/orbit/live_test.go` que ejercita cada handler contra los endpoints reales `https://gitlab.com/api/v4/orbit/*`. La suite tiene cuatro puntos de entrada y 41 subtests que cubren los seis handlers, las formas canónicas del DSL de consulta, pruebas de humo basadas en fixtures, y toda la superficie de características del DSL. El orquestador `make test-e2e-gitlab-com` aprovisiona los proyectos `kg-fixtures` y `security-fixtures` en tu namespace (idempotente), espera a que el indexer de Orbit se ponga al día, y luego ejecuta las pruebas:
+
+```bash
+# Añade un Personal Access Token (alcance api) a .env primero
+echo 'GITLAB_COM_TOKEN=glpat-...' >> .env
+
+# El namespace por defecto es plens1; anúlalo con ORBIT_FIXTURES_NAMESPACE
+make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
+
+# Cuando los fixtures ya están aprovisionados, ejecuta solo las pruebas
+GITLAB_COM_TOKEN=glpat-... \
+  go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/
+```
+
+Consulta [Orbit live test fixtures](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/orbit-fixtures.md) para ver la disposición de los fixtures, el reproductor `scripts/setup-orbit-fixtures.sh`, y la advertencia sobre el indexer (el estado `error` transitorio es normal y las pruebas son informativas, no de igualdad estricta).

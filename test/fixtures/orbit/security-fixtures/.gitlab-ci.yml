@@ -1,0 +1,38 @@
+# Security scan fixture — every include triggers a real SAST/Secret
+# Detection/Dependency Scanning job so the Orbit knowledge graph picks
+# up SecurityScan, Finding, Vulnerability, VulnerabilityIdentifier,
+# VulnerabilityOccurrence, and VulnerabilityScanner entities.
+stages:
+  - test
+  - security
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .cache/pip
+
+.python-base:
+  image: "python:3.12-slim"
+  before_script:
+    - python --version
+    - pip install --upgrade pip
+
+unit:
+  stage: test
+  extends: .python-base
+  script:
+    - pip install -e ".[test]"
+    - pytest -v --tb=short
+
+# Pull in every GitLab-managed security template. Each template adds
+# one or more analyzer jobs that produce Finding / Vulnerability records
+# (some of which require the analyzers to actually find something to
+# emit; the deliberately-vulnerable code in src/ guarantees findings).
+include:
+  - template: 'Security/SAST.gitlab-ci.yml'
+  - template: 'Security/Secret-Detection.gitlab-ci.yml'
+  - template: 'Security/Dependency-Scanning.gitlab-ci.yml'
+  - template: 'Security/Container-Scanning.gitlab-ci.yml'

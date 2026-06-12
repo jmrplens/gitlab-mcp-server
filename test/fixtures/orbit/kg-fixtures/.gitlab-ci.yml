@@ -1,0 +1,78 @@
+# Knowledge Graph fixture CI — 4 stages / 5 jobs to populate Pipeline,
+# Stage, Job, and JobMetadata entities in the Orbit knowledge graph.
+#
+# The job names, stage names, and script contents are deliberately
+# distinct so each entity shows up as a separate row in queries.
+stages:
+  - lint
+  - test
+  - package
+  - publish
+
+variables:
+  PYTHON_VERSION: "3.12"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# Cache pip downloads across jobs in the same pipeline.
+cache:
+  key: "${CI_COMMIT_REF_SLUG}"
+  paths:
+    - .cache/pip
+
+.python-base:
+  image: "python:${PYTHON_VERSION}-slim"
+  before_script:
+    - python --version
+    - pip install --upgrade pip
+    - pip install -e ".[test]"
+
+ruff:
+  stage: lint
+  extends: .python-base
+  script:
+    - pip install ruff==0.6.9
+    - ruff check src tests
+
+mypy:
+  stage: lint
+  extends: .python-base
+  script:
+    - pip install mypy==1.11.2
+    - mypy --strict src
+
+pytest:
+  stage: test
+  extends: .python-base
+  script:
+    - pytest -v --tb=short --junitxml=pytest-junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: pytest-junit.xml
+
+build-sdist:
+  stage: package
+  extends: .python-base
+  script:
+    - pip install build==1.2.2
+    - python -m build --sdist
+  artifacts:
+    paths:
+      - dist/*.tar.gz
+
+publish-dry-run:
+  stage: publish
+  extends: .python-base
+  script:
+    - pip install twine==5.1.1
+    - ls -la dist || true
+    - twine check dist/*.tar.gz
+  needs:
+    - build-sdist
+
+# Pull in security scanning templates so the Orbit knowledge graph
+# picks up Vulnerability / Finding / SecurityScan entities from
+# kg-fixtures in addition to security-fixtures.
+include:
+  - template: 'Security/SAST.gitlab-ci.yml'
+  - template: 'Security/Secret-Detection.gitlab-ci.yml'

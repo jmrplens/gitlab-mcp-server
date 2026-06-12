@@ -5,18 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"reflect"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestStatus_Success_ExpectedOutput verifies that [Status] decodes the Orbit
@@ -164,8 +160,8 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		if string(got["query"]) != `{"query_type":"traversal"}` {
-			t.Fatalf("query body = %s, want traversal query", got["query"])
+		if string(got["query"]) != `{"node":{"entity":"Project","id":"p","node_ids":[1]},"query_type":"traversal"}` {
+			t.Fatalf("query body = %s, want traversal query with node_ids", got["query"])
 		}
 		if string(got["response_format"]) != `"raw"` {
 			t.Fatalf("response_format = %s, want raw", got["response_format"])
@@ -179,7 +175,10 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 	}))
 
 	out, err := Query(context.Background(), client, QueryInput{
-		Query:               map[string]any{"query_type": "traversal"},
+		Query: map[string]any{
+			"query_type": "traversal",
+			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		},
 		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "raw"},
 	})
 	if err != nil {
@@ -214,7 +213,10 @@ func TestQuery_LLMResponseFormat_UsesRawResponse(t *testing.T) {
 	}))
 
 	out, err := Query(context.Background(), client, QueryInput{
-		Query:               map[string]any{"query_type": "traversal"},
+		Query: map[string]any{
+			"query_type": "traversal",
+			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		},
 		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
 	})
 	if err != nil {
@@ -237,7 +239,10 @@ func TestQuery_LLMResponseFormat_RawError(t *testing.T) {
 	}))
 
 	_, err := Query(context.Background(), client, QueryInput{
-		Query:               map[string]any{"query_type": "traversal"},
+		Query: map[string]any{
+			"query_type": "traversal",
+			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+		},
 		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
 	})
 	if err == nil {
@@ -255,13 +260,23 @@ func TestQueryType_NonString_ReturnsEmpty(t *testing.T) {
 	}
 }
 
-// TestResponseFormatName_NilDefaultsToRaw verifies that responseFormatName treats a nil format as raw.
-//
-// The test covers the default branch used by Orbit handlers when the GitLab client option omits an
-// explicit response format. This preserves the public raw-format default expected by the tool schema.
-func TestResponseFormatName_NilDefaultsToRaw(t *testing.T) {
-	if got := responseFormatName(nil); got != string(gl.OrbitResponseFormatRaw) {
-		t.Fatalf("responseFormatName(nil) = %q, want raw", got)
+// TestResponseFormatName_NilReturnsEmpty verifies that responseFormatName returns
+// an empty string for a nil format pointer, signaling "use the API server-side
+// default" (which differs per endpoint: "json" for status/schema/tools,
+// "raw" for dsl/query). The corresponding [responseFormat] helper also
+// returns (nil, nil) for empty input so the SDK URL builder omits the
+// response_format parameter.
+func TestResponseFormatName_NilReturnsEmpty(t *testing.T) {
+	if got := responseFormatName(nil); got != "" {
+		t.Fatalf("responseFormatName(nil) = %q, want empty", got)
+	}
+	empty := gl.OrbitResponseFormatValue("")
+	if got := responseFormatName(&empty); got != "" {
+		t.Fatalf("responseFormatName(&\"\") = %q, want empty", got)
+	}
+	llm := gl.OrbitResponseFormatLLM
+	if got := responseFormatName(&llm); got != "llm" {
+		t.Fatalf("responseFormatName(&llm) = %q, want llm", got)
 	}
 }
 
@@ -340,7 +355,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				_, err := Status(context.Background(), client, StatusInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"}})
 				return err
 			},
-			want: "use raw or llm",
+			want: "use raw, llm, or json",
 		},
 		{
 			name: "empty query",
@@ -353,7 +368,19 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 		{
 			name: "unmarshalable query",
 			call: func() error {
-				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{"bad": func() {}}})
+				// A func value cannot be JSON-encoded. The query passes
+				// structural validation (it has query_type and node_ids) but
+				// fails the final json.Marshal step. This protects callers
+				// from passing unserializable values in the query map.
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
+					"query_type": "traversal",
+					"node": map[string]any{
+						"id":       "p",
+						"entity":   "Project",
+						"node_ids": []int{1},
+						"bad":      func() {},
+					},
+				}})
 				return err
 			},
 			want: "JSON object",
@@ -364,7 +391,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				_, err := Schema(context.Background(), client, SchemaInput{Format: "xml"})
 				return err
 			},
-			want: "use raw or llm",
+			want: "use raw, llm, or json",
 		},
 		{
 			name: "conflicting schema formats",
@@ -378,12 +405,19 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 			name: "invalid query response format",
 			call: func() error {
 				_, err := Query(context.Background(), client, QueryInput{
-					Query:               map[string]any{"query_type": "traversal"},
+					Query: map[string]any{
+						"query_type": "traversal",
+						"node": map[string]any{
+							"id":       "p",
+							"entity":   "Project",
+							"node_ids": []int{1},
+						},
+					},
 					ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"},
 				})
 				return err
 			},
-			want: "use raw or llm",
+			want: "use raw, llm, or json",
 		},
 		{
 			name: "invalid dsl response format",
@@ -391,7 +425,70 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 				_, err := DSL(context.Background(), client, DSLInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"}})
 				return err
 			},
-			want: "use raw or llm",
+			want: "use raw, llm, or json",
+		},
+		{
+			name: "missing query_type",
+			call: func() error {
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{}})
+				return err
+			},
+			want: "query_type is required",
+		},
+		{
+			name: "unknown query_type",
+			call: func() error {
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{"query_type": "search"}})
+				return err
+			},
+			want: "must be one of: traversal, aggregation, neighbors, path_finding",
+		},
+		{
+			name: "traversal without node_ids or filters",
+			call: func() error {
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
+					"query_type": "traversal",
+					"node":       map[string]any{"id": "p", "entity": "Project", "columns": []string{"id"}},
+				}})
+				return err
+			},
+			want: "require at least one node",
+		},
+		{
+			name: "traversal with id_range is also scoped",
+			call: func() error {
+				// id_range counts as a valid scope per the Orbit query
+				// language reference. This subtest uses its own client that
+				// returns 500 on every call so the test can confirm the
+				// request reached the wire (and thus passed client-side
+				// validation) without triggering the shared fixture's
+				// "handler should not be called" assertion.
+				allowClient := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(http.StatusInternalServerError)
+				}))
+				_, err := Query(context.Background(), allowClient, QueryInput{Query: map[string]any{
+					"query_type": "traversal",
+					"node": map[string]any{
+						"id":       "p",
+						"entity":   "Project",
+						"id_range": map[string]any{"start": 1, "end": 100},
+					},
+				}})
+				return err
+			},
+			want: "internal server error", // httptest handler returns 500
+		},
+		{
+			name: "path_finding with fewer than two nodes",
+			call: func() error {
+				_, err := Query(context.Background(), client, QueryInput{Query: map[string]any{
+					"query_type": "path_finding",
+					"nodes":      []any{map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}}},
+					"path":       map[string]any{"type": "shortest", "from": "p", "to": "p", "max_depth": 1},
+				}})
+				return err
+			},
+			want: "at least two top-level node",
 		},
 	}
 
@@ -462,7 +559,10 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 			path:   "/api/v4/orbit/query",
 			status: http.StatusForbidden,
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Query(ctx, client, QueryInput{Query: map[string]any{"query_type": "traversal"}})
+				_, err := Query(ctx, client, QueryInput{Query: map[string]any{
+					"query_type": "traversal",
+					"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+				}})
 				return err
 			},
 			want: "Knowledge Graph enabled",
@@ -482,7 +582,10 @@ func TestOrbit_HTTPErrorHints_ReturnExpectedGuidance(t *testing.T) {
 			path:   "/api/v4/orbit/query",
 			status: http.StatusTooManyRequests,
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Query(ctx, client, QueryInput{Query: map[string]any{"query_type": "traversal"}})
+				_, err := Query(ctx, client, QueryInput{Query: map[string]any{
+					"query_type": "traversal",
+					"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+				}})
 				return err
 			},
 			want: "rate-limited",
@@ -543,7 +646,10 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 		{name: "tools", call: func() error { _, err := Tools(ctx, client, ToolsInput{}); return err }},
 		{name: "dsl", call: func() error { _, err := DSL(ctx, client, DSLInput{}); return err }},
 		{name: "query", call: func() error {
-			_, err := Query(ctx, client, QueryInput{Query: map[string]any{"query_type": "traversal"}})
+			_, err := Query(ctx, client, QueryInput{Query: map[string]any{
+				"query_type": "traversal",
+				"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
+			}})
 			return err
 		}},
 		{name: "graph status", call: func() error {
@@ -556,384 +662,6 @@ func TestOrbitHandlers_ContextCancellation_ReturnsError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.call(); err == nil {
 				t.Fatal("handler error = nil, want context cancellation error")
-			}
-		})
-	}
-}
-
-// TestOrbit_ActionSpecs_Metadata verifies that [ActionSpecs] returns canonical
-// individual Orbit metadata with correct owner, gating, and tool names.
-//
-// The test asserts that all expected tool names are present and that the gating fields are set for GitLab.com premium.
-func TestOrbit_ActionSpecs_Metadata(t *testing.T) {
-	client, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "test-token", false)
-	if err != nil {
-		t.Fatalf("NewClientWithToken() error: %v", err)
-	}
-	specs := ActionSpecs(client)
-	names := make([]string, 0, len(specs))
-	for _, spec := range specs {
-		if spec.OwnerPackage != "orbit" {
-			t.Fatalf("OwnerPackage for %s = %q, want orbit", spec.Name, spec.OwnerPackage)
-		}
-		if !spec.GitLabDotComOnly || spec.Edition != "premium" {
-			t.Fatalf("spec %s gating = dotcom:%t edition:%q, want GitLab.com premium", spec.Name, spec.GitLabDotComOnly, spec.Edition)
-		}
-		names = append(names, spec.IndividualTool.Name)
-	}
-	for _, want := range []string{"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_dsl", "gitlab_orbit_query", "gitlab_orbit_graph_status"} {
-		if !containsTool(names, want) {
-			t.Fatalf("ActionSpecs() missing %s in %v", want, names)
-		}
-	}
-}
-
-// TestOrbit_RegisterMeta_RegistersMetaTool verifies that the consolidated
-// gitlab_orbit meta-tool is registered with the MCP server.
-//
-// The test registers the meta-tool and asserts that it appears in the tool list.
-func TestOrbit_RegisterMeta_RegistersMetaTool(t *testing.T) {
-	client, err := gitlabclient.NewClientWithToken("https://gitlab.example.com", "test-token", false)
-	if err != nil {
-		t.Fatalf("NewClientWithToken() error: %v", err)
-	}
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	registerOrbitMetaForTest(t, server, client)
-	if names := registeredToolNames(t, server); !containsTool(names, "gitlab_orbit") {
-		t.Fatalf("gitlab_orbit meta registration missing gitlab_orbit in %v", names)
-	}
-}
-
-// TestOrbit_RegisterMeta_UsesActionSpecs verifies that gitlab_orbit meta routes
-// are projected from the canonical GitLab.com-only ActionSpec definitions.
-//
-// The test compares the registered meta routes to the ActionSpecs projection for schema and destructiveness.
-func TestOrbit_RegisterMeta_UsesActionSpecs(t *testing.T) {
-	client, err := gitlabclient.NewClientWithToken("https://gitlab.com", "test-token", false)
-	if err != nil {
-		t.Fatalf("NewClientWithToken() error: %v", err)
-	}
-	got := orbitActionSpecRoutes(t, client)
-	want, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
-	if err != nil {
-		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
-	}
-
-	if len(got) != len(want) {
-		t.Fatalf("registered orbit route count = %d, want %d", len(got), len(want))
-	}
-	for actionName, wantRoute := range want {
-		t.Run(actionName, func(t *testing.T) {
-			gotRoute, ok := got[actionName]
-			if !ok {
-				t.Fatalf("registered meta routes missing %q", actionName)
-			}
-			if gotRoute.Destructive != wantRoute.Destructive {
-				t.Fatalf("destructive = %t, want %t", gotRoute.Destructive, wantRoute.Destructive)
-			}
-			if !reflect.DeepEqual(gotRoute.InputSchema, wantRoute.InputSchema) {
-				t.Fatal("input schema differs from ActionSpec projection")
-			}
-			if !reflect.DeepEqual(gotRoute.OutputSchema, wantRoute.OutputSchema) {
-				t.Fatal("output schema differs from ActionSpec projection")
-			}
-		})
-	}
-}
-
-// orbitActionSpecRoutes returns the ActionMap for all canonical Orbit ActionSpecs for use in meta-tool registration tests.
-// It fails the test if ActionSpecsToMapWithError returns an error.
-func orbitActionSpecRoutes(t *testing.T, client *gitlabclient.Client) toolutil.ActionMap {
-	t.Helper()
-	routes, err := toolutil.ActionSpecsToMapWithError(ActionSpecs(client))
-	if err != nil {
-		t.Fatalf("ActionSpecsToMapWithError() error = %v", err)
-	}
-	return routes
-}
-
-// TestOrbit_RegisterMeta_CallThroughMCP verifies that the consolidated Orbit
-// meta-tool dispatches an MCP status call through to the GitLab API.
-//
-// The test creates a meta-tool session and calls the status action, asserting a non-error result.
-func TestOrbit_RegisterMeta_CallThroughMCP(t *testing.T) {
-	session := newOrbitMetaSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.AssertRequestMethod(t, r, http.MethodGet)
-		testutil.AssertRequestPath(t, r, "/api/v4/orbit/status")
-		testutil.RespondJSON(w, http.StatusOK, `{"status":"healthy","version":"0.5.0"}`)
-	}))
-
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-		Name:      "gitlab_orbit",
-		Arguments: map[string]any{"action": "status", "params": map[string]any{}},
-	})
-	if err != nil {
-		t.Fatalf("CallTool() error: %v", err)
-	}
-	if result.IsError {
-		t.Fatal("gitlab_orbit status returned error result")
-	}
-}
-
-// TestOrbit_ActionSpecs_CallAllRoutes verifies that each individual Orbit
-// route can be invoked through the canonical action specs.
-//
-// The test iterates all canonical tool routes, invokes each handler, and asserts a non-nil result.
-func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
-	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/api/v4/orbit/status":
-			testutil.AssertRequestMethod(t, r, http.MethodGet)
-			testutil.RespondJSON(w, http.StatusOK, `{"status":"healthy","version":"0.5.0"}`)
-		case "/api/v4/orbit/schema":
-			testutil.AssertRequestMethod(t, r, http.MethodGet)
-			testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0"}`)
-		case "/api/v4/orbit/tools":
-			testutil.AssertRequestMethod(t, r, http.MethodGet)
-			testutil.RespondJSON(w, http.StatusOK, `[{"name":"query_graph","description":"Execute graph queries","parameters":{"type":"object"}}]`)
-		case "/api/v4/orbit/schema/dsl":
-			testutil.AssertRequestMethod(t, r, http.MethodGet)
-			testutil.RespondJSON(w, http.StatusOK, `{"type":"object","properties":{"query_type":{"type":"string"}}}`)
-		case "/api/v4/orbit/query":
-			testutil.AssertRequestMethod(t, r, http.MethodPost)
-			testutil.RespondJSON(w, http.StatusOK, `{"result":[],"query_type":"traversal","row_count":0}`)
-		case "/api/v4/orbit/graph_status":
-			testutil.AssertRequestMethod(t, r, http.MethodGet)
-			testutil.RespondJSON(w, http.StatusOK, `{"projects":{"indexed":1,"total_known":1},"indexing":{"state":"indexed"}}`)
-		default:
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-	}))
-
-	tests := []struct {
-		name string
-		args map[string]any
-	}{
-		{name: "gitlab_orbit_status", args: map[string]any{}},
-		{name: "gitlab_orbit_schema", args: map[string]any{}},
-		{name: "gitlab_orbit_tools", args: map[string]any{}},
-		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{"query_type": "traversal"}}},
-		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := routes[tt.name].Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler() error: %v", err)
-			}
-			if result == nil {
-				t.Fatalf("Route.Handler() returned nil for %s", tt.name)
-			}
-		})
-	}
-}
-
-// TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult verifies that
-// Orbit 404 responses become informational MCP errors with setup guidance.
-//
-// The test mocks 404 responses for all routes and asserts that the markdown result is an informational error with guidance text.
-func TestOrbit_ActionSpecs_NotFoundReturnsInformationalResult(t *testing.T) {
-	routes := newOrbitSpecsByTool(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
-	}))
-
-	tests := []struct {
-		name string
-		args map[string]any
-	}{
-		{name: "gitlab_orbit_status", args: map[string]any{}},
-		{name: "gitlab_orbit_schema", args: map[string]any{}},
-		{name: "gitlab_orbit_tools", args: map[string]any{}},
-		{name: "gitlab_orbit_dsl", args: map[string]any{}},
-		{name: "gitlab_orbit_query", args: map[string]any{"query": map[string]any{"query_type": "traversal"}}},
-		{name: "gitlab_orbit_graph_status", args: map[string]any{"full_path": "gitlab-org/gitlab"}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := routes[tt.name].Handler(t.Context(), tt.args)
-			if err != nil {
-				t.Fatalf("Route.Handler() error = %v, want nil", err)
-			}
-			callResult := toolutil.MarkdownForResult(result)
-			if callResult == nil || !callResult.IsError {
-				t.Fatalf("MarkdownForResult() = %#v, want informational error result", callResult)
-			}
-			if len(callResult.Content) == 0 {
-				t.Fatal("MarkdownForResult() content is empty, want Orbit not-found guidance")
-			}
-			textContent, ok := callResult.Content[0].(*mcp.TextContent)
-			if !ok {
-				t.Fatalf("content type = %T, want *mcp.TextContent", callResult.Content[0])
-			}
-			if !strings.Contains(textContent.Text, "Not Found") || !strings.Contains(textContent.Text, "GitLab Orbit") {
-				t.Fatalf("content = %q, want Orbit not-found guidance", textContent.Text)
-			}
-		})
-	}
-}
-
-// TestFormatQueryMarkdown_IncludesPrettyJSON verifies that [FormatQueryMarkdown]
-// renders structured result data inside a JSON code fence.
-//
-// The test asserts that the markdown output includes a JSON code block and the expected data.
-func TestFormatQueryMarkdown_IncludesPrettyJSON(t *testing.T) {
-	md := FormatQueryMarkdown(QueryOutput{
-		QueryType: "traversal",
-		RowCount:  1,
-		Result:    []any{map[string]any{"name": "alpha"}},
-	})
-	if !strings.Contains(md, "```json") || !strings.Contains(md, "alpha") {
-		t.Fatalf("FormatQueryMarkdown() = %q, want JSON result", md)
-	}
-}
-
-// TestOrbitMarkdownFormatters_IncludeExpectedSections verifies that each Orbit
-// markdown formatter emits the expected headings and key result sections.
-//
-// The test runs table-driven subtests for all formatters and asserts that the output contains the expected headings and content.
-func TestOrbitMarkdownFormatters_IncludeExpectedSections(t *testing.T) {
-	tests := []struct {
-		name string
-		md   string
-		want []string
-	}{
-		{
-			name: "status structured",
-			md: FormatStatusMarkdown(StatusOutput{
-				Status:  "healthy",
-				Version: "0.5.0",
-				Components: []StatusComponent{
-					{Name: "clickhouse", Status: "healthy", Replicas: &StatusReplicas{Ready: 3, Desired: 3}},
-				},
-			}),
-			want: []string{"Orbit Status", "clickhouse", "3/3"},
-		},
-		{
-			name: "status formatted",
-			md:   FormatStatusMarkdown(StatusOutput{FormattedText: "status: healthy"}),
-			want: []string{"```text", "status: healthy"},
-		},
-		{
-			name: "schema",
-			md: FormatSchemaMarkdown(SchemaOutput{
-				SchemaVersion: "1.0",
-				Domains:       []SchemaDomain{{Name: "core", Description: "Core entities", NodeNames: []string{"User"}}},
-				Nodes:         []any{map[string]any{"name": "User"}},
-				Edges:         []SchemaEdge{{Name: "AUTHORED"}},
-			}),
-			want: []string{"Orbit Schema", "Schema version", "core"},
-		},
-		{
-			name: "tools",
-			md:   FormatToolsMarkdown(ToolsOutput{Tools: []ToolDefinition{{Name: "query_graph", Description: "Execute graph queries"}}}),
-			want: []string{"Orbit Tools", "query_graph"},
-		},
-		{
-			name: "dsl",
-			md:   FormatDSLMarkdown(DSLOutput{ResponseFormat: "llm", Content: "@dsl\nquery_type: traversal"}),
-			want: []string{"Orbit DSL", "```text", "query_type: traversal", "Use gitlab_orbit query"},
-		},
-		{
-			name: "query formatted",
-			md:   FormatQueryMarkdown(QueryOutput{FormattedText: "@header\nProject(name: gitlab)"}),
-			want: []string{"Orbit Query Result", "```text", "@header", "Use gitlab_orbit graph_status"},
-		},
-		{
-			name: "graph status structured",
-			md: FormatGraphStatusMarkdown(GraphStatusOutput{
-				Projects: &GraphStatusProjects{Indexed: 2, TotalKnown: 3},
-				Domains:  []GraphStatusDomain{{Name: "SDLC", Items: []GraphStatusDomainItem{{Name: "Issue", Count: 4}}}},
-				Indexing: &GraphStatusIndexing{State: "indexed", LastDurationMs: 5},
-			}),
-			want: []string{"Orbit Graph Status", "Indexed projects", "SDLC"},
-		},
-		{
-			name: "graph status formatted",
-			md:   FormatGraphStatusMarkdown(GraphStatusOutput{FormattedText: "indexing: indexed"}),
-			want: []string{"```text", "indexing: indexed"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			for _, want := range tt.want {
-				if !strings.Contains(tt.md, want) {
-					t.Fatalf("markdown = %q, want substring %q", tt.md, want)
-				}
-			}
-			if tt.name == "query formatted" && strings.Contains(tt.md, "Query type") {
-				t.Fatalf("markdown = %q, want formatted text without structured query fields", tt.md)
-			}
-		})
-	}
-}
-
-// TestOrbitMarkdownFormatters_UseSafeFences verifies that formatter output uses
-// longer fences when embedded query text contains triple backticks.
-//
-// The test asserts that the output uses four-backtick fences for embedded triple-backtick content.
-func TestOrbitMarkdownFormatters_UseSafeFences(t *testing.T) {
-	md := FormatQueryMarkdown(QueryOutput{
-		QueryType:       "traversal",
-		RawQueryStrings: []string{"MATCH (n) RETURN ```"},
-		Result:          map[string]any{"text": "contains ``` fenced text"},
-	})
-
-	if !strings.Contains(md, "````text\nMATCH (n) RETURN ```\n````") {
-		t.Fatalf("FormatQueryMarkdown() = %q, want four-backtick text fence", md)
-	}
-	if !strings.Contains(md, "````json\n") || !strings.Contains(md, "contains ``` fenced text") {
-		t.Fatalf("FormatQueryMarkdown() = %q, want four-backtick JSON fence", md)
-	}
-}
-
-// TestOrbitMarkdownFormatters_AnonymousFence verifies that [fencedBlock] produces
-// fenced code blocks without a language marker when requested.
-func TestOrbitMarkdownFormatters_AnonymousFence(t *testing.T) {
-	got := fencedBlock("", "plain text")
-	if got != "```\nplain text\n```\n" {
-		t.Fatalf("fencedBlock() = %q, want anonymous fence", got)
-	}
-}
-
-// TestOrbitMarkdownFormatters_EscapeTableCells verifies that markdown table
-// cells escape pipes and normalize newlines from Orbit data.
-//
-// The test runs table-driven subtests for schema, tools, and graph status tables and asserts that pipes are escaped and newlines normalized.
-func TestOrbitMarkdownFormatters_EscapeTableCells(t *testing.T) {
-	tests := []struct {
-		name string
-		md   string
-		want string
-	}{
-		{
-			name: "schema",
-			md: FormatSchemaMarkdown(SchemaOutput{Domains: []SchemaDomain{{
-				Name:        "core|domain",
-				Description: "Core\nentities",
-				NodeNames:   []string{"User|Account"},
-			}}}),
-			want: "core&#124;domain | Core entities | User&#124;Account",
-		},
-		{
-			name: "tools",
-			md:   FormatToolsMarkdown(ToolsOutput{Tools: []ToolDefinition{{Name: "query`|graph", Description: "Run\nqueries"}}}),
-			want: "`query&#124;graph` | Run queries",
-		},
-		{
-			name: "graph status",
-			md:   FormatGraphStatusMarkdown(GraphStatusOutput{Domains: []GraphStatusDomain{{Name: "SDLC|core", Items: []GraphStatusDomainItem{{Name: "Issue|Bug", Count: 4}}}}}),
-			want: "SDLC&#124;core | Issue&#124;Bug: 4",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if !strings.Contains(tt.md, tt.want) {
-				t.Fatalf("markdown = %q, want escaped substring %q", tt.md, tt.want)
 			}
 		})
 	}
@@ -1111,90 +839,88 @@ func TestOrbitConverters_SkipNilNestedEntriesAndPreserveOptionalFields(t *testin
 	}
 }
 
-// registeredToolNames returns the list of tool names registered in the MCP server for test assertions.
-// It connects a test client and server, lists tools, and returns their names.
-func registeredToolNames(t *testing.T, server *mcp.Server) []string {
-	t.Helper()
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() {
-		session.Close()
-		_ = serverSession.Wait()
+// TestStatus_WithResponseFormat_ForwardsValue verifies that [Status]
+// forwards a non-empty `response_format` as the GitLab client option
+// when the caller passes an explicit value. The existing Status tests
+// only exercise the empty-format path; this test covers the
+// `if hasFormat` branch in [Status] that sets
+// `opts.ResponseFormat = format`.
+func TestStatus_WithResponseFormat_ForwardsValue(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/status")
+		testutil.AssertQueryParam(t, r, "response_format", "llm")
+		testutil.RespondJSON(w, http.StatusOK, `{"status":"healthy","version":"0.5.0"}`)
+	}))
+
+	out, err := Status(context.Background(), client, StatusInput{
+		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
 	})
-	result, err := session.ListTools(ctx, nil)
 	if err != nil {
-		t.Fatalf("ListTools() error: %v", err)
+		t.Fatalf("Status() error: %v", err)
 	}
-	names := make([]string, 0, len(result.Tools))
-	for _, tool := range result.Tools {
-		names = append(names, tool.Name)
+	if out.Status != "healthy" || out.Version != "0.5.0" {
+		t.Fatalf("Status() = %+v, want healthy 0.5.0", out)
 	}
-	return names
 }
 
-// newOrbitMetaSession creates a new MCP client session with the Orbit meta-tool registered for testing.
-// It uses the provided HTTP handler for all Orbit API calls.
-func newOrbitMetaSession(t *testing.T, handler http.Handler) *mcp.ClientSession {
-	t.Helper()
-	return newOrbitMCPSession(t, handler, func(server *mcp.Server, client *gitlabclient.Client) {
-		registerOrbitMetaForTest(t, server, client)
-	})
-}
-
-// newOrbitSpecsByTool returns a map of tool name to ActionRoute for all canonical Orbit ActionSpecs.
-// It is used to test route invocation and error handling for all tools.
-func newOrbitSpecsByTool(t *testing.T, handler http.Handler) map[string]toolutil.ActionRoute {
-	t.Helper()
-	client := testutil.NewTestClient(t, handler)
-	routes := make(map[string]toolutil.ActionRoute)
-	for _, spec := range ActionSpecs(client) {
-		routes[spec.IndividualTool.Name] = spec.Route
+// TestSchema_StatusError_WrapsOrbitHint verifies that [Schema] routes
+// HTTP errors through [wrapOrbitErr] so callers see the same actionable
+// hints as the other Orbit handlers. This test covers the
+// `if err != nil` branch in [Schema] that returns the wrapped error.
+func TestSchema_StatusError_WrapsOrbitHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"Not Found"}`)
+	}))
+	_, err := Schema(context.Background(), client, SchemaInput{})
+	if err == nil {
+		t.Fatal("Schema() error = nil, want Not Found error")
 	}
-	return routes
-}
-
-// registerOrbitMetaForTest registers the gitlab_orbit meta-tool with the MCP server for use in meta-tool tests.
-// It uses the canonical ActionSpecs and the analytics icon.
-func registerOrbitMetaForTest(t *testing.T, server *mcp.Server, client *gitlabclient.Client) {
-	t.Helper()
-	toolutil.AddReadOnlyMetaTool(server, "gitlab_orbit", "Query GitLab Orbit context.", orbitActionSpecRoutes(t, client), toolutil.IconAnalytics, toolutil.MarkdownForResult)
-}
-
-// newOrbitMCPSession creates a new MCP client session and registers the Orbit meta-tool or other tools as needed for integration tests.
-// It sets up in-memory transports and cleans up all resources after the test.
-func newOrbitMCPSession(t *testing.T, handler http.Handler, registerFn func(*mcp.Server, *gitlabclient.Client)) *mcp.ClientSession {
-	t.Helper()
-	client := testutil.NewTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
-	registerFn(server, client)
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
+	if !strings.Contains(err.Error(), "knowledge_graph") {
+		t.Fatalf("Schema() error = %q, want knowledge_graph hint", err)
 	}
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() {
-		session.Close()
-		_ = serverSession.Wait()
-	})
-	return session
 }
 
-// containsTool reports whether the given tool name is present in the list of names.
-func containsTool(names []string, want string) bool {
-	return slices.Contains(names, want)
+// TestSchema_ConflictingFormatAndResponseFormat_DetectsMismatch
+// verifies that [Schema] surfaces the "must match" error when the
+// caller sets both `format` and `response_format` to different values
+// (case-insensitive). This covers the `!strings.EqualFold(format,
+// responseFormatAlias)` branch in [schemaResponseFormat].
+func TestSchema_ConflictingFormatAndResponseFormat_DetectsMismatch(t *testing.T) {
+	_, err := Schema(context.Background(), nil, SchemaInput{Format: "raw", ResponseFormat: "LLM"})
+	if err == nil {
+		t.Fatal("Schema() error = nil, want format/response_format mismatch error")
+	}
+	if !strings.Contains(err.Error(), "must match") {
+		t.Fatalf("Schema() error = %q, want must-match message", err)
+	}
+}
+
+// TestSchema_ResponseFormatAliasEmptyString verifies that an empty
+// `response_format` alias is treated the same as an empty `format`:
+// the SDK options carry no format so the API applies its server-side
+// default.
+func TestSchema_ResponseFormatAliasEmptyString(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
+		if got := r.URL.Query().Get("format"); got != "" {
+			t.Fatalf("format query parameter = %q, want empty (server default)", got)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0"}`)
+	}))
+
+	if _, err := Schema(context.Background(), client, SchemaInput{ResponseFormat: "   "}); err != nil {
+		t.Fatalf("Schema() error: %v", err)
+	}
+}
+
+// TestGraphStatusOptions_EmptyFullPathIsTreatedAsNoScope verifies that
+// a whitespace-only `full_path` is normalized to empty and therefore
+// does not count as a scope. With no other scope set,
+// [graphStatusOptions] must surface the "set exactly one" error
+// rather than silently sending an empty full_path query parameter.
+func TestGraphStatusOptions_EmptyFullPathIsTreatedAsNoScope(t *testing.T) {
+	if _, err := graphStatusOptions(GraphStatusInput{FullPath: "   "}); err == nil {
+		t.Fatal("graphStatusOptions() error = nil, want set-exactly-one error")
+	}
 }

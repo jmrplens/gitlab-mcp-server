@@ -40,6 +40,48 @@ Self-managed GitLab instances do not register Orbit tools, even when the Enterpr
 4. (Optional) Call `action: "dsl"` to retrieve the Orbit query DSL schema or LLM grammar.
 5. Pass a JSON query object to `action: "query"` with `response_format` set to `raw` or `llm`.
 
+### Query DSL variants
+
+The `query` parameter on the `query` action is a JSON object whose `query_type` selects one of four variants. The diagram below summarizes the smallest accepted shape for each variant. A Mermaid `graph TD` is the right tool because the four variants share a single `query_type` discriminator and only diverge on the sibling keys — a tree makes the discriminants and required fields legible at a glance.
+
+```mermaid
+graph TD
+    Q["QueryInput<br/>(gitlab_orbit_query)"] --> QT{"query_type"}
+    QT -->|"traversal"| TR["node OR nodes<br/>+ entity, node_ids/filters/id_range<br/>+ relationships?, columns?, order_by?, limit?, cursor?"]
+    QT -->|"aggregation"| AG["nodes[]<br/>+ aggregations[] (function, target, alias)<br/>+ group_by?, aggregation_sort?"]
+    QT -->|"neighbors"| NB["node (bounded)<br/>+ neighbors.node<br/>+ direction?, rel_types?"]
+    QT -->|"path_finding"| PF["nodes[] (>=2, bounded)<br/>+ path {type, from, to, max_depth: 1..3, rel_types?}"]
+```
+
+### Discover → query workflow
+
+The recommended pattern is to discover the live schema first (`schema`, then optionally `dsl`), then execute a typed query through `query`. A `sequenceDiagram` is the right tool because the steps involve four distinct actors (AI client, MCP server, GitLab.com, the Orbit indexer) and the response boundaries matter — the LLM should not assume the schema returned by `dsl` is stable.
+
+```mermaid
+sequenceDiagram
+    participant LLM as AI Client
+    participant MCP as MCP Server
+    participant GL as GitLab.com API
+    participant IDX as Orbit Indexer
+
+    LLM->>MCP: gitlab_orbit_schema (response_format=llm)
+    MCP->>GL: GET /api/v4/orbit/schema
+    GL-->>MCP: ontology (nodes, edges, versions)
+    MCP-->>LLM: schema text
+
+    LLM->>MCP: gitlab_orbit_dsl (response_format=llm)
+    MCP->>GL: GET /api/v4/orbit/schema/dsl
+    GL-->>MCP: query DSL / LLM grammar
+    MCP-->>LLM: DSL text
+
+    LLM->>MCP: gitlab_orbit_query (query={query_type, ...})
+    MCP->>GL: POST /api/v4/orbit/query
+    GL->>IDX: resolve node_ids / filters
+    IDX-->>GL: indexed rows
+    GL-->>MCP: rows / aggregations / paths
+    MCP-->>LLM: result + markdown
+```
+
 ### Example: Check Orbit status
 
 ```json
@@ -100,8 +142,15 @@ Self-managed GitLab instances do not register Orbit tools, even when the Enterpr
 		"action": "query",
 		"params": {
 			"query": {
-				"type": "Project",
-				"filters": { "namespace": "gitlab-org" }
+				"query_type": "traversal",
+				"node": {
+					"id": "p",
+					"entity": "Project",
+					"filters": {
+						"full_path": { "op": "starts_with", "value": "gitlab-org/" }
+					},
+					"columns": ["id", "full_path"]
+				}
 			},
 			"response_format": "llm"
 		}
@@ -176,3 +225,21 @@ In meta-tool mode, action parameter schemas are available through MCP resources:
 | `gitlab://tools/gitlab_orbit.graph_status` | Parameters for indexing status checks   |
 
 These resources remain available with `CAPABILITY_SURFACE=full` or `minimal`, regardless of `META_PARAM_SCHEMA` mode.
+
+## Run the live tests
+
+Orbit ships with a build-tag-gated live test suite at `test/e2e/orbit/live_test.go` that exercises each handler against the real `https://gitlab.com/api/v4/orbit/*` endpoints. The suite has four entry points and 41 subtests covering all six handlers, the canonical Query DSL shapes, fixture-based smoke tests, and the full DSL feature surface. The orchestrator `make test-e2e-gitlab-com` provisions `kg-fixtures` and `security-fixtures` projects in your namespace (idempotent), waits for the Orbit indexer to catch up, then runs the tests:
+
+```bash
+# Add a Personal Access Token (api scope) to .env first
+echo 'GITLAB_COM_TOKEN=glpat-...' >> .env
+
+# Default namespace is plens1; override with ORBIT_FIXTURES_NAMESPACE
+make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
+
+# When fixtures are already provisioned, run only the tests
+GITLAB_COM_TOKEN=glpat-... \
+  go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/
+```
+
+See [Orbit live test fixtures](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/orbit-fixtures.md) for the fixture layout, the `scripts/setup-orbit-fixtures.sh` reproducer, and the indexer caveat (transient `error` state is normal and the tests are informational, not strict equality).

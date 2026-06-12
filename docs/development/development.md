@@ -372,6 +372,26 @@ When adding a normal GitLab operation, define the route once inside the owning `
 
 See [Tool Surfaces And Canonical Action Core](tool-surfaces-and-action-core.md) for the ownership rules across individual tools, meta-tools, dynamic mode, and the canonical action catalog.
 
+### Orbit live-test fixtures
+
+The `orbitlive` build-tagged live tests in `test/e2e/orbit/live_test.go` exercise the real `https://gitlab.com/api/v4/orbit/*` endpoints. They expect two projects in the configured namespace (`kg-fixtures` and `security-fixtures`) with a specific shape, plus optional mirror data. The reproduction script, the expected fixture layout, and the indexer caveat (transient `error` state) are documented in [Orbit Live Test Fixtures](orbit-fixtures.md).
+
+To run the full flow against GitLab.com — token validation, idempotent fixture provisioning, indexer catch-up wait, then the four live test suites (41 subtests) — use the orchestrated target:
+
+```bash
+# Add a Personal Access Token (api scope) to .env first
+echo 'GITLAB_COM_TOKEN=glpat-...' >> .env
+
+# Provision fixtures in your own namespace and run the live tests
+make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
+
+# When fixtures are already provisioned, skip setup and run only the tests
+GITLAB_COM_TOKEN=glpat-... \
+  go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/
+```
+
+`make test-e2e-gitlab-com` chains four sub-targets: `orbit-ensure-token` (validates `GITLAB_COM_TOKEN` is exported), `orbit-setup-fixtures` (runs `scripts/setup-orbit-fixtures.sh`), `orbit-wait-indexer` (polls `/api/v4/orbit/graph_status` until the indexer reports the projects as indexed), and `orbit-run-live-tests` (runs `go test -tags orbitlive ...`). Each sub-target is independently runnable.
+
 ### Example: Adding a tools sub-package
 
 ```go
