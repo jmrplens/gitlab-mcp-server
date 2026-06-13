@@ -2,6 +2,7 @@ packages:
   - .
 
 overrides:
+  esbuild: 0.28.1
   lodash: 4.18.1
   yaml: 2.9.0
   yaml-language-server@1.20.0>yaml: 2.9.0
