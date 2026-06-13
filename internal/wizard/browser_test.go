@@ -127,6 +127,47 @@ func TestOpenBrowser_StartErrorAllPlatforms(t *testing.T) {
 	}
 }
 
+// TestOpenBrowser_DarwinUsesOpen verifies openBrowser invokes the "open"
+// command on macOS without launching a real browser. The test stubs the
+// "open" binary in PATH so the Start() call succeeds against a no-op
+// executable.
+func TestOpenBrowser_DarwinUsesOpen(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin-only open test")
+	}
+
+	binDir := t.TempDir()
+	openPath := filepath.Join(binDir, "open")
+	if err := os.WriteFile(openPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil { //nolint:gosec // Executable fixture is required for PATH lookup.
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+
+	if err := openBrowser("http://127.0.0.1:65535/test"); err != nil {
+		t.Fatalf("openBrowser() error = %v, want nil from stub", err)
+	}
+}
+
+// TestOpenBrowser_DarwinStartError verifies open command startup failures
+// are returned as actionable errors on macOS.
+func TestOpenBrowser_DarwinStartError(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin-only open test")
+	}
+
+	binDir := t.TempDir()
+	// Write a non-executable stub so cmd.Start returns an error.
+	openPath := filepath.Join(binDir, "open")
+	if err := os.WriteFile(openPath, []byte("#!/bin/sh\nexit 0\n"), 0o644); err != nil { //nolint:gosec // non-executable stub is required to trigger start error.
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir)
+
+	if err := openBrowser("http://127.0.0.1:65535/test"); err == nil {
+		t.Fatal("openBrowser() error = nil, want non-executable stub start error")
+	}
+}
+
 // TestOpenBrowser_NonLinux verifies openBrowser uses the platform-specific
 // binary (open on macOS, rundll32 on Windows) without actually launching a
 // real browser. The test stubs the platform binary in PATH so the
