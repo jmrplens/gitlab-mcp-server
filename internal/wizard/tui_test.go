@@ -3,6 +3,7 @@
 package wizard
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -1602,27 +1603,90 @@ func TestUpdate_EscFromOptionsEditingCancelsEdit(t *testing.T) {
 
 // RunTUI tests.
 
-// TestRunTUI_ClosedInputTerminates verifies the entry point of the TUI
-// wizard: with a closed input pipe, Bubble Tea's program loop exits
-// immediately and RunTUI returns. This is the only practical way to
-// exercise RunTUI in unit tests — the real flow needs a TTY. The test
-// uses io.Discard as output and a closed pipe as input so the program
-// cannot try to read from stdin or write to a real terminal.
-func TestRunTUI_ClosedInputTerminates(t *testing.T) {
-	r, w := io.Pipe()
-	_ = w.Close()
+// TestRunTUIWithInput_CtrlCAborstsHappyPath verifies the success path of
+// RunTUIWithInput: when the input pipe delivers a Ctrl+C byte, the model
+// sets aborted=true, Bubble Tea's Program returns nil, and the function
+// falls through to finalizeTUI (which prints "Setup cancelled." and
+// returns nil). This covers the previously-uncovered statement at
+// tui.go:852 ("return finalizeTUI(finalModel, w)").
+//
+// Note: Bubble Tea's Program loop does not exit on a closed/EOF input —
+// it keeps waiting for the next key. The only practical way to drive
+// RunTUI's happy path from a unit test is to feed it a key event the
+// model reacts to with tea.Quit, which Ctrl+C does at every step.
+func TestRunTUIWithInput_CtrlCAborstsHappyPath(t *testing.T) {
+	stubWriteEnvFile(t)
+	// 0x03 is the ASCII control byte for Ctrl+C, which Bubble Tea maps
+	// to the "ctrl+c" key event the model listens for in Update.
+	input := bytes.NewReader([]byte{0x03})
 
+	var output bytes.Buffer
 	done := make(chan error, 1)
 	go func() {
-		done <- RunTUI("1.0.0", io.Discard)
+		done <- RunTUIWithInput("1.0.0", input, &output)
 	}()
 
 	select {
 	case err := <-done:
-		t.Logf("RunTUI returned: %v", err)
+		if err != nil {
+			t.Fatalf("expected nil error from Ctrl+C abort, got %v", err)
+		}
+		if !strings.Contains(output.String(), "Setup cancelled") {
+			t.Errorf("expected 'Setup cancelled' in output, got %q", output.String())
+		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("RunTUI hung — needs a real terminal")
+		t.Fatal("RunTUIWithInput hung")
 	}
+}
 
-	_ = r
+// TestRunTUI_CtrlCViaStdinFn verifies that the public RunTUI entry point
+// reaches RunTUIWithInput through the stdinFn indirection. This covers
+// the previously-uncovered "return RunTUIWithInput(version, stdinFn(), w)"
+// statement in RunTUI. The test swaps stdinFn to return a Ctrl+C reader
+// instead of the real os.Stdin, then restores it.
+func TestRunTUI_CtrlCViaStdinFn(t *testing.T) {
+	stubWriteEnvFile(t)
+	orig := stdinFn
+	stdinFn = func() io.Reader { return bytes.NewReader([]byte{0x03}) }
+	t.Cleanup(func() { stdinFn = orig })
+
+	var output bytes.Buffer
+	done := make(chan error, 1)
+	go func() {
+		done <- RunTUI("1.0.0", &output)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("expected nil error from Ctrl+C abort via RunTUI, got %v", err)
+		}
+		if !strings.Contains(output.String(), "Setup cancelled") {
+			t.Errorf("expected 'Setup cancelled' in output, got %q", output.String())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("RunTUI hung")
+	}
+}
+
+// TestUpdate_DefaultStepReturnsModelNil verifies the default branch of the
+// step switch in Update: when the model is in an unknown step (only
+// reachable through a bug), the message is swallowed and the model is
+// returned unchanged. This locks the defensive "return m, nil" so a
+// future refactor that drops it would be caught.
+func TestUpdate_DefaultStepReturnsModelNil(t *testing.T) {
+	m := newTestModel(t)
+	m.step = tuiStep(99) // unknown step — defensive branch
+
+	result, cmd := m.Update(keyMsg(tea.KeyEnter))
+	final, ok := result.(tuiModel)
+	if !ok {
+		t.Fatalf("expected tuiModel, got %T", result)
+	}
+	if cmd != nil {
+		t.Errorf("expected nil cmd, got %v", cmd)
+	}
+	if final.step != tuiStep(99) {
+		t.Errorf("expected step unchanged, got %d", final.step)
+	}
 }

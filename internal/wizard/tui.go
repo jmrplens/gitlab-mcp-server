@@ -840,11 +840,26 @@ func (m tuiModel) viewClients(width int) string {
 	return tuiActivePanelStyle.Width(width).Render(content.String())
 }
 
+// stdinFn returns the io.Reader that RunTUI uses for Bubble Tea's input.
+// Defaults to os.Stdin. Tests can swap it to inject a custom reader
+// without spinning up a real TTY.
+var stdinFn = func() io.Reader { return os.Stdin }
+
 // RunTUI runs the Bubble Tea interactive setup wizard.
 // It uses the alternate screen buffer to provide a clean full-screen experience.
 func RunTUI(version string, w io.Writer) error {
+	return RunTUIWithInput(version, stdinFn(), w)
+}
+
+// RunTUIWithInput is the test-friendly variant of RunTUI. The production
+// path passes os.Stdin (via stdinFn); tests pass an io.Reader they
+// control. Passing os.Stdin explicitly (instead of letting Bubble Tea
+// open /dev/tty on its own) makes the wizard runnable in environments
+// without a controlling terminal, and lets tests cover the success path
+// of the Program loop without a real TTY.
+func RunTUIWithInput(version string, in io.Reader, w io.Writer) error {
 	model := newTUIModel(version, w)
-	p := tea.NewProgram(model, tea.WithOutput(w))
+	p := tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(w))
 	finalModel, err := p.Run()
 	if err != nil {
 		return fmt.Errorf("TUI error: %w", err)
