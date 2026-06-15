@@ -483,7 +483,7 @@
             <label for="optAutoUpdateRepo">Auto-update repository</label>
             <button type="button" class="help-btn" aria-label="Auto-update repository help" data-tooltip="GitHub owner/repo used for release update checks.">?</button>
           </div>
-          <input type="text" id="optAutoUpdateRepo" value="jmrplens/gitlab-mcp-server">
+          <input type="text" id="optAutoUpdateRepo" placeholder="owner/repo">
         </div>
         <div class="field advanced-field">
           <div class="option-heading">
@@ -686,7 +686,7 @@ try {
   setValue('optExcludeTools', defaults.exclude_tools || '');
   setValue('optUploadMaxFileSize', defaults.upload_max_file_size || '2GB');
   setValue('optAutoUpdateMode', defaults.auto_update_mode || 'true');
-  setValue('optAutoUpdateRepo', defaults.auto_update_repo || 'jmrplens/gitlab-mcp-server');
+  setValue('optAutoUpdateRepo', defaults.auto_update_repo || '');
   setValue('optAutoUpdateTimeout', defaults.auto_update_timeout || '60s');
   setValue('optRateLimitRps', defaults.rate_limit_rps || '0');
   setValue('optRateLimitBurst', defaults.rate_limit_burst || '40');
