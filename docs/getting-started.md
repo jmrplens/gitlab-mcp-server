@@ -75,7 +75,7 @@ The wizard will ask for:
 1. **GitLab URL** — your instance base URL (e.g., `https://gitlab.example.com`)
 2. **Personal Access Token** — a `glpat-...` token with `api` scope
 3. **MCP client** — which AI client(s) to configure (VS Code, Claude Desktop, Cursor, etc.)
-4. *(Web UI and CLI only)* **Advanced options** — tool surface, log level, rate limits, auto-update, etc. The Web UI attaches an inline help tooltip to every advanced option explaining what the setting does and its default.
+4. **Advanced options** — tool surface, log level, rate limits, auto-update, etc. The Web UI attaches an inline help tooltip to every advanced option explaining what the setting does and its default. The CLI asks once whether to configure them. In the TUI, press `Ctrl+O` on the GitLab step to open the advanced options step.
 
 It then writes:
 

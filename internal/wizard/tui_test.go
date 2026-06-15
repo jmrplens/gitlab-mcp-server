@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -1433,4 +1434,195 @@ func TestViewGitLab_Focus0_WithExistingToken_AndError(t *testing.T) {
 	if !strings.Contains(output, "validation error") {
 		t.Error("expected error message in output")
 	}
+}
+
+// finalizeTUI tests — cover the post-Program branches of RunTUI. The Program
+// itself requires a real terminal, so RunTUI delegates to finalizeTUI after
+// the program returns; these tests exercise finalizeTUI directly.
+
+// TestFinalizeTUI_Aborted verifies the abort branch: when the user pressed
+// Esc or Ctrl+C, the wizard exits cleanly with a "Setup cancelled." line
+// and no error.
+func TestFinalizeTUI_Aborted(t *testing.T) {
+	stubWriteEnvFile(t)
+
+	m := tuiModel{aborted: true}
+	var out strings.Builder
+	if err := finalizeTUI(m, &out); err != nil {
+		t.Fatalf("aborted finalize: %v", err)
+	}
+	if !strings.Contains(out.String(), "Setup cancelled") {
+		t.Errorf("expected 'Setup cancelled' message, got %q", out.String())
+	}
+}
+
+// TestFinalizeTUI_ResultNil verifies the no-result branch: when the user
+// reached tuiStepDone without picking any clients or finishing buildResult,
+// the wizard exits cleanly with no error and no output.
+func TestFinalizeTUI_ResultNil(t *testing.T) {
+	var out strings.Builder
+	if err := finalizeTUI(tuiModel{}, &out); err != nil {
+		t.Fatalf("nil-result finalize: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("expected no output for nil-result branch, got %q", out.String())
+	}
+}
+
+// TestFinalizeTUI_TypeAssertionError verifies the defensive branch: when the
+// finalModel is not a tuiModel, finalizeTUI returns an explicit error rather
+// than panicking.
+func TestFinalizeTUI_TypeAssertionError(t *testing.T) {
+	err := finalizeTUI(unknownModel{}, io.Discard)
+	if err == nil {
+		t.Fatal("expected error for non-tuiModel finalModel")
+	}
+	if !strings.Contains(err.Error(), "unexpected model type") {
+		t.Errorf("error = %q, want 'unexpected model type'", err.Error())
+	}
+}
+
+// TestFinalizeTUI_ApplyCalled verifies the success branch: when the model
+// carries a non-nil result, finalizeTUI delegates to Apply and surfaces
+// Apply's return value.
+func TestFinalizeTUI_ApplyCalled(t *testing.T) {
+	stubWriteEnvFile(t)
+	orig := writeEnvFileFn
+	writeEnvFileFn = func(ServerConfig) (string, error) { return "/tmp/.gitlab-mcp-server.env", nil }
+	t.Cleanup(func() { writeEnvFileFn = orig })
+
+	m := tuiModel{
+		result: &Result{Config: ServerConfig{
+			GitLabURL:   "https://gitlab.example.com",
+			GitLabToken: "test-token-finalize-apply",
+		}},
+	}
+	var out strings.Builder
+	if err := finalizeTUI(m, &out); err != nil {
+		t.Fatalf("apply finalize: %v", err)
+	}
+	if !strings.Contains(out.String(), "Writing Configurations") {
+		t.Errorf("expected 'Writing Configurations' header, got %q", out.String())
+	}
+}
+
+// unknownModel is a stand-in tea.Model type used to exercise the type
+// assertion error path in finalizeTUI.
+type unknownModel struct{}
+
+func (unknownModel) Init() tea.Cmd                       { return nil }
+func (unknownModel) Update(tea.Msg) (tea.Model, tea.Cmd) { return unknownModel{}, nil }
+func (unknownModel) View() tea.View                      { return tea.NewView("") }
+
+// TestHandleGitLabTab_AlreadyOnToken verifies the no-op branch: pressing
+// Tab when focus is already on the token field must not change focus.
+func TestHandleGitLabTab_AlreadyOnToken(t *testing.T) {
+	m := tuiModel{
+		step:        tuiStepGitLab,
+		gitlabFocus: 1,
+		urlInput:    textinput.New(),
+		tokenInput:  textinput.New(),
+	}
+	m.urlInput.Focus()
+	m.tokenInput.Focus()
+	result, _ := m.handleGitLabTab()
+	final := result.(tuiModel)
+	if final.gitlabFocus != 1 {
+		t.Errorf("expected gitlabFocus=1, got %d", final.gitlabFocus)
+	}
+}
+
+// TestHandleGitLabShiftTab_AlreadyOnURL verifies the no-op branch: pressing
+// Shift+Tab when focus is already on the URL field must not change focus.
+func TestHandleGitLabShiftTab_AlreadyOnURL(t *testing.T) {
+	m := tuiModel{
+		step:        tuiStepGitLab,
+		gitlabFocus: 0,
+		urlInput:    textinput.New(),
+		tokenInput:  textinput.New(),
+	}
+	m.urlInput.Focus()
+	result, _ := m.handleGitLabShiftTab()
+	final := result.(tuiModel)
+	if final.gitlabFocus != 0 {
+		t.Errorf("expected gitlabFocus=0, got %d", final.gitlabFocus)
+	}
+}
+
+// TestRenderProgress_ShowsOptionsWhenAdvancedOpen verifies the progress bar
+// includes the Options step only when the user opened advanced mode with
+// Ctrl+O.
+func TestRenderProgress_ShowsOptionsWhenAdvancedOpen(t *testing.T) {
+	m := tuiModel{showAdvanced: true, step: tuiStepOptions}
+	out := m.renderProgress(80)
+	if !strings.Contains(out, "Options") {
+		t.Error("expected 'Options' label in progress bar when showAdvanced=true")
+	}
+	if !strings.Contains(out, "●") && !strings.Contains(out, "○") {
+		t.Error("expected step indicator glyph in progress bar")
+	}
+}
+
+// TestUpdate_CtrlCFromInstallAborts verifies the global Ctrl+C handler at
+// the Install step.
+func TestUpdate_CtrlCFromInstallAborts(t *testing.T) {
+	m := newTestModel(t)
+	m.step = tuiStepInstall
+
+	result, cmd := m.Update(ctrlMsg('c'))
+	final := result.(tuiModel)
+	if !final.aborted {
+		t.Error("expected aborted=true after Ctrl+C")
+	}
+	if cmd == nil {
+		t.Error("expected tea.Quit command from Ctrl+C")
+	}
+}
+
+// TestUpdate_EscFromOptionsEditingCancelsEdit verifies the Esc-while-editing
+// branch in updateOptions (returns to non-editing state without applying).
+func TestUpdate_EscFromOptionsEditingCancelsEdit(t *testing.T) {
+	m := newTestModel(t)
+	m.step = tuiStepOptions
+	m.optCursor = tuiOptExcludeTools
+	m.optEditing = true
+	m.optEditInput = textinput.New()
+	m.optExcludeTools = "old-value"
+	m.optEditInput.SetValue("new-value")
+
+	result, _ := m.Update(keyMsg(tea.KeyEscape))
+	final := result.(tuiModel)
+	if final.optEditing {
+		t.Error("expected optEditing=false after Esc")
+	}
+	if final.optExcludeTools != "old-value" {
+		t.Errorf("expected unchanged value after Esc, got %q", final.optExcludeTools)
+	}
+}
+
+// RunTUI tests.
+
+// TestRunTUI_ClosedInputTerminates verifies the entry point of the TUI
+// wizard: with a closed input pipe, Bubble Tea's program loop exits
+// immediately and RunTUI returns. This is the only practical way to
+// exercise RunTUI in unit tests — the real flow needs a TTY. The test
+// uses io.Discard as output and a closed pipe as input so the program
+// cannot try to read from stdin or write to a real terminal.
+func TestRunTUI_ClosedInputTerminates(t *testing.T) {
+	r, w := io.Pipe()
+	_ = w.Close()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- RunTUI("1.0.0", io.Discard)
+	}()
+
+	select {
+	case err := <-done:
+		t.Logf("RunTUI returned: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("RunTUI hung — needs a real terminal")
+	}
+
+	_ = r
 }

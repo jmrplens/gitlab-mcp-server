@@ -62,6 +62,14 @@ func printBanner(w io.Writer, version string) {
 	fmt.Fprintln(w, "  2. Configure your GitLab connection")
 	fmt.Fprintln(w, "  3. Set up your MCP client(s)")
 	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Re-running this wizard pre-loads any values from ~/.gitlab-mcp-server.env")
+	fmt.Fprintln(w, "so you can change only the fields you need. Leave the token blank to keep")
+	fmt.Fprintln(w, "the stored value.")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "For a browser UI with inline help tooltips, run:")
+	fmt.Fprintln(w, "  gitlab-mcp-server --setup --setup-mode web")
+	fmt.Fprintln(w, "For a keyboard-driven TUI, use --setup-mode tui.")
+	fmt.Fprintln(w)
 }
 
 func printSection(w io.Writer, title string) {

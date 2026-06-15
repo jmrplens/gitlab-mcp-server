@@ -849,7 +849,14 @@ func RunTUI(version string, w io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("TUI error: %w", err)
 	}
+	return finalizeTUI(finalModel, w)
+}
 
+// finalizeTUI handles the post-Program branch of RunTUI. Extracted so the
+// abort / result-nil / type-assertion error / success paths can be unit
+// tested without spinning up a real Bubble Tea program (which requires a
+// real terminal).
+func finalizeTUI(finalModel tea.Model, w io.Writer) error {
 	final, ok := finalModel.(tuiModel)
 	if !ok {
 		return errors.New("unexpected model type")
@@ -858,11 +865,9 @@ func RunTUI(version string, w io.Writer) error {
 		fmt.Fprintln(w, "\n  Setup cancelled.")
 		return nil
 	}
-
 	if final.result == nil {
 		return nil
 	}
-
 	printSection(w, "Writing Configurations (TUI)")
 	return Apply(w, final.result)
 }
