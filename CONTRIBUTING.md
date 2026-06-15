@@ -158,6 +158,36 @@ docs(readme): update tool count after wiki tools
 - Set appropriate annotations (readOnlyHint, destructiveHint, etc.)
 - Return both structured JSON and human-readable Markdown
 
+### Setup Wizard Internals
+
+The setup wizard lives in [`internal/wizard/`](internal/wizard/). When changing wizard behavior, follow the package layout and the `run` orchestration:
+
+| File                      | Purpose                                                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `wizard.go`               | `Result` struct, `Apply()`, summary printing, `MaskToken()`                                                        |
+| `run.go`                  | `Run()` entry point and `runCascade` (web → tui → cli) auto-mode                                                   |
+| `webui.go`                | Web UI HTTP server, `/api/defaults`, `/api/configure`, `/api/pick-directory` handlers, `configureRequest` shape    |
+| `tui.go`                  | Bubble Tea model, steps (`tuiStepInstall`, `tuiStepGitLab`, `tuiStepOptions`, `tuiStepClients`), option rows       |
+| `cli.go`                  | Plain prompt flow (`stepInstall`, `stepGitLabConfig`, `stepOptions`, `stepClients`)                                |
+| `prompt.go`               | `Prompter` (AskString / AskYesNo / AskChoice / AskMultiChoice) shared by CLI and tests                             |
+| `envfile.go`              | `LoadExistingConfig`, `WriteEnvFile` — `~/.gitlab-mcp-server.env` round-trip                                       |
+| `clients.go`              | `AllClients`, `ClientInfo`, `ServerConfig`, `DefaultServerConfig`, `GenerateEntry`, `RootKey`, `RestartHint`       |
+| `paths.go`                | OS-specific default install dir, env file path, and per-client JSON config paths (`vsCodeConfigPath`, etc.)        |
+| `jsonmerge.go`            | `MergeServerEntry` and JSONC-aware `readJSONFile` (handles VS Code's `mcp.json` comments)                          |
+| `install.go`              | `InstallBinary` and `getInstalledVersion`                                                                          |
+| `browser.go`              | `openBrowser` (xdg-open / open / rundll32) and `hasDisplay` (DISPLAY / WAYLAND_DISPLAY)                            |
+| `dirpicker.go`            | `pickDirectory` (PowerShell / osascript / zenity / kdialog) for the Web UI's "Browse" button                       |
+| `webui_assets/index.html` | Embedded browser wizard shell served at `/` — paired 1:1 with the `defaultsResponse` / `configureRequest` Go types |
+| `doc.go`                  | Package doc comment (rendered as godoc and linked from `internal/wizard/`)                                         |
+
+When adding a new wizard option (env var, flag, advanced setting):
+
+1. Add the field to `ServerConfig` in `clients.go`, including a `firstNonEmpty` line in `withDefaults()` if it has a default.
+2. Add the field to `envFileEntries` in `envfile.go` (the writer) and to `loadExistingConfigFromPath` (the reader) so existing env files round-trip cleanly.
+3. Wire it into the three UIs: `tui.go` `optionRows()`, `webui.go` `defaultsResponse` and `configureRequest` plus `index.html` form field, and `cli.go` `stepOptions()` prompt.
+4. Cover it with a table-driven test in `tui_test.go`, `webui_test.go`, and `cli_test.go` if the behavior is non-trivial.
+5. Run `go test ./internal/wizard/...` and the audit commands documented in [AGENTS.md](AGENTS.md) (`make audit-docs`).
+
 ### File Organization
 
 ```text
@@ -238,6 +268,7 @@ Then commit the updated golden files alongside your code changes. The CI will fa
 - Adding a new prompt → update `docs/prompts-reference.md`
 - Adding a new capability → update `docs/capabilities.md`
 - Changing configuration → update `docs/configuration.md`
+- Changing the setup wizard (new option, new client, new env var) → update `docs/configuration.md#setup-wizard-recommended` and `site/src/content/docs/setup-wizard.mdx` (EN+ES)
 - Adding or modifying tests → update `docs/testing/testing.md` with new test counts and coverage values
 
 ### Language Policy

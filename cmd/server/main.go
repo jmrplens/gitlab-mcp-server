@@ -264,19 +264,24 @@ FLAGS
 	-meta-tools               Legacy boolean tool selector; prefer -tool-surface
 	-tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
   -capability-surface str   Capability surface: full|minimal (default full)
+  -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
   -enterprise               Force Enterprise/Premium tool catalog; omit to auto-detect per server entry
   -read-only                Expose only read-only tools (default false)
+  -safe-mode                Intercept mutating tools and return a preview instead of executing
+  -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
   -exclude-tools string     Comma-separated tool names to exclude from registration
   -ignore-scopes            Skip PAT scope detection, register all tools (default false)
   -max-http-clients int     Maximum concurrent client sessions (default %d)
   -session-timeout duration Idle session timeout (default %s)
   -auto-update string       Auto-update mode: true|check|false (default "true")
   -auto-update-repo string  GitHub repository for update checks (default "%s")
-  -auto-update-interval dur How often to check for updates (default %s)
+  -auto-update-interval dur How often to check for updates (default %s, HTTP mode)
   -auto-update-timeout dur  Timeout for startup/background update checks (default %s)
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
   -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
+  -rate-limit-rps float     Per-server tools/call rate limit (0 = disabled)
+  -rate-limit-burst int     Token-bucket burst size when --rate-limit-rps > 0 (default %d)
 
 ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
@@ -285,14 +290,21 @@ ENVIRONMENT VARIABLES (stdio mode)
 	TOOL_SURFACE              Canonical tool surface: dynamic|meta|individual (default dynamic)
 	META_TOOLS                Deprecated legacy selector: true|false|dynamic; ignored when TOOL_SURFACE is set
   CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
+  META_PARAM_SCHEMA         Meta-tool input schema: opaque|compact|full (default opaque)
   GITLAB_ENTERPRISE         Enable Enterprise/Premium meta-tools: true/false (default false)
   GITLAB_READ_ONLY          Expose only read-only tools: true/false (default false)
+  GITLAB_SAFE_MODE          Intercept mutating tools and return a preview (default false)
+  EMBEDDED_RESOURCES        Embed canonical MCP resource links in get_* results (default true)
   EXCLUDE_TOOLS             Comma-separated tool names to exclude (default empty)
   GITLAB_IGNORE_SCOPES      Skip PAT scope detection: true/false (default false)
+  UPLOAD_MAX_FILE_SIZE      Maximum upload/file size for upload tools (default 2GB)
   AUTO_UPDATE               Auto-update mode: true/check/false (default true)
   AUTO_UPDATE_REPO          GitHub repository for update checks (default %s)
   AUTO_UPDATE_INTERVAL      Periodic check interval (default 1h, HTTP mode)
   AUTO_UPDATE_TIMEOUT       Startup/background update timeout (default 60s, range 5s–10m)
+  RATE_LIMIT_RPS            Per-server tools/call rate limit (default 0, disabled)
+  RATE_LIMIT_BURST          Token-bucket burst size when RATE_LIMIT_RPS > 0 (default 40)
+  YOLO_MODE                 Skip destructive action confirmation prompts (default false)
   LOG_LEVEL                 Logging: debug/info/warn/error (default info)
 
 JSON CONFIGURATION EXAMPLES
@@ -337,6 +349,7 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
 		config.DefaultAutoUpdateTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
+		config.DefaultRateLimitBurst,
 		config.DefaultGitLabURL,
 		config.DefaultAutoUpdateRepo)
 }

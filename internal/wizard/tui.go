@@ -647,7 +647,8 @@ func (m tuiModel) View() tea.View {
 }
 
 // renderProgress returns the centered progress indicator shown above the
-// current wizard panel.
+// current wizard panel. The Options step is only rendered when the user
+// opened it explicitly with Ctrl+O from the GitLab step.
 func (m tuiModel) renderProgress(width int) string {
 	type stepInfo struct {
 		name      string
@@ -657,8 +658,15 @@ func (m tuiModel) renderProgress(width int) string {
 	steps := []stepInfo{
 		{"Install", m.step > tuiStepInstall, m.step == tuiStepInstall},
 		{"GitLab", m.step > tuiStepGitLab && m.step != tuiStepOptions, m.step == tuiStepGitLab || m.step == tuiStepOptions},
-		{"Clients", m.step > tuiStepClients, m.step == tuiStepClients},
 	}
+	if m.showAdvanced {
+		steps = append(steps, stepInfo{
+			"Options", m.step > tuiStepOptions, m.step == tuiStepOptions,
+		})
+	}
+	steps = append(steps, stepInfo{
+		"Clients", m.step > tuiStepClients, m.step == tuiStepClients,
+	})
 
 	var parts []string
 	for i, s := range steps {
@@ -694,6 +702,11 @@ func (m tuiModel) viewInstall(width int) string {
 	content.WriteString(tuiSectionTitle.Render("Binary Installation") + "\n\n")
 	content.WriteString(tuiListItemStyle.Render("Install path:") + "\n")
 	content.WriteString(m.installInput.View() + "\n\n")
+	content.WriteString(tuiHelpStyle.Render("Full path where the binary will be installed"))
+	content.WriteString("\n\n")
+	content.WriteString(tuiMutedStyle.Render("Flow: Binary install → GitLab URL + Token → MCP client selection") + "\n")
+	content.WriteString(tuiMutedStyle.Render("Press Ctrl+O on the GitLab step to configure advanced options."))
+	content.WriteString("\n")
 	content.WriteString(tuiHelpStyle.Render("Enter to continue"))
 	return tuiActivePanelStyle.Width(width).Render(content.String())
 }
@@ -726,7 +739,7 @@ func (m tuiModel) viewGitLab(width int) string {
 		content.WriteString("\n" + tuiErrorStyle.Render("  ✗ "+m.err) + "\n")
 	}
 
-	content.WriteString("\n" + tuiHelpStyle.Render("Tab/Shift+Tab switch · Enter continue · Ctrl+O options"))
+	content.WriteString("\n" + tuiHelpStyle.Render("Tab/Shift+Tab switch · Enter continue to Clients · Ctrl+O advanced options"))
 	return tuiActivePanelStyle.Width(width).Render(content.String())
 }
 
@@ -748,7 +761,7 @@ func (m tuiModel) viewOptions(width int) string {
 		fmt.Fprintf(&content, "%s%s: %s\n", cursor, tuiListItemStyle.Render(row.name), tuiAccentStyle.Render(value))
 	}
 
-	help := "↑↓ navigate · Space edit/cycle · Enter continue"
+	help := "↑↓ navigate · Space edit/cycle · Enter apply & continue to Clients"
 	if m.optEditing {
 		help = "Enter save · Esc cancel"
 	}
@@ -827,16 +840,38 @@ func (m tuiModel) viewClients(width int) string {
 	return tuiActivePanelStyle.Width(width).Render(content.String())
 }
 
+// stdinFn returns the io.Reader that RunTUI uses for Bubble Tea's input.
+// Defaults to os.Stdin. Tests can swap it to inject a custom reader
+// without spinning up a real TTY.
+var stdinFn = func() io.Reader { return os.Stdin }
+
 // RunTUI runs the Bubble Tea interactive setup wizard.
 // It uses the alternate screen buffer to provide a clean full-screen experience.
 func RunTUI(version string, w io.Writer) error {
+	return RunTUIWithInput(version, stdinFn(), w)
+}
+
+// RunTUIWithInput is the test-friendly variant of RunTUI. The production
+// path passes os.Stdin (via stdinFn); tests pass an io.Reader they
+// control. Passing os.Stdin explicitly (instead of letting Bubble Tea
+// open /dev/tty on its own) makes the wizard runnable in environments
+// without a controlling terminal, and lets tests cover the success path
+// of the Program loop without a real TTY.
+func RunTUIWithInput(version string, in io.Reader, w io.Writer) error {
 	model := newTUIModel(version, w)
-	p := tea.NewProgram(model, tea.WithOutput(w))
+	p := tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(w))
 	finalModel, err := p.Run()
 	if err != nil {
 		return fmt.Errorf("TUI error: %w", err)
 	}
+	return finalizeTUI(finalModel, w)
+}
 
+// finalizeTUI handles the post-Program branch of RunTUI. Extracted so the
+// abort / result-nil / type-assertion error / success paths can be unit
+// tested without spinning up a real Bubble Tea program (which requires a
+// real terminal).
+func finalizeTUI(finalModel tea.Model, w io.Writer) error {
 	final, ok := finalModel.(tuiModel)
 	if !ok {
 		return errors.New("unexpected model type")
@@ -845,11 +880,9 @@ func RunTUI(version string, w io.Writer) error {
 		fmt.Fprintln(w, "\n  Setup cancelled.")
 		return nil
 	}
-
 	if final.result == nil {
 		return nil
 	}
-
 	printSection(w, "Writing Configurations (TUI)")
 	return Apply(w, final.result)
 }

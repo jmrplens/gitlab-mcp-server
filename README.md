@@ -65,30 +65,6 @@ Rows use the base Community Edition catalog (`GITLAB_ENTERPRISE=false`). `META_P
 - **Cross-platform**: Windows, Linux & macOS, amd64 & arm64
 - **Self-hosted GitLab** with self-signed TLS certificate support
 
-## Orbit live tests
-
-The six read-only `gitlab_orbit_*` tools (`status`, `schema`, `tools`, `dsl`, `query`, `graph_status`) target GitLab.com's experimental Knowledge Graph API. They are exercised end-to-end by an `orbitlive`-gated test suite that hits the real `https://gitlab.com/api/v4/orbit/*` endpoints with a real token.
-
-To run the live tests against your own GitLab.com namespace:
-
-```bash
-# 1. Add a Personal Access Token with api scope to .env
-echo 'GITLAB_COM_TOKEN=glpat-...' >> .env
-
-# 2. Run the orchestrated target: ensures the token, provisions
-#    kg-fixtures + security-fixtures, waits for the indexer, then
-#    runs all four live test suites.
-make test-e2e-gitlab-com
-
-# Or point at a different namespace (default is plens1)
-make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme-research
-
-# Or, when fixtures are already provisioned, run only the tests:
-GITLAB_COM_TOKEN=glpat-... go test -tags orbitlive -count=1 -v ./test/e2e/orbit/
-```
-
-See [Orbit live test fixtures](docs/development/orbit-fixtures.md) for the fixture layout, the indexer caveat, and the `--mirror-cli` option that adds a real `gitlab-org/cli` mirror for larger graph queries.
-
 ## Example Prompts
 
 Once connected, just talk to your AI assistant in natural language:
@@ -128,7 +104,9 @@ docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
 ./gitlab-mcp-server --setup
 ```
 
-> **Tip**: The wizard supports Web UI, Terminal UI, and plain CLI modes. On Windows, double-click the `.exe` to launch the wizard automatically.
+> **Tip**: The wizard supports three user interfaces and selects the best one automatically (Web UI → TUI → CLI). Force a specific mode with `--setup-mode web|tui|cli`. The Web UI ships with inline help tooltips on every advanced option. On Windows, double-click the `.exe` to launch the wizard automatically.
+
+The wizard configures **stdio MCP clients** (VS Code, Claude Desktop, Cursor, etc.). It is not used for the long-running HTTP server mode — see [HTTP Server Mode](docs/http-server-mode.md) for that. If `~/.gitlab-mcp-server.env` already exists, the wizard pre-loads its values so you can re-run it to change just one or two fields without re-typing the rest. Leave the token field blank to keep the stored token.
 
 Manual setup only needs a GitLab Personal Access Token with `api` scope:
 

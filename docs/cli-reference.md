@@ -22,14 +22,14 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 
 ### General
 
-| Flag           | Type   | Default   | Description                                                          |
-| -------------- | ------ | --------- | -------------------------------------------------------------------- |
-| `-h`           | bool   | `false`   | Show full help with flags, environment variables, and JSON examples  |
-| `-version`     | bool   | `false`   | Print version and commit hash, then exit                             |
-| `-shutdown`    | bool   | `false`   | Terminate all running instances and exit (used by external updaters) |
-| `-setup`       | bool   | `false`   | Run the interactive Setup Wizard                                     |
-| `-setup-mode`  | string | `auto`    | Setup UI mode: `auto`, `web`, `tui`, `cli`                           |
-| `-tool-search` | string | _(empty)_ | Search registered tools by name or description, then exit            |
+| Flag            | Type   | Default   | Description                                                          |
+| --------------- | ------ | --------- | -------------------------------------------------------------------- |
+| `-h`            | bool   | `false`   | Show full help with flags, environment variables, and JSON examples  |
+| `-version`      | bool   | `false`   | Print version and commit hash, then exit                             |
+| `-shutdown`     | bool   | `false`   | Terminate all running instances and exit (used by external updaters) |
+| `-setup`        | bool   | `false`   | Run the interactive Setup Wizard                                     |
+| `-setup-mode`   | string | `auto`    | Setup UI mode: `auto` (cascade), `web`, `tui`, or `cli`               |
+| `-tool-search`  | string | _(empty)_ | Search registered tools by name or description, then exit            |
 
 ### HTTP Transport Mode
 
@@ -47,6 +47,8 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-read-only`            | bool     | `false`                    | Read-only mode: disables all mutating tools. Only tools with `ReadOnlyHint=true` remain available                                                                                                    |
 | `-safe-mode`            | bool     | `false`                    | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. If `--read-only` is also set, it takes precedence                                                              |
 | `-embedded-resources`   | bool     | `true`                     | Embed canonical `gitlab://` MCP resource URIs as `EmbeddedResource` content blocks in `gitlab_*_get` tool results. Set `false` to disable for clients that don't tolerate duplicate content blocks   |
+| `-exclude-tools`        | string   | _(empty)_                  | Comma-separated list of tool names to exclude from registration                                                                                                                                    |
+| `-ignore-scopes`        | bool     | `false`                    | Skip PAT scope detection and register all tools regardless of token permissions                                                                                                                    |
 | `-max-http-clients`     | int      | `100`                      | Maximum concurrent client sessions (upper bound: 10,000)                                                                                                                                             |
 | `-session-timeout`      | duration | `30m`                      | Idle MCP session timeout (upper bound: 24h)                                                                                                                                                          |
 | `-revalidate-interval`  | duration | `15m`                      | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                      |
@@ -103,14 +105,23 @@ gitlab-mcp-server --http --http-addr=:8080
 
 ### Setup Wizard
 
-The interactive wizard configures the binary, GitLab connection, and MCP client files.
+The interactive wizard configures the binary, GitLab connection, and MCP client files. The wizard is **stdio-only**: it does not configure the HTTP server (use [HTTP Server Mode](http-server-mode.md) for that).
 
 ```bash
-gitlab-mcp-server --setup                    # Auto-detect UI mode
-gitlab-mcp-server --setup -setup-mode web    # Browser-based UI
-gitlab-mcp-server --setup -setup-mode tui    # Terminal UI (Bubble Tea)
-gitlab-mcp-server --setup -setup-mode cli    # Plain text fallback
+gitlab-mcp-server --setup                    # Auto-detect UI mode (web → tui → cli)
+gitlab-mcp-server --setup --setup-mode web   # Browser-based UI (best for first-time setup)
+gitlab-mcp-server --setup --setup-mode tui   # Terminal UI (Bubble Tea, keyboard-driven)
+gitlab-mcp-server --setup --setup-mode cli   # Plain text prompts (headless / SSH)
 ```
+
+The `--setup-mode` flag controls which user interface the wizard uses:
+
+- `auto` (default) — cascade: try Web UI first (when a graphical display is detected), then Bubble Tea TUI (when stdin is a TTY), then plain CLI prompts. The cascade is transparent and falls back automatically on headless or terminal-only environments.
+- `web` — local HTTP server on `127.0.0.1`, opens your default browser, and waits until you submit the form. Advanced options in this UI carry inline help tooltips.
+- `tui` — full-screen terminal interface built with Bubble Tea. Keyboard navigation (Tab/Shift+Tab, Space, Enter, arrow keys, `Ctrl+O` for advanced options, `Esc` to cancel).
+- `cli` — line-by-line prompts read from stdin. Safest choice for SSH sessions, CI, or any environment where browsers and TUI rendering are unavailable.
+
+When `~/.gitlab-mcp-server.env` already exists, every UI mode pre-loads the saved values, so re-running the wizard lets you change only the fields you need. Leaving the token field blank keeps the previously stored token. See [Configuration — Setup Wizard](configuration.md#setup-wizard-recommended) for the full list of fields and their env-var mappings.
 
 On Windows, double-clicking the `.exe` when no `GITLAB_TOKEN` is set launches the wizard automatically.
 

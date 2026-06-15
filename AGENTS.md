@@ -1,62 +1,202 @@
-# AI Agents & Skills
+# gitlab-mcp-server — Agent Quick Reference
 
-This project includes a comprehensive AI assistance infrastructure for development workflows. All agents, skills, and instruction files are located in `.github/` and are designed for use with GitHub Copilot and compatible AI assistants.
+> MCP server in Go that exposes GitLab REST + GraphQL as MCP tools, resources,
+> and prompts. Communicates via stdio (default) or HTTP. Catalog-first tool
+> registration: 176 sub-packages under `internal/tools/`, with three runtime
+> surfaces (`dynamic` default, `meta`, `individual`).
 
-## Agents (7)
+## Read first
 
-| Agent | Description |
-|-------|-------------|
-| **Go MCP Server Expert** | Primary coding agent for Go MCP development. Implements tools, fixes handlers, answers SDK questions. Has Context7 integration for up-to-date library docs. |
-| **Test Expert** | Testing specialist: writes tests, analyzes coverage to 90%+, detects false passes, identifies edge cases, and refreshes `docs/testing/testing.md` with `cmd/gen_testing_docs` at phase completion. Uses Context7 for Go testing docs. |
-| **Plan Expert** | Strategic planning for features, refactoring, architecture, tests, bugs, docs, and upgrades. Generates structured plans — does NOT write code. |
-| **Debug Mode** | Systematic bug investigation with 4-phase workflow: reproduce → hypothesize → fix → verify. |
-| **SE: Reviewer** | Security review (OWASP Top 10, Zero Trust, LLM security) and architecture review (Well-Architected frameworks, ADRs). |
-| **Documentation Writer** | Generates project documentation using Diátaxis framework + Mermaid diagrams. Uses Context7 and web research for external references. |
-| **Go Source Documenter** | Adds godoc-compliant doc comments to Go source and test files. Covers all symbol types. |
+| Where                                               | Why                                                                                 |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `CLAUDE.md`                                         | Full project context, env vars, ADR list, agents/skills catalog                     |
+| `.github/copilot-instructions.md`                   | Auto-loaded by VS Code Copilot; has the language policy, env var table, E2E recipes |
+| `.github/instructions/*.md`                         | Auto-applied coding standards (go, MCP, OWASP, comments, code review)               |
+| `docs/development/tool-surfaces-and-action-core.md` | Surface ownership and catalog projection rules                                      |
+| `docs/adr/`                                         | Architectural Decision Records (catalog-first is ADR-0004)                          |
 
-## Skills (18)
+OpenCode-specific wiring (this file's agents, skills, paths) lives in
+`opencode.json` + `.opencode/agent/`. The canonical agents and skills also
+exist under `.github/agents/` and `.claude/skills/` for Copilot/Claude; the
+opencode mirror is a thin frontmatter shim so they show up in the OpenCode
+CLI.
 
-| Skill | Purpose |
-|-------|---------|
-| **create-implementation-plan** | Structured plan with phased tasks, saved to `plan/` |
-| **create-specification** | Formal spec with requirements and acceptance criteria |
-| **create-architectural-decision-record** | ADR with standardized format, saved to `docs/adr/` |
-| **create-mcp-tool** | End-to-end workflow for creating a catalog-backed MCP tool |
-| **create-mcp-evaluation** | Generate Q&A pairs to benchmark MCP server quality |
-| **increase-test-coverage** | Research → Plan → Implement pipeline to reach 90%+ coverage |
-| **review-and-refactor** | Code quality review + MCP patterns + OWASP, then refactor |
-| **generate-project-documentation** | Full documentation suite (architecture, API, onboarding) |
-| **update-project-documentation** | Delta-update docs after code changes |
-| **update-starlight-docs** | Update Astro Starlight user docs (EN/ES) when dev docs change |
-| **generate-release-notes** | Categorized release notes between two Git refs |
-| **go-source-documentation** | Add godoc-compliant comments to Go files |
-| **go-safe-move-refactor** | Move Go files between packages with zero compilation downtime |
-| **modularize-go-package** | Split monolithic package into domain sub-packages |
-| **golang-testing** | Reference: table-driven tests, subtests, benchmarks, fuzzing |
-| **golang-patterns** | Reference: error handling, concurrency, interfaces, memory |
-| **git-commit** | Conventional commit with auto-detected type/scope from diff |
-| **upstream-contribution** | Contribute fixes to upstream `gitlab.com/gitlab-org/api/client-go` |
+## Hard invariants
 
-## Instruction Files (7)
+- **Catalog-first registration.** For ordinary GitLab API actions, add or
+  update domain-local `ActionSpec`s and handlers. Do **not** add
+  package-local `RegisterTools` functions or ad hoc `mcp.AddTool` calls.
+  The catalog in `internal/tools/action_catalog.go` projects everything
+  into meta, dynamic, `gitlab://tools`, audits, LLM files, and individual
+  tool surfaces. (ADR-0004.)
+- **English-only artifacts.** Every file committed to this repo must be
+  in English, including doc comments, ADRs, branches, commits, and MCP
+  tool descriptions. Chat with the developer in any language you want.
+- **Conventional commits.** `feat:`, `fix:`, `docs:`, `test:`, `refactor:`,
+  `chore:`. Use the `git-commit` skill (`.claude/skills/git-commit/`) for
+  auto-detected type/scope.
+- **Coverage target: maximum possible, 100% when feasible.** CI enforces
+  an 80% floor; in practice the team pushes per-package coverage to 100%
+  unless there is a hard blocker (generated code, third-party
+  interfaces). When you cannot reach 100% on a function, add a
+  documented reason at the call site and prefer table-driven tests that
+  exercise both happy and error paths.
 
-Instruction files in `.github/instructions/` are automatically applied when editing matching files:
+## Common commands
 
-| File | Applies To | Description |
-|------|-----------|-------------|
-| `go.instructions.md` | `**/*.go` | Idiomatic Go practices, naming, error handling |
-| `go-mcp-server.instructions.md` | `**/*.go` | MCP server patterns: tool registration, typed I/O, annotations |
-| `mcp-best-practices.instructions.md` | `**/*.go` | Protocol-level tool design, response formats, pagination |
-| `security-and-owasp.instructions.md` | `*` | OWASP Top 10, input validation, secrets management |
-| `code-review-generic.instructions.md` | `**` | Code review priorities and checklist |
-| `context-engineering.instructions.md` | `**` | Project structure principles for AI-readable code |
-| `self-explanatory-code-commenting.instructions.md` | `**` | Comment only WHY, not WHAT |
+```bash
+# Build
+make build                                # ./dist/gitlab-mcp-server
+make build-all                            # all 6 GOOS/GOARCH targets
 
-## Usage
+# Test (fast)
+make test-pkg PKG=branches                # one domain — the workhorse
+go test ./internal/tools/branches/ -count=1 -v
+go test ./internal/tools/ -run TestBranch -count=1
 
-Agents are invoked via GitHub Copilot Chat using `@agent-name`. Skills are task templates that can be triggered by any agent or directly in chat.
+# Test (full)
+make test-short                           # all unit tests, no coverage
+make test                                 # all unit tests, with coverage.out
+make coverage                             # writes coverage.html
 
-For the full catalog with detailed descriptions and workflows, see [CLAUDE.md](CLAUDE.md).
+# Lint / analyze
+make analyze                              # golangci-lint + govulncheck + markdownlint
+make analyze-fix                          # apply gofumpt/goimports/gci/markdownlint --fix
+make golangci-lint                        # Go-only gate
+golangci-lint run --build-tags e2e ./internal/tools/branches/  # one package
 
-## Run live tests
+# Audit / regenerate
+go run ./cmd/audit_tools/
+go run ./cmd/audit_output/
+go run ./cmd/audit_tokens/
+go run ./cmd/audit_dynamic_aliases/
+go run ./cmd/audit_test_names cmd internal test
+make audit-godocs                         # writes dist/analysis/godoc.md
 
-The six `gitlab_orbit_*` tools (GitLab.com Knowledge Graph) have an `orbitlive`-gated live test suite that hits `https://gitlab.com/api/v4/orbit/*` with a real token. The fixtures live under `test/fixtures/orbit/` and are provisioned by `scripts/setup-orbit-fixtures.sh`. See [Orbit live test fixtures](docs/development/orbit-fixtures.md) for the full reproduction flow, and run the orchestrated target as `make test-e2e-gitlab-com` (requires `GITLAB_COM_TOKEN` in `.env`).
+# MCP Inspector
+make inspector                            # builds + launches at http://127.0.0.1:6274
+make inspector-stop
+```
+
+> `golangci-lint` runs with `--build-tags e2e` (set in `.golangci.yml`).
+> Running it directly without that tag will fail on e2e-tagged files.
+> Use `make golangci-lint` or pass `--build-tags e2e` yourself.
+
+## Post-edit regeneration matrix
+
+| You edited                                          | Run                                                               |
+| --------------------------------------------------- | ----------------------------------------------------------------- |
+| Domain tool (added/renamed/changed input or output) | `go run ./cmd/gen_readme/`                                        |
+| ActionSpec metadata (catalog routes)                | `go run ./cmd/gen_action_catalog_manifest/` (and `--check` in CI) |
+| Pipe tables in `README.md` or `docs/`               | `go run ./cmd/format_md_tables/` (and `--check`)                  |
+| Tests, after a test phase                           | `go run ./cmd/gen_testing_docs/` (and `--check`)                  |
+| Tool surface (registered tools, resources, prompts) | `go run ./cmd/gen_llms/` (and `--check` via `make check-llms`)    |
+| `server.json`                                       | `make check-server-json` (uses MCP publisher)                     |
+
+The combined gate is `make audit-docs`. CI runs it on every PR.
+
+## Adding a new GitLab API tool
+
+For a full walkthrough use the `create-mcp-tool` skill
+(`.claude/skills/create-mcp-tool/`). Short version:
+
+1. **Plan/spec**: `@plan-expert` agent or `create-implementation-plan` skill
+   for non-trivial work.
+2. **Sub-package**: `internal/tools/{domain}/{domain}.go` with typed
+   `Input`/`Output` structs (`jsonschema` tags). No domain prefix on types
+   — the package is the namespace.
+3. **ActionSpec**: add a canonical route in `internal/tools/{domain}/action_specs.go`
+   with metadata, owner package, compatibility policy, and tests.
+4. **Handler + tests**: `httptest`-based table-driven tests using
+   `testutil.NewTestClient` and `testutil.RespondJSON`.
+5. **Markdown formatter**: register via `toolutil.RegisterMarkdown[T](fn)`
+   in the sub-package `markdown.go` `init()`. List formatters must add
+   `toolutil.HintPreserveLinks` as the first hint in `WriteHints()`.
+6. **Refresh**: `gen_readme`, `gen_action_catalog_manifest`, `format_md_tables`,
+   `gen_testing_docs`, `gen_llms` (run `--check` on each before pushing).
+7. **Verify**: `make test-pkg PKG={domain}` and
+   `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`.
+8. **Document**: `docs/tools/{domain}.md` and `docs/tools/README.md`.
+
+## Error handling in tool handlers
+
+All five helpers live in `internal/toolutil/errors.go` (ADR-0007):
+
+- `WrapErr(op, err)` — read-only ops, generic classification
+- `WrapErrWithMessage(op, err)` — mutating ops, includes GitLab message
+- `WrapErrWithHint(op, err, hint)` — when a corrective action is known
+- `WrapErrWithStatusHint(op, err, code, hint)` — hint only applies on a
+  specific HTTP status; falls through to `WrapErrWithMessage` otherwise
+- `NotFoundResult(resource, id, hints...)` — for `IsHTTPStatus(err, 404)`
+  on get handlers; returns a structured result with hints at INFO level
+
+For get handlers: check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll`
+and return `NotFoundResult` with `nil` error. `IsHTTPStatus` and
+`ContainsAny` come first; status-specific hints come last.
+
+## Markdown formatter pattern
+
+Sub-packages self-register formatters via `init()` against a type-keyed
+registry in `internal/toolutil/mdregistry.go`. There is no central
+dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
+`toolutil.MarkdownForResult`. List output should include
+`toolutil.HintPreserveLinks` so LLMs keep `[text](url)` clickable.
+
+## E2E test gotchas
+
+- **Build tag**: all E2E tests are gated by `-tags e2e`. The unit test
+  suite must still compile when that tag is set.
+- **Compile-only check** (no GitLab required):
+  `go test -tags e2e -c -o /dev/null ./test/e2e/suite/`
+- **Self-hosted mode** reads `GITLAB_URL` + `GITLAB_TOKEN` from `.env`.
+  Tests create and delete real resources; the user must have permission.
+  `make test-e2e` adds a confirmation prompt.
+- **Docker mode** needs ~4 GB RAM and runs GitLab CE + runner + fixture
+  service:
+
+  ```bash
+  set -a && source test/e2e/.env.docker && set +a
+  E2E_MODE=docker go test -v -tags e2e -timeout 600s ./test/e2e/suite/
+  ```
+
+  Pipeline/Job tools **only** work in Docker mode (CI runner required).
+- **Orbit live tests** are a separate package at `test/e2e/orbit/`
+  with the `orbitlive` tag. They hit real `https://gitlab.com/api/v4/orbit/*`
+  with `GITLAB_COM_TOKEN` from `.env` (default namespace `plens1`):
+
+  ```bash
+  make test-e2e-gitlab-com                       # full orchestration
+  make test-e2e-gitlab-com ORBIT_FIXTURES_NAMESPACE=acme  # other namespace
+  ```
+
+  See `docs/development/orbit-fixtures.md` for the fixture layout and
+  indexer caveat.
+- **Dynamic-surface only** in Docker mode:
+  `E2E_MODE=docker go test -v -tags e2e -timeout 600s -run '^TestDynamicToolSurface' ./test/e2e/suite/`
+
+## Release process
+
+1. `make release` — GoReleaser snapshot, flattens `dist/` to GitHub asset names.
+2. **Release link names must be exact filenames** (e.g.
+   `checksums.txt.asc`, `gitlab-mcp-server-linux-amd64`). Never add
+   descriptive suffixes like `(GPG signature)` — `go-selfupdate` matches
+   asset names exactly and will fail with decorated names.
+3. Push the tag; CI publishes the GitHub Release and the Docker image.
+4. `make fly-deploy-release` ships the matching tag to Fly.io (HTTP mode).
+
+## Common traps
+
+- **Tool surface default is `dynamic` (2 tools).** Most users expect
+  meta-tools; remind them to set `TOOL_SURFACE=meta` (stdio) or
+  `--tool-surface=meta` (HTTP) when they want the 33/49/50-tool catalog.
+- **`.tmp-kg-fixtures/` and `.tmp-token-audit/`** are working dirs for
+  the fixture and token-audit scripts. Safe to ignore.
+- **`go-selfupdate` asset names** — see the release section above.
+- **Coverage minimum 80%** is enforced in CI; locally
+  `go test -coverprofile=coverage.out ./cmd/... ./internal/...` then
+  `go tool cover -func=coverage.out` reports totals.
+- **HTTP mode without `--gitlab-url`** requires every client request to
+  send `GITLAB-URL`; missing it is a common first-time error.
+- **Auto-update defaults to `true`** in stdio and HTTP. The server may
+  restart on its own; disable with `AUTO_UPDATE=false` for local
+  debugging.

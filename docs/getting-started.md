@@ -44,6 +44,8 @@ chmod +x gitlab-mcp-server-linux-amd64
 
 The easiest way to configure everything is the built-in Setup Wizard. It configures your GitLab connection and writes the MCP client config files in one step.
 
+> **Stdio only**: The wizard configures the **stdio MCP server** only. For shared or remote HTTP deployments, use [HTTP Server Mode](http-server-mode.md) instead.
+
 ### Windows
 
 Double-click the `.exe` file — the wizard opens automatically in your browser.
@@ -63,9 +65,9 @@ Or from a terminal:
 The wizard auto-detects the best UI: **Web** (browser) → **TUI** (terminal) → **CLI** (plain text). You can force a specific mode:
 
 ```bash
-gitlab-mcp-server --setup --setup-mode web   # Browser UI
-gitlab-mcp-server --setup --setup-mode tui   # Terminal UI
-gitlab-mcp-server --setup --setup-mode cli   # Plain text
+gitlab-mcp-server --setup --setup-mode web   # Browser UI (best for first-time setup; has inline help tooltips)
+gitlab-mcp-server --setup --setup-mode tui   # Terminal UI (keyboard-driven, Bubble Tea)
+gitlab-mcp-server --setup --setup-mode cli   # Plain text prompts (headless / SSH)
 ```
 
 The wizard will ask for:
@@ -73,11 +75,14 @@ The wizard will ask for:
 1. **GitLab URL** — your instance base URL (e.g., `https://gitlab.example.com`)
 2. **Personal Access Token** — a `glpat-...` token with `api` scope
 3. **MCP client** — which AI client(s) to configure (VS Code, Claude Desktop, Cursor, etc.)
+4. **Advanced options** — tool surface, log level, rate limits, auto-update, etc. The Web UI attaches an inline help tooltip to every advanced option explaining what the setting does and its default. The CLI asks once whether to configure them. In the TUI, press `Ctrl+O` on the GitLab step to open the advanced options step.
 
 It then writes:
 
-- `~/.gitlab-mcp-server.env` — your credentials (secure permissions, never in client config)
+- `~/.gitlab-mcp-server.env` — your credentials (with `0600` Unix permissions, never in client config)
 - Client-specific config files (e.g., `.vscode/mcp.json`, `claude_desktop_config.json`)
+
+**Re-running the wizard**: If `~/.gitlab-mcp-server.env` already exists, every UI mode (Web, TUI, CLI) pre-loads the saved values. You can change only the fields you need — the token is masked, and leaving it blank keeps the stored one. Use this to add a new client, switch from `dynamic` to `meta`, or rotate the token without re-typing everything.
 
 > **Skip the wizard?** See [Manual Configuration](#alternative-manual-configuration) below.
 
