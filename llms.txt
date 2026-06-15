@@ -12,6 +12,13 @@ Quick start:
 2. Run `gitlab-mcp-server --setup` to launch the interactive setup wizard
 3. The wizard configures your AI client (VS Code, Cursor, Claude Desktop, etc.)
 
+Setup wizard:
+
+- Modes: `--setup-mode web` (browser, inline help tooltips), `tui` (Bubble Tea keyboard UI), `cli` (plain prompts). Default `auto` cascades through them.
+- Scope: stdio MCP clients only (VS Code, Claude Desktop, Cursor, etc.). HTTP server mode is configured via flags, not the wizard.
+- Reconfiguration: when `~/.gitlab-mcp-server.env` already exists, the wizard pre-loads its values so users can change one or two fields without re-typing the rest. Leaving the token blank keeps the stored value.
+- Re-run with `gitlab-mcp-server --setup` to rotate the token, add a new client, or switch tool surface.
+
 Configuration (environment variables, stdio mode):
 
 - GITLAB_URL: GitLab instance URL (default: `https://gitlab.com`; set for self-managed instances)

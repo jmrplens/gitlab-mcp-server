@@ -104,7 +104,9 @@ docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
 ./gitlab-mcp-server --setup
 ```
 
-> **Tip**: The wizard supports Web UI, Terminal UI, and plain CLI modes. On Windows, double-click the `.exe` to launch the wizard automatically.
+> **Tip**: The wizard supports three user interfaces and selects the best one automatically (Web UI → TUI → CLI). Force a specific mode with `--setup-mode web|tui|cli`. The Web UI ships with inline help tooltips on every advanced option. On Windows, double-click the `.exe` to launch the wizard automatically.
+
+The wizard configures **stdio MCP clients** (VS Code, Claude Desktop, Cursor, etc.). It is not used for the long-running HTTP server mode — see [HTTP Server Mode](docs/http-server-mode.md) for that. If `~/.gitlab-mcp-server.env` already exists, the wizard pre-loads its values so you can re-run it to change just one or two fields without re-typing the rest. Leave the token field blank to keep the stored token.
 
 Manual setup only needs a GitLab Personal Access Token with `api` scope:
 

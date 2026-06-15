@@ -397,6 +397,12 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("2. Run `gitlab-mcp-server --setup` to launch the interactive setup wizard\n")
 	b.WriteString("3. The wizard configures your AI client (VS Code, Cursor, Claude Desktop, etc.)\n\n")
 
+	b.WriteString("Setup wizard:\n\n")
+	b.WriteString("- Modes: `--setup-mode web` (browser, inline help tooltips), `tui` (Bubble Tea keyboard UI), `cli` (plain prompts). Default `auto` cascades through them.\n")
+	b.WriteString("- Scope: stdio MCP clients only (VS Code, Claude Desktop, Cursor, etc.). HTTP server mode is configured via flags, not the wizard.\n")
+	b.WriteString("- Reconfiguration: when `~/.gitlab-mcp-server.env` already exists, the wizard pre-loads its values so users can change one or two fields without re-typing the rest. Leaving the token blank keeps the stored value.\n")
+	b.WriteString("- Re-run with `gitlab-mcp-server --setup` to rotate the token, add a new client, or switch tool surface.\n\n")
+
 	b.WriteString("Configuration (environment variables, stdio mode):\n\n")
 	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: `%s`; set for self-managed instances)\n", config.DefaultGitLabURL)
 	b.WriteString("- GITLAB_TOKEN: Personal Access Token (required)\n")

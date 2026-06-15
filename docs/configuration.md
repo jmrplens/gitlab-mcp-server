@@ -30,11 +30,14 @@ These are the settings every user needs to get started.
 | `TOOL_SURFACE`           | `dynamic`            | Canonical tool catalog selector: `dynamic`, `meta`, or `individual`                                                                                                                                                                          |
 | `META_TOOLS`             | *(legacy)*           | Deprecated compatibility selector. Accepted values map to `TOOL_SURFACE`: `true` -> `meta`, `false` -> `individual`, and `dynamic` -> `dynamic`. Ignored when `TOOL_SURFACE` is set                                                          |
 | `CAPABILITY_SURFACE`     | `full`               | Resource and prompt catalog selector: `full` preserves all resources, workflow guides, prompts, and the surface-aware `gitlab://tools` manifest; `minimal` keeps `gitlab://workspace/roots` plus `gitlab://tools` only                       |
+| `META_PARAM_SCHEMA`      | `opaque`             | Meta-tool input-schema strategy: `opaque` (compact envelope), `compact`, or `full`. Applies to meta-tool `tools/list` schemas only. See [env-reference.md](env-reference.md)                                                                 |
 | `GITLAB_ENTERPRISE`      | `false`              | Enable Enterprise/Premium tools in stdio mode. In HTTP mode, `--enterprise` explicitly forces the Enterprise/Premium catalog; when omitted, CE/EE is auto-detected per token+URL pool entry when GitLab reports edition in `/api/v4/version` |
 | `GITLAB_READ_ONLY`       | `false`              | Read-only mode: disables all mutating tools at startup                                                                                                                                                                                       |
 | `GITLAB_SAFE_MODE`       | `false`              | Safe mode: intercepts mutating tools and returns a JSON preview instead of executing. Read-only tools work normally. If `GITLAB_READ_ONLY=true`, it takes precedence                                                                         |
+| `EMBEDDED_RESOURCES`     | `true`               | Embed canonical `gitlab://` MCP resource URIs as `EmbeddedResource` content blocks in `gitlab_*_get` tool results. Set `false` to disable for clients that don't tolerate duplicate content blocks                                           |
 | `EXCLUDE_TOOLS`          | *(empty)*            | Comma-separated list of tool names to exclude from registration                                                                                                                                                                              |
 | `GITLAB_IGNORE_SCOPES`   | `false`              | Skip PAT scope detection and register all tools regardless of token permissions                                                                                                                                                              |
+| `UPLOAD_MAX_FILE_SIZE`   | `2GB`                | Maximum file size for upload and file tools. Supports human-friendly suffixes (`KB`, `MB`, `GB`, case-insensitive). Upper bound: 1 TB                                                                                                        |
 | `LOG_LEVEL`              | `info`               | Logging verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                          |
 
 ### .env File Example
@@ -45,6 +48,8 @@ GITLAB_SKIP_TLS_VERIFY=false
 TOOL_SURFACE=dynamic
 GITLAB_READ_ONLY=false
 GITLAB_SAFE_MODE=false
+EMBEDDED_RESOURCES=true
+UPLOAD_MAX_FILE_SIZE=2GB
 LOG_LEVEL=info
 ```
 
@@ -63,14 +68,20 @@ The easiest way to configure gitlab-mcp-server is through the built-in **Setup W
 gitlab-mcp-server --setup
 
 # Or force a specific UI mode
-gitlab-mcp-server --setup -setup-mode web   # Opens browser-based UI
-gitlab-mcp-server --setup -setup-mode tui   # Terminal UI (Bubble Tea)
-gitlab-mcp-server --setup -setup-mode cli   # Plain text fallback
+gitlab-mcp-server --setup --setup-mode web   # Opens browser-based UI
+gitlab-mcp-server --setup --setup-mode tui   # Terminal UI (Bubble Tea)
+gitlab-mcp-server --setup --setup-mode cli   # Plain text fallback
 ```
 
 On **Windows**, double-click the `.exe` — if no `GITLAB_TOKEN` is set, the wizard starts automatically.
 
 The wizard supports 10 MCP clients: VS Code (GitHub Copilot), Claude Desktop, Claude Code (CLI), Cursor, Windsurf (Codeium), JetBrains IDEs, Copilot CLI, OpenCode, Crush (Charm), and Zed.
+
+> **Stdio only**: The wizard configures the **stdio MCP server** only — it does not configure the long-running HTTP server (OAuth mode, session timeout, max HTTP clients, etc.). For shared or remote HTTP deployments, use [HTTP Server Mode](http-server-mode.md) instead.
+
+**Pre-loading existing configuration**: If `~/.gitlab-mcp-server.env` already exists, every UI mode (web, TUI, CLI) loads it before showing the form. Saved values for GitLab URL, token, catalog mode, safety flags, auto-update, rate limits, log level, and other advanced options are pre-selected. Leave the token field blank to keep the stored token; enter a new value only to rotate it. This makes re-running `--setup` a way to tweak one or two fields without re-typing everything.
+
+**Inline help (Web UI only)**: The Web UI attaches a tooltip to every advanced option explaining what the setting does, its default, and the trade-off. Hover or focus the `?` button next to any label to see it.
 
 **Secure secret storage**: The wizard writes the stdio server configuration, including `GITLAB_URL`, `GITLAB_TOKEN`, TLS, catalog, safety, upload, rate-limit, and auto-update options, to `~/.gitlab-mcp-server.env` (with `0600` permissions on Unix). Most client config files only contain non-secret launch preferences and references to that env file where supported. `GenerateEntry(ClientJetBrains, ...)` is the compatibility exception: JetBrains cannot reference the shared env file, so the display-only JSON snippet includes the full env map, including secrets. Prefer an auto-written client config when possible; if you use the JetBrains snippet, store it with local-only permissions and rotate the token if the snippet is exposed.
 
@@ -185,7 +196,8 @@ This table summarizes the most common operational variables. For the complete so
 | ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `AUTO_UPDATE`          | `true`                       | Enable automatic binary updates (`true`/`check`/`false`)                                                |
 | `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                    |
-| `AUTO_UPDATE_INTERVAL` | `1h`                         | Interval between periodic update checks                                                                 |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Interval between periodic update checks (HTTP mode background checks only)                              |
+| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout for startup/background update checks (range: 5s–10m)                                            |
 | `YOLO_MODE`            | `false`                      | Skip destructive action confirmation prompts                                                            |
 | `AUTOPILOT`            | `false`                      | Same as `YOLO_MODE` — skip confirmation prompts                                                         |
 | `AUTH_MODE`            | `legacy`                     | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification) |
