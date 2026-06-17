@@ -118,6 +118,8 @@ type httpConfig struct {
 	httpIdleTimeout    time.Duration
 }
 
+const defaultHTTPIdleTimeout = 120 * time.Second
+
 // main parses CLI flags, handles one-shot commands such as --help and
 // --tool-search, and dispatches into stdio or HTTP server mode.
 func main() {
@@ -162,7 +164,7 @@ func main() {
 	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", 0, "Per-server tools/call rate limit in requests/second (0 = disabled)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
-	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", 120*time.Second, "HTTP server IdleTimeout; 0 disables idle connection closure")
+	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server IdleTimeout; 0 disables idle connection closure")
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
@@ -275,6 +277,7 @@ FLAGS
   -ignore-scopes            Skip PAT scope detection, register all tools (default false)
   -max-http-clients int     Maximum concurrent client sessions (default %d)
   -session-timeout duration Idle session timeout (default %s)
+	-http-idle-timeout dur    HTTP server idle connection timeout (default %s; 0 disables idle connection closure)
   -auto-update string       Auto-update mode: true|check|false (default "true")
   -auto-update-repo string  GitHub repository for update checks (default "%s")
   -auto-update-interval dur How often to check for updates (default %s, HTTP mode)
@@ -348,6 +351,7 @@ JSON CONFIGURATION EXAMPLES
 `, version, commit,
 		projectAuthor, projectDepartment, projectRepository,
 		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout,
+		defaultHTTPIdleTimeout,
 		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
 		config.DefaultAutoUpdateTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
@@ -384,6 +388,9 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	if err := normalizeFixedGitLabURL(hcfg); err != nil {
 		return err
+	}
+	if hcfg.httpIdleTimeout < 0 {
+		return fmt.Errorf("invalid --http-idle-timeout %s: must be non-negative", hcfg.httpIdleTimeout)
 	}
 
 	toolSurface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(hcfg))
