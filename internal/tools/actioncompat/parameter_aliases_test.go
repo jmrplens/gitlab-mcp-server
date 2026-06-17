@@ -7,9 +7,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestNormalizeParamsWithExplanation_CompatibilityBranches verifies that NormalizeParamsWithExplanation_CompatibilityBranches forwards pagination parameters to the GitLab API and parses the response metadata.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// TestNormalizeParamsWithExplanation_CompatibilityBranches verifies that
+// NormalizeParamsWithExplanation applies action-specific compatibility
+// aliases (job status -> scope, etc.) without making any GitLab API call.
+//
+// The test runs a table of action-specific alias cases and asserts that the
+// normalized params and the emitted alias explanations match the expected
+// contract. This protects the parameter-alias compatibility layer that
+// older LLM agents rely on.
 func TestNormalizeParamsWithExplanation_CompatibilityBranches(t *testing.T) {
 	testCases := []struct {
 		name             string
@@ -579,9 +584,13 @@ func TestNormalizeCommonParams_PaginationBooleanCoercion(t *testing.T) {
 	}
 }
 
-// TestDefaultPaginationValue_PageVsOthers verifies that DefaultPaginationValue_PageVsOthers forwards pagination parameters to the GitLab API and parses the response metadata.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// TestDefaultPaginationValue_PageVsOthers verifies that defaultPaginationValue
+// returns 1 for the "page" key and 100 for any other pagination key
+// (first, last, per_page).
+//
+// The test calls the helper directly across the four documented keys and
+// asserts the expected defaults. This protects the default-pagination
+// contract used when callers omit pagination parameters.
 func TestDefaultPaginationValue_PageVsOthers(t *testing.T) {
 	if got := defaultPaginationValue("page"); got != 1 {
 		t.Fatalf("defaultPaginationValue(page) = %d, want 1", got)

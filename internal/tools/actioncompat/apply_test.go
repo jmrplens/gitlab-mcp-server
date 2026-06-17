@@ -201,9 +201,15 @@ func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
 	}
 }
 
-// TestNormalizeParamsWithExplanation_AppliesActionScopedPolicy verifies that NormalizeParamsWithExplanation_AppliesActionScopedPolicy forwards pagination parameters to the GitLab API and parses the response metadata.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
+// TestNormalizeParamsWithExplanation_AppliesActionScopedPolicy verifies that
+// NormalizeParamsWithExplanation applies the action-scoped alias policy for
+// the repository.file_get action (branch -> ref).
+//
+// The test feeds a {project_id, branch} map into NormalizeParamsWithExplanation
+// with the repository.file_get schema and asserts the result renames branch
+// to ref, removes the original branch key, and emits exactly one alias
+// explanation (branch -> ref). This protects the action-scoped alias
+// normalization contract that downstream handlers depend on.
 func TestNormalizeParamsWithExplanation_AppliesActionScopedPolicy(t *testing.T) {
 	schema := map[string]any{"properties": map[string]any{"project_id": map[string]any{}, "ref": map[string]any{}}}
 	normalized, explanations := NormalizeParamsWithExplanation("repository.file_get", map[string]any{"project_id": 1, "branch": "main"}, schema)

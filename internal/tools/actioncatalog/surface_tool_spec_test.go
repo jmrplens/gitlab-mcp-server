@@ -89,9 +89,14 @@ func TestSurfaceToolSpec_Validate_RequiresSchemas(t *testing.T) {
 	}
 }
 
-// TestSurfaceToolSpec_ValidateRejectsMissingMetadata verifies that SurfaceToolSpec_ValidateRejectsMissingMetadata returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestSurfaceToolSpec_ValidateRejectsMissingMetadata verifies that the
+// SurfaceToolSpec.Validate method rejects specs that omit any required field
+// (description, route, schema, name, owner package, etc.).
+//
+// The test starts from a fully valid spec, strips one field at a time, and
+// asserts each variant produces a validation error. This protects the
+// catalog from registering incomplete surfaces that would later fail at
+// runtime.
 func TestSurfaceToolSpec_ValidateRejectsMissingMetadata(t *testing.T) {
 	valid := SurfaceToolSpec{
 		Name:          "gitlab_test_surface",

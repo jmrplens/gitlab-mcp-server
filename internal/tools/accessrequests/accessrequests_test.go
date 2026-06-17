@@ -52,9 +52,13 @@ func TestListProject_Success(t *testing.T) {
 	}
 }
 
-// TestListProject_MissingProjectID verifies that ListProject_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestListProject_MissingProjectID verifies that ListProject returns a wrapped
+// validation error when the project_id input is empty, without ever calling
+// the GitLab API.
+//
+// The test calls ListProject with an empty ListProjectInput and asserts the
+// error message contains "project_id is required". This protects the handler
+// from making unnecessary network calls with missing required inputs.
 func TestListProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListProject(context.Background(), client, ListProjectInput{})
@@ -646,9 +650,14 @@ func TestDenyGroup_MissingGroupID(t *testing.T) {
 // convertAccessRequest — with date fields populated
 // ---------------------------------------------------------------------------.
 
-// TestConvertAccessRequest_WithDates verifies the ConvertAccessRequest_WithDates handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestConvertAccessRequest_WithDates verifies that convertAccessRequest
+// correctly formats the CreatedAt and RequestedAt time fields when they are
+// populated.
+//
+// The test calls convertAccessRequest with a mock access request carrying
+// explicit time.Time values and asserts the formatted strings contain the
+// expected date prefix. This protects the date-formatting contract used by
+// every access-request output.
 func TestConvertAccessRequest_WithDates(t *testing.T) {
 	// gl.AccessRequest uses *time.Time for CreatedAt and RequestedAt
 	now := testTime(t, "2026-06-15T10:30:00Z")

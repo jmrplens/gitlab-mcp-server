@@ -57,9 +57,14 @@ func TestCatalog_FromActionMapsRoundTrip_DeterministicActions(t *testing.T) {
 	}
 }
 
-// TestFromActionMapsWithError_InvalidToolName_ReturnsError verifies that FromActionMapsWithError_InvalidToolName_ReturnsError returns a wrapped error when the GitLab API responds with an error status.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that the returned error is wrapped and contains a useful hint.
+// TestFromActionMapsWithError_InvalidToolName_ReturnsError verifies that
+// FromActionMapsWithError rejects empty action names and returns both an
+// error and a partial catalog containing the rejected entry.
+//
+// The test feeds an action map keyed by an empty string into
+// FromActionMapsWithError and asserts err != nil plus catalog != nil.
+// This protects the catalog validator from silently dropping malformed
+// entries before they reach the action registry.
 func TestFromActionMapsWithError_InvalidToolName_ReturnsError(t *testing.T) {
 	catalog, err := FromActionMapsWithError(map[string]toolutil.ActionMap{
 		"": {"get": testRoute(false)},

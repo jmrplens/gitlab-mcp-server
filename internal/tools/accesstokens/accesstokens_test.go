@@ -243,9 +243,13 @@ func TestProjectRotate_Success(t *testing.T) {
 	}
 }
 
-// TestProjectRevoke_Success verifies that ProjectRevoke succeeds when the GitLab API returns a valid response.
-// The mock GitLab API at /api/v4/projects/42/access_tokens/5 (DELETE) responds with HTTP NotFound.
-// It asserts the returned output matches the expected fields.
+// TestProjectRevoke_Success verifies that ProjectRevoke succeeds when the
+// GitLab API returns 204 No Content for the DELETE
+// /api/v4/projects/:id/access_tokens/:token_id endpoint.
+//
+// The test wires an httptest server that responds with 204 on the exact
+// DELETE path and 404 on any other request, then asserts no error is
+// returned. This protects the success-path contract of the revoke handler.
 func TestProjectRevoke_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/5" && r.Method == http.MethodDelete {
@@ -565,9 +569,13 @@ func TestPersonalRevoke_Validation(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestAccessLevelName verifies the AccessLevelName handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestAccessLevelName verifies that accessLevelName maps GitLab access level
+// integers (10/20/30/40/50) to their canonical human-readable names and
+// falls back to "Unknown (N)" for any other value.
+//
+// The test runs a table-driven check across the five known levels plus two
+// out-of-range values (0 and 99). This protects the human-facing output
+// across all GitLab access tiers.
 func TestAccessLevelName(t *testing.T) {
 	tests := []struct {
 		level int

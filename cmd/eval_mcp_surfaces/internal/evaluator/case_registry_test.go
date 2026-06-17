@@ -95,14 +95,6 @@ func TestAllEvalCases_ContainsMigratedReadMutatingAndCapabilityCases(t *testing.
 // appear exactly once and that the first case matches MT-001, then confirms
 // that supplying a custom --tasks path produces a deprecation error. This
 // protects the CLI from re-introducing the legacy markdown case loader.
-// TestLoadEvalCases_UsesTypedRegistryOnly verifies that loadEvalCases
-// returns the typed registry when no custom --tasks path is supplied and
-// rejects legacy Markdown --tasks files with a deprecation error.
-//
-// The test calls loadEvalCases with an empty options, asserts known case IDs
-// appear exactly once and that the first case matches MT-001, then confirms
-// that supplying a custom --tasks path produces a deprecation error. This
-// protects the CLI from re-introducing the legacy markdown case loader.
 func TestLoadEvalCases_UsesTypedRegistryOnly(t *testing.T) {
 	cases, err := loadEvalCases(options{})
 	if err != nil {
