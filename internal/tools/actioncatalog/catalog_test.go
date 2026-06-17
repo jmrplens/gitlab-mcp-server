@@ -58,13 +58,16 @@ func TestCatalog_FromActionMapsRoundTrip_DeterministicActions(t *testing.T) {
 }
 
 // TestFromActionMapsWithError_InvalidToolName_ReturnsError verifies that
-// FromActionMapsWithError rejects empty action names and returns both an
-// error and a partial catalog containing the rejected entry.
+// FromActionMapsWithError rejects empty tool names and returns both an
+// error and a non-nil (possibly empty) catalog reflecting partial success.
 //
 // The test feeds an action map keyed by an empty string into
 // FromActionMapsWithError and asserts err != nil plus catalog != nil.
-// This protects the catalog validator from silently dropping malformed
-// entries before they reach the action registry.
+// The catalog is non-nil but contains zero groups because the rejected
+// entry is discarded by normalizeGroup before AddGroup runs, not stored
+// as a "rejected" entry. This protects the catalog validator from
+// silently dropping malformed entries before they reach the action
+// registry.
 func TestFromActionMapsWithError_InvalidToolName_ReturnsError(t *testing.T) {
 	catalog, err := FromActionMapsWithError(map[string]toolutil.ActionMap{
 		"": {"get": testRoute(false)},
