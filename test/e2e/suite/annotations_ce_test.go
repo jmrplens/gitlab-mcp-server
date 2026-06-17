@@ -4,6 +4,8 @@
 // at runtime. This is the primary E2E validation for PR #22 (metadata-driven
 // destructive detection): it calls tools/list on both individual and meta
 // sessions and verifies that destructiveHint is consistent with tool semantics.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -72,10 +74,18 @@ func TestAnnotations_DestructiveHint_Individual(t *testing.T) {
 	requireTruef(t, missingAnnotations == 0, "found %d tools with missing annotations", missingAnnotations)
 }
 
+// isDestructiveIndividualToolName reports whether a flat individual tool
+// name contains a destructive verb (delete, revoke, unprotect, remove, purge)
+// either between underscores or as a terminal suffix.
 func isDestructiveIndividualToolName(name string) bool {
 	return toolNameHasMarkerOrSuffix(name, []string{"_delete_", "_revoke_", "_unprotect_", "_remove_", "_purge_"})
 }
 
+// isReadOnlyIndividualToolName reports whether a flat individual tool name
+// describes a read-only operation (list, get, search) and is neither a
+// destructive verb nor a mutating verb (create, update, add, edit, set,
+// upload). Mutating verbs are excluded first so write tools that happen to
+// contain a list/get/search substring are classified correctly.
 func isReadOnlyIndividualToolName(name string) bool {
 	if strings.HasPrefix(name, "gitlab_create_") || strings.HasPrefix(name, "gitlab_update_") || strings.HasPrefix(name, "gitlab_add_") || strings.HasPrefix(name, "gitlab_edit_") || strings.HasPrefix(name, "gitlab_set_") || strings.HasPrefix(name, "gitlab_upload_") {
 		return false
@@ -86,6 +96,10 @@ func isReadOnlyIndividualToolName(name string) bool {
 	return toolNameHasMarkerOrSuffix(name, []string{"_list_", "_get_", "_search_"})
 }
 
+// toolNameHasMarkerOrSuffix reports whether name matches any verb either as a
+// substring between underscores (e.g. "_delete_") or as a terminal suffix
+// (e.g. "_delete"). Used by annotation tests to classify destructive and
+// read-only tool names from the registered MCP tool catalog.
 func toolNameHasMarkerOrSuffix(name string, verbs []string) bool {
 	for _, verb := range verbs {
 		if strings.Contains(name, verb) {
@@ -99,6 +113,9 @@ func toolNameHasMarkerOrSuffix(name string, verbs []string) bool {
 	return false
 }
 
+// toolNameHasSuffix reports whether name ends with any of the supplied
+// suffixes verbatim. Used by [isReadOnlyIndividualToolName] to exclude
+// mutating tool names that would otherwise match a destructive pattern.
 func toolNameHasSuffix(name string, suffixes []string) bool {
 	for _, suffix := range suffixes {
 		if strings.HasSuffix(name, suffix) {

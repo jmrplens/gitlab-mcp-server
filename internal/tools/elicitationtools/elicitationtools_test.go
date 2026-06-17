@@ -48,8 +48,9 @@ const (
 
 // CancelledResult / UnsupportedResult tests.
 
-// TestCancelledResult verifies that CancelledResult returns a non-error tool
-// result containing a cancellation message.
+// TestCancelledResult verifies the CancelledResult handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCancelledResult(t *testing.T) {
 	result := CancelledResult("Operation canceled by user.")
 	if result.IsError {
@@ -106,8 +107,9 @@ func TestConfirmAction_NoElicitationSupport(t *testing.T) {
 	}
 }
 
-// TestConfirmAction_UserConfirms verifies that ConfirmAction returns nil when
-// the user accepts the confirmation prompt.
+// TestConfirmAction_UserConfirms verifies the ConfirmAction_UserConfirms handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestConfirmAction_UserConfirms(t *testing.T) {
 	ctx := context.Background()
 	_, ss, cleanup := setupElicitationSession(t, ctx, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
@@ -125,8 +127,9 @@ func TestConfirmAction_UserConfirms(t *testing.T) {
 	}
 }
 
-// TestConfirmAction_UserDeclines verifies that ConfirmAction returns a
-// cancellation result when the user declines the confirmation prompt.
+// TestConfirmAction_UserDeclines verifies the ConfirmAction_UserDeclines handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestConfirmAction_UserDeclines(t *testing.T) {
 	ctx := context.Background()
 	_, ss, cleanup := setupElicitationSession(t, ctx, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
@@ -148,8 +151,9 @@ func TestConfirmAction_UserDeclines(t *testing.T) {
 	}
 }
 
-// TestConfirmAction_UserCancels verifies that ConfirmAction returns a
-// cancellation result when the user explicitly cancels the prompt.
+// TestConfirmAction_UserCancels verifies the ConfirmAction_UserCancels handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestConfirmAction_UserCancels(t *testing.T) {
 	ctx := context.Background()
 	_, ss, cleanup := setupElicitationSession(t, ctx, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
@@ -164,8 +168,9 @@ func TestConfirmAction_UserCancels(t *testing.T) {
 	}
 }
 
-// TestConfirmAction_UserNotConfirmed verifies that ConfirmAction returns a
-// cancellation result when the user accepts but sets confirmed to false.
+// TestConfirmAction_UserNotConfirmed verifies the ConfirmAction_UserNotConfirmed handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestConfirmAction_UserNotConfirmed(t *testing.T) {
 	ctx := context.Background()
 	_, ss, cleanup := setupElicitationSession(t, ctx, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
@@ -185,8 +190,9 @@ func TestConfirmAction_UserNotConfirmed(t *testing.T) {
 
 // Interactive tool input validation tests.
 
-// TestIssueCreate_EmptyProjectID verifies that IssueCreate
-// returns a validation error when project_id is empty.
+// TestIssueCreate_EmptyProjectID verifies the IssueCreate_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestIssueCreate_EmptyProjectID(t *testing.T) {
 	_, err := IssueCreate(context.Background(), &mcp.CallToolRequest{}, nil, IssueInput{})
 	if err == nil || !strings.Contains(err.Error(), keyProjectID) {
@@ -194,8 +200,9 @@ func TestIssueCreate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestMRCreate_EmptyProjectID verifies that MRCreate
-// returns a validation error when project_id is empty.
+// TestMRCreate_EmptyProjectID verifies the MRCreate_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMRCreate_EmptyProjectID(t *testing.T) {
 	_, err := MRCreate(context.Background(), &mcp.CallToolRequest{}, nil, MRInput{})
 	if err == nil || !strings.Contains(err.Error(), keyProjectID) {
@@ -203,8 +210,9 @@ func TestMRCreate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestReleaseCreate_EmptyProjectID verifies that
-// ReleaseCreate returns a validation error when project_id is empty.
+// TestReleaseCreate_EmptyProjectID verifies the ReleaseCreate_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestReleaseCreate_EmptyProjectID(t *testing.T) {
 	_, err := ReleaseCreate(context.Background(), &mcp.CallToolRequest{}, nil, ReleaseInput{})
 	if err == nil || !strings.Contains(err.Error(), keyProjectID) {
@@ -326,8 +334,9 @@ func TestIssueCreate_FullFlow(t *testing.T) {
 	}
 }
 
-// TestIssueCreate_UserCancelsTitle verifies that the interactive
-// issue creation returns an error when the user cancels at the title prompt.
+// TestIssueCreate_UserCancelsTitle verifies the IssueCreate_UserCancelsTitle handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestIssueCreate_UserCancelsTitle(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -532,7 +541,9 @@ func setupElicitationSession(t *testing.T, ctx context.Context, handler func(con
 // parseCSVLabels — edge cases
 // ---------------------------------------------------------------------------.
 
-// TestParseCSVLabels_Empty verifies ParseCSVLabels when empty.
+// TestParseCSVLabels_Empty verifies the ParseCSVLabels_Empty handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestParseCSVLabels_Empty(t *testing.T) {
 	got := parseCSVLabels("")
 	if got != nil {
@@ -540,7 +551,9 @@ func TestParseCSVLabels_Empty(t *testing.T) {
 	}
 }
 
-// TestParseCSVLabels_SingleLabel verifies ParseCSVLabels when single label.
+// TestParseCSVLabels_SingleLabel verifies the ParseCSVLabels_SingleLabel handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestParseCSVLabels_SingleLabel(t *testing.T) {
 	got := parseCSVLabels("bug")
 	if len(got) != 1 || got[0] != "bug" {
@@ -548,7 +561,9 @@ func TestParseCSVLabels_SingleLabel(t *testing.T) {
 	}
 }
 
-// TestParseCSVLabels_Multiple verifies ParseCSVLabels when multiple.
+// TestParseCSVLabels_Multiple verifies the ParseCSVLabels_Multiple handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestParseCSVLabels_Multiple(t *testing.T) {
 	got := parseCSVLabels("bug, feature , docs")
 	if len(got) != 3 {
@@ -559,7 +574,9 @@ func TestParseCSVLabels_Multiple(t *testing.T) {
 	}
 }
 
-// TestParseCSVLabels_TrailingComma verifies ParseCSVLabels when trailing comma.
+// TestParseCSVLabels_TrailingComma verifies the ParseCSVLabels_TrailingComma handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestParseCSVLabels_TrailingComma(t *testing.T) {
 	got := parseCSVLabels("bug, ,, feature,")
 	if len(got) != 2 {
@@ -574,7 +591,9 @@ func TestParseCSVLabels_TrailingComma(t *testing.T) {
 // buildMRSummary — all options
 // ---------------------------------------------------------------------------.
 
-// TestBuildMRSummary_Full covers BuildMRSummary with table-driven subtests for full.
+// TestBuildMRSummary_Full verifies the BuildMRSummary_Full handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBuildMRSummary_Full(t *testing.T) {
 	removeSource := true
 	squash := true
@@ -607,7 +626,9 @@ func TestBuildMRSummary_Full(t *testing.T) {
 	}
 }
 
-// TestBuildMRSummary_Minimal verifies BuildMRSummary when minimal.
+// TestBuildMRSummary_Minimal verifies the BuildMRSummary_Minimal handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBuildMRSummary_Minimal(t *testing.T) {
 	s := buildMRSummary(mrSummaryParams{
 		ProjectID:    "42",
@@ -629,7 +650,9 @@ func TestBuildMRSummary_Minimal(t *testing.T) {
 	}
 }
 
-// TestBuildMRSummary_RemoveSourceFalse verifies BuildMRSummary when remove source false.
+// TestBuildMRSummary_RemoveSourceFalse verifies the BuildMRSummary_RemoveSourceFalse handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBuildMRSummary_RemoveSourceFalse(t *testing.T) {
 	removeSource := false
 	squash := false
@@ -653,7 +676,9 @@ func TestBuildMRSummary_RemoveSourceFalse(t *testing.T) {
 // Catalog surface projection no-panic
 // ---------------------------------------------------------------------------.
 
-// TestCatalogSurface_NoPanic verifies elicitation specs can be projected as MCP tools.
+// TestCatalogSurface_NoPanic verifies the CatalogSurface_NoPanic handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_NoPanic(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -672,7 +697,9 @@ func TestCatalogSurface_NoPanic(t *testing.T) {
 // MCP round-trip — without elicitation (covers unsupported path in register.go)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRound_TripNoElicitation covers MCPRound with table-driven subtests for trip no elicitation.
+// TestMCPRound_TripNoElicitation verifies the MCPRound_TripNoElicitation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMCPRound_TripNoElicitation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -727,7 +754,9 @@ func TestMCPRound_TripNoElicitation(t *testing.T) {
 // MCP round-trip — with elicitation (covers success path for issue create)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTripIssueCreate_WithElicitation verifies MCPRoundTripIssueCreate when with elicitation.
+// TestMCPRoundTripIssueCreate_WithElicitation verifies the MCPRoundTripIssueCreate_WithElicitation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMCPRoundTripIssueCreate_WithElicitation(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/issues", func(w http.ResponseWriter, _ *http.Request) {
@@ -795,7 +824,9 @@ func TestMCPRoundTripIssueCreate_WithElicitation(t *testing.T) {
 // MCP round-trip — with elicitation, validation error (empty project_id)
 // ---------------------------------------------------------------------------.
 
-// TestMCPRoundTripIssueCreate_ValidationError verifies MCPRoundTripIssueCreate when validation error.
+// TestMCPRoundTripIssueCreate_ValidationError verifies that MCPRoundTripIssueCreate_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestMCPRoundTripIssueCreate_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -839,7 +870,9 @@ func TestMCPRoundTripIssueCreate_ValidationError(t *testing.T) {
 // MR cancel at source branch prompt
 // ---------------------------------------------------------------------------.
 
-// TestMRCreate_UserCancelsSourceBranch verifies MRCreate when user cancels source branch.
+// TestMRCreate_UserCancelsSourceBranch verifies the MRCreate_UserCancelsSourceBranch handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestMRCreate_UserCancelsSourceBranch(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -862,7 +895,9 @@ func TestMRCreate_UserCancelsSourceBranch(t *testing.T) {
 // Release cancel at tag name prompt
 // ---------------------------------------------------------------------------.
 
-// TestReleaseCreate_UserCancelsTagName verifies ReleaseCreate when user cancels tag name.
+// TestReleaseCreate_UserCancelsTagName verifies the ReleaseCreate_UserCancelsTagName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestReleaseCreate_UserCancelsTagName(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -885,7 +920,9 @@ func TestReleaseCreate_UserCancelsTagName(t *testing.T) {
 // Project cancel at name prompt
 // ---------------------------------------------------------------------------.
 
-// TestProjectCreate_UserCancelsName verifies ProjectCreate when user cancels name.
+// TestProjectCreate_UserCancelsName verifies the ProjectCreate_UserCancelsName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestProjectCreate_UserCancelsName(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -905,7 +942,9 @@ func TestProjectCreate_UserCancelsName(t *testing.T) {
 // Issue user cancels at confirmation
 // ---------------------------------------------------------------------------.
 
-// TestIssueCreate_UserCancelsConfirmation verifies IssueCreate when user cancels confirmation.
+// TestIssueCreate_UserCancelsConfirmation verifies the IssueCreate_UserCancelsConfirmation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestIssueCreate_UserCancelsConfirmation(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -932,7 +971,9 @@ func TestIssueCreate_UserCancelsConfirmation(t *testing.T) {
 // MR user cancels at confirmation
 // ---------------------------------------------------------------------------.
 
-// TestMRCreate_UserCancelsConfirmation verifies MRCreate when user cancels confirmation.
+// TestMRCreate_UserCancelsConfirmation verifies the MRCreate_UserCancelsConfirmation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestMRCreate_UserCancelsConfirmation(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -962,7 +1003,9 @@ func TestMRCreate_UserCancelsConfirmation(t *testing.T) {
 // Release user cancels at confirmation
 // ---------------------------------------------------------------------------.
 
-// TestReleaseCreate_UserCancelsConfirmation verifies ReleaseCreate when user cancels confirmation.
+// TestReleaseCreate_UserCancelsConfirmation verifies the ReleaseCreate_UserCancelsConfirmation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestReleaseCreate_UserCancelsConfirmation(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -988,7 +1031,9 @@ func TestReleaseCreate_UserCancelsConfirmation(t *testing.T) {
 // Issue create with confidential=true in flow
 // ---------------------------------------------------------------------------.
 
-// TestIssueCreate_Confidential verifies IssueCreate when confidential.
+// TestIssueCreate_Confidential verifies the IssueCreate_Confidential handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestIssueCreate_Confidential(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/issues", func(w http.ResponseWriter, _ *http.Request) {
@@ -1199,8 +1244,9 @@ func TestMRCreate_CancelAtVariousSteps(t *testing.T) {
 
 // ReleaseCreate — cancel at intermediate prompts.
 
-// TestReleaseCreate_CancelAtName verifies ReleaseCreate returns an error
-// when the user cancels the release name prompt.
+// TestReleaseCreate_CancelAtName verifies the ReleaseCreate_CancelAtName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestReleaseCreate_CancelAtName(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -1219,8 +1265,9 @@ func TestReleaseCreate_CancelAtName(t *testing.T) {
 	}
 }
 
-// TestReleaseCreate_CancelAtDescription verifies ReleaseCreate returns an
-// error when the user cancels the description prompt.
+// TestReleaseCreate_CancelAtDescription verifies the ReleaseCreate_CancelAtDescription handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestReleaseCreate_CancelAtDescription(t *testing.T) {
 	ctx := context.Background()
 	steps := []elicitationStep{
@@ -1428,8 +1475,9 @@ func TestMCPRoundTripMRCreate_WithElicitation(t *testing.T) {
 
 // MCP round-trip — Release create with elicitation (RegisterTools success path).
 
-// TestMCPRoundTripReleaseCreate_WithElicitation verifies the full MCP
-// round-trip for interactive release creation through RegisterTools.
+// TestMCPRoundTripReleaseCreate_WithElicitation verifies the MCPRoundTripReleaseCreate_WithElicitation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMCPRoundTripReleaseCreate_WithElicitation(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/42/releases", func(w http.ResponseWriter, _ *http.Request) {
@@ -1490,8 +1538,9 @@ func TestMCPRoundTripReleaseCreate_WithElicitation(t *testing.T) {
 
 // MCP round-trip — Project create with elicitation (RegisterTools success path).
 
-// TestMCPRoundTripProjectCreate_WithElicitation verifies the full MCP
-// round-trip for interactive project creation through RegisterTools.
+// TestMCPRoundTripProjectCreate_WithElicitation verifies the MCPRoundTripProjectCreate_WithElicitation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMCPRoundTripProjectCreate_WithElicitation(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects", func(w http.ResponseWriter, _ *http.Request) {

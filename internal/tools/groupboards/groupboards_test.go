@@ -54,7 +54,9 @@ var boardListsArrayJSON = `[` + boardListItemJSON + `]`
 // Group Board CRUD tests
 // ---------------------------------------------------------------------------.
 
-// TestListGroupBoards_Success verifies ListGroupBoards when success.
+// TestListGroupBoards_Success verifies that ListGroupBoards succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListGroupBoards_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards", func(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +80,9 @@ func TestListGroupBoards_Success(t *testing.T) {
 	}
 }
 
-// TestListGroupBoards_MissingGroupID verifies ListGroupBoards when missing group ID.
+// TestListGroupBoards_MissingGroupID verifies that ListGroupBoards_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListGroupBoards_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListGroupBoards(context.Background(), client, ListGroupBoardsInput{})
@@ -87,7 +91,9 @@ func TestListGroupBoards_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoard_Success verifies GetGroupBoard when success.
+// TestGetGroupBoard_Success verifies that GetGroupBoard succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetGroupBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +119,9 @@ func TestGetGroupBoard_Success(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoard_MissingParams verifies GetGroupBoard when missing params.
+// TestGetGroupBoard_MissingParams verifies that GetGroupBoard_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroupBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetGroupBoard(context.Background(), client, GetGroupBoardInput{})
@@ -126,7 +134,9 @@ func TestGetGroupBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoard_Success verifies CreateGroupBoard when success.
+// TestCreateGroupBoard_Success verifies that CreateGroupBoard succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateGroupBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards", func(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +159,9 @@ func TestCreateGroupBoard_Success(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoard_MissingParams verifies CreateGroupBoard when missing params.
+// TestCreateGroupBoard_MissingParams verifies that CreateGroupBoard_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateGroupBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateGroupBoard(context.Background(), client, CreateGroupBoardInput{})
@@ -162,7 +174,9 @@ func TestCreateGroupBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoard_Success verifies UpdateGroupBoard when success.
+// TestUpdateGroupBoard_Success verifies that UpdateGroupBoard succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateGroupBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +196,9 @@ func TestUpdateGroupBoard_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoard_MissingParams verifies UpdateGroupBoard when missing params.
+// TestUpdateGroupBoard_MissingParams verifies that UpdateGroupBoard_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateGroupBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateGroupBoard(context.Background(), client, UpdateGroupBoardInput{})
@@ -195,7 +211,9 @@ func TestUpdateGroupBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoard_Success verifies DeleteGroupBoard when success.
+// TestDeleteGroupBoard_Success verifies that DeleteGroupBoard succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteGroupBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1", func(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +227,9 @@ func TestDeleteGroupBoard_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoard_MissingParams verifies DeleteGroupBoard when missing params.
+// TestDeleteGroupBoard_MissingParams verifies that DeleteGroupBoard_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteGroupBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteGroupBoard(context.Background(), client, DeleteGroupBoardInput{})
@@ -226,7 +246,9 @@ func TestDeleteGroupBoard_MissingParams(t *testing.T) {
 // Group Board List CRUD tests
 // ---------------------------------------------------------------------------.
 
-// TestListGroupBoardLists_Success verifies ListGroupBoardLists when success.
+// TestListGroupBoardLists_Success verifies that ListGroupBoardLists succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListGroupBoardLists_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -247,7 +269,9 @@ func TestListGroupBoardLists_Success(t *testing.T) {
 	}
 }
 
-// TestListGroupBoardLists_MissingParams verifies ListGroupBoardLists when missing params.
+// TestListGroupBoardLists_MissingParams verifies that ListGroupBoardLists_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListGroupBoardLists_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListGroupBoardLists(context.Background(), client, ListGroupBoardListsInput{})
@@ -260,7 +284,9 @@ func TestListGroupBoardLists_MissingParams(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoardList_Success verifies GetGroupBoardList when success.
+// TestGetGroupBoardList_Success verifies that GetGroupBoardList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -283,7 +309,9 @@ func TestGetGroupBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoardList_MissingParams verifies GetGroupBoardList when missing params.
+// TestGetGroupBoardList_MissingParams verifies that GetGroupBoardList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroupBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetGroupBoardList(context.Background(), client, GetGroupBoardListInput{})
@@ -300,7 +328,9 @@ func TestGetGroupBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_Success verifies CreateGroupBoardList when success.
+// TestCreateGroupBoardList_Success verifies that CreateGroupBoardList succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -321,7 +351,9 @@ func TestCreateGroupBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_MissingParams verifies CreateGroupBoardList when missing params.
+// TestCreateGroupBoardList_MissingParams verifies that CreateGroupBoardList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateGroupBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateGroupBoardList(context.Background(), client, CreateGroupBoardListInput{})
@@ -338,7 +370,9 @@ func TestCreateGroupBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_Success verifies UpdateGroupBoardList when success.
+// TestUpdateGroupBoardList_Success verifies that UpdateGroupBoardList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -355,7 +389,9 @@ func TestUpdateGroupBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_MissingParams verifies UpdateGroupBoardList when missing params.
+// TestUpdateGroupBoardList_MissingParams verifies that UpdateGroupBoardList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateGroupBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateGroupBoardList(context.Background(), client, UpdateGroupBoardListInput{})
@@ -372,7 +408,9 @@ func TestUpdateGroupBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoardList_Success verifies DeleteGroupBoardList when success.
+// TestDeleteGroupBoardList_Success verifies that DeleteGroupBoardList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -386,7 +424,9 @@ func TestDeleteGroupBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoardList_MissingParams verifies DeleteGroupBoardList when missing params.
+// TestDeleteGroupBoardList_MissingParams verifies that DeleteGroupBoardList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteGroupBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteGroupBoardList(context.Background(), client, DeleteGroupBoardListInput{})
@@ -407,7 +447,9 @@ func TestDeleteGroupBoardList_MissingParams(t *testing.T) {
 // Formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatGroupBoardMarkdown verifies FormatGroupBoardMarkdown.
+// TestFormatGroupBoardMarkdown verifies the GroupBoardMarkdown Markdown formatter for a representative groupboard input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGroupBoardMarkdown(t *testing.T) {
 	out := GroupBoardOutput{
 		ID:             1,
@@ -437,7 +479,9 @@ func TestFormatGroupBoardMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListGroupBoardsMarkdown verifies FormatListGroupBoardsMarkdown.
+// TestFormatListGroupBoardsMarkdown verifies the ListGroupBoardsMarkdown Markdown formatter for a representative listgroupboards input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 	out := ListGroupBoardsOutput{
 		Boards: []GroupBoardOutput{
@@ -451,7 +495,9 @@ func TestFormatListGroupBoardsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatBoardListMarkdown verifies FormatBoardListMarkdown.
+// TestFormatBoardListMarkdown verifies the BoardListMarkdown Markdown formatter for a representative boardlist input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardListMarkdown(t *testing.T) {
 	out := BoardListOutput{
 		ID:             10,
@@ -489,7 +535,9 @@ const errExpectedAPI = "expected API error, got nil"
 // ListGroupBoards — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListGroupBoards_APIError verifies ListGroupBoards when API error.
+// TestListGroupBoards_APIError verifies that ListGroupBoards returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListGroupBoards_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -500,7 +548,9 @@ func TestListGroupBoards_APIError(t *testing.T) {
 	}
 }
 
-// TestListGroupBoards_CancelledContext verifies ListGroupBoards when cancelled context.
+// TestListGroupBoards_CancelledContext verifies the ListGroupBoards_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListGroupBoards_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -514,7 +564,9 @@ func TestListGroupBoards_CancelledContext(t *testing.T) {
 // GetGroupBoard — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetGroupBoard_APIError verifies GetGroupBoard when API error.
+// TestGetGroupBoard_APIError verifies that GetGroupBoard returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroupBoard_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -525,7 +577,9 @@ func TestGetGroupBoard_APIError(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoard_CancelledContext verifies GetGroupBoard when cancelled context.
+// TestGetGroupBoard_CancelledContext verifies the GetGroupBoard_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -539,7 +593,9 @@ func TestGetGroupBoard_CancelledContext(t *testing.T) {
 // CreateGroupBoard — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreateGroupBoard_APIError verifies CreateGroupBoard when API error.
+// TestCreateGroupBoard_APIError verifies that CreateGroupBoard returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateGroupBoard_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -550,8 +606,9 @@ func TestCreateGroupBoard_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoard_ValidationAPIError verifies validation failures include
-// guidance about unique names and referenced scope IDs.
+// TestCreateGroupBoard_ValidationAPIError verifies that CreateGroupBoard_ValidationAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateGroupBoard_ValidationAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Name has already been taken"}`)
@@ -566,7 +623,9 @@ func TestCreateGroupBoard_ValidationAPIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoard_CancelledContext verifies CreateGroupBoard when cancelled context.
+// TestCreateGroupBoard_CancelledContext verifies the CreateGroupBoard_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreateGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -580,7 +639,9 @@ func TestCreateGroupBoard_CancelledContext(t *testing.T) {
 // UpdateGroupBoard — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestUpdateGroupBoard_APIError verifies UpdateGroupBoard when API error.
+// TestUpdateGroupBoard_APIError verifies that UpdateGroupBoard returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateGroupBoard_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -607,7 +668,9 @@ func TestUpdateGroupBoard_ValidationAPIError(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoard_CancelledContext verifies UpdateGroupBoard when cancelled context.
+// TestUpdateGroupBoard_CancelledContext verifies the UpdateGroupBoard_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdateGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -621,7 +684,9 @@ func TestUpdateGroupBoard_CancelledContext(t *testing.T) {
 // DeleteGroupBoard — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeleteGroupBoard_APIError verifies DeleteGroupBoard when API error.
+// TestDeleteGroupBoard_APIError verifies that DeleteGroupBoard returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteGroupBoard_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -632,7 +697,9 @@ func TestDeleteGroupBoard_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoard_CancelledContext verifies DeleteGroupBoard when cancelled context.
+// TestDeleteGroupBoard_CancelledContext verifies the DeleteGroupBoard_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteGroupBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -646,7 +713,9 @@ func TestDeleteGroupBoard_CancelledContext(t *testing.T) {
 // ListGroupBoardLists — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestListGroupBoardLists_APIError verifies ListGroupBoardLists when API error.
+// TestListGroupBoardLists_APIError verifies that ListGroupBoardLists returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListGroupBoardLists_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -657,7 +726,9 @@ func TestListGroupBoardLists_APIError(t *testing.T) {
 	}
 }
 
-// TestListGroupBoardLists_CancelledContext verifies ListGroupBoardLists when cancelled context.
+// TestListGroupBoardLists_CancelledContext verifies the ListGroupBoardLists_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListGroupBoardLists_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -671,7 +742,9 @@ func TestListGroupBoardLists_CancelledContext(t *testing.T) {
 // GetGroupBoardList — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetGroupBoardList_APIError verifies GetGroupBoardList when API error.
+// TestGetGroupBoardList_APIError verifies that GetGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroupBoardList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -682,7 +755,9 @@ func TestGetGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestGetGroupBoardList_CancelledContext verifies GetGroupBoardList when cancelled context.
+// TestGetGroupBoardList_CancelledContext verifies the GetGroupBoardList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -696,7 +771,9 @@ func TestGetGroupBoardList_CancelledContext(t *testing.T) {
 // CreateGroupBoardList — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestCreateGroupBoardList_APIError verifies CreateGroupBoardList when API error.
+// TestCreateGroupBoardList_APIError verifies that CreateGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateGroupBoardList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -707,8 +784,9 @@ func TestCreateGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_ValidationAPIError verifies validation failures
-// include guidance about allowed list scopes and duplicate board lists.
+// TestCreateGroupBoardList_ValidationAPIError verifies that CreateGroupBoardList_ValidationAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateGroupBoardList_ValidationAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"List already exists"}`)
@@ -723,7 +801,9 @@ func TestCreateGroupBoardList_ValidationAPIError(t *testing.T) {
 	}
 }
 
-// TestCreateGroupBoardList_CancelledContext verifies CreateGroupBoardList when cancelled context.
+// TestCreateGroupBoardList_CancelledContext verifies the CreateGroupBoardList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreateGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -737,7 +817,9 @@ func TestCreateGroupBoardList_CancelledContext(t *testing.T) {
 // UpdateGroupBoardList — API error, canceled context, fallback, empty
 // ---------------------------------------------------------------------------.
 
-// TestUpdateGroupBoardList_APIError verifies UpdateGroupBoardList when API error.
+// TestUpdateGroupBoardList_APIError verifies that UpdateGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateGroupBoardList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -748,7 +830,9 @@ func TestUpdateGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_CancelledContext verifies UpdateGroupBoardList when cancelled context.
+// TestUpdateGroupBoardList_CancelledContext verifies the UpdateGroupBoardList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdateGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -758,7 +842,9 @@ func TestUpdateGroupBoardList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_FallbackFirstElement verifies UpdateGroupBoardList when fallback first element.
+// TestUpdateGroupBoardList_FallbackFirstElement verifies the UpdateGroupBoardList_FallbackFirstElement handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateGroupBoardList_FallbackFirstElement(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
@@ -780,7 +866,9 @@ func TestUpdateGroupBoardList_FallbackFirstElement(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_EmptyResult verifies UpdateGroupBoardList when empty result.
+// TestUpdateGroupBoardList_EmptyResult verifies the UpdateGroupBoardList_EmptyResult handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateGroupBoardList_EmptyResult(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
@@ -803,7 +891,9 @@ func TestUpdateGroupBoardList_EmptyResult(t *testing.T) {
 // DeleteGroupBoardList — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeleteGroupBoardList_APIError verifies DeleteGroupBoardList when API error.
+// TestDeleteGroupBoardList_APIError verifies that DeleteGroupBoardList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteGroupBoardList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -814,7 +904,9 @@ func TestDeleteGroupBoardList_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteGroupBoardList_CancelledContext verifies DeleteGroupBoardList when cancelled context.
+// TestDeleteGroupBoardList_CancelledContext verifies the DeleteGroupBoardList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteGroupBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -828,7 +920,9 @@ func TestDeleteGroupBoardList_CancelledContext(t *testing.T) {
 // Formatter coverage: FormatGroupBoardMarkdown — minimal (no optional fields)
 // ---------------------------------------------------------------------------.
 
-// TestFormatGroupBoardMarkdown_Minimal verifies FormatGroupBoardMarkdown when minimal.
+// TestFormatGroupBoardMarkdown_Minimal verifies the GroupBoardMarkdown_Minimal Markdown formatter for a representative groupboard_minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 	md := FormatGroupBoardMarkdown(GroupBoardOutput{ID: 1, Name: "Board"})
 	if !strings.Contains(md, "Board") {
@@ -845,7 +939,9 @@ func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 // Formatter coverage: FormatListGroupBoardsMarkdown — empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListGroupBoardsMarkdown_Empty verifies FormatListGroupBoardsMarkdown when empty.
+// TestFormatListGroupBoardsMarkdown_Empty verifies the ListGroupBoardsMarkdown_Empty Markdown formatter for a representative listgroupboards_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListGroupBoardsMarkdown_Empty(t *testing.T) {
 	md := FormatListGroupBoardsMarkdown(ListGroupBoardsOutput{})
 	if !strings.Contains(md, "## Group Issue Boards") {
@@ -857,7 +953,9 @@ func TestFormatListGroupBoardsMarkdown_Empty(t *testing.T) {
 // Formatter coverage: FormatBoardListMarkdown — minimal (no optional fields)
 // ---------------------------------------------------------------------------.
 
-// TestFormatBoardListMarkdown_Minimal verifies FormatBoardListMarkdown when minimal.
+// TestFormatBoardListMarkdown_Minimal verifies the BoardListMarkdown_Minimal Markdown formatter for a representative boardlist_minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 	md := FormatBoardListMarkdown(BoardListOutput{ID: 5, Position: 1})
 	if !strings.Contains(md, "Board List (ID: 5)") {
@@ -877,7 +975,9 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 // Formatter coverage: FormatListBoardListsMarkdown — with data and empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListBoardListsMarkdown_WithData verifies FormatListBoardListsMarkdown when with data.
+// TestFormatListBoardListsMarkdown_WithData verifies the ListBoardListsMarkdown_WithData Markdown formatter for a representative listboardlists_withdata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
@@ -894,7 +994,9 @@ func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardListsMarkdown_Empty verifies FormatListBoardListsMarkdown when empty.
+// TestFormatListBoardListsMarkdown_Empty verifies the ListBoardListsMarkdown_Empty Markdown formatter for a representative listboardlists_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 	md := FormatListBoardListsMarkdown(ListBoardListsOutput{})
 	if !strings.Contains(md, "## Board Lists") {

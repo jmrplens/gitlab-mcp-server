@@ -17,7 +17,9 @@ import (
 // ListProtectionRules
 // ---------------------------------------------------------------------------.
 
-// TestListProtectionRules_Success verifies ListProtectionRules when success.
+// TestListProtectionRules_Success verifies that ListProtectionRules succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProtectionRules_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/protection/repository/rules", func(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +44,9 @@ func TestListProtectionRules_Success(t *testing.T) {
 	}
 }
 
-// TestListProtectionRules_MissingProjectID verifies ListProtectionRules when missing project ID.
+// TestListProtectionRules_MissingProjectID verifies that ListProtectionRules_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProtectionRules_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListProtectionRules(context.Background(), client, ListProtectionRulesInput{})
@@ -55,7 +59,9 @@ func TestListProtectionRules_MissingProjectID(t *testing.T) {
 // CreateProtectionRule
 // ---------------------------------------------------------------------------.
 
-// TestCreateProtectionRule_Success verifies CreateProtectionRule when success.
+// TestCreateProtectionRule_Success verifies that CreateProtectionRule succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateProtectionRule_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/protection/repository/rules", func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +91,9 @@ func TestCreateProtectionRule_Success(t *testing.T) {
 	}
 }
 
-// TestCreateProtectionRule_MissingProjectID verifies CreateProtectionRule when missing project ID.
+// TestCreateProtectionRule_MissingProjectID verifies that CreateProtectionRule_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateProtectionRule_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateProtectionRule(context.Background(), client, CreateProtectionRuleInput{RepositoryPathPattern: "x"})
@@ -94,7 +102,9 @@ func TestCreateProtectionRule_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreateProtectionRule_MissingPattern verifies CreateProtectionRule when missing pattern.
+// TestCreateProtectionRule_MissingPattern verifies that CreateProtectionRule_MissingPattern returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateProtectionRule_MissingPattern(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateProtectionRule(context.Background(), client, CreateProtectionRuleInput{ProjectID: toolutil.StringOrInt("10")})
@@ -107,7 +117,9 @@ func TestCreateProtectionRule_MissingPattern(t *testing.T) {
 // UpdateProtectionRule
 // ---------------------------------------------------------------------------.
 
-// TestUpdateProtectionRule_Success verifies UpdateProtectionRule when success.
+// TestUpdateProtectionRule_Success verifies that UpdateProtectionRule succeeds when the GitLab API returns a valid response.
+// The test exercises the PATCH path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateProtectionRule_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/protection/repository/rules/5", func(w http.ResponseWriter, r *http.Request) {
@@ -133,7 +145,9 @@ func TestUpdateProtectionRule_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateProtectionRule_MissingProjectID verifies UpdateProtectionRule when missing project ID.
+// TestUpdateProtectionRule_MissingProjectID verifies that UpdateProtectionRule_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateProtectionRule_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateProtectionRule(context.Background(), client, UpdateProtectionRuleInput{RuleID: 5})
@@ -142,7 +156,9 @@ func TestUpdateProtectionRule_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestUpdateProtectionRule_MissingRuleID verifies UpdateProtectionRule when missing rule ID.
+// TestUpdateProtectionRule_MissingRuleID verifies that UpdateProtectionRule_MissingRuleID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateProtectionRule_MissingRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateProtectionRule(context.Background(), client, UpdateProtectionRuleInput{ProjectID: toolutil.StringOrInt("10")})
@@ -155,7 +171,9 @@ func TestUpdateProtectionRule_MissingRuleID(t *testing.T) {
 // DeleteProtectionRule
 // ---------------------------------------------------------------------------.
 
-// TestDeleteProtectionRule_Success verifies DeleteProtectionRule when success.
+// TestDeleteProtectionRule_Success verifies that DeleteProtectionRule succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteProtectionRule_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/registry/protection/repository/rules/5", func(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +194,9 @@ func TestDeleteProtectionRule_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteProtectionRule_MissingProjectID verifies DeleteProtectionRule when missing project ID.
+// TestDeleteProtectionRule_MissingProjectID verifies that DeleteProtectionRule_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteProtectionRule_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteProtectionRule(context.Background(), client, DeleteProtectionRuleInput{RuleID: 5})
@@ -185,7 +205,9 @@ func TestDeleteProtectionRule_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeleteProtectionRule_MissingRuleID verifies DeleteProtectionRule when missing rule ID.
+// TestDeleteProtectionRule_MissingRuleID verifies that DeleteProtectionRule_MissingRuleID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteProtectionRule_MissingRuleID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteProtectionRule(context.Background(), client, DeleteProtectionRuleInput{ProjectID: toolutil.StringOrInt("10")})
@@ -198,7 +220,9 @@ func TestDeleteProtectionRule_MissingRuleID(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatProtectionRuleMarkdown verifies FormatProtectionRuleMarkdown.
+// TestFormatProtectionRuleMarkdown verifies the ProtectionRuleMarkdown Markdown formatter for a representative protectionrule input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatProtectionRuleMarkdown(t *testing.T) {
 	out := ProtectionRuleOutput{
 		ID: 1, ProjectID: 10,
@@ -212,7 +236,9 @@ func TestFormatProtectionRuleMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatProtectionRuleListMarkdown verifies FormatProtectionRuleListMarkdown.
+// TestFormatProtectionRuleListMarkdown verifies the ProtectionRuleListMarkdown Markdown formatter for a representative protectionrulelist input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatProtectionRuleListMarkdown(t *testing.T) {
 	out := ProtectionRuleListOutput{
 		Rules: []ProtectionRuleOutput{

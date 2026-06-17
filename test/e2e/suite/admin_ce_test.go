@@ -3,6 +3,8 @@
 // admin_ce_test.go tests lightweight admin and job-related MCP tools against
 // a live GitLab instance. Covers topic listing, settings retrieval via
 // gitlab_admin, and job token scope via gitlab_job.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -15,7 +17,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/topics"
 )
 
-// TestMeta_Admin exercises admin-level meta-tool actions (topics, settings).
+// TestMeta_Admin exercises read-only admin-level meta-tool actions (topics,
+// settings) via the gitlab_admin catalog tool.
+//
+// The test runs two subtests. The first lists GitLab topics through the
+// topic_list action and asserts the call succeeds. The second fetches the
+// admin settings through settings_get and asserts the returned map has at
+// least one key. Neither subtest mutates GitLab state.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Admin(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -40,7 +50,16 @@ func TestMeta_Admin(t *testing.T) {
 	})
 }
 
-// TestMeta_JobTokens exercises job listing and token scope via the gitlab_job meta-tool.
+// TestMeta_JobTokens exercises job listing and token scope via the
+// gitlab_job meta-tool.
+//
+// The test creates a project fixture and runs two subtests. The first lists
+// the project's jobs through list_project (the list may be empty when no CI
+// pipeline has run). The second fetches the project-level job token scope
+// through token_scope_get and asserts the response carries an inbound_enabled
+// flag.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_JobTokens(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

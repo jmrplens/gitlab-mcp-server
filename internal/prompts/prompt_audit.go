@@ -14,7 +14,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// Access level names from GitLab's permission model.
+// accessLevelNames maps GitLab's numeric access level values to their
+// human-readable names from GitLab's permission model. Used by
+// [accessLevelName] and the audit prompts to render role badges.
 var accessLevelNames = map[gl.AccessLevelValue]string{
 	10: "Guest",
 	20: "Reporter",
@@ -23,7 +25,9 @@ var accessLevelNames = map[gl.AccessLevelValue]string{
 	50: "Owner",
 }
 
-// accessLevelName returns the human-readable name for a GitLab access level.
+// accessLevelName returns the human-readable name for a GitLab access
+// level. When level is not in [accessLevelNames] it returns a
+// "Unknown(<value>)" placeholder so the audit output always renders.
 func accessLevelName(level gl.AccessLevelValue) string {
 	if name, ok := accessLevelNames[level]; ok {
 		return name
@@ -31,10 +35,12 @@ func accessLevelName(level gl.AccessLevelValue) string {
 	return fmt.Sprintf("Unknown(%d)", level)
 }
 
-// settingValueTableHeader is the common Markdown table header for setting/value tables.
+// settingValueTableHeader is the common Markdown table header for
+// "Setting | Value" tables in the audit prompts.
 const settingValueTableHeader = "| Setting | Value |\n|---------|-------|\n"
 
-// isDefaultBranchProtected checks if the default branch is in the protected branches list.
+// isDefaultBranchProtected reports whether defaultBranch appears in the
+// given list of protected branches by name.
 func isDefaultBranchProtected(branches []*gl.ProtectedBranch, defaultBranch string) bool {
 	for _, pb := range branches {
 		if pb.Name == defaultBranch {
@@ -44,7 +50,14 @@ func isDefaultBranchProtected(branches []*gl.ProtectedBranch, defaultBranch stri
 	return false
 }
 
-// registerAuditPrompts registers all project audit prompts.
+// registerAuditPrompts registers the two project-audit prompt families
+// exposed by this file:
+//
+//   - audit_project_workflow: audits labels, milestones, and issue/MR
+//     templates for completeness and consistency.
+//   - audit_project_full: a comprehensive audit covering settings, branch
+//     protection, access, labels, milestones, templates, webhooks, and
+//     push rules.
 func registerAuditPrompts(server *mcp.Server, client *gitlabclient.Client) {
 	registerAuditProjectWorkflowPrompt(server, client)
 	registerAuditProjectFullPrompt(server, client)

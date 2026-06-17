@@ -10,6 +10,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// Field and tool name constants shared by the issuelinks handlers. Centralizing
+// them keeps the error messages and parameter validation consistent.
 const (
 	fieldProjectID      = "project_id"
 	fieldIssueIID       = "issue_iid"
@@ -120,7 +122,10 @@ func toRelationOutput(r *gitlab.IssueRelation) RelationOutput {
 // Handlers
 // ---------------------------------------------------------------------------.
 
-// List lists resources for the issuelinks package.
+// List retrieves the list of issue relations (links) for a given issue
+// from the GitLab Issue links API (GET /projects/:id/issues/:issue_iid/links).
+// Returns a [ListOutput] with the linked issues or an error if the project
+// or issue is not found.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired(fieldProjectID)
@@ -147,7 +152,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return out, nil
 }
 
-// Get retrieves resources for the issuelinks package.
+// Get retrieves a single issue link by its ID from the GitLab Issue links
+// API (GET /projects/:id/issues/:issue_iid/links/:issue_link_id). Returns the
+// link details including source and target issue metadata.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.ErrFieldRequired(fieldProjectID)
@@ -170,7 +177,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return toOutput(link), nil
 }
 
-// Create creates resources for the issuelinks package.
+// Create creates a new issue link between a source issue and a target issue
+// via the GitLab Issue links API (POST /projects/:id/issues/:issue_iid/links).
+// The link may be of type "relates_to" (default), "blocks", or "is_blocked_by"
+// and may target an issue in a different project.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.ErrFieldRequired(fieldProjectID)
@@ -204,7 +214,10 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return toOutput(link), nil
 }
 
-// Delete deletes resources for the issuelinks package.
+// Delete removes an existing issue link from a GitLab project via the
+// GitLab Issue links API (DELETE /projects/:id/issues/:issue_iid/links/:issue_link_id).
+// Returns an error if the link is not found or the caller lacks Reporter
+// role or higher.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
 	if input.ProjectID == "" {
 		return toolutil.ErrFieldRequired(fieldProjectID)

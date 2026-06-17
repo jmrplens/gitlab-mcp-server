@@ -11,7 +11,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
 )
 
-// TestMeta_ProtectedTags exercises protected tag CRUD via the gitlab_tag meta-tool.
+// TestMeta_ProtectedTags exercises protected tag CRUD operations through the
+// gitlab_tag meta-tool against a live GitLab instance.
+//
+// The test creates a project fixture and a regular tag, then walks the full
+// protected tag lifecycle: protect_create, protect_list, protect_get,
+// and protect_delete via the meta-tool. Each step asserts the documented
+// action returns the expected payload and that the tag name round-trips
+// through GitLab correctly.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ProtectedTags(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

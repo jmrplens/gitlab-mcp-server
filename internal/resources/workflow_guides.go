@@ -8,10 +8,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// RegisterWorkflowGuides registers static text resources with workflow
-// best-practice content. These guides help LLMs provide consistent
-// advice on git workflows, merge requests, commits, code reviews,
-// and pipeline troubleshooting.
+// RegisterWorkflowGuides registers static text resources with
+// workflow best-practice content. The package-internal
+// [workflowGuides] table defines the five guides exposed:
+//
+//	gitlab://guides/git-workflow
+//	gitlab://guides/merge-request-hygiene
+//	gitlab://guides/conventional-commits
+//	gitlab://guides/code-review
+//	gitlab://guides/pipeline-troubleshooting
+//
+// These guides help LLMs provide consistent advice on Git workflows,
+// merge requests, commits, code reviews, and pipeline troubleshooting.
 func RegisterWorkflowGuides(server *mcp.Server) {
 	for _, g := range workflowGuides {
 		guide := g // capture for closure

@@ -9,8 +9,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestFormatPATMarkdown verifies single PAT markdown rendering covers
-// all output fields including optional scopes, expires_at, and last_used_at.
+// TestFormatPATMarkdown verifies the PATMarkdown Markdown formatter for a representative pat input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatPATMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -72,8 +73,9 @@ func TestFormatPATMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatPATListMarkdown verifies list rendering for empty token lists
-// and populated lists with pagination metadata.
+// TestFormatPATListMarkdown verifies the PATListMarkdown Markdown formatter for a representative patlist input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatPATListMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -167,8 +169,9 @@ func TestFormatSSHKeyMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatSSHKeyListMarkdown verifies list rendering for empty SSH key lists
-// and populated lists with pagination metadata.
+// TestFormatSSHKeyListMarkdown verifies the SSHKeyListMarkdown Markdown formatter for a representative sshkeylist input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatSSHKeyListMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string

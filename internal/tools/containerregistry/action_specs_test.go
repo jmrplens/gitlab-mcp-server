@@ -12,7 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestActionSpecs_DeleteErrors verifies that delete routes return errors when the GitLab API fails.
+// TestActionSpecs_DeleteErrors validates the DeleteErrors route through the catalog surface.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +46,9 @@ func TestActionSpecs_DeleteErrors(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := registrySpecsByTool(t, ActionSpecs(client))

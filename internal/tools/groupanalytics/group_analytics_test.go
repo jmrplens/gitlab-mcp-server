@@ -173,8 +173,9 @@ func TestFormatIssuesCountMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMRCountMarkdown verifies the Markdown output for recently created
-// merge requests count, checking header, table structure, and hints.
+// TestFormatMRCountMarkdown verifies the MRCountMarkdown Markdown formatter for a representative mrcount input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMRCountMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -231,8 +232,9 @@ func TestFormatMRCountMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMembersCountMarkdown verifies the Markdown output for recently
-// added members count, checking header, table structure, and hints.
+// TestFormatMembersCountMarkdown verifies the MembersCountMarkdown Markdown formatter for a representative memberscount input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMembersCountMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string

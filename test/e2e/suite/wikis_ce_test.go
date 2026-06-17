@@ -13,7 +13,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/wikis"
 )
 
-// TestIndividual_Wikis exercises wiki page CRUD using individual MCP tools.
+// TestIndividual_Wikis exercises wiki page CRUD using individual MCP tools
+// against a live GitLab instance.
+//
+// The test creates a project fixture, then walks gitlab_wiki_create,
+// _list, _get, _update, and _delete. Each subtest asserts the wiki page
+// slug and content round-trip through the GitLab API. Cleanup removes the
+// page (and its project fixture) when the test exits.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Wikis(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -81,7 +89,16 @@ func TestIndividual_Wikis(t *testing.T) {
 	})
 }
 
-// TestMeta_Wikis exercises wiki page CRUD using the gitlab_wiki meta-tool.
+// TestMeta_Wikis exercises wiki page CRUD using the gitlab_wiki meta-tool
+// against a live GitLab instance.
+//
+// The test mirrors [TestIndividual_Wikis] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_wiki tool.
+// Subtests cover create, list, get, update, and delete, verifying the
+// meta-tool returns consistent payloads and that mutations are observable
+// through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Wikis(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -14,42 +14,74 @@ const (
 	actionIssueGet     = "issue.get"
 )
 
-// ActionSpecs returns canonical specs for issue lifecycle actions.
+// ActionSpecs returns canonical specs for issue lifecycle actions exposed
+// as MCP tools. The create, read, update, delete, reorder, move, subscribe,
+// todo, and time-tracking routes are projected into the dynamic, meta,
+// individual, and audit surfaces by the action catalog (ADR-0004).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_issue_create — open a new issue in a project.
 		issueCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_issue_create"),
+		// gitlab_issue_get — fetch a single issue by IID (returns a structured not-found result on 404).
 		issueReadSpec("get", toolutil.RouteAction(client, getWithEmbeddedResource), "gitlab_issue_get"),
+		// gitlab_issue_get_by_id — fetch a single issue by its global database ID.
 		issueReadSpec("get_by_id", toolutil.RouteAction(client, GetByID), "gitlab_issue_get_by_id"),
+		// gitlab_issue_list — list project issues with optional filtering and pagination.
 		issueReadSpec("list", toolutil.RouteAction(client, List), "gitlab_issue_list"),
+		// gitlab_issue_list_all — list issues visible to the caller across all projects.
 		issueReadSpec("list_all", toolutil.RouteAction(client, ListAll), "gitlab_issue_list_all"),
+		// gitlab_issue_list_group — list issues across a group and its projects.
 		issueReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_issue_list_group"),
+		// gitlab_issue_update — update issue fields; supports close/reopen via state_event.
 		issueUpdateActionSpec(client),
+		// gitlab_issue_delete — permanently delete an issue (destructive, requires confirmation).
 		issueDeleteSpec("delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_issue_delete"),
+		// gitlab_issue_reorder — move an issue before/after another issue in the list.
 		issueUpdateSpec("reorder", toolutil.RouteAction(client, Reorder), "gitlab_issue_reorder"),
+		// gitlab_issue_move — move an issue to a different project.
 		issueUpdateSpec("move", toolutil.RouteAction(client, Move), "gitlab_issue_move"),
+		// gitlab_issue_subscribe — subscribe the caller to issue notifications.
 		issueUpdateSpec("subscribe", toolutil.RouteAction(client, Subscribe), "gitlab_issue_subscribe"),
+		// gitlab_issue_unsubscribe — remove the caller's subscription from the issue.
 		issueUpdateSpec("unsubscribe", toolutil.RouteAction(client, Unsubscribe), "gitlab_issue_unsubscribe"),
+		// gitlab_issue_create_todo — add a to-do item for the caller on this issue.
 		issueCreateSpec("create_todo", toolutil.RouteAction(client, CreateTodo), "gitlab_issue_create_todo"),
+		// gitlab_issue_time_estimate_set — set the time estimate (e.g. "3h30m").
 		issueUpdateSpec("time_estimate_set", toolutil.RouteAction(client, SetTimeEstimate), "gitlab_issue_time_estimate_set"),
+		// gitlab_issue_time_estimate_reset — clear the time estimate.
 		issueUpdateSpec("time_estimate_reset", toolutil.RouteAction(client, ResetTimeEstimate), "gitlab_issue_time_estimate_reset"),
+		// gitlab_issue_spent_time_add — log time spent on the issue.
 		issueUpdateSpec("spent_time_add", toolutil.RouteAction(client, AddSpentTime), "gitlab_issue_spent_time_add"),
+		// gitlab_issue_spent_time_reset — clear total spent time for the issue.
 		issueUpdateSpec("spent_time_reset", toolutil.RouteAction(client, ResetSpentTime), "gitlab_issue_spent_time_reset"),
+		// gitlab_issue_time_stats_get — read time tracking totals for the issue.
 		issueReadSpec("time_stats_get", toolutil.RouteAction(client, GetTimeStats), "gitlab_issue_time_stats_get"),
+		// gitlab_issue_participants — list users participating in the issue.
 		issueReadSpec("participants", toolutil.RouteAction(client, GetParticipants), "gitlab_issue_participants"),
+		// gitlab_issue_mrs_closing — list MRs that will close this issue on merge.
 		issueReadSpec("mrs_closing", toolutil.RouteAction(client, ListMRsClosing), "gitlab_issue_mrs_closing"),
+		// gitlab_issue_mrs_related — list MRs related to this issue (broader than closing).
 		issueReadSpec("mrs_related", toolutil.RouteAction(client, ListMRsRelated), "gitlab_issue_mrs_related"),
 	}
 }
 
+// getOutput wraps [Output] so the issue.get route can return a distinct
+// type that downstream formatters recognize as a single-issue payload.
 type getOutput struct {
 	Output
 }
 
+// getWithEmbeddedResource delegates to [Get] and embeds the result in a
+// [getOutput]. Used by the get route so the formatter registry can pick
+// the single-issue Markdown renderer.
 func getWithEmbeddedResource(ctx context.Context, client *gitlabclient.Client, input GetInput) (getOutput, error) {
 	out, err := Get(ctx, client, input)
 	return getOutput{Output: out}, err
 }
 
+// deleteOutput adapts the package's [Delete] handler to the
+// [toolutil.DestructiveAction] contract, returning a structured success
+// result that names the issue and project in the message.
 func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
 	if err := Delete(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
@@ -58,13 +90,19 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 	return out, nil
 }
 
-// GroupActionSpecs returns canonical specs for issue actions exposed through the group meta-tool.
+// GroupActionSpecs returns canonical specs for issue actions exposed
+// through the group meta-tool surface. Currently scoped to group issue
+// listing.
 func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_issue_list_group — list issues across a group's projects.
 		groupIssueReadSpec("issues", toolutil.RouteAction(client, ListGroup), "gitlab_issue_list_group"),
 	}
 }
 
+// issueReadSpec builds a read-only [toolutil.ActionSpec] for an issue
+// action and fills in the usage, related actions, and parameter guidance
+// for the most common individual tools.
 func issueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := issueOptions(individualTool)
 	switch individualTool {
@@ -125,6 +163,9 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	return toolutil.NewReadActionSpec(name, route, options)
 }
 
+// issueCreateSpec builds a create-style [toolutil.ActionSpec] for an issue
+// action and fills in the usage, related actions, and parameter guidance
+// for the create and create_todo individual tools.
 func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := issueOptions(individualTool)
 	if individualTool == "gitlab_issue_create" {
@@ -155,10 +196,15 @@ func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
+// issueUpdateSpec builds an update-style [toolutil.ActionSpec] for an
+// issue action using the package's default [issueOptions].
 func issueUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, issueOptions(individualTool))
 }
 
+// issueUpdateActionSpec builds the special update spec for the
+// gitlab_issue_update individual tool, adding the state_event schema
+// override and explicit guidance for the close/reopen aliases.
 func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := issueOptions("gitlab_issue_update")
 	options.Usage = "Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen; dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically."
@@ -184,10 +230,14 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec("update", toolutil.RouteAction(client, Update), options)
 }
 
+// issueDeleteSpec builds a destructive [toolutil.ActionSpec] for an issue
+// action using the package's default [issueOptions].
 func issueDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, issueOptions(individualTool))
 }
 
+// issueOptions returns the base [toolutil.ActionSpecOptions] shared by
+// every issue action (tags, owner, individual tool metadata).
 func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute issues domain action.", Tags: []string{"issue"},
@@ -197,6 +247,9 @@ func issueOptions(individualTool string) toolutil.ActionSpecOptions {
 	}
 }
 
+// groupIssueReadSpec builds a read-only [toolutil.ActionSpec] for a group
+// issue action and fills in the usage and related actions for the
+// gitlab_issue_list_group individual tool.
 func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := groupIssueOptions(individualTool)
 	if individualTool == "gitlab_issue_list_group" {
@@ -216,6 +269,9 @@ func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool 
 	return toolutil.NewReadActionSpec(name, route, options)
 }
 
+// groupIssueOptions returns the base [toolutil.ActionSpecOptions] shared
+// by every group-scoped issue action (tags, owner, individual tool
+// metadata).
 func groupIssueOptions(individualTool string) toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute issues domain action.", Tags: []string{"group", "issue"},

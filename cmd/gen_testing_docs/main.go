@@ -79,6 +79,15 @@ var (
 )
 
 // options controls how the generator collects and writes documentation data.
+//
+// docPath is the testing reference file to update (default docs/testing/testing.md).
+// check enables non-mutating CI mode that fails when the generated block
+// would change. skipCoverage skips running `go test -cover` and only
+// updates count-only sections. topToolRows caps the high-test-count tool
+// sub-package summary table. timeout bounds the unit-test coverage run.
+// coverageDir overrides the temp profile directory; empty uses a fresh
+// temp dir. includeE2ERun additionally executes the build-tagged E2E
+// suite, which requires a real GitLab test environment.
 type options struct {
 	docPath       string
 	check         bool
@@ -90,6 +99,16 @@ type options struct {
 }
 
 // packageMetrics contains the generated testing facts for one Go package.
+//
+// ImportPath and Name come from go list. Dir is the absolute directory
+// from go list; RelPath is the same path made module-relative. Key is the
+// short label used in tables. Layer is one of the layer* constants.
+// Summary is the first sentence of the package doc comment. TestFunctions
+// and TestFiles count AST-discovered tests. ToolCount is the maximum of
+// the static AddTool scan, the local ActionSpec scan, and the runtime
+// catalog count (the highest value is taken so coverage does not regress
+// when one path under-counts). Coverage holds the per-package coverage
+// from the most recent unit-test run, or zero-value when unavailable.
 type packageMetrics struct {
 	ImportPath    string
 	Dir           string
@@ -105,12 +124,21 @@ type packageMetrics struct {
 }
 
 // coverageValue stores a per-package or aggregate coverage percentage.
+//
+// OK is false when coverage was not measured (e.g. package lacks tests).
+// Percent is the decimal percentage in the 0..100 range when OK is true.
 type coverageValue struct {
 	Percent float64
 	OK      bool
 }
 
 // repositoryMetrics is the full generated data model for testing.md.
+//
+// Packages is the per-package metrics list. NamingCounts aggregates the
+// Test* naming-pattern buckets across all packages. OverallCoverage,
+// InternalCoverage, and AveragePackageCoverage are the combined, internal,
+// and unweighted averages respectively. E2ENote is the rendered footnote
+// describing whether E2E tests were executed or counted statically.
 type repositoryMetrics struct {
 	Packages               []packageMetrics
 	NamingCounts           map[string]int
@@ -121,6 +149,10 @@ type repositoryMetrics struct {
 }
 
 // packageInfo identifies one Go package returned by go list.
+//
+// ImportPath is the module path. Dir is the absolute directory containing
+// the package source. Name is the short package identifier from the
+// package clause.
 type packageInfo struct {
 	ImportPath string
 	Dir        string
@@ -1210,6 +1242,9 @@ func classifyLayer(relPath string) string {
 	}
 }
 
+// layerTotal aggregates test counts for a single package layer (e.g. "core"
+// or "tools-orchestration"). tests is the total number of Test* functions;
+// files is the number of _test.go files in that layer.
 type layerTotal struct {
 	tests int
 	files int

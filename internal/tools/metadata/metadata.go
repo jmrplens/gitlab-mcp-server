@@ -30,7 +30,10 @@ type GetOutput struct {
 	Enterprise bool    `json:"enterprise"`
 }
 
-// Get retrieves GitLab instance metadata.
+// Get retrieves GitLab instance metadata via the GitLab Metadata API
+// (GET /metadata). Useful for discovering the running GitLab version,
+// the KAS (Kubernetes Agent Server) configuration, and the
+// Enterprise/Ultimate flag.
 func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutput, error) {
 	meta, _, err := client.GL().Metadata.GetMetadata(gl.WithContext(ctx))
 	if err != nil {

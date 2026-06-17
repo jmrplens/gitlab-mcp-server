@@ -13,8 +13,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
 )
 
-// TestMeta_TagsProtected exercises protected tag actions not covered by tags_test.go:
-// list_protected, protect, get_protected, unprotect, get_signature.
+// TestMeta_TagsProtected exercises protected tag actions through the
+// gitlab_tag meta-tool that are not covered by tags_test.go.
+//
+// The test creates a project fixture and a regular tag, then walks
+// list_protected, protect, get_protected, unprotect, and get_signature via
+// {action, params} arguments through the catalog-backed tool. Each subtest
+// asserts the meta-tool returns the expected protected-tag payload and
+// that protection mutations are observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_TagsProtected(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

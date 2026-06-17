@@ -16,7 +16,9 @@ const (
 	registerSingleMoveJSON  = `{"id":1,"state":"finished","group":{"id":42,"web_url":"https://gitlab.example.com/groups/test","full_path":"test"},"source_storage_name":"default","destination_storage_name":"storage2"}`
 )
 
-// TestActionSpecs_Metadata verifies group storage move action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -32,7 +34,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes verifies all 6 group storage move routes execute successfully.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

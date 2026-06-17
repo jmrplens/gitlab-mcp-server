@@ -16,8 +16,14 @@ import (
 )
 
 // TestIndividual_Vulnerabilities exercises vulnerability GraphQL tools
-// via individual MCP tools.
-// Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
+// through individual MCP tools against a live GitLab EE Premium/Ultimate instance.
+//
+// The test creates a project fixture, then walks the individual
+// vulnerability list and detail tools, asserting they return the expected
+// GraphQL payloads. The test returns early when the running GitLab does
+// not report EE capabilities.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: individual. Requires Premium/Ultimate.
 func TestIndividual_Vulnerabilities(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
@@ -46,9 +52,15 @@ func TestIndividual_Vulnerabilities(t *testing.T) {
 	})
 }
 
-// TestMeta_Vulnerabilities exercises vulnerability tools via the
-// gitlab_vulnerability meta-tool.
-// Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
+// TestMeta_Vulnerabilities exercises vulnerability tools through the
+// gitlab_vulnerability meta-tool against a live GitLab EE Premium/Ultimate instance.
+//
+// The test creates a project fixture, then walks the catalog-backed list
+// and detail actions via {action, params} arguments. Each subtest asserts
+// the meta-tool returns the expected GraphQL payload for the project's
+// vulnerability report.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta. Requires Premium/Ultimate.
 func TestMeta_Vulnerabilities(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {

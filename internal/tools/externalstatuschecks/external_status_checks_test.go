@@ -45,7 +45,9 @@ const projectStatusCheckJSON = `{
 
 const projectStatusCheckListJSON = `[` + projectStatusCheckJSON + `]`
 
-// TestListProjectStatusChecks_Success verifies listing project status checks returns items.
+// TestListProjectStatusChecks_Success verifies that ListProjectStatusChecks succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProjectStatusChecks_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, _ *http.Request) {
@@ -78,7 +80,9 @@ func TestListProjectStatusChecks_Success(t *testing.T) {
 	}
 }
 
-// TestListProjectStatusChecks_MissingProjectID verifies validation rejects empty project_id.
+// TestListProjectStatusChecks_MissingProjectID verifies that ListProjectStatusChecks_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProjectStatusChecks_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListProjectStatusChecks(context.Background(), client, ListProjectStatusChecksInput{})
@@ -87,7 +91,9 @@ func TestListProjectStatusChecks_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestListProjectMRExternalStatusChecks_Success verifies listing project MR status checks returns items.
+// TestListProjectMRExternalStatusChecks_Success verifies that ListProjectMRExternalStatusChecks succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProjectMRExternalStatusChecks_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/merge_requests/10/status_checks", func(w http.ResponseWriter, _ *http.Request) {
@@ -112,7 +118,9 @@ func TestListProjectMRExternalStatusChecks_Success(t *testing.T) {
 	}
 }
 
-// TestListProjectMRExternalStatusChecks_MissingFields verifies validation for project MR list.
+// TestListProjectMRExternalStatusChecks_MissingFields verifies that ListProjectMRExternalStatusChecks_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProjectMRExternalStatusChecks_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 
@@ -126,7 +134,9 @@ func TestListProjectMRExternalStatusChecks_MissingFields(t *testing.T) {
 	}
 }
 
-// TestListProjectExternalStatusChecks_Success verifies listing project status checks returns items.
+// TestListProjectExternalStatusChecks_Success verifies that ListProjectExternalStatusChecks succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProjectExternalStatusChecks_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, _ *http.Request) {
@@ -153,7 +163,9 @@ func TestListProjectExternalStatusChecks_Success(t *testing.T) {
 	}
 }
 
-// TestListProjectExternalStatusChecks_MissingProjectID verifies validation rejects empty project_id.
+// TestListProjectExternalStatusChecks_MissingProjectID verifies that ListProjectExternalStatusChecks_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProjectExternalStatusChecks_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListProjectExternalStatusChecks(context.Background(), client, ListProjectInput{})
@@ -162,7 +174,9 @@ func TestListProjectExternalStatusChecks_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCreateProjectExternalStatusCheck_Success verifies project create returns output.
+// TestCreateProjectExternalStatusCheck_Success verifies that CreateProjectExternalStatusCheck succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateProjectExternalStatusCheck_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, _ *http.Request) {
@@ -189,7 +203,9 @@ func TestCreateProjectExternalStatusCheck_Success(t *testing.T) {
 	}
 }
 
-// TestCreateProjectExternalStatusCheck_WithOptionalFields verifies create with shared secret and branch IDs.
+// TestCreateProjectExternalStatusCheck_WithOptionalFields verifies the CreateProjectExternalStatusCheck_WithOptionalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateProjectExternalStatusCheck_WithOptionalFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, _ *http.Request) {
@@ -212,7 +228,9 @@ func TestCreateProjectExternalStatusCheck_WithOptionalFields(t *testing.T) {
 	}
 }
 
-// TestCreateProjectExternalStatusCheck_MissingFields verifies required field validation for project create.
+// TestCreateProjectExternalStatusCheck_MissingFields verifies that CreateProjectExternalStatusCheck_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateProjectExternalStatusCheck_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 
@@ -234,7 +252,9 @@ func TestCreateProjectExternalStatusCheck_MissingFields(t *testing.T) {
 	}
 }
 
-// TestDeleteProjectExternalStatusCheck_Success verifies project delete succeeds.
+// TestDeleteProjectExternalStatusCheck_Success verifies that DeleteProjectExternalStatusCheck succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteProjectExternalStatusCheck_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/projects/1/external_status_checks/42", func(w http.ResponseWriter, _ *http.Request) {
@@ -251,7 +271,9 @@ func TestDeleteProjectExternalStatusCheck_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteProjectExternalStatusCheck_MissingFields verifies required field validation for project delete.
+// TestDeleteProjectExternalStatusCheck_MissingFields verifies that DeleteProjectExternalStatusCheck_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteProjectExternalStatusCheck_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 
@@ -272,7 +294,9 @@ func TestDeleteProjectExternalStatusCheck_MissingFields(t *testing.T) {
 	}
 }
 
-// TestUpdateProjectExternalStatusCheck_Success verifies project update returns output.
+// TestUpdateProjectExternalStatusCheck_Success verifies that UpdateProjectExternalStatusCheck succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateProjectExternalStatusCheck_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/projects/1/external_status_checks/42", func(w http.ResponseWriter, _ *http.Request) {
@@ -293,7 +317,9 @@ func TestUpdateProjectExternalStatusCheck_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateProjectExternalStatusCheck_WithAllFields verifies update with all optional fields.
+// TestUpdateProjectExternalStatusCheck_WithAllFields verifies the UpdateProjectExternalStatusCheck_WithAllFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateProjectExternalStatusCheck_WithAllFields(t *testing.T) {
 	var capturedBody string
 	mux := http.NewServeMux()
@@ -328,7 +354,9 @@ func TestUpdateProjectExternalStatusCheck_WithAllFields(t *testing.T) {
 	}
 }
 
-// TestUpdateProjectExternalStatusCheck_MissingFields verifies required field validation for project update.
+// TestUpdateProjectExternalStatusCheck_MissingFields verifies that UpdateProjectExternalStatusCheck_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateProjectExternalStatusCheck_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 
@@ -349,7 +377,9 @@ func TestUpdateProjectExternalStatusCheck_MissingFields(t *testing.T) {
 	}
 }
 
-// TestRetryFailedExternalStatusCheckForProjectMR_Success verifies project retry succeeds.
+// TestRetryFailedExternalStatusCheckForProjectMR_Success verifies that RetryFailedExternalStatusCheckForProjectMR succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRetryFailedExternalStatusCheckForProjectMR_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/merge_requests/10/status_checks/42/retry", func(w http.ResponseWriter, _ *http.Request) {
@@ -367,7 +397,9 @@ func TestRetryFailedExternalStatusCheckForProjectMR_Success(t *testing.T) {
 	}
 }
 
-// TestRetryFailedExternalStatusCheckForProjectMR_MissingFields verifies required field validation.
+// TestRetryFailedExternalStatusCheckForProjectMR_MissingFields verifies that RetryFailedExternalStatusCheckForProjectMR_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRetryFailedExternalStatusCheckForProjectMR_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 
@@ -389,7 +421,9 @@ func TestRetryFailedExternalStatusCheckForProjectMR_MissingFields(t *testing.T) 
 	}
 }
 
-// TestSetProjectMRExternalStatusCheckStatus_Success verifies project set status succeeds.
+// TestSetProjectMRExternalStatusCheckStatus_Success verifies that SetProjectMRExternalStatusCheckStatus succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSetProjectMRExternalStatusCheckStatus_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/merge_requests/10/status_check_responses", func(w http.ResponseWriter, _ *http.Request) {
@@ -409,7 +443,9 @@ func TestSetProjectMRExternalStatusCheckStatus_Success(t *testing.T) {
 	}
 }
 
-// TestSetProjectMRExternalStatusCheckStatus_MissingFields verifies all required field validation.
+// TestSetProjectMRExternalStatusCheckStatus_MissingFields verifies that SetProjectMRExternalStatusCheckStatus_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSetProjectMRExternalStatusCheckStatus_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 
@@ -433,7 +469,9 @@ func TestSetProjectMRExternalStatusCheckStatus_MissingFields(t *testing.T) {
 	}
 }
 
-// TestToMergeStatusCheckOutput_Conversion verifies the converter maps all fields correctly.
+// TestToMergeStatusCheckOutput_Conversion verifies the ToMergeStatusCheckOutput_Conversion handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToMergeStatusCheckOutput_Conversion(t *testing.T) {
 	check := &gl.MergeStatusCheck{
 		ID:          99,
@@ -447,7 +485,9 @@ func TestToMergeStatusCheckOutput_Conversion(t *testing.T) {
 	}
 }
 
-// TestToProjectStatusCheckOutput_Conversion verifies the converter maps all fields including branches.
+// TestToProjectStatusCheckOutput_Conversion verifies the ToProjectStatusCheckOutput_Conversion handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToProjectStatusCheckOutput_Conversion(t *testing.T) {
 	check := &gl.ProjectStatusCheck{
 		ID:          42,
@@ -474,7 +514,9 @@ func TestToProjectStatusCheckOutput_Conversion(t *testing.T) {
 	}
 }
 
-// TestToProjectStatusCheckOutput_NoBranches verifies the converter handles nil branches.
+// TestToProjectStatusCheckOutput_NoBranches verifies the ToProjectStatusCheckOutput_NoBranches handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToProjectStatusCheckOutput_NoBranches(t *testing.T) {
 	check := &gl.ProjectStatusCheck{
 		ID:   1,
@@ -486,8 +528,9 @@ func TestToProjectStatusCheckOutput_NoBranches(t *testing.T) {
 	}
 }
 
-// TestListProjectStatusChecks_ContextCancelled verifies that a cancelled context
-// returns an error for ListProjectStatusChecks.
+// TestListProjectStatusChecks_ContextCancelled verifies the ListProjectStatusChecks_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListProjectStatusChecks_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	ctx := testutil.CancelledCtx(t)
@@ -497,7 +540,9 @@ func TestListProjectStatusChecks_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestListProjectStatusChecks_APIError verifies that a 500 API response is propagated.
+// TestListProjectStatusChecks_APIError verifies that ListProjectStatusChecks returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProjectStatusChecks_APIError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, _ *http.Request) {
@@ -510,8 +555,9 @@ func TestListProjectStatusChecks_APIError(t *testing.T) {
 	}
 }
 
-// TestListProjectStatusChecks_WithPagination verifies that Page and PerPage
-// options are forwarded to the GitLab API.
+// TestListProjectStatusChecks_WithPagination verifies that ListProjectStatusChecks_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListProjectStatusChecks_WithPagination(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, r *http.Request) {
@@ -534,8 +580,9 @@ func TestListProjectStatusChecks_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListProjectMRExternalStatusChecks_ContextCancelled verifies that a
-// cancelled context returns an error.
+// TestListProjectMRExternalStatusChecks_ContextCancelled verifies the ListProjectMRExternalStatusChecks_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListProjectMRExternalStatusChecks_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	ctx := testutil.CancelledCtx(t)
@@ -545,7 +592,9 @@ func TestListProjectMRExternalStatusChecks_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestListProjectMRExternalStatusChecks_APIError verifies that a 500 API response is propagated.
+// TestListProjectMRExternalStatusChecks_APIError verifies that ListProjectMRExternalStatusChecks returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProjectMRExternalStatusChecks_APIError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/merge_requests/10/status_checks", func(w http.ResponseWriter, _ *http.Request) {
@@ -558,8 +607,9 @@ func TestListProjectMRExternalStatusChecks_APIError(t *testing.T) {
 	}
 }
 
-// TestListProjectMRExternalStatusChecks_WithPagination verifies that Page and
-// PerPage options are forwarded to the GitLab API.
+// TestListProjectMRExternalStatusChecks_WithPagination verifies that ListProjectMRExternalStatusChecks_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListProjectMRExternalStatusChecks_WithPagination(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/merge_requests/10/status_checks", func(w http.ResponseWriter, r *http.Request) {
@@ -583,8 +633,9 @@ func TestListProjectMRExternalStatusChecks_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListProjectExternalStatusChecks_ContextCancelled verifies that a
-// cancelled context returns an error.
+// TestListProjectExternalStatusChecks_ContextCancelled verifies the ListProjectExternalStatusChecks_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListProjectExternalStatusChecks_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	ctx := testutil.CancelledCtx(t)
@@ -594,7 +645,9 @@ func TestListProjectExternalStatusChecks_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestListProjectExternalStatusChecks_APIError verifies that a 500 API response is propagated.
+// TestListProjectExternalStatusChecks_APIError verifies that ListProjectExternalStatusChecks returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProjectExternalStatusChecks_APIError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, _ *http.Request) {
@@ -607,8 +660,9 @@ func TestListProjectExternalStatusChecks_APIError(t *testing.T) {
 	}
 }
 
-// TestListProjectExternalStatusChecks_WithPagination verifies that Page and
-// PerPage options are forwarded to the GitLab API.
+// TestListProjectExternalStatusChecks_WithPagination verifies that ListProjectExternalStatusChecks_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListProjectExternalStatusChecks_WithPagination(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, r *http.Request) {
@@ -631,8 +685,9 @@ func TestListProjectExternalStatusChecks_WithPagination(t *testing.T) {
 	}
 }
 
-// TestCreateProjectExternalStatusCheck_ContextCancelled verifies that a
-// cancelled context returns an error.
+// TestCreateProjectExternalStatusCheck_ContextCancelled verifies the CreateProjectExternalStatusCheck_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreateProjectExternalStatusCheck_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	ctx := testutil.CancelledCtx(t)
@@ -644,7 +699,9 @@ func TestCreateProjectExternalStatusCheck_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestCreateProjectExternalStatusCheck_APIError verifies that a 422 API response is propagated.
+// TestCreateProjectExternalStatusCheck_APIError verifies that CreateProjectExternalStatusCheck returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateProjectExternalStatusCheck_APIError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/external_status_checks", func(w http.ResponseWriter, _ *http.Request) {
@@ -659,8 +716,9 @@ func TestCreateProjectExternalStatusCheck_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteProjectExternalStatusCheck_ContextCancelled verifies that a
-// cancelled context returns an error.
+// TestDeleteProjectExternalStatusCheck_ContextCancelled verifies the DeleteProjectExternalStatusCheck_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteProjectExternalStatusCheck_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	ctx := testutil.CancelledCtx(t)
@@ -670,7 +728,9 @@ func TestDeleteProjectExternalStatusCheck_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestDeleteProjectExternalStatusCheck_APIError verifies that a 404 API response is propagated.
+// TestDeleteProjectExternalStatusCheck_APIError verifies that DeleteProjectExternalStatusCheck returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteProjectExternalStatusCheck_APIError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/projects/1/external_status_checks/42", func(w http.ResponseWriter, _ *http.Request) {
@@ -683,8 +743,9 @@ func TestDeleteProjectExternalStatusCheck_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateProjectExternalStatusCheck_ContextCancelled verifies that a
-// cancelled context returns an error.
+// TestUpdateProjectExternalStatusCheck_ContextCancelled verifies the UpdateProjectExternalStatusCheck_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdateProjectExternalStatusCheck_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	ctx := testutil.CancelledCtx(t)
@@ -694,7 +755,9 @@ func TestUpdateProjectExternalStatusCheck_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestUpdateProjectExternalStatusCheck_APIError verifies that a 500 API response is propagated.
+// TestUpdateProjectExternalStatusCheck_APIError verifies that UpdateProjectExternalStatusCheck returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateProjectExternalStatusCheck_APIError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/projects/1/external_status_checks/42", func(w http.ResponseWriter, _ *http.Request) {
@@ -707,8 +770,9 @@ func TestUpdateProjectExternalStatusCheck_APIError(t *testing.T) {
 	}
 }
 
-// TestRetryFailedExternalStatusCheckForProjectMR_ContextCancelled verifies
-// that a cancelled context returns an error.
+// TestRetryFailedExternalStatusCheckForProjectMR_ContextCancelled verifies the RetryFailedExternalStatusCheckForProjectMR_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestRetryFailedExternalStatusCheckForProjectMR_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	ctx := testutil.CancelledCtx(t)
@@ -718,8 +782,9 @@ func TestRetryFailedExternalStatusCheckForProjectMR_ContextCancelled(t *testing.
 	}
 }
 
-// TestRetryFailedExternalStatusCheckForProjectMR_APIError verifies that a 404
-// API response is propagated.
+// TestRetryFailedExternalStatusCheckForProjectMR_APIError verifies that RetryFailedExternalStatusCheckForProjectMR returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRetryFailedExternalStatusCheckForProjectMR_APIError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/merge_requests/10/status_checks/42/retry", func(w http.ResponseWriter, _ *http.Request) {
@@ -732,8 +797,9 @@ func TestRetryFailedExternalStatusCheckForProjectMR_APIError(t *testing.T) {
 	}
 }
 
-// TestSetProjectMRExternalStatusCheckStatus_ContextCancelled verifies that a
-// cancelled context returns an error.
+// TestSetProjectMRExternalStatusCheckStatus_ContextCancelled verifies the SetProjectMRExternalStatusCheckStatus_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestSetProjectMRExternalStatusCheckStatus_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	ctx := testutil.CancelledCtx(t)
@@ -745,8 +811,9 @@ func TestSetProjectMRExternalStatusCheckStatus_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestSetProjectMRExternalStatusCheckStatus_APIError verifies that a 422 API
-// response is propagated.
+// TestSetProjectMRExternalStatusCheckStatus_APIError verifies that SetProjectMRExternalStatusCheckStatus returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSetProjectMRExternalStatusCheckStatus_APIError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/1/merge_requests/10/status_check_responses", func(w http.ResponseWriter, _ *http.Request) {

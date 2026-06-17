@@ -3,6 +3,8 @@
 // cilint_ce_test.go tests the CI lint MCP tools against a live GitLab instance
 // using both individual tools and the gitlab_template meta-tool. Validates
 // CI configuration content and project-level linting.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -13,7 +15,16 @@ import (
 )
 
 // TestIndividual_CILint exercises CI lint operations using individual MCP
-// tools: validates inline YAML content and lints a project without a CI config.
+// tools: validates inline YAML content and lints a project without a CI
+// config.
+//
+// The test creates a project fixture and runs two subtests. LintContent
+// submits a minimal valid .gitlab-ci.yml content and asserts Valid=true.
+// LintProject lints the empty project (no .gitlab-ci.yml committed) and
+// asserts Valid=false. Together they exercise both inline content and
+// repository-backed lint paths.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_CILint(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()
@@ -48,6 +59,13 @@ func TestIndividual_CILint(t *testing.T) {
 
 // TestMeta_CILint exercises the same CI lint operations via the
 // gitlab_template meta-tool.
+//
+// The test mirrors [TestIndividual_CILint] but drives both subtests with
+// {action, params} arguments through the catalog-backed gitlab_template
+// tool, using lint and lint_project. Each subtest asserts the same
+// Valid / Invalid outcome and verifies the tool name stays constant.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_CILint(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

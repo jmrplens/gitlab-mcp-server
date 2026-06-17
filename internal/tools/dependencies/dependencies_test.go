@@ -183,7 +183,9 @@ func assertRailsDependencyLicense(t *testing.T, d Output) {
 	}
 }
 
-// TestListDeps_CancelledContext verifies ListDeps returns error on cancelled context.
+// TestListDeps_CancelledContext verifies the ListDeps_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListDeps_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
@@ -195,8 +197,9 @@ func TestListDeps_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreateExport validates the CreateExport handler across success,
-// validation, context cancellation, API error, and export_type paths.
+// TestCreateExport verifies the CreateExport handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateExport(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -280,7 +283,9 @@ func TestCreateExport(t *testing.T) {
 	}
 }
 
-// TestCreateExport_CancelledContext verifies CreateExport returns error on cancelled context.
+// TestCreateExport_CancelledContext verifies the CreateExport_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreateExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
@@ -311,8 +316,9 @@ func TestCreateExport_NotFoundHint(t *testing.T) {
 	}
 }
 
-// TestGetExport validates the GetExport handler across success,
-// validation, context cancellation, and API error paths.
+// TestGetExport verifies the GetExport handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetExport(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -395,7 +401,9 @@ func TestGetExport(t *testing.T) {
 	}
 }
 
-// TestGetExport_CancelledContext verifies GetExport returns error on cancelled context.
+// TestGetExport_CancelledContext verifies the GetExport_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
@@ -407,8 +415,9 @@ func TestGetExport_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDownloadExport validates the DownloadExport handler across success,
-// validation, context cancellation, and API error paths.
+// TestDownloadExport verifies the DownloadExport handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDownloadExport(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -487,7 +496,9 @@ func TestDownloadExport(t *testing.T) {
 	}
 }
 
-// TestDownloadExport_CancelledContext verifies DownloadExport returns error on cancelled context.
+// TestDownloadExport_CancelledContext verifies the DownloadExport_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDownloadExport_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
@@ -605,8 +616,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatExportMarkdown validates Markdown rendering for export status,
-// covering exports with and without download URLs and self links.
+// TestFormatExportMarkdown verifies the ExportMarkdown Markdown formatter for a representative export input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatExportMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -659,7 +671,9 @@ func TestFormatExportMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatDownloadMarkdown validates Markdown rendering of downloaded SBOM content.
+// TestFormatDownloadMarkdown verifies the DownloadMarkdown Markdown formatter for a representative download input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatDownloadMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string

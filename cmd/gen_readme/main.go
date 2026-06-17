@@ -122,6 +122,15 @@ func readMetaParamSchemaMode() (string, error) {
 
 // tokenFootprintRow is a README-facing token measurement for one runtime
 // configuration.
+//
+// Configuration is the Markdown label rendered in the leftmost column.
+// MetaParamSchema is set for meta-tool configurations and empty ("n/a")
+// for dynamic and individual. VisibleTools is the number of MCP tools the
+// server exposes under this configuration. ReachableActions is the count
+// of distinct GitLab API actions a client can drive (matches VisibleTools
+// for individual mode). ToolSchemaTokens estimates the byte cost of
+// publishing the visible tool schemas. SharedTokens captures the
+// resources-plus-prompts overhead for this configuration.
 type tokenFootprintRow struct {
 	Configuration    string
 	MetaParamSchema  string
@@ -133,6 +142,10 @@ type tokenFootprintRow struct {
 
 // resourceRegistrationOptions selects which MCP resource groups are advertised
 // for README token-footprint measurements.
+//
+// See [resourceRegistrationOptions] in cmd/audit_tokens for the full field
+// contract — the type is duplicated here to avoid pulling audit-only code
+// into the generator dependency graph.
 type resourceRegistrationOptions struct {
 	Core           bool
 	ToolManifest   bool
@@ -143,6 +156,14 @@ type resourceRegistrationOptions struct {
 	WorkspaceRoots bool
 }
 
+// sharedTokenMeasureOptions bundles the catalog metadata and capability
+// surface needed to estimate the shared (resources + prompts) token cost
+// of one runtime configuration.
+//
+// Routes is the catalog route map (used by the meta surface). ToolCatalog
+// and ToolList drive the tool-manifest templates. ToolSurface selects the
+// MCP surface label; CapabilitySurface toggles full vs minimal prompts and
+// workflow guides; PromptTokens is the pre-computed prompt catalog size.
 type sharedTokenMeasureOptions struct {
 	Routes            map[string]toolutil.ActionMap
 	ToolCatalog       *actioncatalog.Catalog

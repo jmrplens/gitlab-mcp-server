@@ -18,10 +18,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runners"
 )
 
-// TestEE_MetaRunnerManagement exercises runner management on GitLab EE/Ultimate.
-// Uses the Docker-registered runner (description "e2e-docker-runner") created
-// by scripts/register-runner.sh. Validates that runner operations work correctly
-// with an Enterprise-tier GitLab instance.
+// TestEE_MetaRunnerManagement exercises runner management on GitLab
+// EE/Ultimate against a live GitLab instance.
+//
+// The test uses the Docker-registered runner (description "e2e-docker-runner")
+// created by scripts/register-runner.sh, then walks runner list, get,
+// update, pause, resume, and unregister operations via the meta-tool. Each
+// subtest asserts the meta-tool returns the expected runner payload and
+// that mutations are observable through subsequent reads.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta.
 func TestEE_MetaRunnerManagement(t *testing.T) {
 	if !sess.enterprise {
 		t.Skip("EE runner management requires GitLab EE/Ultimate")

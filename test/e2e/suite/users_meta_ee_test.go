@@ -18,9 +18,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
 )
 
-// TestEE_MetaUserServiceAccounts exercises EE instance service account
-// operations via the gitlab_user meta-tool. Service accounts are
-// Premium/Ultimate-only; the current-user PAT test runs on all tiers.
+// TestEE_MetaUserServiceAccounts exercises instance-level service account
+// operations through the gitlab_user meta-tool against a live GitLab
+// EE Premium/Ultimate instance.
+//
+// The test mirrors the CE equivalent ([TestMeta_UserServiceAccounts] in
+// users_meta_ce_test.go) which is excluded from the EE build. Subtests
+// cover list_service_accounts, create_service_account, and
+// update_service_account via {action, params} arguments through the
+// catalog-backed tool. Cleanup deletes the created service account once
+// all subtests complete.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta. Requires Premium/Ultimate.
 func TestEE_MetaUserServiceAccounts(t *testing.T) {
 	if !sess.enterprise {
 		t.Skip("user service accounts require GitLab Premium/Ultimate")

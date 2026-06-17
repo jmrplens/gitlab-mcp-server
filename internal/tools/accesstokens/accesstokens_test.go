@@ -58,7 +58,9 @@ const (
 // Project Access Tokens
 // ---------------------------------------------------------------------------.
 
-// TestProjectList_Success verifies ProjectList when success.
+// TestProjectList_Success verifies that ProjectList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProjectList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens && r.Method == http.MethodGet {
@@ -86,7 +88,9 @@ func TestProjectList_Success(t *testing.T) {
 	}
 }
 
-// TestProjectList_WithState verifies ProjectList when with state.
+// TestProjectList_WithState verifies the ProjectList_WithState handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProjectList_WithState(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens {
@@ -108,7 +112,9 @@ func TestProjectList_WithState(t *testing.T) {
 	}
 }
 
-// TestProjectList_MissingProjectID verifies ProjectList when missing project ID.
+// TestProjectList_MissingProjectID verifies that ProjectList_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 	_, err := ProjectList(context.Background(), client, ProjectListInput{})
@@ -117,7 +123,9 @@ func TestProjectList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestProjectGet_Success verifies ProjectGet when success.
+// TestProjectGet_Success verifies that ProjectGet succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/access_tokens/5 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestProjectGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/5" && r.Method == http.MethodGet {
@@ -136,7 +144,9 @@ func TestProjectGet_Success(t *testing.T) {
 	}
 }
 
-// TestProjectGet_MissingInputs verifies ProjectGet when missing inputs.
+// TestProjectGet_MissingInputs verifies that ProjectGet_MissingInputs returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectGet_MissingInputs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 
@@ -151,7 +161,9 @@ func TestProjectGet_MissingInputs(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_Success verifies ProjectCreate when success.
+// TestProjectCreate_Success verifies that ProjectCreate succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProjectCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens && r.Method == http.MethodPost {
@@ -179,7 +191,9 @@ func TestProjectCreate_Success(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_Validation covers ProjectCreate with table-driven subtests for validation.
+// TestProjectCreate_Validation verifies the ProjectCreate_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProjectCreate_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 
@@ -208,7 +222,9 @@ func TestProjectCreate_Validation(t *testing.T) {
 	}
 }
 
-// TestProjectRotate_Success verifies ProjectRotate when success.
+// TestProjectRotate_Success verifies that ProjectRotate succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/access_tokens/5/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestProjectRotate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/5/rotate" && r.Method == http.MethodPost {
@@ -227,7 +243,13 @@ func TestProjectRotate_Success(t *testing.T) {
 	}
 }
 
-// TestProjectRevoke_Success verifies ProjectRevoke when success.
+// TestProjectRevoke_Success verifies that ProjectRevoke succeeds when the
+// GitLab API returns 204 No Content for the DELETE
+// /api/v4/projects/:id/access_tokens/:token_id endpoint.
+//
+// The test wires an httptest server that responds with 204 on the exact
+// DELETE path and 404 on any other request, then asserts no error is
+// returned. This protects the success-path contract of the revoke handler.
 func TestProjectRevoke_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/5" && r.Method == http.MethodDelete {
@@ -243,7 +265,9 @@ func TestProjectRevoke_Success(t *testing.T) {
 	}
 }
 
-// TestProjectRevoke_Validation verifies ProjectRevoke when validation.
+// TestProjectRevoke_Validation verifies the ProjectRevoke_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProjectRevoke_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 
@@ -261,7 +285,9 @@ func TestProjectRevoke_Validation(t *testing.T) {
 // Group Access Tokens
 // ---------------------------------------------------------------------------.
 
-// TestGroupList_Success verifies GroupList when success.
+// TestGroupList_Success verifies that GroupList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupTokens && r.Method == http.MethodGet {
@@ -285,7 +311,9 @@ func TestGroupList_Success(t *testing.T) {
 	}
 }
 
-// TestGroupList_MissingGroupID verifies GroupList when missing group ID.
+// TestGroupList_MissingGroupID verifies that GroupList_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 	_, err := GroupList(context.Background(), client, GroupListInput{})
@@ -294,7 +322,9 @@ func TestGroupList_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGroupGet_Success verifies GroupGet when success.
+// TestGroupGet_Success verifies that GroupGet succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/10/access_tokens/3 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGroupGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/3" && r.Method == http.MethodGet {
@@ -313,7 +343,9 @@ func TestGroupGet_Success(t *testing.T) {
 	}
 }
 
-// TestGroupCreate_Success verifies GroupCreate when success.
+// TestGroupCreate_Success verifies that GroupCreate succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupTokens && r.Method == http.MethodPost {
@@ -337,7 +369,9 @@ func TestGroupCreate_Success(t *testing.T) {
 	}
 }
 
-// TestGroupRotate_Success verifies GroupRotate when success.
+// TestGroupRotate_Success verifies that GroupRotate succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/10/access_tokens/3/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGroupRotate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/3/rotate" && r.Method == http.MethodPost {
@@ -356,7 +390,9 @@ func TestGroupRotate_Success(t *testing.T) {
 	}
 }
 
-// TestGroupRevoke_Success verifies GroupRevoke when success.
+// TestGroupRevoke_Success verifies that GroupRevoke succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/10/access_tokens/3 (DELETE) responds with HTTP NotFound.
+// It asserts the returned output matches the expected fields.
 func TestGroupRevoke_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/3" && r.Method == http.MethodDelete {
@@ -376,7 +412,9 @@ func TestGroupRevoke_Success(t *testing.T) {
 // Personal Access Tokens
 // ---------------------------------------------------------------------------.
 
-// TestPersonalList_Success verifies PersonalList when success.
+// TestPersonalList_Success verifies that PersonalList succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/personal_access_tokens (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestPersonalList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens" && r.Method == http.MethodGet {
@@ -400,7 +438,9 @@ func TestPersonalList_Success(t *testing.T) {
 	}
 }
 
-// TestPersonalList_WithFilters verifies PersonalList when with filters.
+// TestPersonalList_WithFilters verifies the PersonalList_WithFilters handler.
+// The mock GitLab API at /api/v4/personal_access_tokens (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestPersonalList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens" {
@@ -422,7 +462,9 @@ func TestPersonalList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestPersonalGet_SelfSuccess verifies PersonalGet when self success.
+// TestPersonalGet_SelfSuccess verifies the PersonalGet_SelfSuccess handler.
+// The mock GitLab API at /api/v4/personal_access_tokens/self (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestPersonalGet_SelfSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/self" && r.Method == http.MethodGet {
@@ -441,7 +483,9 @@ func TestPersonalGet_SelfSuccess(t *testing.T) {
 	}
 }
 
-// TestPersonalGet_ByIDSuccess verifies PersonalGet when by ID success.
+// TestPersonalGet_ByIDSuccess verifies the PersonalGet_ByIDSuccess handler.
+// The mock GitLab API at /api/v4/personal_access_tokens/99 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestPersonalGet_ByIDSuccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/99" && r.Method == http.MethodGet {
@@ -460,7 +504,9 @@ func TestPersonalGet_ByIDSuccess(t *testing.T) {
 	}
 }
 
-// TestPersonalRotate_Success verifies PersonalRotate when success.
+// TestPersonalRotate_Success verifies that PersonalRotate succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/personal_access_tokens/99/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestPersonalRotate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/99/rotate" && r.Method == http.MethodPost {
@@ -479,7 +525,9 @@ func TestPersonalRotate_Success(t *testing.T) {
 	}
 }
 
-// TestPersonalRotate_Validation verifies PersonalRotate when validation.
+// TestPersonalRotate_Validation verifies the PersonalRotate_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestPersonalRotate_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 	_, err := PersonalRotate(context.Background(), client, PersonalRotateInput{})
@@ -488,7 +536,9 @@ func TestPersonalRotate_Validation(t *testing.T) {
 	}
 }
 
-// TestPersonalRevoke_Success verifies PersonalRevoke when success.
+// TestPersonalRevoke_Success verifies that PersonalRevoke succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/personal_access_tokens/99 (DELETE) responds with HTTP NotFound.
+// It asserts the returned output matches the expected fields.
 func TestPersonalRevoke_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/99" && r.Method == http.MethodDelete {
@@ -504,7 +554,9 @@ func TestPersonalRevoke_Success(t *testing.T) {
 	}
 }
 
-// TestPersonalRevoke_Validation verifies PersonalRevoke when validation.
+// TestPersonalRevoke_Validation verifies the PersonalRevoke_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestPersonalRevoke_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Helper() }))
 	err := PersonalRevoke(context.Background(), client, PersonalRevokeInput{})
@@ -517,7 +569,13 @@ func TestPersonalRevoke_Validation(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestAccessLevelName covers AccessLevelName with table-driven subtests.
+// TestAccessLevelName verifies that accessLevelName maps GitLab access level
+// integers (10/20/30/40/50) to their canonical human-readable names and
+// falls back to "Unknown (N)" for any other value.
+//
+// The test runs a table-driven check across the five known levels plus two
+// out-of-range values (0 and 99). This protects the human-facing output
+// across all GitLab access tiers.
 func TestAccessLevelName(t *testing.T) {
 	tests := []struct {
 		level int
@@ -541,7 +599,9 @@ func TestAccessLevelName(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{
 		ID:     5,
@@ -559,7 +619,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_AccessLevel verifies FormatOutputMarkdown when access level.
+// TestFormatOutputMarkdown_AccessLevel verifies the OutputMarkdown_AccessLevel Markdown formatter for a representative output_accesslevel input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_AccessLevel(t *testing.T) {
 	out := Output{
 		ID:          7,
@@ -576,7 +638,9 @@ func TestFormatOutputMarkdown_AccessLevel(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No access tokens found") {
@@ -584,7 +648,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithTokens verifies FormatListMarkdown when with tokens.
+// TestFormatListMarkdown_WithTokens verifies the ListMarkdown_WithTokens Markdown formatter for a representative list_withtokens input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithTokens(t *testing.T) {
 	out := ListOutput{
 		Tokens: []Output{
@@ -605,7 +671,9 @@ func TestFormatListMarkdown_WithTokens(t *testing.T) {
 // ProjectRotateSelf
 // ---------------------------------------------------------------------------.
 
-// TestProjectRotateSelf_Success verifies ProjectRotateSelf when success.
+// TestProjectRotateSelf_Success verifies that ProjectRotateSelf succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/access_tokens/self/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestProjectRotateSelf_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -624,7 +692,9 @@ func TestProjectRotateSelf_Success(t *testing.T) {
 	}
 }
 
-// TestProjectRotateSelf_MissingProjectID verifies ProjectRotateSelf when missing project ID.
+// TestProjectRotateSelf_MissingProjectID verifies that ProjectRotateSelf_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectRotateSelf_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -640,7 +710,9 @@ func TestProjectRotateSelf_MissingProjectID(t *testing.T) {
 // GroupRotateSelf
 // ---------------------------------------------------------------------------.
 
-// TestGroupRotateSelf_Success verifies GroupRotateSelf when success.
+// TestGroupRotateSelf_Success verifies that GroupRotateSelf succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/10/access_tokens/self/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGroupRotateSelf_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -659,7 +731,9 @@ func TestGroupRotateSelf_Success(t *testing.T) {
 	}
 }
 
-// TestGroupRotateSelf_MissingGroupID verifies GroupRotateSelf when missing group ID.
+// TestGroupRotateSelf_MissingGroupID verifies that GroupRotateSelf_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupRotateSelf_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -675,7 +749,9 @@ func TestGroupRotateSelf_MissingGroupID(t *testing.T) {
 // PersonalRotateSelf
 // ---------------------------------------------------------------------------.
 
-// TestPersonalRotateSelf_Success verifies PersonalRotateSelf when success.
+// TestPersonalRotateSelf_Success verifies that PersonalRotateSelf succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/personal_access_tokens/self/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestPersonalRotateSelf_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -694,7 +770,9 @@ func TestPersonalRotateSelf_Success(t *testing.T) {
 	}
 }
 
-// TestPersonalRotateSelf_APIError verifies PersonalRotateSelf when API error.
+// TestPersonalRotateSelf_APIError verifies that PersonalRotateSelf returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPersonalRotateSelf_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -710,7 +788,9 @@ func TestPersonalRotateSelf_APIError(t *testing.T) {
 // PersonalRevokeSelf
 // ---------------------------------------------------------------------------.
 
-// TestPersonalRevokeSelf_Success verifies PersonalRevokeSelf when success.
+// TestPersonalRevokeSelf_Success verifies that PersonalRevokeSelf succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/personal_access_tokens/self (DELETE) responds with HTTP NotFound.
+// It asserts the returned output matches the expected fields.
 func TestPersonalRevokeSelf_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/self" && r.Method == http.MethodDelete {
@@ -726,7 +806,9 @@ func TestPersonalRevokeSelf_Success(t *testing.T) {
 	}
 }
 
-// TestPersonalRevokeSelf_APIError verifies PersonalRevokeSelf when API error.
+// TestPersonalRevokeSelf_APIError verifies that PersonalRevokeSelf returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPersonalRevokeSelf_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -744,7 +826,9 @@ func TestPersonalRevokeSelf_APIError(t *testing.T) {
 // Canceled context -- ALL 18 handlers
 // ---------------------------------------------------------------------------.
 
-// TestCancelled_Context covers Cancelled with table-driven subtests for context.
+// TestCancelled_Context verifies the Cancelled_Context handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCancelled_Context(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -825,7 +909,9 @@ func TestCancelled_Context(t *testing.T) {
 // API error -- handlers missing error coverage
 // ---------------------------------------------------------------------------.
 
-// TestProjectList_APIError verifies ProjectList when API error.
+// TestProjectList_APIError verifies that ProjectList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -836,7 +922,9 @@ func TestProjectList_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectGet_APIError verifies ProjectGet when API error.
+// TestProjectGet_APIError verifies that ProjectGet returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -847,7 +935,9 @@ func TestProjectGet_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectCreate_APIError verifies ProjectCreate when API error.
+// TestProjectCreate_APIError verifies that ProjectCreate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -860,7 +950,9 @@ func TestProjectCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectRotate_APIError verifies ProjectRotate when API error.
+// TestProjectRotate_APIError verifies that ProjectRotate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectRotate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -871,7 +963,9 @@ func TestProjectRotate_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectRevoke_APIError verifies ProjectRevoke when API error.
+// TestProjectRevoke_APIError verifies that ProjectRevoke returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectRevoke_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -882,7 +976,9 @@ func TestProjectRevoke_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectRotateSelf_APIError verifies ProjectRotateSelf when API error.
+// TestProjectRotateSelf_APIError verifies that ProjectRotateSelf returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectRotateSelf_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -893,7 +989,9 @@ func TestProjectRotateSelf_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupList_APIError verifies GroupList when API error.
+// TestGroupList_APIError verifies that GroupList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -904,7 +1002,9 @@ func TestGroupList_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupGet_APIError verifies GroupGet when API error.
+// TestGroupGet_APIError verifies that GroupGet returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -915,7 +1015,9 @@ func TestGroupGet_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupCreate_APIError verifies GroupCreate when API error.
+// TestGroupCreate_APIError verifies that GroupCreate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -928,7 +1030,9 @@ func TestGroupCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupRotate_APIError verifies GroupRotate when API error.
+// TestGroupRotate_APIError verifies that GroupRotate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupRotate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -939,7 +1043,9 @@ func TestGroupRotate_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupRevoke_APIError verifies GroupRevoke when API error.
+// TestGroupRevoke_APIError verifies that GroupRevoke returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupRevoke_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -950,7 +1056,9 @@ func TestGroupRevoke_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupRotateSelf_APIError verifies GroupRotateSelf when API error.
+// TestGroupRotateSelf_APIError verifies that GroupRotateSelf returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupRotateSelf_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -961,7 +1069,9 @@ func TestGroupRotateSelf_APIError(t *testing.T) {
 	}
 }
 
-// TestPersonalList_APIError verifies PersonalList when API error.
+// TestPersonalList_APIError verifies that PersonalList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPersonalList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -972,7 +1082,9 @@ func TestPersonalList_APIError(t *testing.T) {
 	}
 }
 
-// TestPersonalGet_SelfAPIError verifies PersonalGet when self API error.
+// TestPersonalGet_SelfAPIError verifies that PersonalGet_SelfAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPersonalGet_SelfAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -983,7 +1095,9 @@ func TestPersonalGet_SelfAPIError(t *testing.T) {
 	}
 }
 
-// TestPersonalGet_ByIDAPIError verifies PersonalGet when by idapi error.
+// TestPersonalGet_ByIDAPIError verifies that PersonalGet_ByIDAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPersonalGet_ByIDAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -994,7 +1108,9 @@ func TestPersonalGet_ByIDAPIError(t *testing.T) {
 	}
 }
 
-// TestPersonalRotate_APIError verifies PersonalRotate when API error.
+// TestPersonalRotate_APIError verifies that PersonalRotate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPersonalRotate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -1005,7 +1121,9 @@ func TestPersonalRotate_APIError(t *testing.T) {
 	}
 }
 
-// TestPersonalRevoke_APIError verifies PersonalRevoke when API error.
+// TestPersonalRevoke_APIError verifies that PersonalRevoke returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPersonalRevoke_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, jsonServerErr)
@@ -1016,7 +1134,9 @@ func TestPersonalRevoke_APIError(t *testing.T) {
 	}
 }
 
-// TestAccessTokenInputValidationAPIErrors covers GitLab 400 validation hints for token mutations.
+// TestAccessTokenInputValidationAPIErrors verifies that AccessTokenInputValidationAPIErrors returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAccessTokenInputValidationAPIErrors(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid expires_at"}`)
@@ -1066,7 +1186,9 @@ func TestAccessTokenInputValidationAPIErrors(t *testing.T) {
 // Validation tests -- missing coverage
 // ---------------------------------------------------------------------------.
 
-// TestGroupGet_MissingInputs verifies GroupGet when missing inputs.
+// TestGroupGet_MissingInputs verifies that GroupGet_MissingInputs returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupGet_MissingInputs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 
@@ -1081,7 +1203,9 @@ func TestGroupGet_MissingInputs(t *testing.T) {
 	}
 }
 
-// TestGroupCreate_Validation covers GroupCreate with table-driven subtests for validation.
+// TestGroupCreate_Validation verifies the GroupCreate_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupCreate_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 
@@ -1106,7 +1230,9 @@ func TestGroupCreate_Validation(t *testing.T) {
 	}
 }
 
-// TestGroupRotate_Validation covers GroupRotate with table-driven subtests for validation.
+// TestGroupRotate_Validation verifies the GroupRotate_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupRotate_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 
@@ -1130,7 +1256,9 @@ func TestGroupRotate_Validation(t *testing.T) {
 	}
 }
 
-// TestGroupRevoke_Validation verifies GroupRevoke when validation.
+// TestGroupRevoke_Validation verifies the GroupRevoke_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupRevoke_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 
@@ -1144,7 +1272,9 @@ func TestGroupRevoke_Validation(t *testing.T) {
 	}
 }
 
-// TestProjectRotate_Validation covers ProjectRotate with table-driven subtests for validation.
+// TestProjectRotate_Validation verifies the ProjectRotate_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProjectRotate_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 
@@ -1168,7 +1298,9 @@ func TestProjectRotate_Validation(t *testing.T) {
 	}
 }
 
-// TestProjectRotateSelf_BadDate verifies ProjectRotateSelf when bad date.
+// TestProjectRotateSelf_BadDate verifies the ProjectRotateSelf_BadDate handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProjectRotateSelf_BadDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 	_, err := ProjectRotateSelf(context.Background(), client, ProjectRotateSelfInput{ProjectID: "42", ExpiresAt: "bad"})
@@ -1177,7 +1309,9 @@ func TestProjectRotateSelf_BadDate(t *testing.T) {
 	}
 }
 
-// TestGroupRotateSelf_BadDate verifies GroupRotateSelf when bad date.
+// TestGroupRotateSelf_BadDate verifies the GroupRotateSelf_BadDate handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupRotateSelf_BadDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 	_, err := GroupRotateSelf(context.Background(), client, GroupRotateSelfInput{GroupID: "10", ExpiresAt: "bad"})
@@ -1186,7 +1320,9 @@ func TestGroupRotateSelf_BadDate(t *testing.T) {
 	}
 }
 
-// TestPersonalRotate_BadDate verifies PersonalRotate when bad date.
+// TestPersonalRotate_BadDate verifies the PersonalRotate_BadDate handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestPersonalRotate_BadDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 	_, err := PersonalRotate(context.Background(), client, PersonalRotateInput{TokenID: 1, ExpiresAt: "bad"})
@@ -1195,7 +1331,9 @@ func TestPersonalRotate_BadDate(t *testing.T) {
 	}
 }
 
-// TestPersonalRotateSelf_BadDate verifies PersonalRotateSelf when bad date.
+// TestPersonalRotateSelf_BadDate verifies the PersonalRotateSelf_BadDate handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestPersonalRotateSelf_BadDate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { /* validation test: handler not called */ }))
 	_, err := PersonalRotateSelf(context.Background(), client, PersonalRotateSelfInput{ExpiresAt: "bad"})
@@ -1208,7 +1346,9 @@ func TestPersonalRotateSelf_BadDate(t *testing.T) {
 // Converter edge cases -- all date fields populated
 // ---------------------------------------------------------------------------.
 
-// TestFromProjectToken_AllDates verifies FromProjectToken when all dates.
+// TestFromProjectToken_AllDates verifies the FromProjectToken_AllDates handler.
+// The mock GitLab API at /api/v4/projects/1/access_tokens/5 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestFromProjectToken_AllDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/access_tokens/5" && r.Method == http.MethodGet {
@@ -1243,7 +1383,9 @@ func TestFromProjectToken_AllDates(t *testing.T) {
 	}
 }
 
-// TestFromGroupToken_AllDates verifies FromGroupToken when all dates.
+// TestFromGroupToken_AllDates verifies the FromGroupToken_AllDates handler.
+// The mock GitLab API at /api/v4/groups/10/access_tokens/3 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestFromGroupToken_AllDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/3" && r.Method == http.MethodGet {
@@ -1275,7 +1417,9 @@ func TestFromGroupToken_AllDates(t *testing.T) {
 	}
 }
 
-// TestFromPersonalToken_AllDates verifies FromPersonalToken when all dates.
+// TestFromPersonalToken_AllDates verifies the FromPersonalToken_AllDates handler.
+// The mock GitLab API at /api/v4/personal_access_tokens/50 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestFromPersonalToken_AllDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/50" && r.Method == http.MethodGet {
@@ -1311,7 +1455,9 @@ func TestFromPersonalToken_AllDates(t *testing.T) {
 // Pagination parameters
 // ---------------------------------------------------------------------------.
 
-// TestProjectList_WithPagination verifies ProjectList when with pagination.
+// TestProjectList_WithPagination verifies that ProjectList_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestProjectList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens {
@@ -1335,7 +1481,9 @@ func TestProjectList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestPersonalList_WithUserID verifies PersonalList when with user ID.
+// TestPersonalList_WithUserID verifies the PersonalList_WithUserID handler.
+// The mock GitLab API at /api/v4/personal_access_tokens (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestPersonalList_WithUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens" {
@@ -1359,7 +1507,9 @@ func TestPersonalList_WithUserID(t *testing.T) {
 	}
 }
 
-// TestGroupList_WithPagination verifies GroupList when with pagination.
+// TestGroupList_WithPagination verifies that GroupList_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestGroupList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupTokens {
@@ -1383,7 +1533,9 @@ func TestGroupList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestGroupList_WithState verifies GroupList when with state.
+// TestGroupList_WithState verifies the GroupList_WithState handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupList_WithState(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupTokens {
@@ -1402,7 +1554,9 @@ func TestGroupList_WithState(t *testing.T) {
 	}
 }
 
-// TestPersonalList_WithPagination verifies PersonalList when with pagination.
+// TestPersonalList_WithPagination verifies that PersonalList_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/personal_access_tokens (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestPersonalList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens" {
@@ -1430,7 +1584,9 @@ func TestPersonalList_WithPagination(t *testing.T) {
 // GroupCreate with optional fields (description, access_level, expires_at)
 // ---------------------------------------------------------------------------.
 
-// TestGroupCreate_WithOptionalFields verifies GroupCreate when with optional fields.
+// TestGroupCreate_WithOptionalFields verifies the GroupCreate_WithOptionalFields handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupCreate_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupTokens && r.Method == http.MethodPost {
@@ -1467,7 +1623,9 @@ func TestGroupCreate_WithOptionalFields(t *testing.T) {
 // ProjectCreate with description (optional field coverage)
 // ---------------------------------------------------------------------------.
 
-// TestProjectCreate_WithDescription verifies ProjectCreate when with description.
+// TestProjectCreate_WithDescription verifies the ProjectCreate_WithDescription handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProjectCreate_WithDescription(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathProjectTokens && r.Method == http.MethodPost {
@@ -1498,7 +1656,9 @@ func TestProjectCreate_WithDescription(t *testing.T) {
 // GroupRotate with ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestGroupRotate_WithExpiresAt verifies GroupRotate when with expires at.
+// TestGroupRotate_WithExpiresAt verifies the GroupRotate_WithExpiresAt handler.
+// The mock GitLab API at /api/v4/groups/10/access_tokens/3/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGroupRotate_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/3/rotate" && r.Method == http.MethodPost {
@@ -1521,7 +1681,9 @@ func TestGroupRotate_WithExpiresAt(t *testing.T) {
 // GroupRotateSelf with ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestGroupRotateSelf_WithExpiresAt verifies GroupRotateSelf when with expires at.
+// TestGroupRotateSelf_WithExpiresAt verifies the GroupRotateSelf_WithExpiresAt handler.
+// The mock GitLab API at /api/v4/groups/10/access_tokens/self/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGroupRotateSelf_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/10/access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -1544,7 +1706,9 @@ func TestGroupRotateSelf_WithExpiresAt(t *testing.T) {
 // ProjectRotateSelf with ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestProjectRotateSelf_WithExpiresAt verifies ProjectRotateSelf when with expires at.
+// TestProjectRotateSelf_WithExpiresAt verifies the ProjectRotateSelf_WithExpiresAt handler.
+// The mock GitLab API at /api/v4/projects/42/access_tokens/self/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestProjectRotateSelf_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -1567,7 +1731,9 @@ func TestProjectRotateSelf_WithExpiresAt(t *testing.T) {
 // PersonalRotate with ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestPersonalRotate_WithExpiresAt verifies PersonalRotate when with expires at.
+// TestPersonalRotate_WithExpiresAt verifies the PersonalRotate_WithExpiresAt handler.
+// The mock GitLab API at /api/v4/personal_access_tokens/99/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestPersonalRotate_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/99/rotate" && r.Method == http.MethodPost {
@@ -1590,7 +1756,9 @@ func TestPersonalRotate_WithExpiresAt(t *testing.T) {
 // PersonalRotateSelf with ExpiresAt
 // ---------------------------------------------------------------------------.
 
-// TestPersonalRotateSelf_WithExpiresAt verifies PersonalRotateSelf when with expires at.
+// TestPersonalRotateSelf_WithExpiresAt verifies the PersonalRotateSelf_WithExpiresAt handler.
+// The mock GitLab API at /api/v4/personal_access_tokens/self/rotate (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestPersonalRotateSelf_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/personal_access_tokens/self/rotate" && r.Method == http.MethodPost {
@@ -1613,7 +1781,9 @@ func TestPersonalRotateSelf_WithExpiresAt(t *testing.T) {
 // FormatOutputMarkdown -- all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies FormatOutputMarkdown when all fields.
+// TestFormatOutputMarkdown_AllFields verifies the OutputMarkdown_AllFields Markdown formatter for a representative output_allfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	out := Output{
 		ID:          42,
@@ -1652,7 +1822,9 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 // FormatListMarkdown -- with pagination data
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithPagination verifies FormatListMarkdown when with pagination.
+// TestFormatListMarkdown_WithPagination verifies the ListMarkdown_WithPagination Markdown formatter for a representative list_withpagination input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	out := ListOutput{
 		Tokens: []Output{
@@ -1673,7 +1845,9 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata verifies canonical metadata for access token actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1694,7 +1868,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallAllRoutes validates access token routes through canonical specs.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newAccessTokenRouteSpecs(t)
 

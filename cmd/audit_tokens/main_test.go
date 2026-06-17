@@ -1,6 +1,10 @@
 // main_test.go contains focused tests for the audit_tokens command. Tests use
 // a local GitLab version mock and exercise the resource token measurement path
 // that depends on the surface-aware tool manifest resources.
+//
+// Coverage focuses on the resource registration options (including the
+// minimal candidate) and the small pure helpers (domain parsing, total
+// tokens, number formatting, table printing) that compose the audit report.
 package main
 
 import (

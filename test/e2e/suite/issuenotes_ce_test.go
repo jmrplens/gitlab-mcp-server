@@ -3,6 +3,8 @@
 // issuenotes_ce_test.go tests the issue note MCP tools against a live GitLab
 // instance. Covers note create, list, get, update, and delete for both
 // individual and meta-tool modes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -13,8 +15,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuenotes"
 )
 
-// TestIndividual_IssueNotes exercises issue note CRUD using individual tools:
-// create → list → get → update → delete.
+// TestIndividual_IssueNotes exercises issue note CRUD using individual
+// tools: create → list → get → update → delete.
+//
+// The test creates a project and issue fixture, then walks through the
+// full note lifecycle using the gitlab_*_issue_note_* tools. Each
+// subtest asserts the expected note ID or body round-trips through the
+// GitLab API. The project is removed by the per-test resource ledger.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_IssueNotes(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -82,7 +91,15 @@ func TestIndividual_IssueNotes(t *testing.T) {
 }
 
 // TestMeta_IssueNotes exercises note CRUD via the gitlab_issue meta-tool
-// with note_create, note_list, note_get, note_update, and note_delete actions.
+// with note_create, note_list, note_get, note_update, and note_delete
+// actions.
+//
+// The test mirrors [TestIndividual_IssueNotes] but drives every step
+// with {action, params} arguments through the catalog-backed gitlab_issue
+// tool. Each subtest asserts the same outcome and verifies the tool name
+// stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_IssueNotes(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

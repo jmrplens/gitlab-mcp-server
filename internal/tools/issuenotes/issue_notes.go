@@ -173,7 +173,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return ListOutput{Notes: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-// GetNote retrieves a single note from an issue by note ID.
+// GetNote retrieves a single issue note by note ID from the GitLab
+// Notes API (GET /projects/:id/issues/:issue_iid/notes/:note_id).
+// Returns the note details or an error if the note is not found.
 func GetNote(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -195,7 +197,9 @@ func GetNote(ctx context.Context, client *gitlabclient.Client, input GetInput) (
 	return ToOutput(n), nil
 }
 
-// Update modifies the body of an existing issue note.
+// Update replaces the body of an existing issue note via the GitLab
+// Notes API (PUT /projects/:id/issues/:issue_iid/notes/:note_id). Only the
+// original author can edit a note; system notes cannot be edited.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -219,7 +223,10 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return ToOutput(n), nil
 }
 
-// Delete removes a note from an issue.
+// Delete removes an issue note from a GitLab project via the GitLab
+// Notes API (DELETE /projects/:id/issues/:issue_iid/notes/:note_id). Only
+// the note author or a project Maintainer can delete a note; system notes
+// cannot be deleted.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
 	if err := ctx.Err(); err != nil {
 		return err

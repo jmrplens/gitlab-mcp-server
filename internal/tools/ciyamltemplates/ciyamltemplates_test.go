@@ -13,7 +13,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestList verifies List.
+// TestList verifies the List handler.
+// The mock GitLab API at /api/v4/templates/gitlab_ci_ymls (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/templates/gitlab_ci_ymls" {
@@ -34,7 +36,9 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies List when error.
+// TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -46,7 +50,9 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestGet verifies Get.
+// TestGet verifies the Get handler.
+// The mock GitLab API at /api/v4/templates/gitlab_ci_ymls/Go (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/templates/gitlab_ci_ymls/Go" {
@@ -64,7 +70,9 @@ func TestGet(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies Get when error.
+// TestGet_Error verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -76,7 +84,9 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestGet_EmptyKey verifies Get when empty key.
+// TestGet_EmptyKey verifies the Get_EmptyKey handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_EmptyKey(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("should not call API with empty key")
@@ -90,7 +100,9 @@ func TestGet_EmptyKey(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{Templates: []TemplateListItem{{Key: "Go", Name: "Go"}}}
 	md := FormatListMarkdown(out)
@@ -99,7 +111,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies FormatGetMarkdown.
+// TestFormatGetMarkdown verifies the GetMarkdown Markdown formatter for a representative get input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{Name: "Go", Content: "stages:\n  - test"})
 	if !strings.Contains(md, "Go") || !strings.Contains(md, "stages") {
@@ -116,7 +130,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // List — canceled context, pagination, empty result
 // ---------------------------------------------------------------------------.
 
-// TestList_CancelledContext verifies List when cancelled context.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -126,7 +142,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies List when with pagination.
+// TestList_WithPagination verifies that List_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/templates/gitlab_ci_ymls (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/templates/gitlab_ci_ymls" {
@@ -154,7 +172,9 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies List when empty result.
+// TestList_EmptyResult verifies the List_EmptyResult handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -172,7 +192,9 @@ func TestList_EmptyResult(t *testing.T) {
 // Get — canceled context, empty key
 // ---------------------------------------------------------------------------.
 
-// TestGet_CancelledContext verifies Get when cancelled context.
+// TestGet_CancelledContext verifies the Get_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -182,7 +204,9 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_EmptyKey_Cov verifies Get when empty key cov.
+// TestGet_EmptyKey_Cov verifies the Get_EmptyKey_Cov handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_EmptyKey_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -193,7 +217,9 @@ func TestGet_EmptyKey_Cov(t *testing.T) {
 	}
 }
 
-// TestGetOutput_Fields verifies GetOutput when fields.
+// TestGetOutput_Fields verifies the GetOutput_Fields handler.
+// The mock GitLab API at /api/v4/templates/gitlab_ci_ymls/Python (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetOutput_Fields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/templates/gitlab_ci_ymls/Python" {
@@ -218,7 +244,9 @@ func TestGetOutput_Fields(t *testing.T) {
 // FormatListMarkdown — empty, with data, with pagination
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No templates found") {
@@ -229,7 +257,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithPagination verifies FormatListMarkdown when with pagination.
+// TestFormatListMarkdown_WithPagination verifies the ListMarkdown_WithPagination Markdown formatter for a representative list_withpagination input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	out := ListOutput{
 		Templates: []TemplateListItem{
@@ -252,7 +282,9 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_SpecialCharacters verifies FormatListMarkdown when special characters.
+// TestFormatListMarkdown_SpecialCharacters verifies the ListMarkdown_SpecialCharacters Markdown formatter for a representative list_specialcharacters input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 	out := ListOutput{
 		Templates: []TemplateListItem{
@@ -269,7 +301,9 @@ func TestFormatListMarkdown_SpecialCharacters(t *testing.T) {
 // FormatGetMarkdown — with data, empty content
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_AllFields verifies FormatGetMarkdown when all fields.
+// TestFormatGetMarkdown_AllFields verifies the GetMarkdown_AllFields Markdown formatter for a representative get_allfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_AllFields(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{
 		Name:    "Ruby",
@@ -289,7 +323,9 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_EmptyContent verifies FormatGetMarkdown when empty content.
+// TestFormatGetMarkdown_EmptyContent verifies the GetMarkdown_EmptyContent Markdown formatter for a representative get_emptycontent input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_EmptyContent(t *testing.T) {
 	md := FormatGetMarkdown(GetOutput{Name: "Empty", Content: ""})
 	if !strings.Contains(md, "## CI YAML Template: Empty") {
@@ -300,7 +336,9 @@ func TestFormatGetMarkdown_EmptyContent(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata verifies CI YAML template action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -320,7 +358,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRoutes validates CI YAML template canonical routes.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	specByTool := newCIYAMLTemplatesRouteSpecs(t)
 
@@ -351,7 +391,9 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteErrors covers canonical route error paths.
+// TestActionSpecs_CallRouteErrors validates the CallRouteErrors route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {

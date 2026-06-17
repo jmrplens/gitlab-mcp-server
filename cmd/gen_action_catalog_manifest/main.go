@@ -25,6 +25,18 @@ const (
 	defaultOutputPath = "internal/tools/action_specs_manifest_gen.go"
 )
 
+// main parses CLI flags, walks the source directory for buildXxxActionSpecs
+// functions, generates the manifest file (or verifies it in --check mode),
+// and exits non-zero on failure.
+//
+// Run this command after adding, removing, or renaming a
+// buildXxxActionSpecs function in internal/tools; CI enforces that the
+// committed manifest stays in sync with the source.
+//
+// Usage:
+//
+//	go run ./cmd/gen_action_catalog_manifest/            # rewrite manifest
+//	go run ./cmd/gen_action_catalog_manifest/ --check    # fail if stale
 func main() {
 	sourceDir := flag.String("source", defaultSourceDir, "directory containing action spec group builder source files")
 	outputPath := flag.String("output", defaultOutputPath, "generated manifest path")

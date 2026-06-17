@@ -19,9 +19,10 @@ import (
 )
 
 // toolManifestResourceSession registers catalog-backed meta-tools plus the
-// unified tool manifest resources in a single MCP server, then returns an in-memory
-// client session. It pins mode=full so per-action InputSchemas keep their
-// real structured shape.
+// unified tool manifest resources in a single MCP server, then returns an
+// in-memory client session. It pins mode=full so per-action InputSchemas
+// keep their real structured shape rather than collapsing to a flat
+// map[string]any.
 func toolManifestResourceSession(t *testing.T, client *gitlabclient.Client, enterprise bool) *mcp.ClientSession {
 	t.Helper()
 	t.Cleanup(tools.SetMetaParamSchemaScoped("full"))
@@ -55,8 +56,10 @@ func toolManifestResourceSession(t *testing.T, client *gitlabclient.Client, ente
 	return session
 }
 
-// listToolsForManifest creates a temporary in-memory client/server session to
-// inspect the server tools available during resource registration.
+// listToolsForManifest creates a temporary in-memory client/server session
+// to inspect the server tools available during resource registration. The
+// session is torn down before return so the caller's session is the only
+// active transport.
 func listToolsForManifest(t *testing.T, server *mcp.Server) []*mcp.Tool {
 	t.Helper()
 	st, ct := mcp.NewInMemoryTransports()

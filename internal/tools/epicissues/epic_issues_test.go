@@ -191,7 +191,9 @@ func resolveHandler(childPath string) http.HandlerFunc {
 // List
 // --------------------------------------------------------------------------
 
-// TestList uses table-driven subtests to exercise List across success, pagination, empty result, missing-parent, validation, and API-error scenarios.
+// TestList verifies the List handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	tests := []listCase{
 		{
@@ -347,7 +349,9 @@ func assertChildIssueFields(t *testing.T, issue ChildOutput) {
 	}
 }
 
-// TestList_CancelledContext verifies that List returns an error when the context is already cancelled.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
 	ctx := testutil.CancelledCtx(t)
@@ -386,8 +390,9 @@ func TestList_SkipsWidgetsWithoutChildren(t *testing.T) {
 	}
 }
 
-// TestAssign uses table-driven subtests to exercise Assign across success,
-// validation, GID resolution failures, mutation errors, and API failures.
+// TestAssign verifies the Assign handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAssign(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -496,7 +501,9 @@ func TestAssign(t *testing.T) {
 	}
 }
 
-// TestAssign_CancelledContext verifies that Assign returns an error when the context is already cancelled.
+// TestAssign_CancelledContext verifies the Assign_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestAssign_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
 	ctx := testutil.CancelledCtx(t)
@@ -556,7 +563,9 @@ func TestAssign_ChildResolutionAndMutationErrors(t *testing.T) {
 // Remove
 // --------------------------------------------------------------------------
 
-// TestRemove uses table-driven subtests to exercise Remove across success, validation, GID-resolution failure, and mutation errors.
+// TestRemove verifies the Remove handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRemove(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -662,7 +671,9 @@ func TestRemove(t *testing.T) {
 	}
 }
 
-// TestRemove_CancelledContext verifies that Remove returns an error when the context is already cancelled.
+// TestRemove_CancelledContext verifies the Remove_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestRemove_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
 	ctx := testutil.CancelledCtx(t)
@@ -716,7 +727,9 @@ func TestRemove_EpicResolutionAndMutationErrors(t *testing.T) {
 // UpdateOrder
 // --------------------------------------------------------------------------
 
-// TestUpdateOrder uses table-driven subtests to exercise UpdateOrder across BEFORE/AFTER positions, validation, mutation errors, and API errors.
+// TestUpdateOrder verifies the UpdateOrder handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateOrder(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -884,7 +897,9 @@ func TestUpdateOrder(t *testing.T) {
 	}
 }
 
-// TestUpdateOrder_CancelledContext verifies that UpdateOrder returns an error when the context is already cancelled.
+// TestUpdateOrder_CancelledContext verifies the UpdateOrder_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdateOrder_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, graphqlMux(map[string]http.HandlerFunc{}))
 	ctx := testutil.CancelledCtx(t)
@@ -1002,7 +1017,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatAssignMarkdown uses table-driven subtests to verify that FormatAssignMarkdown renders assigned/removed actions and handles empty GIDs.
+// TestFormatAssignMarkdown verifies the AssignMarkdown Markdown formatter for a representative assign input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatAssignMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string

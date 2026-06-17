@@ -8,50 +8,60 @@ import (
 	"strings"
 )
 
-// graphqlRequest represents the JSON body of a GraphQL POST request.
+// graphqlRequest is the JSON body shape of a GitLab GraphQL POST request. It
+// mirrors the fields consumed by the [gitlab.com/gitlab-org/api/client-go]
+// GraphQL transport without depending on that package's private types.
 type graphqlRequest struct {
 	Query     string         `json:"query"`
 	Variables map[string]any `json:"variables,omitempty"`
 }
 
-// RespondGraphQL writes a GraphQL JSON envelope response with the given
-// data payload. It wraps the data in {"data": ...} as expected by the
-// GitLab GraphQL API client.
+// RespondGraphQL writes a GraphQL JSON envelope response with the given data
+// payload. It wraps data in the standard {"data": ...} envelope expected by
+// the GitLab GraphQL API client. For example:
 //
 //	testutil.RespondGraphQL(w, http.StatusOK, `{"project":{"name":"foo"}}`)
 //
-// produces: {"data":{"project":{"name":"foo"}}}
+// produces the body {"data":{"project":{"name":"foo"}}}. Callers remain
+// responsible for escaping any quotes embedded in data.
 func RespondGraphQL(w http.ResponseWriter, status int, data string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`{"data":` + data + `}`))
 }
 
-// RespondGraphQLError writes a GraphQL error response with the given message.
+// RespondGraphQLError writes a GraphQL error envelope with the given message.
+// It sets data to null and emits a single error entry, mirroring the shape
+// returned by GitLab when a query partially or fully fails. For example:
 //
 //	testutil.RespondGraphQLError(w, http.StatusOK, "not found")
 //
-// produces: {"data":null,"errors":[{"message":"not found"}]}
+// produces {"data":null,"errors":[{"message":"not found"}]}. The message is
+// interpolated directly into JSON — callers must escape any embedded quotes.
 func RespondGraphQLError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`{"data":null,"errors":[{"message":"` + message + `"}]}`))
 }
 
-// GraphQLHandler creates an http.Handler that routes GraphQL POST requests
-// by matching the query body against handler keys. It reads the request body,
-// checks if the query contains each key string, and dispatches to the first
-// matching handler.
+// GraphQLHandler returns an [http.Handler] that routes GraphQL POST requests
+// by matching the request's query string against handler keys. The first key
+// that appears as a substring of the query wins; keys are therefore evaluated
+// longest-first so specific mutation names take precedence over shorter
+// operation roots (e.g. "vulnerabilityDismiss" matches before "vulnerability").
 //
-// Keys should be GraphQL operation identifiers (type names, field names, or
-// mutation names) that uniquely identify the query. For example:
+// The request body is parsed into a [graphqlRequest], then reattached to r so
+// downstream handlers can read it again. Non-POST requests are rejected with
+// 405 Method Not Allowed, malformed JSON with 400 Bad Request, and queries
+// that match no key with 400 Bad Request.
+//
+// Keys should be GraphQL operation identifiers (field names, type names, or
+// mutation names) that uniquely identify the operation, for example:
 //
 //	testutil.GraphQLHandler(map[string]http.HandlerFunc{
-//	    "vulnerabilities":    handleListVulnerabilities,
+//	    "vulnerabilities":      handleListVulnerabilities,
 //	    "vulnerabilityDismiss": handleDismissVulnerability,
 //	})
-//
-// If no handler matches, it responds with 400 Bad Request.
 func GraphQLHandler(handlers map[string]http.HandlerFunc) http.Handler {
 	// Sort keys longest-first so the most specific key matches first,
 	// avoiding non-deterministic map iteration when multiple keys match.
@@ -96,9 +106,13 @@ func GraphQLHandler(handlers map[string]http.HandlerFunc) http.Handler {
 	})
 }
 
-// ParseGraphQLVariables reads the request body and returns the Variables
-// map from the GraphQL request. Useful for asserting input parameters
-// in test handlers.
+// ParseGraphQLVariables reads r's body and returns the Variables map from
+// the GraphQL request, or an error if the body cannot be read or is not
+// valid JSON. The body is restored on r so subsequent handlers can re-read
+// it. The returned map is nil when the request omits a variables field.
+//
+// ParseGraphQLVariables is intended for assertions inside test handlers —
+// production code should rely on the client-go GraphQL transport.
 func ParseGraphQLVariables(r *http.Request) (map[string]any, error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

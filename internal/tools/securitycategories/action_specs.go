@@ -14,12 +14,16 @@ const (
 // ActionSpecs returns canonical specs for security category actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_create_security_category — create a new security category in a namespace.
 		securityCategoryCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_create_security_category", descriptionCreateSecurityCategory),
+		// gitlab_update_security_category — rename or update the description of an existing security category.
 		securityCategoryUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_update_security_category", descriptionUpdateSecurityCategory),
+		// gitlab_delete_security_category — delete a security category and its associated attributes.
 		securityCategoryDeleteSpec("delete", toolutil.DestructiveAction(client, Delete), "gitlab_delete_security_category", descriptionDeleteSecurityCategory),
 	}
 }
 
+// securityCategoryCreateSpec builds the canonical create spec for a security category tool.
 func securityCategoryCreateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityCategoryOptions(individualTool, description)
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
@@ -31,6 +35,7 @@ func securityCategoryCreateSpec(name string, route toolutil.ActionRoute, individ
 	return toolutil.NewCreateActionSpec(name, route, options)
 }
 
+// securityCategoryUpdateSpec builds the canonical update spec for a security category tool.
 func securityCategoryUpdateSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityCategoryOptions(individualTool, description)
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
@@ -42,6 +47,7 @@ func securityCategoryUpdateSpec(name string, route toolutil.ActionRoute, individ
 	return toolutil.NewUpdateActionSpec(name, route, options)
 }
 
+// securityCategoryDeleteSpec builds the canonical destructive delete spec for a security category tool.
 func securityCategoryDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityCategoryOptions(individualTool, description)
 	options.Usage = "Delete a custom security category and its associated attributes."

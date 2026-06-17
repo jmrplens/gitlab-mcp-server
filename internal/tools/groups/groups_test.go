@@ -42,8 +42,9 @@ var groupMembersJSON = `[{"id":10,"username":"devops1","name":"DevOps One","stat
 // subgroupsJSON is a JSON response fixture containing one descendant group.
 var subgroupsJSON = `[{"id":100,"name":"monitoring","path":"monitoring","full_path":"org/infra/monitoring","description":"Monitoring subgroup","visibility":"private","web_url":"https://gitlab.example.com/groups/org/infra/monitoring","parent_id":99}]`
 
-// TestGroupList_Success verifies that List retrieves groups and correctly
-// maps name, full path, parent ID, and pagination metadata.
+// TestGroupList_Success verifies that GroupList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroups {
@@ -74,8 +75,9 @@ func TestGroupList_Success(t *testing.T) {
 	}
 }
 
-// TestGroupList_WithSearch verifies that List forwards the search query
-// parameter to the GitLab API.
+// TestGroupList_WithSearch verifies the GroupList_WithSearch handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupList_WithSearch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroups {
@@ -97,8 +99,9 @@ func TestGroupList_WithSearch(t *testing.T) {
 	}
 }
 
-// TestGroupList_Owned verifies that List passes the owned=true filter
-// to the GitLab API when the Owned field is set.
+// TestGroupList_Owned verifies the GroupList_Owned handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupList_Owned(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroups {
@@ -120,8 +123,9 @@ func TestGroupList_Owned(t *testing.T) {
 	}
 }
 
-// TestGroupList_Empty verifies that List returns an empty slice when
-// the GitLab API returns no groups.
+// TestGroupList_Empty verifies the GroupList_Empty handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -136,8 +140,9 @@ func TestGroupList_Empty(t *testing.T) {
 	}
 }
 
-// TestGroupList_APIError verifies that List propagates an API error
-// Server Error returned by the GitLab API.
+// TestGroupList_APIError verifies that GroupList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -149,8 +154,9 @@ func TestGroupList_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupList_CancelledContext verifies that List returns an error
-// immediately when called with an already-canceled context.
+// TestGroupList_CancelledContext verifies the GroupList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGroupList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -164,8 +170,9 @@ func TestGroupList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGroupGet_Success verifies that Get retrieves a single group by ID
-// and correctly maps name, ID, and visibility to the output struct.
+// TestGroupGet_Success verifies that GroupGet succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroup99 {
@@ -190,8 +197,9 @@ func TestGroupGet_Success(t *testing.T) {
 	}
 }
 
-// TestGroupGet_NotFound verifies that Get returns an error when the
-// GitLab API responds with 404 for a non-existent group.
+// TestGroupGet_NotFound verifies that GroupGet_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupGet_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Group Not Found"}`)
@@ -203,8 +211,9 @@ func TestGroupGet_NotFound(t *testing.T) {
 	}
 }
 
-// TestGroupGet_CancelledContext verifies that Get returns an error
-// immediately when called with an already-canceled context.
+// TestGroupGet_CancelledContext verifies the GroupGet_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGroupGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, groupDetailJSON)
@@ -254,8 +263,9 @@ func TestGroupMembersList_Success(t *testing.T) {
 	}
 }
 
-// TestGroupMembersList_WithQuery verifies that MembersList forwards
-// the query filter parameter to the GitLab API.
+// TestGroupMembersList_WithQuery verifies the GroupMembersList_WithQuery handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupMembersList_WithQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupMembers {
@@ -280,8 +290,9 @@ func TestGroupMembersList_WithQuery(t *testing.T) {
 	}
 }
 
-// TestGroupMembersList_Empty verifies that MembersList returns an empty
-// member slice when the GitLab API returns no members.
+// TestGroupMembersList_Empty verifies the GroupMembersList_Empty handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupMembersList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -296,8 +307,9 @@ func TestGroupMembersList_Empty(t *testing.T) {
 	}
 }
 
-// TestGroupMembersList_APIError verifies that MembersList propagates a
-// 403 Forbidden error returned by the GitLab API.
+// TestGroupMembersList_APIError verifies that GroupMembersList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupMembersList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -309,8 +321,9 @@ func TestGroupMembersList_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupMembersList_CancelledContext verifies that MembersList returns
-// an error immediately when called with an already-canceled context.
+// TestGroupMembersList_CancelledContext verifies the GroupMembersList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGroupMembersList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -324,8 +337,9 @@ func TestGroupMembersList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestSubgroupsList_Success verifies that SubgroupsList retrieves descendant
-// groups with correct name, parent ID, and pagination metadata.
+// TestSubgroupsList_Success verifies that SubgroupsList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSubgroupsList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupSubgroups {
@@ -353,8 +367,9 @@ func TestSubgroupsList_Success(t *testing.T) {
 	}
 }
 
-// TestSubgroupsList_WithSearch verifies that SubgroupsList forwards the
-// search query parameter to the GitLab API.
+// TestSubgroupsList_WithSearch verifies the SubgroupsList_WithSearch handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSubgroupsList_WithSearch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupSubgroups {
@@ -379,8 +394,9 @@ func TestSubgroupsList_WithSearch(t *testing.T) {
 	}
 }
 
-// TestSubgroupsList_Empty verifies that SubgroupsList returns an empty slice
-// when the GitLab API returns no descendant groups.
+// TestSubgroupsList_Empty verifies the SubgroupsList_Empty handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSubgroupsList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -395,8 +411,9 @@ func TestSubgroupsList_Empty(t *testing.T) {
 	}
 }
 
-// TestSubgroupsList_APIError verifies that SubgroupsList propagates a 404
-// error returned by the GitLab API for a non-existent parent group.
+// TestSubgroupsList_APIError verifies that SubgroupsList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSubgroupsList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Group Not Found"}`)
@@ -408,8 +425,9 @@ func TestSubgroupsList_APIError(t *testing.T) {
 	}
 }
 
-// TestSubgroupsList_CancelledContext verifies that SubgroupsList returns an
-// error immediately when called with an already-canceled context.
+// TestSubgroupsList_CancelledContext verifies the SubgroupsList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestSubgroupsList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -423,8 +441,9 @@ func TestSubgroupsList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGroupGet_SuccessEnrichedFields verifies that Get maps the enriched
-// fields: FullName, CreatedAt, MarkedForDeletion.
+// TestGroupGet_SuccessEnrichedFields verifies the GroupGet_SuccessEnrichedFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupGet_SuccessEnrichedFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroup99 {
@@ -449,8 +468,9 @@ func TestGroupGet_SuccessEnrichedFields(t *testing.T) {
 	}
 }
 
-// TestGroupListInput_EnrichedFilters verifies that List passes new filters
-// (order_by, sort, visibility) as query parameters.
+// TestGroupListInput_EnrichedFilters verifies the GroupListInput_EnrichedFilters handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupListInput_EnrichedFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -476,8 +496,9 @@ func TestGroupListInput_EnrichedFilters(t *testing.T) {
 	}
 }
 
-// TestGroupMembers_ListSAMLAndRoleFields verifies that MembersList maps
-// GroupSAMLProvider and MemberRoleName from the API response.
+// TestGroupMembers_ListSAMLAndRoleFields verifies the GroupMembers_ListSAMLAndRoleFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupMembers_ListSAMLAndRoleFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroupMembers {
@@ -559,8 +580,9 @@ func assertEnrichedSubgroupQuery(t *testing.T, r *http.Request) {
 	}
 }
 
-// TestGroupList_EnrichedNewFilters verifies that List passes the new
-// params: AllAvailable, Statistics, WithCustomAttributes, SkipGroups.
+// TestGroupList_EnrichedNewFilters verifies the GroupList_EnrichedNewFilters handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupList_EnrichedNewFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroups {
@@ -623,7 +645,9 @@ const (
 // groupProjectsJSON stores the package-level group projects JSON state.
 var groupProjectsJSON = `[{"id":42,"name":"my-project","path_with_namespace":"org/infra/my-project","description":"A project","visibility":"private","web_url":"https://gitlab.example.com/org/infra/my-project","default_branch":"main","archived":false,"created_at":"2026-02-01T12:00:00Z"}]`
 
-// TestGroupCreate_Success verifies GroupCreate when success.
+// TestGroupCreate_Success verifies that GroupCreate succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroups {
@@ -642,7 +666,9 @@ func TestGroupCreate_Success(t *testing.T) {
 	}
 }
 
-// TestGroupCreate_MissingName verifies GroupCreate when missing name.
+// TestGroupCreate_MissingName verifies that GroupCreate_MissingName returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupCreate_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -653,7 +679,9 @@ func TestGroupCreate_MissingName(t *testing.T) {
 	}
 }
 
-// TestGroupCreateServer_Error verifies GroupCreateServer when error.
+// TestGroupCreateServer_Error verifies that GroupCreateServer returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupCreateServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -668,7 +696,9 @@ func TestGroupCreateServer_Error(t *testing.T) {
 // Update tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupUpdate_Success verifies GroupUpdate when success.
+// TestGroupUpdate_Success verifies that GroupUpdate succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == pathGroup99 {
@@ -690,7 +720,9 @@ func TestGroupUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestGroupUpdate_MissingGroupID verifies GroupUpdate when missing group ID.
+// TestGroupUpdate_MissingGroupID verifies that GroupUpdate_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupUpdate_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -701,7 +733,9 @@ func TestGroupUpdate_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGroupUpdateServer_Error verifies GroupUpdateServer when error.
+// TestGroupUpdateServer_Error verifies that GroupUpdateServer returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupUpdateServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -716,7 +750,9 @@ func TestGroupUpdateServer_Error(t *testing.T) {
 // Delete tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupDelete_Success verifies GroupDelete when success.
+// TestGroupDelete_Success verifies that GroupDelete succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGroup99 {
@@ -732,7 +768,9 @@ func TestGroupDelete_Success(t *testing.T) {
 	}
 }
 
-// TestGroupDelete_MissingGroupID verifies GroupDelete when missing group ID.
+// TestGroupDelete_MissingGroupID verifies that GroupDelete_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupDelete_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -743,7 +781,9 @@ func TestGroupDelete_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGroupDeleteServer_Error verifies GroupDeleteServer when error.
+// TestGroupDeleteServer_Error verifies that GroupDeleteServer returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupDeleteServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -758,7 +798,9 @@ func TestGroupDeleteServer_Error(t *testing.T) {
 // Restore tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupRestore_Success verifies GroupRestore when success.
+// TestGroupRestore_Success verifies that GroupRestore succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupRestore_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroup99Restore {
@@ -777,7 +819,9 @@ func TestGroupRestore_Success(t *testing.T) {
 	}
 }
 
-// TestGroupRestore_MissingGroupID verifies GroupRestore when missing group ID.
+// TestGroupRestore_MissingGroupID verifies that GroupRestore_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupRestore_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -792,7 +836,9 @@ func TestGroupRestore_MissingGroupID(t *testing.T) {
 // Search tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupSearch_Success verifies GroupSearch when success.
+// TestGroupSearch_Success verifies that GroupSearch succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupSearch_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroups && r.URL.Query().Get("search") != "" {
@@ -814,7 +860,9 @@ func TestGroupSearch_Success(t *testing.T) {
 	}
 }
 
-// TestGroupSearch_MissingQuery verifies GroupSearch when missing query.
+// TestGroupSearch_MissingQuery verifies that GroupSearch_MissingQuery returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupSearch_MissingQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -829,7 +877,9 @@ func TestGroupSearch_MissingQuery(t *testing.T) {
 // TransferProject tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupTransferProject_Success verifies GroupTransferProject when success.
+// TestGroupTransferProject_Success verifies that GroupTransferProject succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/99/projects/42 (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGroupTransferProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/99/projects/42" {
@@ -848,7 +898,9 @@ func TestGroupTransferProject_Success(t *testing.T) {
 	}
 }
 
-// TestGroupTransferProject_MissingGroupID verifies GroupTransferProject when missing group ID.
+// TestGroupTransferProject_MissingGroupID verifies that GroupTransferProject_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupTransferProject_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -859,7 +911,9 @@ func TestGroupTransferProject_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGroupTransferProject_MissingProjectID verifies GroupTransferProject when missing project ID.
+// TestGroupTransferProject_MissingProjectID verifies that GroupTransferProject_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupTransferProject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -874,7 +928,9 @@ func TestGroupTransferProject_MissingProjectID(t *testing.T) {
 // ListProjects tests
 // ---------------------------------------------------------------------------.
 
-// TestGroupListProjects_Success verifies GroupListProjects when success.
+// TestGroupListProjects_Success verifies that GroupListProjects succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupListProjects_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathGroup99Projects {
@@ -902,7 +958,9 @@ func TestGroupListProjects_Success(t *testing.T) {
 	}
 }
 
-// TestGroupListProjects_MissingGroupID verifies GroupListProjects when missing group ID.
+// TestGroupListProjects_MissingGroupID verifies that GroupListProjects_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupListProjects_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -913,7 +971,9 @@ func TestGroupListProjects_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGroupListProjectsServer_Error verifies GroupListProjectsServer when error.
+// TestGroupListProjectsServer_Error verifies that GroupListProjectsServer returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupListProjectsServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -936,7 +996,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // Get — missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestGet_MissingGroupID verifies Get when missing group ID.
+// TestGet_MissingGroupID verifies that Get_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(context.Background(), client, GetInput{})
@@ -949,7 +1011,9 @@ func TestGet_MissingGroupID(t *testing.T) {
 // MembersList — missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestMembersList_MissingGroupID verifies MembersList when missing group ID.
+// TestMembersList_MissingGroupID verifies that MembersList_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestMembersList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := MembersList(context.Background(), client, MembersListInput{})
@@ -962,7 +1026,9 @@ func TestMembersList_MissingGroupID(t *testing.T) {
 // SubgroupsList — missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestSubgroupsList_MissingGroupID verifies SubgroupsList when missing group ID.
+// TestSubgroupsList_MissingGroupID verifies that SubgroupsList_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSubgroupsList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := SubgroupsList(context.Background(), client, SubgroupsListInput{})
@@ -975,7 +1041,9 @@ func TestSubgroupsList_MissingGroupID(t *testing.T) {
 // List — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestList_WithPagination verifies List when with pagination.
+// TestList_WithPagination verifies that List_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -1005,7 +1073,9 @@ func TestList_WithPagination(t *testing.T) {
 // List — with TopLevelOnly
 // ---------------------------------------------------------------------------.
 
-// TestList_TopLevelOnly verifies List when top level only.
+// TestList_TopLevelOnly verifies the List_TopLevelOnly handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_TopLevelOnly(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.URL.Query().Get("top_level_only"); got != "true" {
@@ -1023,7 +1093,9 @@ func TestList_TopLevelOnly(t *testing.T) {
 // MembersList — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestMembersList_WithPagination verifies MembersList when with pagination.
+// TestMembersList_WithPagination verifies that MembersList_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestMembersList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -1048,7 +1120,9 @@ func TestMembersList_WithPagination(t *testing.T) {
 // SubgroupsList — with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestSubgroupsList_WithPagination verifies SubgroupsList when with pagination.
+// TestSubgroupsList_WithPagination verifies that SubgroupsList_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestSubgroupsList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -1073,7 +1147,9 @@ func TestSubgroupsList_WithPagination(t *testing.T) {
 // Create — canceled context, with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCreate_CancelledContext verifies Create when cancelled context.
+// TestCreate_CancelledContext verifies the Create_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1083,7 +1159,9 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_AllOptionalFields verifies Create when all optional fields.
+// TestCreate_AllOptionalFields verifies the Create_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/groups (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups" {
@@ -1120,7 +1198,9 @@ func TestCreate_AllOptionalFields(t *testing.T) {
 // Update — canceled context, with optional bool fields
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_CancelledContext verifies Update when cancelled context.
+// TestUpdate_CancelledContext verifies the Update_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1130,7 +1210,9 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_AllOptionalFields verifies Update when all optional fields.
+// TestUpdate_AllOptionalFields verifies the Update_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/groups/99 (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/groups/99" {
@@ -1164,7 +1246,9 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 // Delete — canceled context, with permanently_remove
 // ---------------------------------------------------------------------------.
 
-// TestDelete_CancelledContext verifies Delete when cancelled context.
+// TestDelete_CancelledContext verifies the Delete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1174,7 +1258,9 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_PermanentlyRemove verifies Delete when permanently remove.
+// TestDelete_PermanentlyRemove verifies the Delete_PermanentlyRemove handler.
+// The mock GitLab API at /api/v4/groups/99 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete_PermanentlyRemove(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/99" {
@@ -1198,7 +1284,9 @@ func TestDelete_PermanentlyRemove(t *testing.T) {
 // Restore — canceled context, server error
 // ---------------------------------------------------------------------------.
 
-// TestRestore_CancelledContext verifies Restore when cancelled context.
+// TestRestore_CancelledContext verifies the Restore_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestRestore_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1208,7 +1296,9 @@ func TestRestore_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRestore_ServerError verifies Restore when server error.
+// TestRestore_ServerError verifies that Restore_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRestore_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -1223,7 +1313,9 @@ func TestRestore_ServerError(t *testing.T) {
 // Archive — success, cancelled context, server error, forbidden
 // ---------------------------------------------------------------------------.
 
-// TestArchive_Success verifies that archiving a group calls the correct endpoint.
+// TestArchive_Success verifies that Archive succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/99/archive (POST) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestArchive_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/99/archive" {
@@ -1239,7 +1331,9 @@ func TestArchive_Success(t *testing.T) {
 	}
 }
 
-// TestArchive_CancelledContext verifies archive respects context cancellation.
+// TestArchive_CancelledContext verifies the Archive_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestArchive_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1249,7 +1343,9 @@ func TestArchive_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestArchive_Forbidden verifies archive returns a hint on 403.
+// TestArchive_Forbidden verifies the Archive_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestArchive_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -1260,7 +1356,9 @@ func TestArchive_Forbidden(t *testing.T) {
 	}
 }
 
-// TestArchive_EmptyGroupID verifies archive requires group_id.
+// TestArchive_EmptyGroupID verifies the Archive_EmptyGroupID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestArchive_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := Archive(context.Background(), client, ArchiveInput{})
@@ -1273,7 +1371,9 @@ func TestArchive_EmptyGroupID(t *testing.T) {
 // Unarchive — success, cancelled context, server error, forbidden
 // ---------------------------------------------------------------------------.
 
-// TestUnarchive_Success verifies that unarchiving a group calls the correct endpoint.
+// TestUnarchive_Success verifies that Unarchive succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/99/unarchive (POST) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestUnarchive_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/99/unarchive" {
@@ -1289,7 +1389,9 @@ func TestUnarchive_Success(t *testing.T) {
 	}
 }
 
-// TestUnarchive_CancelledContext verifies unarchive respects context cancellation.
+// TestUnarchive_CancelledContext verifies the Unarchive_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUnarchive_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1299,7 +1401,9 @@ func TestUnarchive_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUnarchive_Forbidden verifies unarchive returns a hint on 403.
+// TestUnarchive_Forbidden verifies the Unarchive_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUnarchive_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -1310,7 +1414,9 @@ func TestUnarchive_Forbidden(t *testing.T) {
 	}
 }
 
-// TestUnarchive_EmptyGroupID verifies unarchive requires group_id.
+// TestUnarchive_EmptyGroupID verifies the Unarchive_EmptyGroupID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUnarchive_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := Unarchive(context.Background(), client, ArchiveInput{})
@@ -1323,7 +1429,9 @@ func TestUnarchive_EmptyGroupID(t *testing.T) {
 // Search — canceled context, server error
 // ---------------------------------------------------------------------------.
 
-// TestSearch_CancelledContext verifies Search when cancelled context.
+// TestSearch_CancelledContext verifies the Search_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestSearch_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1333,7 +1441,9 @@ func TestSearch_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestSearch_ServerError verifies Search when server error.
+// TestSearch_ServerError verifies that Search_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSearch_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -1348,7 +1458,9 @@ func TestSearch_ServerError(t *testing.T) {
 // TransferProject — canceled context, server error
 // ---------------------------------------------------------------------------.
 
-// TestTransferProject_CancelledContext verifies TransferProject when cancelled context.
+// TestTransferProject_CancelledContext verifies the TransferProject_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestTransferProject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1358,7 +1470,9 @@ func TestTransferProject_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestTransferProject_ServerError verifies TransferProject when server error.
+// TestTransferProject_ServerError verifies that TransferProject_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestTransferProject_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -1369,7 +1483,9 @@ func TestTransferProject_ServerError(t *testing.T) {
 	}
 }
 
-// TestTransferProject_BadRequest verifies TransferProject returns the compatibility hint for 400 responses.
+// TestTransferProject_BadRequest verifies the TransferProject_BadRequest handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestTransferProject_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -1387,7 +1503,9 @@ func TestTransferProject_BadRequest(t *testing.T) {
 // ListProjects — canceled context, with optional filter fields
 // ---------------------------------------------------------------------------.
 
-// TestListProjects_CancelledContext verifies ListProjects when cancelled context.
+// TestListProjects_CancelledContext verifies the ListProjects_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListProjects_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1397,7 +1515,9 @@ func TestListProjects_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListProjects_AllOptionalFilters verifies ListProjects when all optional filters.
+// TestListProjects_AllOptionalFilters verifies the ListProjects_AllOptionalFilters handler.
+// The mock GitLab API at /api/v4/groups/99/projects (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListProjects_AllOptionalFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/99/projects" {
@@ -1453,7 +1573,9 @@ func assertListProjectsOptionalQuery(t *testing.T, r *http.Request) {
 // ListHooks — canceled context, missing group_id, empty result
 // ---------------------------------------------------------------------------.
 
-// TestListHooks_CancelledContext verifies ListHooks when cancelled context.
+// TestListHooks_CancelledContext verifies the ListHooks_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListHooks_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1463,7 +1585,9 @@ func TestListHooks_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListHooks_MissingGroupID verifies ListHooks when missing group ID.
+// TestListHooks_MissingGroupID verifies that ListHooks_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListHooks_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := ListHooks(context.Background(), client, ListHooksInput{})
@@ -1472,7 +1596,9 @@ func TestListHooks_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestListHooks_Empty verifies ListHooks when empty.
+// TestListHooks_Empty verifies the ListHooks_Empty handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListHooks_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1486,7 +1612,9 @@ func TestListHooks_Empty(t *testing.T) {
 	}
 }
 
-// TestListHooks_WithPagination verifies ListHooks when with pagination.
+// TestListHooks_WithPagination verifies that ListHooks_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListHooks_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -1511,7 +1639,9 @@ func TestListHooks_WithPagination(t *testing.T) {
 // GetHook — canceled context, missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestGetHook_CancelledContext verifies GetHook when cancelled context.
+// TestGetHook_CancelledContext verifies the GetHook_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1521,7 +1651,9 @@ func TestGetHook_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetHook_MissingGroupID verifies GetHook when missing group ID.
+// TestGetHook_MissingGroupID verifies that GetHook_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetHook_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := GetHook(context.Background(), client, GetHookInput{HookID: 10})
@@ -1534,7 +1666,9 @@ func TestGetHook_MissingGroupID(t *testing.T) {
 // AddHook — canceled context, missing group_id, missing url, with all opts
 // ---------------------------------------------------------------------------.
 
-// TestAddHook_CancelledContext verifies AddHook when cancelled context.
+// TestAddHook_CancelledContext verifies the AddHook_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestAddHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1547,7 +1681,9 @@ func TestAddHook_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestAddHook_MissingGroupID verifies AddHook when missing group ID.
+// TestAddHook_MissingGroupID verifies that AddHook_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddHook_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := AddHook(context.Background(), client, AddHookInput{
@@ -1558,7 +1694,9 @@ func TestAddHook_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestAddHook_MissingURL verifies AddHook when missing URL.
+// TestAddHook_MissingURL verifies that AddHook_MissingURL returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddHook_MissingURL(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := AddHook(context.Background(), client, AddHookInput{GroupID: "99"})
@@ -1567,7 +1705,9 @@ func TestAddHook_MissingURL(t *testing.T) {
 	}
 }
 
-// TestAddHook_AllOptionalFields verifies AddHook when all optional fields.
+// TestAddHook_AllOptionalFields verifies the AddHook_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/groups/99/hooks (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestAddHook_AllOptionalFields(t *testing.T) {
 	hookResponse := `{"id":20,"url":"https://hooks.example.com/ci","name":"Full Hook","description":"All events","group_id":99,"push_events":true,"tag_push_events":true,"merge_requests_events":true,"issues_events":true,"note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"subgroup_events":true,"member_events":true,"confidential_issues_events":true,"confidential_note_events":true,"enable_ssl_verification":true,"created_at":"2026-03-01T10:00:00Z"}`
 
@@ -1626,7 +1766,9 @@ func TestAddHook_AllOptionalFields(t *testing.T) {
 // EditHook — canceled context, missing group_id, with all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestEditHook_CancelledContext verifies EditHook when cancelled context.
+// TestEditHook_CancelledContext verifies the EditHook_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestEditHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1640,7 +1782,9 @@ func TestEditHook_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestEditHook_MissingGroupID verifies EditHook when missing group ID.
+// TestEditHook_MissingGroupID verifies that EditHook_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEditHook_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := EditHook(context.Background(), client, EditHookInput{
@@ -1652,7 +1796,9 @@ func TestEditHook_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestEditHook_AllOptionalFields verifies EditHook when all optional fields.
+// TestEditHook_AllOptionalFields verifies the EditHook_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/groups/99/hooks/10 (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestEditHook_AllOptionalFields(t *testing.T) {
 	hookResponse := `{"id":10,"url":"https://hooks.example.com/updated","name":"Edited","description":"Updated hook","group_id":99,"push_events":false,"tag_push_events":true,"merge_requests_events":true,"issues_events":false,"note_events":true,"job_events":false,"pipeline_events":true,"wiki_page_events":false,"deployment_events":true,"releases_events":true,"subgroup_events":false,"member_events":true,"confidential_issues_events":false,"confidential_note_events":true,"enable_ssl_verification":false,"created_at":"2026-01-15T10:00:00Z"}`
 
@@ -1704,7 +1850,9 @@ func TestEditHook_AllOptionalFields(t *testing.T) {
 // DeleteHook — canceled context, missing group_id
 // ---------------------------------------------------------------------------.
 
-// TestDeleteHook_CancelledContext verifies DeleteHook when cancelled context.
+// TestDeleteHook_CancelledContext verifies the DeleteHook_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -1714,7 +1862,9 @@ func TestDeleteHook_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteHook_MissingGroupID verifies DeleteHook when missing group ID.
+// TestDeleteHook_MissingGroupID verifies that DeleteHook_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteHook_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := DeleteHook(context.Background(), client, DeleteHookInput{HookID: 10})
@@ -1727,7 +1877,9 @@ func TestDeleteHook_MissingGroupID(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_WithData verifies FormatOutputMarkdown when with data.
+// TestFormatOutputMarkdown_WithData verifies the OutputMarkdown_WithData Markdown formatter for a representative output_withdata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_WithData(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:                99,
@@ -1761,7 +1913,9 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Minimal verifies FormatOutputMarkdown when minimal.
+// TestFormatOutputMarkdown_Minimal verifies the OutputMarkdown_Minimal Markdown formatter for a representative output_minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:         1,
@@ -1791,7 +1945,9 @@ func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithData verifies FormatListMarkdown when with data.
+// TestFormatListMarkdown_WithData verifies the ListMarkdown_WithData Markdown formatter for a representative list_withdata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithData(t *testing.T) {
 	out := ListOutput{
 		Groups: []Output{
@@ -1819,7 +1975,9 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No groups found") {
@@ -1834,7 +1992,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // FormatMemberListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatMemberListMarkdown_WithData verifies FormatMemberListMarkdown when with data.
+// TestFormatMemberListMarkdown_WithData verifies the MemberListMarkdown_WithData Markdown formatter for a representative memberlist_withdata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMemberListMarkdown_WithData(t *testing.T) {
 	out := MemberListOutput{
 		Members: []MemberOutput{
@@ -1860,7 +2020,9 @@ func TestFormatMemberListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatMemberListMarkdown_Empty verifies FormatMemberListMarkdown when empty.
+// TestFormatMemberListMarkdown_Empty verifies the MemberListMarkdown_Empty Markdown formatter for a representative memberlist_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMemberListMarkdown_Empty(t *testing.T) {
 	md := FormatMemberListMarkdown(MemberListOutput{})
 	if !strings.Contains(md, "No members found") {
@@ -1875,7 +2037,9 @@ func TestFormatMemberListMarkdown_Empty(t *testing.T) {
 // FormatListProjectsMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListProjectsMarkdown_WithData verifies FormatListProjectsMarkdown when with data.
+// TestFormatListProjectsMarkdown_WithData verifies the ListProjectsMarkdown_WithData Markdown formatter for a representative listprojects_withdata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListProjectsMarkdown_WithData(t *testing.T) {
 	out := ListProjectsOutput{
 		Projects: []ProjectItem{
@@ -1902,7 +2066,9 @@ func TestFormatListProjectsMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatListProjectsMarkdown_Empty verifies FormatListProjectsMarkdown when empty.
+// TestFormatListProjectsMarkdown_Empty verifies the ListProjectsMarkdown_Empty Markdown formatter for a representative listprojects_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListProjectsMarkdown_Empty(t *testing.T) {
 	md := FormatListProjectsMarkdown(ListProjectsOutput{})
 	if !strings.Contains(md, "No projects found") {
@@ -1917,7 +2083,9 @@ func TestFormatListProjectsMarkdown_Empty(t *testing.T) {
 // FormatHookMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatHookMarkdown_WithNameAndAllEvents verifies FormatHookMarkdown when with name and all events.
+// TestFormatHookMarkdown_WithNameAndAllEvents verifies the HookMarkdown_WithNameAndAllEvents Markdown formatter for a representative hook_withnameandallevents input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatHookMarkdown_WithNameAndAllEvents(t *testing.T) {
 	md := FormatHookMarkdown(HookOutput{
 		ID:                       10,
@@ -1964,7 +2132,9 @@ func TestFormatHookMarkdown_WithNameAndAllEvents(t *testing.T) {
 	}
 }
 
-// TestFormatHookMarkdown_WithoutName verifies FormatHookMarkdown when without name.
+// TestFormatHookMarkdown_WithoutName verifies the HookMarkdown_WithoutName Markdown formatter for a representative hook_withoutname input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatHookMarkdown_WithoutName(t *testing.T) {
 	md := FormatHookMarkdown(HookOutput{
 		ID:  5,
@@ -1988,7 +2158,9 @@ func TestFormatHookMarkdown_WithoutName(t *testing.T) {
 	}
 }
 
-// TestFormatHookMarkdown_NoEventsEnabled verifies FormatHookMarkdown when no events enabled.
+// TestFormatHookMarkdown_NoEventsEnabled verifies the HookMarkdown_NoEventsEnabled Markdown formatter for a representative hook_noeventsenabled input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatHookMarkdown_NoEventsEnabled(t *testing.T) {
 	md := FormatHookMarkdown(HookOutput{
 		ID:  1,
@@ -2004,7 +2176,9 @@ func TestFormatHookMarkdown_NoEventsEnabled(t *testing.T) {
 // FormatHookListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatHookListMarkdown_WithData verifies FormatHookListMarkdown when with data.
+// TestFormatHookListMarkdown_WithData verifies the HookListMarkdown_WithData Markdown formatter for a representative hooklist_withdata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatHookListMarkdown_WithData(t *testing.T) {
 	out := HookListOutput{
 		Hooks: []HookOutput{
@@ -2032,7 +2206,9 @@ func TestFormatHookListMarkdown_WithData(t *testing.T) {
 	}
 }
 
-// TestFormatHookListMarkdown_Empty verifies FormatHookListMarkdown when empty.
+// TestFormatHookListMarkdown_Empty verifies the HookListMarkdown_Empty Markdown formatter for a representative hooklist_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatHookListMarkdown_Empty(t *testing.T) {
 	md := FormatHookListMarkdown(HookListOutput{})
 	if !strings.Contains(md, "No group webhooks found.") {
@@ -2047,7 +2223,9 @@ func TestFormatHookListMarkdown_Empty(t *testing.T) {
 // enabledEvents — comprehensive
 // ---------------------------------------------------------------------------.
 
-// TestEnabledEvents_All verifies EnabledEvents when all.
+// TestEnabledEvents_All verifies the EnabledEvents_All handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnabledEvents_All(t *testing.T) {
 	h := HookOutput{
 		PushEvents:          true,
@@ -2072,7 +2250,9 @@ func TestEnabledEvents_All(t *testing.T) {
 	}
 }
 
-// TestEnabledEvents_None verifies EnabledEvents when none.
+// TestEnabledEvents_None verifies the EnabledEvents_None handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnabledEvents_None(t *testing.T) {
 	result := enabledEvents(HookOutput{})
 	if result != "none" {
@@ -2084,7 +2264,9 @@ func TestEnabledEvents_None(t *testing.T) {
 // ActionSpecs route coverage
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for group actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -2109,7 +2291,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpecsCallAllRoutes — route coverage for all 18 tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates group routes across multiple scenarios.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newGroupsRouteSpecs(t)
 
@@ -2258,7 +2442,9 @@ func newGroupsRouteSpecs(t *testing.T) map[string]toolutil.ActionSpec {
 	return groupSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestActionSpecs_GroupGetRoute verifies the canonical group get route output.
+// TestActionSpecs_GroupGetRoute validates the GroupGetRoute route through the catalog surface.
+// The mock GitLab API at /api/v4/groups/10 (GET) responds with HTTP OK.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_GroupGetRoute(t *testing.T) {
 	const respJSON = `{"id":10,"name":"G","path":"g","full_path":"g","web_url":"https://gitlab.example.com/groups/g","visibility":"private"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -26,6 +26,13 @@ const (
 	writeStdoutErrorText = "write stdout: %w"
 )
 
+// options describes the resolved CLI flags and positional arguments for
+// [run].
+//
+// root is the repository root containing README.md and docs/. check enables
+// non-mutating CI mode that fails when any table would change. paths is
+// the list of explicit files or directories to format; it falls back to
+// {"README.md", "docs"} when empty.
 type options struct {
 	root  string
 	check bool

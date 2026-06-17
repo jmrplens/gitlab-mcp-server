@@ -16,7 +16,9 @@ const (
 	pathGroupSAMLOne = "/api/v4/groups/mygroup/saml_group_links/saml-devs"
 )
 
-// TestList_Success verifies that List returns the expected output when the GitLab API responds successfully.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupSAML {
@@ -40,7 +42,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_MissingGroupID verifies that List returns a validation error when group_id is missing.
+// TestList_MissingGroupID verifies that List_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -51,7 +55,9 @@ func TestList_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies that Get returns the expected output when the GitLab API responds successfully.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGroupSAMLOne {
@@ -70,7 +76,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingSAMLGroupName verifies that Get returns a validation error when saml_group_name is missing.
+// TestGet_MissingSAMLGroupName verifies that Get_MissingSAMLGroupName returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingSAMLGroupName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -81,7 +89,9 @@ func TestGet_MissingSAMLGroupName(t *testing.T) {
 	}
 }
 
-// TestAdd_Success verifies that Add returns the expected output when the GitLab API responds successfully.
+// TestAdd_Success verifies that Add succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAdd_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupSAML {
@@ -104,7 +114,9 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
-// TestAdd_MissingGroupID verifies that Add returns a validation error when group_id is missing.
+// TestAdd_MissingGroupID verifies that Add_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAdd_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -115,7 +127,9 @@ func TestAdd_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestAdd_MissingSAMLGroupName verifies that Add returns a validation error when saml_group_name is missing.
+// TestAdd_MissingSAMLGroupName verifies that Add_MissingSAMLGroupName returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAdd_MissingSAMLGroupName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -126,7 +140,9 @@ func TestAdd_MissingSAMLGroupName(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies that Delete returns the expected output when the GitLab API responds successfully.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathGroupSAMLOne {
@@ -142,7 +158,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingSAMLGroupName verifies that Delete returns a validation error when saml_group_name is missing.
+// TestDelete_MissingSAMLGroupName verifies that Delete_MissingSAMLGroupName returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingSAMLGroupName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -153,8 +171,9 @@ func TestDelete_MissingSAMLGroupName(t *testing.T) {
 	}
 }
 
-// TestSAMLLinkErrorHints verifies API failures explain the SAML SSO
-// configuration prerequisite instead of returning a bare 401/404.
+// TestSAMLLinkErrorHints verifies that SAMLLinkErrorHints returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSAMLLinkErrorHints(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusUnauthorized, `{"message":"401 Unauthorized"}`)
@@ -208,8 +227,9 @@ func TestSAMLLinkErrorHints(t *testing.T) {
 	}
 }
 
-// TestList_APIError validates the List handler across API errors and edge cases.
-// Covers: API 500 error propagation.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -224,7 +244,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult validates that List handles an empty slice from the API.
+// TestList_EmptyResult verifies the List_EmptyResult handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -239,7 +261,9 @@ func TestList_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestGet_MissingGroupID validates that Get returns an error when group_id is empty.
+// TestGet_MissingGroupID verifies that Get_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -251,7 +275,9 @@ func TestGet_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGet_APIError validates that Get propagates API errors properly.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -266,7 +292,9 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestAdd_APIError validates that Add propagates API errors properly.
+// TestAdd_APIError verifies that Add returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAdd_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"409 Conflict"}`)
@@ -285,8 +313,9 @@ func TestAdd_APIError(t *testing.T) {
 	}
 }
 
-// TestAdd_WithOptionalFields validates that Add sends optional fields
-// (MemberRoleID and Provider) when they are provided.
+// TestAdd_WithOptionalFields verifies the Add_WithOptionalFields handler.
+// The mock GitLab API at /api/v4/groups/mygroup/saml_group_links (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestAdd_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/mygroup/saml_group_links" {
@@ -326,7 +355,9 @@ func TestAdd_WithOptionalFields(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingGroupID validates that Delete returns an error when group_id is empty.
+// TestDelete_MissingGroupID verifies that Delete_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -338,7 +369,9 @@ func TestDelete_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError validates that Delete propagates API errors properly.
+// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -353,8 +386,9 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestToOutput_AllFields validates the toOutput helper populates all fields correctly,
-// including optional MemberRoleID and Provider.
+// TestToOutput_AllFields verifies the ToOutput_AllFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_AllFields(t *testing.T) {
 	tests := []struct {
 		name     string

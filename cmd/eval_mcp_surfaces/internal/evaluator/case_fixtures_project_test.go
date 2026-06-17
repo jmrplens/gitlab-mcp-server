@@ -1,3 +1,7 @@
+// case_fixtures_project_test.go covers the typed fixtures used by the base
+// mutating Docker preset: shared resource builders, attempt-name derivation,
+// and prompt-template rendering for live fixtures.
+
 package evaluator
 
 import (
@@ -5,6 +9,14 @@ import (
 	"testing"
 )
 
+// TestBaseMutatingFixtureSpecs_DefineRequiredResourceBuilders verifies that
+// every base mutating fixture ships Ensure, Validate, and Cleanup callbacks
+// so case prompts can rely on stable resource lifecycles.
+//
+// The test enumerates the expected fixture names and asserts each one is
+// registered in the base mutating registry with non-nil callbacks. This
+// protects the evaluator from silently shipping a fixture whose validate or
+// cleanup path was never wired up.
 func TestBaseMutatingFixtureSpecs_DefineRequiredResourceBuilders(t *testing.T) {
 	fixtures := baseMutatingFixtureSpecs()
 	byName := requireFixtureNames(fixtures)
@@ -40,6 +52,15 @@ func TestBaseMutatingFixtureSpecs_DefineRequiredResourceBuilders(t *testing.T) {
 	}
 }
 
+// TestFixtureOutputFromLiveState_ExposesTypedPromptValues verifies that
+// fixtureOutputFromLiveState exposes every typed prompt value used by case
+// templates, formatting integers and string slices into the canonical
+// pipe-joined representation.
+//
+// The test builds a populated liveFixtureState and asserts each typed key
+// maps to the expected string form, including the comma-joined
+// package_release_files slice. This protects case prompts from regressing to
+// raw integer or unserialised slice values.
 func TestFixtureOutputFromLiveState_ExposesTypedPromptValues(t *testing.T) {
 	output := fixtureOutputFromLiveState(&liveFixtureState{
 		ProjectID:             123,
@@ -74,6 +95,15 @@ func TestFixtureOutputFromLiveState_ExposesTypedPromptValues(t *testing.T) {
 	}
 }
 
+// TestAttemptNameFixtureOutput_UsesModelRunSuffix verifies that
+// attemptNameFixtureOutput composes every attempt-scoped name from the
+// model label, run index, and run suffix in a stable, GitLab-friendly form.
+//
+// The test supplies a qwen model with run index 3 and suffix "abc123" and
+// asserts each output key (subgroup name, branch name, variable key, package
+// release tag, and so on) matches the expected composed string. This
+// protects case prompts from generating unsafe or colliding resource names
+// when the same fixture is reused across attempts.
 func TestAttemptNameFixtureOutput_UsesModelRunSuffix(t *testing.T) {
 	output := attemptNameFixtureOutput(FixtureContext{ModelName: "qwen:qwen3.6-flash", RunIndex: 3, RunSuffix: "abc123"})
 	for key, want := range map[string]string{
@@ -93,6 +123,14 @@ func TestAttemptNameFixtureOutput_UsesModelRunSuffix(t *testing.T) {
 	}
 }
 
+// TestAttemptNameFixtureOutput_IsolatesCaseResources verifies that
+// attemptNameFixtureOutput appends the case ID to release-related values so
+// per-case resources do not collide across attempts that share a model and
+// run suffix.
+//
+// The test sets CaseID on the FixtureContext and asserts the release tag and
+// link names include the "ms018" case suffix. This protects destructive
+// release workflows from accidentally overwriting shared release artifacts.
 func TestAttemptNameFixtureOutput_IsolatesCaseResources(t *testing.T) {
 	output := attemptNameFixtureOutput(FixtureContext{ModelName: "qwen:qwen3.6-flash", RunIndex: 1, RunSuffix: "abc123", CaseID: "MS-018"})
 	for key, want := range map[string]string{
@@ -106,6 +144,16 @@ func TestAttemptNameFixtureOutput_IsolatesCaseResources(t *testing.T) {
 	}
 }
 
+// TestBaseMutatingPromptTemplate_RendersAttemptNamesWithoutChangingStoredPrompt
+// verifies that rendering a case prompt with attempt-scoped output values
+// produces the expected substituted text while leaving the stored prompt
+// template unchanged.
+//
+// The test loads MT-036, builds an attempt-scoped FixtureOutput, renders the
+// case prompt, and asserts the rendered string contains the expected tag
+// name, project path, and default branch. This protects the prompt-template
+// pipeline from accidentally mutating the stored [Case.PromptTemplate.Text]
+// when substituting attempt-scoped values.
 func TestBaseMutatingPromptTemplate_RendersAttemptNamesWithoutChangingStoredPrompt(t *testing.T) {
 	evalCase, ok := CaseByID("MT-036")
 	if !ok {

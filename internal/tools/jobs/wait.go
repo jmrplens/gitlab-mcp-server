@@ -15,6 +15,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// pollDuration converts a seconds value to a [time.Duration]. It is
+// overridable from tests to inject a faster clock without changing the
+// production behavior.
 var pollDuration = func(seconds int) time.Duration { return time.Duration(seconds) * time.Second }
 
 // WaitInput defines parameters for waiting on a job to complete.
@@ -36,8 +39,11 @@ type WaitOutput struct {
 	TimedOut    bool   `json:"timed_out"`
 }
 
-// Wait polls a job until it reaches a terminal state or the timeout is reached.
-// It sends MCP progress notifications to keep the client informed during polling.
+// Wait polls a CI/CD job until it reaches a terminal state
+// (success/failed/canceled/skipped) or the configured timeout is reached.
+// MCP progress notifications are emitted on every poll to keep the
+// caller informed. The output captures the final job snapshot, the
+// waited-for duration, and whether the call timed out.
 func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input WaitInput) (WaitOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return WaitOutput{}, err
@@ -77,6 +83,8 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 	return waitOutputFromResult(result), nil
 }
 
+// waitOutputFromResult converts a [waitpoll.Result] into the package's
+// [WaitOutput], flattening the polled job snapshot and the wait metadata.
 func waitOutputFromResult(result waitpoll.Result[Output]) WaitOutput {
 	return WaitOutput{
 		Job:         result.Item,

@@ -19,6 +19,12 @@ import (
 
 const helperReportsWhetherTemplate = "%s reports whether %s."
 
+// insertion describes one doc-comment edit to splice into a source file.
+//
+// startLine and endLine are 1-based line numbers in the original file;
+// inserting new comment text replaces this range (an empty range inserts
+// the comment immediately before startLine). comment is the rendered
+// doc-comment text without the leading "// " or indentation.
 type insertion struct {
 	startLine int
 	endLine   int
@@ -443,6 +449,12 @@ func generateTestHelperDoc(d *ast.FuncDecl, pkgName string) string {
 	return fmt.Sprintf("%s supports %s assertions in %s tests.", name, phrase, pkgName)
 }
 
+// prefixDocRule defines a doc-comment template applied to helpers whose
+// name starts with one of prefixes.
+//
+// template is a fmt-style format string with two %s verbs (name, subject)
+// or one %s (name) for nameOnly rules. subject is invoked to derive the
+// subject text from the helper name and the matched prefix.
 type prefixDocRule struct {
 	prefixes []string
 	template string
@@ -591,6 +603,15 @@ func helperIntentDoc(name, pkgName string) string {
 	return fmt.Sprintf("%s implements the %s helper used by %s.", name, words, pkgName)
 }
 
+// helperDocRule defines a helper-doc template applied when both the
+// prefix and contains constraints match the helper name.
+//
+// prefixes is the list of name prefixes to match (all-or-nothing; empty
+// means any name). contains is the list of substring markers to require.
+// trimPrefixes are stripped from the helper name before producing the
+// subject. template is the format string. useWords controls whether the
+// already-split word form is used as the subject; nameOnly emits only
+// the helper name as the sole %s verb.
 type helperDocRule struct {
 	prefixes     []string
 	contains     []string
@@ -777,6 +798,10 @@ func generateTypeDoc(ts *ast.TypeSpec, pkgName string) string {
 	return fmt.Sprintf("%s holds %s data for the %s package.", name, words, pkgName)
 }
 
+// keywordDocRule defines a type-doc template applied when the type name
+// contains any of keywords (case-insensitive).
+//
+// template is a fmt-style format string with two %s verbs (name, words).
 type keywordDocRule struct {
 	keywords []string
 	template string

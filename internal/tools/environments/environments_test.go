@@ -28,7 +28,9 @@ const (
 // environmentList tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentList_Success verifies EnvironmentList when success.
+// TestEnvironmentList_Success verifies that EnvironmentList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironments && r.Method == http.MethodGet {
@@ -55,7 +57,9 @@ func TestEnvironmentList_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_WithFilters verifies EnvironmentList when with filters.
+// TestEnvironmentList_WithFilters verifies the EnvironmentList_WithFilters handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironments {
@@ -81,7 +85,9 @@ func TestEnvironmentList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_MissingProjectID verifies EnvironmentList when missing project ID.
+// TestEnvironmentList_MissingProjectID verifies that EnvironmentList_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -93,7 +99,9 @@ func TestEnvironmentList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_CancelledContext verifies EnvironmentList when cancelled context.
+// TestEnvironmentList_CancelledContext verifies the EnvironmentList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestEnvironmentList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -111,7 +119,9 @@ func TestEnvironmentList_CancelledContext(t *testing.T) {
 // environmentGet tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentGet_Success verifies EnvironmentGet when success.
+// TestEnvironmentGet_Success verifies that EnvironmentGet succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1 && r.Method == http.MethodGet {
@@ -133,7 +143,9 @@ func TestEnvironmentGet_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentGet_ZeroID verifies EnvironmentGet when zero ID.
+// TestEnvironmentGet_ZeroID verifies the EnvironmentGet_ZeroID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentGet_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -148,7 +160,9 @@ func TestEnvironmentGet_ZeroID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentGet_CancelledContext verifies EnvironmentGet when cancelled context.
+// TestEnvironmentGet_CancelledContext verifies the EnvironmentGet_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestEnvironmentGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -166,7 +180,9 @@ func TestEnvironmentGet_CancelledContext(t *testing.T) {
 // environmentCreate tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentCreate_Success verifies EnvironmentCreate when success.
+// TestEnvironmentCreate_Success verifies that EnvironmentCreate succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironments && r.Method == http.MethodPost {
@@ -190,7 +206,9 @@ func TestEnvironmentCreate_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentCreate_MissingName verifies EnvironmentCreate when missing name.
+// TestEnvironmentCreate_MissingName verifies that EnvironmentCreate_MissingName returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentCreate_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -205,7 +223,9 @@ func TestEnvironmentCreate_MissingName(t *testing.T) {
 	}
 }
 
-// TestEnvironmentCreate_CancelledContext verifies EnvironmentCreate when cancelled context.
+// TestEnvironmentCreate_CancelledContext verifies the EnvironmentCreate_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestEnvironmentCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -223,7 +243,9 @@ func TestEnvironmentCreate_CancelledContext(t *testing.T) {
 // environmentUpdate tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentUpdate_Success verifies EnvironmentUpdate when success.
+// TestEnvironmentUpdate_Success verifies that EnvironmentUpdate succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1 && r.Method == http.MethodPut {
@@ -247,7 +269,9 @@ func TestEnvironmentUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentUpdate_ZeroID verifies EnvironmentUpdate when zero ID.
+// TestEnvironmentUpdate_ZeroID verifies the EnvironmentUpdate_ZeroID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentUpdate_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -263,7 +287,9 @@ func TestEnvironmentUpdate_ZeroID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentUpdate_CancelledContext verifies EnvironmentUpdate when cancelled context.
+// TestEnvironmentUpdate_CancelledContext verifies the EnvironmentUpdate_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestEnvironmentUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -281,7 +307,9 @@ func TestEnvironmentUpdate_CancelledContext(t *testing.T) {
 // environmentDelete tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentDelete_Success verifies EnvironmentDelete when success.
+// TestEnvironmentDelete_Success verifies that EnvironmentDelete succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1 && r.Method == http.MethodDelete {
@@ -300,7 +328,9 @@ func TestEnvironmentDelete_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentDelete_ZeroID verifies EnvironmentDelete when zero ID.
+// TestEnvironmentDelete_ZeroID verifies the EnvironmentDelete_ZeroID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentDelete_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -315,7 +345,9 @@ func TestEnvironmentDelete_ZeroID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentDelete_CancelledContext verifies EnvironmentDelete when cancelled context.
+// TestEnvironmentDelete_CancelledContext verifies the EnvironmentDelete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestEnvironmentDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -333,7 +365,9 @@ func TestEnvironmentDelete_CancelledContext(t *testing.T) {
 // environmentStop tests
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentStop_Success verifies EnvironmentStop when success.
+// TestEnvironmentStop_Success verifies that EnvironmentStop succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentStop_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1+"/stop" && r.Method == http.MethodPost {
@@ -355,7 +389,9 @@ func TestEnvironmentStop_Success(t *testing.T) {
 	}
 }
 
-// TestEnvironmentStop_WithForce verifies EnvironmentStop when with force.
+// TestEnvironmentStop_WithForce verifies the EnvironmentStop_WithForce handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentStop_WithForce(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathEnvironment1+"/stop" {
@@ -379,7 +415,9 @@ func TestEnvironmentStop_WithForce(t *testing.T) {
 	}
 }
 
-// TestEnvironmentStop_ZeroID verifies EnvironmentStop when zero ID.
+// TestEnvironmentStop_ZeroID verifies the EnvironmentStop_ZeroID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentStop_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -394,7 +432,9 @@ func TestEnvironmentStop_ZeroID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentStop_CancelledContext verifies EnvironmentStop when cancelled context.
+// TestEnvironmentStop_CancelledContext verifies the EnvironmentStop_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestEnvironmentStop_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -420,7 +460,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // List — API error, name filter, pagination
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentList_APIError verifies EnvironmentList when API error.
+// TestEnvironmentList_APIError verifies that EnvironmentList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -431,7 +473,9 @@ func TestEnvironmentList_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_WithNameFilter verifies EnvironmentList when with name filter.
+// TestEnvironmentList_WithNameFilter verifies the EnvironmentList_WithNameFilter handler.
+// The mock GitLab API at /api/v4/projects/1/environments (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentList_WithNameFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/environments" {
@@ -458,7 +502,9 @@ func TestEnvironmentList_WithNameFilter(t *testing.T) {
 	}
 }
 
-// TestEnvironmentList_Pagination verifies EnvironmentList when pagination.
+// TestEnvironmentList_Pagination verifies that EnvironmentList forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/projects/1/environments (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestEnvironmentList_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/environments" {
@@ -489,7 +535,9 @@ func TestEnvironmentList_Pagination(t *testing.T) {
 // Get — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentGet_APIError verifies EnvironmentGet when API error.
+// TestEnvironmentGet_APIError verifies that EnvironmentGet returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -500,7 +548,9 @@ func TestEnvironmentGet_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentGet_MissingProjectID verifies EnvironmentGet when missing project ID.
+// TestEnvironmentGet_MissingProjectID verifies that EnvironmentGet_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(context.Background(), client, GetInput{EnvironmentID: 1})
@@ -513,7 +563,9 @@ func TestEnvironmentGet_MissingProjectID(t *testing.T) {
 // Create — API error, missing project_id, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentCreate_APIError verifies EnvironmentCreate when API error.
+// TestEnvironmentCreate_APIError verifies that EnvironmentCreate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -524,7 +576,9 @@ func TestEnvironmentCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentCreate_MissingProjectID verifies EnvironmentCreate when missing project ID.
+// TestEnvironmentCreate_MissingProjectID verifies that EnvironmentCreate_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentCreate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Create(context.Background(), client, CreateInput{Name: "staging"})
@@ -533,7 +587,9 @@ func TestEnvironmentCreate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentCreate_AllOptionalFields verifies EnvironmentCreate when all optional fields.
+// TestEnvironmentCreate_AllOptionalFields verifies the EnvironmentCreate_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/projects/1/environments (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/1/environments" {
@@ -572,7 +628,9 @@ func TestEnvironmentCreate_AllOptionalFields(t *testing.T) {
 // Update — API error, missing project_id, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentUpdate_APIError verifies EnvironmentUpdate when API error.
+// TestEnvironmentUpdate_APIError verifies that EnvironmentUpdate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -583,7 +641,9 @@ func TestEnvironmentUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentUpdate_MissingProjectID verifies EnvironmentUpdate when missing project ID.
+// TestEnvironmentUpdate_MissingProjectID verifies that EnvironmentUpdate_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Update(context.Background(), client, UpdateInput{EnvironmentID: 1, Name: "x"})
@@ -592,7 +652,9 @@ func TestEnvironmentUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentUpdate_AllOptionalFields verifies EnvironmentUpdate when all optional fields.
+// TestEnvironmentUpdate_AllOptionalFields verifies the EnvironmentUpdate_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/projects/1/environments/5 (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/projects/1/environments/5" {
@@ -628,7 +690,9 @@ func TestEnvironmentUpdate_AllOptionalFields(t *testing.T) {
 // Delete — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentDelete_APIError verifies EnvironmentDelete when API error.
+// TestEnvironmentDelete_APIError verifies that EnvironmentDelete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -639,7 +703,9 @@ func TestEnvironmentDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentDelete_MissingProjectID verifies EnvironmentDelete when missing project ID.
+// TestEnvironmentDelete_MissingProjectID verifies that EnvironmentDelete_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := Delete(context.Background(), client, DeleteInput{EnvironmentID: 1})
@@ -652,7 +718,9 @@ func TestEnvironmentDelete_MissingProjectID(t *testing.T) {
 // Stop — API error, missing project_id, force=false
 // ---------------------------------------------------------------------------.
 
-// TestEnvironmentStop_APIError verifies EnvironmentStop when API error.
+// TestEnvironmentStop_APIError verifies that EnvironmentStop returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentStop_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -663,7 +731,9 @@ func TestEnvironmentStop_APIError(t *testing.T) {
 	}
 }
 
-// TestEnvironmentStop_MissingProjectID verifies EnvironmentStop when missing project ID.
+// TestEnvironmentStop_MissingProjectID verifies that EnvironmentStop_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEnvironmentStop_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Stop(context.Background(), client, StopInput{EnvironmentID: 1})
@@ -672,7 +742,9 @@ func TestEnvironmentStop_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestEnvironmentStop_ForceFalse verifies EnvironmentStop when force false.
+// TestEnvironmentStop_ForceFalse verifies the EnvironmentStop_ForceFalse handler.
+// The mock GitLab API at /api/v4/projects/1/environments/2/stop (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestEnvironmentStop_ForceFalse(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/environments/2/stop" && r.Method == http.MethodPost {
@@ -700,7 +772,9 @@ func TestEnvironmentStop_ForceFalse(t *testing.T) {
 // toOutput — all optional timestamp fields
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllTimestampFields verifies ToOutput when all timestamp fields.
+// TestToOutput_AllTimestampFields verifies the ToOutput_AllTimestampFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_AllTimestampFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:          1,
@@ -737,7 +811,9 @@ func TestToOutput_AllTimestampFields(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_EmptyName verifies FormatOutputMarkdown when empty name.
+// TestFormatOutputMarkdown_EmptyName verifies the OutputMarkdown_EmptyName Markdown formatter for a representative output_emptyname input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_EmptyName(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -745,7 +821,9 @@ func TestFormatOutputMarkdown_EmptyName(t *testing.T) {
 	}
 }
 
-// TestFormatEnvironmentNotFound verifies the special not-found formatter emits content.
+// TestFormatEnvironmentNotFound verifies the EnvironmentNotFound Markdown formatter for a representative environmentnotfound input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFormatEnvironmentNotFound(t *testing.T) {
 	result := formatEnvironmentNotFound(environmentNotFoundOutput{Identifier: "ID 99 in project 42"})
 	if result == nil {
@@ -756,7 +834,9 @@ func TestFormatEnvironmentNotFound(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
+// TestFormatOutputMarkdown_MinimalFields verifies the OutputMarkdown_MinimalFields Markdown formatter for a representative output_minimalfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:    7,
@@ -789,7 +869,9 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithEnvironments verifies FormatListMarkdown when with environments.
+// TestFormatListMarkdown_WithEnvironments verifies the ListMarkdown_WithEnvironments Markdown formatter for a representative list_withenvironments input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithEnvironments(t *testing.T) {
 	out := ListOutput{
 		Environments: []Output{
@@ -820,7 +902,9 @@ func TestFormatListMarkdown_WithEnvironments(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No environments found") {
@@ -831,7 +915,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestGet_WithAutoStopAt verifies toOutput covers the AutoStopAt nil guard.
+// TestGet_WithAutoStopAt verifies the Get_WithAutoStopAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_WithAutoStopAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -854,7 +940,9 @@ func TestGet_WithAutoStopAt(t *testing.T) {
 // ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for environment actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -894,7 +982,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpecs route coverage for all 6 tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates environment routes across multiple scenarios.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newEnvironmentSpecsByTool(t)
 
@@ -970,7 +1060,9 @@ func newEnvironmentSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	return environmentSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestActionSpecs_EnvironmentGetRoute verifies the canonical environment get route output.
+// TestActionSpecs_EnvironmentGetRoute validates the EnvironmentGetRoute route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_EnvironmentGetRoute(t *testing.T) {
 	const respJSON = `{"id":7,"name":"prod","slug":"prod","state":"available","tier":"production"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

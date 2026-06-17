@@ -14,9 +14,14 @@ const (
 	pipelineWaitAction = "pipeline.wait"
 )
 
-// ActionSpecs returns canonical specs for merge request actions.
+// ActionSpecs returns canonical specs for merge request actions exposed
+// as MCP tools. The full MR lifecycle (create, read, update, merge,
+// approve, delete, rebase, subscribe, time tracking, dependencies) is
+// projected into the dynamic, meta, individual, and audit surfaces by
+// the action catalog (ADR-0004).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_mr_create — open a new merge request from source into target branch.
 		toolutil.NewCreateActionSpec("create",
 			toolutil.RouteAction(client, Create),
 			toolutil.ActionSpecOptions{
@@ -41,38 +46,71 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				OwnerPackage:   "mergerequests",
 				IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_mr_create", Title: toolutil.TitleFromName("gitlab_mr_create")},
 			}),
+		// gitlab_mr_get — fetch a single MR (returns a structured not-found result on 404).
 		mergeRequestReadSpec("get", mergeRequestGetRoute(client), "gitlab_mr_get"),
+		// gitlab_mr_list — list project MRs.
 		mergeRequestReadSpec("list", toolutil.RouteAction(client, List), "gitlab_mr_list"),
+		// gitlab_mr_list_global — list MRs across all projects visible to the caller.
 		mergeRequestReadSpec("list_global", toolutil.RouteAction(client, ListGlobal), "gitlab_mr_list_global"),
+		// gitlab_mr_list_group — list MRs across a group and its projects.
 		mergeRequestReadSpec("list_group", toolutil.RouteAction(client, ListGroup), "gitlab_mr_list_group"),
+		// gitlab_mr_update — update MR fields.
 		mergeRequestUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_mr_update"),
+		// gitlab_mr_merge — merge an MR now or schedule merge-when-pipeline-succeeds.
 		mergeRequestDestructiveUpdateIndividualSpec("merge", toolutil.DestructiveAction(client, Merge), "gitlab_mr_merge"),
+		// gitlab_mr_approve — add the caller's approval to the MR.
 		mergeRequestUpdateSpec("approve", toolutil.RouteAction(client, Approve), "gitlab_mr_approve"),
+		// gitlab_mr_unapprove — remove the caller's approval (destructive, idempotent).
 		mergeRequestDestructiveUpdateIndividualSpec("unapprove", toolutil.RouteAction(client, UnapproveOutput), "gitlab_mr_unapprove"),
+		// gitlab_mr_commits — list commits on the MR.
 		mergeRequestReadSpec("commits", toolutil.RouteAction(client, Commits), "gitlab_mr_commits"),
+		// gitlab_mr_pipelines — list pipelines attached to the MR.
 		mergeRequestReadSpec("pipelines", toolutil.RouteAction(client, Pipelines), "gitlab_mr_pipelines"),
+		// gitlab_mr_delete — delete an MR (destructive).
 		mergeRequestDeleteSpec("delete", toolutil.RouteAction(client, DeleteOutput), "gitlab_mr_delete"),
+		// gitlab_mr_rebase — rebase the MR's source branch.
 		mergeRequestUpdateSpec("rebase", toolutil.RouteAction(client, Rebase), "gitlab_mr_rebase"),
+		// gitlab_mr_participants — list MR participants.
 		mergeRequestReadSpec("participants", toolutil.RouteAction(client, Participants), "gitlab_mr_participants"),
+		// gitlab_mr_reviewers — list MR reviewers.
 		mergeRequestReadSpec("reviewers", toolutil.RouteAction(client, Reviewers), "gitlab_mr_reviewers"),
+		// gitlab_mr_create_pipeline — trigger a new pipeline for the MR.
 		mergeRequestCreateSpec("create_pipeline", toolutil.RouteAction(client, CreatePipeline), "gitlab_mr_create_pipeline"),
+		// gitlab_mr_issues_closed — list issues closed by the MR.
 		mergeRequestReadSpec("issues_closed", toolutil.RouteAction(client, IssuesClosed), "gitlab_mr_issues_closed"),
+		// gitlab_mr_cancel_auto_merge — cancel merge-when-pipeline-succeeds.
 		mergeRequestUpdateSpec("cancel_auto_merge", toolutil.RouteAction(client, CancelAutoMerge), "gitlab_mr_cancel_auto_merge"),
+		// gitlab_mr_subscribe — subscribe the caller to MR notifications.
 		mergeRequestUpdateSpec("subscribe", toolutil.RouteAction(client, Subscribe), "gitlab_mr_subscribe"),
+		// gitlab_mr_unsubscribe — remove the caller's subscription.
 		mergeRequestUpdateSpec("unsubscribe", toolutil.RouteAction(client, Unsubscribe), "gitlab_mr_unsubscribe"),
+		// gitlab_mr_set_time_estimate — set the MR's time estimate.
 		mergeRequestUpdateSpec("time_estimate_set", toolutil.RouteAction(client, SetTimeEstimate), "gitlab_mr_set_time_estimate"),
+		// gitlab_mr_reset_time_estimate — clear the MR's time estimate.
 		mergeRequestUpdateSpec("time_estimate_reset", toolutil.RouteAction(client, ResetTimeEstimate), "gitlab_mr_reset_time_estimate"),
+		// gitlab_mr_add_spent_time — log time spent on the MR.
 		mergeRequestUpdateSpec("spent_time_add", toolutil.RouteAction(client, AddSpentTime), "gitlab_mr_add_spent_time"),
+		// gitlab_mr_reset_spent_time — clear the MR's spent time.
 		mergeRequestUpdateSpec("spent_time_reset", toolutil.RouteAction(client, ResetSpentTime), "gitlab_mr_reset_spent_time"),
+		// gitlab_mr_time_stats — read MR time tracking totals.
 		mergeRequestReadSpec("time_stats", toolutil.RouteAction(client, GetTimeStats), "gitlab_mr_time_stats"),
+		// gitlab_mr_related_issues — list issues that mention or are closed by the MR.
 		mergeRequestReadSpec("related_issues", toolutil.RouteAction(client, RelatedIssues), "gitlab_mr_related_issues"),
+		// gitlab_mr_create_todo — add a to-do item on the MR for the caller.
 		mergeRequestCreateSpec("create_todo", toolutil.RouteAction(client, CreateTodo), "gitlab_mr_create_todo"),
+		// gitlab_mr_dependency_create — add a blocking dependency.
 		mergeRequestCreateSpec("dependency_create", toolutil.RouteAction(client, CreateDependency), "gitlab_mr_dependency_create"),
+		// gitlab_mr_dependency_delete — remove a blocking dependency (destructive).
 		mergeRequestDeleteSpec("dependency_delete", toolutil.RouteAction(client, DeleteDependencyOutput), "gitlab_mr_dependency_delete"),
+		// gitlab_mr_dependencies_list — list blocking dependencies.
 		mergeRequestReadSpec("dependencies_list", toolutil.RouteAction(client, GetDependencies), "gitlab_mr_dependencies_list"),
 	}
 }
 
+// mergeRequestGetRoute wraps the [Get] route so a 404 response is
+// converted into a structured [mergeRequestNotFoundOutput] hint rather
+// than an error, matching the get-not-found pattern used across the
+// project.
 func mergeRequestGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	route := toolutil.RouteAction(client, Get)
 	baseHandler := route.Handler
@@ -86,7 +124,9 @@ func mergeRequestGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	return route
 }
 
-// UnapproveOutput removes approval from a merge request and returns the legacy success message shape.
+// UnapproveOutput removes approval from a merge request and returns the
+// legacy [toolutil.DeleteOutput] success shape required by the
+// destructive-action contract.
 func UnapproveOutput(ctx context.Context, client *gitlabclient.Client, input ApproveInput) (toolutil.DeleteOutput, error) {
 	if err := Unapprove(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
@@ -94,7 +134,9 @@ func UnapproveOutput(ctx context.Context, client *gitlabclient.Client, input App
 	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted approval from MR !%d in project %s.", input.MRIID, input.ProjectID)}, nil
 }
 
-// DeleteOutput deletes a merge request and returns the legacy success message shape.
+// DeleteOutput deletes a merge request and returns the legacy
+// [toolutil.DeleteOutput] success shape required by the
+// destructive-action contract.
 func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
 	if err := Delete(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
@@ -102,7 +144,9 @@ func DeleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted MR !%d from project %s.", input.MRIID, input.ProjectID)}, nil
 }
 
-// DeleteDependencyOutput removes a merge request dependency and returns the legacy success message shape.
+// DeleteDependencyOutput removes a merge request dependency and
+// returns the legacy [toolutil.DeleteOutput] success shape required by
+// the destructive-action contract.
 func DeleteDependencyOutput(ctx context.Context, client *gitlabclient.Client, input DeleteDependencyInput) (toolutil.DeleteOutput, error) {
 	if err := DeleteDependency(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
@@ -110,22 +154,39 @@ func DeleteDependencyOutput(ctx context.Context, client *gitlabclient.Client, in
 	return toolutil.DeleteOutput{Status: "success", Message: fmt.Sprintf("Successfully deleted dependency on blocking MR %d from MR !%d in project %s.", input.BlockingMergeRequestID, input.MRIID, input.ProjectID)}, nil
 }
 
+// mergeRequestReadSpec builds a read-only [toolutil.ActionSpec] for a
+// merge request action using the package's default
+// [mergeRequestOptions].
 func mergeRequestReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, mergeRequestOptions(name, individualTool))
 }
 
+// mergeRequestCreateSpec builds a create-style [toolutil.ActionSpec]
+// for a merge request action using the package's default
+// [mergeRequestOptions].
 func mergeRequestCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, mergeRequestOptions(name, individualTool))
 }
 
+// mergeRequestUpdateSpec builds an update-style [toolutil.ActionSpec]
+// for a merge request action using the package's default
+// [mergeRequestOptions].
 func mergeRequestUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, mergeRequestOptions(name, individualTool))
 }
 
+// mergeRequestDeleteSpec builds a destructive [toolutil.ActionSpec]
+// for a merge request action using the package's default
+// [mergeRequestOptions].
 func mergeRequestDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, mergeRequestOptions(name, individualTool))
 }
 
+// mergeRequestDestructiveUpdateIndividualSpec builds a destructive
+// [toolutil.ActionSpec] whose individual tool is NOT marked
+// destructive, used for actions that are destructive through the
+// dynamic surface but a normal update through the individual tool
+// (for example merge and unapprove).
 func mergeRequestDestructiveUpdateIndividualSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	individualDestructive := false
 	options := mergeRequestOptions(name, individualTool)
@@ -133,6 +194,10 @@ func mergeRequestDestructiveUpdateIndividualSpec(name string, route toolutil.Act
 	return toolutil.NewDeleteActionSpec(name, route, options)
 }
 
+// mergeRequestOptions returns the base [toolutil.ActionSpecOptions]
+// for a merge request action and customizes the Usage/Aliases for
+// the merge, pipelines, create_pipeline, and cancel_auto_merge
+// individual tools.
 func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute mergerequests domain action.", Tags: []string{"merge_request"},

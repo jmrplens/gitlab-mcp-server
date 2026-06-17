@@ -17,10 +17,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runners"
 )
 
-// TestMeta_Runner exercises the gitlab_runner meta-tool: list, list_project,
+// TestMeta_Runner exercises the gitlab_runner meta-tool against a live
+// GitLab CE instance with a registered runner.
+//
+// The test uses the Docker-registered runner (description "e2e-docker-runner")
+// created by scripts/register-runner.sh and walks list, list_project,
 // list_group, get, enable_project, disable_project, list_managers, and
-// controller operations. Uses the Docker-registered runner (description
-// "e2e-docker-runner") created by scripts/register-runner.sh.
+// controller operations via {action, params} arguments through the
+// catalog-backed tool. Each subtest asserts the meta-tool returns the
+// expected runner payload and that mutations are observable through
+// subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Runner(t *testing.T) {
 	if sess.meta == nil {
 		t.Skip("meta session not configured")

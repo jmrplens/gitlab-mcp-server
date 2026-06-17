@@ -12,7 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestActionSpecs_DeleteNoteError verifies the delete note route returns an error when GraphQL rejects it.
+// TestActionSpecs_DeleteNoteError validates the DeleteNoteError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteNoteError(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"destroyNote": func(w http.ResponseWriter, _ *http.Request) {
@@ -31,7 +33,9 @@ func TestActionSpecs_DeleteNoteError(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := epicDiscussionSpecsByTool(t, ActionSpecs(client))

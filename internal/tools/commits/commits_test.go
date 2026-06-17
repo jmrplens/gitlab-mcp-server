@@ -167,8 +167,9 @@ func TestCommitCreateServer_Error(t *testing.T) {
 	}
 }
 
-// TestCommitCreate_NonBadRequestAPIError verifies Create uses the generic
-// mutating error wrapper for non-400 API failures.
+// TestCommitCreate_NonBadRequestAPIError verifies that CommitCreate_NonBadRequestAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCommitCreate_NonBadRequestAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -188,8 +189,9 @@ func TestCommitCreate_NonBadRequestAPIError(t *testing.T) {
 	}
 }
 
-// TestCommitList_Success verifies that List returns commits with correct
-// metadata and pagination headers.
+// TestCommitList_Success verifies that CommitList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCommitList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoCommits {
@@ -238,8 +240,9 @@ func TestCommitList_Success(t *testing.T) {
 	}
 }
 
-// TestCommitList_WithRefName verifies that List passes the ref_name filter
-// to the GitLab API.
+// TestCommitList_WithRefName verifies the CommitList_WithRefName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCommitList_WithRefName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoCommits {
@@ -265,8 +268,9 @@ func TestCommitList_WithRefName(t *testing.T) {
 	}
 }
 
-// TestCommitList_EmptyProjectID verifies that List returns an actionable
-// error when project_id is empty.
+// TestCommitList_EmptyProjectID verifies the CommitList_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCommitList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -278,8 +282,9 @@ func TestCommitList_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestCommitListServer_Error verifies that List returns an error when
-// the GitLab API responds with an error.
+// TestCommitListServer_Error verifies that CommitListServer returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCommitListServer_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Internal Server Error"}`)
@@ -293,8 +298,9 @@ func TestCommitListServer_Error(t *testing.T) {
 	}
 }
 
-// TestCommitList_CancelledContext verifies that List returns an error
-// when the context is canceled.
+// TestCommitList_CancelledContext verifies the CommitList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCommitList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -308,8 +314,9 @@ func TestCommitList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCommitGet_Success verifies that Get retrieves a single commit
-// with full details including stats and parent IDs.
+// TestCommitGet_Success verifies that CommitGet succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCommitGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123" {
@@ -357,7 +364,9 @@ func TestCommitGet_Success(t *testing.T) {
 	}
 }
 
-// TestCommitGet_EmptyProjectID verifies Get returns an error for empty project_id.
+// TestCommitGet_EmptyProjectID verifies the CommitGet_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCommitGet_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -369,7 +378,9 @@ func TestCommitGet_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestCommitDiff_Success verifies that Diff returns diffs for a commit.
+// TestCommitDiff_Success verifies that CommitDiff succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123/diff (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCommitDiff_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/diff" {
@@ -406,7 +417,9 @@ func TestCommitDiff_Success(t *testing.T) {
 	}
 }
 
-// TestCommitDiff_EmptyProjectID verifies Diff returns an error for empty project_id.
+// TestCommitDiff_EmptyProjectID verifies the CommitDiff_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCommitDiff_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -422,7 +435,9 @@ func TestCommitDiff_EmptyProjectID(t *testing.T) {
 // GetRefs tests
 // ---------------------------------------------------------------------------.
 
-// TestGetRefs_Success verifies GetRefs returns refs referencing a commit.
+// TestGetRefs_Success verifies that GetRefs succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123/refs (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetRefs_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/refs" {
@@ -450,7 +465,9 @@ func TestGetRefs_Success(t *testing.T) {
 	}
 }
 
-// TestGetRefs_EmptyProjectID verifies GetRefs returns an error for empty project_id.
+// TestGetRefs_EmptyProjectID verifies the GetRefs_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetRefs_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -466,7 +483,9 @@ func TestGetRefs_EmptyProjectID(t *testing.T) {
 // GetComments / PostComment tests
 // ---------------------------------------------------------------------------.
 
-// TestGetComments_Success verifies GetComments returns commit comments.
+// TestGetComments_Success verifies that GetComments succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123/comments (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetComments_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/comments" {
@@ -512,7 +531,9 @@ func TestGetComments_Success(t *testing.T) {
 	}
 }
 
-// TestPostComment_Success verifies PostComment creates a commit comment.
+// TestPostComment_Success verifies that PostComment succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123/comments (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestPostComment_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/comments" {
@@ -544,7 +565,9 @@ func TestPostComment_Success(t *testing.T) {
 	}
 }
 
-// TestPostComment_EmptyProjectID verifies PostComment returns an error for empty project_id.
+// TestPostComment_EmptyProjectID verifies the PostComment_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestPostComment_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "{}")
@@ -560,7 +583,9 @@ func TestPostComment_EmptyProjectID(t *testing.T) {
 // GetStatuses / SetStatus tests
 // ---------------------------------------------------------------------------.
 
-// TestGetStatuses_Success verifies GetStatuses returns commit pipeline statuses.
+// TestGetStatuses_Success verifies that GetStatuses succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123/statuses (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetStatuses_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/statuses" {
@@ -597,7 +622,9 @@ func TestGetStatuses_Success(t *testing.T) {
 	}
 }
 
-// TestSetStatus_Success verifies SetStatus sets a commit pipeline status.
+// TestSetStatus_Success verifies that SetStatus succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/statuses/abc123 (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestSetStatus_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/statuses/abc123" {
@@ -633,7 +660,9 @@ func TestSetStatus_Success(t *testing.T) {
 	}
 }
 
-// TestSetStatus_EmptyProjectID verifies SetStatus returns an error for empty project_id.
+// TestSetStatus_EmptyProjectID verifies the SetStatus_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSetStatus_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "{}")
@@ -649,7 +678,9 @@ func TestSetStatus_EmptyProjectID(t *testing.T) {
 // ListMRsByCommit tests
 // ---------------------------------------------------------------------------.
 
-// TestListMRsByCommit_Success verifies ListMRsByCommit returns MRs for a commit.
+// TestListMRsByCommit_Success verifies that ListMRsByCommit succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123/merge_requests (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListMRsByCommit_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/merge_requests" {
@@ -686,7 +717,9 @@ func TestListMRsByCommit_Success(t *testing.T) {
 	}
 }
 
-// TestListMRsByCommit_EmptyProjectID verifies ListMRsByCommit returns an error for empty project_id.
+// TestListMRsByCommit_EmptyProjectID verifies the ListMRsByCommit_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListMRsByCommit_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
@@ -702,7 +735,9 @@ func TestListMRsByCommit_EmptyProjectID(t *testing.T) {
 // CherryPick tests
 // ---------------------------------------------------------------------------.
 
-// TestCherryPick_Success verifies CherryPick returns the cherry-picked commit.
+// TestCherryPick_Success verifies that CherryPick succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123/cherry_pick (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCherryPick_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/cherry_pick" {
@@ -733,7 +768,9 @@ func TestCherryPick_Success(t *testing.T) {
 	}
 }
 
-// TestCherryPick_EmptyProjectID verifies CherryPick returns an error for empty project_id.
+// TestCherryPick_EmptyProjectID verifies the CherryPick_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCherryPick_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "{}")
@@ -749,7 +786,9 @@ func TestCherryPick_EmptyProjectID(t *testing.T) {
 // Revert tests
 // ---------------------------------------------------------------------------.
 
-// TestRevert_Success verifies Revert returns the revert commit.
+// TestRevert_Success verifies that Revert succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123/revert (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestRevert_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/revert" {
@@ -780,7 +819,9 @@ func TestRevert_Success(t *testing.T) {
 	}
 }
 
-// TestRevert_EmptyProjectID verifies Revert returns an error for empty project_id.
+// TestRevert_EmptyProjectID verifies the Revert_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRevert_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "{}")
@@ -796,7 +837,9 @@ func TestRevert_EmptyProjectID(t *testing.T) {
 // GetGPGSignature tests
 // ---------------------------------------------------------------------------.
 
-// TestGetGPGSignature_Success verifies GetGPGSignature returns signature info.
+// TestGetGPGSignature_Success verifies that GetGPGSignature succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123/signature (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetGPGSignature_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc123/signature" {
@@ -828,7 +871,9 @@ func TestGetGPGSignature_Success(t *testing.T) {
 	}
 }
 
-// TestGetGPGSignature_EmptyProjectID verifies GetGPGSignature returns an error for empty project_id.
+// TestGetGPGSignature_EmptyProjectID verifies the GetGPGSignature_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetGPGSignature_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, "{}")
@@ -844,7 +889,9 @@ func TestGetGPGSignature_EmptyProjectID(t *testing.T) {
 // Canceled Context Tests
 // ---------------------------------------------------------------------------.
 
-// TestCommitCreate_CancelledContext verifies CommitCreate when cancelled context.
+// TestCommitCreate_CancelledContext verifies the CommitCreate_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCommitCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -856,7 +903,9 @@ func TestCommitCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCommitGet_CancelledContext verifies CommitGet when cancelled context.
+// TestCommitGet_CancelledContext verifies the CommitGet_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCommitGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -868,7 +917,9 @@ func TestCommitGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCommitDiff_CancelledContext verifies CommitDiff when cancelled context.
+// TestCommitDiff_CancelledContext verifies the CommitDiff_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCommitDiff_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -880,7 +931,9 @@ func TestCommitDiff_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetRefs_CancelledContext verifies GetRefs when cancelled context.
+// TestGetRefs_CancelledContext verifies the GetRefs_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetRefs_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -892,7 +945,9 @@ func TestGetRefs_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetComments_CancelledContext verifies GetComments when cancelled context.
+// TestGetComments_CancelledContext verifies the GetComments_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetComments_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -904,7 +959,9 @@ func TestGetComments_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestPostComment_CancelledContext verifies PostComment when cancelled context.
+// TestPostComment_CancelledContext verifies the PostComment_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestPostComment_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -916,7 +973,9 @@ func TestPostComment_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetStatuses_CancelledContext verifies GetStatuses when cancelled context.
+// TestGetStatuses_CancelledContext verifies the GetStatuses_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetStatuses_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -928,7 +987,9 @@ func TestGetStatuses_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestSetStatus_CancelledContext verifies SetStatus when cancelled context.
+// TestSetStatus_CancelledContext verifies the SetStatus_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestSetStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -940,7 +1001,9 @@ func TestSetStatus_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListMRsByCommit_CancelledContext verifies ListMRsByCommit when cancelled context.
+// TestListMRsByCommit_CancelledContext verifies the ListMRsByCommit_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListMRsByCommit_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -952,7 +1015,9 @@ func TestListMRsByCommit_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCherryPick_CancelledContext verifies CherryPick when cancelled context.
+// TestCherryPick_CancelledContext verifies the CherryPick_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCherryPick_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -964,7 +1029,9 @@ func TestCherryPick_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRevert_CancelledContext verifies Revert when cancelled context.
+// TestRevert_CancelledContext verifies the Revert_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestRevert_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -976,7 +1043,9 @@ func TestRevert_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetGPGSignature_CancelledContext verifies GetGPGSignature when cancelled context.
+// TestGetGPGSignature_CancelledContext verifies the GetGPGSignature_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetGPGSignature_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -992,7 +1061,9 @@ func TestGetGPGSignature_CancelledContext(t *testing.T) {
 // API Error Tests
 // ---------------------------------------------------------------------------.
 
-// TestCommitGet_APIError verifies CommitGet when API error.
+// TestCommitGet_APIError verifies that CommitGet returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCommitGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Commit Not Found"}`)
@@ -1003,7 +1074,9 @@ func TestCommitGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCommitDiff_APIError verifies CommitDiff when API error.
+// TestCommitDiff_APIError verifies that CommitDiff returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCommitDiff_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -1014,7 +1087,9 @@ func TestCommitDiff_APIError(t *testing.T) {
 	}
 }
 
-// TestGetRefs_APIError verifies GetRefs when API error.
+// TestGetRefs_APIError verifies that GetRefs returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetRefs_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -1025,7 +1100,9 @@ func TestGetRefs_APIError(t *testing.T) {
 	}
 }
 
-// TestGetComments_APIError verifies GetComments when API error.
+// TestGetComments_APIError verifies that GetComments returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetComments_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"500 Error"}`)
@@ -1036,7 +1113,9 @@ func TestGetComments_APIError(t *testing.T) {
 	}
 }
 
-// TestPostComment_APIError verifies PostComment when API error.
+// TestPostComment_APIError verifies that PostComment returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPostComment_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
@@ -1047,7 +1126,9 @@ func TestPostComment_APIError(t *testing.T) {
 	}
 }
 
-// TestGetStatuses_APIError verifies GetStatuses when API error.
+// TestGetStatuses_APIError verifies that GetStatuses returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetStatuses_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -1058,7 +1139,9 @@ func TestGetStatuses_APIError(t *testing.T) {
 	}
 }
 
-// TestSetStatus_APIError verifies SetStatus when API error.
+// TestSetStatus_APIError verifies that SetStatus returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSetStatus_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
@@ -1069,7 +1152,9 @@ func TestSetStatus_APIError(t *testing.T) {
 	}
 }
 
-// TestListMRsByCommit_APIError verifies ListMRsByCommit when API error.
+// TestListMRsByCommit_APIError verifies that ListMRsByCommit returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListMRsByCommit_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -1080,7 +1165,9 @@ func TestListMRsByCommit_APIError(t *testing.T) {
 	}
 }
 
-// TestCherryPick_APIError verifies CherryPick when API error.
+// TestCherryPick_APIError verifies that CherryPick returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCherryPick_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"409 Conflict"}`)
@@ -1091,7 +1178,9 @@ func TestCherryPick_APIError(t *testing.T) {
 	}
 }
 
-// TestRevert_APIError verifies Revert when API error.
+// TestRevert_APIError verifies that Revert returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRevert_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"409 Conflict"}`)
@@ -1102,7 +1191,9 @@ func TestRevert_APIError(t *testing.T) {
 	}
 }
 
-// TestGetGPGSignature_APIError verifies GetGPGSignature when API error.
+// TestGetGPGSignature_APIError verifies that GetGPGSignature returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGPGSignature_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -1117,7 +1208,9 @@ func TestGetGPGSignature_APIError(t *testing.T) {
 // Handler Edge Cases (optional fields, filters)
 // ---------------------------------------------------------------------------.
 
-// TestCommitCreate_WithAllOptions verifies CommitCreate when with all options.
+// TestCommitCreate_WithAllOptions verifies the CommitCreate_WithAllOptions handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCommitCreate_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1158,7 +1251,9 @@ func TestCommitCreate_WithAllOptions(t *testing.T) {
 	}
 }
 
-// TestCommitCreate_EmptyProjectID verifies CommitCreate when empty project ID.
+// TestCommitCreate_EmptyProjectID verifies the CommitCreate_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCommitCreate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
@@ -1190,7 +1285,9 @@ func commitListAllOptionsHandler(t *testing.T) http.HandlerFunc {
 	}
 }
 
-// TestCommitList_WithAllOptions verifies CommitList when with all options.
+// TestCommitList_WithAllOptions verifies the CommitList_WithAllOptions handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCommitList_WithAllOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, commitListAllOptionsHandler(t))
 
@@ -1219,7 +1316,9 @@ func TestCommitList_WithAllOptions(t *testing.T) {
 	}
 }
 
-// TestCommitDiff_WithUnidiff verifies CommitDiff when with unidiff.
+// TestCommitDiff_WithUnidiff verifies the CommitDiff_WithUnidiff handler.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc/diff (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCommitDiff_WithUnidiff(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/diff" {
@@ -1249,7 +1348,9 @@ func TestCommitDiff_WithUnidiff(t *testing.T) {
 	}
 }
 
-// TestGetRefs_WithType verifies GetRefs when with type.
+// TestGetRefs_WithType verifies the GetRefs_WithType handler.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc/refs (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetRefs_WithType(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/refs" {
@@ -1282,7 +1383,9 @@ func TestGetRefs_WithType(t *testing.T) {
 	}
 }
 
-// TestPostComment_Inline verifies PostComment when inline.
+// TestPostComment_Inline verifies the PostComment_Inline handler.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc/comments (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestPostComment_Inline(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/comments" {
@@ -1311,8 +1414,9 @@ func TestPostComment_Inline(t *testing.T) {
 	}
 }
 
-// TestPostComment_NotFoundAPIError verifies PostComment uses the SHA lookup
-// hint for non-400 API failures such as 404.
+// TestPostComment_NotFoundAPIError verifies that PostComment_NotFoundAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPostComment_NotFoundAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Commit Not Found"}`)
@@ -1327,7 +1431,9 @@ func TestPostComment_NotFoundAPIError(t *testing.T) {
 	}
 }
 
-// TestGetStatuses_WithFilters verifies GetStatuses when with filters.
+// TestGetStatuses_WithFilters verifies the GetStatuses_WithFilters handler.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc/statuses (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetStatuses_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/statuses" {
@@ -1370,7 +1476,9 @@ func TestGetStatuses_WithFilters(t *testing.T) {
 	}
 }
 
-// TestSetStatus_WithAllOptions verifies SetStatus when with all options.
+// TestSetStatus_WithAllOptions verifies the SetStatus_WithAllOptions handler.
+// The mock GitLab API at /api/v4/projects/42/statuses/abc (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestSetStatus_WithAllOptions(t *testing.T) {
 	var capturedBody string
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1423,8 +1531,9 @@ func TestSetStatus_WithAllOptions(t *testing.T) {
 	}
 }
 
-// TestSetStatus_ForbiddenAPIError verifies SetStatus returns the permission
-// hint when GitLab rejects status updates with 403.
+// TestSetStatus_ForbiddenAPIError verifies that SetStatus_ForbiddenAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSetStatus_ForbiddenAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -1439,8 +1548,9 @@ func TestSetStatus_ForbiddenAPIError(t *testing.T) {
 	}
 }
 
-// TestSetStatus_NotFoundAPIError verifies SetStatus uses the commit lookup hint
-// for non-400/403 API failures such as 404.
+// TestSetStatus_NotFoundAPIError verifies that SetStatus_NotFoundAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestSetStatus_NotFoundAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Commit Not Found"}`)
@@ -1455,7 +1565,9 @@ func TestSetStatus_NotFoundAPIError(t *testing.T) {
 	}
 }
 
-// TestCherryPick_WithOptions verifies CherryPick when with options.
+// TestCherryPick_WithOptions verifies the CherryPick_WithOptions handler.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc/cherry_pick (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCherryPick_WithOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/repository/commits/abc/cherry_pick" {
@@ -1480,7 +1592,9 @@ func TestCherryPick_WithOptions(t *testing.T) {
 	}
 }
 
-// TestGetComments_EmptyProjectID verifies GetComments when empty project ID.
+// TestGetComments_EmptyProjectID verifies the GetComments_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetComments_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1491,7 +1605,9 @@ func TestGetComments_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestGetStatuses_EmptyProjectID verifies GetStatuses when empty project ID.
+// TestGetStatuses_EmptyProjectID verifies the GetStatuses_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetStatuses_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1502,7 +1618,9 @@ func TestGetStatuses_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestGetRefs_EmptySHA verifies GetRefs when empty SHA.
+// TestGetRefs_EmptySHA verifies the GetRefs_EmptySHA handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetRefs_EmptySHA(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -1513,7 +1631,9 @@ func TestGetRefs_EmptySHA(t *testing.T) {
 	}
 }
 
-// TestCherryPick_EmptyBranch verifies CherryPick when empty branch.
+// TestCherryPick_EmptyBranch verifies the CherryPick_EmptyBranch handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCherryPick_EmptyBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1524,7 +1644,9 @@ func TestCherryPick_EmptyBranch(t *testing.T) {
 	}
 }
 
-// TestRevert_EmptyBranch verifies Revert when empty branch.
+// TestRevert_EmptyBranch verifies the Revert_EmptyBranch handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRevert_EmptyBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -1539,7 +1661,9 @@ func TestRevert_EmptyBranch(t *testing.T) {
 // Format*Markdown Tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	c := Output{ShortID: "abc12", Title: "feat: init", AuthorName: "Alice", AuthorEmail: "a@t.com", CommittedDate: "2026-01-01", WebURL: "https://example.com"}
 	md := FormatOutputMarkdown(c)
@@ -1554,7 +1678,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Commits:    []Output{{ShortID: "a1", Title: "feat: x", AuthorName: "A", CommittedDate: "2026-01-01"}},
@@ -1569,7 +1695,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{Commits: nil, Pagination: toolutil.PaginationOutput{}}
 	md := FormatListMarkdown(out)
@@ -1597,7 +1725,9 @@ func TestFormatListMarkdown_ClickableCommitLinks(t *testing.T) {
 	}
 }
 
-// TestFormatDetailMarkdown verifies FormatDetailMarkdown.
+// TestFormatDetailMarkdown verifies the DetailMarkdown Markdown formatter for a representative detail input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatDetailMarkdown(t *testing.T) {
 	c := DetailOutput{
 		ShortID:     "abc",
@@ -1624,7 +1754,9 @@ func TestFormatDetailMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatDetailMarkdown_Minimal verifies FormatDetailMarkdown when minimal.
+// TestFormatDetailMarkdown_Minimal verifies the DetailMarkdown_Minimal Markdown formatter for a representative detail_minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 	c := DetailOutput{ShortID: "x", Title: "t", Message: "t", WebURL: "u"}
 	md := FormatDetailMarkdown(c)
@@ -1639,7 +1771,9 @@ func TestFormatDetailMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatDiffMarkdown verifies FormatDiffMarkdown.
+// TestFormatDiffMarkdown verifies the DiffMarkdown Markdown formatter for a representative diff input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatDiffMarkdown(t *testing.T) {
 	out := DiffOutput{
 		Diffs: []toolutil.DiffOutput{
@@ -1667,7 +1801,9 @@ func TestFormatDiffMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatDiffMarkdown_Empty verifies FormatDiffMarkdown when empty.
+// TestFormatDiffMarkdown_Empty verifies the DiffMarkdown_Empty Markdown formatter for a representative diff_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatDiffMarkdown_Empty(t *testing.T) {
 	out := DiffOutput{Diffs: nil}
 	md := FormatDiffMarkdown(out)
@@ -1676,7 +1812,9 @@ func TestFormatDiffMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatRefsMarkdown verifies FormatRefsMarkdown.
+// TestFormatRefsMarkdown verifies the RefsMarkdown Markdown formatter for a representative refs input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatRefsMarkdown(t *testing.T) {
 	out := RefsOutput{
 		Refs: []RefOutput{
@@ -1696,7 +1834,9 @@ func TestFormatRefsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatRefsMarkdown_Empty verifies FormatRefsMarkdown when empty.
+// TestFormatRefsMarkdown_Empty verifies the RefsMarkdown_Empty Markdown formatter for a representative refs_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatRefsMarkdown_Empty(t *testing.T) {
 	out := RefsOutput{Refs: nil}
 	md := FormatRefsMarkdown(out)
@@ -1705,7 +1845,9 @@ func TestFormatRefsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCommentsMarkdown verifies FormatCommentsMarkdown.
+// TestFormatCommentsMarkdown verifies the CommentsMarkdown Markdown formatter for a representative comments input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatCommentsMarkdown(t *testing.T) {
 	out := CommentsOutput{
 		Comments: []CommentOutput{
@@ -1728,7 +1870,9 @@ func TestFormatCommentsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatCommentsMarkdown_Empty verifies FormatCommentsMarkdown when empty.
+// TestFormatCommentsMarkdown_Empty verifies the CommentsMarkdown_Empty Markdown formatter for a representative comments_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatCommentsMarkdown_Empty(t *testing.T) {
 	out := CommentsOutput{Comments: nil}
 	md := FormatCommentsMarkdown(out)
@@ -1737,7 +1881,9 @@ func TestFormatCommentsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCommentMarkdown verifies FormatCommentMarkdown.
+// TestFormatCommentMarkdown verifies the CommentMarkdown Markdown formatter for a representative comment input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatCommentMarkdown(t *testing.T) {
 	c := CommentOutput{Author: "dev", Note: "Nice!", Path: testFileMainGo, Line: 5}
 	md := FormatCommentMarkdown(c)
@@ -1752,7 +1898,9 @@ func TestFormatCommentMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatCommentMarkdown_NoPath verifies FormatCommentMarkdown when no path.
+// TestFormatCommentMarkdown_NoPath verifies the CommentMarkdown_NoPath Markdown formatter for a representative comment_nopath input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatCommentMarkdown_NoPath(t *testing.T) {
 	c := CommentOutput{Author: "dev", Note: "OK"}
 	md := FormatCommentMarkdown(c)
@@ -1761,7 +1909,9 @@ func TestFormatCommentMarkdown_NoPath(t *testing.T) {
 	}
 }
 
-// TestFormatStatusesMarkdown verifies FormatStatusesMarkdown.
+// TestFormatStatusesMarkdown verifies the StatusesMarkdown Markdown formatter for a representative statuses input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatStatusesMarkdown(t *testing.T) {
 	out := StatusesOutput{
 		Statuses: []StatusOutput{
@@ -1777,7 +1927,9 @@ func TestFormatStatusesMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatStatusesMarkdown_Empty verifies FormatStatusesMarkdown when empty.
+// TestFormatStatusesMarkdown_Empty verifies the StatusesMarkdown_Empty Markdown formatter for a representative statuses_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatStatusesMarkdown_Empty(t *testing.T) {
 	out := StatusesOutput{Statuses: nil}
 	md := FormatStatusesMarkdown(out)
@@ -1786,7 +1938,9 @@ func TestFormatStatusesMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatStatusMarkdown verifies FormatStatusMarkdown.
+// TestFormatStatusMarkdown verifies the StatusMarkdown Markdown formatter for a representative status input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatStatusMarkdown(t *testing.T) {
 	s := StatusOutput{ID: 1, Status: "success", Name: "build", Ref: "main", Description: "Passed", TargetURL: testCIURL}
 	md := FormatStatusMarkdown(s)
@@ -1801,7 +1955,9 @@ func TestFormatStatusMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatStatusMarkdown_Minimal verifies FormatStatusMarkdown when minimal.
+// TestFormatStatusMarkdown_Minimal verifies the StatusMarkdown_Minimal Markdown formatter for a representative status_minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatStatusMarkdown_Minimal(t *testing.T) {
 	s := StatusOutput{ID: 2, Status: "pending", Name: "test", Ref: "dev"}
 	md := FormatStatusMarkdown(s)
@@ -1813,7 +1969,9 @@ func TestFormatStatusMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatMRsByCommitMarkdown verifies FormatMRsByCommitMarkdown.
+// TestFormatMRsByCommitMarkdown verifies the MRsByCommitMarkdown Markdown formatter for a representative mrsbycommit input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMRsByCommitMarkdown(t *testing.T) {
 	out := MRsByCommitOutput{
 		MergeRequests: []BasicMROutput{
@@ -1832,7 +1990,9 @@ func TestFormatMRsByCommitMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatMRsByCommitMarkdown_Empty verifies FormatMRsByCommitMarkdown when empty.
+// TestFormatMRsByCommitMarkdown_Empty verifies the MRsByCommitMarkdown_Empty Markdown formatter for a representative mrsbycommit_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMRsByCommitMarkdown_Empty(t *testing.T) {
 	out := MRsByCommitOutput{MergeRequests: nil}
 	md := FormatMRsByCommitMarkdown(out)
@@ -1841,7 +2001,9 @@ func TestFormatMRsByCommitMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatGPGSignatureMarkdown verifies FormatGPGSignatureMarkdown.
+// TestFormatGPGSignatureMarkdown verifies the GPGSignatureMarkdown Markdown formatter for a representative gpgsignature input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGPGSignatureMarkdown(t *testing.T) {
 	sig := GPGSignatureOutput{
 		KeyID:              1,
@@ -1866,7 +2028,9 @@ func TestFormatGPGSignatureMarkdown(t *testing.T) {
 // ActionSpecs Tests
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for commit actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1930,7 +2094,9 @@ func commitRouteHandler(routes map[string]commitMockResp) http.HandlerFunc {
 	}
 }
 
-// TestActionSpecs_GetNotFound covers the canonical get route 404 error path.
+// TestActionSpecs_GetNotFound validates the GetNotFound route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_GetNotFound(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Commit Not Found"}`)
@@ -1944,8 +2110,9 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}
 }
 
-// TestToOutput_DateFields covers the non-nil date and status branches
-// in ToOutput (CommittedDate, AuthoredDate, CreatedAt, Status).
+// TestToOutput_DateFields verifies the ToOutput_DateFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_DateFields(t *testing.T) {
 	now := time.Now()
 	status := gl.BuildStateValue("success")
@@ -1972,8 +2139,9 @@ func TestToOutput_DateFields(t *testing.T) {
 	}
 }
 
-// TestDetailToOutput_StatusAndStats covers optional status and stats fields in
-// detailed commit responses.
+// TestDetailToOutput_StatusAndStats verifies the DetailToOutput_StatusAndStats handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDetailToOutput_StatusAndStats(t *testing.T) {
 	now := time.Now()
 	status := gl.BuildStateValue("success")
@@ -1996,8 +2164,9 @@ func TestDetailToOutput_StatusAndStats(t *testing.T) {
 	}
 }
 
-// TestCommentToOutput_AuthorNameFallback covers the fallback to Author.Name
-// when Author.Username is empty.
+// TestCommentToOutput_AuthorNameFallback verifies the CommentToOutput_AuthorNameFallback handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCommentToOutput_AuthorNameFallback(t *testing.T) {
 	c := &gl.CommitComment{
 		Note:   "test",
@@ -2009,7 +2178,9 @@ func TestCommentToOutput_AuthorNameFallback(t *testing.T) {
 	}
 }
 
-// TestCherryPick_400Error covers the 400 BadRequest error branch.
+// TestCherryPick_400Error verifies that CherryPick_400Error returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCherryPick_400Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
@@ -2020,7 +2191,9 @@ func TestCherryPick_400Error(t *testing.T) {
 	}
 }
 
-// TestCherryPick_409Conflict covers the 409 Conflict error branch.
+// TestCherryPick_409Conflict verifies the CherryPick_409Conflict handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCherryPick_409Conflict(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"409 Conflict"}`)
@@ -2031,7 +2204,9 @@ func TestCherryPick_409Conflict(t *testing.T) {
 	}
 }
 
-// TestCherryPick_GenericAPIError covers non-400/409 mutating API failures.
+// TestCherryPick_GenericAPIError verifies that CherryPick_GenericAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCherryPick_GenericAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -2045,7 +2220,9 @@ func TestCherryPick_GenericAPIError(t *testing.T) {
 	}
 }
 
-// TestRevert_400Error covers the 400 BadRequest error branch.
+// TestRevert_400Error verifies that Revert_400Error returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRevert_400Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad Request"}`)
@@ -2056,7 +2233,9 @@ func TestRevert_400Error(t *testing.T) {
 	}
 }
 
-// TestRevert_409Conflict covers the 409 Conflict error branch.
+// TestRevert_409Conflict verifies the Revert_409Conflict handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRevert_409Conflict(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"409 Conflict"}`)
@@ -2067,7 +2246,9 @@ func TestRevert_409Conflict(t *testing.T) {
 	}
 }
 
-// TestRevert_GenericAPIError covers non-400/409 mutating API failures.
+// TestRevert_GenericAPIError verifies that Revert_GenericAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRevert_GenericAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -2123,7 +2304,9 @@ func assertCommitRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpec
 	}
 }
 
-// TestActionSpecs_CallAllRoutes validates all commit routes across multiple scenarios.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	specs := newCommitSpecsByTool(t)
 
@@ -2153,7 +2336,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CommitGetRoute verifies the canonical commit get route output.
+// TestActionSpecs_CommitGetRoute validates the CommitGetRoute route through the catalog surface.
+// The mock GitLab API at /api/v4/projects/42/repository/commits/abc123 (GET) responds with HTTP OK.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CommitGetRoute(t *testing.T) {
 	const respJSON = `{"id":"abc123","short_id":"abc123","title":"T","message":"M","author_name":"A","author_email":"a@b","authored_date":"2026-01-01T00:00:00Z","committed_date":"2026-01-01T00:00:00Z","web_url":"https://gitlab.example.com/g/p/-/commit/abc123"}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

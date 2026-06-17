@@ -12,7 +12,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestIndividual_UserProjects exercises user contributed/starred project listing via individual tools.
+// TestIndividual_UserProjects exercises user contributed and starred project
+// listing through individual MCP tools against a live GitLab instance.
+//
+// The test calls gitlab_project_list_user_contributed and
+// gitlab_project_list_user_starred for the authenticated user, asserting
+// each tool returns the expected payload shape. The test does not create
+// any GitLab resources and runs without a project fixture.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_UserProjects(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -35,7 +43,15 @@ func TestIndividual_UserProjects(t *testing.T) {
 	})
 }
 
-// TestMeta_UserProjects exercises user contributed/starred project listing via the gitlab_project meta-tool.
+// TestMeta_UserProjects exercises user contributed and starred project
+// listing through the gitlab_project meta-tool against a live GitLab instance.
+//
+// The test calls user_contributed_projects_list and user_starred_projects_list
+// for the authenticated user via {action, params} arguments through the
+// catalog-backed tool. Each subtest asserts the meta-tool returns the
+// expected payload shape.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_UserProjects(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

@@ -8,15 +8,18 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestApplyToGroupSpecs_EmptyInputReturnsNil verifies empty catalog groups stay nil.
+// TestApplyToGroupSpecs_EmptyInputReturnsNil verifies the ApplyToGroupSpecs_EmptyInputReturnsNil handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestApplyToGroupSpecs_EmptyInputReturnsNil(t *testing.T) {
 	if groups := ApplyToGroupSpecs(nil); groups != nil {
 		t.Fatalf("ApplyToGroupSpecs(nil) = %+v, want nil", groups)
 	}
 }
 
-// TestApplyToGroupSpecs_ProjectsAllGroups verifies slice-level projection
-// forwards each group through ApplyToGroupSpec.
+// TestApplyToGroupSpecs_ProjectsAllGroups verifies the ApplyToGroupSpecs_ProjectsAllGroups handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestApplyToGroupSpecs_ProjectsAllGroups(t *testing.T) {
 	groups := ApplyToGroupSpecs([]actioncatalog.CatalogGroupSpec{
 		{ToolName: "gitlab_job", Actions: []toolutil.ActionSpec{toolutil.NewActionSpec("list", testCompatRoute(), toolutil.ActionSpecOptions{})}},
@@ -29,7 +32,9 @@ func TestApplyToGroupSpecs_ProjectsAllGroups(t *testing.T) {
 	}
 }
 
-// TestApplyToGroupSpec_ClonesAndUsesToolNameDomain verifies group projection clones inputs and falls back to the tool name domain.
+// TestApplyToGroupSpec_ClonesAndUsesToolNameDomain verifies the ApplyToGroupSpec_ClonesAndUsesToolNameDomain handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestApplyToGroupSpec_ClonesAndUsesToolNameDomain(t *testing.T) {
 	route := toolutil.ActionRoute{
 		Handler:     func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil },
@@ -52,7 +57,9 @@ func TestApplyToGroupSpec_ClonesAndUsesToolNameDomain(t *testing.T) {
 	}
 }
 
-// TestApplyToActionSpecs_ProjectsCompatibilityMetadata verifies ApplyToActionSpecs projects compatibility metadata.
+// TestApplyToActionSpecs_ProjectsCompatibilityMetadata verifies the ApplyToActionSpecs_ProjectsCompatibilityMetadata handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestApplyToActionSpecs_ProjectsCompatibilityMetadata(t *testing.T) {
 	route := toolutil.ActionRoute{
 		Handler: func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil },
@@ -109,14 +116,18 @@ func TestApplyToActionSpecs_ProjectsPackageReleaseWorkflowAliases(t *testing.T) 
 	}
 }
 
-// TestApplyToActionSpecs_EmptyInputReturnsNil verifies action projection keeps empty specs nil.
+// TestApplyToActionSpecs_EmptyInputReturnsNil verifies the ApplyToActionSpecs_EmptyInputReturnsNil handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestApplyToActionSpecs_EmptyInputReturnsNil(t *testing.T) {
 	if specs := ApplyToActionSpecs("gitlab_job", "job", nil); specs != nil {
 		t.Fatalf("ApplyToActionSpecs(nil) = %+v, want nil", specs)
 	}
 }
 
-// TestApplyToActionSpecs_PreservesUnsearchableActionAlias verifies ApplyToActionSpecs preserves unsearchable action alias.
+// TestApplyToActionSpecs_PreservesUnsearchableActionAlias verifies the ApplyToActionSpecs_PreservesUnsearchableActionAlias handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestApplyToActionSpecs_PreservesUnsearchableActionAlias(t *testing.T) {
 	specs := ApplyToActionSpecs("gitlab_repository", "repository", []toolutil.ActionSpec{
 		toolutil.NewActionSpec("tree", toolutil.ActionRoute{}, toolutil.ActionSpecOptions{}),
@@ -135,15 +146,18 @@ func TestApplyToActionSpecs_PreservesUnsearchableActionAlias(t *testing.T) {
 	}
 }
 
-// TestActionAliasSpecsForAction_Empty verifies no metadata is emitted for
-// actions without compatibility aliases.
+// TestActionAliasSpecsForAction_Empty verifies the ActionAliasSpecsForAction_Empty handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestActionAliasSpecsForAction_Empty(t *testing.T) {
 	if aliases := actionAliasSpecsForAction("get", nil); aliases != nil {
 		t.Fatalf("actionAliasSpecsForAction(nil) = %+v, want nil", aliases)
 	}
 }
 
-// TestNormalizeActionAlias_UsesCompatibilityPolicy verifies NormalizeActionAlias uses compatibility policy.
+// TestNormalizeActionAlias_UsesCompatibilityPolicy verifies the NormalizeActionAlias_UsesCompatibilityPolicy handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
 	if normalized, ok := NormalizeActionAlias(" "); ok || normalized != "" {
 		t.Fatalf("NormalizeActionAlias(empty) = %q, %t; want empty false", normalized, ok)
@@ -187,7 +201,15 @@ func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
 	}
 }
 
-// TestNormalizeParamsWithExplanation_AppliesActionScopedPolicy verifies NormalizeParamsWithExplanation applies action scoped policy.
+// TestNormalizeParamsWithExplanation_AppliesActionScopedPolicy verifies that
+// NormalizeParamsWithExplanation applies the action-scoped alias policy for
+// the repository.file_get action (branch -> ref).
+//
+// The test feeds a {project_id, branch} map into NormalizeParamsWithExplanation
+// with the repository.file_get schema and asserts the result renames branch
+// to ref, removes the original branch key, and emits exactly one alias
+// explanation (branch -> ref). This protects the action-scoped alias
+// normalization contract that downstream handlers depend on.
 func TestNormalizeParamsWithExplanation_AppliesActionScopedPolicy(t *testing.T) {
 	schema := map[string]any{"properties": map[string]any{"project_id": map[string]any{}, "ref": map[string]any{}}}
 	normalized, explanations := NormalizeParamsWithExplanation("repository.file_get", map[string]any{"project_id": 1, "branch": "main"}, schema)

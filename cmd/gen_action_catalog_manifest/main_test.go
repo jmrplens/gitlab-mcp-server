@@ -1,3 +1,8 @@
+// main_test.go covers the gen_action_catalog_manifest generator helpers.
+//
+// Tests verify deterministic builder discovery (sorted output, exclusion of
+// helper functions and _gen/_test.go files), deterministic manifest
+// generation, and the stale-manifest detection branch used by --check.
 package main
 
 import (

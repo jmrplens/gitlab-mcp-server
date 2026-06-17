@@ -193,6 +193,16 @@ func TestValidateStepCallWithRoutes_UsesParamSensitiveActionAlias(t *testing.T) 
 	}
 }
 
+// TestMergeRequiredOriginalParams_InitializesNilNormalizedMap verifies that
+// mergeRequiredOriginalParams allocates a new result map when the supplied
+// normalized map is nil, copying any required original values that the
+// normalization layer did not surface.
+//
+// The test calls the helper with a non-empty original map, a nil normalized
+// map, and a list of required keys. The assertion confirms the result
+// contains the original project_id, which protects downstream repair
+// payloads from dropping required params because the normalized map was
+// freshly allocated.
 func TestMergeRequiredOriginalParams_InitializesNilNormalizedMap(t *testing.T) {
 	got := mergeRequiredOriginalParams(map[string]any{"project_id": "my-org/project"}, nil, []string{"project_id"})
 
@@ -201,6 +211,17 @@ func TestMergeRequiredOriginalParams_InitializesNilNormalizedMap(t *testing.T) {
 	}
 }
 
+// TestValidateStepCallWithRoutes_RejectsForbiddenParams verifies that
+// validateStepCallWithRoutes, the assertion recorder, and the repair payload
+// builder all reject a dynamic execute call that includes a forbidden param
+// (token) and that the assertion result for CaseAssertionForbiddenParams is
+// marked failed.
+//
+// The test feeds a step with a forbidden token param and asserts the
+// validation message mentions the param, the assertion recorder marks the
+// forbidden_params case as failed, and the repair payload advertises the
+// allowed repair path. This protects destructive scenarios from leaking
+// secrets while still offering a model-friendly retry envelope.
 func TestValidateStepCallWithRoutes_RejectsForbiddenParams(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: toolutil.ActionRoute{}}}
 	step := evalStep{
@@ -237,6 +258,16 @@ func hasFailedAssertion(results []CaseAssertionResult, assertionType CaseAsserti
 	return false
 }
 
+// TestValidateStepCallWithRoutes_ReportsWrongAction verifies that
+// validateStepCallWithRoutes flags a dynamic execute call whose action does
+// not match the expected action, and that the resulting repair payload
+// records the wrong_action kind and the attempted action.
+//
+// The test feeds a step expecting project.get with an attempted
+// project.list call and asserts the validation result marks the call
+// invalid without matching the action, and the repair payload records the
+// wrong_action classification. This protects the runner from rewarding
+// wrong-action attempts during repair.
 func TestValidateStepCallWithRoutes_ReportsWrongAction(t *testing.T) {
 	routes := map[string]toolutil.ActionMap{dynamicExecuteActionTool: {actionProjectGet: toolutil.ActionRoute{}}}
 	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: actionProjectGet, RequiredParams: []string{"project_id"}}
@@ -253,6 +284,16 @@ func TestValidateStepCallWithRoutes_ReportsWrongAction(t *testing.T) {
 	}
 }
 
+// TestValidateStepCallWithRoutes_PreservesDestructiveConfirmSemantics
+// verifies that the validator enforces top-level confirm:true for destructive
+// dynamic execute calls while still accepting params.confirm:true for
+// destructive meta-tool calls.
+//
+// The test exercises four scenarios: missing confirm for dynamic,
+// params-only confirm for dynamic, top-level confirm for dynamic, and
+// top-level confirm for the meta-tool that should be rejected. The
+// assertions protect the destructive safety contract across both tool
+// surfaces from regressing to a permissive state.
 func TestValidateStepCallWithRoutes_PreservesDestructiveConfirmSemantics(t *testing.T) {
 	dynamicStep := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.delete", RequiredParams: []string{"project_id", "issue_iid"}, Destructive: true}
 	routes := map[string]toolutil.ActionMap{
@@ -362,6 +403,15 @@ func TestSimulatedToolResult_OnlyInjectsFirstAttempt(t *testing.T) {
 	}
 }
 
+// TestSuccessfulSimulatedToolContent_EmitsProducedValues verifies that the
+// simulated successful tool response includes the produced_values block
+// expected by downstream steps that depend on a previous step's output.
+//
+// The test calls successfulSimulatedToolContent for a dynamic issue.create
+// step and decodes the JSON response. It asserts the produced_values map
+// contains the supplied project_id and a generated issue_iid. This
+// protects multi-step workflows from regressing to a response shape that
+// drops produced values.
 func TestSuccessfulSimulatedToolContent_EmitsProducedValues(t *testing.T) {
 	content := successfulSimulatedToolContent(evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create", ProducedValues: []string{"issue_iid", "project_id"}}, modelContentBlock{
 		Name:  dynamicExecuteActionTool,

@@ -24,7 +24,9 @@ const (
 	fmtIDWant = "ID = %q, want %q"
 )
 
-// TestList_Success verifies List when success.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/1/issues/10/discussions (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/issues/10/discussions" {
@@ -48,7 +50,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies Get when success.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/1/issues/10/discussions/abc123 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/1/issues/10/discussions/abc123" {
@@ -68,7 +72,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies Create when success.
+// TestCreate_Success verifies that Create succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -88,7 +94,9 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestAddNote_Success verifies AddNote when success.
+// TestAddNote_Success verifies that AddNote succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAddNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated,
@@ -105,7 +113,9 @@ func TestAddNote_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateNote_Success verifies UpdateNote when success.
+// TestUpdateNote_Success verifies that UpdateNote succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
@@ -125,7 +135,9 @@ func TestUpdateNote_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteNote_Success verifies DeleteNote when success.
+// TestDeleteNote_Success verifies that DeleteNote succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteNote_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -138,7 +150,9 @@ func TestDeleteNote_Success(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies Get when API error.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -151,7 +165,9 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
+// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty Markdown formatter for a representative liststring_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if md != "No issue discussions found.\n" {
@@ -172,7 +188,9 @@ func assertContains(t *testing.T, err error, substr string) {
 	}
 }
 
-// TestIssueIIDRequired_Validation ensures all handlers reject zero/negative issue_iid.
+// TestIssueIIDRequired_Validation verifies the IssueIIDRequired_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestIssueIIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when issue_iid is invalid")
@@ -212,7 +230,9 @@ func TestIssueIIDRequired_Validation(t *testing.T) {
 	}
 }
 
-// TestNoteIDRequired_Validation ensures UpdateNote and DeleteNote reject zero/negative note_id.
+// TestNoteIDRequired_Validation verifies the NoteIDRequired_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestNoteIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when note_id is invalid")
@@ -239,7 +259,9 @@ func TestNoteIDRequired_Validation(t *testing.T) {
 	}
 }
 
-// TestProjectIDRequired_Validation ensures all handlers reject empty project_id.
+// TestProjectIDRequired_Validation verifies the ProjectIDRequired_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProjectIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when project_id is empty")
@@ -275,7 +297,9 @@ func TestProjectIDRequired_Validation(t *testing.T) {
 	}
 }
 
-// TestDiscussionIDRequired_Validation ensures Get/AddNote/UpdateNote/DeleteNote reject empty discussion_id.
+// TestDiscussionIDRequired_Validation verifies the DiscussionIDRequired_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDiscussionIDRequired_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when discussion_id is empty")
@@ -313,7 +337,9 @@ func TestDiscussionIDRequired_Validation(t *testing.T) {
 // Format*Markdown tests — populated + empty
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdownString_Populated verifies FormatListMarkdownString when populated.
+// TestFormatListMarkdownString_Populated verifies the ListMarkdownString_Populated Markdown formatter for a representative liststring_populated input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_Populated(t *testing.T) {
 	out := ListOutput{
 		Discussions: []Output{
@@ -349,7 +375,9 @@ func TestFormatListMarkdownString_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_Populated verifies FormatMarkdownString when populated.
+// TestFormatMarkdownString_Populated verifies the MarkdownString_Populated Markdown formatter for a representative string_populated input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_Populated(t *testing.T) {
 	out := Output{
 		ID:             "disc-abc",
@@ -372,7 +400,9 @@ func TestFormatMarkdownString_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_Empty verifies FormatMarkdownString when empty.
+// TestFormatMarkdownString_Empty verifies the MarkdownString_Empty Markdown formatter for a representative string_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_Empty(t *testing.T) {
 	md := FormatMarkdownString(Output{})
 	if !strings.Contains(md, "Discussion") {
@@ -380,7 +410,9 @@ func TestFormatMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatNoteMarkdownString_Populated verifies FormatNoteMarkdownString when populated.
+// TestFormatNoteMarkdownString_Populated verifies the NoteMarkdownString_Populated Markdown formatter for a representative notestring_populated input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatNoteMarkdownString_Populated(t *testing.T) {
 	out := NoteOutput{
 		ID:        42,
@@ -402,7 +434,9 @@ func TestFormatNoteMarkdownString_Populated(t *testing.T) {
 	}
 }
 
-// TestFormatNoteMarkdownString_Empty verifies FormatNoteMarkdownString when empty.
+// TestFormatNoteMarkdownString_Empty verifies the NoteMarkdownString_Empty Markdown formatter for a representative notestring_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatNoteMarkdownString_Empty(t *testing.T) {
 	md := FormatNoteMarkdownString(NoteOutput{})
 	if !strings.Contains(md, "## Note") {
@@ -418,7 +452,9 @@ func TestFormatNoteMarkdownString_Empty(t *testing.T) {
 // Converter tests — noteToOutput, toOutput, toListOutput
 // ---------------------------------------------------------------------------.
 
-// TestNoteToOutput_AllFields verifies NoteToOutput when all fields.
+// TestNoteToOutput_AllFields verifies the NoteToOutput_AllFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestNoteToOutput_AllFields(t *testing.T) {
 	// Exercise noteToOutput via Create which returns noteToOutput(note).
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -465,7 +501,9 @@ func TestNoteToOutput_AllFields(t *testing.T) {
 	}
 }
 
-// TestNoteToOutput_NoUpdatedAt verifies NoteToOutput when no updated at.
+// TestNoteToOutput_NoUpdatedAt verifies the NoteToOutput_NoUpdatedAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestNoteToOutput_NoUpdatedAt(t *testing.T) {
 	// GitLab always returns created_at; updated_at may be absent.
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -499,7 +537,9 @@ func TestNoteToOutput_NoUpdatedAt(t *testing.T) {
 	}
 }
 
-// TestNoteToOutput_EmptyAuthor verifies NoteToOutput when empty author.
+// TestNoteToOutput_EmptyAuthor verifies the NoteToOutput_EmptyAuthor handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestNoteToOutput_EmptyAuthor(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{
@@ -526,7 +566,9 @@ func TestNoteToOutput_EmptyAuthor(t *testing.T) {
 	}
 }
 
-// TestToOutput_MultipleNotes verifies ToOutput when multiple notes.
+// TestToOutput_MultipleNotes verifies the ToOutput_MultipleNotes handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_MultipleNotes(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{
@@ -562,7 +604,9 @@ func TestToOutput_MultipleNotes(t *testing.T) {
 	}
 }
 
-// TestToListOutput_MultipleDiscussions verifies ToListOutput when multiple discussions.
+// TestToListOutput_MultipleDiscussions verifies the ToListOutput_MultipleDiscussions handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToListOutput_MultipleDiscussions(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK,
@@ -592,7 +636,9 @@ func TestToListOutput_MultipleDiscussions(t *testing.T) {
 	}
 }
 
-// TestToListOutput_EmptyList verifies ToListOutput when empty list.
+// TestToListOutput_EmptyList verifies the ToListOutput_EmptyList handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToListOutput_EmptyList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
@@ -613,7 +659,9 @@ func TestToListOutput_EmptyList(t *testing.T) {
 // Context cancellation for all 6 handlers
 // ---------------------------------------------------------------------------.
 
-// TestList_CancelledContext verifies List when cancelled context.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -626,7 +674,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies Get when cancelled context.
+// TestGet_CancelledContext verifies the Get_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -639,7 +689,9 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies Create when cancelled context.
+// TestCreate_CancelledContext verifies the Create_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreate_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -652,7 +704,9 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestAddNote_CancelledContext verifies AddNote when cancelled context.
+// TestAddNote_CancelledContext verifies the AddNote_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestAddNote_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -665,7 +719,9 @@ func TestAddNote_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateNote_CancelledContext verifies UpdateNote when cancelled context.
+// TestUpdateNote_CancelledContext verifies the UpdateNote_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdateNote_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -678,7 +734,9 @@ func TestUpdateNote_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteNote_CancelledContext verifies DeleteNote when cancelled context.
+// TestDeleteNote_CancelledContext verifies the DeleteNote_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteNote_CancelledContext(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
@@ -695,7 +753,9 @@ func TestDeleteNote_CancelledContext(t *testing.T) {
 // API error paths for all 6 handlers
 // ---------------------------------------------------------------------------.
 
-// TestList_APIError verifies List when API error.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -706,7 +766,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies Create when API error.
+// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -717,7 +779,9 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestAddNote_APIError verifies AddNote when API error.
+// TestAddNote_APIError verifies that AddNote returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddNote_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -728,7 +792,9 @@ func TestAddNote_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateNote_APIError verifies UpdateNote when API error.
+// TestUpdateNote_APIError verifies that UpdateNote returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateNote_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -739,7 +805,9 @@ func TestUpdateNote_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteNote_APIError verifies DeleteNote when API error.
+// TestDeleteNote_APIError verifies that DeleteNote returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteNote_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)

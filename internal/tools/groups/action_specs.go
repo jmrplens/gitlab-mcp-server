@@ -14,23 +14,41 @@ const actionGroupGet = "group.get"
 // ActionSpecs returns canonical specs for core group and group hook actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_group_list — list groups visible to the authenticated user.
 		groupReadSpec("list", toolutil.RouteAction(client, List), "gitlab_group_list"),
+		// gitlab_group_get — fetch a single group by ID or path (returns a structured not-found result on 404).
 		groupReadSpec("get", groupGetRoute(client), "gitlab_group_get"),
+		// gitlab_group_create — create a new top-level group or subgroup.
 		groupCreateSpec("create", toolutil.RouteAction(client, Create), "gitlab_group_create"),
+		// gitlab_group_update — update an existing group.
 		groupUpdateSpec("update", toolutil.RouteAction(client, Update), "gitlab_group_update"),
+		// gitlab_group_delete — delete a group and all its projects (destructive).
 		groupDeleteSpec("delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_group_delete"),
+		// gitlab_group_restore — restore a previously deleted group.
 		groupUpdateSpec("restore", toolutil.RouteAction(client, Restore), "gitlab_group_restore"),
+		// gitlab_group_archive — archive a group (destructive, idempotent).
 		groupUpdateSpec("archive", toolutil.RouteAction(client, ArchiveOutput), "gitlab_group_archive"),
+		// gitlab_group_unarchive — unarchive a group (destructive, idempotent).
 		groupUpdateSpec("unarchive", toolutil.RouteAction(client, UnarchiveOutput), "gitlab_group_unarchive"),
+		// gitlab_group_search — search for groups by name or path.
 		groupReadSpec("search", toolutil.RouteAction(client, Search), "gitlab_group_search"),
+		// gitlab_group_transfer_project — transfer a project into a group.
 		groupUpdateSpec("transfer_project", toolutil.RouteAction(client, TransferProject), "gitlab_group_transfer_project"),
+		// gitlab_group_projects — list the projects that belong to a group.
 		groupReadSpec("projects", toolutil.RouteAction(client, ListProjects), "gitlab_group_projects"),
+		// gitlab_group_members_list — list the members of a group.
 		groupReadSpec("members", toolutil.RouteAction(client, MembersList), "gitlab_group_members_list"),
+		// gitlab_subgroups_list — list the subgroups of a group.
 		groupReadSpec("subgroups", toolutil.RouteAction(client, SubgroupsList), "gitlab_subgroups_list"),
+		// gitlab_group_hook_list — list group webhooks.
 		groupReadSpec("hook_list", toolutil.RouteAction(client, ListHooks), "gitlab_group_hook_list"),
+		// gitlab_group_hook_get — fetch a single group webhook by ID.
 		groupReadSpec("hook_get", toolutil.RouteAction(client, GetHook), "gitlab_group_hook_get"),
+		// gitlab_group_hook_add — create a new group webhook.
 		groupCreateSpec("hook_add", toolutil.RouteAction(client, AddHook), "gitlab_group_hook_add"),
+		// gitlab_group_hook_edit — update an existing group webhook.
 		groupUpdateSpec("hook_edit", toolutil.RouteAction(client, EditHook), "gitlab_group_hook_edit"),
+		// gitlab_group_hook_delete — delete a group webhook (destructive).
 		groupDeleteSpec("hook_delete", toolutil.DestructiveVoidAction(client, DeleteHook), "gitlab_group_hook_delete"),
 	}
 }

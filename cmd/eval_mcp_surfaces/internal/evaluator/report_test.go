@@ -59,6 +59,16 @@ func TestWriteReport_WritesFullEvaluationMarkdown(t *testing.T) {
 	}
 }
 
+// TestCheckReportCleanContent_DetectsFailedTaskRows verifies that
+// checkReportCleanContent parses a Task Results table with one failed row,
+// counts the total rows, identifies the failing model and task, and records
+// the failure notes.
+//
+// The test feeds a handcrafted markdown table containing one clean row and
+// one failed row and asserts that the returned status reports the correct
+// totals, marks the report as not clean, and exposes the failing row
+// details. This protects the CI gate from approving reports that contain
+// fixture preparation failures.
 func TestCheckReportCleanContent_DetectsFailedTaskRows(t *testing.T) {
 	content := "## Task Results\n\n" +
 		"| Model | Run | Task | Final success | Notes |\n" +
@@ -81,6 +91,14 @@ func TestCheckReportCleanContent_DetectsFailedTaskRows(t *testing.T) {
 	}
 }
 
+// TestEscapeTable_NormalizesMultilineCells verifies that escapeTable
+// replaces newlines with <br> tags and escapes pipe characters so multi-line
+// notes survive the markdown table renderer without breaking the row layout.
+//
+// The test feeds a known multi-line error message containing a pipe and
+// asserts the helper produces the expected escaped form. This protects the
+// report writer from emitting tables that GitHub's markdown renderer will
+// misinterpret.
 func TestEscapeTable_NormalizesMultilineCells(t *testing.T) {
 	got := escapeTable("google status 404: {\n  \"error\": true\n} | retry")
 	want := "google status 404: {<br>  \"error\": true<br>} \\| retry"
@@ -89,6 +107,14 @@ func TestEscapeTable_NormalizesMultilineCells(t *testing.T) {
 	}
 }
 
+// TestCheckReportCleanContent_AllowsRepairedFirstPassWhenFinalSuccess
+// verifies that checkReportCleanContent accepts a task whose first call
+// failed but a later repair recovered the task, marking the report clean
+// despite the No/Yes first-pass/Repair combination.
+//
+// The test feeds a Task Results row showing a No first pass and Yes final
+// success and asserts the status reports clean. This protects the CI gate
+// from rejecting reports that include legitimate repair-driven recoveries.
 func TestCheckReportCleanContent_AllowsRepairedFirstPassWhenFinalSuccess(t *testing.T) {
 	content := "## Task Results\n\n" +
 		"| Model | Run | Task | First pass | Repair | Final success | Notes |\n" +
@@ -103,6 +129,13 @@ func TestCheckReportCleanContent_AllowsRepairedFirstPassWhenFinalSuccess(t *test
 	}
 }
 
+// TestCheckReportCleanContent_RequiresTaskResultsTable verifies that
+// checkReportCleanContent returns an error when the supplied content lacks
+// the Task Results table that the gate relies on.
+//
+// The test feeds only the startup failure header and asserts the helper
+// rejects the content. This protects the CI gate from silently approving
+// reports that were cut short before any task was attempted.
 func TestCheckReportCleanContent_RequiresTaskResultsTable(t *testing.T) {
 	if _, err := checkReportCleanContent("# Startup failure\n\nStatus: `failed`\n"); err == nil {
 		t.Fatal("checkReportCleanContent() error = nil, want missing task results error")

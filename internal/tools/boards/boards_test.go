@@ -86,7 +86,9 @@ var boardListsArrayJSON = `[` + boardListItemJSON + `]`
 // Board CRUD tests
 // ---------------------------------------------------------------------------.
 
-// TestListBoards_Success verifies ListBoards when success.
+// TestListBoards_Success verifies that ListBoards succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListBoards_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards", func(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +109,9 @@ func TestListBoards_Success(t *testing.T) {
 	}
 }
 
-// TestListBoards_MissingProjectID verifies ListBoards when missing project ID.
+// TestListBoards_MissingProjectID verifies that ListBoards_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListBoards_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListBoards(context.Background(), client, ListBoardsInput{})
@@ -116,7 +120,9 @@ func TestListBoards_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestGetBoard_Success verifies GetBoard when success.
+// TestGetBoard_Success verifies that GetBoard succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +142,9 @@ func TestGetBoard_Success(t *testing.T) {
 	}
 }
 
-// TestGetBoard_MissingParams verifies GetBoard when missing params.
+// TestGetBoard_MissingParams verifies that GetBoard_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetBoard(context.Background(), client, GetBoardInput{})
@@ -149,7 +157,9 @@ func TestGetBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestCreateBoard_Success verifies CreateBoard when success.
+// TestCreateBoard_Success verifies that CreateBoard succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards", func(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +182,9 @@ func TestCreateBoard_Success(t *testing.T) {
 	}
 }
 
-// TestCreateBoard_MissingParams verifies CreateBoard when missing params.
+// TestCreateBoard_MissingParams verifies that CreateBoard_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateBoard(context.Background(), client, CreateBoardInput{})
@@ -185,7 +197,9 @@ func TestCreateBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_Success verifies UpdateBoard when success.
+// TestUpdateBoard_Success verifies that UpdateBoard succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +222,9 @@ func TestUpdateBoard_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_MissingParams verifies UpdateBoard when missing params.
+// TestUpdateBoard_MissingParams verifies that UpdateBoard_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateBoard(context.Background(), client, UpdateBoardInput{})
@@ -221,7 +237,9 @@ func TestUpdateBoard_MissingParams(t *testing.T) {
 	}
 }
 
-// TestDeleteBoard_Success verifies DeleteBoard when success.
+// TestDeleteBoard_Success verifies that DeleteBoard succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteBoard_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoard1, func(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +259,9 @@ func TestDeleteBoard_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteBoard_MissingParams verifies DeleteBoard when missing params.
+// TestDeleteBoard_MissingParams verifies that DeleteBoard_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteBoard_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteBoard(context.Background(), client, DeleteBoardInput{})
@@ -258,7 +278,9 @@ func TestDeleteBoard_MissingParams(t *testing.T) {
 // Board List CRUD tests
 // ---------------------------------------------------------------------------.
 
-// TestListBoardLists_Success verifies ListBoardLists when success.
+// TestListBoardLists_Success verifies that ListBoardLists succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListBoardLists_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -281,7 +303,9 @@ func TestListBoardLists_Success(t *testing.T) {
 	}
 }
 
-// TestListBoardLists_MissingParams verifies ListBoardLists when missing params.
+// TestListBoardLists_MissingParams verifies that ListBoardLists_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListBoardLists_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListBoardLists(context.Background(), client, ListBoardListsInput{})
@@ -294,7 +318,9 @@ func TestListBoardLists_MissingParams(t *testing.T) {
 	}
 }
 
-// TestGetBoardList_Success verifies GetBoardList when success.
+// TestGetBoardList_Success verifies that GetBoardList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoardList100, func(w http.ResponseWriter, r *http.Request) {
@@ -313,7 +339,9 @@ func TestGetBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestGetBoardList_MissingParams verifies GetBoardList when missing params.
+// TestGetBoardList_MissingParams verifies that GetBoardList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetBoardList(context.Background(), client, GetBoardListInput{})
@@ -334,7 +362,9 @@ func TestGetBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_Success verifies CreateBoardList when success.
+// TestCreateBoardList_Success verifies that CreateBoardList succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -357,7 +387,9 @@ func TestCreateBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_MissingParams verifies CreateBoardList when missing params.
+// TestCreateBoardList_MissingParams verifies that CreateBoardList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateBoardList(context.Background(), client, CreateBoardListInput{})
@@ -370,7 +402,9 @@ func TestCreateBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestUpdateBoardList_Success verifies UpdateBoardList when success.
+// TestUpdateBoardList_Success verifies that UpdateBoardList succeeds when the GitLab API returns a valid response.
+// The test exercises the PUT path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoardList100, func(w http.ResponseWriter, r *http.Request) {
@@ -393,7 +427,9 @@ func TestUpdateBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateBoardList_MissingParams verifies UpdateBoardList when missing params.
+// TestUpdateBoardList_MissingParams verifies that UpdateBoardList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateBoardList(context.Background(), client, UpdateBoardListInput{})
@@ -414,7 +450,9 @@ func TestUpdateBoardList_MissingParams(t *testing.T) {
 	}
 }
 
-// TestDeleteBoardList_Success verifies DeleteBoardList when success.
+// TestDeleteBoardList_Success verifies that DeleteBoardList succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathBoardList100, func(w http.ResponseWriter, r *http.Request) {
@@ -434,7 +472,9 @@ func TestDeleteBoardList_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteBoardList_MissingParams verifies DeleteBoardList when missing params.
+// TestDeleteBoardList_MissingParams verifies that DeleteBoardList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteBoardList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteBoardList(context.Background(), client, DeleteBoardListInput{})
@@ -459,7 +499,9 @@ func TestDeleteBoardList_MissingParams(t *testing.T) {
 // Formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatBoardMarkdown verifies FormatBoardMarkdown.
+// TestFormatBoardMarkdown verifies the BoardMarkdown Markdown formatter for a representative board input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardMarkdown(t *testing.T) {
 	out := BoardOutput{
 		ID: 1, Name: "Dev", ProjectName: "P", ProjectPath: "group/p", ProjectID: 10,
@@ -482,7 +524,9 @@ func TestFormatBoardMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardsMarkdown verifies FormatListBoardsMarkdown.
+// TestFormatListBoardsMarkdown verifies the ListBoardsMarkdown Markdown formatter for a representative listboards input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListBoardsMarkdown(t *testing.T) {
 	out := ListBoardsOutput{
 		Boards: []BoardOutput{{ID: 1, Name: "Dev", ProjectPath: "group/dev"}},
@@ -500,7 +544,9 @@ func TestFormatListBoardsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatBoardListMarkdown verifies FormatBoardListMarkdown.
+// TestFormatBoardListMarkdown verifies the BoardListMarkdown Markdown formatter for a representative boardlist input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardListMarkdown(t *testing.T) {
 	out := BoardListOutput{ID: 100, LabelName: "To Do", Position: 0, MaxIssueCount: 10}
 	md := FormatBoardListMarkdown(out)
@@ -520,7 +566,9 @@ func TestFormatBoardListMarkdown(t *testing.T) {
 // Comprehensive markdown formatter tests
 // ---------------------------------------------------------------------------.
 
-// TestFormatBoardMarkdown_NoProject verifies FormatBoardMarkdown when no project.
+// TestFormatBoardMarkdown_NoProject verifies the BoardMarkdown_NoProject Markdown formatter for a representative board_noproject input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardMarkdown_NoProject(t *testing.T) {
 	out := BoardOutput{ID: 1, Name: "Board"}
 	md := FormatBoardMarkdown(out)
@@ -529,7 +577,9 @@ func TestFormatBoardMarkdown_NoProject(t *testing.T) {
 	}
 }
 
-// TestFormatBoardMarkdown_ProjectNameFallback verifies FormatBoardMarkdown when project name fallback.
+// TestFormatBoardMarkdown_ProjectNameFallback verifies the BoardMarkdown_ProjectNameFallback Markdown formatter for a representative board_projectnamefallback input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardMarkdown_ProjectNameFallback(t *testing.T) {
 	out := BoardOutput{ID: 1, Name: "Board", ProjectName: "MyProject", ProjectID: 5}
 	md := FormatBoardMarkdown(out)
@@ -538,7 +588,9 @@ func TestFormatBoardMarkdown_ProjectNameFallback(t *testing.T) {
 	}
 }
 
-// TestFormatBoardMarkdown_ListWithoutLabel verifies FormatBoardMarkdown when list without label.
+// TestFormatBoardMarkdown_ListWithoutLabel verifies the BoardMarkdown_ListWithoutLabel Markdown formatter for a representative board_listwithoutlabel input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardMarkdown_ListWithoutLabel(t *testing.T) {
 	out := BoardOutput{
 		ID: 1, Name: "Board",
@@ -550,7 +602,9 @@ func TestFormatBoardMarkdown_ListWithoutLabel(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardsMarkdown_FallbackToName verifies FormatListBoardsMarkdown when fallback to name.
+// TestFormatListBoardsMarkdown_FallbackToName verifies the ListBoardsMarkdown_FallbackToName Markdown formatter for a representative listboards_fallbacktoname input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListBoardsMarkdown_FallbackToName(t *testing.T) {
 	out := ListBoardsOutput{
 		Boards: []BoardOutput{{ID: 1, Name: "Dev", ProjectName: "MyProject"}},
@@ -561,7 +615,9 @@ func TestFormatListBoardsMarkdown_FallbackToName(t *testing.T) {
 	}
 }
 
-// TestFormatBoardListMarkdown_NoLabelFallback verifies FormatBoardListMarkdown when no label fallback.
+// TestFormatBoardListMarkdown_NoLabelFallback verifies the BoardListMarkdown_NoLabelFallback Markdown formatter for a representative boardlist_nolabelfallback input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardListMarkdown_NoLabelFallback(t *testing.T) {
 	out := BoardListOutput{ID: 200, Position: 3}
 	md := FormatBoardListMarkdown(out)
@@ -570,7 +626,9 @@ func TestFormatBoardListMarkdown_NoLabelFallback(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardListsMarkdown_NoLabelFallback verifies FormatListBoardListsMarkdown when no label fallback.
+// TestFormatListBoardListsMarkdown_NoLabelFallback verifies the ListBoardListsMarkdown_NoLabelFallback Markdown formatter for a representative listboardlists_nolabelfallback input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListBoardListsMarkdown_NoLabelFallback(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{{ID: 300, Position: 0}},
@@ -600,7 +658,9 @@ const (
 // Board CRUD — server errors & canceled contexts
 // ---------------------------------------------------------------------------.
 
-// TestListBoards_ServerError verifies ListBoards when server error.
+// TestListBoards_ServerError verifies that ListBoards_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListBoards_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -611,7 +671,9 @@ func TestListBoards_ServerError(t *testing.T) {
 	}
 }
 
-// TestListBoards_CancelledContext verifies ListBoards when cancelled context.
+// TestListBoards_CancelledContext verifies the ListBoards_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListBoards_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -623,7 +685,9 @@ func TestListBoards_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListBoards_WithPagination verifies ListBoards when with pagination.
+// TestListBoards_WithPagination verifies that ListBoards_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListBoards_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("page") != "2" {
@@ -644,7 +708,9 @@ func TestListBoards_WithPagination(t *testing.T) {
 	}
 }
 
-// TestGetBoard_ServerError verifies GetBoard when server error.
+// TestGetBoard_ServerError verifies that GetBoard_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetBoard_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -655,7 +721,9 @@ func TestGetBoard_ServerError(t *testing.T) {
 	}
 }
 
-// TestGetBoard_CancelledContext verifies GetBoard when cancelled context.
+// TestGetBoard_CancelledContext verifies the GetBoard_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -667,7 +735,9 @@ func TestGetBoard_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreateBoard_ServerError verifies CreateBoard when server error.
+// TestCreateBoard_ServerError verifies that CreateBoard_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateBoard_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -678,7 +748,9 @@ func TestCreateBoard_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreateBoard_CancelledContext verifies CreateBoard when cancelled context.
+// TestCreateBoard_CancelledContext verifies the CreateBoard_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreateBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -690,7 +762,9 @@ func TestCreateBoard_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_AllOptionalFields verifies UpdateBoard when all optional fields.
+// TestUpdateBoard_AllOptionalFields verifies the UpdateBoard_AllOptionalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateBoard_AllOptionalFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards/1", func(w http.ResponseWriter, r *http.Request) {
@@ -716,7 +790,9 @@ func TestUpdateBoard_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_ServerError verifies UpdateBoard when server error.
+// TestUpdateBoard_ServerError verifies that UpdateBoard_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateBoard_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -727,7 +803,9 @@ func TestUpdateBoard_ServerError(t *testing.T) {
 	}
 }
 
-// TestUpdateBoard_CancelledContext verifies UpdateBoard when cancelled context.
+// TestUpdateBoard_CancelledContext verifies the UpdateBoard_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdateBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -739,7 +817,9 @@ func TestUpdateBoard_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteBoard_ServerError verifies DeleteBoard when server error.
+// TestDeleteBoard_ServerError verifies that DeleteBoard_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteBoard_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -750,7 +830,9 @@ func TestDeleteBoard_ServerError(t *testing.T) {
 	}
 }
 
-// TestDeleteBoard_CancelledContext verifies DeleteBoard when cancelled context.
+// TestDeleteBoard_CancelledContext verifies the DeleteBoard_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteBoard_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -766,7 +848,9 @@ func TestDeleteBoard_CancelledContext(t *testing.T) {
 // Board List CRUD — server errors & canceled contexts
 // ---------------------------------------------------------------------------.
 
-// TestListBoardLists_ServerError verifies ListBoardLists when server error.
+// TestListBoardLists_ServerError verifies that ListBoardLists_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListBoardLists_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -777,7 +861,9 @@ func TestListBoardLists_ServerError(t *testing.T) {
 	}
 }
 
-// TestListBoardLists_CancelledContext verifies ListBoardLists when cancelled context.
+// TestListBoardLists_CancelledContext verifies the ListBoardLists_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListBoardLists_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -789,7 +875,9 @@ func TestListBoardLists_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetBoardList_ServerError verifies GetBoardList when server error.
+// TestGetBoardList_ServerError verifies that GetBoardList_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetBoardList_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -800,7 +888,9 @@ func TestGetBoardList_ServerError(t *testing.T) {
 	}
 }
 
-// TestGetBoardList_CancelledContext verifies GetBoardList when cancelled context.
+// TestGetBoardList_CancelledContext verifies the GetBoardList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -812,7 +902,9 @@ func TestGetBoardList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_AllTypes verifies CreateBoardList when all types.
+// TestCreateBoardList_AllTypes verifies the CreateBoardList_AllTypes handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateBoardList_AllTypes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/projects/10/boards/1/lists", func(w http.ResponseWriter, r *http.Request) {
@@ -832,7 +924,9 @@ func TestCreateBoardList_AllTypes(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_ServerError verifies CreateBoardList when server error.
+// TestCreateBoardList_ServerError verifies that CreateBoardList_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateBoardList_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -843,7 +937,9 @@ func TestCreateBoardList_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_BadRequest verifies CreateBoardList returns list-type guidance for 400 responses.
+// TestCreateBoardList_BadRequest verifies the CreateBoardList_BadRequest handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateBoardList_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)
@@ -857,7 +953,9 @@ func TestCreateBoardList_BadRequest(t *testing.T) {
 	}
 }
 
-// TestCreateBoardList_CancelledContext verifies CreateBoardList when cancelled context.
+// TestCreateBoardList_CancelledContext verifies the CreateBoardList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreateBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -869,7 +967,9 @@ func TestCreateBoardList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateBoardList_ServerError verifies UpdateBoardList when server error.
+// TestUpdateBoardList_ServerError verifies that UpdateBoardList_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateBoardList_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -880,7 +980,9 @@ func TestUpdateBoardList_ServerError(t *testing.T) {
 	}
 }
 
-// TestUpdateBoardList_CancelledContext verifies UpdateBoardList when cancelled context.
+// TestUpdateBoardList_CancelledContext verifies the UpdateBoardList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdateBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -892,7 +994,9 @@ func TestUpdateBoardList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteBoardList_ServerError verifies DeleteBoardList when server error.
+// TestDeleteBoardList_ServerError verifies that DeleteBoardList_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteBoardList_ServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"Server Error"}`)
@@ -903,7 +1007,9 @@ func TestDeleteBoardList_ServerError(t *testing.T) {
 	}
 }
 
-// TestDeleteBoardList_CancelledContext verifies DeleteBoardList when cancelled context.
+// TestDeleteBoardList_CancelledContext verifies the DeleteBoardList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteBoardList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -919,7 +1025,9 @@ func TestDeleteBoardList_CancelledContext(t *testing.T) {
 // Formatters — additional coverage
 // ---------------------------------------------------------------------------.
 
-// TestFormatBoardMarkdown_Minimal verifies FormatBoardMarkdown when minimal.
+// TestFormatBoardMarkdown_Minimal verifies the BoardMarkdown_Minimal Markdown formatter for a representative board_minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardMarkdown_Minimal(t *testing.T) {
 	out := BoardOutput{ID: 2, Name: "Minimal"}
 	md := FormatBoardMarkdown(out)
@@ -949,7 +1057,9 @@ func TestFormatBoardMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatBoardMarkdown_WithWeight verifies FormatBoardMarkdown when with weight.
+// TestFormatBoardMarkdown_WithWeight verifies the BoardMarkdown_WithWeight Markdown formatter for a representative board_withweight input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardMarkdown_WithWeight(t *testing.T) {
 	out := BoardOutput{ID: 1, Name: "Dev", Weight: 5}
 	md := FormatBoardMarkdown(out)
@@ -958,7 +1068,9 @@ func TestFormatBoardMarkdown_WithWeight(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardListsMarkdown verifies FormatListBoardListsMarkdown.
+// TestFormatListBoardListsMarkdown verifies the ListBoardListsMarkdown Markdown formatter for a representative listboardlists input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListBoardListsMarkdown(t *testing.T) {
 	out := ListBoardListsOutput{
 		Lists: []BoardListOutput{
@@ -979,7 +1091,9 @@ func TestFormatListBoardListsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListBoardListsMarkdown_Empty verifies FormatListBoardListsMarkdown when empty.
+// TestFormatListBoardListsMarkdown_Empty verifies the ListBoardListsMarkdown_Empty Markdown formatter for a representative listboardlists_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 	out := ListBoardListsOutput{}
 	md := FormatListBoardListsMarkdown(out)
@@ -988,7 +1102,9 @@ func TestFormatListBoardListsMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatBoardListMarkdown_AllFields verifies FormatBoardListMarkdown when all fields.
+// TestFormatBoardListMarkdown_AllFields verifies the BoardListMarkdown_AllFields Markdown formatter for a representative boardlist_allfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 	out := BoardListOutput{
 		ID: 100, LabelName: "To Do", LabelID: 20, Position: 0,
@@ -1007,7 +1123,9 @@ func TestFormatBoardListMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatBoardListMarkdown_Minimal verifies FormatBoardListMarkdown when minimal.
+// TestFormatBoardListMarkdown_Minimal verifies the BoardListMarkdown_Minimal Markdown formatter for a representative boardlist_minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 	out := BoardListOutput{ID: 200, Position: 1}
 	md := FormatBoardListMarkdown(out)
@@ -1031,7 +1149,9 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for board actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	specs := ActionSpecs(client)
@@ -1103,7 +1223,9 @@ func newBoardMux() *http.ServeMux {
 	return mux
 }
 
-// TestActionSpecs_CallAllRoutes validates board routes across multiple scenarios.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, newBoardMux())
 	byTool := boardSpecsByTool(t, ActionSpecs(client))
@@ -1137,7 +1259,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_BoardGetRoute verifies the canonical board get route output.
+// TestActionSpecs_BoardGetRoute validates the BoardGetRoute route through the catalog surface.
+// The mock GitLab API at /api/v4/projects/42/boards/3 (GET) responds with HTTP OK.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_BoardGetRoute(t *testing.T) {
 	const respJSON = `{"id":3,"name":"Development","project":{"id":42}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

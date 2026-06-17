@@ -25,7 +25,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // fmtUnexpMethod identifies the fmt unexp method constant used by this package.
 const fmtUnexpMethod = "unexpected method: %s"
 
-// TestList verifies List.
+// TestList verifies the List handler.
+// The mock GitLab API at /api/v4/applications (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/applications" {
@@ -57,7 +59,9 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies List when error.
+// TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -69,7 +73,9 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestCreate verifies Create.
+// TestCreate verifies the Create handler.
+// The mock GitLab API at /api/v4/applications (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCreate(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/applications" {
@@ -111,7 +117,9 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-// TestCreate_Error verifies Create when error.
+// TestCreate_Error verifies that Create returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -123,7 +131,9 @@ func TestCreate_Error(t *testing.T) {
 	}
 }
 
-// TestDelete_ValidationError verifies Delete when validation error.
+// TestDelete_ValidationError verifies that Delete_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Fatal("API should not be called")
@@ -136,7 +146,9 @@ func TestDelete_ValidationError(t *testing.T) {
 	}
 }
 
-// TestDelete verifies Delete.
+// TestDelete verifies the Delete handler.
+// The mock GitLab API at /api/v4/applications/3 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/applications/3" {
@@ -154,7 +166,9 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-// TestDelete_Error verifies Delete when error.
+// TestDelete_Error verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -166,7 +180,9 @@ func TestDelete_Error(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	out := ListOutput{
 		Applications: []ApplicationItem{
@@ -182,7 +198,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{Applications: nil}
 	md := FormatListMarkdown(out)
@@ -191,7 +209,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatCreateMarkdown verifies FormatCreateMarkdown.
+// TestFormatCreateMarkdown verifies the CreateMarkdown Markdown formatter for a representative create input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatCreateMarkdown(t *testing.T) {
 	out := CreateOutput{ApplicationItem: ApplicationItem{
 		ID: 2, ApplicationName: "New", ApplicationID: "aid-2", Secret: "sec", CallbackURL: "http://cb", Confidential: false,
@@ -211,7 +231,9 @@ func TestFormatCreateMarkdown(t *testing.T) {
 // List — with pagination
 // ---------------------------------------------------------------------------.
 
-// TestList_WithPagination verifies List when with pagination.
+// TestList_WithPagination verifies that List_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/applications (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_WithPagination(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodGet {
@@ -239,7 +261,9 @@ func TestList_WithPagination(t *testing.T) {
 // Create — with confidential flag
 // ---------------------------------------------------------------------------.
 
-// TestCreate_WithConfidential verifies Create when with confidential.
+// TestCreate_WithConfidential verifies the Create_WithConfidential handler.
+// The mock GitLab API at /api/v4/applications (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCreate_WithConfidential(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodPost {
@@ -267,7 +291,9 @@ func TestCreate_WithConfidential(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata verifies application action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	specs := ActionSpecs(client)
@@ -301,7 +327,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRoutes validates all application canonical routes.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	specByTool := newApplicationsRouteSpecs(t)
 
@@ -334,7 +362,9 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteErrors verifies application canonical route error paths.
+// TestActionSpecs_CallRouteErrors validates the CallRouteErrors route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CallRouteErrors(t *testing.T) {
 	specByTool := newErrorRouteSpecs(t)
 

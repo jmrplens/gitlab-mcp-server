@@ -150,13 +150,25 @@ import (
 )
 
 // ActionSpecGroup contains specs owned by one catalog group.
+//
+// It is an alias for [actioncatalog.CatalogGroupSpec]; the alias keeps
+// the domain builders free of cross-package dependencies while preserving
+// a single canonical type for catalog projection.
 type ActionSpecGroup = actioncatalog.CatalogGroupSpec
 
+// actionSpecGroupBuilder produces the [ActionSpecGroup]s contributed by one
+// domain to the canonical catalog. The client is the GitLab API client
+// (or nil for spec-only builders), and enterprise gates Premium/Ultimate
+// domains.
 type actionSpecGroupBuilder func(*gitlabclient.Client, bool) []ActionSpecGroup
 
 //go:generate go run ../../cmd/gen_action_catalog_manifest/
 
-// CollectActionSpecs gathers canonical specs from domain-local builders.
+// CollectActionSpecs gathers canonical specs from domain-local builders
+// and returns them in deterministic, sorted order. The enterprise flag
+// toggles Premium/Ultimate domains; client is forwarded to every builder
+// so GitLab.com detection and edition-sensitive specs can be assembled
+// correctly. The result is the input to [BuildActionCatalog].
 func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	groups := make([]ActionSpecGroup, 0)
 	for _, build := range actionSpecGroupBuilders() {
@@ -165,10 +177,14 @@ func CollectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSp
 	return sortedActionSpecGroups(actioncompat.ApplyToGroupSpecs(groups))
 }
 
+// buildAdminActionSpecs contributes the gitlab_admin catalog group.
 func buildAdminActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_admin", adminspecs.ActionSpecs(client))
 }
 
+// buildAccessActionSpecs contributes the gitlab_access catalog group by
+// merging specs from access tokens, deploy tokens, deploy keys, access
+// requests, and invites sub-packages.
 func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 48)
 	specs = append(specs, accesstokens.ActionSpecs(client)...)
@@ -179,10 +195,17 @@ func buildAccessActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGro
 	return actionSpecGroup("gitlab_access", specs)
 }
 
+// buildAnalyzeActionSpecs contributes the gitlab_analyze catalog group
+// backed by the sampling sub-package. The catalog marks this group as a
+// sampling utility surface.
 func buildAnalyzeActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_analyze", samplingtools.ActionSpecs(client))
 }
 
+// buildOrbitActionSpecs contributes the gitlab_orbit catalog group only
+// when the deployment is GitLab.com and Enterprise is enabled. Returns
+// nil otherwise so the group is omitted from the catalog for
+// self-managed instances and CE catalogs.
 func buildOrbitActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise || client == nil || !client.IsGitLabDotCom() {
 		return nil
@@ -190,6 +213,8 @@ func buildOrbitActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 	return actionSpecGroup("gitlab_orbit", orbit.ActionSpecs(client))
 }
 
+// buildAttestationActionSpecs contributes the gitlab_attestation
+// Enterprise catalog group.
 func buildAttestationActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -197,6 +222,8 @@ func buildAttestationActionSpecs(client *gitlabclient.Client, enterprise bool) [
 	return actionSpecGroup("gitlab_attestation", attestations.ActionSpecs(client))
 }
 
+// buildAuditEventActionSpecs contributes the gitlab_audit_event
+// Enterprise catalog group.
 func buildAuditEventActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -204,15 +231,20 @@ func buildAuditEventActionSpecs(client *gitlabclient.Client, enterprise bool) []
 	return actionSpecGroup("gitlab_audit_event", auditevents.ActionSpecs(client))
 }
 
+// buildBranchActionSpecs contributes the gitlab_branch catalog group by
+// merging branch and branch rule specs.
 func buildBranchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := append(branches.ActionSpecs(client), branchrules.ActionSpecs(client)...)
 	return actionSpecGroup("gitlab_branch", specs)
 }
 
+// buildCICatalogActionSpecs contributes the gitlab_ci_catalog catalog group.
 func buildCICatalogActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_ci_catalog", cicatalog.ActionSpecs(client))
 }
 
+// buildCIVariableActionSpecs contributes the gitlab_ci_variable catalog
+// group by merging project, group, and instance CI variable specs.
 func buildCIVariableActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 15)
 	specs = append(specs, civariables.ActionSpecs(client)...)
@@ -221,6 +253,8 @@ func buildCIVariableActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpe
 	return actionSpecGroup("gitlab_ci_variable", specs)
 }
 
+// buildCompliancePolicyActionSpecs contributes the gitlab_compliance_policy
+// Enterprise catalog group.
 func buildCompliancePolicyActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -228,10 +262,14 @@ func buildCompliancePolicyActionSpecs(client *gitlabclient.Client, enterprise bo
 	return actionSpecGroup("gitlab_compliance_policy", compliancepolicy.ActionSpecs(client))
 }
 
+// buildCustomEmojiActionSpecs contributes the gitlab_custom_emoji catalog
+// group.
 func buildCustomEmojiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_custom_emoji", customemoji.ActionSpecs(client))
 }
 
+// buildDependencyActionSpecs contributes the gitlab_dependency Enterprise
+// catalog group.
 func buildDependencyActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -239,6 +277,8 @@ func buildDependencyActionSpecs(client *gitlabclient.Client, enterprise bool) []
 	return actionSpecGroup("gitlab_dependency", dependencies.ActionSpecs(client))
 }
 
+// buildDORAMetricsActionSpecs contributes the gitlab_dora_metrics
+// Enterprise catalog group.
 func buildDORAMetricsActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -246,6 +286,9 @@ func buildDORAMetricsActionSpecs(client *gitlabclient.Client, enterprise bool) [
 	return actionSpecGroup("gitlab_dora_metrics", dorametrics.ActionSpecs(client))
 }
 
+// buildEnvironmentActionSpecs contributes the gitlab_environment catalog
+// group by merging environment, protected environment, freeze period,
+// deployment, and deployment merge request specs.
 func buildEnvironmentActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 23)
 	specs = append(specs, environments.ActionSpecs(client)...)
@@ -256,6 +299,8 @@ func buildEnvironmentActionSpecs(client *gitlabclient.Client, _ bool) []ActionSp
 	return actionSpecGroup("gitlab_environment", specs)
 }
 
+// buildEnterpriseUserActionSpecs contributes the gitlab_enterprise_user
+// Enterprise catalog group.
 func buildEnterpriseUserActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -263,6 +308,8 @@ func buildEnterpriseUserActionSpecs(client *gitlabclient.Client, enterprise bool
 	return actionSpecGroup("gitlab_enterprise_user", enterpriseusers.ActionSpecs(client))
 }
 
+// buildExternalStatusCheckActionSpecs contributes the
+// gitlab_external_status_check Enterprise catalog group.
 func buildExternalStatusCheckActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -270,6 +317,8 @@ func buildExternalStatusCheckActionSpecs(client *gitlabclient.Client, enterprise
 	return actionSpecGroup("gitlab_external_status_check", externalstatuschecks.ActionSpecs(client))
 }
 
+// buildFeatureFlagsActionSpecs contributes the gitlab_feature_flags
+// catalog group by merging feature flag and flag user list specs.
 func buildFeatureFlagsActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 10)
 	specs = append(specs, featureflags.ActionSpecs(client)...)
@@ -277,6 +326,7 @@ func buildFeatureFlagsActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 	return actionSpecGroup("gitlab_feature_flags", specs)
 }
 
+// buildGeoActionSpecs contributes the gitlab_geo Enterprise catalog group.
 func buildGeoActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -284,6 +334,10 @@ func buildGeoActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionS
 	return actionSpecGroup("gitlab_geo", geo.ActionSpecs(client))
 }
 
+// buildGroupActionSpecs contributes the gitlab_group catalog group. It
+// always emits the base CE set and, when enterprise is true, also merges
+// in Premium/Ultimate-only group sub-domains (epics, SAML, LDAP, audit
+// settings, group iterations, group service accounts, group wikis, etc.).
 func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 96)
 	specs = append(specs, grouptools.ActionSpecs(client)...)
@@ -318,6 +372,8 @@ func buildGroupActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 	return actionSpecGroup("gitlab_group", specs)
 }
 
+// buildGroupSCIMActionSpecs contributes the gitlab_group_scim Enterprise
+// catalog group.
 func buildGroupSCIMActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -325,6 +381,11 @@ func buildGroupSCIMActionSpecs(client *gitlabclient.Client, enterprise bool) []A
 	return actionSpecGroup("gitlab_group_scim", groupscim.ActionSpecs(client))
 }
 
+// buildIssueActionSpecs contributes the gitlab_issue catalog group by
+// merging issue, issue note, issue link, issue discussion, issue
+// statistics, work item, issue award emoji, and issue resource event
+// specs. Project and group iteration specs are appended when enterprise
+// is true.
 func buildIssueActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 63)
 	specs = append(specs, issues.ActionSpecs(client)...)
@@ -342,6 +403,8 @@ func buildIssueActionSpecs(client *gitlabclient.Client, enterprise bool) []Actio
 	return actionSpecGroup("gitlab_issue", specs)
 }
 
+// buildJobActionSpecs contributes the gitlab_job catalog group by
+// merging job and job token scope specs.
 func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 25)
 	specs = append(specs, jobs.ActionSpecs(client)...)
@@ -349,6 +412,9 @@ func buildJobActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup 
 	return actionSpecGroup("gitlab_job", specs)
 }
 
+// buildMergeRequestActionSpecs contributes the gitlab_merge_request
+// catalog group by merging MR, MR approval, MR approval settings, MR
+// context commits, MR award emoji, and MR resource event specs.
 func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 58)
 	specs = append(specs, mergerequests.ActionSpecs(client)...)
@@ -360,6 +426,8 @@ func buildMergeRequestActionSpecs(client *gitlabclient.Client, _ bool) []ActionS
 	return actionSpecGroup("gitlab_merge_request", specs)
 }
 
+// buildMergeTrainActionSpecs contributes the gitlab_merge_train Enterprise
+// catalog group.
 func buildMergeTrainActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -367,6 +435,8 @@ func buildMergeTrainActionSpecs(client *gitlabclient.Client, enterprise bool) []
 	return actionSpecGroup("gitlab_merge_train", mergetrains.ActionSpecs(client))
 }
 
+// buildMemberRoleActionSpecs contributes the gitlab_member_role Enterprise
+// catalog group.
 func buildMemberRoleActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -374,10 +444,15 @@ func buildMemberRoleActionSpecs(client *gitlabclient.Client, enterprise bool) []
 	return actionSpecGroup("gitlab_member_role", memberroles.ActionSpecs(client))
 }
 
+// buildModelRegistryActionSpecs contributes the gitlab_model_registry
+// catalog group.
 func buildModelRegistryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_model_registry", modelregistry.ActionSpecs(client))
 }
 
+// buildMRReviewActionSpecs contributes the gitlab_mr_review catalog
+// group by merging MR note, MR discussion, MR change, and MR draft note
+// specs.
 func buildMRReviewActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 23)
 	specs = append(specs, mrnotes.ActionSpecs(client)...)
@@ -387,6 +462,8 @@ func buildMRReviewActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecG
 	return actionSpecGroup("gitlab_mr_review", specs)
 }
 
+// buildPackageActionSpecs contributes the gitlab_package catalog group by
+// merging package, container registry, and protected package specs.
 func buildPackageActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 24)
 	specs = append(specs, packages.ActionSpecs(client)...)
@@ -395,6 +472,9 @@ func buildPackageActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGr
 	return actionSpecGroup("gitlab_package", specs)
 }
 
+// buildPipelineActionSpecs contributes the gitlab_pipeline catalog group
+// by merging pipeline, pipeline trigger, resource group, and pipeline
+// schedule specs.
 func buildPipelineActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 33)
 	specs = append(specs, pipelines.ActionSpecs(client)...)
@@ -404,6 +484,8 @@ func buildPipelineActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecG
 	return actionSpecGroup("gitlab_pipeline", specs)
 }
 
+// buildProjectAliasActionSpecs contributes the gitlab_project_alias
+// Enterprise catalog group.
 func buildProjectAliasActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -411,6 +493,9 @@ func buildProjectAliasActionSpecs(client *gitlabclient.Client, enterprise bool) 
 	return actionSpecGroup("gitlab_project_alias", projectaliases.ActionSpecs(client))
 }
 
+// buildProjectActionSpecs contributes the gitlab_project catalog group.
+// It always emits the base CE project surface and, when enterprise is
+// true, also includes push rule and project service account specs.
 func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 130)
 	specs = append(specs, uploads.ActionSpecs(client)...)
@@ -432,6 +517,8 @@ func buildProjectActionSpecs(client *gitlabclient.Client, enterprise bool) []Act
 	return actionSpecGroup("gitlab_project", specs)
 }
 
+// buildReleaseActionSpecs contributes the gitlab_release catalog group by
+// merging release and release link specs.
 func buildReleaseActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 12)
 	specs = append(specs, releases.ActionSpecs(client)...)
@@ -439,6 +526,9 @@ func buildReleaseActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGr
 	return actionSpecGroup("gitlab_release", specs)
 }
 
+// buildRepositoryActionSpecs contributes the gitlab_repository catalog
+// group by merging repository tree/compare, commit, file, submodule,
+// markdown, and commit discussion specs.
 func buildRepositoryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 41)
 	specs = append(specs, repository.ActionSpecs(client)...)
@@ -450,14 +540,19 @@ func buildRepositoryActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpe
 	return actionSpecGroup("gitlab_repository", specs)
 }
 
+// buildRunnerActionSpecs contributes the gitlab_runner catalog group.
 func buildRunnerActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_runner", runners.ActionSpecs(client))
 }
 
+// buildSearchActionSpecs contributes the gitlab_search catalog group.
 func buildSearchActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_search", search.ActionSpecs(client))
 }
 
+// buildSecurityAttributeActionSpecs contributes the gitlab_security_attribute
+// Enterprise catalog group. The custom group description documents the
+// supported actions in human-readable form for the schema resource.
 func buildSecurityAttributeActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -469,6 +564,9 @@ func buildSecurityAttributeActionSpecs(client *gitlabclient.Client, enterprise b
 	return groups
 }
 
+// buildSecurityCategoryActionSpecs contributes the gitlab_security_category
+// Enterprise catalog group. The custom group description documents the
+// supported actions in human-readable form for the schema resource.
 func buildSecurityCategoryActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -480,6 +578,8 @@ func buildSecurityCategoryActionSpecs(client *gitlabclient.Client, enterprise bo
 	return groups
 }
 
+// buildSecurityFindingActionSpecs contributes the gitlab_security_finding
+// Enterprise catalog group.
 func buildSecurityFindingActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -487,6 +587,9 @@ func buildSecurityFindingActionSpecs(client *gitlabclient.Client, enterprise boo
 	return actionSpecGroup("gitlab_security_finding", securityfindings.ActionSpecs(client))
 }
 
+// buildSnippetActionSpecs contributes the gitlab_snippet catalog group by
+// merging snippet, snippet discussion, snippet note, and snippet award
+// emoji specs.
 func buildSnippetActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 34)
 	specs = append(specs, snippets.ActionSpecs(client)...)
@@ -496,6 +599,10 @@ func buildSnippetActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGr
 	return actionSpecGroup("gitlab_snippet", specs)
 }
 
+// buildStorageMoveActionSpecs contributes the gitlab_storage_move
+// catalog group. The group always includes project and snippet storage
+// move specs and appends group storage move specs when enterprise is
+// true.
 func buildStorageMoveActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 18)
 	specs = append(specs, projectstoragemoves.ActionSpecs(client)...)
@@ -506,10 +613,14 @@ func buildStorageMoveActionSpecs(client *gitlabclient.Client, enterprise bool) [
 	return actionSpecGroup("gitlab_storage_move", specs)
 }
 
+// buildTagActionSpecs contributes the gitlab_tag catalog group.
 func buildTagActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_tag", tags.ActionSpecs(client))
 }
 
+// buildTemplateActionSpecs contributes the gitlab_template catalog group
+// by merging CI lint, CI YAML, Dockerfile, gitignore, license, and
+// project template specs.
 func buildTemplateActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 12)
 	specs = append(specs, cilint.ActionSpecs(client)...)
@@ -521,6 +632,9 @@ func buildTemplateActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecG
 	return actionSpecGroup("gitlab_template", specs)
 }
 
+// buildUserActionSpecs contributes the gitlab_user catalog group. The
+// user package receives the enterprise flag so it can decide whether to
+// include Enterprise-only user sub-resources.
 func buildUserActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	specs := make([]toolutil.ActionSpec, 0, 75)
 	specs = append(specs, users.ActionSpecs(client, enterprise)...)
@@ -536,6 +650,8 @@ func buildUserActionSpecs(client *gitlabclient.Client, enterprise bool) []Action
 	return actionSpecGroup("gitlab_user", specs)
 }
 
+// buildVulnerabilityActionSpecs contributes the gitlab_vulnerability
+// Enterprise catalog group.
 func buildVulnerabilityActionSpecs(client *gitlabclient.Client, enterprise bool) []ActionSpecGroup {
 	if !enterprise {
 		return nil
@@ -543,10 +659,14 @@ func buildVulnerabilityActionSpecs(client *gitlabclient.Client, enterprise bool)
 	return actionSpecGroup("gitlab_vulnerability", vulnerabilities.ActionSpecs(client))
 }
 
+// buildWikiActionSpecs contributes the gitlab_wiki catalog group.
 func buildWikiActionSpecs(client *gitlabclient.Client, _ bool) []ActionSpecGroup {
 	return actionSpecGroup("gitlab_wiki", wikis.ActionSpecs(client))
 }
 
+// actionSpecGroup wraps specs into a single [ActionSpecGroup] with the
+// catalog group metadata derived from the tool name. Returns nil when
+// specs is empty so the catalog builder treats the group as absent.
 func actionSpecGroup(toolName string, specs []toolutil.ActionSpec) []ActionSpecGroup {
 	if len(specs) == 0 {
 		return nil
@@ -563,6 +683,11 @@ func actionSpecGroup(toolName string, specs []toolutil.ActionSpec) []ActionSpecG
 	}}
 }
 
+// actionSpecGroupsByTool groups specs by tool name, validates that each
+// group has a non-blank tool name, and that every spec has a non-blank
+// and non-duplicate action name. Returns a copy of the specs sorted by
+// action name per tool, joined with errors.Join so callers can surface
+// every validation issue in a single round-trip.
 func actionSpecGroupsByTool(groups []ActionSpecGroup) (map[string][]toolutil.ActionSpec, error) {
 	byTool := make(map[string][]toolutil.ActionSpec, len(groups))
 	var errs []error
@@ -596,6 +721,9 @@ func actionSpecGroupsByTool(groups []ActionSpecGroup) (map[string][]toolutil.Act
 	return byTool, errors.Join(errs...)
 }
 
+// sortedActionSpecGroups returns a defensive copy of groups sorted by
+// ToolName. Returns nil for an empty or nil input so callers can use
+// the result as a drop-in replacement for the original.
 func sortedActionSpecGroups(groups []ActionSpecGroup) []ActionSpecGroup {
 	if len(groups) == 0 {
 		return nil

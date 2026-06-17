@@ -2,6 +2,8 @@
 
 // instancevariables_ce_test.go tests the instance-level CI variable MCP tools against a live
 // GitLab instance. Exercises create, list, get, update, and delete via the gitlab_ci_variable meta-tool.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -11,7 +13,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/instancevariables"
 )
 
-// TestMeta_CIVariablesInstance exercises instance-level CI variable CRUD via the gitlab_ci_variable meta-tool.
+// TestMeta_CIVariablesInstance exercises instance-level CI variable CRUD
+// via the gitlab_ci_variable meta-tool.
+//
+// The test registers a t.Cleanup that best-effort deletes the instance
+// variable so subsequent runs start from a clean state, then runs five
+// subtests driving instance_create, instance_list, instance_get,
+// instance_update, and instance_delete. Each subtest asserts the expected
+// key or value round-trips through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_CIVariablesInstance(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

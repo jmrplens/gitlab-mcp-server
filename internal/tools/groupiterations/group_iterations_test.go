@@ -17,7 +17,9 @@ import (
 
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestActionSpecs_Metadata verifies canonical metadata for group iteration actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	specs := IssueActionSpecs(client)
@@ -83,7 +85,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_ValidationError_MissingGroupID verifies List returns error when GroupID is empty.
+// TestList_ValidationError_MissingGroupID verifies that List_ValidationError_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_ValidationError_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -94,8 +98,9 @@ func TestList_ValidationError_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestList_QueryParams verifies List passes state, search, and include_ancestors
-// parameters correctly to the GitLab API query string.
+// TestList_QueryParams verifies that List_QueryParams forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_QueryParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestPath(t, r, "/api/v4/groups/5/iterations")
@@ -117,8 +122,9 @@ func TestList_QueryParams(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies List returns an empty slice when the API
-// returns no iterations, ensuring no nil-slice issues.
+// TestList_EmptyResult verifies the List_EmptyResult handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
@@ -134,8 +140,9 @@ func TestList_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies List wraps and returns errors from the GitLab API
-// for non-200 responses (404, 500).
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -173,8 +180,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestList_Pagination verifies List correctly propagates pagination metadata
-// from the GitLab response headers.
+// TestList_Pagination verifies that List forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_Pagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -199,8 +207,9 @@ func TestList_Pagination(t *testing.T) {
 	}
 }
 
-// TestList_ContextCancelled verifies List returns an error when the context
-// is cancelled before the API call completes.
+// TestList_ContextCancelled verifies the List_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -214,8 +223,9 @@ func TestList_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestList_WithDates verifies List correctly parses start_date, due_date,
-// created_at, and updated_at from the API response into string fields.
+// TestList_WithDates verifies the List_WithDates handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_WithDates(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{
@@ -247,7 +257,9 @@ func TestList_WithDates(t *testing.T) {
 	}
 }
 
-// TestToOutput_NilInput verifies toOutput returns a zero-value Output for nil input.
+// TestToOutput_NilInput verifies the ToOutput_NilInput handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_NilInput(t *testing.T) {
 	out := toOutput(nil)
 	if out.ID != 0 || out.Title != "" {
@@ -255,8 +267,9 @@ func TestToOutput_NilInput(t *testing.T) {
 	}
 }
 
-// TestToOutput_AllFields verifies toOutput maps all GroupIteration fields
-// including dates to the Output struct.
+// TestToOutput_AllFields verifies the ToOutput_AllFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_AllFields(t *testing.T) {
 	now := time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC)
 	startDate := gl.ISOTime(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC))
@@ -316,8 +329,9 @@ func TestToOutput_AllFields(t *testing.T) {
 	}
 }
 
-// TestToOutput_NilDates verifies toOutput leaves date fields empty when the
-// source GroupIteration has nil date pointers.
+// TestToOutput_NilDates verifies the ToOutput_NilDates handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_NilDates(t *testing.T) {
 	it := &gl.GroupIteration{
 		ID:    1,
@@ -340,8 +354,9 @@ func TestToOutput_NilDates(t *testing.T) {
 	}
 }
 
-// TestIterationState verifies iterationState maps state integers to the correct
-// human-readable strings for all known states and unknown values.
+// TestIterationState verifies the IterationState handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestIterationState(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -365,8 +380,9 @@ func TestIterationState(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown returns the
-// "no iterations found" message for an empty list.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(got, "No group iterations found") {
@@ -374,8 +390,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithIterations verifies FormatListMarkdown produces
-// a Markdown table with ID, IID, title, state, dates, and URL columns.
+// TestFormatListMarkdown_WithIterations verifies the ListMarkdown_WithIterations Markdown formatter for a representative list_withiterations input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithIterations(t *testing.T) {
 	out := ListOutput{
 		Iterations: []Output{
@@ -406,8 +423,9 @@ func TestFormatListMarkdown_WithIterations(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_Full verifies FormatOutputMarkdown renders all fields
-// including description and URL for a fully populated iteration.
+// TestFormatOutputMarkdown_Full verifies the OutputMarkdown_Full Markdown formatter for a representative output_full input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_Full(t *testing.T) {
 	out := Output{
 		ID:          42,
@@ -443,8 +461,9 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoDescription verifies FormatOutputMarkdown omits
-// the Description section when the description field is empty.
+// TestFormatOutputMarkdown_NoDescription verifies the OutputMarkdown_NoDescription Markdown formatter for a representative output_nodescription input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 	out := Output{
 		ID:    1,
@@ -462,8 +481,9 @@ func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoWebURL verifies FormatOutputMarkdown omits the
-// URL row when WebURL is empty.
+// TestFormatOutputMarkdown_NoWebURL verifies the OutputMarkdown_NoWebURL Markdown formatter for a representative output_noweburl input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_NoWebURL(t *testing.T) {
 	out := Output{
 		ID:    1,
@@ -478,8 +498,9 @@ func TestFormatOutputMarkdown_NoWebURL(t *testing.T) {
 	}
 }
 
-// TestList_MultipleIterations verifies List correctly converts multiple
-// iterations from the API response.
+// TestList_MultipleIterations verifies the List_MultipleIterations handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_MultipleIterations(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -503,8 +524,9 @@ func TestList_MultipleIterations(t *testing.T) {
 	}
 }
 
-// TestIssueActionSpecs_CallRoute verifies that the group iteration canonical
-// route executes successfully through IssueActionSpecs.
+// TestIssueActionSpecs_CallRoute verifies the IssueActionSpecs_CallRoute handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestIssueActionSpecs_CallRoute(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {

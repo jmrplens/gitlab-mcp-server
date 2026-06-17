@@ -14,8 +14,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
 )
 
-// TestMeta_ReleaseLinksExtended exercises release link actions not covered by releases_test.go:
-// link_get, link_update, link_create_batch.
+// TestMeta_ReleaseLinksExtended exercises release link actions through the
+// gitlab_release meta-tool that are not covered by releases_test.go.
+//
+// The test creates a project, a tag, and a release with one initial link,
+// then walks link_get, link_update, and link_create_batch via {action, params}
+// arguments through the catalog-backed tool. Each subtest asserts the
+// meta-tool returns the expected link payload and that mutations are
+// observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ReleaseLinksExtended(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -1,6 +1,15 @@
 //go:build e2e && !enterprise
 
-// users_ce_test.go — E2E tests for user tools domain.
+// users_ce_test.go exercises the GitLab user tools domain against a live
+// GitLab CE instance.
+//
+// Covers the individual MCP tool surface (gitlab_user_get, _create,
+// _update, _delete, _block, _unblock, _ban, _unban, _activate,
+// _deactivate, _status) and the catalog-backed gitlab_user meta-tool
+// surface. Also validates catalog-projected tool registration through
+// the individual session.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -13,8 +22,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
 )
 
-// TestIndividual_Users exercises user tools via individual MCP tools:
-// get current user, list all users, then get a specific user by ID.
+// TestIndividual_Users exercises user tools through individual MCP tools
+// against a live GitLab CE instance.
+//
+// The test calls gitlab_user_get for the current user, gitlab_user_list,
+// and gitlab_user_get_by_id (for the current user) to verify the
+// individual tool surface returns consistent user metadata. The test
+// does not create any resources.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Users(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -50,8 +66,17 @@ func TestIndividual_Users(t *testing.T) {
 	})
 }
 
-// TestIndividual_UserManagement exercises catalog-projected individual tools
-// that used to be registered by the user management registration layer.
+// TestIndividual_UserManagement exercises catalog-projected individual user
+// management tools against a live GitLab CE instance.
+//
+// The test runs inside [RunWithCapabilities] with [CapabilityAdmin] and
+// [CapabilityInstanceGlobal] so admin-only tools are reachable. It walks
+// gitlab_user_create, _update, _block, _unblock, _deactivate, _activate,
+// _ban, _unban, _status (set/get), and _delete through the individual
+// tool surface. Each subtest asserts the meta-tool returns the expected
+// user payload and that mutations are observable through subsequent reads.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual. Admin token required.
 func TestIndividual_UserManagement(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -126,8 +151,17 @@ func TestIndividual_UserManagement(t *testing.T) {
 	})
 }
 
-// TestIndividual_UserManagementCatalogProjection verifies user management tools
-// are present in tools/list with catalog-derived schemas and annotations.
+// TestIndividual_UserManagementCatalogProjection verifies user management
+// tools are present in tools/list with catalog-derived schemas and
+// annotations against a live GitLab CE instance.
+//
+// The test calls ListTools on the individual session and asserts that
+// every catalog-projected user management tool (create, update, block,
+// unblock, deactivate, activate, ban, unban, status set/get, delete) is
+// registered with the expected destructiveHint/readOnlyHint annotations
+// and JSON-schema-derived input/output schemas.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual. Admin token required.
 func TestIndividual_UserManagementCatalogProjection(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -177,8 +211,15 @@ func assertUserToolProjection(t *testing.T, tools []*mcp.Tool, name string, requ
 	requireSchemaConfirmProperty(t, schema, wantConfirm)
 }
 
-// TestMeta_Users exercises the same user operations via the gitlab_user meta-tool:
-// current, list, and get actions.
+// TestMeta_Users exercises the same user operations through the
+// gitlab_user meta-tool against a live GitLab CE instance.
+//
+// The test calls the current, list, and get actions via {action, params}
+// arguments through the catalog-backed tool, verifying the meta-tool
+// returns consistent user metadata for the current user and the listed
+// users. The test does not create any resources.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Users(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

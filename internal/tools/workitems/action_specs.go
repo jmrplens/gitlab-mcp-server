@@ -11,15 +11,23 @@ import (
 // ActionSpecs returns canonical specs for work item actions exposed through gitlab_issue.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_get_work_item — fetch a single work item by namespace path and IID.
 		workItemReadSpec("work_item_get", toolutil.RouteAction(client, Get), "gitlab_get_work_item"),
+		// gitlab_list_work_items — list work items for a project or group with cursor pagination.
 		workItemReadSpec("work_item_list", toolutil.RouteAction(client, List), "gitlab_list_work_items"),
+		// gitlab_create_work_item — create a new work item under a namespace.
 		workItemCreateSpec("work_item_create", toolutil.RouteAction(client, Create), "gitlab_create_work_item"),
+		// gitlab_update_work_item — update an existing work item's fields, status, or labels.
 		workItemUpdateSpec("work_item_update", toolutil.RouteAction(client, Update), "gitlab_update_work_item"),
+		// gitlab_delete_work_item — permanently delete a work item by IID (destructive).
 		workItemDeleteSpec("work_item_delete", toolutil.DestructiveAction(client, deleteOutput), "gitlab_delete_work_item"),
+		// gitlab_list_work_item_types — list system-defined and custom work item types for a namespace.
 		workItemReadSpec("work_item_type_list", toolutil.RouteAction(client, ListWorkItemTypes), "gitlab_list_work_item_types"),
 	}
 }
 
+// deleteOutput adapts the void [Delete] handler into the catalog DeleteOutput contract
+// so it composes with [toolutil.DestructiveAction] and surfaces a confirmation message.
 func deleteOutput(ctx context.Context, client *gitlabclient.Client, input DeleteInput) (toolutil.DeleteOutput, error) {
 	if err := Delete(ctx, client, input); err != nil {
 		return toolutil.DeleteOutput{}, err
@@ -28,6 +36,9 @@ func deleteOutput(ctx context.Context, client *gitlabclient.Client, input Delete
 	return out, nil
 }
 
+// workItemReadSpec builds the canonical read-only spec for a work item tool. The
+// work-item-types list tool gets richer description, aliases, and related actions
+// because it is the entry point for discovering type IDs required by create.
 func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	opts := workItemOptions(individualTool)
 	if individualTool == "gitlab_list_work_item_types" {
@@ -39,14 +50,17 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 	return toolutil.NewReadActionSpec(name, route, opts)
 }
 
+// workItemCreateSpec builds the canonical create spec for a work item tool.
 func workItemCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, workItemOptions(individualTool))
 }
 
+// workItemUpdateSpec builds the canonical update spec for a work item tool.
 func workItemUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, workItemOptions(individualTool))
 }
 
+// workItemDeleteSpec builds the canonical destructive delete spec for a work item tool.
 func workItemDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, workItemOptions(individualTool))
 }

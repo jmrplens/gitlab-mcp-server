@@ -15,7 +15,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
 )
 
-// TestIndividual_Releases exercises the release lifecycle using individual MCP tools.
+// TestIndividual_Releases exercises the release lifecycle using individual
+// MCP tools against a live GitLab instance.
+//
+// The test creates a project, unprotects the default branch so releases can
+// push tags, then walks gitlab_release_create, _update, _list, _get, and
+// _delete along with linked asset upload, update, and delete. Assertions
+// verify the release name, tag name, and link URLs round-trip through the
+// GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Releases(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -142,7 +151,15 @@ func TestIndividual_Releases(t *testing.T) {
 	})
 }
 
-// TestMeta_Releases exercises the release lifecycle using the gitlab_release meta-tool.
+// TestMeta_Releases exercises the release lifecycle using the
+// gitlab_release meta-tool against a live GitLab instance.
+//
+// The test mirrors [TestIndividual_Releases] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_release tool.
+// Subtests cover create, list, get, update, and delete, then exercise the
+// link create, list, get, update, and delete actions.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Releases(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

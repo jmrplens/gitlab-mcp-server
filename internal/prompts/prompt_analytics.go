@@ -17,7 +17,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// registerAnalyticsPrompts registers all analytics prompts.
+// registerAnalyticsPrompts registers the four analytics prompt families
+// exposed by this file:
+//
+//   - merge_velocity: project-level MR throughput metrics for a look-back window.
+//   - release_readiness: open MRs targeting a release branch with conflict
+//     and discussion counts.
+//   - release_cadence: time-between-releases analysis with a release history table.
+//   - weekly_team_recap: group-level weekly recap combining merged MRs, open
+//     MRs, and open issues.
 func registerAnalyticsPrompts(server *mcp.Server, client *gitlabclient.Client) {
 	registerMergeVelocityPrompt(server, client)
 	registerReleaseReadinessPrompt(server, client)

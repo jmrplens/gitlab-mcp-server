@@ -1,3 +1,4 @@
+// ranking_test.go contains unit tests for the dynamic surface ranking pipeline.
 package dynamic
 
 import (
@@ -5,7 +6,9 @@ import (
 	"testing"
 )
 
-// TestRanking_ExplanationSummaryNilAndFuzzy verifies Ranking when explanation summary nil and fuzzy.
+// TestRanking_ExplanationSummaryNilAndFuzzy verifies the Ranking_ExplanationSummaryNilAndFuzzy handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRanking_ExplanationSummaryNilAndFuzzy(t *testing.T) {
 	if got := explanationSummary(nil); got != "-" {
 		t.Fatalf("explanationSummary(nil) = %q, want -", got)
@@ -22,7 +25,9 @@ func TestRanking_ExplanationSummaryNilAndFuzzy(t *testing.T) {
 	}
 }
 
-// TestRanking_HasSearchExplanations verifies Ranking when has search explanations.
+// TestRanking_HasSearchExplanations verifies the Ranking_HasSearchExplanations handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRanking_HasSearchExplanations(t *testing.T) {
 	if hasSearchExplanations([]SearchResult{{ID: "project.get"}}) {
 		t.Fatal("hasSearchExplanations() = true, want false for nil explanations")

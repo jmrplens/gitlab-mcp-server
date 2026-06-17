@@ -4,6 +4,8 @@
 // a live GitLab instance using both individual tools and the gitlab_ci_variable
 // meta-tool. Exercises the full variable lifecycle: create → get → list →
 // update → delete.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -16,6 +18,13 @@ import (
 
 // TestIndividual_CIVariables exercises the project CI variable lifecycle
 // using individual MCP tools: create → get → list → update → delete.
+//
+// The test creates a project fixture, then runs five subtests that drive
+// gitlab_ci_variable_create, _get, _list, _update, and _delete. Each
+// subtest asserts the returned key/value round-trips through the GitLab
+// API and that list contains the created variable.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_CIVariables(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -84,6 +93,13 @@ func TestIndividual_CIVariables(t *testing.T) {
 
 // TestMeta_CIVariables exercises the same project CI variable lifecycle via
 // the gitlab_ci_variable meta-tool.
+//
+// The test mirrors [TestIndividual_CIVariables] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_ci_variable
+// tool, using create, get, list, update, and delete. Each subtest asserts
+// the same outcome and verifies the tool name stays constant.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_CIVariables(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

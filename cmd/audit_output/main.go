@@ -24,12 +24,24 @@ import (
 )
 
 // finding describes one output-format audit finding for a registered MCP tool.
+//
+// tool is the MCP tool name that triggered the finding. category is the
+// rule family used to group findings in the report (for example
+// "output-schema" or "description-returns"). detail is the human-readable
+// explanation rendered verbatim into the Markdown table.
 type finding struct {
 	tool     string
 	category string
 	detail   string
 }
 
+// toolQualityStats counts how many tools in a population satisfy each
+// quality dimension checked by [collectToolQualityStats].
+//
+// Schema counts tools with a non-nil OutputSchema. Returns counts tools
+// whose description mentions "returns". Title counts tools with a non-empty
+// MCP Title field. SeeAlso counts tools whose description cross-references
+// related tools via "see also:".
 type toolQualityStats struct {
 	Schema  int
 	Returns int

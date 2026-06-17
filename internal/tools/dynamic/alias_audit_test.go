@@ -1,3 +1,4 @@
+// alias_audit_test.go contains unit tests for the dynamic-tool-surface alias audit logic.
 package dynamic
 
 import (
@@ -74,8 +75,9 @@ func TestAuditDefaultActionAliases_ReturnsOnlyExpectedDefaultFindings(t *testing
 	}
 }
 
-// TestAuditDiscoveryTerms_NilAndSparseInputs verifies discovery audits ignore
-// nil catalogs and sparse registries.
+// TestAuditDiscoveryTerms_NilAndSparseInputs verifies the AuditDiscoveryTerms_NilAndSparseInputs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAuditDiscoveryTerms_NilAndSparseInputs(t *testing.T) {
 	if findings := AuditCatalogDiscoveryTerms(nil); findings != nil {
 		t.Fatalf("AuditCatalogDiscoveryTerms(nil) = %+v, want nil", findings)

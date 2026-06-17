@@ -47,7 +47,28 @@ func mrIIDArg() *mcp.PromptArgument {
 	return &mcp.PromptArgument{Name: argMRIID, Title: toolutil.TitleFromName(argMRIID), Description: descMRIID, Required: true}
 }
 
-// Register registers all MCP prompts (AI-optimized summaries, etc).
+// Register adds every MCP prompt template exposed by this package to the
+// given server, grouped by domain:
+//
+//   - Project prompts: summarize_mr_changes, review_mr,
+//     summarize_pipeline_status, suggest_mr_reviewers, generate_release_notes,
+//     summarize_open_mrs, project_health_check, compare_branches,
+//     daily_standup, mr_risk_assessment, team_member_workload, user_stats.
+//   - Cross-project prompts: my_open_mrs, my_pending_reviews, my_issues,
+//     my_activity_summary.
+//   - Team prompts: user_activity_report, team_overview, group_mr_dashboard,
+//     reviewer_workload.
+//   - Project reports: branch_mr_summary, project_activity_report,
+//     mr_discussion_health, unassigned_items, stale_items_report.
+//   - Analytics: merge_velocity, release_readiness, release_cadence,
+//     weekly_team_recap.
+//   - Milestone/label: milestone_progress, label_distribution,
+//     group_milestone_progress, project_contributors.
+//   - Git workflow: audit_commit_hygiene, mr_description_quality.
+//   - Project audit: audit_project_workflow, audit_project_full.
+//
+// All prompt handlers in this package share the helpers in prompt_helpers.go
+// to keep GitLab API access, pagination, and Markdown assembly consistent.
 func Register(server *mcp.Server, client *gitlabclient.Client) {
 	registerSummarizeMRChangesPrompt(server, client)
 	registerReviewMRPrompt(server, client)

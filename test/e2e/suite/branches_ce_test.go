@@ -3,6 +3,8 @@
 // branches_ce_test.go contains self-contained E2E tests for the branches domain.
 // Each top-level test function creates its own project fixture and runs all
 // subtests independently of any other domain test file.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -15,6 +17,14 @@ import (
 
 // TestIndividual_Branches exercises the branch lifecycle using individual
 // MCP tools (gitlab_branch_create, gitlab_branch_get, etc.).
+//
+// The test creates a project fixture, unprotects the default branch so
+// subsequent commits and pushes succeed, then walks through Create, Get,
+// Update, List, Delete, Protect, ProtectedList, and Unprotect subtests.
+// Each subtest asserts the expected branch name, commit SHA, or
+// protection level round-trips through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Branches(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -150,6 +160,13 @@ func TestIndividual_Branches(t *testing.T) {
 
 // TestMeta_Branches exercises the branch lifecycle using the gitlab_branch
 // meta-tool.
+//
+// The test mirrors [TestIndividual_Branches] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_branch
+// tool. Each subtest asserts the same outcome and verifies the tool name
+// stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Branches(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

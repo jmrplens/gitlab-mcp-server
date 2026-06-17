@@ -52,7 +52,9 @@ const (
 	}`
 )
 
-// TestList_Success verifies that List returns the expected output when the GitLab API responds successfully.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathListTokens {
@@ -74,7 +76,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_InvalidUserID verifies that List returns a validation error when user_id is invalid.
+// TestList_InvalidUserID verifies the List_InvalidUserID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -85,7 +89,9 @@ func TestList_InvalidUserID(t *testing.T) {
 	}
 }
 
-// TestList_WithStateFilter verifies that List forwards the state filter parameters to the GitLab API.
+// TestList_WithStateFilter verifies the List_WithStateFilter handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_WithStateFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathListTokens {
@@ -107,7 +113,9 @@ func TestList_WithStateFilter(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies that Get returns the expected output when the GitLab API responds successfully.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathGetToken {
@@ -132,7 +140,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidUserID verifies that Get returns a validation error when user_id is invalid.
+// TestGet_InvalidUserID verifies the Get_InvalidUserID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -143,7 +153,9 @@ func TestGet_InvalidUserID(t *testing.T) {
 	}
 }
 
-// TestGet_InvalidTokenID verifies that Get returns a validation error when token_id is invalid.
+// TestGet_InvalidTokenID verifies the Get_InvalidTokenID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_InvalidTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -154,7 +166,9 @@ func TestGet_InvalidTokenID(t *testing.T) {
 	}
 }
 
-// TestCreate_Success verifies that Create returns the expected output when the GitLab API responds successfully.
+// TestCreate_Success verifies that Create succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathCreateToken {
@@ -178,7 +192,9 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_EmptyName verifies that Create returns a validation error when name is empty.
+// TestCreate_EmptyName verifies the Create_EmptyName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_EmptyName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -189,7 +205,9 @@ func TestCreate_EmptyName(t *testing.T) {
 	}
 }
 
-// TestCreate_EmptyScopes verifies that Create returns a validation error when scopes is empty.
+// TestCreate_EmptyScopes verifies the Create_EmptyScopes handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_EmptyScopes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -200,7 +218,9 @@ func TestCreate_EmptyScopes(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidExpiresAt verifies that Create returns a validation error when expires_at is invalid.
+// TestCreate_InvalidExpiresAt verifies the Create_InvalidExpiresAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_InvalidExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -213,7 +233,9 @@ func TestCreate_InvalidExpiresAt(t *testing.T) {
 	}
 }
 
-// TestRevoke_Success verifies that Revoke returns the expected output when the GitLab API responds successfully.
+// TestRevoke_Success verifies that Revoke succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRevoke_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathRevokeToken {
@@ -232,7 +254,9 @@ func TestRevoke_Success(t *testing.T) {
 	}
 }
 
-// TestRevoke_InvalidUserID verifies that Revoke returns a validation error when user_id is invalid.
+// TestRevoke_InvalidUserID verifies the Revoke_InvalidUserID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRevoke_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -243,7 +267,9 @@ func TestRevoke_InvalidUserID(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_Success verifies that CreatePAT returns the expected output when the GitLab API responds successfully.
+// TestCreatePAT_Success verifies that CreatePAT succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreatePAT_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathCreatePAT {
@@ -267,7 +293,9 @@ func TestCreatePAT_Success(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_EmptyName verifies that CreatePAT returns a validation error when name is empty.
+// TestCreatePAT_EmptyName verifies the CreatePAT_EmptyName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreatePAT_EmptyName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -278,7 +306,9 @@ func TestCreatePAT_EmptyName(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies that FormatListMarkdownString returns a non-empty markdown string for an empty list.
+// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty Markdown formatter for a representative liststring_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if md == "" {
@@ -286,7 +316,9 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString verifies that FormatMarkdownString returns a non-empty markdown rendering of a token output.
+// TestFormatMarkdownString verifies the MarkdownString Markdown formatter for a representative string input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString(t *testing.T) {
 	md := FormatMarkdownString(Output{ID: 1, Name: "test", Scopes: []string{"api"}, Active: true})
 	if md == "" {
@@ -294,7 +326,9 @@ func TestFormatMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatPATMarkdownString verifies that FormatPATMarkdownString returns a non-empty markdown rendering of a PAT output.
+// TestFormatPATMarkdownString verifies the PATMarkdownString Markdown formatter for a representative patstring input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatPATMarkdownString(t *testing.T) {
 	md := FormatPATMarkdownString(PATOutput{ID: 1, Name: "test", Scopes: []string{"api"}, UserID: 42})
 	if md == "" {
@@ -302,8 +336,9 @@ func TestFormatPATMarkdownString(t *testing.T) {
 	}
 }
 
-// TestList_PaginationParams verifies that Page and PerPage options are passed
-// as query parameters to the GitLab API when provided.
+// TestList_PaginationParams verifies that ListParams forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_PaginationParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestMethod(t, r, http.MethodGet)
@@ -326,7 +361,9 @@ func TestList_PaginationParams(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies that the handler wraps GitLab API errors for List.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -341,7 +378,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies that the handler wraps GitLab API errors for Get.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -356,7 +395,9 @@ func TestGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_InvalidUserID verifies that Create rejects user_id <= 0.
+// TestCreate_InvalidUserID verifies the Create_InvalidUserID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -372,7 +413,9 @@ func TestCreate_InvalidUserID(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies that the handler wraps GitLab API errors for Create.
+// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -389,7 +432,9 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestRevoke_InvalidTokenID verifies that Revoke rejects token_id <= 0.
+// TestRevoke_InvalidTokenID verifies the Revoke_InvalidTokenID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRevoke_InvalidTokenID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -403,7 +448,9 @@ func TestRevoke_InvalidTokenID(t *testing.T) {
 	}
 }
 
-// TestRevoke_APIError verifies that the handler wraps GitLab API errors for Revoke.
+// TestRevoke_APIError verifies that Revoke returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRevoke_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -418,7 +465,9 @@ func TestRevoke_APIError(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_InvalidUserID verifies that CreatePAT rejects user_id <= 0.
+// TestCreatePAT_InvalidUserID verifies the CreatePAT_InvalidUserID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreatePAT_InvalidUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -434,7 +483,9 @@ func TestCreatePAT_InvalidUserID(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_EmptyScopes verifies that CreatePAT rejects empty scopes.
+// TestCreatePAT_EmptyScopes verifies the CreatePAT_EmptyScopes handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreatePAT_EmptyScopes(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -450,7 +501,9 @@ func TestCreatePAT_EmptyScopes(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_InvalidExpiresAt verifies that CreatePAT rejects invalid date format.
+// TestCreatePAT_InvalidExpiresAt verifies the CreatePAT_InvalidExpiresAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreatePAT_InvalidExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -466,7 +519,9 @@ func TestCreatePAT_InvalidExpiresAt(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_APIError verifies that the handler wraps GitLab API errors for CreatePAT.
+// TestCreatePAT_APIError verifies that CreatePAT returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreatePAT_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -483,8 +538,9 @@ func TestCreatePAT_APIError(t *testing.T) {
 	}
 }
 
-// TestCreatePAT_MinimalInput verifies CreatePAT succeeds with no optional fields
-// (no description, no expires_at).
+// TestCreatePAT_MinimalInput verifies the CreatePAT_MinimalInput handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreatePAT_MinimalInput(t *testing.T) {
 	const minimalPATJSON = `{
 		"id":20,"name":"bare-pat","active":true,"token":"glpat-min123",
@@ -517,8 +573,9 @@ func TestCreatePAT_MinimalInput(t *testing.T) {
 	}
 }
 
-// TestToPATOutput_WithLastUsedAt verifies that toPATOutput formats LastUsedAt
-// when the field is non-nil in the GitLab response.
+// TestToPATOutput_WithLastUsedAt verifies the ToPATOutput_WithLastUsedAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToPATOutput_WithLastUsedAt(t *testing.T) {
 	const patWithLastUsed = `{
 		"id":30,"name":"used-pat","active":true,"token":"glpat-used",
@@ -566,8 +623,9 @@ func TestFormatListMarkdownString_WithTokens(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_AllOptionalFields verifies that FormatMarkdownString
-// renders ExpiresAt and Token fields when they are present.
+// TestFormatMarkdownString_AllOptionalFields verifies the MarkdownString_AllOptionalFields Markdown formatter for a representative string_alloptionalfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_AllOptionalFields(t *testing.T) {
 	out := Output{
 		ID: 5, Name: "full-token", Active: true,
@@ -590,8 +648,9 @@ func TestFormatMarkdownString_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_MinimalFields verifies that FormatMarkdownString omits
-// ExpiresAt and Token when they are empty.
+// TestFormatMarkdownString_MinimalFields verifies the MarkdownString_MinimalFields Markdown formatter for a representative string_minimalfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_MinimalFields(t *testing.T) {
 	out := Output{ID: 6, Name: "basic", Active: false, Scopes: []string{"read_user"}}
 	md := FormatMarkdownString(out)
@@ -631,8 +690,9 @@ func TestFormatPATMarkdownString_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestFormatPATMarkdownString_MinimalFields verifies that FormatPATMarkdownString
-// omits Description, ExpiresAt, and Token when empty.
+// TestFormatPATMarkdownString_MinimalFields verifies the PATMarkdownString_MinimalFields Markdown formatter for a representative patstring_minimalfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatPATMarkdownString_MinimalFields(t *testing.T) {
 	out := PATOutput{ID: 11, Name: "bare", Active: false, Scopes: []string{"read_api"}, UserID: 99}
 	md := FormatPATMarkdownString(out)
@@ -648,7 +708,9 @@ func TestFormatPATMarkdownString_MinimalFields(t *testing.T) {
 	}
 }
 
-// TestFormatRevokeMarkdownString verifies the revocation confirmation markdown output.
+// TestFormatRevokeMarkdownString verifies the RevokeMarkdownString Markdown formatter for a representative revokestring input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatRevokeMarkdownString(t *testing.T) {
 	out := RevokeOutput{UserID: 42, TokenID: 7, Revoked: true}
 	md := FormatRevokeMarkdownString(out)

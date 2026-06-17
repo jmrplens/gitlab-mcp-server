@@ -13,7 +13,14 @@ import (
 )
 
 // TestIndividual_Repository exercises repository tree and compare operations
-// using individual MCP tools.
+// through individual MCP tools against a live GitLab CE instance.
+//
+// The test creates a project fixture with a known commit, then walks
+// gitlab_repository_tree and gitlab_repository_compare via the individual
+// tool surface. Each subtest asserts the expected payload shape and that
+// the file paths and commit SHAs round-trip through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Repository(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -67,7 +74,15 @@ func TestIndividual_Repository(t *testing.T) {
 	})
 }
 
-// TestMeta_Repository exercises repository operations using the gitlab_repository meta-tool.
+// TestMeta_Repository exercises repository operations using the
+// gitlab_repository meta-tool against a live GitLab instance.
+//
+// The test creates a project fixture with a known commit, then walks the
+// tree_get and compare actions via {action, params} arguments through the
+// catalog-backed tool. Assertions cover the file paths, commit SHAs, and
+// diff entries returned by the meta-tool for the documented routes.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Repository(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

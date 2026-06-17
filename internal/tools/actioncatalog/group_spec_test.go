@@ -9,7 +9,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestCatalogGroupSpec_ValidateAndClone verifies CatalogGroupSpec when validate and clone.
+// TestCatalogGroupSpec_ValidateAndClone verifies the CatalogGroupSpec_ValidateAndClone handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogGroupSpec_ValidateAndClone(t *testing.T) {
 	icons := []mcp.Icon{{Source: "data:image/svg+xml;base64,test", MIMEType: "image/svg+xml", Sizes: []string{"any"}}}
 	capabilities := []string{"sampling", "", "sampling"}
@@ -61,8 +63,9 @@ func TestCatalogGroupSpec_ValidateAndClone(t *testing.T) {
 	}
 }
 
-// TestCatalogGroupSpec_CloneDefaultsSurfaceKind verifies group specs default to
-// meta-group surface kind when no explicit kind is supplied.
+// TestCatalogGroupSpec_CloneDefaultsSurfaceKind verifies the CatalogGroupSpec_CloneDefaultsSurfaceKind handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogGroupSpec_CloneDefaultsSurfaceKind(t *testing.T) {
 	cloned := CloneCatalogGroupSpec(CatalogGroupSpec{ToolName: "gitlab_project"})
 	if cloned.SurfaceKind != SurfaceKindMetaGroup {
@@ -70,7 +73,9 @@ func TestCatalogGroupSpec_CloneDefaultsSurfaceKind(t *testing.T) {
 	}
 }
 
-// TestCatalogGroupSpec_RejectsInvalidMetadata covers CatalogGroupSpec with table-driven subtests for rejects invalid metadata.
+// TestCatalogGroupSpec_RejectsInvalidMetadata verifies the CatalogGroupSpec_RejectsInvalidMetadata handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogGroupSpec_RejectsInvalidMetadata(t *testing.T) {
 	validAction := toolutil.NewActionSpec("get", testRoute(false), toolutil.ActionSpecOptions{ReadOnly: true, OwnerPackage: "projects"})
 	testCases := []struct {
@@ -188,7 +193,9 @@ func TestValidateCatalogGroupAliases_EdgeCases(t *testing.T) {
 	}
 }
 
-// TestGroupOptions_BaseDomainControlsActionID verifies GroupOptions when base domain controls action ID.
+// TestGroupOptions_BaseDomainControlsActionID verifies the GroupOptions_BaseDomainControlsActionID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupOptions_BaseDomainControlsActionID(t *testing.T) {
 	group := NewGroup(GroupOptions{ToolName: "gitlab_project_alias", BaseDomain: "alias"})
 	group.SetAction(Action{Name: "get", Route: testRoute(false)})

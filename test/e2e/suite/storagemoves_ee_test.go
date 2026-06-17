@@ -20,9 +20,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/snippetstoragemoves"
 )
 
-// TestMeta_GroupStorageMoves_Graceful404 exercises group storage
-// move list (returns 404 when Geo is not configured) via
-// gitlab_storage_move.
+// TestMeta_GroupStorageMoves_Graceful404 exercises group storage move list
+// actions through the gitlab_storage_move meta-tool against a live GitLab
+// EE Ultimate instance.
+//
+// Storage moves are Ultimate-only and require GitLab Geo. Single-node
+// Docker CE returns 404, so the test asserts the 404 error path is surfaced
+// cleanly through the meta-tool. Subtests cover retrieve_all_group,
+// retrieve_group, and schedule_group with an invalid storage name
+// (expects 400/404/422 depending on the GitLab version).
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta.
 func TestMeta_GroupStorageMoves_Graceful404(t *testing.T) {
 	if !sess.enterprise {
 		t.Skip("storage moves require GitLab Ultimate")
@@ -92,9 +100,17 @@ func TestMeta_GroupStorageMoves_Graceful404(t *testing.T) {
 	})
 }
 
-// TestMeta_ProjectStorageMoves_Graceful404 exercises project storage
-// move list (returns 404 when Geo is not configured) via
-// gitlab_storage_move.
+// TestMeta_ProjectStorageMoves_Graceful404 exercises project storage move
+// list actions through the gitlab_storage_move meta-tool against a live
+// GitLab EE Ultimate instance.
+//
+// Storage moves are Ultimate-only and require GitLab Geo. Single-node
+// Docker CE returns 404, so the test asserts the 404 error path is surfaced
+// cleanly through the meta-tool. Subtests cover retrieve_all_project,
+// retrieve_project, and schedule_project with an invalid destination
+// storage (expects 404/422 depending on the GitLab version).
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta.
 func TestMeta_ProjectStorageMoves_Graceful404(t *testing.T) {
 	if !sess.enterprise {
 		t.Skip("storage moves require GitLab Ultimate")
@@ -152,9 +168,18 @@ func TestMeta_ProjectStorageMoves_Graceful404(t *testing.T) {
 	})
 }
 
-// TestMeta_SnippetStorageMoves_Graceful404 exercises snippet storage
-// move list (returns 404 when Geo is not configured) via
-// gitlab_storage_move.
+// TestMeta_SnippetStorageMoves_Graceful404 exercises snippet storage move
+// list actions through the gitlab_storage_move meta-tool against a live
+// GitLab EE Ultimate instance.
+//
+// Storage moves are Ultimate-only and require GitLab Geo. Single-node
+// Docker CE returns 404, so the test asserts the 404 error path is surfaced
+// cleanly through the meta-tool. The test uses a fake snippet ID since the
+// snippet storage move routes return 404 regardless of Geo when the snippet
+// does not exist. Subtests cover retrieve_all_snippet, retrieve_snippet,
+// and schedule_snippet with an invalid destination storage.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta.
 func TestMeta_SnippetStorageMoves_Graceful404(t *testing.T) {
 	if !sess.enterprise {
 		t.Skip("storage moves require GitLab Ultimate")

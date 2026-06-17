@@ -1,6 +1,10 @@
 // main_test.go verifies the meta-schema audit command can build and inspect the
 // full base-plus-enterprise meta-tool catalog without requiring a real GitLab
 // instance.
+//
+// Tests exercise [run] end-to-end (which in turn registers the entire
+// catalog and walks every meta-tool schema) and validate the byte-counting
+// helpers [human] and [repeat].
 package main
 
 import (

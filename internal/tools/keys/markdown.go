@@ -9,12 +9,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// FormatMarkdown formats a key as Markdown.
+// FormatMarkdown renders a key as Markdown wrapped in an
+// [mcp.CallToolResult]. It is registered as the package's
+// formatter for [Output].
 func FormatMarkdown(out Output) *mcp.CallToolResult {
 	return toolutil.ToolResultWithMarkdown(FormatMarkdownString(out))
 }
 
-// FormatMarkdownString renders a key as Markdown.
+// FormatMarkdownString renders a key as a Markdown summary with the ID,
+// title, truncated public key, owner, and creation timestamp.
 func FormatMarkdownString(out Output) string {
 	var b strings.Builder
 	b.WriteString("## SSH Key\n\n")

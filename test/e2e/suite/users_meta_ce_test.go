@@ -24,9 +24,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/users"
 )
 
-// TestMeta_UserSelf exercises gitlab_user meta-tool actions that operate on the current user:
-// me, current_user_status, set_status, get_status, emails, contribution_events,
-// associations_count, memberships, avatar_get.
+// TestMeta_UserSelf exercises gitlab_user meta-tool actions that operate on
+// the current authenticated user against a live GitLab instance.
+//
+// The test runs inside [RunWithCapabilities] with [CapabilityCurrentUserState]
+// so user status and notification settings are snapshotted before mutation
+// and restored during cleanup. It covers me, current_user_status, set_status,
+// get_status, emails, contribution_events, associations_count, memberships,
+// and avatar_get, asserting each action returns the expected payload shape.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_UserSelf(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -144,8 +151,15 @@ func TestMeta_UserSelf(t *testing.T) {
 	})
 }
 
-// TestMeta_UserTodosEvents exercises gitlab_user meta-tool todo and event actions:
-// todo_list, todo_mark_all_done, event_list_contributions, event_list_project.
+// TestMeta_UserTodosEvents exercises the todo and event actions of the
+// gitlab_user meta-tool against a live GitLab instance.
+//
+// The test creates a project and a todo target so todo_list and
+// todo_mark_all_done have observable state, then walks event_list_contributions
+// and event_list_project to verify those actions return consistent payloads.
+// Cleanup removes the project and the lingering todos when the test exits.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_UserTodosEvents(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -194,7 +208,17 @@ func TestMeta_UserTodosEvents(t *testing.T) {
 	})
 }
 
-// TestMeta_UserNamespacesNotifications exercises namespace and notification actions.
+// TestMeta_UserNamespacesNotifications exercises the namespace and notification
+// actions of the gitlab_user meta-tool against a live GitLab instance.
+//
+// The test runs each subtest inside [RunWithCapabilities] with
+// [CapabilityCurrentUserState] so notification settings are snapshotted before
+// mutation and restored during cleanup. It validates namespace_list and
+// notification_global_get before exercising the read-only notification
+// sub-actions, then confirms the original global notification level survives
+// every change by re-reading it after each mutating step.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_UserNamespacesNotifications(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -335,7 +359,15 @@ func TestMeta_UserNamespacesNotifications(t *testing.T) {
 	})
 }
 
-// TestMeta_UserSSHKeyLifecycle exercises the full SSH key lifecycle via gitlab_user.
+// TestMeta_UserSSHKeyLifecycle exercises the full SSH key lifecycle through
+// the gitlab_user meta-tool against a live GitLab instance.
+//
+// The test generates a one-off keypair, registers ssh_key_add, then walks
+// ssh_key_list, ssh_key_get, and ssh_key_delete via the meta-tool catalog,
+// asserting the registered key shows up in the listing and disappears after
+// deletion. Cleanup removes the key when the test exits, even on failure.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_UserSSHKeyLifecycle(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -385,10 +417,18 @@ func TestMeta_UserSSHKeyLifecycle(t *testing.T) {
 	})
 }
 
-// TestMeta_UserAdmin exercises admin-level user operations via gitlab_user:
-// create, modify, block/unblock, deactivate/activate, ban/unban,
-// ssh_keys_for_user, add_ssh_key_for_user, emails_for_user, add_email_for_user,
-// impersonation tokens, and finally delete.
+// TestMeta_UserAdmin exercises admin-level user operations through the
+// gitlab_user meta-tool against a live GitLab instance.
+//
+// The test creates a dedicated user, then walks through modify, block,
+// unblock, deactivate, activate, ban, unban, ssh_keys_for_user,
+// add_ssh_key_for_user, emails_for_user, add_email_for_user, impersonation
+// tokens, and finally delete. Each subtest asserts the expected admin payload
+// is returned and that subsequent state transitions succeed.
+//
+// Cleanup unblocks and deletes the user when the test exits, even on failure.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta. Admin token required.
 //
 //nolint:maintidx // Ordered admin E2E workflow keeps one created user lifecycle visible through cleanup.
 func TestMeta_UserAdmin(t *testing.T) {
@@ -689,8 +729,15 @@ func TestMeta_UserAdmin(t *testing.T) {
 }
 
 // TestMeta_UserServiceAccounts exercises service account and current-user PAT
-// operations via the gitlab_user meta-tool. Service accounts are EE-only
-// (returns 404 on CE); the PAT test also runs on all tiers.
+// operations through the gitlab_user meta-tool against a live GitLab instance.
+//
+// Service account actions (create_personal_access_token for a service account)
+// are EE-only and return 404 on CE; the test guards against that case via
+// [requireTruef] checks rather than skipping, surfacing unexpected failures.
+// The PAT subtest runs on every tier and confirms the issued token resolves
+// to the expected user and expires in the future.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_UserServiceAccounts(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

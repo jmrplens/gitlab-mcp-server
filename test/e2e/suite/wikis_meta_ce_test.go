@@ -14,7 +14,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/wikis"
 )
 
-// TestMeta_WikiUploadAttachment exercises the upload_attachment action not covered by wikis_test.go.
+// TestMeta_WikiUploadAttachment exercises the wiki upload_attachment action
+// through the gitlab_wiki meta-tool against a live GitLab instance.
+//
+// The test creates a project fixture and a wiki page (required for uploads),
+// then calls upload_attachment with a base64-encoded payload. The subtest
+// asserts the meta-tool returns the expected attachment metadata with a
+// non-empty file name and path. This complements the CRUD coverage in the
+// wikis test.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_WikiUploadAttachment(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -7,7 +7,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestGroupFromSpecs_ProjectsSpecMetadata verifies GroupFromSpecs projects spec metadata.
+// TestGroupFromSpecs_ProjectsSpecMetadata verifies the GroupFromSpecs_ProjectsSpecMetadata handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupFromSpecs_ProjectsSpecMetadata(t *testing.T) {
 	route := toolutil.ActionRoute{InputSchema: map[string]any{
 		"type": "object",
@@ -78,14 +80,18 @@ func assertProjectedActionMetadata(t *testing.T, action Action) {
 	}
 }
 
-// TestActionsFromSpecs_RejectsInvalidSpecs verifies ActionsFromSpecs rejects invalid specs.
+// TestActionsFromSpecs_RejectsInvalidSpecs verifies the ActionsFromSpecs_RejectsInvalidSpecs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestActionsFromSpecs_RejectsInvalidSpecs(t *testing.T) {
 	if _, err := ActionsFromSpecs([]toolutil.ActionSpec{{Name: ""}}); err == nil {
 		t.Fatal("ActionsFromSpecs() error = nil, want invalid spec rejection")
 	}
 }
 
-// TestGroupFromSpecs_PropagatesSpecProjectionErrors verifies GroupFromSpecs when propagates spec projection errors.
+// TestGroupFromSpecs_PropagatesSpecProjectionErrors verifies that GroupFromSpecs_PropagatesSpecProjectionErrors returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupFromSpecs_PropagatesSpecProjectionErrors(t *testing.T) {
 	if _, err := GroupFromSpecs(GroupOptions{ToolName: "gitlab_project"}, []toolutil.ActionSpec{{Name: ""}}); err == nil {
 		t.Fatal("GroupFromSpecs() error = nil, want invalid spec rejection")

@@ -3,6 +3,8 @@
 // issuediscussions_ce_test.go tests the issue discussion MCP tools against a live
 // GitLab instance. Covers threaded discussion create, list, get, add note,
 // update note, and delete note for both individual and meta-tool modes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -13,8 +15,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issuediscussions"
 )
 
-// TestIndividual_IssueDiscussions exercises the issue discussion lifecycle using
-// individual tools: create → list → get → add note → update note → delete note.
+// TestIndividual_IssueDiscussions exercises the issue discussion lifecycle
+// using individual tools: create → list → get → add note → update note
+// → delete note.
+//
+// The test creates a project and issue fixture, then walks through the
+// full discussion lifecycle including adding and updating notes on a
+// threaded discussion. Each subtest asserts the expected discussion ID,
+// note ID, or body round-trips through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_IssueDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -104,8 +114,15 @@ func TestIndividual_IssueDiscussions(t *testing.T) {
 	})
 }
 
-// TestMeta_IssueDiscussions exercises the same discussion lifecycle via the
-// gitlab_issue meta-tool with discussion_* actions.
+// TestMeta_IssueDiscussions exercises the same discussion lifecycle via
+// the gitlab_issue meta-tool with discussion_* actions.
+//
+// The test mirrors [TestIndividual_IssueDiscussions] but drives every
+// step with {action, params} arguments through the catalog-backed
+// gitlab_issue tool. Each subtest asserts the same outcome and verifies
+// the tool name stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_IssueDiscussions(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

@@ -4,9 +4,22 @@
 // The package wires the individual, meta, and dynamic GitLab MCP tool surfaces
 // to the server. It delegates domain implementations to internal/tools/{domain}
 // sub-packages, builds the canonical action catalog for catalog-backed
-// surfaces, exposes the gitlab_server meta-tool, applies read-only and safe mode
-// behavior, filters tools by personal access token scopes, and delegates
+// surfaces, exposes the gitlab_server meta-tool, applies read-only and safe
+// mode behavior, filters tools by personal access token scopes, and delegates
 // meta-tool Markdown rendering to the type-based registry in internal/toolutil.
+//
+// # Catalog-first registration
+//
+// The package follows the catalog-first registration model documented in
+// ADR-0014. The canonical [actioncatalog.Catalog] produced by
+// [BuildActionCatalog] is the single source of truth for ordinary GitLab API
+// actions and feeds every catalog-backed surface:
+//
+//   - meta tools registered by [RegisterMetaCatalog]
+//   - individual tools projected by [RegisterIndividualCatalogTools]
+//   - the dynamic find/execute registry in internal/tools/dynamic
+//   - the gitlab://tools schema resource in internal/resources
+//   - audits, LLM files, and the model-eval surfaces
 //
 // # Architecture
 //
@@ -22,12 +35,13 @@
 //
 // [RegisterAll] registers the individual tools by projecting the canonical
 // action catalog. [BuildActionCatalog] builds the catalog used by
-// [RegisterIndividualCatalogTools], [RegisterMetaCatalog], and dynamic mode.
-// [RegisterAllMeta] preserves the meta registration entry point by building and
-// registering that catalog. [SafeModePreview] describes the preview payload
-// returned when safe mode intercepts mutating calls.
+// [RegisterIndividualCatalogTools], [RegisterMetaCatalog], and dynamic
+// mode. [RegisterAllMeta] preserves the meta registration entry point by
+// building and registering that catalog. [SafeModePreview] describes the
+// preview payload returned when safe mode intercepts mutating calls.
 //
 // Domain packages document the official GitLab API pages they wrap. Keeping
-// those references in package documentation preserves pkgsite discoverability
-// without adding fields to MCP tool schemas or dynamic discovery responses.
+// those references in package documentation preserves pkgsite
+// discoverability without adding fields to MCP tool schemas or dynamic
+// discovery responses.
 package tools

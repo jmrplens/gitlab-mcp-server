@@ -1,3 +1,4 @@
+// groupserviceaccounts_test.go contains unit tests for GitLab group service account MCP tool handlers.
 package groupserviceaccounts
 
 import (
@@ -16,8 +17,9 @@ const (
 	pathServiceAccount42PAT = "/api/v4/groups/mygroup/service_accounts/42/personal_access_tokens"
 )
 
-// TestList validates the List handler covering success, validation, API errors,
-// optional parameters, empty results, and pagination.
+// TestList verifies the List handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -104,8 +106,9 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestCreate validates the Create handler covering success with all optional
-// fields, validation, and API errors.
+// TestCreate verifies the Create handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -243,8 +246,9 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-// TestDelete validates the Delete handler covering success, hard_delete flag,
-// both validation branches, and API errors.
+// TestDelete verifies the Delete handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -308,8 +312,9 @@ func TestDelete(t *testing.T) {
 	}
 }
 
-// TestListPATs validates the ListPATs handler covering success, both
-// validation branches, API errors, and empty results.
+// TestListPATs verifies the ListPATs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListPATs(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -500,8 +505,9 @@ func TestCreatePAT(t *testing.T) {
 	}
 }
 
-// TestRevokePAT validates the RevokePAT handler covering success, all three
-// validation branches, and API errors.
+// TestRevokePAT verifies the RevokePAT handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRevokePAT(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -564,8 +570,9 @@ func TestRevokePAT(t *testing.T) {
 	}
 }
 
-// TestToPATOutput_TimeFields verifies that toPATOutput correctly formats
-// CreatedAt and ExpiresAt timestamps from the GitLab response.
+// TestToPATOutput_TimeFields verifies the ToPATOutput_TimeFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToPATOutput_TimeFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathServiceAccount42PAT {
@@ -596,8 +603,9 @@ func TestToPATOutput_TimeFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown verifies the FormatOutputMarkdown formatter renders
-// all fields and hints.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{ID: 42, Name: "svc-bot", Username: "svc-bot", Email: "svc@test.com"}
 	md := FormatOutputMarkdown(out)
@@ -608,8 +616,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies the list formatter for both empty and
-// non-empty account lists.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	t.Run("non-empty list", func(t *testing.T) {
 		out := ListOutput{
@@ -638,8 +647,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatPATOutputMarkdown verifies the PAT formatter renders all fields
-// including optional ones (CreatedAt, ExpiresAt, Token).
+// TestFormatPATOutputMarkdown verifies the PATOutputMarkdown Markdown formatter for a representative patoutput input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatPATOutputMarkdown(t *testing.T) {
 	t.Run("with all fields", func(t *testing.T) {
 		out := PATOutput{
@@ -667,8 +677,9 @@ func TestFormatPATOutputMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatListPATMarkdown verifies the PAT list formatter for empty and
-// non-empty token lists.
+// TestFormatListPATMarkdown verifies the ListPATMarkdown Markdown formatter for a representative listpat input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListPATMarkdown(t *testing.T) {
 	t.Run("non-empty list", func(t *testing.T) {
 		out := ListPATOutput{
@@ -694,8 +705,9 @@ func TestFormatListPATMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatMarkdownString verifies the markdown.go registry formatter for a
-// single service account.
+// TestFormatMarkdownString verifies the MarkdownString Markdown formatter for a representative string input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString(t *testing.T) {
 	out := Output{ID: 10, Name: "svc", Username: "svc-user", Email: "svc@e.com"}
 	md := FormatMarkdownString(out)
@@ -706,8 +718,9 @@ func TestFormatMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString verifies the markdown.go registry formatter for
-// a list of service accounts covering both empty and non-empty cases.
+// TestFormatListMarkdownString verifies the ListMarkdownString Markdown formatter for a representative liststring input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString(t *testing.T) {
 	t.Run("with accounts", func(t *testing.T) {
 		out := ListOutput{
@@ -727,8 +740,9 @@ func TestFormatListMarkdownString(t *testing.T) {
 	})
 }
 
-// TestFormatPATMarkdownString verifies the markdown.go registry PAT formatter
-// including optional fields (CreatedAt, ExpiresAt, Token).
+// TestFormatPATMarkdownString verifies the PATMarkdownString Markdown formatter for a representative patstring input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatPATMarkdownString(t *testing.T) {
 	t.Run("with all fields", func(t *testing.T) {
 		out := PATOutput{
@@ -752,8 +766,9 @@ func TestFormatPATMarkdownString(t *testing.T) {
 	})
 }
 
-// TestFormatListPATMarkdownString verifies the markdown.go registry PAT list
-// formatter for empty and non-empty cases.
+// TestFormatListPATMarkdownString verifies the ListPATMarkdownString Markdown formatter for a representative listpatstring input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListPATMarkdownString(t *testing.T) {
 	t.Run("with tokens", func(t *testing.T) {
 		out := ListPATOutput{

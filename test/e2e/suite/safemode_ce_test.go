@@ -14,10 +14,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
 )
 
-// TestSafeMode exercises the GITLAB_SAFE_MODE feature via the safe-mode
-// session. It creates a real project (via the individual session), then
-// verifies that mutating calls return a SafeModePreview instead of executing,
-// and that read-only calls still work.
+// TestSafeMode exercises the GITLAB_SAFE_MODE feature through the safe-mode
+// session against a live GitLab CE instance.
+//
+// The test creates a real project via the individual session (not the
+// safe-mode session, so the creation actually happens), then walks
+// mutating and read-only calls on the safe-mode session. Mutating calls
+// must return a SafeModePreview describing the would-be operation without
+// executing it; read-only calls must pass through and return the
+// expected payload.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: safe-mode.
 func TestSafeMode(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

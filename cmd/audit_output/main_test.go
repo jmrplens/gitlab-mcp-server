@@ -1,3 +1,10 @@
+// main_test.go covers the audit_output command helpers that score
+// individual and meta tools for output quality.
+//
+// Tests verify that the route-level OutputSchema scan, the percentage
+// helper, and the per-tool quality aggregator (Schema, Returns, Title,
+// SeeAlso counts) handle happy paths, missing fields, and the meta vs
+// individual labels used in the markdown report.
 package main
 
 import (

@@ -1,6 +1,10 @@
 // main_test.go contains focused tests for llms.txt generation helpers. Tests
 // use a local GitLab version mock so resource and template discovery can run
 // through an in-memory MCP server.
+//
+// Coverage focuses on the dynamic two-tool contract, llms.txt and
+// llms-full.txt structural validation, generated file naming rules, and
+// the schema-type label formatter used in the long-form reference.
 package main
 
 import (

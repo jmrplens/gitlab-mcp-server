@@ -11,20 +11,35 @@ import (
 
 const actionIssueList = "issue.list"
 
-// ActionSpecs returns canonical specs for project label actions.
+// ActionSpecs returns canonical specs for project label actions exposed
+// as MCP tools. The list, get, create, update, delete, subscribe,
+// unsubscribe, and promote routes are projected into the dynamic,
+// meta, individual, and audit surfaces by the action catalog
+// (ADR-0004).
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_label_list — list project labels with optional search and pagination.
 		labelReadSpec("label_list", toolutil.RouteAction(client, List), "gitlab_label_list"),
+		// gitlab_label_get — fetch a label by ID or name (returns a structured not-found result on 404).
 		labelReadSpec("label_get", labelGetRoute(client), "gitlab_label_get"),
+		// gitlab_label_create — create a new project label.
 		labelCreateSpec("label_create", toolutil.RouteAction(client, Create), "gitlab_label_create"),
+		// gitlab_label_update — update an existing project label.
 		labelUpdateSpec("label_update", toolutil.RouteAction(client, Update), "gitlab_label_update"),
+		// gitlab_label_delete — remove a project label (destructive).
 		labelDeleteSpec("label_delete", toolutil.DestructiveVoidAction(client, Delete), "gitlab_label_delete"),
+		// gitlab_label_subscribe — subscribe the caller to label notifications.
 		labelUpdateSpec("label_subscribe", toolutil.RouteAction(client, Subscribe), "gitlab_label_subscribe"),
+		// gitlab_label_unsubscribe — remove the caller's label subscription.
 		labelUpdateSpec("label_unsubscribe", toolutil.RouteVoidAction(client, Unsubscribe), "gitlab_label_unsubscribe"),
+		// gitlab_label_promote — promote a project label to a group label.
 		labelUpdateSpec("label_promote", toolutil.RouteVoidAction(client, Promote), "gitlab_label_promote"),
 	}
 }
 
+// labelGetRoute wraps the [Get] route so a 404 response is converted
+// into a structured [labelNotFoundOutput] hint rather than an error,
+// matching the get-not-found pattern used across the project.
 func labelGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	route := toolutil.RouteAction(client, Get)
 	baseHandler := route.Handler
@@ -40,22 +55,33 @@ func labelGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {
 	return route
 }
 
+// labelReadSpec builds a read-only [toolutil.ActionSpec] for a label
+// action using the package's default [labelOptionsForAction].
 func labelReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, labelOptionsForAction(name, individualTool))
 }
 
+// labelCreateSpec builds a create-style [toolutil.ActionSpec] for a
+// label action using the package's default [labelOptionsForAction].
 func labelCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewCreateActionSpec(name, route, labelOptionsForAction(name, individualTool))
 }
 
+// labelUpdateSpec builds an update-style [toolutil.ActionSpec] for a
+// label action using the package's default [labelOptionsForAction].
 func labelUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, labelOptionsForAction(name, individualTool))
 }
 
+// labelDeleteSpec builds a destructive [toolutil.ActionSpec] for a
+// label action using the package's default [labelOptionsForAction].
 func labelDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, labelOptionsForAction(name, individualTool))
 }
 
+// labelOptionsForAction returns the base [toolutil.ActionSpecOptions]
+// for a label action and customizes the Usage/Aliases for the list,
+// get, and create individual tools.
 func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{
 		Aliases: []string{individualTool}, Usage: "Use to execute labels domain action.", Tags: []string{"project", "label"},

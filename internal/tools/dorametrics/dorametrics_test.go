@@ -228,8 +228,9 @@ func assertProjectMetricsCaseResult(t *testing.T, out Output, err error, tt proj
 	}
 }
 
-// TestGetProjectMetrics_ContextCancelled verifies the handler respects
-// context cancellation and returns an error without calling the API.
+// TestGetProjectMetrics_ContextCancelled verifies the GetProjectMetrics_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetProjectMetrics_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
@@ -409,8 +410,9 @@ func metricsCaseHandler(t *testing.T, handler http.HandlerFunc) http.HandlerFunc
 	}
 }
 
-// TestGetGroupMetrics_ContextCancelled verifies the handler respects
-// context cancellation and returns an error without calling the API.
+// TestGetGroupMetrics_ContextCancelled verifies the GetGroupMetrics_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetGroupMetrics_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called for cancelled context")
@@ -422,8 +424,9 @@ func TestGetGroupMetrics_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestGetGroupMetrics_BadRequestHint verifies that invalid group DORA filters
-// return actionable guidance for the model.
+// TestGetGroupMetrics_BadRequestHint verifies the GetGroupMetrics_BadRequestHint handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetGroupMetrics_BadRequestHint(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"error":"environment_tiers is invalid"}`)
@@ -536,7 +539,9 @@ func TestFormatMarkdown(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata verifies DORA metrics action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)

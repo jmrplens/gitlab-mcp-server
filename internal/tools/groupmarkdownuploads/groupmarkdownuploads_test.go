@@ -19,7 +19,9 @@ const errExpectedErr = "expected error"
 // testFilename identifies the test filename constant used by this package.
 const testFilename = "image.png"
 
-// TestList verifies List.
+// TestList verifies the List handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -40,7 +42,9 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_Error verifies List when error.
+// TestList_Error verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -51,7 +55,9 @@ func TestList_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteByID verifies DeleteByID.
+// TestDeleteByID verifies the DeleteByID handler.
+// The mock GitLab API at /api/v4/groups/5/uploads/1 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDeleteByID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete || r.URL.Path != "/api/v4/groups/5/uploads/1" {
@@ -66,7 +72,9 @@ func TestDeleteByID(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_Error verifies DeleteByID when error.
+// TestDeleteByID_Error verifies that DeleteByID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteByID_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -77,7 +85,9 @@ func TestDeleteByID_Error(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_ValidationUploadID verifies DeleteByID when validation upload ID.
+// TestDeleteByID_ValidationUploadID verifies the DeleteByID_ValidationUploadID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteByID_ValidationUploadID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when upload_id is invalid")
@@ -93,7 +103,9 @@ func TestDeleteByID_ValidationUploadID(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename verifies DeleteBySecretAndFilename.
+// TestDeleteBySecretAndFilename verifies the DeleteBySecretAndFilename handler.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteBySecretAndFilename(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -112,7 +124,9 @@ func TestDeleteBySecretAndFilename(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename_Error verifies DeleteBySecretAndFilename when error.
+// TestDeleteBySecretAndFilename_Error verifies that DeleteBySecretAndFilename returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteBySecretAndFilename_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -127,7 +141,9 @@ func TestDeleteBySecretAndFilename_Error(t *testing.T) {
 	}
 }
 
-// TestFormatList verifies FormatList.
+// TestFormatList verifies the List Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatList(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -140,7 +156,9 @@ func TestFormatList(t *testing.T) {
 	}
 }
 
-// TestFormatList_Empty verifies FormatList when empty.
+// TestFormatList_Empty verifies the List_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatList_Empty(t *testing.T) {
 	out := &ListOutput{Uploads: []UploadItem{}}
 	md := FormatList(out)
@@ -164,7 +182,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // List — canceled context, pagination, empty result, multiple uploads
 // ---------------------------------------------------------------------------.
 
-// TestList_CancelledContext verifies List when cancelled context.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -174,7 +194,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_EmptyGroupID verifies List when empty group ID.
+// TestList_EmptyGroupID verifies the List_EmptyGroupID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -185,7 +207,9 @@ func TestList_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestList_EmptyResult verifies List when empty result.
+// TestList_EmptyResult verifies the List_EmptyResult handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -203,7 +227,9 @@ func TestList_EmptyResult(t *testing.T) {
 	}
 }
 
-// TestList_MultipleUploads verifies List when multiple uploads.
+// TestList_MultipleUploads verifies the List_MultipleUploads handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_MultipleUploads(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -234,7 +260,9 @@ func TestList_MultipleUploads(t *testing.T) {
 	}
 }
 
-// TestList_WithPagination verifies List when with pagination.
+// TestList_WithPagination verifies that List_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -262,7 +290,9 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestList_APIErrorInternalServer verifies List when API error internal server.
+// TestList_APIErrorInternalServer verifies that ListInternalServer returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIErrorInternalServer(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -277,7 +307,9 @@ func TestList_APIErrorInternalServer(t *testing.T) {
 // DeleteByID — canceled context, empty group_id
 // ---------------------------------------------------------------------------.
 
-// TestDeleteByID_CancelledContext verifies DeleteByID when cancelled context.
+// TestDeleteByID_CancelledContext verifies the DeleteByID_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteByID_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -287,7 +319,9 @@ func TestDeleteByID_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_EmptyGroupID verifies DeleteByID when empty group ID.
+// TestDeleteByID_EmptyGroupID verifies the DeleteByID_EmptyGroupID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteByID_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -298,7 +332,9 @@ func TestDeleteByID_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestDeleteByID_InternalServerError verifies DeleteByID when internal server error.
+// TestDeleteByID_InternalServerError verifies that DeleteByID_InternalServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteByID_InternalServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -313,7 +349,9 @@ func TestDeleteByID_InternalServerError(t *testing.T) {
 // DeleteBySecretAndFilename — canceled context, empty fields
 // ---------------------------------------------------------------------------.
 
-// TestDeleteBySecretAndFilename_CancelledContext verifies DeleteBySecretAndFilename when cancelled context.
+// TestDeleteBySecretAndFilename_CancelledContext verifies the DeleteBySecretAndFilename_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteBySecretAndFilename_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -325,7 +363,9 @@ func TestDeleteBySecretAndFilename_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename_EmptyGroupID verifies DeleteBySecretAndFilename when empty group ID.
+// TestDeleteBySecretAndFilename_EmptyGroupID verifies the DeleteBySecretAndFilename_EmptyGroupID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteBySecretAndFilename_EmptyGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -338,7 +378,9 @@ func TestDeleteBySecretAndFilename_EmptyGroupID(t *testing.T) {
 	}
 }
 
-// TestDeleteBySecretAndFilename_InternalServerError verifies DeleteBySecretAndFilename when internal server error.
+// TestDeleteBySecretAndFilename_InternalServerError verifies that DeleteBySecretAndFilename_InternalServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteBySecretAndFilename_InternalServerError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -355,7 +397,9 @@ func TestDeleteBySecretAndFilename_InternalServerError(t *testing.T) {
 // FormatList — with pagination, special characters, nil created_at
 // ---------------------------------------------------------------------------.
 
-// TestFormatList_WithPagination verifies FormatList when with pagination.
+// TestFormatList_WithPagination verifies the List_WithPagination Markdown formatter for a representative list_withpagination input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestFormatList_WithPagination(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -377,7 +421,9 @@ func TestFormatList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestFormatList_SpecialCharacters verifies FormatList when special characters.
+// TestFormatList_SpecialCharacters verifies the List_SpecialCharacters Markdown formatter for a representative list_specialcharacters input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatList_SpecialCharacters(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -391,7 +437,9 @@ func TestFormatList_SpecialCharacters(t *testing.T) {
 	}
 }
 
-// TestFormatList_NilCreatedAt verifies FormatList when nil created at.
+// TestFormatList_NilCreatedAt verifies the List_NilCreatedAt Markdown formatter for a representative list_nilcreatedat input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatList_NilCreatedAt(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{
@@ -407,7 +455,9 @@ func TestFormatList_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestFormatList_MultipleRows verifies FormatList when multiple rows.
+// TestFormatList_MultipleRows verifies the List_MultipleRows Markdown formatter for a representative list_multiplerows input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatList_MultipleRows(t *testing.T) {
 	out := &ListOutput{
 		Uploads: []UploadItem{

@@ -76,6 +76,9 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
+// toOutput converts a [gl.MergeTrain] into the package's [Output],
+// flattening the embedded merge request, user, and pipeline fields and
+// formatting every timestamp via [toolutil.DateTimeFormat].
 func toOutput(mt *gl.MergeTrain) Output {
 	if mt == nil {
 		return Output{}
@@ -120,7 +123,9 @@ func toOutput(mt *gl.MergeTrain) Output {
 	return out
 }
 
-// ListProjectMergeTrains lists all merge trains for a project.
+// ListProjectMergeTrains lists all merge trains in a project via the
+// GitLab Merge trains API (GET /projects/:id/merge_trains). Merge
+// trains require a Premium license.
 func ListProjectMergeTrains(ctx context.Context, client *gitlabclient.Client, input ListProjectInput) (ListOutput, error) {
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
@@ -141,7 +146,9 @@ func ListProjectMergeTrains(ctx context.Context, client *gitlabclient.Client, in
 	return toListOutput(trains, resp), nil
 }
 
-// ListMergeRequestInMergeTrain lists merge requests in a merge train for a branch.
+// ListMergeRequestInMergeTrain lists the merge requests currently
+// sitting on the merge train for a specific target branch via the
+// GitLab Merge trains API (GET /projects/:id/merge_trains/:target_branch).
 func ListMergeRequestInMergeTrain(ctx context.Context, client *gitlabclient.Client, input ListBranchInput) (ListOutput, error) {
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
@@ -165,7 +172,11 @@ func ListMergeRequestInMergeTrain(ctx context.Context, client *gitlabclient.Clie
 	return toListOutput(trains, resp), nil
 }
 
-// GetMergeRequestOnMergeTrain gets the merge train status for a specific MR.
+// GetMergeRequestOnMergeTrain retrieves the merge train status for a
+// single merge request via the GitLab Merge trains API
+// (GET /projects/:id/merge_trains/merge_requests/:merge_request_iid).
+// Returns the active train entry or a 404 when the MR is not on a
+// merge train.
 func GetMergeRequestOnMergeTrain(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.ErrFieldRequired("project_id")
@@ -180,7 +191,12 @@ func GetMergeRequestOnMergeTrain(ctx context.Context, client *gitlabclient.Clien
 	return toOutput(train), nil
 }
 
-// AddMergeRequestToMergeTrain adds a merge request to a merge train.
+// AddMergeRequestToMergeTrain adds a merge request to a project's
+// merge train via the GitLab Merge trains API
+// (POST /projects/:id/merge_trains/merge_requests/:merge_request_iid).
+// Optional AutoMerge/SHA/Squash parameters forward to the underlying
+// client-go options. Requires the MR to be approved with a passing
+// pipeline; merge trains require a Premium license.
 func AddMergeRequestToMergeTrain(ctx context.Context, client *gitlabclient.Client, input AddInput) (ListOutput, error) {
 	if input.ProjectID == "" {
 		return ListOutput{}, toolutil.ErrFieldRequired("project_id")
@@ -205,6 +221,9 @@ func AddMergeRequestToMergeTrain(ctx context.Context, client *gitlabclient.Clien
 	return toListOutput(trains, resp), nil
 }
 
+// toListOutput converts a slice of [gl.MergeTrain] entries into a
+// paginated [ListOutput] using the supplied GitLab [gl.Response] for
+// pagination metadata.
 func toListOutput(trains []*gl.MergeTrain, resp *gl.Response) ListOutput {
 	out := ListOutput{
 		Trains:     make([]Output, 0, len(trains)),

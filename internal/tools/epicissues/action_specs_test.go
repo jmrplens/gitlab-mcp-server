@@ -10,7 +10,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestActionSpecs_Metadata verifies epic issue action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -26,7 +28,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes uses table-driven subtests to exercise each canonical route.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"WorkItemWidgetHierarchy": func(w http.ResponseWriter, _ *http.Request) {
@@ -79,7 +83,9 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
-// TestMarkdownInit_Registry verifies that markdown formatters for ListOutput and AssignOutput are registered in the shared markdown registry.
+// TestMarkdownInit_Registry verifies the MarkdownInit_Registry handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMarkdownInit_Registry(t *testing.T) {
 	out := toolutil.MarkdownForResult(ListOutput{})
 	if out == nil {

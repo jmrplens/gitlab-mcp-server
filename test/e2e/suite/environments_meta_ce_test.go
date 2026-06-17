@@ -2,6 +2,8 @@
 
 // environments_meta_ce_test.go tests environment-related meta-tool actions against a live
 // GitLab instance, including protected environments, freeze periods, and deployment CRUD.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -14,7 +16,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/protectedenvs"
 )
 
-// TestMeta_EnvironmentsProtected exercises protected environment actions.
+// TestMeta_EnvironmentsProtected exercises protected environment actions
+// via the gitlab_environment meta-tool.
+//
+// The test creates a project fixture and returns early on CE (protected
+// environments are EE-only). On EE, it drives the protected_environment_*
+// actions through the catalog-backed meta-tool, asserting each step's
+// expected ID round-trips through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: EE. Surface: meta.
 func TestMeta_EnvironmentsProtected(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -89,7 +99,16 @@ func TestMeta_EnvironmentsProtected(t *testing.T) {
 	})
 }
 
-// TestMeta_EnvironmentsFreeze exercises freeze period CRUD.
+// TestMeta_EnvironmentsFreeze exercises freeze period CRUD via the
+// gitlab_environment meta-tool.
+//
+// The test creates a project fixture and runs subtests that drive the
+// freeze_period_create, freeze_period_list, freeze_period_get,
+// freeze_period_update, and freeze_period_delete actions through the
+// catalog-backed gitlab_environment tool. Each subtest asserts the
+// expected ID or schedule round-trips through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_EnvironmentsFreeze(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -166,7 +185,16 @@ func TestMeta_EnvironmentsFreeze(t *testing.T) {
 	})
 }
 
-// TestMeta_DeploymentsExtended exercises deployment CRUD via gitlab_environment (deployment_* actions).
+// TestMeta_DeploymentsExtended exercises deployment CRUD via the
+// gitlab_environment meta-tool (deployment_* actions).
+//
+// The test creates a project fixture, sets up a deployment, and drives
+// the deployment_get, deployment_list, deployment_update, and
+// deployment_delete actions through the catalog-backed meta-tool. Each
+// subtest asserts the expected ID or environment name round-trips
+// through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_DeploymentsExtended(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

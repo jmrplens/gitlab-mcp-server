@@ -800,6 +800,10 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Unsubsc
 		})
 }
 
+// changeIssueSubscription is the shared implementation behind [Subscribe]
+// and [Unsubscribe]. It calls the provided change function (which performs
+// the subscribe or unsubscribe API call) and falls back to a fresh [Get]
+// when GitLab returns io.EOF or 304 Not Modified (no change occurred).
 func changeIssueSubscription(ctx context.Context, client *gitlabclient.Client, projectID toolutil.StringOrInt, issueIID int64, operation string, change func(string, int64) (*gl.Issue, *gl.Response, error)) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -1107,6 +1111,8 @@ func basicMRToOutput(mr *gl.BasicMergeRequest) RelatedMROutput {
 	return out
 }
 
+// relatedMRsOutput converts a slice of basic merge requests into a
+// [RelatedMRsOutput] with pagination metadata derived from resp.
 func relatedMRsOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) RelatedMRsOutput {
 	out := make([]RelatedMROutput, len(mrs))
 	for i, mr := range mrs {
@@ -1115,6 +1121,10 @@ func relatedMRsOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) RelatedMRs
 	return RelatedMRsOutput{MergeRequests: out, Pagination: toolutil.PaginationFromResponse(resp)}
 }
 
+// setPagination copies the page and perPage values from the MCP input into
+// the underlying [gl.ListOptions] when they are positive. It is used by
+// the issue <-> merge request link list helpers to avoid repeating the
+// same guard in every list handler.
 func setPagination(opts *gl.ListOptions, page, perPage int) {
 	if page > 0 {
 		opts.Page = int64(page)
@@ -1124,6 +1134,9 @@ func setPagination(opts *gl.ListOptions, page, perPage int) {
 	}
 }
 
+// issueMergeRequestsListArgs parameterises [listIssueMergeRequests] so the
+// closing-MR and related-MR list handlers can share validation and the
+// request shape while differing only in the GitLab API call and hint.
 type issueMergeRequestsListArgs struct {
 	projectID toolutil.StringOrInt
 	issueIID  int64
@@ -1134,6 +1147,9 @@ type issueMergeRequestsListArgs struct {
 	list      func(string, int64, int, int, ...gl.RequestOptionFunc) ([]*gl.BasicMergeRequest, *gl.Response, error)
 }
 
+// listIssueMergeRequests validates the inputs, invokes the supplied list
+// function (closing or related MRs), and converts the result into a
+// [RelatedMRsOutput] with pagination metadata.
 func listIssueMergeRequests(ctx context.Context, args issueMergeRequestsListArgs) (RelatedMRsOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return RelatedMRsOutput{}, err

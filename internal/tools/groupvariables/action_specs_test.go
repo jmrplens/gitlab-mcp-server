@@ -12,7 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestActionSpecs_CallAllRoutes exercises every group variable tool through its canonical route.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	variableJSON := `{"key":"MY_VAR","value":"secret","variable_type":"env_var","protected":true,"masked":false,"hidden":false,"raw":false,"environment_scope":"*","description":"Test var"}`
 	handler := http.NewServeMux()
@@ -67,7 +69,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteError verifies that the delete route propagates backend errors.
+// TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteError(t *testing.T) {
 	byTool := groupVariableSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -86,7 +90,9 @@ func TestActionSpecs_DeleteError(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteOutput verifies the delete route preserves its success message.
+// TestActionSpecs_DeleteOutput validates the DeleteOutput route through the catalog surface.
+// The mock GitLab API at /api/v4/groups/10/variables/MY_VAR (DELETE) returns a representative success body.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_DeleteOutput(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/10/variables/MY_VAR" || r.Method != http.MethodDelete {
@@ -113,7 +119,9 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API when confirm is declined")

@@ -1,3 +1,4 @@
+// action_specs_test.go contains unit tests for the group SAML [toolutil.ActionSpec] entries.
 package groupsaml
 
 import (
@@ -8,7 +9,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestActionSpecs_Metadata verifies canonical metadata for group SAML actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -42,7 +45,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes verifies all group SAML routes execute through the catalog.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The mock GitLab API at /api/v4/groups/42/saml_group_links (GET) responds with HTTP OK.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +89,9 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteError verifies delete route errors propagate directly.
+// TestActionSpecs_CallRouteError validates the CallRouteError route through the catalog surface.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CallRouteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

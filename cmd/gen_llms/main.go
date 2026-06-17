@@ -51,6 +51,16 @@ const (
 	llmsBoldTitleFormat          = "**%s**\n\n"
 )
 
+// llmsCatalog holds the full introspection result of one MCP server build,
+// across every surface relevant to llms.txt and llms-full.txt generation.
+//
+// Individual lists GitLab.com Enterprise individual tools. IndividualSelfManaged
+// is the same population for self-managed GitLab. MetaBase/MetaEnterprise/
+// MetaGitLabComEnterprise cover the three meta-tool surfaces. Dynamic
+// contains the two-tool find/execute dynamic surface. MetaRoutes maps
+// each meta-tool name to its action catalog (used for per-action output
+// schemas in llms-full.txt). Resources and ResourceTemplates hold the
+// static resources plus templates; Prompts lists the registered MCP prompts.
 type llmsCatalog struct {
 	Individual              []*mcp.Tool
 	IndividualSelfManaged   []*mcp.Tool

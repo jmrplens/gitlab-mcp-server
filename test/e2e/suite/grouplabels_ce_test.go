@@ -2,6 +2,8 @@
 
 // grouplabels_ce_test.go tests the group label MCP tools against a live GitLab instance.
 // Exercises create, list, and delete via the gitlab_group meta-tool.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -16,7 +18,15 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestMeta_GroupLabels exercises group label CRUD via the gitlab_group meta-tool.
+// TestMeta_GroupLabels exercises group label CRUD via the gitlab_group
+// meta-tool.
+//
+// The test creates a dedicated group fixture, then drives label_create,
+// label_list, and label_delete subtests through the catalog-backed
+// gitlab_group meta-tool. Cleanup deletes the group via a deferred call
+// so the GitLab instance stays clean even when subtests fail.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_GroupLabels(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

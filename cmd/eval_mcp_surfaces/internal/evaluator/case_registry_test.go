@@ -1,3 +1,7 @@
+// case_registry_test.go covers the typed evaluation case registry: case
+// validation, expected coverage, fixture scope invariants, and the deprecation
+// of legacy --tasks Markdown files.
+
 package evaluator
 
 import (
@@ -6,6 +10,16 @@ import (
 	"testing"
 )
 
+// TestValidateEvalCaseRegistry_DetectsInvalidDefinitions verifies that
+// validateEvalCaseRegistry returns descriptive errors for every documented
+// case definition issue: duplicate IDs, empty prompts, missing steps,
+// destructive steps without confirm, unknown presets, and optional capability
+// bridge steps that are not paired correctly.
+//
+// The test feeds a synthetic slice of EvalCase objects covering each failure
+// mode and asserts the joined problem string contains each expected phrase.
+// This protects the typed registry from silently accepting malformed cases
+// during refactors.
 func TestValidateEvalCaseRegistry_DetectsInvalidDefinitions(t *testing.T) {
 	cases := []EvalCase{
 		{ID: "DUP", Prompt: "valid prompt", Presets: []EvalPreset{EvalPreset(presetDockerRead)}, Partition: EvalPartition(partitionBaseRead), Steps: []ExpectedStep{{ExpectedTool: "gitlab_user", ExpectedAction: "current"}}},
@@ -25,6 +39,15 @@ func TestValidateEvalCaseRegistry_DetectsInvalidDefinitions(t *testing.T) {
 	}
 }
 
+// TestAllEvalCases_ContainsMigratedReadMutatingAndCapabilityCases verifies
+// that AllEvalCases returns at least the expected minimum set of typed
+// evaluation cases and that all migrated IDs remain discoverable through
+// CaseByID and the preset groupings.
+//
+// The test asserts a floor on the total case count, a representative sample
+// of case IDs, and the exact counts for every Docker preset and the
+// schema-enterprise preset. This protects the registry from quietly losing
+// cases during the legacy-to-typed migration.
 func TestAllEvalCases_ContainsMigratedReadMutatingAndCapabilityCases(t *testing.T) {
 	cases := AllEvalCases()
 	if len(cases) < 173 {
@@ -64,6 +87,14 @@ func TestAllEvalCases_ContainsMigratedReadMutatingAndCapabilityCases(t *testing.
 	}
 }
 
+// TestLoadEvalCases_UsesTypedRegistryOnly verifies that loadEvalCases
+// returns the typed registry when no custom --tasks path is supplied and
+// rejects legacy Markdown --tasks files with a deprecation error.
+//
+// The test calls loadEvalCases with an empty options, asserts known case IDs
+// appear exactly once and that the first case matches MT-001, then confirms
+// that supplying a custom --tasks path produces a deprecation error. This
+// protects the CLI from re-introducing the legacy markdown case loader.
 func TestLoadEvalCases_UsesTypedRegistryOnly(t *testing.T) {
 	cases, err := loadEvalCases(options{})
 	if err != nil {
@@ -88,6 +119,15 @@ func TestLoadEvalCases_UsesTypedRegistryOnly(t *testing.T) {
 	}
 }
 
+// TestDestructiveTypedFixtures_AttemptScopedForLiveTargets verifies that
+// destructive cases whose cleanup depends on the live GitLab instance use
+// attempt-scoped fixtures and a non-empty prompt template, so each run gets
+// fresh disposable state.
+//
+// The test walks a mapping of case IDs to fixture names and asserts each
+// case attaches the expected fixture with FixtureScopeAttempt plus a prompt
+// template that supplies per-attempt values. This protects live destructive
+// runs from reusing shared fixtures that could leak state across runs.
 func TestDestructiveTypedFixtures_AttemptScopedForLiveTargets(t *testing.T) {
 	checks := map[string]string{
 		"MT-017": "mergeable_merge_request",
@@ -118,6 +158,15 @@ func TestDestructiveTypedFixtures_AttemptScopedForLiveTargets(t *testing.T) {
 	}
 }
 
+// TestDestructiveMergeRequestLiveCasesUseFixtures verifies that destructive
+// merge-request cases attach the merge_request fixture and reference
+// {{ .MergeRequest.IID }} in the prompt template instead of legacy static
+// values like MR `7`.
+//
+// The test iterates MS-027 and MS-033 and asserts each case exposes the
+// merge_request fixture, embeds the fixture IID in the template, and does
+// not retain the old static MR marker. This protects destructive MR cases
+// from regressing to non-isolated state.
 func TestDestructiveMergeRequestLiveCasesUseFixtures(t *testing.T) {
 	for _, id := range []string{"MS-027", "MS-033"} {
 		t.Run(id, func(t *testing.T) {
@@ -139,6 +188,16 @@ func TestDestructiveMergeRequestLiveCasesUseFixtures(t *testing.T) {
 	}
 }
 
+// TestReleaseAssetLinkCRUDCaseUsesAttemptScopedURLs verifies that the
+// MS-018 release-asset-link CRUD case uses the attempt_names fixture so each
+// attempt receives unique link URLs, and that its prompt template references
+// the templated Values.release_link_url / Values.release_link_updated_url
+// placeholders instead of legacy static URLs.
+//
+// The test loads MS-018, checks the attempt_names scope, and verifies the
+// template contains the templated URL placeholders while no longer carrying
+// the legacy static "eval-crud-link" phrasing. This protects the CRUD
+// release case from losing attempt isolation.
 func TestReleaseAssetLinkCRUDCaseUsesAttemptScopedURLs(t *testing.T) {
 	evalCase, ok := CaseByID("MS-018")
 	if !ok {
@@ -162,6 +221,15 @@ func TestReleaseAssetLinkCRUDCaseUsesAttemptScopedURLs(t *testing.T) {
 	}
 }
 
+// TestEnterpriseProtectedEnvironmentCasesUseAttemptScopedNames verifies that
+// the MS-052 and MS-053 Enterprise protected-environment cases attach the
+// attempt_names fixture, reference .Values.subgroup_name and .Values.subgroup_path
+// in the prompt template, and preserve the "Maintainer deploy access"
+// guidance needed by the case workflow.
+//
+// The test runs a subtest per case ID and asserts each fixture and template
+// invariant. This protects the protected-environment cases from regressing
+// to shared subgroup state and losing the maintainer-deploy-access hint.
 func TestEnterpriseProtectedEnvironmentCasesUseAttemptScopedNames(t *testing.T) {
 	for _, id := range []string{"MS-052", "MS-053"} {
 		t.Run(id, func(t *testing.T) {
@@ -189,6 +257,15 @@ func TestEnterpriseProtectedEnvironmentCasesUseAttemptScopedNames(t *testing.T) 
 	}
 }
 
+// TestInteractiveMergeRequestCaseUsesGuidedOnlyParams verifies that the
+// interactive merge-request case MT-081 attaches the merge_request_source
+// fixture and instructs the model to omit source_branch in favor of the
+// guided prompt's implicit branch handling.
+//
+// The test asserts the fixture is attached and the prompt template includes
+// both "Do not pass `source_branch`" and "guided prompts will use source
+// branch" guidance. This protects interactive MR workflows from regressing
+// to manual source-branch entry that would conflict with guided prompts.
 func TestInteractiveMergeRequestCaseUsesGuidedOnlyParams(t *testing.T) {
 	evalCase, ok := CaseByID("MT-081")
 	if !ok {
@@ -205,6 +282,16 @@ func TestInteractiveMergeRequestCaseUsesGuidedOnlyParams(t *testing.T) {
 	}
 }
 
+// TestEnterpriseDockerCases_AttachTypedFixtures verifies that every
+// Enterprise Docker evaluation case attaches the correct typed Enterprise
+// fixture and exposes a non-empty prompt template.
+//
+// The test iterates a case ID to fixture name mapping covering push-rule
+// projects, seeded push-rule projects, project/group service accounts, and
+// the matching MS-IDs. Each subtest asserts the fixture is present, requires
+// the Enterprise runtime edition, and that the prompt template is populated.
+// This protects Enterprise Docker cases from running with the wrong fixture
+// edition or an empty template.
 func TestEnterpriseDockerCases_AttachTypedFixtures(t *testing.T) {
 	checks := map[string]string{
 		"MT-192": "enterprise_push_rule_project",
@@ -237,6 +324,15 @@ func TestEnterpriseDockerCases_AttachTypedFixtures(t *testing.T) {
 	}
 }
 
+// TestDestructiveEvalCases_DestructiveStepsRequireConfirm verifies that
+// every destructive step in the docker-destructive-safe preset lists
+// confirm as either a required or optional parameter, so the model's tool
+// call cannot bypass the safety prompt.
+//
+// The test iterates all destructive cases returned by CasesByPreset and for
+// each destructive step asserts confirm is present in the param lists.
+// This protects destructive evaluation runs from executing steps that lack
+// the confirm gate.
 func TestDestructiveEvalCases_DestructiveStepsRequireConfirm(t *testing.T) {
 	for _, evalCase := range CasesByPreset(presetDockerDestructiveSafe) {
 		t.Run(string(evalCase.ID), func(t *testing.T) {

@@ -12,8 +12,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 )
 
-// TestIndividual_PushRules exercises push rule CRUD via individual MCP tools.
-// Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
+// TestIndividual_PushRules exercises push rule CRUD through individual MCP
+// tools against a live GitLab Premium/Ultimate instance.
+//
+// The test creates a project fixture, then walks gitlab_project_add_push_rule,
+// gitlab_project_get_push_rules, gitlab_project_edit_push_rule, and
+// gitlab_project_delete_push_rule. Assertions verify the push rule ID is
+// non-empty, that max_file_size round-trips through the GitLab API, and
+// that the edit operation updates the persisted value.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: individual.
 func TestIndividual_PushRules(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {
@@ -63,8 +71,15 @@ func TestIndividual_PushRules(t *testing.T) {
 	})
 }
 
-// TestMeta_PushRules exercises push rule CRUD via the gitlab_project meta-tool.
-// Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
+// TestMeta_PushRules exercises push rule CRUD through the gitlab_project
+// meta-tool against a live GitLab Premium/Ultimate instance.
+//
+// The test mirrors [TestIndividual_PushRules] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_project tool.
+// Subtests cover push_rule_add, push_rule_get, push_rule_edit, and
+// push_rule_delete, verifying the meta-tool returns consistent payloads.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta.
 func TestMeta_PushRules(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {

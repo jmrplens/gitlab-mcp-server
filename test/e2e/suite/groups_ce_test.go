@@ -2,6 +2,8 @@
 
 // groups_ce_test.go tests the group MCP tools against a live GitLab instance.
 // Covers create, list, get, members, subgroups, and delete for both individual and meta-tool modes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -16,6 +18,14 @@ import (
 )
 
 // TestIndividual_Groups exercises group CRUD using individual MCP tools.
+//
+// The test creates a unique top-level group fixture (deferred deletion),
+// then runs subtests covering group_create, group_list, group_get, group
+// members, subgroups, and group_delete through the individual
+// gitlab_group_* tools. Each subtest asserts the expected ID or name
+// round-trips through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Groups(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -103,7 +113,15 @@ func TestIndividual_Groups(t *testing.T) {
 	})
 }
 
-// TestMeta_Groups exercises group operations using the gitlab_group meta-tool.
+// TestMeta_Groups exercises group operations using the gitlab_group
+// meta-tool.
+//
+// The test mirrors [TestIndividual_Groups] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_group
+// tool. Each subtest asserts the same outcome and verifies the tool name
+// stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Groups(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

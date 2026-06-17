@@ -1,6 +1,13 @@
 //go:build e2e && !enterprise
 
-// uploads_ce_test.go — E2E tests for project upload domain.
+// uploads_ce_test.go exercises the project upload domain against a live
+// GitLab CE instance.
+//
+// Covers both the individual MCP tool surface (gitlab_upload_file,
+// gitlab_upload_get, gitlab_upload_list) and the catalog-backed
+// gitlab_project meta-tool surface for upload actions.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -12,8 +19,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/uploads"
 )
 
-// TestIndividual_Uploads exercises the project upload tools via individual MCP tools:
-// uploads a base64-encoded file to a project, then lists uploads to verify.
+// TestIndividual_Uploads exercises project upload tools through individual
+// MCP tools against a live GitLab CE instance.
+//
+// The test creates a project fixture, uploads a base64-encoded file via
+// gitlab_upload_file, then calls gitlab_upload_list and gitlab_upload_get
+// to verify the upload is observable through subsequent reads. Each
+// subtest asserts the expected upload payload shape with non-empty name
+// and URL.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Uploads(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -48,8 +63,16 @@ func TestIndividual_Uploads(t *testing.T) {
 	})
 }
 
-// TestMeta_Uploads exercises the same upload lifecycle via the gitlab_project meta-tool:
-// upload and upload_list actions with base64-encoded file content.
+// TestMeta_Uploads exercises the upload lifecycle through the
+// gitlab_project meta-tool against a live GitLab CE instance.
+//
+// The test mirrors [TestIndividual_Uploads] but drives every step with
+// {action, params} arguments through the catalog-backed tool. Subtests
+// cover the upload and upload_list actions with base64-encoded file
+// content, verifying the meta-tool returns consistent upload payloads
+// with non-empty name and URL.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Uploads(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

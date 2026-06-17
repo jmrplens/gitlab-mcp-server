@@ -28,8 +28,10 @@ const (
 	toolManifestKindVisibleTool    = "visible_tool"
 )
 
-// ToolSurfaceResourceOptions captures the active server tool surface for the
-// unified tool manifest resources.
+// ToolSurfaceResourceOptions captures the active server tool surface
+// for the unified tool manifest resources ([RegisterToolSurfaceResources]).
+// All three slices are projected differently depending on the surface
+// (see [newToolSurfaceSnapshot]).
 type ToolSurfaceResourceOptions struct {
 	Surface    string
 	Tools      []*mcp.Tool
@@ -37,8 +39,9 @@ type ToolSurfaceResourceOptions struct {
 	MetaRoutes map[string]toolutil.ActionMap
 }
 
-// ToolSurfaceVisibleTool summarizes one MCP tool currently advertised through
-// tools/list.
+// ToolSurfaceVisibleTool summarizes one MCP tool currently advertised
+// through tools/list, surfaced in the [ToolSurfaceManifest]'s
+// VisibleTools list.
 type ToolSurfaceVisibleTool struct {
 	Name        string `json:"name"`
 	Title       string `json:"title,omitempty"`
@@ -47,7 +50,10 @@ type ToolSurfaceVisibleTool struct {
 	Destructive bool   `json:"destructive"`
 }
 
-// ToolSurfaceEntry describes one executable unit in the active surface.
+// ToolSurfaceEntry describes one executable unit in the active tool
+// surface. Entries can be dynamic actions (gitlab_execute_action
+// surface), meta actions (gitlab_<tool>.<action> surface), or
+// individual tools (one MCP tool per GitLab action).
 type ToolSurfaceEntry struct {
 	ID             string   `json:"id"`
 	Kind           string   `json:"kind"`
@@ -64,7 +70,9 @@ type ToolSurfaceEntry struct {
 	RequiredParams []string `json:"required_params,omitempty"`
 }
 
-// ToolSurfaceManifest is the payload returned by gitlab://tools.
+// ToolSurfaceManifest is the JSON payload returned by the
+// "gitlab://tools" resource. It summarizes the active tool surface
+// and lists every executable entry the surface exposes.
 type ToolSurfaceManifest struct {
 	Surface          string                   `json:"surface"`
 	URITemplate      string                   `json:"uri_template"`
@@ -74,7 +82,10 @@ type ToolSurfaceManifest struct {
 	Entries          []ToolSurfaceEntry       `json:"entries"`
 }
 
-// ToolSurfaceCallShape describes how to invoke one manifest detail entry.
+// ToolSurfaceCallShape describes how to invoke one manifest entry.
+// ActionLocation and ConfirmLocation are populated only for surfaces
+// where those fields apply (dynamic, meta); they are empty in
+// individual mode.
 type ToolSurfaceCallShape struct {
 	Tool            string `json:"tool"`
 	Action          string `json:"action,omitempty"`
@@ -83,7 +94,10 @@ type ToolSurfaceCallShape struct {
 	ConfirmLocation string `json:"confirm_location,omitempty"`
 }
 
-// ToolSurfaceDetail is the payload returned by gitlab://tools/{id}.
+// ToolSurfaceDetail is the JSON payload returned by the
+// "gitlab://tools/{id}" resource. It embeds the matching
+// [ToolSurfaceEntry] and adds the per-entry call shape and input
+// schema.
 type ToolSurfaceDetail struct {
 	ToolSurfaceEntry
 	Call        ToolSurfaceCallShape `json:"call"`
@@ -104,15 +118,25 @@ type toolSnapshot struct {
 	Destructive bool
 }
 
-// RegisterToolSurfaceResources wires a surface-aware tool manifest into the
-// MCP server. The static resource lists the active surface and executable
-// entries, while the template returns the accepted call shape for one entry.
+// RegisterToolSurfaceResources wires a surface-aware tool manifest
+// into the MCP server. Two resources are registered:
+//
+//   - The static "gitlab://tools" resource, which lists the active
+//     surface ("dynamic", "meta", or "individual") and every
+//     executable entry that surface exposes.
+//   - The "gitlab://tools/{id}" template resource, which returns the
+//     accepted call shape and input schema for one entry.
+//
+// Use [ToolSurfaceResourceOptions] to pass the active tool surface;
+// see [newToolSurfaceSnapshot] for the projection rules.
 func RegisterToolSurfaceResources(server *mcp.Server, opts ToolSurfaceResourceOptions) {
 	snapshot := newToolSurfaceSnapshot(opts)
 	registerToolManifestIndex(server, snapshot)
 	registerToolManifestTemplate(server, snapshot)
 }
 
+// registerToolManifestIndex registers the static catalog resource that
+// lists the active surface and every executable entry.
 func registerToolManifestIndex(server *mcp.Server, snapshot toolSurfaceSnapshot) {
 	server.AddResource(&mcp.Resource{
 		URI:         toolsManifestURI,
@@ -127,6 +151,9 @@ func registerToolManifestIndex(server *mcp.Server, snapshot toolSurfaceSnapshot)
 	})
 }
 
+// registerToolManifestTemplate registers the URI-template resource that
+// returns the call shape and input schema for one entry from the
+// surface manifest.
 func registerToolManifestTemplate(server *mcp.Server, snapshot toolSurfaceSnapshot) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: toolsManifestTemplateURI,

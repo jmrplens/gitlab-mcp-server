@@ -17,7 +17,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestListPendingProjectInvitations_Success verifies ListPendingProjectInvitations when success.
+// TestListPendingProjectInvitations_Success verifies that ListPendingProjectInvitations succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/invitations (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListPendingProjectInvitations_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -45,7 +47,9 @@ func TestListPendingProjectInvitations_Success(t *testing.T) {
 	}
 }
 
-// TestListPendingProjectInvitations_WithQuery verifies ListPendingProjectInvitations when with query.
+// TestListPendingProjectInvitations_WithQuery verifies the ListPendingProjectInvitations_WithQuery handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListPendingProjectInvitations_WithQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("query") != "alice" {
@@ -65,7 +69,9 @@ func TestListPendingProjectInvitations_WithQuery(t *testing.T) {
 	}
 }
 
-// TestListPendingProjectInvitations_ValidationError verifies ListPendingProjectInvitations when validation error.
+// TestListPendingProjectInvitations_ValidationError verifies that ListPendingProjectInvitations_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListPendingProjectInvitations_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -77,7 +83,9 @@ func TestListPendingProjectInvitations_ValidationError(t *testing.T) {
 	}
 }
 
-// TestListPendingGroupInvitations_Success verifies ListPendingGroupInvitations when success.
+// TestListPendingGroupInvitations_Success verifies that ListPendingGroupInvitations succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/10/invitations (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListPendingGroupInvitations_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/10/invitations" {
@@ -101,7 +109,9 @@ func TestListPendingGroupInvitations_Success(t *testing.T) {
 	}
 }
 
-// TestListPendingGroupInvitations_ValidationError verifies ListPendingGroupInvitations when validation error.
+// TestListPendingGroupInvitations_ValidationError verifies that ListPendingGroupInvitations_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListPendingGroupInvitations_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -113,7 +123,9 @@ func TestListPendingGroupInvitations_ValidationError(t *testing.T) {
 	}
 }
 
-// TestProjectInvites_Success verifies ProjectInvites when success.
+// TestProjectInvites_Success verifies that ProjectInvites succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/invitations (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestProjectInvites_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/invitations" || r.Method != http.MethodPost {
@@ -132,7 +144,9 @@ func TestProjectInvites_Success(t *testing.T) {
 	}
 }
 
-// TestProjectInvites_ValidationError_NoProject verifies ProjectInvites when validation error no project.
+// TestProjectInvites_ValidationError_NoProject verifies that ProjectInvites_ValidationError_NoProject returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectInvites_ValidationError_NoProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -144,7 +158,9 @@ func TestProjectInvites_ValidationError_NoProject(t *testing.T) {
 	}
 }
 
-// TestProjectInvites_ValidationError_NoEmailOrUser verifies ProjectInvites when validation error no email or user.
+// TestProjectInvites_ValidationError_NoEmailOrUser verifies that ProjectInvites_ValidationError_NoEmailOrUser returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectInvites_ValidationError_NoEmailOrUser(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -156,7 +172,9 @@ func TestProjectInvites_ValidationError_NoEmailOrUser(t *testing.T) {
 	}
 }
 
-// TestGroupInvites_Success verifies GroupInvites when success.
+// TestGroupInvites_Success verifies that GroupInvites succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/10/invitations (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestGroupInvites_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/10/invitations" || r.Method != http.MethodPost {
@@ -175,7 +193,9 @@ func TestGroupInvites_Success(t *testing.T) {
 	}
 }
 
-// TestGroupInvites_ValidationError_NoGroup verifies GroupInvites when validation error no group.
+// TestGroupInvites_ValidationError_NoGroup verifies that GroupInvites_ValidationError_NoGroup returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupInvites_ValidationError_NoGroup(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -187,7 +207,9 @@ func TestGroupInvites_ValidationError_NoGroup(t *testing.T) {
 	}
 }
 
-// TestGroupInvites_APIError verifies GroupInvites when API error.
+// TestGroupInvites_APIError verifies that GroupInvites returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupInvites_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -199,7 +221,9 @@ func TestGroupInvites_APIError(t *testing.T) {
 	}
 }
 
-// TestGroupInvites_BadRequest verifies invalid group invitation input hints.
+// TestGroupInvites_BadRequest verifies the GroupInvites_BadRequest handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGroupInvites_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"already a member"}`)
@@ -214,7 +238,9 @@ func TestGroupInvites_BadRequest(t *testing.T) {
 	}
 }
 
-// TestFormatListPendingMarkdownString_WithInvitations verifies FormatListPendingMarkdownString when with invitations.
+// TestFormatListPendingMarkdownString_WithInvitations verifies the ListPendingMarkdownString_WithInvitations Markdown formatter for a representative listpendingstring_withinvitations input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 	out := ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{
@@ -234,7 +260,9 @@ func TestFormatListPendingMarkdownString_WithInvitations(t *testing.T) {
 	}
 }
 
-// TestFormatListPendingMarkdownString_Empty verifies FormatListPendingMarkdownString when empty.
+// TestFormatListPendingMarkdownString_Empty verifies the ListPendingMarkdownString_Empty Markdown formatter for a representative listpendingstring_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListPendingMarkdownString_Empty(t *testing.T) {
 	out := ListPendingInvitationsOutput{Invitations: []PendingInviteOutput{}}
 	md := FormatListPendingMarkdownString(out)
@@ -243,7 +271,9 @@ func TestFormatListPendingMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatInviteResultMarkdownString verifies FormatInviteResultMarkdownString.
+// TestFormatInviteResultMarkdownString verifies the InviteResultMarkdownString Markdown formatter for a representative inviteresultstring input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatInviteResultMarkdownString(t *testing.T) {
 	out := InviteResultOutput{Status: "success", Message: map[string]string{"alice@example.com": "Invite sent"}}
 	md := FormatInviteResultMarkdownString(out)
@@ -277,7 +307,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // ListPendingProjectInvitations — API error
 // ---------------------------------------------------------------------------.
 
-// TestListPendingProjectInvitations_APIError verifies ListPendingProjectInvitations when API error.
+// TestListPendingProjectInvitations_APIError verifies that ListPendingProjectInvitations returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListPendingProjectInvitations_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -292,7 +324,9 @@ func TestListPendingProjectInvitations_APIError(t *testing.T) {
 // ListPendingGroupInvitations — API error
 // ---------------------------------------------------------------------------.
 
-// TestListPendingGroupInvitations_APIError verifies ListPendingGroupInvitations when API error.
+// TestListPendingGroupInvitations_APIError verifies that ListPendingGroupInvitations returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListPendingGroupInvitations_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -307,7 +341,9 @@ func TestListPendingGroupInvitations_APIError(t *testing.T) {
 // ListPendingGroupInvitations — with query filter
 // ---------------------------------------------------------------------------.
 
-// TestListPendingGroupInvitations_WithQuery verifies ListPendingGroupInvitations when with query.
+// TestListPendingGroupInvitations_WithQuery verifies the ListPendingGroupInvitations_WithQuery handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListPendingGroupInvitations_WithQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("query") != "team" {
@@ -330,7 +366,9 @@ func TestListPendingGroupInvitations_WithQuery(t *testing.T) {
 // ProjectInvites — API error (403)
 // ---------------------------------------------------------------------------.
 
-// TestProjectInvites_APIError verifies ProjectInvites when API error.
+// TestProjectInvites_APIError verifies that ProjectInvites returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectInvites_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -341,7 +379,9 @@ func TestProjectInvites_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectInvites_BadRequest verifies invalid invitation input hints.
+// TestProjectInvites_BadRequest verifies the ProjectInvites_BadRequest handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProjectInvites_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"already a member"}`)
@@ -359,7 +399,9 @@ func TestProjectInvites_BadRequest(t *testing.T) {
 // GroupInvites — validation: missing email AND user_id
 // ---------------------------------------------------------------------------.
 
-// TestGroupInvites_ValidationErrorNoEmailOrUser verifies GroupInvites when validation error no email or user.
+// TestGroupInvites_ValidationErrorNoEmailOrUser verifies that GroupInvites_ValidationErrorNoEmailOrUser returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupInvites_ValidationErrorNoEmailOrUser(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -377,7 +419,9 @@ func TestGroupInvites_ValidationErrorNoEmailOrUser(t *testing.T) {
 // ProjectInvites — with user_id (exercises opts.UserID path)
 // ---------------------------------------------------------------------------.
 
-// TestProjectInvites_WithUserID verifies ProjectInvites when with user ID.
+// TestProjectInvites_WithUserID verifies the ProjectInvites_WithUserID handler.
+// The mock GitLab API at /api/v4/projects/42/invitations (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestProjectInvites_WithUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -403,7 +447,9 @@ func TestProjectInvites_WithUserID(t *testing.T) {
 // ProjectInvites — with expires_at (exercises date parsing path)
 // ---------------------------------------------------------------------------.
 
-// TestProjectInvites_WithExpiresAt verifies ProjectInvites when with expires at.
+// TestProjectInvites_WithExpiresAt verifies the ProjectInvites_WithExpiresAt handler.
+// The mock GitLab API at /api/v4/projects/42/invitations (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestProjectInvites_WithExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/projects/42/invitations" {
@@ -430,7 +476,9 @@ func TestProjectInvites_WithExpiresAt(t *testing.T) {
 // GroupInvites — with email AND expires_at
 // ---------------------------------------------------------------------------.
 
-// TestGroupInvites_WithEmailAndExpiresAt verifies GroupInvites when with email and expires at.
+// TestGroupInvites_WithEmailAndExpiresAt verifies the GroupInvites_WithEmailAndExpiresAt handler.
+// The mock GitLab API at /api/v4/groups/10/invitations (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestGroupInvites_WithEmailAndExpiresAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/v4/groups/10/invitations" {
@@ -457,7 +505,9 @@ func TestGroupInvites_WithEmailAndExpiresAt(t *testing.T) {
 // toPendingInviteOutput — with dates populated
 // ---------------------------------------------------------------------------.
 
-// TestToPendingInviteOutput_WithDates verifies ToPendingInviteOutput when with dates.
+// TestToPendingInviteOutput_WithDates verifies the ToPendingInviteOutput_WithDates handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToPendingInviteOutput_WithDates(t *testing.T) {
 	created := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 	expires := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
@@ -492,7 +542,9 @@ func TestToPendingInviteOutput_WithDates(t *testing.T) {
 // toPendingInviteOutput — with nil dates
 // ---------------------------------------------------------------------------.
 
-// TestToPendingInviteOutput_NilDates verifies ToPendingInviteOutput when nil dates.
+// TestToPendingInviteOutput_NilDates verifies the ToPendingInviteOutput_NilDates handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToPendingInviteOutput_NilDates(t *testing.T) {
 	inv := &gl.PendingInvite{
 		ID:          20,
@@ -515,7 +567,9 @@ func TestToPendingInviteOutput_NilDates(t *testing.T) {
 // toInviteResultOutput — direct coverage with message map
 // ---------------------------------------------------------------------------.
 
-// TestToInviteResultOutput_WithMessages verifies ToInviteResultOutput when with messages.
+// TestToInviteResultOutput_WithMessages verifies the ToInviteResultOutput_WithMessages handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToInviteResultOutput_WithMessages(t *testing.T) {
 	r := &gl.InvitesResult{
 		Status: "error",
@@ -540,7 +594,9 @@ func TestToInviteResultOutput_WithMessages(t *testing.T) {
 // FormatInviteResultMarkdownString — empty message map
 // ---------------------------------------------------------------------------.
 
-// TestFormatInviteResultMarkdownString_EmptyMessages verifies FormatInviteResultMarkdownString when empty messages.
+// TestFormatInviteResultMarkdownString_EmptyMessages verifies the InviteResultMarkdownString_EmptyMessages Markdown formatter for a representative inviteresultstring_emptymessages input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatInviteResultMarkdownString_EmptyMessages(t *testing.T) {
 	out := InviteResultOutput{Status: "success", Message: map[string]string{}}
 	md := FormatInviteResultMarkdownString(out)
@@ -556,7 +612,9 @@ func TestFormatInviteResultMarkdownString_EmptyMessages(t *testing.T) {
 // FormatListPendingMarkdown — returns *mcp.CallToolResult
 // ---------------------------------------------------------------------------.
 
-// TestFormatListPendingMarkdown_ReturnsCallToolResult verifies FormatListPendingMarkdown returns call tool result.
+// TestFormatListPendingMarkdown_ReturnsCallToolResult verifies the ListPendingMarkdown_ReturnsCallToolResult Markdown formatter for a representative listpending_returnscalltoolresult input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListPendingMarkdown_ReturnsCallToolResult(t *testing.T) {
 	out := ListPendingInvitationsOutput{
 		Invitations: []PendingInviteOutput{
@@ -583,7 +641,9 @@ func TestFormatListPendingMarkdown_ReturnsCallToolResult(t *testing.T) {
 // FormatInviteResultMarkdown — returns *mcp.CallToolResult
 // ---------------------------------------------------------------------------.
 
-// TestFormatInviteResultMarkdown_ReturnsCallToolResult verifies FormatInviteResultMarkdown returns call tool result.
+// TestFormatInviteResultMarkdown_ReturnsCallToolResult verifies the InviteResultMarkdown_ReturnsCallToolResult Markdown formatter for a representative inviteresult_returnscalltoolresult input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatInviteResultMarkdown_ReturnsCallToolResult(t *testing.T) {
 	out := InviteResultOutput{Status: "success"}
 	result := FormatInviteResultMarkdown(out)
@@ -606,7 +666,9 @@ func TestFormatInviteResultMarkdown_ReturnsCallToolResult(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies invite action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -622,7 +684,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes validates all invite canonical routes.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := testutil.NewTestClient(t, invitesRouteHandler())
 	specs := ActionSpecs(client)

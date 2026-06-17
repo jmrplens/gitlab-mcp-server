@@ -56,7 +56,9 @@ const (
 
 // Issue award emoji tests.
 
-// TestListIssueAwardEmoji_Success verifies ListIssueAwardEmoji when success.
+// TestListIssueAwardEmoji_Success verifies that ListIssueAwardEmoji succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListIssueAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/award_emoji" {
@@ -83,7 +85,9 @@ func TestListIssueAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestListIssueAwardEmoji_ValidationError verifies ListIssueAwardEmoji when validation error.
+// TestListIssueAwardEmoji_ValidationError verifies that ListIssueAwardEmoji_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListIssueAwardEmoji_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -98,7 +102,9 @@ func TestListIssueAwardEmoji_ValidationError(t *testing.T) {
 	}
 }
 
-// TestGetIssueAwardEmoji_Success verifies GetIssueAwardEmoji when success.
+// TestGetIssueAwardEmoji_Success verifies that GetIssueAwardEmoji succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetIssueAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/award_emoji/10" {
@@ -123,7 +129,9 @@ func TestGetIssueAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestCreateIssueAwardEmoji_Success verifies CreateIssueAwardEmoji when success.
+// TestCreateIssueAwardEmoji_Success verifies that CreateIssueAwardEmoji succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateIssueAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -151,7 +159,9 @@ func TestCreateIssueAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestCreateIssueAwardEmoji_ValidationError verifies CreateIssueAwardEmoji when validation error.
+// TestCreateIssueAwardEmoji_ValidationError verifies that CreateIssueAwardEmoji_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateIssueAwardEmoji_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -167,7 +177,9 @@ func TestCreateIssueAwardEmoji_ValidationError(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueAwardEmoji_Success verifies DeleteIssueAwardEmoji when success.
+// TestDeleteIssueAwardEmoji_Success verifies that DeleteIssueAwardEmoji succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteIssueAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
@@ -189,7 +201,9 @@ func TestDeleteIssueAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueAwardEmoji_APIError verifies DeleteIssueAwardEmoji when API error.
+// TestDeleteIssueAwardEmoji_APIError verifies that DeleteIssueAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -207,7 +221,9 @@ func TestDeleteIssueAwardEmoji_APIError(t *testing.T) {
 
 // Issue note award emoji tests.
 
-// TestListIssueNoteAwardEmoji_Success verifies ListIssueNoteAwardEmoji when success.
+// TestListIssueNoteAwardEmoji_Success verifies that ListIssueNoteAwardEmoji succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListIssueNoteAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/notes/5/award_emoji" {
@@ -232,7 +248,9 @@ func TestListIssueNoteAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueNoteAwardEmoji_Success verifies DeleteIssueNoteAwardEmoji when success.
+// TestDeleteIssueNoteAwardEmoji_Success verifies that DeleteIssueNoteAwardEmoji succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteIssueNoteAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/issues/1/notes/5/award_emoji/20" {
@@ -254,7 +272,9 @@ func TestDeleteIssueNoteAwardEmoji_Success(t *testing.T) {
 
 // MR award emoji tests.
 
-// TestListMRAwardEmoji_Success verifies ListMRAwardEmoji when success.
+// TestListMRAwardEmoji_Success verifies that ListMRAwardEmoji succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListMRAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/merge_requests/3/award_emoji" {
@@ -278,7 +298,9 @@ func TestListMRAwardEmoji_Success(t *testing.T) {
 	}
 }
 
-// TestCreateMRAwardEmoji_ValidationError verifies CreateMRAwardEmoji when validation error.
+// TestCreateMRAwardEmoji_ValidationError verifies that CreateMRAwardEmoji_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateMRAwardEmoji_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -346,7 +368,9 @@ func TestCreateMRAwardEmoji_DuplicateReturnsExisting(t *testing.T) {
 
 // Snippet award emoji tests.
 
-// TestListSnippetAwardEmoji_Success verifies ListSnippetAwardEmoji when success.
+// TestListSnippetAwardEmoji_Success verifies that ListSnippetAwardEmoji succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListSnippetAwardEmoji_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != testPathAPIProjects+testProjectID+"/snippets/7/award_emoji" {
@@ -372,7 +396,9 @@ func TestListSnippetAwardEmoji_Success(t *testing.T) {
 
 // Formatter tests.
 
-// TestFormatListMarkdownString_WithEmoji verifies FormatListMarkdownString when with emoji.
+// TestFormatListMarkdownString_WithEmoji verifies the ListMarkdownString_WithEmoji Markdown formatter for a representative liststring_withemoji input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_WithEmoji(t *testing.T) {
 	out := ListOutput{
 		AwardEmoji: []Output{
@@ -395,7 +421,9 @@ func TestFormatListMarkdownString_WithEmoji(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty verifies FormatListMarkdownString when empty.
+// TestFormatListMarkdownString_Empty verifies the ListMarkdownString_Empty Markdown formatter for a representative liststring_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_Empty(t *testing.T) {
 	out := ListOutput{AwardEmoji: []Output{}}
 	md := FormatListMarkdownString(out)
@@ -404,7 +432,9 @@ func TestFormatListMarkdownString_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString verifies FormatMarkdownString.
+// TestFormatMarkdownString verifies the MarkdownString Markdown formatter for a representative string input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString(t *testing.T) {
 	out := Output{
 		ID:        10,
@@ -426,7 +456,9 @@ func TestFormatMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{AwardEmoji: []Output{}}
 	result := FormatListMarkdown(out)
@@ -463,7 +495,9 @@ func assertErrContains(t *testing.T, err error, substr string) {
 	}
 }
 
-// TestListIssueAwardEmoji_InvalidIID verifies ListIssueAwardEmoji when invalid IID.
+// TestListIssueAwardEmoji_InvalidIID verifies the ListIssueAwardEmoji_InvalidIID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListIssueAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -474,7 +508,9 @@ func TestListIssueAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldIssueIID)
 }
 
-// TestGetIssueAwardEmoji_InvalidIDs verifies GetIssueAwardEmoji when invalid IDs.
+// TestGetIssueAwardEmoji_InvalidIDs verifies the GetIssueAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetIssueAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -485,7 +521,9 @@ func TestGetIssueAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateIssueAwardEmoji_InvalidIID verifies CreateIssueAwardEmoji when invalid IID.
+// TestCreateIssueAwardEmoji_InvalidIID verifies the CreateIssueAwardEmoji_InvalidIID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateIssueAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -494,7 +532,9 @@ func TestCreateIssueAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldIssueIID)
 }
 
-// TestDeleteIssueAwardEmoji_InvalidIDs verifies DeleteIssueAwardEmoji when invalid IDs.
+// TestDeleteIssueAwardEmoji_InvalidIDs verifies the DeleteIssueAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteIssueAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -505,7 +545,9 @@ func TestDeleteIssueAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestListIssueNoteAwardEmoji_InvalidIDs verifies ListIssueNoteAwardEmoji when invalid IDs.
+// TestListIssueNoteAwardEmoji_InvalidIDs verifies the ListIssueNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -516,7 +558,9 @@ func TestListIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestGetIssueNoteAwardEmoji_InvalidIDs verifies GetIssueNoteAwardEmoji when invalid IDs.
+// TestGetIssueNoteAwardEmoji_InvalidIDs verifies the GetIssueNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -529,7 +573,9 @@ func TestGetIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateIssueNoteAwardEmoji_InvalidIDs verifies CreateIssueNoteAwardEmoji when invalid IDs.
+// TestCreateIssueNoteAwardEmoji_InvalidIDs verifies the CreateIssueNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -540,7 +586,9 @@ func TestCreateIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestDeleteIssueNoteAwardEmoji_InvalidIDs verifies DeleteIssueNoteAwardEmoji when invalid IDs.
+// TestDeleteIssueNoteAwardEmoji_InvalidIDs verifies the DeleteIssueNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -553,7 +601,9 @@ func TestDeleteIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestListMRAwardEmoji_InvalidIID verifies ListMRAwardEmoji when invalid IID.
+// TestListMRAwardEmoji_InvalidIID verifies the ListMRAwardEmoji_InvalidIID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListMRAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -562,7 +612,9 @@ func TestListMRAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldMRIID)
 }
 
-// TestGetMRAwardEmoji_InvalidIDs verifies GetMRAwardEmoji when invalid IDs.
+// TestGetMRAwardEmoji_InvalidIDs verifies the GetMRAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetMRAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -573,7 +625,9 @@ func TestGetMRAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateMRAwardEmoji_InvalidIID verifies CreateMRAwardEmoji when invalid IID.
+// TestCreateMRAwardEmoji_InvalidIID verifies the CreateMRAwardEmoji_InvalidIID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateMRAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -582,7 +636,9 @@ func TestCreateMRAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldMRIID)
 }
 
-// TestDeleteMRAwardEmoji_InvalidIDs verifies DeleteMRAwardEmoji when invalid IDs.
+// TestDeleteMRAwardEmoji_InvalidIDs verifies the DeleteMRAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteMRAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -593,7 +649,9 @@ func TestDeleteMRAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestListMRNoteAwardEmoji_InvalidIDs verifies ListMRNoteAwardEmoji when invalid IDs.
+// TestListMRNoteAwardEmoji_InvalidIDs verifies the ListMRNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -604,7 +662,9 @@ func TestListMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestGetMRNoteAwardEmoji_InvalidIDs verifies GetMRNoteAwardEmoji when invalid IDs.
+// TestGetMRNoteAwardEmoji_InvalidIDs verifies the GetMRNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -617,7 +677,9 @@ func TestGetMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateMRNoteAwardEmoji_InvalidIDs verifies CreateMRNoteAwardEmoji when invalid IDs.
+// TestCreateMRNoteAwardEmoji_InvalidIDs verifies the CreateMRNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -628,7 +690,9 @@ func TestCreateMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestDeleteMRNoteAwardEmoji_InvalidIDs verifies DeleteMRNoteAwardEmoji when invalid IDs.
+// TestDeleteMRNoteAwardEmoji_InvalidIDs verifies the DeleteMRNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -641,7 +705,9 @@ func TestDeleteMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestListSnippetAwardEmoji_InvalidIID verifies ListSnippetAwardEmoji when invalid IID.
+// TestListSnippetAwardEmoji_InvalidIID verifies the ListSnippetAwardEmoji_InvalidIID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListSnippetAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -650,7 +716,9 @@ func TestListSnippetAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldSnippetID)
 }
 
-// TestGetSnippetAwardEmoji_InvalidIDs verifies GetSnippetAwardEmoji when invalid IDs.
+// TestGetSnippetAwardEmoji_InvalidIDs verifies the GetSnippetAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -661,7 +729,9 @@ func TestGetSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateSnippetAwardEmoji_InvalidIID verifies CreateSnippetAwardEmoji when invalid IID.
+// TestCreateSnippetAwardEmoji_InvalidIID verifies the CreateSnippetAwardEmoji_InvalidIID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateSnippetAwardEmoji_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -670,7 +740,9 @@ func TestCreateSnippetAwardEmoji_InvalidIID(t *testing.T) {
 	assertErrContains(t, err, testFieldSnippetID)
 }
 
-// TestDeleteSnippetAwardEmoji_InvalidIDs verifies DeleteSnippetAwardEmoji when invalid IDs.
+// TestDeleteSnippetAwardEmoji_InvalidIDs verifies the DeleteSnippetAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -681,7 +753,9 @@ func TestDeleteSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestListSnippetNoteAwardEmoji_InvalidIDs verifies ListSnippetNoteAwardEmoji when invalid IDs.
+// TestListSnippetNoteAwardEmoji_InvalidIDs verifies the ListSnippetNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -692,7 +766,9 @@ func TestListSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestGetSnippetNoteAwardEmoji_InvalidIDs verifies GetSnippetNoteAwardEmoji when invalid IDs.
+// TestGetSnippetNoteAwardEmoji_InvalidIDs verifies the GetSnippetNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -705,7 +781,9 @@ func TestGetSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldAwardID)
 }
 
-// TestCreateSnippetNoteAwardEmoji_InvalidIDs verifies CreateSnippetNoteAwardEmoji when invalid IDs.
+// TestCreateSnippetNoteAwardEmoji_InvalidIDs verifies the CreateSnippetNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -716,7 +794,9 @@ func TestCreateSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	assertErrContains(t, err, testFieldNoteID)
 }
 
-// TestDeleteSnippetNoteAwardEmoji_InvalidIDs verifies DeleteSnippetNoteAwardEmoji when invalid IDs.
+// TestDeleteSnippetNoteAwardEmoji_InvalidIDs verifies the DeleteSnippetNoteAwardEmoji_InvalidIDs handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal(errNoReachAPI)
@@ -770,7 +850,9 @@ func covOKDelete() http.Handler {
 
 // ======================== Issue Emoji ========================.
 
-// TestListIssueAwardEmoji_Validation verifies ListIssueAwardEmoji when validation.
+// TestListIssueAwardEmoji_Validation verifies the ListIssueAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{})
@@ -779,7 +861,9 @@ func TestListIssueAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListIssueAwardEmoji_APIError verifies ListIssueAwardEmoji when API error.
+// TestListIssueAwardEmoji_APIError verifies that ListIssueAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{ProjectID: "p", IID: 1})
@@ -788,7 +872,9 @@ func TestListIssueAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestListIssueAwardEmoji_Success_Cov verifies ListIssueAwardEmoji when success cov.
+// TestListIssueAwardEmoji_Success_Cov verifies the ListIssueAwardEmoji_Success_Cov handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKList())
 	out, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{ProjectID: "p", IID: 1})
@@ -800,7 +886,9 @@ func TestListIssueAwardEmoji_Success_Cov(t *testing.T) {
 	}
 }
 
-// TestGetIssueAwardEmoji_Validation verifies GetIssueAwardEmoji when validation.
+// TestGetIssueAwardEmoji_Validation verifies the GetIssueAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{})
@@ -809,7 +897,9 @@ func TestGetIssueAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetIssueAwardEmoji_APIError verifies GetIssueAwardEmoji when API error.
+// TestGetIssueAwardEmoji_APIError verifies that GetIssueAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -818,7 +908,9 @@ func TestGetIssueAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestGetIssueAwardEmoji_Success_Cov verifies GetIssueAwardEmoji when success cov.
+// TestGetIssueAwardEmoji_Success_Cov verifies the GetIssueAwardEmoji_Success_Cov handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKSingle())
 	out, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -830,7 +922,9 @@ func TestGetIssueAwardEmoji_Success_Cov(t *testing.T) {
 	}
 }
 
-// TestCreateIssueAwardEmoji_Validation verifies CreateIssueAwardEmoji when validation.
+// TestCreateIssueAwardEmoji_Validation verifies the CreateIssueAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{})
@@ -839,7 +933,9 @@ func TestCreateIssueAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateIssueAwardEmoji_APIError verifies CreateIssueAwardEmoji when API error.
+// TestCreateIssueAwardEmoji_APIError verifies that CreateIssueAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateIssueAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{ProjectID: "p", IID: 1, Name: "thumbsup"})
@@ -848,7 +944,9 @@ func TestCreateIssueAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateIssueAwardEmoji_Success_Cov verifies CreateIssueAwardEmoji when success cov.
+// TestCreateIssueAwardEmoji_Success_Cov verifies the CreateIssueAwardEmoji_Success_Cov handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKSingle())
 	out, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{ProjectID: "p", IID: 1, Name: "thumbsup"})
@@ -860,7 +958,9 @@ func TestCreateIssueAwardEmoji_Success_Cov(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueAwardEmoji_Validation verifies DeleteIssueAwardEmoji when validation.
+// TestDeleteIssueAwardEmoji_Validation verifies the DeleteIssueAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteIssueAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{})
@@ -869,7 +969,9 @@ func TestDeleteIssueAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueAwardEmoji_APIError_Cov verifies DeleteIssueAwardEmoji when API error cov.
+// TestDeleteIssueAwardEmoji_APIError_Cov verifies that DeleteIssueAwardEmoji_Cov returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteIssueAwardEmoji_APIError_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -878,7 +980,9 @@ func TestDeleteIssueAwardEmoji_APIError_Cov(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueAwardEmoji_Success_Cov verifies DeleteIssueAwardEmoji when success cov.
+// TestDeleteIssueAwardEmoji_Success_Cov verifies the DeleteIssueAwardEmoji_Success_Cov handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteIssueAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKDelete())
 	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -889,7 +993,9 @@ func TestDeleteIssueAwardEmoji_Success_Cov(t *testing.T) {
 
 // ======================== Issue Note Emoji ========================.
 
-// TestListIssueNoteAwardEmoji_Validation verifies ListIssueNoteAwardEmoji when validation.
+// TestListIssueNoteAwardEmoji_Validation verifies the ListIssueNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{})
@@ -898,7 +1004,9 @@ func TestListIssueNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListIssueNoteAwardEmoji_APIError verifies ListIssueNoteAwardEmoji when API error.
+// TestListIssueNoteAwardEmoji_APIError verifies that ListIssueNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
@@ -907,7 +1015,9 @@ func TestListIssueNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestListIssueNoteAwardEmoji_Success_Cov verifies ListIssueNoteAwardEmoji when success cov.
+// TestListIssueNoteAwardEmoji_Success_Cov verifies the ListIssueNoteAwardEmoji_Success_Cov handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListIssueNoteAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKList())
 	out, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
@@ -919,7 +1029,9 @@ func TestListIssueNoteAwardEmoji_Success_Cov(t *testing.T) {
 	}
 }
 
-// TestGetIssueNoteAwardEmoji_Validation verifies GetIssueNoteAwardEmoji when validation.
+// TestGetIssueNoteAwardEmoji_Validation verifies the GetIssueNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{})
@@ -928,7 +1040,9 @@ func TestGetIssueNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetIssueNoteAwardEmoji_APIError verifies GetIssueNoteAwardEmoji when API error.
+// TestGetIssueNoteAwardEmoji_APIError verifies that GetIssueNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -937,7 +1051,9 @@ func TestGetIssueNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateIssueNoteAwardEmoji_Validation verifies CreateIssueNoteAwardEmoji when validation.
+// TestCreateIssueNoteAwardEmoji_Validation verifies the CreateIssueNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, IssueCreateOnNoteInput{})
@@ -946,7 +1062,9 @@ func TestCreateIssueNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateIssueNoteAwardEmoji_APIError verifies CreateIssueNoteAwardEmoji when API error.
+// TestCreateIssueNoteAwardEmoji_APIError verifies that CreateIssueNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, IssueCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
@@ -955,7 +1073,9 @@ func TestCreateIssueNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueNoteAwardEmoji_Validation verifies DeleteIssueNoteAwardEmoji when validation.
+// TestDeleteIssueNoteAwardEmoji_Validation verifies the DeleteIssueNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteIssueNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{})
@@ -964,7 +1084,9 @@ func TestDeleteIssueNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteIssueNoteAwardEmoji_APIError verifies DeleteIssueNoteAwardEmoji when API error.
+// TestDeleteIssueNoteAwardEmoji_APIError verifies that DeleteIssueNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteIssueNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -975,7 +1097,9 @@ func TestDeleteIssueNoteAwardEmoji_APIError(t *testing.T) {
 
 // ======================== MR Emoji ========================.
 
-// TestListMRAwardEmoji_Validation verifies ListMRAwardEmoji when validation.
+// TestListMRAwardEmoji_Validation verifies the ListMRAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRAwardEmoji(t.Context(), client, MRListInput{})
@@ -984,7 +1108,9 @@ func TestListMRAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListMRAwardEmoji_APIError verifies ListMRAwardEmoji when API error.
+// TestListMRAwardEmoji_APIError verifies that ListMRAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRAwardEmoji(t.Context(), client, MRListInput{ProjectID: "p", IID: 1})
@@ -993,7 +1119,9 @@ func TestListMRAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestListMRAwardEmoji_Success_Cov verifies ListMRAwardEmoji when success cov.
+// TestListMRAwardEmoji_Success_Cov verifies the ListMRAwardEmoji_Success_Cov handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListMRAwardEmoji_Success_Cov(t *testing.T) {
 	client := testutil.NewTestClient(t, covOKList())
 	out, err := ListMRAwardEmoji(t.Context(), client, MRListInput{ProjectID: "p", IID: 1})
@@ -1005,7 +1133,9 @@ func TestListMRAwardEmoji_Success_Cov(t *testing.T) {
 	}
 }
 
-// TestGetMRAwardEmoji_Validation verifies GetMRAwardEmoji when validation.
+// TestGetMRAwardEmoji_Validation verifies the GetMRAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRAwardEmoji(t.Context(), client, MRGetInput{})
@@ -1014,7 +1144,9 @@ func TestGetMRAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetMRAwardEmoji_APIError verifies GetMRAwardEmoji when API error.
+// TestGetMRAwardEmoji_APIError verifies that GetMRAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRAwardEmoji(t.Context(), client, MRGetInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -1023,7 +1155,9 @@ func TestGetMRAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateMRAwardEmoji_Validation verifies CreateMRAwardEmoji when validation.
+// TestCreateMRAwardEmoji_Validation verifies the CreateMRAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{})
@@ -1032,7 +1166,9 @@ func TestCreateMRAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateMRAwardEmoji_APIError verifies CreateMRAwardEmoji when API error.
+// TestCreateMRAwardEmoji_APIError verifies that CreateMRAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{ProjectID: "p", IID: 1, Name: "x"})
@@ -1041,7 +1177,9 @@ func TestCreateMRAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteMRAwardEmoji_Validation verifies DeleteMRAwardEmoji when validation.
+// TestDeleteMRAwardEmoji_Validation verifies the DeleteMRAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteMRAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{})
@@ -1050,7 +1188,9 @@ func TestDeleteMRAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteMRAwardEmoji_APIError verifies DeleteMRAwardEmoji when API error.
+// TestDeleteMRAwardEmoji_APIError verifies that DeleteMRAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteMRAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -1061,7 +1201,9 @@ func TestDeleteMRAwardEmoji_APIError(t *testing.T) {
 
 // ======================== MR Note Emoji ========================.
 
-// TestListMRNoteAwardEmoji_Validation verifies ListMRNoteAwardEmoji when validation.
+// TestListMRNoteAwardEmoji_Validation verifies the ListMRNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRNoteAwardEmoji(t.Context(), client, MRListOnNoteInput{})
@@ -1070,7 +1212,9 @@ func TestListMRNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListMRNoteAwardEmoji_APIError verifies ListMRNoteAwardEmoji when API error.
+// TestListMRNoteAwardEmoji_APIError verifies that ListMRNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListMRNoteAwardEmoji(t.Context(), client, MRListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
@@ -1079,7 +1223,9 @@ func TestListMRNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestGetMRNoteAwardEmoji_Validation verifies GetMRNoteAwardEmoji when validation.
+// TestGetMRNoteAwardEmoji_Validation verifies the GetMRNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{})
@@ -1088,7 +1234,9 @@ func TestGetMRNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetMRNoteAwardEmoji_APIError verifies GetMRNoteAwardEmoji when API error.
+// TestGetMRNoteAwardEmoji_APIError verifies that GetMRNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -1097,7 +1245,9 @@ func TestGetMRNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateMRNoteAwardEmoji_Validation verifies CreateMRNoteAwardEmoji when validation.
+// TestCreateMRNoteAwardEmoji_Validation verifies the CreateMRNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateMRNoteAwardEmoji(t.Context(), client, MRCreateOnNoteInput{})
@@ -1106,7 +1256,9 @@ func TestCreateMRNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateMRNoteAwardEmoji_APIError verifies CreateMRNoteAwardEmoji when API error.
+// TestCreateMRNoteAwardEmoji_APIError verifies that CreateMRNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateMRNoteAwardEmoji(t.Context(), client, MRCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
@@ -1115,7 +1267,9 @@ func TestCreateMRNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteMRNoteAwardEmoji_Validation verifies DeleteMRNoteAwardEmoji when validation.
+// TestDeleteMRNoteAwardEmoji_Validation verifies the DeleteMRNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteMRNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{})
@@ -1124,7 +1278,9 @@ func TestDeleteMRNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteMRNoteAwardEmoji_APIError verifies DeleteMRNoteAwardEmoji when API error.
+// TestDeleteMRNoteAwardEmoji_APIError verifies that DeleteMRNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteMRNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -1135,7 +1291,9 @@ func TestDeleteMRNoteAwardEmoji_APIError(t *testing.T) {
 
 // ======================== Snippet Emoji ========================.
 
-// TestListSnippetAwardEmoji_Validation verifies ListSnippetAwardEmoji when validation.
+// TestListSnippetAwardEmoji_Validation verifies the ListSnippetAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListSnippetAwardEmoji(t.Context(), client, SnippetListInput{})
@@ -1144,7 +1302,9 @@ func TestListSnippetAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListSnippetAwardEmoji_APIError verifies ListSnippetAwardEmoji when API error.
+// TestListSnippetAwardEmoji_APIError verifies that ListSnippetAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListSnippetAwardEmoji(t.Context(), client, SnippetListInput{ProjectID: "p", IID: 1})
@@ -1153,7 +1313,9 @@ func TestListSnippetAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestGetSnippetAwardEmoji_Validation verifies GetSnippetAwardEmoji when validation.
+// TestGetSnippetAwardEmoji_Validation verifies the GetSnippetAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetSnippetAwardEmoji(t.Context(), client, SnippetGetInput{})
@@ -1162,7 +1324,9 @@ func TestGetSnippetAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetSnippetAwardEmoji_APIError verifies GetSnippetAwardEmoji when API error.
+// TestGetSnippetAwardEmoji_APIError verifies that GetSnippetAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetSnippetAwardEmoji(t.Context(), client, SnippetGetInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -1171,7 +1335,9 @@ func TestGetSnippetAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateSnippetAwardEmoji_Validation verifies CreateSnippetAwardEmoji when validation.
+// TestCreateSnippetAwardEmoji_Validation verifies the CreateSnippetAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateSnippetAwardEmoji(t.Context(), client, SnippetCreateInput{})
@@ -1180,7 +1346,9 @@ func TestCreateSnippetAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateSnippetAwardEmoji_APIError verifies CreateSnippetAwardEmoji when API error.
+// TestCreateSnippetAwardEmoji_APIError verifies that CreateSnippetAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateSnippetAwardEmoji(t.Context(), client, SnippetCreateInput{ProjectID: "p", IID: 1, Name: "x"})
@@ -1189,7 +1357,9 @@ func TestCreateSnippetAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteSnippetAwardEmoji_Validation verifies DeleteSnippetAwardEmoji when validation.
+// TestDeleteSnippetAwardEmoji_Validation verifies the DeleteSnippetAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteSnippetAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteSnippetAwardEmoji(t.Context(), client, SnippetDeleteInput{})
@@ -1198,7 +1368,9 @@ func TestDeleteSnippetAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteSnippetAwardEmoji_APIError verifies DeleteSnippetAwardEmoji when API error.
+// TestDeleteSnippetAwardEmoji_APIError verifies that DeleteSnippetAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteSnippetAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteSnippetAwardEmoji(t.Context(), client, SnippetDeleteInput{ProjectID: "p", IID: 1, AwardID: 1})
@@ -1209,7 +1381,9 @@ func TestDeleteSnippetAwardEmoji_APIError(t *testing.T) {
 
 // ======================== Snippet Note Emoji ========================.
 
-// TestListSnippetNoteAwardEmoji_Validation verifies ListSnippetNoteAwardEmoji when validation.
+// TestListSnippetNoteAwardEmoji_Validation verifies the ListSnippetNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, SnippetListOnNoteInput{})
@@ -1218,7 +1392,9 @@ func TestListSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestListSnippetNoteAwardEmoji_APIError verifies ListSnippetNoteAwardEmoji when API error.
+// TestListSnippetNoteAwardEmoji_APIError verifies that ListSnippetNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, SnippetListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1})
@@ -1227,7 +1403,9 @@ func TestListSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestGetSnippetNoteAwardEmoji_Validation verifies GetSnippetNoteAwardEmoji when validation.
+// TestGetSnippetNoteAwardEmoji_Validation verifies the GetSnippetNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{})
@@ -1236,7 +1414,9 @@ func TestGetSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestGetSnippetNoteAwardEmoji_APIError verifies GetSnippetNoteAwardEmoji when API error.
+// TestGetSnippetNoteAwardEmoji_APIError verifies that GetSnippetNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -1245,7 +1425,9 @@ func TestGetSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateSnippetNoteAwardEmoji_Validation verifies CreateSnippetNoteAwardEmoji when validation.
+// TestCreateSnippetNoteAwardEmoji_Validation verifies the CreateSnippetNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, SnippetCreateOnNoteInput{})
@@ -1254,7 +1436,9 @@ func TestCreateSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestCreateSnippetNoteAwardEmoji_APIError verifies CreateSnippetNoteAwardEmoji when API error.
+// TestCreateSnippetNoteAwardEmoji_APIError verifies that CreateSnippetNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, SnippetCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, Name: "x"})
@@ -1263,7 +1447,9 @@ func TestCreateSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteSnippetNoteAwardEmoji_Validation verifies DeleteSnippetNoteAwardEmoji when validation.
+// TestDeleteSnippetNoteAwardEmoji_Validation verifies the DeleteSnippetNoteAwardEmoji_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{})
@@ -1272,7 +1458,9 @@ func TestDeleteSnippetNoteAwardEmoji_Validation(t *testing.T) {
 	}
 }
 
-// TestDeleteSnippetNoteAwardEmoji_APIError verifies DeleteSnippetNoteAwardEmoji when API error.
+// TestDeleteSnippetNoteAwardEmoji_APIError verifies that DeleteSnippetNoteAwardEmoji returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteSnippetNoteAwardEmoji_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 1, AwardID: 1})
@@ -1283,7 +1471,9 @@ func TestDeleteSnippetNoteAwardEmoji_APIError(t *testing.T) {
 
 // ======================== Formatters ========================.
 
-// TestFormatListMarkdown_Empty_Cov verifies FormatListMarkdown when empty cov.
+// TestFormatListMarkdown_Empty_Cov verifies the ListMarkdown_Empty_Cov Markdown formatter for a representative list_empty_cov input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty_Cov(t *testing.T) {
 	res := FormatListMarkdown(ListOutput{})
 	if res == nil {
@@ -1291,7 +1481,9 @@ func TestFormatListMarkdown_Empty_Cov(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_Empty_Cov verifies FormatListMarkdownString when empty cov.
+// TestFormatListMarkdownString_Empty_Cov verifies the ListMarkdownString_Empty_Cov Markdown formatter for a representative liststring_empty_cov input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_Empty_Cov(t *testing.T) {
 	md := FormatListMarkdownString(ListOutput{})
 	if !strings.Contains(md, "No award emoji found") {
@@ -1299,7 +1491,9 @@ func TestFormatListMarkdownString_Empty_Cov(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdownString_WithEmoji_Cov verifies FormatListMarkdownString when with emoji cov.
+// TestFormatListMarkdownString_WithEmoji_Cov verifies the ListMarkdownString_WithEmoji_Cov Markdown formatter for a representative liststring_withemoji_cov input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdownString_WithEmoji_Cov(t *testing.T) {
 	out := ListOutput{AwardEmoji: []Output{{ID: 1, Name: "thumbsup", Username: "alice"}}}
 	md := FormatListMarkdownString(out)
@@ -1308,7 +1502,9 @@ func TestFormatListMarkdownString_WithEmoji_Cov(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Wrapper verifies FormatMarkdown when wrapper.
+// TestFormatMarkdown_Wrapper verifies the Markdown_Wrapper Markdown formatter for a representative _wrapper input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_Wrapper(t *testing.T) {
 	res := FormatMarkdown(Output{Name: "thumbsup"})
 	if res == nil {
@@ -1316,7 +1512,9 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_NoCreatedAt verifies FormatMarkdownString when no created at.
+// TestFormatMarkdownString_NoCreatedAt verifies the MarkdownString_NoCreatedAt Markdown formatter for a representative string_nocreatedat input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_NoCreatedAt(t *testing.T) {
 	md := FormatMarkdownString(Output{Name: "thumbsup", Username: "alice"})
 	if strings.Contains(md, "Created") {
@@ -1324,7 +1522,9 @@ func TestFormatMarkdownString_NoCreatedAt(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_WithCreatedAt verifies FormatMarkdownString when with created at.
+// TestFormatMarkdownString_WithCreatedAt verifies the MarkdownString_WithCreatedAt Markdown formatter for a representative string_withcreatedat input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
 	md := FormatMarkdownString(Output{Name: "thumbsup", Username: "alice", CreatedAt: "2026-06-01T10:00:00Z"})
 	if !strings.Contains(md, "Created") || !strings.Contains(md, "1 Jun 2026") {
@@ -1334,7 +1534,9 @@ func TestFormatMarkdownString_WithCreatedAt(t *testing.T) {
 
 // ======================== Action Specs ========================.
 
-// TestActionSpecs_Metadata verifies canonical metadata for all award emoji actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	specs := allAwardEmojiActionSpecs(client)
@@ -1362,7 +1564,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallAllRoutes validates all award emoji routes through canonical specs.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -1429,7 +1633,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_GetNotFound validates get routes preserve NotFoundResult details.
+// TestActionSpecs_GetNotFound validates the GetNotFound route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_GetNotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -1468,8 +1674,9 @@ func TestActionSpecs_GetNotFound(t *testing.T) {
 	}
 }
 
-// TestCreateAPIErrors covers the API error return paths in all five create
-// functions that lack API-error coverage.
+// TestCreateAPIErrors verifies that CreateAPIErrors returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateAPIErrors(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -1509,7 +1716,9 @@ func TestCreateAPIErrors(t *testing.T) {
 	})
 }
 
-// TestActionSpecs_CreateErrors validates create routes return API errors.
+// TestActionSpecs_CreateErrors validates the CreateErrors route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CreateErrors(t *testing.T) {
 	assertActionSpecMutationErrors(t, http.MethodPost, []awardEmojiActionSpecCase{
 		{"gitlab_issue_emoji_create", map[string]any{"project_id": "p", "issue_iid": 1, "name": "thumbsup"}},
@@ -1549,7 +1758,9 @@ func assertActionSpecMutationErrors(t *testing.T, method string, cases []awardEm
 	}
 }
 
-// TestActionSpecs_DeleteErrors validates delete routes return API errors.
+// TestActionSpecs_DeleteErrors validates the DeleteErrors route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteErrors(t *testing.T) {
 	assertActionSpecMutationErrors(t, http.MethodDelete, []awardEmojiActionSpecCase{
 		{"gitlab_issue_emoji_delete", map[string]any{"project_id": "p", "issue_iid": 1, "award_id": 1}},
@@ -1561,7 +1772,9 @@ func TestActionSpecs_DeleteErrors(t *testing.T) {
 	})
 }
 
-// TestDeleteAwardEmoji_NotFoundHints covers delete not-found hint branches.
+// TestDeleteAwardEmoji_NotFoundHints verifies that DeleteAwardEmoji_NotFoundHints returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteAwardEmoji_NotFoundHints(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -1604,7 +1817,9 @@ func TestDeleteAwardEmoji_NotFoundHints(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := awardEmojiSpecsByTool(t, allAwardEmojiActionSpecs(client))

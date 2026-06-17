@@ -42,7 +42,9 @@ const userListArrayJSON = `[` + userListJSON + `]`
 
 // -- List --.
 
-// TestListUserLists_Success verifies ListUserLists when success.
+// TestListUserLists_Success verifies that ListUserLists succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListUserLists_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/42/feature_flags_user_lists", func(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +66,9 @@ func TestListUserLists_Success(t *testing.T) {
 	}
 }
 
-// TestListUserLists_MissingProjectID verifies ListUserLists when missing project ID.
+// TestListUserLists_MissingProjectID verifies that ListUserLists_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListUserLists_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ListUserLists(context.Background(), client, ListInput{})
@@ -75,7 +79,9 @@ func TestListUserLists_MissingProjectID(t *testing.T) {
 
 // -- Get --.
 
-// TestGetUserList_Success verifies GetUserList when success.
+// TestGetUserList_Success verifies that GetUserList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetUserList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/42/feature_flags_user_lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +101,9 @@ func TestGetUserList_Success(t *testing.T) {
 	}
 }
 
-// TestGetUserList_MissingParams verifies GetUserList when missing params.
+// TestGetUserList_MissingParams verifies that GetUserList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetUserList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetUserList(context.Background(), client, GetInput{})
@@ -110,7 +118,9 @@ func TestGetUserList_MissingParams(t *testing.T) {
 
 // -- Create --.
 
-// TestCreateUserList_Success verifies CreateUserList when success.
+// TestCreateUserList_Success verifies that CreateUserList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreateUserList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/projects/42/feature_flags_user_lists", func(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +139,9 @@ func TestCreateUserList_Success(t *testing.T) {
 	}
 }
 
-// TestCreateUserList_MissingParams verifies CreateUserList when missing params.
+// TestCreateUserList_MissingParams verifies that CreateUserList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateUserList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := CreateUserList(context.Background(), client, CreateInput{})
@@ -144,7 +156,9 @@ func TestCreateUserList_MissingParams(t *testing.T) {
 
 // -- Update --.
 
-// TestUpdateUserList_Success verifies UpdateUserList when success.
+// TestUpdateUserList_Success verifies that UpdateUserList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateUserList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/projects/42/feature_flags_user_lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -163,7 +177,9 @@ func TestUpdateUserList_Success(t *testing.T) {
 	}
 }
 
-// TestUpdateUserList_MissingParams verifies UpdateUserList when missing params.
+// TestUpdateUserList_MissingParams verifies that UpdateUserList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateUserList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := UpdateUserList(context.Background(), client, UpdateInput{})
@@ -178,7 +194,9 @@ func TestUpdateUserList_MissingParams(t *testing.T) {
 
 // -- Delete --.
 
-// TestDeleteUserList_Success verifies DeleteUserList when success.
+// TestDeleteUserList_Success verifies that DeleteUserList succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteUserList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/projects/42/feature_flags_user_lists/10", func(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +210,9 @@ func TestDeleteUserList_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteUserList_MissingParams verifies DeleteUserList when missing params.
+// TestDeleteUserList_MissingParams verifies that DeleteUserList_MissingParams returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteUserList_MissingParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := DeleteUserList(context.Background(), client, DeleteInput{})
@@ -207,7 +227,9 @@ func TestDeleteUserList_MissingParams(t *testing.T) {
 
 // -- Formatters --.
 
-// TestFormatUserListMarkdown verifies FormatUserListMarkdown.
+// TestFormatUserListMarkdown verifies the UserListMarkdown Markdown formatter for a representative userlist input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatUserListMarkdown(t *testing.T) {
 	out := Output{ID: 1, IID: 10, ProjectID: 42, Name: testListName, UserXIDs: "user1,user2"}
 	md := FormatUserListMarkdown(out)
@@ -219,7 +241,9 @@ func TestFormatUserListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatUserListMarkdown_NameInHeading verifies FormatUserListMarkdown when name in heading.
+// TestFormatUserListMarkdown_NameInHeading verifies the UserListMarkdown_NameInHeading Markdown formatter for a representative userlist_nameinheading input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatUserListMarkdown_NameInHeading(t *testing.T) {
 	out := Output{ID: 5, IID: 3, ProjectID: 10, Name: "my-list", UserXIDs: "x1"}
 	md := FormatUserListMarkdown(out)
@@ -234,7 +258,9 @@ func TestFormatUserListMarkdown_NameInHeading(t *testing.T) {
 	}
 }
 
-// TestFormatListUserListsMarkdown_NoIDColumn verifies FormatListUserListsMarkdown when no ID column.
+// TestFormatListUserListsMarkdown_NoIDColumn verifies the ListUserListsMarkdown_NoIDColumn Markdown formatter for a representative listuserlists_noidcolumn input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListUserListsMarkdown_NoIDColumn(t *testing.T) {
 	out := ListOutput{
 		UserLists: []Output{
@@ -251,7 +277,9 @@ func TestFormatListUserListsMarkdown_NoIDColumn(t *testing.T) {
 	}
 }
 
-// TestFormatListUserListsMarkdown verifies FormatListUserListsMarkdown.
+// TestFormatListUserListsMarkdown verifies the ListUserListsMarkdown Markdown formatter for a representative listuserlists input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListUserListsMarkdown(t *testing.T) {
 	out := ListOutput{
 		UserLists: []Output{
@@ -266,7 +294,9 @@ func TestFormatListUserListsMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListUserListsMarkdown_Empty verifies FormatListUserListsMarkdown when empty.
+// TestFormatListUserListsMarkdown_Empty verifies the ListUserListsMarkdown_Empty Markdown formatter for a representative listuserlists_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListUserListsMarkdown_Empty(t *testing.T) {
 	out := ListOutput{UserLists: []Output{}}
 	md := FormatListUserListsMarkdown(out)
@@ -299,7 +329,9 @@ const covUserListJSON = `{
 // List — API error, search param
 // ---------------------------------------------------------------------------.
 
-// TestListUserLists_APIError verifies ListUserLists when API error.
+// TestListUserLists_APIError verifies that ListUserLists returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListUserLists_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -310,7 +342,9 @@ func TestListUserLists_APIError(t *testing.T) {
 	}
 }
 
-// TestListUserLists_Forbidden verifies ListUserLists adds the Premium/Ultimate hint on forbidden responses.
+// TestListUserLists_Forbidden verifies the ListUserLists_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListUserLists_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -324,7 +358,9 @@ func TestListUserLists_Forbidden(t *testing.T) {
 	}
 }
 
-// TestListUserLists_WithSearch verifies ListUserLists when with search.
+// TestListUserLists_WithSearch verifies the ListUserLists_WithSearch handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListUserLists_WithSearch(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/projects/42/feature_flags_user_lists", func(w http.ResponseWriter, r *http.Request) {
@@ -351,7 +387,9 @@ func TestListUserLists_WithSearch(t *testing.T) {
 // Get — API error
 // ---------------------------------------------------------------------------.
 
-// TestGetUserList_APIError verifies GetUserList when API error.
+// TestGetUserList_APIError verifies that GetUserList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetUserList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -366,7 +404,9 @@ func TestGetUserList_APIError(t *testing.T) {
 // Create — API error
 // ---------------------------------------------------------------------------.
 
-// TestCreateUserList_APIError verifies CreateUserList when API error.
+// TestCreateUserList_APIError verifies that CreateUserList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateUserList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -379,7 +419,9 @@ func TestCreateUserList_APIError(t *testing.T) {
 	}
 }
 
-// TestCreateUserList_ErrorBranches verifies CreateUserList status-specific errors.
+// TestCreateUserList_ErrorBranches verifies that CreateUserListBranches returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateUserList_ErrorBranches(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -410,7 +452,9 @@ func TestCreateUserList_ErrorBranches(t *testing.T) {
 // Update — API error
 // ---------------------------------------------------------------------------.
 
-// TestUpdateUserList_APIError verifies UpdateUserList when API error.
+// TestUpdateUserList_APIError verifies that UpdateUserList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdateUserList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -423,7 +467,9 @@ func TestUpdateUserList_APIError(t *testing.T) {
 	}
 }
 
-// TestUpdateUserList_Forbidden verifies UpdateUserList adds the role hint on forbidden responses.
+// TestUpdateUserList_Forbidden verifies the UpdateUserList_Forbidden handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateUserList_Forbidden(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -441,7 +487,9 @@ func TestUpdateUserList_Forbidden(t *testing.T) {
 // Delete — API error
 // ---------------------------------------------------------------------------.
 
-// TestDeleteUserList_APIError verifies DeleteUserList when API error.
+// TestDeleteUserList_APIError verifies that DeleteUserList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteUserList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":msgBadRequest}`)
@@ -456,7 +504,9 @@ func TestDeleteUserList_APIError(t *testing.T) {
 // FormatUserListMarkdown — with CreatedAt / UpdatedAt
 // ---------------------------------------------------------------------------.
 
-// TestFormatUserListMarkdown_WithDates verifies FormatUserListMarkdown when with dates.
+// TestFormatUserListMarkdown_WithDates verifies the UserListMarkdown_WithDates Markdown formatter for a representative userlist_withdates input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatUserListMarkdown_WithDates(t *testing.T) {
 	out := Output{
 		ID: 1, IID: 10, ProjectID: 42,

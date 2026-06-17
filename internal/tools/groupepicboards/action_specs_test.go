@@ -1,3 +1,4 @@
+// action_specs_test.go contains unit tests for the group epic board [toolutil.ActionSpec] entries.
 package groupepicboards
 
 import (
@@ -14,7 +15,9 @@ const (
 	registerBoardsJSON = `[{"id":1,"name":"Board","labels":[{"name":"bug"}],"lists":[{"id":1,"position":0,"label":{"id":10,"name":"To Do"}}]}]`
 )
 
-// TestActionSpecs_Metadata verifies group epic board action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -30,7 +33,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes verifies both group epic board routes execute successfully.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

@@ -7,7 +7,14 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestNormalizeParamsWithExplanation_CompatibilityBranches verifies dynamic parameter compatibility rules across legacy action spellings.
+// TestNormalizeParamsWithExplanation_CompatibilityBranches verifies that
+// NormalizeParamsWithExplanation applies action-specific compatibility
+// aliases (job status -> scope, etc.) without making any GitLab API call.
+//
+// The test runs a table of action-specific alias cases and asserts that the
+// normalized params and the emitted alias explanations match the expected
+// contract. This protects the parameter-alias compatibility layer that
+// older LLM agents rely on.
 func TestNormalizeParamsWithExplanation_CompatibilityBranches(t *testing.T) {
 	testCases := []struct {
 		name             string
@@ -311,7 +318,9 @@ func TestNormalizeParamsWithExplanation_EnterpriseCompatibilityBranches(t *testi
 	}
 }
 
-// TestNormalizeParamsWithExplanation_NoChangeScenarios verifies canonical values are not overwritten by aliases.
+// TestNormalizeParamsWithExplanation_NoChangeScenarios verifies that NormalizeParamsWithExplanation_NoChangeScenarios forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestNormalizeParamsWithExplanation_NoChangeScenarios(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -377,7 +386,9 @@ func TestNormalizeParamsWithExplanation_AcceptedAliasCanonicalization(t *testing
 	}
 }
 
-// TestParameterNormalizationHelpers_ParseValues verifies exported parser helpers used by dynamic parameter normalization.
+// TestParameterNormalizationHelpers_ParseValues verifies the ParameterNormalizationHelpers_ParseValues handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestParameterNormalizationHelpers_ParseValues(t *testing.T) {
 	accessLevelCases := []struct {
 		name      string
@@ -445,7 +456,9 @@ func TestParameterNormalizationHelpers_ParseValues(t *testing.T) {
 	}
 }
 
-// TestParameterAliases_SnippetFileNameTargetsFilePath verifies alias metadata matches snippet file normalization output.
+// TestParameterAliases_SnippetFileNameTargetsFilePath verifies the ParameterAliases_SnippetFileNameTargetsFilePath handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestParameterAliases_SnippetFileNameTargetsFilePath(t *testing.T) {
 	for _, alias := range ParameterAliases() {
 		if alias.ActionID == actionSnippetProjectCreate && alias.Alias == "files.file_name" {
@@ -458,7 +471,9 @@ func TestParameterAliases_SnippetFileNameTargetsFilePath(t *testing.T) {
 	t.Fatal("files.file_name snippet alias not found")
 }
 
-// TestActionAliasHelpers_NormalizationAndCompaction verifies alias normalization trims, sorts, and deduplicates values.
+// TestActionAliasHelpers_NormalizationAndCompaction verifies the ActionAliasHelpers_NormalizationAndCompaction handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestActionAliasHelpers_NormalizationAndCompaction(t *testing.T) {
 	aliases := cloneActionAliases([]ActionAlias{
 		{Alias: " Z.Alias ", Canonical: " z.target ", Source: " source ", Reason: " reason "},
@@ -569,8 +584,13 @@ func TestNormalizeCommonParams_PaginationBooleanCoercion(t *testing.T) {
 	}
 }
 
-// TestDefaultPaginationValue_PageVsOthers verifies page defaults to 1 and all
-// other pagination param names default to 100.
+// TestDefaultPaginationValue_PageVsOthers verifies that defaultPaginationValue
+// returns 1 for the "page" key and 100 for any other pagination key
+// (first, last, per_page).
+//
+// The test calls the helper directly across the four documented keys and
+// asserts the expected defaults. This protects the default-pagination
+// contract used when callers omit pagination parameters.
 func TestDefaultPaginationValue_PageVsOthers(t *testing.T) {
 	if got := defaultPaginationValue("page"); got != 1 {
 		t.Fatalf("defaultPaginationValue(page) = %d, want 1", got)
@@ -623,8 +643,9 @@ func TestNormalizeGroupProtectedBranchProtectParams_BranchAndAccessLevels(t *tes
 	}
 }
 
-// TestNormalizeProjectPushRuleParams_UnsignedCommitAlias verifies deny_unsigned_commits
-// maps to reject_unsigned_commits.
+// TestNormalizeProjectPushRuleParams_UnsignedCommitAlias verifies that NormalizeProjectPushRuleParams_UnsignedCommitAlias forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestNormalizeProjectPushRuleParams_UnsignedCommitAlias(t *testing.T) {
 	normalized, explanations := NormalizeParamsWithExplanation(
 		actionProjectPushRuleAdd,
@@ -786,8 +807,9 @@ func TestProtectedEnvironmentApprovalCount_NonIntegerValue(t *testing.T) {
 	}
 }
 
-// TestIssueUpdateParams_StateEventNotAccepted verifies that normalizeIssueUpdateParams
-// is a no-op when the schema does not accept state_event.
+// TestIssueUpdateParams_StateEventNotAccepted verifies that IssueUpdateParams_StateEventNotAccepted forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestIssueUpdateParams_StateEventNotAccepted(t *testing.T) {
 	params := map[string]any{"state_event": "close"}
 	normalized, explanations := NormalizeParamsWithExplanation(
@@ -815,8 +837,9 @@ func TestProtectedEnvironmentAccessEntries_UnsupportedValue(t *testing.T) {
 	}
 }
 
-// TestProtectedEnvironmentAccessEntries_DefaultSwitchInLoop verifies the
-// switch default branch (non-map, non-primitive entries inside the array).
+// TestProtectedEnvironmentAccessEntries_DefaultSwitchInLoop verifies the ProtectedEnvironmentAccessEntries_DefaultSwitchInLoop handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProtectedEnvironmentAccessEntries_DefaultSwitchInLoop(t *testing.T) {
 	// An array of unsupported items — none of them are maps, so the
 	// default case runs for each and the function returns the original
@@ -827,8 +850,9 @@ func TestProtectedEnvironmentAccessEntries_DefaultSwitchInLoop(t *testing.T) {
 	}
 }
 
-// TestProtectedEnvironmentAccessEntries_PrimitiveInArray verifies the
-// switch default branch wraps a valid primitive (int) into an object.
+// TestProtectedEnvironmentAccessEntries_PrimitiveInArray verifies the ProtectedEnvironmentAccessEntries_PrimitiveInArray handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProtectedEnvironmentAccessEntries_PrimitiveInArray(t *testing.T) {
 	v, changed := protectedEnvironmentAccessEntries([]any{float64(30)}, false)
 	if !changed {
@@ -865,8 +889,9 @@ func TestAccessLevelParam_NonConvertibleValue(t *testing.T) {
 	}
 }
 
-// TestMoveWithoutSchemaCheck_AliasMissing verifies the early return when
-// the alias is not present in params.
+// TestMoveWithoutSchemaCheck_AliasMissing verifies that MoveWithoutSchemaCheck_AliasMissing returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestMoveWithoutSchemaCheck_AliasMissing(t *testing.T) {
 	// Use a group label update call without "name" in params — the
 	// moveWithoutSchemaCheck("name", "new_name", ...) should be a no-op.
@@ -884,8 +909,9 @@ func TestMoveWithoutSchemaCheck_AliasMissing(t *testing.T) {
 	}
 }
 
-// TestMoveWithoutSchemaCheck_TargetPresent verifies the early return when
-// the target key is already present in state.out.
+// TestMoveWithoutSchemaCheck_TargetPresent verifies the MoveWithoutSchemaCheck_TargetPresent handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMoveWithoutSchemaCheck_TargetPresent(t *testing.T) {
 	// Both "name" alias and "new_name" target are present — the move
 	// should not happen (early return).
@@ -903,8 +929,9 @@ func TestMoveWithoutSchemaCheck_TargetPresent(t *testing.T) {
 	}
 }
 
-// TestRunnerUpdateParams_PausedNotAccepted verifies that normalizeRunnerUpdateParams
-// is a no-op when the schema does not accept "paused".
+// TestRunnerUpdateParams_PausedNotAccepted verifies that RunnerUpdateParams_PausedNotAccepted forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestRunnerUpdateParams_PausedNotAccepted(t *testing.T) {
 	params := map[string]any{"paused": "true"}
 	normalized, explanations := NormalizeParamsWithExplanation(
@@ -921,8 +948,9 @@ func TestRunnerUpdateParams_PausedNotAccepted(t *testing.T) {
 	}
 }
 
-// TestRunnerUpdateParams_NonParseableValue verifies the early return when
-// the "paused" value cannot be parsed as a bool.
+// TestRunnerUpdateParams_NonParseableValue verifies that RunnerUpdateParams_NonParseableValue forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestRunnerUpdateParams_NonParseableValue(t *testing.T) {
 	params := map[string]any{"paused": "maybe"}
 	normalized, explanations := NormalizeParamsWithExplanation(
@@ -938,8 +966,9 @@ func TestRunnerUpdateParams_NonParseableValue(t *testing.T) {
 	}
 }
 
-// TestSnippetProjectCreateParams_FilesNotAccepted verifies the early return
-// when the schema does not accept "files".
+// TestSnippetProjectCreateParams_FilesNotAccepted verifies that SnippetProjectCreateParams_FilesNotAccepted forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestSnippetProjectCreateParams_FilesNotAccepted(t *testing.T) {
 	params := map[string]any{"file_name": "x", "content": "y"}
 	normalized, explanations := NormalizeParamsWithExplanation(
@@ -959,8 +988,9 @@ func TestSnippetProjectCreateParams_FilesNotAccepted(t *testing.T) {
 	}
 }
 
-// TestReleaseLinkBatchEntries_NonArrayLinks verifies the early return when
-// "links" is not a slice.
+// TestReleaseLinkBatchEntries_NonArrayLinks verifies the ReleaseLinkBatchEntries_NonArrayLinks handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestReleaseLinkBatchEntries_NonArrayLinks(t *testing.T) {
 	clone := func() map[string]any { return map[string]any{} }
 	record := func(alias, target, reason string) {}
@@ -970,8 +1000,9 @@ func TestReleaseLinkBatchEntries_NonArrayLinks(t *testing.T) {
 	}
 }
 
-// TestReleaseLinkBatchEntries_EmptyLinks verifies the early return when
-// "links" is an empty slice.
+// TestReleaseLinkBatchEntries_EmptyLinks verifies the ReleaseLinkBatchEntries_EmptyLinks handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestReleaseLinkBatchEntries_EmptyLinks(t *testing.T) {
 	clone := func() map[string]any { return map[string]any{} }
 	record := func(alias, target, reason string) {}
@@ -981,8 +1012,9 @@ func TestReleaseLinkBatchEntries_EmptyLinks(t *testing.T) {
 	}
 }
 
-// TestReleaseLinkBatchEntries_NonMapLink verifies the per-item continue
-// when a link is not a map.
+// TestReleaseLinkBatchEntries_NonMapLink verifies the ReleaseLinkBatchEntries_NonMapLink handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestReleaseLinkBatchEntries_NonMapLink(t *testing.T) {
 	clone := func() map[string]any { return map[string]any{} }
 	record := func(alias, target, reason string) {}
@@ -992,8 +1024,9 @@ func TestReleaseLinkBatchEntries_NonMapLink(t *testing.T) {
 	}
 }
 
-// TestReleaseLinkBatchEntries_NoChanges verifies the case where the link map
-// has no aliases to normalize (so !linkChanged → continue).
+// TestReleaseLinkBatchEntries_NoChanges verifies the ReleaseLinkBatchEntries_NoChanges handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestReleaseLinkBatchEntries_NoChanges(t *testing.T) {
 	clone := func() map[string]any { return map[string]any{} }
 	record := func(alias, target, reason string) {}
@@ -1093,8 +1126,9 @@ func TestGitLabBranchProtectionAccessLevelValue_Defaults(t *testing.T) {
 	}
 }
 
-// TestGitLabAccessLevelValue_InvalidLevel verifies that gitlabAccessLevelValue
-// rejects invalid access level numbers.
+// TestGitLabAccessLevelValue_InvalidLevel verifies the GitLabAccessLevelValue_InvalidLevel handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGitLabAccessLevelValue_InvalidLevel(t *testing.T) {
 	if level, ok := gitlabAccessLevelValue(99); ok {
 		t.Errorf("expected false for 99, got level=%d ok=%v", level, ok)
@@ -1145,8 +1179,9 @@ func TestGitLabAccessLevelValue_ExtendedAliases(t *testing.T) {
 	}
 }
 
-// TestIntegerValue_TypeCoverage verifies integerValue handles all supported
-// numeric representations and rejects unsupported ones.
+// TestIntegerValue_TypeCoverage verifies the IntegerValue_TypeCoverage handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestIntegerValue_TypeCoverage(t *testing.T) {
 	cases := []struct {
 		value   any

@@ -47,6 +47,11 @@ var readSuffixes = []string{
 }
 
 // violation records a single metadata rule infraction for a tool.
+//
+// tool is the MCP tool name that violated the rule. category is the rule
+// family used to group findings in the report (naming, description,
+// annotations, etc.). detail is a human-readable explanation rendered
+// verbatim into the Markdown table.
 type violation struct {
 	tool     string // MCP tool name that violated the rule.
 	category string // Rule category (naming, description, annotations, etc.).
@@ -252,6 +257,8 @@ func auditAdditionalProperties(tls []*mcp.Tool, kind string) []violation {
 }
 
 // isObjectSchema reports whether a JSON Schema node represents an object.
+// A schema is considered object-shaped when its type is "object" or it
+// declares a "properties" map; both shapes are valid for MCP tool inputs.
 func isObjectSchema(node map[string]any) bool {
 	if t, ok := node["type"].(string); ok {
 		return t == "object"

@@ -3,6 +3,8 @@
 // commits_ce_test.go tests the commit and file MCP tools against a live GitLab
 // instance using both individual tools and the gitlab_repository meta-tool.
 // Exercises: commit list, get, diff, and file retrieval.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -14,7 +16,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/files"
 )
 
-// TestIndividual_Commits exercises commit operations using individual MCP tools.
+// TestIndividual_Commits exercises commit and file operations using
+// individual MCP tools (gitlab_commit_list, gitlab_commit_get, etc.).
+//
+// The test creates a project fixture, unprotects the default branch, and
+// commits a placeholder main.go file so the project has at least one
+// commit. Then it runs four subtests: list commits on the default branch,
+// fetch the created commit by SHA, retrieve its diff, and read the file
+// from the default branch. Each subtest asserts the expected ID, SHA, or
+// filename round-trips through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Commits(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -74,7 +86,15 @@ func TestIndividual_Commits(t *testing.T) {
 	})
 }
 
-// TestMeta_Commits exercises commit operations using the gitlab_repository meta-tool.
+// TestMeta_Commits exercises commit and file operations using the
+// gitlab_repository meta-tool.
+//
+// The test mirrors [TestIndividual_Commits] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_repository
+// tool. Each subtest asserts the same outcome and verifies the tool name
+// stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Commits(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

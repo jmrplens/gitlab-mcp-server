@@ -2,6 +2,8 @@
 
 // deploykeys_ce_test.go tests the deploy key MCP tools against a live GitLab instance.
 // Covers add, get, list, update, and delete for both individual and meta-tool modes.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -30,8 +32,16 @@ func generateTestSSHKey(t *testing.T) string {
 	return string(ssh.MarshalAuthorizedKey(sshPub))
 }
 
-// TestIndividual_DeployKeys exercises the deploy key lifecycle using individual tools:
-// add → get → list → update → delete. Generates a fresh ED25519 SSH key per run.
+// TestIndividual_DeployKeys exercises the deploy key lifecycle using
+// individual tools: add → get → list → update → delete.
+//
+// The test creates a project fixture and a fresh ED25519 SSH key per run,
+// then runs five subtests covering the full lifecycle through the
+// gitlab_*_deploy_key_* tools. Each subtest asserts the expected ID or
+// title round-trips through the GitLab API. Cleanup relies on the
+// explicit delete subtest plus the per-test project cleanup.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_DeployKeys(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -97,7 +107,15 @@ func TestIndividual_DeployKeys(t *testing.T) {
 	})
 }
 
-// TestMeta_DeployKeys exercises the same deploy key lifecycle via the gitlab_access meta-tool.
+// TestMeta_DeployKeys exercises the same deploy key lifecycle via the
+// gitlab_access meta-tool.
+//
+// The test mirrors [TestIndividual_DeployKeys] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_access
+// tool. Each subtest asserts the same outcome and verifies the tool name
+// stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_DeployKeys(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

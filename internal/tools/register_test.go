@@ -355,8 +355,10 @@ func TestRegisterAll_ToolNames(t *testing.T) {
 	}
 }
 
-// TestRegisterAllMeta_ToolNames verifies that every expected meta-tool name
-// is present after RegisterAllMeta (enterprise=true) and that no unexpected tools are registered.
+// expectedRegisterAllToolNames returns the set of meta-tool names that
+// the catalog projection plus standalone utilities should register for
+// the given enterprise flag. The map is used to compare against the
+// live RegisterAllMeta output to detect name drift.
 func expectedRegisterAllToolNames(t *testing.T, enterprise bool) map[string]bool {
 	t.Helper()
 	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
@@ -387,6 +389,10 @@ func expectedRegisterAllToolNames(t *testing.T, enterprise bool) map[string]bool
 	return names
 }
 
+// TestRegisterAllMeta_ToolNames verifies that every expected meta-tool
+// name is present after RegisterAllMeta (enterprise=true) and that no
+// unexpected tools are registered. The expected name set is sourced from
+// the catalog projection and the standalone utility spec list.
 func TestRegisterAllMeta_ToolNames(t *testing.T) {
 	session := newMetaMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusOK, `{"version":"17.0.0"}`)

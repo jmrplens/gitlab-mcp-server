@@ -76,8 +76,10 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// List retrieves a paginated list of labels for a GitLab project.
-// Supports filtering by search keyword and including ancestor group labels.
+// List retrieves a paginated list of project labels via the GitLab
+// Labels API (GET /projects/:id/labels). Supports filtering by search
+// keyword, including ancestor group labels, and including issue/MR
+// counts.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -101,7 +103,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return ListOutput{Labels: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-// Get retrieves a single label by ID or name.
+// Get retrieves a single project label by its ID or name via the
+// GitLab Labels API (GET /projects/:id/labels/:label_id).
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -117,7 +120,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return toOutput(l), nil
 }
 
-// Create creates a new label in a GitLab project.
+// Create creates a new label in a GitLab project via the GitLab Labels
+// API (POST /projects/:id/labels). The Color must be a 6-digit hex
+// value; existing label names return 409 Conflict.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -152,7 +157,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return toOutput(l), nil
 }
 
-// Update modifies an existing label. Only non-empty fields are applied.
+// Update modifies an existing project label via the GitLab Labels API
+// (PUT /projects/:id/labels/:label_id). Only non-empty fields in the
+// input are applied; new_name must be unique within the project.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -184,7 +191,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return toOutput(l), nil
 }
 
-// Delete removes a label from a GitLab project.
+// Delete removes a label from a GitLab project via the GitLab Labels
+// API (DELETE /projects/:id/labels/:label_id). Requires Maintainer or
+// Owner role; group-inherited labels must be deleted at the group level.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -200,7 +209,10 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	return nil
 }
 
-// Subscribe subscribes the authenticated user to a label to receive notifications.
+// Subscribe subscribes the authenticated user to a label to receive
+// notifications via the GitLab Labels subscribe API
+// (POST /projects/:id/labels/:label_id/subscribe). Returns 304 Not
+// Modified when the user is already subscribed.
 func Subscribe(ctx context.Context, client *gitlabclient.Client, input SubscribeInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -216,7 +228,10 @@ func Subscribe(ctx context.Context, client *gitlabclient.Client, input Subscribe
 	return toOutput(l), nil
 }
 
-// Unsubscribe removes the authenticated user's subscription from a label.
+// Unsubscribe removes the authenticated user's subscription from a
+// project label via the GitLab Labels unsubscribe API
+// (POST /projects/:id/labels/:label_id/unsubscribe). Returns 304 Not
+// Modified when the user is not currently subscribed.
 func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input SubscribeInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -232,7 +247,10 @@ func Unsubscribe(ctx context.Context, client *gitlabclient.Client, input Subscri
 	return nil
 }
 
-// Promote promotes a project label to a group label.
+// Promote promotes a project label to a group label via the GitLab
+// Labels promote API (POST /projects/:id/labels/:label_id/promote).
+// Requires the project to belong to a group; cannot promote labels in
+// personal (user-namespace) projects.
 func Promote(ctx context.Context, client *gitlabclient.Client, input PromoteInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -251,7 +269,8 @@ func Promote(ctx context.Context, client *gitlabclient.Client, input PromoteInpu
 	return nil
 }
 
-// toOutput converts a GitLab API [gl.Label] to MCP output format.
+// toOutput delegates to [labeldata.ProjectOutput] so the package shares
+// the same [Output] shape with the [labeldata] sub-package.
 func toOutput(label *gl.Label) Output {
 	return labeldata.ProjectOutput(label)
 }

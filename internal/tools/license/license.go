@@ -73,7 +73,8 @@ type DeleteInput struct {
 
 // Helpers.
 
-// formatTime renders the result as a formatted string.
+// formatTime formats an optional [time.Time] as RFC 3339 or returns
+// the empty string when the timestamp is nil.
 func formatTime(t *time.Time) string {
 	if t == nil {
 		return ""
@@ -81,7 +82,8 @@ func formatTime(t *time.Time) string {
 	return t.Format(time.RFC3339)
 }
 
-// formatISOTime renders the result as a formatted string.
+// formatISOTime formats an optional [gl.ISOTime] as an ISO 8601 string
+// or returns the empty string when the timestamp is nil.
 func formatISOTime(t *gl.ISOTime) string {
 	if t == nil {
 		return ""
@@ -89,7 +91,8 @@ func formatISOTime(t *gl.ISOTime) string {
 	return t.String()
 }
 
-// toItem converts the GitLab API response to the tool output format.
+// toItem converts a [gl.License] into the package's [Item] shape,
+// flattening the embedded licensee and add-on structs.
 func toItem(l *gl.License) Item {
 	return Item{
 		ID:               l.ID,
@@ -120,7 +123,8 @@ func toItem(l *gl.License) Item {
 
 // Handlers.
 
-// Get retrieves the current license information.
+// Get retrieves the currently installed GitLab license via the GitLab
+// License API (GET /license). Requires administrator access.
 func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutput, error) {
 	lic, _, err := client.GL().License.GetLicense(gl.WithContext(ctx))
 	if err != nil {
@@ -129,7 +133,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutpu
 	return GetOutput{License: toItem(lic)}, nil
 }
 
-// Add adds a new license.
+// Add installs a new GitLab license via the GitLab License API
+// (POST /license). The License field must be a base64-encoded
+// license string. Requires administrator access.
 func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddOutput, error) {
 	opts := &gl.AddLicenseOptions{
 		License: new(input.License),
@@ -141,7 +147,8 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 	return AddOutput{License: toItem(lic)}, nil
 }
 
-// Delete removes a license by ID.
+// Delete removes a GitLab license by ID via the GitLab License API
+// (DELETE /license/:id). Requires administrator access.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
 	if input.ID <= 0 {
 		return toolutil.ErrRequiredInt64("license_delete", "id")

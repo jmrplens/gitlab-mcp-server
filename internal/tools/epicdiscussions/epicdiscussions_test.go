@@ -124,7 +124,9 @@ func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
 	return testutil.GraphQLHandler(handlers)
 }
 
-// TestDiscussionIDHelpers verifies discussion ID helper edge cases.
+// TestDiscussionIDHelpers verifies the DiscussionIDHelpers handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDiscussionIDHelpers(t *testing.T) {
 	if got := extractDiscussionHex("plain-id"); got != "plain-id" {
 		t.Fatalf("extractDiscussionHex() = %q, want plain-id", got)
@@ -135,8 +137,9 @@ func TestDiscussionIDHelpers(t *testing.T) {
 	}
 }
 
-// TestResolveWorkItemGID_ErrorPaths verifies GraphQL and missing-epic errors
-// while resolving an epic work item GID.
+// TestResolveWorkItemGID_ErrorPaths verifies that ResolveWorkItemGIDPaths returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestResolveWorkItemGID_ErrorPaths(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -177,7 +180,9 @@ func TestResolveWorkItemGID_ErrorPaths(t *testing.T) {
 // List
 // --------------------------------------------------------------------------
 
-// TestList uses table-driven subtests to exercise List across success, pagination, empty result, missing-parent, validation, and API-error scenarios.
+// TestList verifies the List handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	tests := []listCase{
 		{
@@ -323,7 +328,9 @@ func assertListCaseResult(t *testing.T, out ListOutput, err error, wantErr strin
 // Get
 // --------------------------------------------------------------------------
 
-// TestGet uses table-driven subtests to exercise Get across success, not-found, validation, and API-error scenarios.
+// TestGet verifies the Get handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -439,7 +446,9 @@ func TestGet(t *testing.T) {
 // Create
 // --------------------------------------------------------------------------
 
-// TestCreate uses table-driven subtests to exercise Create across success, validation, mutation-error, and cancellation scenarios.
+// TestCreate verifies the Create handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate(t *testing.T) {
 	tests := []createDiscussionCase{
 		{
@@ -588,7 +597,9 @@ func assertCreateCaseResult(t *testing.T, out Output, err error, wantErr string,
 // AddNote
 // --------------------------------------------------------------------------
 
-// TestAddNote uses table-driven subtests to exercise AddNote across success, validation, mutation errors, and cancellation.
+// TestAddNote verifies the AddNote handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAddNote(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -730,7 +741,9 @@ func TestAddNote(t *testing.T) {
 // UpdateNote
 // --------------------------------------------------------------------------
 
-// TestUpdateNote uses table-driven subtests to exercise UpdateNote across success, validation, mutation errors, and cancellation.
+// TestUpdateNote verifies the UpdateNote handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUpdateNote(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -844,7 +857,9 @@ func TestUpdateNote(t *testing.T) {
 // DeleteNote
 // --------------------------------------------------------------------------
 
-// TestDeleteNote uses table-driven subtests to exercise DeleteNote across success, validation, mutation errors, and cancellation.
+// TestDeleteNote verifies the DeleteNote handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeleteNote(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -999,7 +1014,9 @@ func TestFormatMarkdownString(t *testing.T) {
 	}
 }
 
-// TestFormatNoteMarkdownString verifies that FormatNoteMarkdownString renders a note with its author in the output.
+// TestFormatNoteMarkdownString verifies the NoteMarkdownString Markdown formatter for a representative notestring input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatNoteMarkdownString(t *testing.T) {
 	md := FormatNoteMarkdownString(NoteOutput{ID: 1, Body: "test note", Author: "carol", CreatedAt: "2026-01-01T00:00:00Z"})
 	if !strings.Contains(md, "carol") {
@@ -1010,7 +1027,9 @@ func TestFormatNoteMarkdownString(t *testing.T) {
 // --------------------------------------------------------------------------
 // --------------------------------------------------------------------------
 
-// TestActionSpecs_CallAllRoutes invokes every individual tool through its canonical route.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := epicDiscussionSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, graphqlSessionMux())))
 	tools := []struct {

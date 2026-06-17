@@ -12,7 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
-// TestStartMigration verifies StartMigration.
+// TestStartMigration verifies the StartMigration handler.
+// The mock GitLab API at /api/v4/bulk_imports (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestStartMigration(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/bulk_imports" {
@@ -62,7 +64,9 @@ func TestStartMigration(t *testing.T) {
 	}
 }
 
-// TestStartMigration_Error verifies StartMigration when error.
+// TestStartMigration_Error verifies that StartMigration returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestStartMigration_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -78,7 +82,9 @@ func TestStartMigration_Error(t *testing.T) {
 	}
 }
 
-// TestFormatStartMigrationMarkdown verifies FormatStartMigrationMarkdown.
+// TestFormatStartMigrationMarkdown verifies the StartMigrationMarkdown Markdown formatter for a representative startmigration input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatStartMigrationMarkdown(t *testing.T) {
 	out := MigrationOutput{
 		ID:          1,
@@ -104,7 +110,9 @@ func TestFormatStartMigrationMarkdown(t *testing.T) {
 // StartMigration — with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestStartMigration_WithOptionalFields verifies StartMigration when with optional fields.
+// TestStartMigration_WithOptionalFields verifies the StartMigration_WithOptionalFields handler.
+// The mock GitLab API at /api/v4/bulk_imports (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestStartMigration_WithOptionalFields(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/bulk_imports" && r.Method == http.MethodPost {
@@ -151,7 +159,9 @@ func TestStartMigration_WithOptionalFields(t *testing.T) {
 // FormatStartMigrationMarkdown — with failures
 // ---------------------------------------------------------------------------.
 
-// TestFormatStartMigrationMarkdown_WithFailures verifies FormatStartMigrationMarkdown when with failures.
+// TestFormatStartMigrationMarkdown_WithFailures verifies the StartMigrationMarkdown_WithFailures Markdown formatter for a representative startmigration_withfailures input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatStartMigrationMarkdown_WithFailures(t *testing.T) {
 	out := MigrationOutput{
 		ID:          2,
@@ -175,7 +185,9 @@ func TestFormatStartMigrationMarkdown_WithFailures(t *testing.T) {
 // ActionSpecs route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_StartMigrationRoute verifies start migration route execution.
+// TestActionSpecs_StartMigrationRoute validates the StartMigrationRoute route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_StartMigrationRoute(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("POST /api/v4/bulk_imports", func(w http.ResponseWriter, _ *http.Request) {
@@ -212,7 +224,9 @@ func TestActionSpecs_StartMigrationRoute(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_StartMigrationAPIError verifies start migration route errors.
+// TestActionSpecs_StartMigrationAPIError validates the StartMigrationAPIError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_StartMigrationAPIError(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -238,8 +252,9 @@ func TestActionSpecs_StartMigrationAPIError(t *testing.T) {
 	}
 }
 
-// TestList_OK validates that List parses the GitLab response into the typed
-// MigrationSummary slice and propagates pagination metadata.
+// TestList_OK verifies the List_OK handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_OK(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports", func(w http.ResponseWriter, r *http.Request) {
@@ -268,7 +283,9 @@ func TestList_OK(t *testing.T) {
 	}
 }
 
-// TestGet_OK validates that Get retrieves a single migration by ID.
+// TestGet_OK verifies the Get_OK handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_OK(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports/7", func(w http.ResponseWriter, _ *http.Request) {
@@ -285,7 +302,9 @@ func TestGet_OK(t *testing.T) {
 	}
 }
 
-// TestGet_RequiresID validates required field check.
+// TestGet_RequiresID verifies the Get_RequiresID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGet_RequiresID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	if _, err := Get(t.Context(), client, GetInput{}); err == nil {
@@ -293,8 +312,9 @@ func TestGet_RequiresID(t *testing.T) {
 	}
 }
 
-// TestCancel_OK validates that Cancel posts to the cancel endpoint and parses
-// the returned MigrationSummary.
+// TestCancel_OK verifies the Cancel_OK handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCancel_OK(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports/9/cancel", func(w http.ResponseWriter, r *http.Request) {
@@ -314,7 +334,9 @@ func TestCancel_OK(t *testing.T) {
 	}
 }
 
-// TestCancel_RequiresID validates required field check.
+// TestCancel_RequiresID verifies the Cancel_RequiresID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCancel_RequiresID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	if _, err := Cancel(t.Context(), client, CancelInput{}); err == nil {
@@ -322,8 +344,9 @@ func TestCancel_RequiresID(t *testing.T) {
 	}
 }
 
-// TestListEntities_RejectsNegativeID ensures that a negative bulk_import_id is
-// rejected rather than silently widening the query to all imports.
+// TestListEntities_RejectsNegativeID verifies the ListEntities_RejectsNegativeID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListEntities_RejectsNegativeID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	if _, err := ListEntities(t.Context(), client, ListEntitiesInput{BulkImportID: -1}); err == nil {
@@ -331,8 +354,9 @@ func TestListEntities_RejectsNegativeID(t *testing.T) {
 	}
 }
 
-// TestListEntities_AllScope hits /bulk_imports/entities when no bulk_import_id
-// is supplied.
+// TestListEntities_AllScope verifies the ListEntities_AllScope handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListEntities_AllScope(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports/entities", func(w http.ResponseWriter, _ *http.Request) {
@@ -351,8 +375,9 @@ func TestListEntities_AllScope(t *testing.T) {
 	}
 }
 
-// TestListEntities_PerImport hits /bulk_imports/{id}/entities when the import
-// id is supplied.
+// TestListEntities_PerImport verifies the ListEntities_PerImport handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListEntities_PerImport(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports/55/entities", func(w http.ResponseWriter, _ *http.Request) {
@@ -369,7 +394,9 @@ func TestListEntities_PerImport(t *testing.T) {
 	}
 }
 
-// TestGetEntity_OK validates retrieval of a single entity.
+// TestGetEntity_OK verifies the GetEntity_OK handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetEntity_OK(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports/3/entities/77", func(w http.ResponseWriter, _ *http.Request) {
@@ -386,7 +413,9 @@ func TestGetEntity_OK(t *testing.T) {
 	}
 }
 
-// TestGetEntity_Validation validates required field checks.
+// TestGetEntity_Validation verifies the GetEntity_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetEntity_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	if _, err := GetEntity(t.Context(), client, GetEntityInput{}); err == nil {
@@ -397,7 +426,9 @@ func TestGetEntity_Validation(t *testing.T) {
 	}
 }
 
-// TestListEntityFailures_OK validates retrieval of failed import records.
+// TestListEntityFailures_OK verifies the ListEntityFailures_OK handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListEntityFailures_OK(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports/4/entities/88/failures", func(w http.ResponseWriter, _ *http.Request) {
@@ -416,7 +447,9 @@ func TestListEntityFailures_OK(t *testing.T) {
 	}
 }
 
-// TestListEntityFailures_SkipsNilEntries validates defensive handling of null failure records.
+// TestListEntityFailures_SkipsNilEntries verifies the ListEntityFailures_SkipsNilEntries handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListEntityFailures_SkipsNilEntries(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports/4/entities/88/failures", func(w http.ResponseWriter, _ *http.Request) {
@@ -436,7 +469,9 @@ func TestListEntityFailures_SkipsNilEntries(t *testing.T) {
 	}
 }
 
-// TestFormatters_Smoke renders each formatter to ensure non-empty markdown.
+// TestFormatters_Smoke verifies the ters_Smoke Markdown formatter for a representative ters_smoke input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatters_Smoke(t *testing.T) {
 	listOut := ListOutput{Migrations: []MigrationSummary{{ID: 1, Status: "started", SourceType: "gitlab", SourceURL: "https://src"}}}
 	if md := FormatListMarkdown(listOut); !strings.Contains(md, "started") {

@@ -13,8 +13,15 @@ import (
 )
 
 // TestSchema_AdditionalPropertiesFalse verifies that every tool's root
-// inputSchema has additionalProperties: false set by the LockdownInputSchemas
-// middleware. This prevents LLMs from silently passing unknown arguments.
+// input schema has additionalProperties: false set by the LockdownInputSchemas
+// middleware against a live MCP server.
+//
+// The test inspects tools/list on both the individual and meta-tool
+// sessions and asserts each registered tool has the additionalProperties
+// lockdown. This prevents LLMs from silently passing unknown arguments
+// that would otherwise round-trip silently through the GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual, meta.
 func TestSchema_AdditionalPropertiesFalse(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -73,8 +80,15 @@ func TestSchema_AdditionalPropertiesFalse(t *testing.T) {
 }
 
 // TestSchema_MetaToolsHaveOutputSchema verifies that every meta-tool
-// (tools with meta-tool routing pattern) has a non-nil OutputSchema
+// (catalog-backed single-tool surface) has a non-nil OutputSchema
 // registered in the tools/list response.
+//
+// The test inspects the meta-tool session's tools/list and asserts each
+// registered gitlab_* tool exposes an OutputSchema derived from the
+// action spec catalog. This guards against regressions where a meta-tool
+// is registered without a matching output schema.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestSchema_MetaToolsHaveOutputSchema(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -100,9 +114,14 @@ func TestSchema_MetaToolsHaveOutputSchema(t *testing.T) {
 }
 
 // TestSchema_PaginationHasMore verifies that paginated list tool responses
-// include the has_more boolean field in their structured output. This tests
-// the pagination output enrichment by calling a list tool that returns
-// paginated results.
+// include the has_more boolean field in their structured output.
+//
+// The test calls a list tool that returns paginated results, parses the
+// structured content, and asserts has_more is present. This validates
+// the pagination output enrichment pipeline that exposes a uniform
+// pagination contract across every list tool.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestSchema_PaginationHasMore(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil && sess.meta == nil {

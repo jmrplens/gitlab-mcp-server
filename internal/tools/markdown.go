@@ -6,9 +6,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// markdownForResult dispatches to the registered Markdown formatter based
-// on the concrete type of result. Used by meta-tool handlers where the
-// output type is any. Returns a success confirmation for nil (void actions).
+// markdownForResult dispatches to the registered Markdown formatter
+// based on the concrete type of result. Used by meta-tool handlers where
+// the output type is any. Returns a success confirmation for nil (void
+// actions). Delegates to [toolutil.MarkdownForResult] which walks the
+// type registry.
 func markdownForResult(result any) *mcp.CallToolResult {
 	return toolutil.MarkdownForResult(result)
 }

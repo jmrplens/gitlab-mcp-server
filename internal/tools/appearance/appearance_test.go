@@ -37,7 +37,9 @@ const appearanceJSON = `{
 	"email_header_and_footer_enabled": true
 }`
 
-// TestGet_Success verifies Get when success.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/application/appearance (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/appearance" && r.Method == http.MethodGet {
@@ -62,7 +64,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_Error verifies Get when error.
+// TestGet_Error verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -74,7 +78,9 @@ func TestGet_Error(t *testing.T) {
 	}
 }
 
-// TestUpdate_Success verifies Update when success.
+// TestUpdate_Success verifies that Update succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/application/appearance (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/appearance" && r.Method == http.MethodPut {
@@ -98,7 +104,9 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_Error verifies Update when error.
+// TestUpdate_Error verifies that Update returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -110,7 +118,9 @@ func TestUpdate_Error(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown verifies FormatGetMarkdown.
+// TestFormatGetMarkdown verifies the GetMarkdown Markdown formatter for a representative get input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
 		Appearance: Item{
@@ -139,7 +149,9 @@ func TestFormatGetMarkdown(t *testing.T) {
 // Update — all optional fields populated
 // ---------------------------------------------------------------------------.
 
-// TestUpdate_AllFields verifies Update when all fields.
+// TestUpdate_AllFields verifies the Update_AllFields handler.
+// The mock GitLab API at /api/v4/application/appearance (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_AllFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/application/appearance" && r.Method == http.MethodPut {
@@ -177,7 +189,9 @@ func TestUpdate_AllFields(t *testing.T) {
 // FormatGetMarkdown — with PWA fields
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_WithPWA verifies FormatGetMarkdown when with pwa.
+// TestFormatGetMarkdown_WithPWA verifies the GetMarkdown_WithPWA Markdown formatter for a representative get_withpwa input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_WithPWA(t *testing.T) {
 	out := GetOutput{
 		Appearance: Item{
@@ -204,7 +218,9 @@ func TestFormatGetMarkdown_WithPWA(t *testing.T) {
 // FormatGetMarkdown — empty fields (no optional PWA/messages)
 // ---------------------------------------------------------------------------.
 
-// TestFormatGetMarkdown_Minimal verifies FormatGetMarkdown when minimal.
+// TestFormatGetMarkdown_Minimal verifies the GetMarkdown_Minimal Markdown formatter for a representative get_minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_Minimal(t *testing.T) {
 	out := GetOutput{
 		Appearance: Item{
@@ -228,7 +244,9 @@ func TestFormatGetMarkdown_Minimal(t *testing.T) {
 // FormatUpdateMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatUpdateMarkdown_Coverage verifies FormatUpdateMarkdown when coverage.
+// TestFormatUpdateMarkdown_Coverage verifies the UpdateMarkdown_Coverage Markdown formatter for a representative update_coverage input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatUpdateMarkdown_Coverage(t *testing.T) {
 	out := UpdateOutput{
 		Appearance: Item{
@@ -247,7 +265,9 @@ func TestFormatUpdateMarkdown_Coverage(t *testing.T) {
 // ActionSpec route execution
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRoutes covers ActionSpecs with table-driven subtests for call routes.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	client := newAppearanceRouteClient(t)
 	specs := ActionSpecs(client)

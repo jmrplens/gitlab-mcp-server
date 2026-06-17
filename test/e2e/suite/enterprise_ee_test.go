@@ -3,6 +3,8 @@
 // enterprise_test.go tests GitLab Premium/Ultimate (Enterprise) MCP tools against a live
 // instance. Each test requires GITLAB_ENTERPRISE=true and gracefully skips via
 // requirePremiumFeature when the feature is unavailable.
+//
+// Build tag: e2e && enterprise.
 package suite
 
 import (
@@ -45,8 +47,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// TestMeta_MergeTrains exercises merge train tools via the gitlab_merge_train meta-tool.
-// Requires GitLab Premium/Ultimate (GITLAB_ENTERPRISE=true).
+// TestMeta_MergeTrains exercises the merge train meta-tool against a live
+// GitLab Premium/Ultimate instance. Requires GITLAB_ENTERPRISE=true.
+//
+// The test creates a group fixture and a project under it (merge trains
+// require a Premium/Ultimate namespace), enables merged results pipelines
+// and merge trains on the project, then drives the merge train actions
+// through the catalog-backed gitlab_merge_train meta-tool. The test
+// returns early when the session was not started in enterprise mode.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: meta.
 func TestMeta_MergeTrains(t *testing.T) {
 	t.Parallel()
 	if !sess.enterprise {

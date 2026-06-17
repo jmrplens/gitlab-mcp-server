@@ -20,6 +20,10 @@ func main() {
 	os.Exit(run(os.Stdout, os.Stderr))
 }
 
+// run is the testable entry point that builds the catalog, adds standalone
+// dynamic routes, runs [dynamic.AuditDefaultActionAliases], and writes one
+// TSV line per finding to stdout. The function returns a process-style exit
+// code: 0 when no error-severity findings remain, 1 otherwise.
 func run(stdout, stderr io.Writer) int {
 	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
 	if err != nil {

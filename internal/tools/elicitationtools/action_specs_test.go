@@ -141,8 +141,9 @@ func TestCatalogSurface_IssueCancelRoundTrip(t *testing.T) {
 	})
 }
 
-// TestCatalogSurface_MRCancelRoundTrip verifies the MR surface tool's
-// cancellation wrapper.
+// TestCatalogSurface_MRCancelRoundTrip verifies the CatalogSurface_MRCancelRoundTrip handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCatalogSurface_MRCancelRoundTrip(t *testing.T) {
 	runRoundTripCancelCase(t, roundTripCancelCase{
 		tool:       "gitlab_interactive_mr_create",
@@ -151,8 +152,9 @@ func TestCatalogSurface_MRCancelRoundTrip(t *testing.T) {
 	})
 }
 
-// TestCatalogSurface_ReleaseCancelRoundTrip verifies the release surface tool's
-// cancellation wrapper.
+// TestCatalogSurface_ReleaseCancelRoundTrip verifies the CatalogSurface_ReleaseCancelRoundTrip handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCatalogSurface_ReleaseCancelRoundTrip(t *testing.T) {
 	runRoundTripCancelCase(t, roundTripCancelCase{
 		tool:       "gitlab_interactive_release_create",
@@ -161,8 +163,9 @@ func TestCatalogSurface_ReleaseCancelRoundTrip(t *testing.T) {
 	})
 }
 
-// TestCatalogSurface_ProjectCancelRoundTrip verifies the project surface tool's
-// cancellation wrapper.
+// TestCatalogSurface_ProjectCancelRoundTrip verifies the CatalogSurface_ProjectCancelRoundTrip handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCatalogSurface_ProjectCancelRoundTrip(t *testing.T) {
 	runRoundTripCancelCase(t, roundTripCancelCase{
 		tool:       "gitlab_interactive_project_create",

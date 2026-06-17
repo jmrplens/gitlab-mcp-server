@@ -20,8 +20,9 @@ import (
 )
 
 // createEpicInGroup creates a real Epic in the given group via the
-// gitlab_epic meta-tool and returns its IID. The cleanup is registered
-// with the ledger so the epic is deleted at the end of the run.
+// gitlab_epic meta-tool and returns its IID. Cleanup is registered with
+// the per-test ledger so the epic is removed at the end of the test even
+// if subtests fail mid-flight.
 func createEpicInGroup(ctx context.Context, t *testing.T, e2e *E2EContext, groupFullPath, titlePrefix string) int64 {
 	t.Helper()
 	out, err := callToolOn[epics.Output](ctx, sess.meta, "gitlab_epic", map[string]any{

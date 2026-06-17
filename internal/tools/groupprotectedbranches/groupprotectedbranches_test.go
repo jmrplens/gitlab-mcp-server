@@ -1,3 +1,4 @@
+// groupprotectedbranches_test.go contains unit tests for the GitLab group protected branch MCP tool handlers.
 package groupprotectedbranches
 
 import (
@@ -126,8 +127,9 @@ func TestList(t *testing.T) {
 	}
 }
 
-// TestList_ContextCancelled verifies List returns an error when the
-// context is cancelled before the API call.
+// TestList_ContextCancelled verifies the List_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -246,8 +248,9 @@ func assertProtectedBranchPushAccess(t *testing.T, levels []AccessLevelOutput) {
 	}
 }
 
-// TestGet_ContextCancelled verifies Get returns an error when the context
-// is cancelled before the API call.
+// TestGet_ContextCancelled verifies the Get_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, branchJSON)
@@ -383,8 +386,9 @@ func TestProtect(t *testing.T) {
 	}
 }
 
-// TestProtect_ContextCancelled verifies Protect returns an error when the
-// context is cancelled before the API call.
+// TestProtect_ContextCancelled verifies the Protect_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestProtect_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -518,8 +522,9 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
-// TestUpdate_ContextCancelled verifies Update returns an error when the
-// context is cancelled before the API call.
+// TestUpdate_ContextCancelled verifies the Update_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdate_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -594,8 +599,9 @@ func TestUnprotect(t *testing.T) {
 	}
 }
 
-// TestUnprotect_ContextCancelled verifies Unprotect returns an error when
-// the context is cancelled before the API call.
+// TestUnprotect_ContextCancelled verifies the Unprotect_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUnprotect_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -686,8 +692,9 @@ func assertInt64Pointer(t *testing.T, name string, got *int64, want int64) {
 	}
 }
 
-// TestFormatOutputMarkdown validates the Markdown formatter for a single
-// group protected branch including access level tables and hint sections.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	t.Run("renders branch with access levels", func(t *testing.T) {
 		out := Output{
@@ -752,8 +759,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	})
 }
 
-// TestFormatListMarkdown validates the Markdown formatter for a paginated
-// list of group protected branches including the empty-result case.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	t.Run("renders table with branches", func(t *testing.T) {
 		out := ListOutput{

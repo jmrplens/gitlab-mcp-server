@@ -1,3 +1,9 @@
+// main_test.go verifies the audit_dynamic_aliases command exit code and
+// output contract against the generated dynamic alias catalog.
+//
+// The single test runs [run] with in-memory writers and asserts the
+// command exits cleanly and prints the canonical "dynamic alias audit
+// passed" summary string.
 package main
 
 import (

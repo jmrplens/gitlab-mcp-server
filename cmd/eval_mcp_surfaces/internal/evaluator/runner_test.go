@@ -47,6 +47,16 @@ func TestToolUseBlocks_FiltersNonToolContent(t *testing.T) {
 	}
 }
 
+// TestValidateDynamicFindResult_UsesFullMCPResponse verifies that
+// validateDynamicFindResult inspects the structuredContent of the MCP
+// response when the textual payload is truncated, so discovery failures are
+// still detected when a stub truncates the body.
+//
+// The test feeds two exchanges: one whose structuredContent contains the
+// expected action and one that does not. The first call must succeed even
+// though the textual payload lacks the action; the second must return an
+// error. This protects the runner from silently accepting truncated
+// responses during dynamic discovery.
 func TestValidateDynamicFindResult_UsesFullMCPResponse(t *testing.T) {
 	steps := []evalStep{
 		{ExpectedTool: dynamicFindTool, RequiredParams: []string{"query"}},
@@ -95,6 +105,17 @@ func TestRunnerTraceSummaryAndResourceHelpers(t *testing.T) {
 	}
 }
 
+// TestEvaluatePreparedCase_UsesRenderedPromptAndTypedSteps verifies that the
+// runner's evaluatePreparedCase honors the rendered prompt and typed steps
+// from a [PreparedCase], including produced values and expected assertions.
+//
+// The test runs a scripted runner against a prepared case whose prompt has
+// been rendered with fixture values and whose first step declares a
+// produced_value. It asserts the result reports success, that the task and
+// trace prompts both contain the rendered fixture text, that the produced
+// value is preserved, and that the expected-action and required-params
+// assertions both pass. This protects the runner's typed-case integration
+// from regressing to the legacy unrendered prompt path.
 func TestEvaluatePreparedCase_UsesRenderedPromptAndTypedSteps(t *testing.T) {
 	runner := newScriptedRunner(
 		t,
@@ -127,6 +148,17 @@ func TestEvaluatePreparedCase_UsesRenderedPromptAndTypedSteps(t *testing.T) {
 	}
 }
 
+// TestEvaluateTask_AcceptsOptionalCapabilityBridgePreludeSkip verifies that
+// the runner marks an evaluation successful when the model skips an optional
+// capability bridge prelude but completes the required resource bridge
+// steps that follow.
+//
+// The test seeds a three-step task (optional capability list, required
+// resource list, required resource read) and a scripted runner that skips
+// the optional prelude. It asserts the result reports first-pass success
+// without a repair, exposes the expected bridge metrics, and records an
+// "accepted optional" note. This protects the runner from penalizing
+// models that intelligently skip optional capability preludes.
 func TestEvaluateTask_AcceptsOptionalCapabilityBridgePreludeSkip(t *testing.T) {
 	runner := newScriptedRunner(
 		t,
@@ -160,6 +192,16 @@ func TestEvaluateTask_AcceptsOptionalCapabilityBridgePreludeSkip(t *testing.T) {
 	}
 }
 
+// TestEvaluateTask_AcceptsDirectDynamicExecuteWithoutFind verifies that the
+// runner accepts a model that skips the gitlab_find_action discovery step and
+// calls gitlab_execute_action directly with the expected action.
+//
+// The test seeds a two-step task (expected find then execute) but scripts
+// the runner to call execute directly. It asserts the result reports first-pass
+// success without repair, completes both steps, records the direct call as
+// the first tool, and emits the "accepted direct" note. This protects the
+// runner from rejecting direct execute calls when the prompt supplies
+// sufficient context.
 func TestEvaluateTask_AcceptsDirectDynamicExecuteWithoutFind(t *testing.T) {
 	runner := newScriptedRunner(
 		t,

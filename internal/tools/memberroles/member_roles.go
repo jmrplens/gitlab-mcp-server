@@ -89,6 +89,9 @@ type ListOutput struct {
 	Roles []Output `json:"roles"`
 }
 
+// toOutput converts a [gl.MemberRole] into the package's [Output]
+// shape, wrapping every permission flag in a *bool so omitted flags
+// round-trip cleanly through the MCP tool input schema.
 func toOutput(r *gl.MemberRole) Output {
 	if r == nil {
 		return Output{}
@@ -124,6 +127,9 @@ func toOutput(r *gl.MemberRole) Output {
 	}
 }
 
+// buildCreateOpts assembles a [gl.CreateMemberRoleOptions] from the
+// shared [Permissions] set, applying non-nil flags via
+// [applyAdminPermissionOpts] and [applyManageReadRemovePermissionOpts].
 func buildCreateOpts(name string, baseLevel int, desc string, p Permissions) *gl.CreateMemberRoleOptions {
 	opts := &gl.CreateMemberRoleOptions{
 		Name:            new(name),
@@ -137,6 +143,10 @@ func buildCreateOpts(name string, baseLevel int, desc string, p Permissions) *gl
 	return opts
 }
 
+// applyAdminPermissionOpts copies the admin-style permission flags
+// (CI/CD variables, compliance framework, members, MRs, push rules,
+// Terraform, vulnerability, webhooks, archive) onto the create
+// options when they are set in [Permissions].
 func applyAdminPermissionOpts(opts *gl.CreateMemberRoleOptions, p Permissions) {
 	if p.AdminCICDVariables != nil {
 		opts.AdminCICDVariables = p.AdminCICDVariables
@@ -167,6 +177,11 @@ func applyAdminPermissionOpts(opts *gl.CreateMemberRoleOptions, p Permissions) {
 	}
 }
 
+// applyManageReadRemovePermissionOpts copies the manage/read/remove
+// permission flags (deploy tokens, group/project access tokens, MR
+// settings, security policy link, code, runners, dependency,
+// vulnerability, group, project) onto the create options when they
+// are set in [Permissions].
 func applyManageReadRemovePermissionOpts(opts *gl.CreateMemberRoleOptions, p Permissions) {
 	if p.ManageDeployTokens != nil {
 		opts.ManageDeployTokens = p.ManageDeployTokens
@@ -203,7 +218,10 @@ func applyManageReadRemovePermissionOpts(opts *gl.CreateMemberRoleOptions, p Per
 	}
 }
 
-// ListInstance returns all instance-level member roles.
+// ListInstance lists every custom member role defined at the GitLab
+// instance level via the GitLab Member Roles API
+// (GET /member_roles). Requires administrator access and is only
+// available on self-managed Ultimate installations.
 func ListInstance(ctx context.Context, client *gitlabclient.Client, _ ListInstanceInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -220,7 +238,9 @@ func ListInstance(ctx context.Context, client *gitlabclient.Client, _ ListInstan
 	return out, nil
 }
 
-// ListGroup returns all member roles for a group.
+// ListGroup lists every custom member role for a top-level group via
+// the GitLab Member Roles API (GET /groups/:id/member_roles).
+// Requires Owner role on the group and an Ultimate license.
 func ListGroup(ctx context.Context, client *gitlabclient.Client, in ListGroupInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -243,7 +263,9 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, in ListGroupInp
 	return out, nil
 }
 
-// CreateInstance creates a new instance-level member role.
+// CreateInstance creates a new instance-level custom member role via
+// the GitLab Member Roles API (POST /member_roles). Requires
+// administrator access and self-managed Ultimate.
 func CreateInstance(ctx context.Context, client *gitlabclient.Client, in CreateInstanceInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -263,7 +285,9 @@ func CreateInstance(ctx context.Context, client *gitlabclient.Client, in CreateI
 	return toOutput(role), nil
 }
 
-// CreateGroup creates a new group-level member role.
+// CreateGroup creates a new group-level custom member role via the
+// GitLab Member Roles API (POST /groups/:id/member_roles). Requires
+// Owner role on the group and an Ultimate license.
 func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGroupInput) (Output, error) {
 	if err := ctx.Err(); err != nil {
 		return Output{}, err
@@ -289,7 +313,9 @@ func CreateGroup(ctx context.Context, client *gitlabclient.Client, in CreateGrou
 	return toOutput(role), nil
 }
 
-// DeleteInstance deletes an instance-level member role.
+// DeleteInstance deletes an instance-level custom member role via the
+// GitLab Member Roles API (DELETE /member_roles/:member_role_id).
+// Requires administrator access and self-managed Ultimate.
 func DeleteInstance(ctx context.Context, client *gitlabclient.Client, in DeleteInstanceInput) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -305,7 +331,9 @@ func DeleteInstance(ctx context.Context, client *gitlabclient.Client, in DeleteI
 	return nil
 }
 
-// DeleteGroup deletes a group-level member role.
+// DeleteGroup deletes a group-level custom member role via the GitLab
+// Member Roles API (DELETE /groups/:id/member_roles/:member_role_id).
+// Requires Owner role on the group and an Ultimate license.
 func DeleteGroup(ctx context.Context, client *gitlabclient.Client, in DeleteGroupInput) error {
 	if err := ctx.Err(); err != nil {
 		return err

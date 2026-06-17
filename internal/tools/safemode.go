@@ -10,8 +10,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// SafeModePreview is the structured response returned when a mutating tool
-// is called with Safe Mode enabled.
+// SafeModePreview is the structured response returned when a mutating
+// tool is called with Safe Mode enabled. Status is always "blocked",
+// Mode is "safe", Tool is the registered tool name, Params mirrors the
+// would-be call arguments, and Hint tells the operator how to disable
+// safe mode.
 type SafeModePreview struct {
 	Status string          `json:"status"`
 	Mode   string          `json:"mode"`
@@ -20,10 +23,11 @@ type SafeModePreview struct {
 	Hint   string          `json:"hint"`
 }
 
-// WrapMutatingToolsForSafeMode lists all registered tools via an ephemeral
-// in-memory session and replaces mutating tool handlers (ReadOnlyHint == false)
-// with a handler that returns a [SafeModePreview] instead of executing.
-// Returns the number of tools wrapped.
+// WrapMutatingToolsForSafeMode lists all registered tools via an
+// ephemeral in-memory session and replaces mutating tool handlers
+// (ReadOnlyHint == false) with a handler that returns a
+// [SafeModePreview] instead of executing. Returns the number of tools
+// wrapped. If listing tools fails, logs the error and returns 0.
 func WrapMutatingToolsForSafeMode(server *mcp.Server) int {
 	ctx := context.Background()
 	tools, err := toolutil.ListRegisteredTools(ctx, server, "safemode-filter")
@@ -44,9 +48,10 @@ func WrapMutatingToolsForSafeMode(server *mcp.Server) int {
 	return wrapped
 }
 
-// safeModeHandler returns a [mcp.ToolHandler] that builds a [SafeModePreview]
-// from the request and returns it as JSON text content without executing the
-// real operation.
+// safeModeHandler returns an [mcp.ToolHandler] that builds a
+// [SafeModePreview] from the request and returns it as JSON text content
+// without executing the real operation. Returns an IsError result when
+// the preview cannot be marshaled to JSON.
 func safeModeHandler(toolName string) mcp.ToolHandler {
 	return func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		preview := SafeModePreview{

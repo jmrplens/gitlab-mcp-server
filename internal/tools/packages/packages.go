@@ -52,7 +52,10 @@ type PublishOutput struct {
 	URL           string `json:"url"`
 }
 
-// validatePublishInput checks all required fields and mutual exclusion constraints for Publish.
+// validatePublishInput checks all required fields and the mutual
+// exclusion between [PublishInput.FilePath] and
+// [PublishInput.ContentBase64] for [Publish]. Returns a wrapped error
+// that includes the ctx.Err() when the context is cancelled.
 func validatePublishInput(ctx context.Context, input PublishInput) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf(fmtCtxCancelled, err)
@@ -164,7 +167,9 @@ func Publish(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient
 	return out, nil
 }
 
-// ptrString returns a pointer to s, or nil if s is empty.
+// ptrString returns a pointer to s, or nil if s is empty. Used to
+// convert optional string fields to the *string shape expected by
+// the GitLab client-go options.
 func ptrString(s string) *string {
 	if s == "" {
 		return nil
@@ -191,7 +196,11 @@ type DownloadOutput struct {
 	SHA256     string `json:"sha256"`
 }
 
-// Download downloads a file from the GitLab Generic Package Registry.
+// Download downloads a single file from the GitLab Generic Package
+// Registry via the GitLab Packages download API
+// (GET /projects/:id/packages/generic/:package_name/:package_version/:file_name).
+// The file is streamed to the local OutputPath, with the resulting
+// size and SHA256 surfaced in the response.
 func Download(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input DownloadInput) (DownloadOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return DownloadOutput{}, fmt.Errorf(fmtCtxCancelled, err)
@@ -283,6 +292,9 @@ type ListOutput struct {
 }
 
 // buildListOptions translates ListInput filter fields into GitLab API options.
+// buildListOptions assembles a [gl.ListProjectPackagesOptions] from
+// the shared [ListInput] filter set, mapping the MCP-friendly
+// OrderBy/Sort/Status values to the GitLab Packages API fields.
 func buildListOptions(input ListInput) *gl.ListProjectPackagesOptions {
 	opts := &gl.ListProjectPackagesOptions{
 		ListOptions: gl.ListOptions{
@@ -315,6 +327,8 @@ func buildListOptions(input ListInput) *gl.ListProjectPackagesOptions {
 }
 
 // packageToListItem converts a GitLab Package API object into a ListItem.
+// packageToListItem converts a [gl.Package] into the package's
+// [ListItem] shape, flattening the optional pipeline metadata.
 func packageToListItem(p *gl.Package) ListItem {
 	item := ListItem{
 		ID:          p.ID,
@@ -356,6 +370,9 @@ func packageToListItem(p *gl.Package) ListItem {
 }
 
 // packagePipelineToOutput converts GitLab package pipeline metadata.
+// packagePipelineToOutput converts a [gl.PackagePipeline] into the
+// package's [PipelineItem] shape, or nil when the pipeline pointer
+// is nil.
 func packagePipelineToOutput(pipeline *gl.PackagePipeline) *PipelineItem {
 	if pipeline == nil {
 		return nil
@@ -384,7 +401,10 @@ func packagePipelineToOutput(pipeline *gl.PackagePipeline) *PipelineItem {
 	return item
 }
 
-// List lists packages in a GitLab project.
+// List retrieves a paginated list of Generic Package Registry
+// packages in a project via the GitLab Packages list API
+// (GET /projects/:id/packages). Optional filters narrow by package
+// name, version, status, and the [buildListOptions] sort field.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, fmt.Errorf(fmtCtxCancelled, err)
@@ -438,7 +458,9 @@ type FileListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// FileList lists files within a specific package.
+// FileList lists the files within a single Generic Package Registry
+// package via the GitLab Packages file list API
+// (GET /projects/:id/packages/:package_id/package_files).
 func FileList(ctx context.Context, client *gitlabclient.Client, input FileListInput) (FileListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return FileListOutput{}, fmt.Errorf(fmtCtxCancelled, err)
@@ -495,7 +517,9 @@ type DeleteInput struct {
 	PackageID toolutil.StringOrInt `json:"package_id" jsonschema:"Package ID to delete,required"`
 }
 
-// Delete deletes a package from the GitLab Package Registry.
+// Delete deletes a single Generic Package Registry package via the
+// GitLab Packages API (DELETE /projects/:id/packages/:package_id).
+// Requires Maintainer or Owner role on the project.
 func Delete(ctx context.Context, _ *mcp.CallToolRequest, client *gitlabclient.Client, input DeleteInput) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf(fmtCtxCancelled, err)
@@ -528,7 +552,9 @@ type FileDeleteInput struct {
 	PackageFileID toolutil.StringOrInt `json:"package_file_id" jsonschema:"Package file ID to delete,required"`
 }
 
-// FileDelete deletes a single file from a package.
+// FileDelete deletes a single file from a Generic Package Registry
+// package via the GitLab Packages API
+// (DELETE /projects/:id/packages/:package_id/package_files/:file_id).
 func FileDelete(ctx context.Context, _ *mcp.CallToolRequest, client *gitlabclient.Client, input FileDeleteInput) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf(fmtCtxCancelled, err)

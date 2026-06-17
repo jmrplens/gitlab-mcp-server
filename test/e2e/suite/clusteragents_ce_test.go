@@ -4,6 +4,8 @@
 // Exercises the full lifecycle: register agent → list → get → create token →
 // list tokens → get token → revoke token → delete agent, using both individual
 // tools and the gitlab_admin meta-tool.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -15,8 +17,15 @@ import (
 )
 
 // TestIndividual_ClusterAgents exercises the cluster agent lifecycle using
-// individual MCP tools: register → list → get → create token → list tokens →
-// get token → revoke token → delete agent.
+// individual MCP tools: register → list → get → create token → list tokens
+// → get token → revoke token → delete agent.
+//
+// The test creates a project fixture and runs eight subtests covering the
+// full agent + token lifecycle. Each subtest asserts the expected ID or
+// token ID round-trips through the GitLab API. The project itself is
+// removed by the per-test resource ledger at test exit.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_ClusterAgents(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -121,8 +130,16 @@ func TestIndividual_ClusterAgents(t *testing.T) {
 }
 
 // TestMeta_ClusterAgents exercises the cluster agent lifecycle via the
-// gitlab_admin meta-tool: register → list → get → create token →
-// list tokens → get token → revoke token → delete agent.
+// gitlab_admin meta-tool: register → list → get → create token → list
+// tokens → get token → revoke token → delete agent.
+//
+// The test mirrors [TestIndividual_ClusterAgents] but drives every step
+// with {action, params} arguments through the catalog-backed gitlab_admin
+// tool, using the cluster_agent_* actions. Each subtest asserts the
+// expected ID or token ID round-trips and verifies the tool name stays
+// constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_ClusterAgents(t *testing.T) {
 	if !sess.enterprise {
 		t.Parallel()

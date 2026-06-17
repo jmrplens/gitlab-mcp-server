@@ -36,8 +36,9 @@ func graphqlMux(handlers map[string]http.HandlerFunc) http.Handler {
 
 // List handler tests.
 
-// TestList_Success verifies that listing custom emoji returns the expected
-// items when the GraphQL API responds with valid emoji data.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"customEmoji": func(w http.ResponseWriter, _ *http.Request) {
@@ -87,8 +88,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_EmptyGroup verifies that listing custom emoji for a group
-// with no emoji returns an empty result set.
+// TestList_EmptyGroup verifies the List_EmptyGroup handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_EmptyGroup(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"customEmoji": func(w http.ResponseWriter, _ *http.Request) {
@@ -113,8 +115,9 @@ func TestList_EmptyGroup(t *testing.T) {
 	}
 }
 
-// TestList_GroupNotFound verifies that listing custom emoji returns an
-// error when the specified group does not exist.
+// TestList_GroupNotFound verifies that List_GroupNotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_GroupNotFound(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"customEmoji": func(w http.ResponseWriter, _ *http.Request) {
@@ -132,8 +135,9 @@ func TestList_GroupNotFound(t *testing.T) {
 	}
 }
 
-// TestList_MissingGroupPath verifies that listing custom emoji returns
-// a validation error when the required group_path parameter is missing.
+// TestList_MissingGroupPath verifies that List_MissingGroupPath returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingGroupPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	_, err := List(context.Background(), client, ListInput{})
@@ -145,8 +149,9 @@ func TestList_MissingGroupPath(t *testing.T) {
 	}
 }
 
-// TestList_ServerError verifies that listing custom emoji propagates
-// errors when the GraphQL API returns a server error.
+// TestList_ServerError verifies that List_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_ServerError(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"customEmoji": func(w http.ResponseWriter, _ *http.Request) {
@@ -161,8 +166,9 @@ func TestList_ServerError(t *testing.T) {
 	}
 }
 
-// TestList_Pagination verifies that cursor-based pagination parameters
-// are correctly forwarded to the GraphQL API and page info is returned.
+// TestList_Pagination verifies that List forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_Pagination(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"customEmoji": func(w http.ResponseWriter, r *http.Request) {
@@ -226,8 +232,9 @@ func TestList_Pagination(t *testing.T) {
 	}
 }
 
-// TestList_NullCreatedAt verifies that custom emoji with null created_at
-// fields are handled without errors.
+// TestList_NullCreatedAt verifies the List_NullCreatedAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_NullCreatedAt(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"customEmoji": func(w http.ResponseWriter, _ *http.Request) {
@@ -263,8 +270,9 @@ func TestList_NullCreatedAt(t *testing.T) {
 
 // Create handler tests.
 
-// TestCreate_Success verifies that creating a custom emoji returns the
-// expected item when the GraphQL mutation succeeds.
+// TestCreate_Success verifies that Create succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_Success(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"createCustomEmoji": func(w http.ResponseWriter, r *http.Request) {
@@ -302,8 +310,9 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingGroupPath verifies that creating a custom emoji returns
-// a validation error when the required group_path parameter is missing.
+// TestCreate_MissingGroupPath verifies that Create_MissingGroupPath returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingGroupPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	_, err := Create(context.Background(), client, CreateInput{Name: "test", URL: "https://example.com/test.png"})
@@ -315,8 +324,9 @@ func TestCreate_MissingGroupPath(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingName verifies that creating a custom emoji returns
-// a validation error when the required name parameter is missing.
+// TestCreate_MissingName verifies that Create_MissingName returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	_, err := Create(context.Background(), client, CreateInput{GroupPath: "my-group", URL: "https://example.com/test.png"})
@@ -328,8 +338,9 @@ func TestCreate_MissingName(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingURL verifies that creating a custom emoji returns
-// a validation error when the required url parameter is missing.
+// TestCreate_MissingURL verifies that Create_MissingURL returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingURL(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	_, err := Create(context.Background(), client, CreateInput{GroupPath: "my-group", Name: "test"})
@@ -341,8 +352,9 @@ func TestCreate_MissingURL(t *testing.T) {
 	}
 }
 
-// TestCreate_MutationErrors verifies that GraphQL mutation-level errors
-// (e.g., duplicate name) are properly propagated as tool errors.
+// TestCreate_MutationErrors verifies that Create_MutationErrors returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MutationErrors(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"createCustomEmoji": func(w http.ResponseWriter, _ *http.Request) {
@@ -369,8 +381,9 @@ func TestCreate_MutationErrors(t *testing.T) {
 	}
 }
 
-// TestCreate_ServerError verifies that creating a custom emoji propagates
-// errors when the GraphQL API returns a server error.
+// TestCreate_ServerError verifies that Create_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_ServerError(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"createCustomEmoji": func(w http.ResponseWriter, _ *http.Request) {
@@ -389,8 +402,9 @@ func TestCreate_ServerError(t *testing.T) {
 	}
 }
 
-// TestCreate_NullEmoji verifies that a null customEmoji in the mutation
-// response is handled as an error.
+// TestCreate_NullEmoji verifies the Create_NullEmoji handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_NullEmoji(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"createCustomEmoji": func(w http.ResponseWriter, _ *http.Request) {
@@ -419,8 +433,9 @@ func TestCreate_NullEmoji(t *testing.T) {
 
 // Delete handler tests.
 
-// TestDelete_Success verifies that deleting a custom emoji succeeds when
-// the GraphQL mutation returns without errors.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Success(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"destroyCustomEmoji": func(w http.ResponseWriter, r *http.Request) {
@@ -445,8 +460,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingID verifies that deleting a custom emoji returns
-// a validation error when the required id parameter is missing.
+// TestDelete_MissingID verifies that Delete_MissingID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NotFoundHandler())
 	err := Delete(context.Background(), client, DeleteInput{})
@@ -458,8 +474,9 @@ func TestDelete_MissingID(t *testing.T) {
 	}
 }
 
-// TestDelete_MutationErrors verifies that GraphQL mutation-level errors
-// on delete are properly propagated as tool errors.
+// TestDelete_MutationErrors verifies that Delete_MutationErrors returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MutationErrors(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"destroyCustomEmoji": func(w http.ResponseWriter, _ *http.Request) {
@@ -482,8 +499,9 @@ func TestDelete_MutationErrors(t *testing.T) {
 	}
 }
 
-// TestDelete_ServerError verifies that deleting a custom emoji propagates
-// errors when the GraphQL API returns a server error.
+// TestDelete_ServerError verifies that Delete_ServerError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_ServerError(t *testing.T) {
 	handler := graphqlMux(map[string]http.HandlerFunc{
 		"destroyCustomEmoji": func(w http.ResponseWriter, _ *http.Request) {
@@ -500,8 +518,9 @@ func TestDelete_ServerError(t *testing.T) {
 
 // Markdown formatter tests.
 
-// TestFormatListMarkdown_Empty verifies that formatting an empty custom
-// emoji list produces the expected no-results Markdown message.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No custom emoji found") {
@@ -509,8 +528,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithEmoji verifies that formatting custom emoji
-// produces a Markdown table with name, URL, and external status.
+// TestFormatListMarkdown_WithEmoji verifies the ListMarkdown_WithEmoji Markdown formatter for a representative list_withemoji input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithEmoji(t *testing.T) {
 	out := ListOutput{
 		Emoji: []Item{
@@ -547,8 +567,9 @@ func TestFormatListMarkdown_WithEmoji(t *testing.T) {
 	}
 }
 
-// TestFormatCreateMarkdown verifies that formatting a created custom emoji
-// produces the expected Markdown detail block.
+// TestFormatCreateMarkdown verifies the CreateMarkdown Markdown formatter for a representative create input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatCreateMarkdown(t *testing.T) {
 	out := CreateOutput{
 		Emoji: Item{

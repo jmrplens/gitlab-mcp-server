@@ -19,7 +19,15 @@ import (
 )
 
 // TestSearchType_BasicSearchWorks verifies search_type=basic is accepted by
-// both individual and meta search tools against a real GitLab project.
+// both the individual and meta search tools against a live GitLab CE instance.
+//
+// The test creates a project with unique content, waits for Sidekiq indexing,
+// and then issues search requests with search_type=basic through both
+// gitlab_search_code and the gitlab_search meta-tool. Each subtest asserts
+// the search returns the expected payload and that the basic search type
+// does not produce validation errors.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual, meta.
 func TestSearchType_BasicSearchWorks(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -63,8 +71,16 @@ func TestSearchType_BasicSearchWorks(t *testing.T) {
 	})
 }
 
-// TestSearchType_InvalidValueFails verifies invalid search_type values return
-// actionable errors before depending on any GitLab backend behavior.
+// TestSearchType_InvalidValueFails verifies invalid search_type values
+// return actionable errors before depending on any GitLab backend behavior.
+//
+// The test calls gitlab_search_code with several invalid values
+// (non-enum strings, empty, whitespace) and asserts the tool returns a
+// structured validation error rather than silently passing the value
+// through to the GitLab API. The same checks run for the catalog-backed
+// meta-tool search action.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual, meta.
 func TestSearchType_InvalidValueFails(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -97,8 +113,16 @@ func TestSearchType_InvalidValueFails(t *testing.T) {
 	})
 }
 
-// TestSearchType_SchemasExposeEnum verifies search_type is constrained in the
-// live individual tools/list schema and the meta-tool detail resource.
+// TestSearchType_SchemasExposeEnum verifies search_type is constrained in
+// the live individual tools/list schema and the meta-tool detail resource.
+//
+// The test inspects the input schemas of gitlab_search_code and the
+// gitlab_search meta-tool search action, then asserts the search_type
+// field is exposed as an enum with the documented values. This guards
+// against accidental schema regressions that would weaken input
+// validation for both surfaces.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual, meta.
 func TestSearchType_SchemasExposeEnum(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {

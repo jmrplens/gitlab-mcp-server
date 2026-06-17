@@ -1,3 +1,4 @@
+// surface_specs_test.go contains unit tests for the dynamic surface metadata and the two-tools contract.
 package dynamic
 
 import (
@@ -7,7 +8,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 )
 
-// TestControllerSurfaceSpecs_ClassifyDynamicControllers verifies ControllerSurfaceSpecs when classify dynamic controllers.
+// TestControllerSurfaceSpecs_ClassifyDynamicControllers verifies the ControllerSurfaceSpecs_ClassifyDynamicControllers handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	specs := ControllerSurfaceSpecs(nil)
 	if len(specs) != 2 {
@@ -39,8 +42,9 @@ func TestControllerSurfaceSpecs_ClassifyDynamicControllers(t *testing.T) {
 	}
 }
 
-// TestControllerSurfaceSpecs_RouteHandlers verifies controller specs execute
-// through their wrapped dynamic registry routes.
+// TestControllerSurfaceSpecs_RouteHandlers verifies the ControllerSurfaceSpecs_RouteHandlers handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestControllerSurfaceSpecs_RouteHandlers(t *testing.T) {
 	specs := ControllerSurfaceSpecs(NewRegistry(testRoutes(t)))
 

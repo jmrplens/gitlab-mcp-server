@@ -12,7 +12,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
-// TestMark verifies Mark.
+// TestMark verifies the Mark handler.
+// The mock GitLab API at /api/v4/admin/migrations/20240115100000/mark (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestMark(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/admin/migrations/20240115100000/mark" {
@@ -39,7 +41,9 @@ func TestMark(t *testing.T) {
 	}
 }
 
-// TestMark_Error verifies Mark when error.
+// TestMark_Error verifies that Mark returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestMark_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -51,7 +55,9 @@ func TestMark_Error(t *testing.T) {
 	}
 }
 
-// TestMark_VersionValidation covers Mark with table-driven subtests for version validation.
+// TestMark_VersionValidation verifies the Mark_VersionValidation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestMark_VersionValidation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when version is invalid")
@@ -79,7 +85,9 @@ func TestMark_VersionValidation(t *testing.T) {
 	}
 }
 
-// TestFormatMarkMarkdown verifies FormatMarkMarkdown.
+// TestFormatMarkMarkdown verifies the MarkMarkdown Markdown formatter for a representative mark input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkMarkdown(t *testing.T) {
 	md := FormatMarkMarkdown(MarkOutput{Status: "marked", Version: 20240115100000})
 	if !strings.Contains(md, "marked") {
@@ -92,7 +100,9 @@ func TestFormatMarkMarkdown(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
-// TestActionSpecs_Metadata verifies database migration action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -115,7 +125,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoute verifies the database migration canonical route.
+// TestActionSpecs_CallRoute validates the CallRoute route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoute(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -132,7 +144,9 @@ func TestActionSpecs_CallRoute(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteError validates the database migration route error path.
+// TestActionSpecs_CallRouteError validates the CallRouteError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CallRouteError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {

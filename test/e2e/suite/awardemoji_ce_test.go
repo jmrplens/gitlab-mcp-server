@@ -3,6 +3,8 @@
 // awardemoji_ce_test.go tests the award emoji MCP tools against a live GitLab
 // instance using both individual tools and the gitlab_issue meta-tool.
 // Exercises the full emoji lifecycle on issues: create → list → get → delete.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -15,6 +17,14 @@ import (
 
 // TestIndividual_AwardEmoji exercises the issue award emoji lifecycle using
 // individual MCP tools: create → list → get → delete.
+//
+// The test creates a project and issue fixture, attaches a thumbsup emoji
+// to the issue through gitlab_issue_emoji_create, lists the emojis on the
+// issue, fetches the new emoji by ID, and finally deletes it. Each subtest
+// asserts the expected ID round-trips through get and that the list
+// contains at least the created emoji.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_AwardEmoji(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -72,8 +82,16 @@ func TestIndividual_AwardEmoji(t *testing.T) {
 	})
 }
 
-// TestMeta_AwardEmoji exercises the same emoji lifecycle via the
-// gitlab_issue meta-tool.
+// TestMeta_AwardEmoji exercises the same issue award emoji lifecycle via
+// the gitlab_issue meta-tool.
+//
+// The test mirrors [TestIndividual_AwardEmoji] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_issue tool,
+// using emoji_issue_create, emoji_issue_list, emoji_issue_get, and
+// emoji_issue_delete. Each subtest asserts the same outcome and verifies
+// the tool name stays constant across the lifecycle.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_AwardEmoji(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

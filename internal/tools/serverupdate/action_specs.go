@@ -19,6 +19,7 @@ func ActionSpecs(updater *autoupdate.Updater) []toolutil.ActionSpec {
 		return nil
 	}
 	return []toolutil.ActionSpec{
+		// gitlab_server_check_update — verify whether a newer MCP server release is available.
 		toolutil.NewReadActionSpec("check_update", toolutil.RouteFunc(func(ctx context.Context, input CheckInput) (CheckOutput, error) {
 			return Check(ctx, updater, input)
 		}), toolutil.ActionSpecOptions{
@@ -27,6 +28,7 @@ func ActionSpecs(updater *autoupdate.Updater) []toolutil.ActionSpec {
 			OwnerPackage:   "serverupdate",
 			IndividualTool: toolutil.IndividualToolSpec{Name: checkUpdateToolName, Title: toolutil.TitleFromName(checkUpdateToolName), Description: checkUpdateDescription},
 		}),
+		// gitlab_server_apply_update — download and apply the latest MCP server update (destructive, restarts the binary).
 		toolutil.NewDeleteActionSpec("apply_update", toolutil.DestructiveFunc(func(ctx context.Context, input ApplyInput) (ApplyOutput, error) {
 			return Apply(ctx, updater, input)
 		}), toolutil.ActionSpecOptions{

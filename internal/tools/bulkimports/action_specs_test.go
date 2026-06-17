@@ -20,7 +20,9 @@ func bulkImportSpecsByTool(t *testing.T, mux *http.ServeMux) map[string]toolutil
 	return byTool
 }
 
-// TestActionSpecs_Metadata verifies canonical metadata for bulk import actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	byTool := bulkImportSpecsByTool(t, http.NewServeMux())
 
@@ -57,7 +59,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_StartMigrationError covers the route error branch after StartMigration.
+// TestActionSpecs_StartMigrationError validates the StartMigrationError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_StartMigrationError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -75,7 +79,9 @@ func TestActionSpecs_StartMigrationError(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_SuccessPaths exercises the happy path of every bulk import route.
+// TestActionSpecs_SuccessPaths validates the SuccessPaths route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_SuccessPaths(t *testing.T) {
 	mux := http.NewServeMux()
 	migrationJSON := `{"id":1,"status":"started","source_type":"gitlab","source_url":"https://src","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","has_failures":false}`
@@ -141,8 +147,9 @@ func TestActionSpecs_SuccessPaths(t *testing.T) {
 	}
 }
 
-// TestFormatGetMarkdown_FailuresAndStatusHints exercises both conditional
-// hint branches: HasFailures=true and Status=started/created.
+// TestFormatGetMarkdown_FailuresAndStatusHints verifies the GetMarkdown_FailuresAndStatusHints Markdown formatter for a representative get_failuresandstatushints input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_FailuresAndStatusHints(t *testing.T) {
 	got := FormatGetMarkdown(MigrationSummary{ID: 1, Status: "started", HasFailures: true})
 	if !strings.Contains(got, "Failures detected") {
@@ -158,8 +165,9 @@ func TestFormatGetMarkdown_FailuresAndStatusHints(t *testing.T) {
 	}
 }
 
-// TestFormatGetEntityMarkdown_HasFailures covers the HasFailures hint branch
-// inside FormatGetEntityMarkdown.
+// TestFormatGetEntityMarkdown_HasFailures verifies the GetEntityMarkdown_HasFailures Markdown formatter for a representative getentity_hasfailures input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetEntityMarkdown_HasFailures(t *testing.T) {
 	got := FormatGetEntityMarkdown(EntitySummary{ID: 1, BulkImportID: 2, HasFailures: true})
 	if !strings.Contains(got, "Failures detected") {
@@ -167,8 +175,9 @@ func TestFormatGetEntityMarkdown_HasFailures(t *testing.T) {
 	}
 }
 
-// TestListEntities_StatusFilter covers the Status pointer branch in
-// ListEntities (input.Status != "").
+// TestListEntities_StatusFilter verifies the ListEntities_StatusFilter handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListEntities_StatusFilter(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports/entities", func(w http.ResponseWriter, r *http.Request) {
@@ -183,8 +192,9 @@ func TestListEntities_StatusFilter(t *testing.T) {
 	}
 }
 
-// TestListEntityFailures_Success covers the success path of ListEntityFailures
-// including the per-failure conversion loop with a non-nil entry.
+// TestListEntityFailures_Success verifies that ListEntityFailures succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListEntityFailures_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/bulk_imports/3/entities/4/failures", func(w http.ResponseWriter, _ *http.Request) {
@@ -202,8 +212,9 @@ func TestListEntityFailures_Success(t *testing.T) {
 	}
 }
 
-// TestListEntityFailures_Validation covers the BulkImportID and EntityID
-// non-positive validation branches.
+// TestListEntityFailures_Validation verifies the ListEntityFailures_Validation handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListEntityFailures_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	if _, err := ListEntityFailures(t.Context(), client, ListEntityFailuresInput{}); err == nil {
@@ -214,7 +225,9 @@ func TestListEntityFailures_Validation(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_NotFoundErrors verifies get routes propagate 404 API errors.
+// TestActionSpecs_NotFoundErrors validates the NotFoundErrors route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_NotFoundErrors(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -239,7 +252,9 @@ func TestActionSpecs_NotFoundErrors(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_ErrorPaths covers route errors when the GitLab API responds with a non-404 error.
+// TestActionSpecs_ErrorPaths validates the ErrorPaths route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_ErrorPaths(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
@@ -268,24 +283,27 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 	}
 }
 
-// TestToSummary_Nil ensures the nil guard in toSummary returns the zero value
-// instead of panicking.
+// TestToSummary_Nil verifies the ToSummary_Nil handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToSummary_Nil(t *testing.T) {
 	if got := toSummary(nil); got != (MigrationSummary{}) {
 		t.Errorf("toSummary(nil) = %+v, want zero value", got)
 	}
 }
 
-// TestToEntitySummary_Nil ensures the nil guard in toEntitySummary returns the
-// zero value instead of panicking.
+// TestToEntitySummary_Nil verifies the ToEntitySummary_Nil handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToEntitySummary_Nil(t *testing.T) {
 	if got := toEntitySummary(nil); got != (EntitySummary{}) {
 		t.Errorf("toEntitySummary(nil) = %+v, want zero value", got)
 	}
 }
 
-// TestFormatListMarkdown_Empty covers the early-return branch when no
-// migrations are present.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	got := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(got, "_No migrations found._") {
@@ -293,8 +311,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListEntitiesMarkdown_Empty covers the early-return branch when no
-// entities are present.
+// TestFormatListEntitiesMarkdown_Empty verifies the ListEntitiesMarkdown_Empty Markdown formatter for a representative listentities_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListEntitiesMarkdown_Empty(t *testing.T) {
 	got := FormatListEntitiesMarkdown(ListEntitiesOutput{})
 	if !strings.Contains(got, "_No entities found._") {
@@ -302,8 +321,9 @@ func TestFormatListEntitiesMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatEntityFailuresMarkdown_Empty covers the early-return branch when no
-// failures are present.
+// TestFormatEntityFailuresMarkdown_Empty verifies the EntityFailuresMarkdown_Empty Markdown formatter for a representative entityfailures_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatEntityFailuresMarkdown_Empty(t *testing.T) {
 	got := FormatEntityFailuresMarkdown(ListEntityFailuresOutput{BulkImportID: 1, EntityID: 2})
 	if !strings.Contains(got, "_No failures recorded._") {

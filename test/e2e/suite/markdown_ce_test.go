@@ -3,6 +3,8 @@
 // markdown_ce_test.go tests the GitLab markdown rendering MCP tool against a live
 // GitLab instance. Covers basic markdown-to-HTML rendering and GitLab Flavored
 // Markdown (GFM) rendering with project context.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -12,7 +14,16 @@ import (
 	markdowntools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/markdown"
 )
 
-// TestIndividual_MarkdownRender exercises the gitlab_render_markdown individual tool.
+// TestIndividual_MarkdownRender exercises the gitlab_render_markdown
+// individual tool against a live GitLab instance.
+//
+// The test renders inline markdown (bold + italic) and project-scoped
+// GitLab Flavored Markdown (GFM) as subtests, asserting that the
+// returned HTML is non-empty and that the rendered output contains
+// expected tags. Each subtest runs without a project fixture so the
+// render endpoint stays stateless.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_MarkdownRender(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

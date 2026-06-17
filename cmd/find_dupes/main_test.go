@@ -1,3 +1,9 @@
+// main_test.go covers the find_dupes command's literal-collection and
+// filtering pipeline.
+//
+// Tests exercise AST counting, constant exclusion, JSON-field suppression,
+// and the filename-shortening printer. Error-path tests verify that missing
+// files and malformed Go sources are surfaced without panics.
 package main
 
 import (

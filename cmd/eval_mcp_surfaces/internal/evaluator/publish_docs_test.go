@@ -115,6 +115,17 @@ func TestAggregatePublishRows_RepairSuccessUsesRepairAttempts(t *testing.T) {
 	}
 }
 
+// TestPublishEffectiveTraceOutcome_AcceptsOptionalCapabilityPreludeSkip
+// verifies that publishEffectiveTraceOutcome treats an optional capability
+// bridge prelude that the model skipped as a successful outcome rather than
+// a regression.
+//
+// The test feeds a taskTrace whose first expected step is an optional
+// capabilityList tool, but the recorded first call was resourceList. The
+// assertion confirms all three outcome flags return true so the report
+// does not flag this as a first-call mismatch. This protects the
+// documentation publish path from penalizing models that intelligently
+// skip optional prelude steps.
 func TestPublishEffectiveTraceOutcome_AcceptsOptionalCapabilityPreludeSkip(t *testing.T) {
 	trace := taskTrace{
 		Expected: []traceExpectedStep{

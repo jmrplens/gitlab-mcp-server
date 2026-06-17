@@ -49,8 +49,10 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// List retrieves a paginated list of milestones for a GitLab project.
-// Supports filtering by state, title, search keyword, and ancestor inclusion.
+// List retrieves a paginated list of project milestones via the
+// GitLab Milestones API (GET /projects/:id/milestones). Supports
+// filtering by state, exact title, free-text search, ancestor
+// inclusion, and explicit IID list.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	if err := ctx.Err(); err != nil {
 		return ListOutput{}, err
@@ -95,7 +97,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	return ListOutput{Milestones: out, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-// ToOutput converts a GitLab API [gl.Milestone] to MCP output format.
+// ToOutput converts a GitLab API [gl.Milestone] into the package's
+// [Output], formatting optional start/due dates as ISO strings and
+// created/updated timestamps as RFC 3339.
 func ToOutput(m *gl.Milestone) Output {
 	out := Output{
 		ID:          m.ID,
@@ -233,7 +237,10 @@ func resolveIID(ctx context.Context, client *gitlabclient.Client, projectID tool
 
 // ---------- Handlers ----------.
 
-// Get retrieves a single milestone by IID (resolves to global ID internally).
+// Get retrieves a single project milestone by its IID via the GitLab
+// Milestones API (GET /projects/:id/milestones/:milestone_id). The
+// supplied IID is resolved to the global ID before the API call via
+// [resolveIID] so callers can use the natural IID-style address.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, errors.New("milestoneGet: project_id is required")
@@ -255,7 +262,10 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	return ToOutput(m), nil
 }
 
-// Create creates a new milestone in a GitLab project.
+// Create creates a new project milestone via the GitLab Milestones
+// API (POST /projects/:id/milestones). Title is required; start/due
+// dates must be YYYY-MM-DD and the title must be unique within the
+// project.
 func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, errors.New("milestoneCreate: project_id is required")
@@ -295,7 +305,10 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	return ToOutput(m), nil
 }
 
-// Update modifies an existing milestone (resolved by IID).
+// Update modifies an existing project milestone via the GitLab
+// Milestones API (PUT /projects/:id/milestones/:milestone_id). The
+// IID is resolved to the global ID before the call. State transitions
+// use state_event=close or state_event=activate.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, errors.New("milestoneUpdate: project_id is required")
@@ -344,7 +357,9 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	return ToOutput(m), nil
 }
 
-// Delete removes a milestone from a project (resolved by IID).
+// Delete removes a project milestone via the GitLab Milestones API
+// (DELETE /projects/:id/milestones/:milestone_id). The IID is resolved
+// to the global ID before the call. Requires Maintainer or Owner role.
 func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput) error {
 	if input.ProjectID == "" {
 		return errors.New("milestoneDelete: project_id is required")
@@ -366,7 +381,10 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	return nil
 }
 
-// GetIssues retrieves issues assigned to a milestone (resolved by IID).
+// GetIssues lists the issues assigned to a milestone via the GitLab
+// Milestones issues API
+// (GET /projects/:id/milestones/:milestone_id/issues). The IID is
+// resolved to the global ID before the call.
 func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssuesInput) (MilestoneIssuesOutput, error) {
 	if input.ProjectID == "" {
 		return MilestoneIssuesOutput{}, errors.New("milestoneGetIssues: project_id is required")
@@ -412,7 +430,10 @@ func GetIssues(ctx context.Context, client *gitlabclient.Client, input GetIssues
 	return MilestoneIssuesOutput{Issues: items, Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }
 
-// GetMergeRequests retrieves merge requests assigned to a milestone (resolved by IID).
+// GetMergeRequests lists the merge requests assigned to a milestone
+// via the GitLab Milestones merge requests API
+// (GET /projects/:id/milestones/:milestone_id/merge_requests). The
+// IID is resolved to the global ID before the call.
 func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input GetMergeRequestsInput) (MilestoneMergeRequestsOutput, error) {
 	if input.ProjectID == "" {
 		return MilestoneMergeRequestsOutput{}, errors.New("milestoneGetMergeRequests: project_id is required")
@@ -462,7 +483,8 @@ func GetMergeRequests(ctx context.Context, client *gitlabclient.Client, input Ge
 
 // ---------- Helpers ----------.
 
-// parseISODate converts a YYYY-MM-DD string to *gl.ISOTime.
+// parseISODate converts a YYYY-MM-DD milestone date string to the
+// [gl.ISOTime] type expected by the GitLab API.
 func parseISODate(s string) (*gl.ISOTime, error) {
 	t, err := time.Parse("2006-01-02", s)
 	if err != nil {

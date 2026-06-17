@@ -29,7 +29,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // CI Variable List
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableList_Success verifies CIVariableList when success.
+// TestCIVariableList_Success verifies that CIVariableList succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/123/variables (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/variables" && r.Method == http.MethodGet {
@@ -58,7 +60,9 @@ func TestCIVariableList_Success(t *testing.T) {
 	}
 }
 
-// TestCIVariableList_MissingProjectID verifies CIVariableList when missing project ID.
+// TestCIVariableList_MissingProjectID verifies that CIVariableList_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	_, err := List(context.Background(), client, ListInput{})
@@ -67,7 +71,9 @@ func TestCIVariableList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestCIVariableList_CancelledContext verifies CIVariableList when cancelled context.
+// TestCIVariableList_CancelledContext verifies the CIVariableList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCIVariableList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -81,7 +87,9 @@ func TestCIVariableList_CancelledContext(t *testing.T) {
 // CI Variable Get
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableGet_Success verifies CIVariableGet when success.
+// TestCIVariableGet_Success verifies that CIVariableGet succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/123/variables/DB_HOST (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/variables/DB_HOST" && r.Method == http.MethodGet {
@@ -106,7 +114,9 @@ func TestCIVariableGet_Success(t *testing.T) {
 	}
 }
 
-// TestCIVariableGet_MissingFields covers CIVariableGet with table-driven subtests for missing fields.
+// TestCIVariableGet_MissingFields verifies that CIVariableGet_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableGet_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	tests := []struct {
@@ -126,7 +136,9 @@ func TestCIVariableGet_MissingFields(t *testing.T) {
 	}
 }
 
-// TestCIVariableGet_CancelledContext verifies CIVariableGet when cancelled context.
+// TestCIVariableGet_CancelledContext verifies the CIVariableGet_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCIVariableGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -140,7 +152,9 @@ func TestCIVariableGet_CancelledContext(t *testing.T) {
 // CI Variable Create
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableCreate_Success verifies CIVariableCreate when success.
+// TestCIVariableCreate_Success verifies that CIVariableCreate succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/123/variables (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/variables" && r.Method == http.MethodPost {
@@ -163,7 +177,9 @@ func TestCIVariableCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCIVariableCreate_MissingFields covers CIVariableCreate with table-driven subtests for missing fields.
+// TestCIVariableCreate_MissingFields verifies that CIVariableCreate_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableCreate_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	tests := []struct {
@@ -184,7 +200,9 @@ func TestCIVariableCreate_MissingFields(t *testing.T) {
 	}
 }
 
-// TestCIVariableCreate_CancelledContext verifies CIVariableCreate when cancelled context.
+// TestCIVariableCreate_CancelledContext verifies the CIVariableCreate_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCIVariableCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -200,7 +218,9 @@ func TestCIVariableCreate_CancelledContext(t *testing.T) {
 // CI Variable Update
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableUpdate_Success verifies CIVariableUpdate when success.
+// TestCIVariableUpdate_Success verifies that CIVariableUpdate succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/123/variables/DB_HOST (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/variables/DB_HOST" && r.Method == http.MethodPut {
@@ -223,7 +243,9 @@ func TestCIVariableUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestCIVariableUpdate_MissingFields covers CIVariableUpdate with table-driven subtests for missing fields.
+// TestCIVariableUpdate_MissingFields verifies that CIVariableUpdate_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableUpdate_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	tests := []struct {
@@ -243,7 +265,9 @@ func TestCIVariableUpdate_MissingFields(t *testing.T) {
 	}
 }
 
-// TestCIVariableUpdate_CancelledContext verifies CIVariableUpdate when cancelled context.
+// TestCIVariableUpdate_CancelledContext verifies the CIVariableUpdate_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCIVariableUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -259,7 +283,9 @@ func TestCIVariableUpdate_CancelledContext(t *testing.T) {
 // CI Variable Delete
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableDelete_Success verifies CIVariableDelete when success.
+// TestCIVariableDelete_Success verifies that CIVariableDelete succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/123/variables/DB_HOST (DELETE) responds with HTTP NotFound.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/123/variables/DB_HOST" && r.Method == http.MethodDelete {
@@ -277,7 +303,9 @@ func TestCIVariableDelete_Success(t *testing.T) {
 	}
 }
 
-// TestCIVariableDelete_MissingFields covers CIVariableDelete with table-driven subtests for missing fields.
+// TestCIVariableDelete_MissingFields verifies that CIVariableDelete_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableDelete_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	tests := []struct {
@@ -297,7 +325,9 @@ func TestCIVariableDelete_MissingFields(t *testing.T) {
 	}
 }
 
-// TestCIVariableDelete_CancelledContext verifies CIVariableDelete when cancelled context.
+// TestCIVariableDelete_CancelledContext verifies the CIVariableDelete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCIVariableDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -361,7 +391,9 @@ const (
 // List — API error, with pagination parameters
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableList_APIError verifies CIVariableList when API error.
+// TestCIVariableList_APIError verifies that CIVariableList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -372,7 +404,9 @@ func TestCIVariableList_APIError(t *testing.T) {
 	}
 }
 
-// TestCIVariableList_WithPagination verifies CIVariableList when with pagination.
+// TestCIVariableList_WithPagination verifies that CIVariableList_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/projects/42/variables (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestCIVariableList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/variables" && r.Method == http.MethodGet {
@@ -409,7 +443,9 @@ func TestCIVariableList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestCIVariableList_EmptyResult verifies CIVariableList when empty result.
+// TestCIVariableList_EmptyResult verifies the CIVariableList_EmptyResult handler.
+// The mock GitLab API at /api/v4/projects/1/variables (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableList_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/variables" && r.Method == http.MethodGet {
@@ -432,7 +468,9 @@ func TestCIVariableList_EmptyResult(t *testing.T) {
 // Get — API error, with environment_scope
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableGet_APIError verifies CIVariableGet when API error.
+// TestCIVariableGet_APIError verifies that CIVariableGet returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -443,7 +481,9 @@ func TestCIVariableGet_APIError(t *testing.T) {
 	}
 }
 
-// TestCIVariableGet_WithEnvironmentScope verifies CIVariableGet when with environment scope.
+// TestCIVariableGet_WithEnvironmentScope verifies the CIVariableGet_WithEnvironmentScope handler.
+// The mock GitLab API at /api/v4/projects/10/variables/DB_URL (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableGet_WithEnvironmentScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/10/variables/DB_URL" && r.Method == http.MethodGet {
@@ -476,7 +516,9 @@ func TestCIVariableGet_WithEnvironmentScope(t *testing.T) {
 // Create — API error, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableCreate_APIError verifies CIVariableCreate when API error.
+// TestCIVariableCreate_APIError verifies that CIVariableCreate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -487,7 +529,9 @@ func TestCIVariableCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestCIVariableCreate_BadRequest verifies invalid key and masking hints.
+// TestCIVariableCreate_BadRequest verifies the CIVariableCreate_BadRequest handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableCreate_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"invalid key"}`)
@@ -501,7 +545,9 @@ func TestCIVariableCreate_BadRequest(t *testing.T) {
 	}
 }
 
-// TestCIVariableCreate_AllOptionalFields verifies CIVariableCreate when all optional fields.
+// TestCIVariableCreate_AllOptionalFields verifies the CIVariableCreate_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/projects/1/variables (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableCreate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/variables" && r.Method == http.MethodPost {
@@ -552,7 +598,9 @@ func TestCIVariableCreate_AllOptionalFields(t *testing.T) {
 // Update — API error, all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableUpdate_APIError verifies CIVariableUpdate when API error.
+// TestCIVariableUpdate_APIError verifies that CIVariableUpdate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -563,7 +611,9 @@ func TestCIVariableUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestCIVariableUpdate_NotFound verifies missing variable hints.
+// TestCIVariableUpdate_NotFound verifies that CIVariableUpdate_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableUpdate_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -577,7 +627,9 @@ func TestCIVariableUpdate_NotFound(t *testing.T) {
 	}
 }
 
-// TestCIVariableUpdate_AllOptionalFields verifies CIVariableUpdate when all optional fields.
+// TestCIVariableUpdate_AllOptionalFields verifies the CIVariableUpdate_AllOptionalFields handler.
+// The mock GitLab API at /api/v4/projects/1/variables/DB_HOST (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableUpdate_AllOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/variables/DB_HOST" && r.Method == http.MethodPut {
@@ -629,7 +681,9 @@ func TestCIVariableUpdate_AllOptionalFields(t *testing.T) {
 // Delete — API error, with environment_scope
 // ---------------------------------------------------------------------------.
 
-// TestCIVariableDelete_APIError verifies CIVariableDelete when API error.
+// TestCIVariableDelete_APIError verifies that CIVariableDelete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -640,7 +694,9 @@ func TestCIVariableDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestCIVariableDelete_NotFound verifies already-deleted variable hints.
+// TestCIVariableDelete_NotFound verifies that CIVariableDelete_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCIVariableDelete_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -654,7 +710,9 @@ func TestCIVariableDelete_NotFound(t *testing.T) {
 	}
 }
 
-// TestCIVariableDelete_WithEnvironmentScope verifies CIVariableDelete when with environment scope.
+// TestCIVariableDelete_WithEnvironmentScope verifies the CIVariableDelete_WithEnvironmentScope handler.
+// The mock GitLab API at /api/v4/projects/1/variables/DB_HOST (DELETE) responds with HTTP NotFound.
+// It asserts the returned output matches the expected fields.
 func TestCIVariableDelete_WithEnvironmentScope(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/1/variables/DB_HOST" && r.Method == http.MethodDelete {
@@ -678,7 +736,9 @@ func TestCIVariableDelete_WithEnvironmentScope(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_EmptyKey verifies FormatOutputMarkdown when empty key.
+// TestFormatOutputMarkdown_EmptyKey verifies the OutputMarkdown_EmptyKey Markdown formatter for a representative output_emptykey input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_EmptyKey(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -686,7 +746,9 @@ func TestFormatOutputMarkdown_EmptyKey(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_FullUnmasked verifies FormatOutputMarkdown when full unmasked.
+// TestFormatOutputMarkdown_FullUnmasked verifies the OutputMarkdown_FullUnmasked Markdown formatter for a representative output_fullunmasked input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "DB_HOST",
@@ -719,7 +781,9 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MaskedValue verifies FormatOutputMarkdown when masked value.
+// TestFormatOutputMarkdown_MaskedValue verifies the OutputMarkdown_MaskedValue Markdown formatter for a representative output_maskedvalue input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "SECRET",
@@ -737,7 +801,9 @@ func TestFormatOutputMarkdown_MaskedValue(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_HiddenValue verifies FormatOutputMarkdown when hidden value.
+// TestFormatOutputMarkdown_HiddenValue verifies the OutputMarkdown_HiddenValue Markdown formatter for a representative output_hiddenvalue input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_HiddenValue(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "TOKEN",
@@ -755,7 +821,9 @@ func TestFormatOutputMarkdown_HiddenValue(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoDescription verifies FormatOutputMarkdown when no description.
+// TestFormatOutputMarkdown_NoDescription verifies the OutputMarkdown_NoDescription Markdown formatter for a representative output_nodescription input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Key:              "SIMPLE",
@@ -773,7 +841,9 @@ func TestFormatOutputMarkdown_NoDescription(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithVariables verifies FormatListMarkdown when with variables.
+// TestFormatListMarkdown_WithVariables verifies the ListMarkdown_WithVariables Markdown formatter for a representative list_withvariables input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -799,7 +869,9 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No CI/CD variables found") {
@@ -810,7 +882,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_EscapesTableCells verifies FormatListMarkdown when escapes table cells.
+// TestFormatListMarkdown_EscapesTableCells verifies the ListMarkdown_EscapesTableCells Markdown formatter for a representative list_escapestablecells input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 	out := ListOutput{
 		Variables: []Output{
@@ -829,7 +903,9 @@ func TestFormatListMarkdown_EscapesTableCells(t *testing.T) {
 // ActionSpecs — metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for CI variable actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -867,7 +943,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpecsCallAllRoutes — all 5 tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates CI variable routes through canonical specs.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newCIVariableRouteSpecs(t)
 

@@ -14,7 +14,9 @@ import (
 
 const fmtUnexpErr = "unexpected error: %v"
 
-// TestListInstance_Success verifies listing instance audit events returns correct results.
+// TestListInstance_Success verifies that ListInstance succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/audit_events (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListInstance_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/audit_events" {
@@ -44,7 +46,9 @@ func TestListInstance_Success(t *testing.T) {
 	}
 }
 
-// TestGetInstance_Success verifies getting a single instance audit event.
+// TestGetInstance_Success verifies that GetInstance succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/audit_events/1 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetInstance_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/audit_events/1" {
@@ -66,7 +70,9 @@ func TestGetInstance_Success(t *testing.T) {
 	}
 }
 
-// TestGetInstance_ValidationError verifies GetInstance rejects invalid event_id.
+// TestGetInstance_ValidationError verifies that GetInstance_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetInstance_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -77,7 +83,9 @@ func TestGetInstance_ValidationError(t *testing.T) {
 	}
 }
 
-// TestListGroup_Success verifies listing group audit events.
+// TestListGroup_Success verifies that ListGroup succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/5/audit_events (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/5/audit_events" {
@@ -101,7 +109,9 @@ func TestListGroup_Success(t *testing.T) {
 	}
 }
 
-// TestListGroup_ValidationError verifies ListGroup rejects empty group_id.
+// TestListGroup_ValidationError verifies that ListGroup_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListGroup_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -112,7 +122,9 @@ func TestListGroup_ValidationError(t *testing.T) {
 	}
 }
 
-// TestGetGroup_Success verifies getting a single group audit event.
+// TestGetGroup_Success verifies that GetGroup succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/5/audit_events/2 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/5/audit_events/2" {
@@ -131,7 +143,9 @@ func TestGetGroup_Success(t *testing.T) {
 	}
 }
 
-// TestGetGroup_ValidationError_MissingGroup verifies GetGroup rejects empty group_id.
+// TestGetGroup_ValidationError_MissingGroup verifies that GetGroup_ValidationError_MissingGroup returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroup_ValidationError_MissingGroup(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -142,7 +156,9 @@ func TestGetGroup_ValidationError_MissingGroup(t *testing.T) {
 	}
 }
 
-// TestListProject_Success verifies listing project audit events.
+// TestListProject_Success verifies that ListProject succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/audit_events (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/audit_events" {
@@ -166,7 +182,9 @@ func TestListProject_Success(t *testing.T) {
 	}
 }
 
-// TestListProject_ValidationError verifies ListProject rejects empty project_id.
+// TestListProject_ValidationError verifies that ListProject_ValidationError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProject_ValidationError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -177,7 +195,9 @@ func TestListProject_ValidationError(t *testing.T) {
 	}
 }
 
-// TestGetProject_Success verifies getting a single project audit event.
+// TestGetProject_Success verifies that GetProject succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/audit_events/3 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetProject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/projects/42/audit_events/3" {
@@ -196,7 +216,9 @@ func TestGetProject_Success(t *testing.T) {
 	}
 }
 
-// TestGetProject_ValidationError_MissingProject verifies GetProject rejects empty project_id.
+// TestGetProject_ValidationError_MissingProject verifies that GetProject_ValidationError_MissingProject returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetProject_ValidationError_MissingProject(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -207,7 +229,9 @@ func TestGetProject_ValidationError_MissingProject(t *testing.T) {
 	}
 }
 
-// TestListInstance_WithDateFilter verifies date filtering is applied.
+// TestListInstance_WithDateFilter verifies the ListInstance_WithDateFilter handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListInstance_WithDateFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -231,8 +255,9 @@ func TestListInstance_WithDateFilter(t *testing.T) {
 
 // --- Context cancellation tests ---
 
-// TestListInstance_ContextCancelled verifies ListInstance returns an error
-// when the context is already cancelled before the API call.
+// TestListInstance_ContextCancelled verifies the ListInstance_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListInstance_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called on cancelled context")
@@ -245,8 +270,9 @@ func TestListInstance_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestGetInstance_ContextCancelled verifies GetInstance returns an error
-// when the context is already cancelled.
+// TestGetInstance_ContextCancelled verifies the GetInstance_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetInstance_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -259,8 +285,9 @@ func TestGetInstance_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestListGroup_ContextCancelled verifies ListGroup returns an error
-// when the context is already cancelled.
+// TestListGroup_ContextCancelled verifies the ListGroup_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListGroup_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -273,8 +300,9 @@ func TestListGroup_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestGetGroup_ContextCancelled verifies GetGroup returns an error
-// when the context is already cancelled.
+// TestGetGroup_ContextCancelled verifies the GetGroup_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetGroup_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -287,8 +315,9 @@ func TestGetGroup_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestListProject_ContextCancelled verifies ListProject returns an error
-// when the context is already cancelled.
+// TestListProject_ContextCancelled verifies the ListProject_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListProject_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -301,8 +330,9 @@ func TestListProject_ContextCancelled(t *testing.T) {
 	}
 }
 
-// TestGetProject_ContextCancelled verifies GetProject returns an error
-// when the context is already cancelled.
+// TestGetProject_ContextCancelled verifies the GetProject_ContextCancelled handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetProject_ContextCancelled(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -317,7 +347,9 @@ func TestGetProject_ContextCancelled(t *testing.T) {
 
 // --- API error tests ---
 
-// TestListInstance_APIError verifies ListInstance wraps API errors correctly.
+// TestListInstance_APIError verifies that ListInstance returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListInstance_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -332,7 +364,9 @@ func TestListInstance_APIError(t *testing.T) {
 	}
 }
 
-// TestGetInstance_APIError verifies GetInstance wraps API errors correctly.
+// TestGetInstance_APIError verifies that GetInstance returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetInstance_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -347,7 +381,9 @@ func TestGetInstance_APIError(t *testing.T) {
 	}
 }
 
-// TestListGroup_APIError verifies ListGroup wraps API errors correctly.
+// TestListGroup_APIError verifies that ListGroup returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -362,7 +398,9 @@ func TestListGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestGetGroup_APIError verifies GetGroup wraps API errors correctly.
+// TestGetGroup_APIError verifies that GetGroup returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -377,7 +415,9 @@ func TestGetGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestListProject_APIError verifies ListProject wraps API errors correctly.
+// TestListProject_APIError verifies that ListProject returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -392,7 +432,9 @@ func TestListProject_APIError(t *testing.T) {
 	}
 }
 
-// TestGetProject_APIError verifies GetProject wraps API errors correctly.
+// TestGetProject_APIError verifies that GetProject returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetProject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -409,7 +451,9 @@ func TestGetProject_APIError(t *testing.T) {
 
 // --- Additional validation tests ---
 
-// TestGetGroup_ValidationError_MissingEvent verifies GetGroup rejects event_id=0.
+// TestGetGroup_ValidationError_MissingEvent verifies that GetGroup_ValidationError_MissingEvent returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroup_ValidationError_MissingEvent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -421,7 +465,9 @@ func TestGetGroup_ValidationError_MissingEvent(t *testing.T) {
 	}
 }
 
-// TestGetProject_ValidationError_MissingEvent verifies GetProject rejects event_id=0.
+// TestGetProject_ValidationError_MissingEvent verifies that GetProject_ValidationError_MissingEvent returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetProject_ValidationError_MissingEvent(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -433,7 +479,9 @@ func TestGetProject_ValidationError_MissingEvent(t *testing.T) {
 	}
 }
 
-// TestGetInstance_NegativeEventID verifies GetInstance rejects negative event_id.
+// TestGetInstance_NegativeEventID verifies the GetInstance_NegativeEventID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetInstance_NegativeEventID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("handler should not be called")
@@ -447,7 +495,9 @@ func TestGetInstance_NegativeEventID(t *testing.T) {
 
 // --- buildListOpts and date/pagination parameter tests ---
 
-// TestListInstance_WithCreatedBefore verifies created_before filter is passed to the API.
+// TestListInstance_WithCreatedBefore verifies the ListInstance_WithCreatedBefore handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListInstance_WithCreatedBefore(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -466,7 +516,9 @@ func TestListInstance_WithCreatedBefore(t *testing.T) {
 	}
 }
 
-// TestListInstance_WithPagination verifies page and per_page are passed to the API.
+// TestListInstance_WithPagination verifies that ListInstance_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListInstance_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertQueryParam(t, r, "page", "2")
@@ -486,7 +538,9 @@ func TestListInstance_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListInstance_InvalidDateSilentlyIgnored verifies invalid dates are silently ignored.
+// TestListInstance_InvalidDateSilentlyIgnored verifies the ListInstance_InvalidDateSilentlyIgnored handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListInstance_InvalidDateSilentlyIgnored(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -509,7 +563,9 @@ func TestListInstance_InvalidDateSilentlyIgnored(t *testing.T) {
 	}
 }
 
-// TestListGroup_WithDateFilter verifies date filters are applied for group listing.
+// TestListGroup_WithDateFilter verifies the ListGroup_WithDateFilter handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListGroup_WithDateFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -533,7 +589,9 @@ func TestListGroup_WithDateFilter(t *testing.T) {
 	}
 }
 
-// TestListProject_WithDateFilter verifies date filters are applied for project listing.
+// TestListProject_WithDateFilter verifies the ListProject_WithDateFilter handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListProject_WithDateFilter(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -555,8 +613,9 @@ func TestListProject_WithDateFilter(t *testing.T) {
 
 // --- toOutput detail coverage ---
 
-// TestListInstance_AllDetails verifies toOutput maps all detail fields including
-// TargetID, CustomMessage, and EntityPath from the API response.
+// TestListInstance_AllDetails verifies the ListInstance_AllDetails handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListInstance_AllDetails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[{
@@ -631,7 +690,9 @@ func TestListInstance_AllDetails(t *testing.T) {
 	}
 }
 
-// TestGetInstance_NilCreatedAt verifies toOutput handles nil created_at gracefully.
+// TestGetInstance_NilCreatedAt verifies the GetInstance_NilCreatedAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetInstance_NilCreatedAt(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK,
@@ -650,7 +711,9 @@ func TestGetInstance_NilCreatedAt(t *testing.T) {
 	}
 }
 
-// TestListInstance_MultipleEvents verifies ListInstance handles multiple events.
+// TestListInstance_MultipleEvents verifies the ListInstance_MultipleEvents handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListInstance_MultipleEvents(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
@@ -675,7 +738,9 @@ func TestListInstance_MultipleEvents(t *testing.T) {
 	}
 }
 
-// TestListInstance_EmptyResult verifies ListInstance handles zero events.
+// TestListInstance_EmptyResult verifies the ListInstance_EmptyResult handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestListInstance_EmptyResult(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`,
@@ -693,7 +758,9 @@ func TestListInstance_EmptyResult(t *testing.T) {
 
 // --- Markdown formatter tests ---
 
-// TestFormatMarkdown_Full verifies FormatMarkdown renders all detail fields.
+// TestFormatMarkdown_Full verifies the Markdown_Full Markdown formatter for a representative _full input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_Full(t *testing.T) {
 	e := Output{
 		ID:         42,
@@ -732,7 +799,9 @@ func TestFormatMarkdown_Full(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdown_Minimal verifies FormatMarkdown omits empty detail fields.
+// TestFormatMarkdown_Minimal verifies the Markdown_Minimal Markdown formatter for a representative _minimal input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_Minimal(t *testing.T) {
 	e := Output{
 		ID:         1,
@@ -760,7 +829,9 @@ func TestFormatMarkdown_Minimal(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithEvents verifies FormatListMarkdown renders a table.
+// TestFormatListMarkdown_WithEvents verifies the ListMarkdown_WithEvents Markdown formatter for a representative list_withevents input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithEvents(t *testing.T) {
 	out := ListOutput{
 		AuditEvents: []Output{
@@ -784,7 +855,9 @@ func TestFormatListMarkdown_WithEvents(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown shows placeholder for no events.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{
 		AuditEvents: []Output{},

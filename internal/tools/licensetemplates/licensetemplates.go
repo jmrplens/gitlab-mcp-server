@@ -40,7 +40,9 @@ type ListOutput struct {
 	Pagination toolutil.PaginationOutput `json:"pagination"`
 }
 
-// List lists all available license templates.
+// List retrieves the available license templates from the GitLab
+// License templates API (GET /templates/licenses). Optional Popular
+// filter narrows to featured templates.
 func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
 	opts := &gl.ListLicenseTemplatesOptions{
 		ListOptions: gl.ListOptions{Page: input.Page, PerPage: input.PerPage},
@@ -75,7 +77,10 @@ type GetOutput struct {
 	LicenseItem
 }
 
-// Get gets a single license template by key.
+// Get retrieves a single license template by its key from the GitLab
+// License templates API (GET /templates/licenses/:key). Optional
+// Project and Fullname placeholders are substituted into the template
+// content.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetOutput, error) {
 	if input.Key == "" {
 		return GetOutput{}, errors.New("get_license_template: key is required. Use list action to see available template keys")
@@ -94,7 +99,9 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	return GetOutput{LicenseItem: licenseFromGL(l)}, nil
 }
 
-// licenseFromGL maps license from gl between API and evaluator models.
+// licenseFromGL converts a [gl.LicenseTemplate] into the package's
+// [LicenseItem], copying the key, name, metadata, conditions,
+// permissions, limitations, and rendered content.
 func licenseFromGL(l *gl.LicenseTemplate) LicenseItem {
 	return LicenseItem{
 		Key:         l.Key,

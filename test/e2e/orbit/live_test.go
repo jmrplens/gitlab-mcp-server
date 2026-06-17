@@ -1,24 +1,41 @@
 //go:build orbitlive
 
-// live_test.go is the live integration test surface for the orbit package.
-// It is gated behind the `orbitlive` build tag so it never runs in the
-// default `go test ./...` sweep. Run it explicitly with:
+// Package orbit contains live integration tests against the experimental
+// GitLab Orbit Knowledge Graph API on GitLab.com. The tests hit the real
+// https://gitlab.com/api/v4/orbit/* endpoints (no httptest mocks) and
+// exercise every public orbit handler in internal/tools/orbit plus the
+// full query DSL surface end-to-end.
+//
+// # Build tag
+//
+// All tests are gated behind the `orbitlive` build tag so they never run
+// in the default `go test ./...` sweep. Run them explicitly with:
 //
 //	set -a && . ./.env && set +a && \
 //	  go test -tags orbitlive -count=1 -v -timeout 240s ./test/e2e/orbit/
 //
-// Or end-to-end (provisions fixtures, waits for the indexer, runs
-// the tests) via the project Make target:
+// Or end-to-end (provisions fixtures, waits for the indexer, runs the
+// tests) via the project Make target:
 //
 //	set -a && . ./.env && set +a && \
 //	  make test-e2e-gitlab-com
 //
-// The test lives under test/e2e/orbit/ (external `orbit_test` package)
-// so it is co-located with the rest of the e2e surface and can be
-// run or evolved independently of the mock-based e2e suite in
-// test/e2e/suite/. It uses the real GitLab.com REST API (not httptest
-// mocks) and exercises every public orbit handler plus the full
-// query DSL surface end-to-end.
+// # Required environment
+//
+//   - GITLAB_COM_TOKEN — a GitLab.com personal access token with api scope,
+//     used to authenticate every request.
+//   - ORBIT_FIXTURES_NAMESPACE — optional. Overrides the default `plens1`
+//     namespace against which the fixture-driven subtests run. Set this
+//     when developing against your own GitLab.com namespace.
+//
+// # Layout
+//
+// The test file uses the external `orbit_test` package so it is
+// co-located with the rest of the e2e surface and can be run or evolved
+// independently of the mock-based e2e suite in test/e2e/suite/.
+// See docs/development/orbit-fixtures.md for the fixture layout, the
+// data the fixture-driven subtests expect, and the Orbit indexer
+// eventually-consistent caveat.
 package orbit_test
 
 import (
@@ -39,6 +56,10 @@ import (
 	orbit "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/orbit"
 )
 
+// liveGitLabComURL is the base URL for the real GitLab.com REST API
+// exercised by every handler test in this file. Pinned to gitlab.com
+// (no override) because the Orbit Knowledge Graph API is currently a
+// GitLab.com-only experimental surface.
 const liveGitLabComURL = "https://gitlab.com"
 
 // newLiveClient creates a GitLab.com client using the GITLAB_COM_TOKEN
@@ -548,6 +569,11 @@ func testOrbitLiveFixtures(t *testing.T) {
 	if namespace == "" {
 		namespace = "plens1"
 	}
+	// Fixture project names created under <namespace>/ by
+	// scripts/setup-orbit-fixtures.sh. kg-fixtures populates the
+	// Project / MergeRequest / File / Milestone / Pipeline entities;
+	// security-fixtures populates the Vulnerability / Finding entities.
+	// See docs/development/orbit-fixtures.md for the full layout.
 	const (
 		kgFixturesProjectPath       = "kg-fixtures"
 		securityFixturesProjectPath = "security-fixtures"

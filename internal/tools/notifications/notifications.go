@@ -101,7 +101,9 @@ type EventOutput struct {
 
 // Handlers.
 
-// GetGlobalSettings gets global notification settings.
+// GetGlobalSettings retrieves the authenticated user's global
+// notification settings via the GitLab Notification settings API
+// (GET /notification_settings).
 func GetGlobalSettings(ctx context.Context, client *gitlabclient.Client, _ GetGlobalInput) (Output, error) {
 	settings, _, err := client.GL().NotificationSettings.GetGlobalSettings(gl.WithContext(ctx))
 	if err != nil {
@@ -111,7 +113,9 @@ func GetGlobalSettings(ctx context.Context, client *gitlabclient.Client, _ GetGl
 	return toOutput(settings), nil
 }
 
-// GetSettingsForProject gets notification settings for a project.
+// GetSettingsForProject retrieves the authenticated user's notification
+// settings for a project via the GitLab Notification settings API
+// (GET /projects/:id/notification_settings).
 func GetSettingsForProject(ctx context.Context, client *gitlabclient.Client, input GetProjectInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("notification_project_get", toolutil.ErrFieldRequired("project_id"))
@@ -124,7 +128,9 @@ func GetSettingsForProject(ctx context.Context, client *gitlabclient.Client, inp
 	return toOutput(settings), nil
 }
 
-// GetSettingsForGroup gets notification settings for a group.
+// GetSettingsForGroup retrieves the authenticated user's notification
+// settings for a group via the GitLab Notification settings API
+// (GET /groups/:id/notification_settings).
 func GetSettingsForGroup(ctx context.Context, client *gitlabclient.Client, input GetGroupInput) (Output, error) {
 	if input.GroupID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("notification_group_get", toolutil.ErrFieldRequired("group_id"))
@@ -137,7 +143,9 @@ func GetSettingsForGroup(ctx context.Context, client *gitlabclient.Client, input
 	return toOutput(settings), nil
 }
 
-// UpdateGlobalSettings updates global notification settings.
+// UpdateGlobalSettings updates the authenticated user's global
+// notification settings via the GitLab Notification settings API
+// (PUT /notification_settings). Only non-nil fields are applied.
 func UpdateGlobalSettings(ctx context.Context, client *gitlabclient.Client, input UpdateGlobalInput) (Output, error) {
 	opts := buildUpdateOpts(input.eventFields)
 	settings, _, err := client.GL().NotificationSettings.UpdateGlobalSettings(opts, gl.WithContext(ctx))
@@ -148,7 +156,9 @@ func UpdateGlobalSettings(ctx context.Context, client *gitlabclient.Client, inpu
 	return toOutput(settings), nil
 }
 
-// UpdateSettingsForProject updates notification settings for a project.
+// UpdateSettingsForProject updates the authenticated user's
+// notification settings for a project via the GitLab Notification
+// settings API (PUT /projects/:id/notification_settings).
 func UpdateSettingsForProject(ctx context.Context, client *gitlabclient.Client, input UpdateProjectInput) (Output, error) {
 	if input.ProjectID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("notification_project_update", toolutil.ErrFieldRequired("project_id"))
@@ -162,7 +172,9 @@ func UpdateSettingsForProject(ctx context.Context, client *gitlabclient.Client, 
 	return toOutput(settings), nil
 }
 
-// UpdateSettingsForGroup updates notification settings for a group.
+// UpdateSettingsForGroup updates the authenticated user's notification
+// settings for a group via the GitLab Notification settings API
+// (PUT /groups/:id/notification_settings).
 func UpdateSettingsForGroup(ctx context.Context, client *gitlabclient.Client, input UpdateGroupInput) (Output, error) {
 	if input.GroupID == "" {
 		return Output{}, toolutil.WrapErrWithMessage("notification_group_update", toolutil.ErrFieldRequired("group_id"))
@@ -178,7 +190,9 @@ func UpdateSettingsForGroup(ctx context.Context, client *gitlabclient.Client, in
 
 // Helpers.
 
-// levelMap stores the package-level level map state.
+// levelMap translates the human-friendly notification level strings
+// accepted in [eventFields.Level] to the [gl.NotificationLevelValue]
+// enum expected by the GitLab API.
 var levelMap = map[string]gl.NotificationLevelValue{
 	"disabled":      gl.DisabledNotificationLevel,
 	"participating": gl.ParticipatingNotificationLevel,
@@ -188,7 +202,9 @@ var levelMap = map[string]gl.NotificationLevelValue{
 	"custom":        gl.CustomNotificationLevel,
 }
 
-// buildUpdateOpts constructs the request parameters from the input.
+// buildUpdateOpts assembles a [gl.NotificationSettingsOptions] from
+// the shared [eventFields], translating the Level string via
+// [levelMap] and copying every event flag onto the options.
 func buildUpdateOpts(e eventFields) *gl.NotificationSettingsOptions {
 	opts := &gl.NotificationSettingsOptions{}
 	if e.Level != "" {
@@ -222,7 +238,9 @@ func buildUpdateOpts(e eventFields) *gl.NotificationSettingsOptions {
 
 // Converters.
 
-// toOutput converts the GitLab API response to the tool output format.
+// toOutput converts a [gl.NotificationSettings] response into the
+// package's [Output] shape, flattening the optional [EventOutput]
+// sub-struct.
 func toOutput(s *gl.NotificationSettings) Output {
 	out := Output{
 		Level:             s.Level.String(),
@@ -255,7 +273,8 @@ func toOutput(s *gl.NotificationSettings) Output {
 
 // Formatters.
 
-// eventLine formats one notification event flag for Markdown output.
+// eventLine formats a single notification event flag as a Markdown
+// bullet line with a checkmark/cross emoji.
 func eventLine(name string, enabled bool) string {
 	return fmt.Sprintf("- %s %s\n", toolutil.BoolEmoji(enabled), name)
 }

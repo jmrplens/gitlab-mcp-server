@@ -124,8 +124,9 @@ const (
 
 // --- List tests ---
 
-// TestList_Success verifies List returns one epic with Type="Epic" when the
-// REST group epics endpoint responds 200 with a single epic.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -148,7 +149,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_RESTFilterOptions verifies List applies REST-compatible filters without falling back to Work Items.
+// TestList_RESTFilterOptions verifies the List_RESTFilterOptions handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_RESTFilterOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -182,8 +185,9 @@ func TestList_RESTFilterOptions(t *testing.T) {
 	}
 }
 
-// TestList_MissingFullPath verifies List returns a validation error when
-// full_path is empty, without issuing any GraphQL request.
+// TestList_MissingFullPath verifies that List_MissingFullPath returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -194,8 +198,9 @@ func TestList_MissingFullPath(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies List returns a context error when
-// invoked with an already-cancelled context.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -207,8 +212,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies List propagates an error when the GraphQL
-// endpoint responds 403 Forbidden.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -249,8 +255,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingIID verifies Get returns a validation error mentioning "iid"
-// when the iid field is zero, without issuing a GraphQL request.
+// TestGet_MissingIID verifies that Get_MissingIID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -264,8 +271,9 @@ func TestGet_MissingIID(t *testing.T) {
 	}
 }
 
-// TestGet_MissingFullPath verifies Get returns a validation error when
-// full_path is empty.
+// TestGet_MissingFullPath verifies that Get_MissingFullPath returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -276,8 +284,9 @@ func TestGet_MissingFullPath(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies Get propagates an error when the GraphQL endpoint
-// responds 404 Not Found.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -290,8 +299,9 @@ func TestGet_APIError(t *testing.T) {
 
 // --- GetLinks tests (REST) ---
 
-// TestGetLinks_Success verifies GetLinks returns the child epic list when
-// GET /groups/:path/epics/:iid/epics responds 200 with one linked epic.
+// TestGetLinks_Success verifies that GetLinks succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetLinks_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/epics/1/epics") {
@@ -315,8 +325,9 @@ func TestGetLinks_Success(t *testing.T) {
 	}
 }
 
-// TestGetLinks_MissingIID verifies GetLinks returns a validation error when
-// iid is zero.
+// TestGetLinks_MissingIID verifies that GetLinks_MissingIID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetLinks_MissingIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -327,8 +338,9 @@ func TestGetLinks_MissingIID(t *testing.T) {
 	}
 }
 
-// TestGetLinks_MissingFullPath verifies GetLinks returns a validation error
-// when full_path is empty.
+// TestGetLinks_MissingFullPath verifies that GetLinks_MissingFullPath returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetLinks_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -341,8 +353,9 @@ func TestGetLinks_MissingFullPath(t *testing.T) {
 
 // --- Create tests ---
 
-// TestCreate_Success verifies Create returns the new epic when the GraphQL
-// workItemCreate mutation responds 200 with a work item payload.
+// TestCreate_Success verifies that Create succeeds when the GitLab API returns a valid response.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -365,8 +378,9 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingTitle verifies Create returns a validation error when
-// the title field is empty.
+// TestCreate_MissingTitle verifies that Create_MissingTitle returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingTitle(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -377,8 +391,9 @@ func TestCreate_MissingTitle(t *testing.T) {
 	}
 }
 
-// TestCreate_MissingFullPath verifies Create returns a validation error when
-// full_path is empty.
+// TestCreate_MissingFullPath verifies that Create_MissingFullPath returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -389,8 +404,9 @@ func TestCreate_MissingFullPath(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies Create propagates an error when the GraphQL
-// workItemCreate mutation responds 403 Forbidden.
+// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -436,8 +452,9 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingIID verifies Update returns a validation error when
-// iid is zero.
+// TestUpdate_MissingIID verifies that Update_MissingIID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -448,8 +465,9 @@ func TestUpdate_MissingIID(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingFullPath verifies Update returns a validation error when
-// full_path is empty.
+// TestUpdate_MissingFullPath verifies that Update_MissingFullPath returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -460,8 +478,9 @@ func TestUpdate_MissingFullPath(t *testing.T) {
 	}
 }
 
-// TestUpdate_APIError verifies Update propagates an error when the first
-// GraphQL call (GID resolution) responds 403 Forbidden.
+// TestUpdate_APIError verifies that Update returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -499,8 +518,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingIID verifies Delete returns a validation error when
-// iid is zero.
+// TestDelete_MissingIID verifies that Delete_MissingIID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingIID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -511,8 +531,9 @@ func TestDelete_MissingIID(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingFullPath verifies Delete returns a validation error when
-// full_path is empty.
+// TestDelete_MissingFullPath verifies that Delete_MissingFullPath returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingFullPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -523,8 +544,9 @@ func TestDelete_MissingFullPath(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies Delete propagates an error when the first
-// GraphQL call (GID resolution) responds 403 Forbidden.
+// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -580,8 +602,9 @@ func TestMapStatusToID(t *testing.T) {
 
 // --- Markdown tests ---
 
-// TestFormatOutputMarkdown verifies FormatOutputMarkdown produces a non-empty
-// string for a minimally populated Output.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	out := Output{
 		IID: 1, Title: "Epic", Type: "Epic", State: "OPEN", Author: "alice",
@@ -592,8 +615,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown produces a
-// non-empty string for a zero-value ListOutput (empty epic list).
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	result := FormatListMarkdown(ListOutput{})
 	if result == "" {
@@ -601,8 +625,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatLinksMarkdown verifies FormatLinksMarkdown produces a non-empty
-// string for a LinksOutput containing one child epic.
+// TestFormatLinksMarkdown verifies the LinksMarkdown Markdown formatter for a representative links input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatLinksMarkdown(t *testing.T) {
 	out := LinksOutput{
 		ChildEpics: []LinksItem{
@@ -692,8 +717,9 @@ func assertEpicOutputTimelineFields(t *testing.T, out Output) {
 
 // --- toLinkItem coverage ---
 
-// TestToLinkItem_NilAuthorAndCreatedAt verifies toLinkItem handles a minimal
-// Epic with nil Author and nil CreatedAt without panicking.
+// TestToLinkItem_NilAuthorAndCreatedAt verifies the ToLinkItem_NilAuthorAndCreatedAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToLinkItem_NilAuthorAndCreatedAt(t *testing.T) {
 	e := &gl.Epic{ID: 10, IID: 3, Title: "Bare", State: "opened"}
 	item := toLinkItem(e)
@@ -705,7 +731,9 @@ func TestToLinkItem_NilAuthorAndCreatedAt(t *testing.T) {
 	}
 }
 
-// TestEpicToOutput_FullRESTEpic verifies REST epic mapping includes optional author and timeline fields.
+// TestEpicToOutput_FullRESTEpic verifies the EpicToOutput_FullRESTEpic handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEpicToOutput_FullRESTEpic(t *testing.T) {
 	start := gl.ISOTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	due := gl.ISOTime(time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC))
@@ -778,7 +806,9 @@ func TestList_WithAllFilters(t *testing.T) {
 	}
 }
 
-// TestList_WorkItemsAPIError verifies Work Items fallback errors include the Premium/Ultimate hint.
+// TestList_WorkItemsAPIError verifies that List_WorkItemsAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_WorkItemsAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -838,7 +868,9 @@ func TestCreate_WithAllOptions(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies that Create returns context error early.
+// TestCreate_CancelledContext verifies the Create_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -906,7 +938,9 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies that Update returns context error early.
+// TestUpdate_CancelledContext verifies the Update_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -920,7 +954,9 @@ func TestUpdate_CancelledContext(t *testing.T) {
 
 // --- GetLinks additional coverage ---
 
-// TestGetLinks_CancelledContext verifies GetLinks returns context error early.
+// TestGetLinks_CancelledContext verifies the GetLinks_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetLinks_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -932,7 +968,9 @@ func TestGetLinks_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetLinks_APIError verifies GetLinks wraps API errors.
+// TestGetLinks_APIError verifies that GetLinks returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetLinks_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -943,7 +981,9 @@ func TestGetLinks_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies Get returns context error early.
+// TestGet_CancelledContext verifies the Get_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -955,7 +995,9 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies Delete returns context error early.
+// TestDelete_CancelledContext verifies the Delete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API")
@@ -1013,8 +1055,9 @@ func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 	}
 }
 
-// TestFormatLinksMarkdown_Empty verifies FormatLinksMarkdown renders the
-// empty state message when no child epics are present.
+// TestFormatLinksMarkdown_Empty verifies the LinksMarkdown_Empty Markdown formatter for a representative links_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatLinksMarkdown_Empty(t *testing.T) {
 	result := FormatLinksMarkdown(LinksOutput{})
 	if !strings.Contains(result, "No child epics found") {

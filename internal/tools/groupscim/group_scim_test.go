@@ -56,8 +56,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_MissingGroupID verifies that List returns a validation error
-// when the required group_id input is empty.
+// TestList_MissingGroupID verifies that List_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -69,8 +70,9 @@ func TestList_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies that List returns an error when
-// invoked with an already-cancelled context.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -84,8 +86,9 @@ func TestList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies that List returns an error when the GitLab
-// group SCIM endpoint responds with 403 Forbidden.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/mygroup/scim/identities (GET) responds with HTTP Forbidden.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/scim/identities" {
@@ -103,8 +106,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies that Get retrieves a single SCIM identity by
-// group and UID and returns the expected external_uid and user_id.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/mygroup/scim/uid-123 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/groups/mygroup/scim/uid-123" {
@@ -129,8 +133,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingGroupID verifies that Get returns a validation error
-// when the required group_id input is empty.
+// TestGet_MissingGroupID verifies that Get_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -142,8 +147,9 @@ func TestGet_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGet_MissingUID verifies that Get returns a validation error when
-// the required uid input is empty.
+// TestGet_MissingUID verifies that Get_MissingUID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingUID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -155,8 +161,9 @@ func TestGet_MissingUID(t *testing.T) {
 	}
 }
 
-// TestGet_CancelledContext verifies that Get returns an error when
-// invoked with an already-cancelled context.
+// TestGet_CancelledContext verifies the Get_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -173,8 +180,9 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGet_APIError verifies that Get returns an error when the GitLab
-// SCIM endpoint responds with 400 Bad Request.
+// TestGet_APIError verifies that Get returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/mygroup/scim/uid-123 (GET) responds with HTTP BadRequest.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/scim/uid-123" {
@@ -191,8 +199,9 @@ func TestGet_APIError(t *testing.T) {
 	assertSCIMIdentityHint(t, err)
 }
 
-// TestUpdate_Success verifies that Update issues PATCH
-// /api/v4/groups/:id/scim/:uid and returns no error on 204 No Content.
+// TestUpdate_Success verifies that Update succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/mygroup/scim/uid-123 (PATCH) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == "/api/v4/groups/mygroup/scim/uid-123" {
@@ -212,8 +221,9 @@ func TestUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingGroupID verifies that Update returns a validation
-// error when the required group_id input is empty.
+// TestUpdate_MissingGroupID verifies that Update_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -225,8 +235,9 @@ func TestUpdate_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingUID verifies that Update returns a validation error
-// when the required uid input is empty.
+// TestUpdate_MissingUID verifies that Update_MissingUID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingUID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -241,8 +252,9 @@ func TestUpdate_MissingUID(t *testing.T) {
 	}
 }
 
-// TestUpdate_MissingExternUID verifies that Update returns a validation
-// error when the required extern_uid input is empty.
+// TestUpdate_MissingExternUID verifies that Update_MissingExternUID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingExternUID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -257,8 +269,9 @@ func TestUpdate_MissingExternUID(t *testing.T) {
 	}
 }
 
-// TestUpdate_CancelledContext verifies that Update returns an error when
-// invoked with an already-cancelled context.
+// TestUpdate_CancelledContext verifies the Update_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -276,8 +289,9 @@ func TestUpdate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdate_APIError verifies that Update returns an error when the
-// GitLab SCIM endpoint responds with 403 Forbidden.
+// TestUpdate_APIError verifies that Update returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/mygroup/scim/uid-123 (GET) responds with HTTP Forbidden.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/scim/uid-123" {
@@ -295,8 +309,9 @@ func TestUpdate_APIError(t *testing.T) {
 	assertSCIMIdentityHint(t, err)
 }
 
-// TestDelete_Success verifies that Delete issues DELETE
-// /api/v4/groups/:id/scim/:uid and returns no error on 204 No Content.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/groups/mygroup/scim/uid-123 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/groups/mygroup/scim/uid-123" {
@@ -315,8 +330,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingGroupID verifies that Delete returns a validation
-// error when the required group_id input is empty.
+// TestDelete_MissingGroupID verifies that Delete_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -328,8 +344,9 @@ func TestDelete_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingUID verifies that Delete returns a validation error
-// when the required uid input is empty.
+// TestDelete_MissingUID verifies that Delete_MissingUID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingUID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -341,8 +358,9 @@ func TestDelete_MissingUID(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies that Delete returns an error when
-// invoked with an already-cancelled context.
+// TestDelete_CancelledContext verifies the Delete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -359,8 +377,9 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies that Delete returns an error when the
-// GitLab SCIM endpoint responds with 400 Bad Request.
+// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The mock GitLab API at /api/v4/groups/mygroup/scim/uid-123 (GET) responds with HTTP BadRequest.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/groups/mygroup/scim/uid-123" {

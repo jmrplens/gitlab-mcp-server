@@ -112,8 +112,9 @@ func TestBranchUnprotect_Success(t *testing.T) {
 	}
 }
 
-// TestBranchUnprotect_NotFound verifies that branchUnprotect returns an error
-// when the target branch does not exist. The mock returns HTTP 404.
+// TestBranchUnprotect_NotFound verifies that BranchUnprotect_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestBranchUnprotect_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Branch Not Found"}`)
@@ -231,8 +232,9 @@ func TestBranchCreate_Success(t *testing.T) {
 	}
 }
 
-// TestBranchCreate_AlreadyExists verifies that branchCreate returns an error
-// when the GitLab API reports the branch already exists (HTTP 400).
+// TestBranchCreate_AlreadyExists verifies the BranchCreate_AlreadyExists handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchCreate_AlreadyExists(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Branch already exists"}`)
@@ -248,8 +250,9 @@ func TestBranchCreate_AlreadyExists(t *testing.T) {
 	}
 }
 
-// TestBranchCreateRef_NotFound verifies that branchCreate returns an
-// actionable error message when the source ref does not exist.
+// TestBranchCreateRef_NotFound verifies that BranchCreateRef_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestBranchCreateRef_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"Invalid reference name"}`)
@@ -324,8 +327,9 @@ func TestBranchList_Success(t *testing.T) {
 	}
 }
 
-// TestBranchList_WithSearch verifies that branchList passes the search query
-// parameter to the GitLab API and returns only matching branches.
+// TestBranchList_WithSearch verifies the BranchList_WithSearch handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchList_WithSearch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRepoBranches {
@@ -353,8 +357,9 @@ func TestBranchList_WithSearch(t *testing.T) {
 	}
 }
 
-// TestBranchList_Empty verifies that branchList handles an empty API response
-// gracefully, returning zero branches without error.
+// TestBranchList_Empty verifies the BranchList_Empty handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -369,7 +374,9 @@ func TestBranchList_Empty(t *testing.T) {
 	}
 }
 
-// TestBranchGet_Success verifies that branchGet retrieves a single branch by name.
+// TestBranchGet_Success verifies that BranchGet succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathRepoBranches+"/main" {
@@ -394,7 +401,9 @@ func TestBranchGet_Success(t *testing.T) {
 	}
 }
 
-// TestBranchGet_EmptyProjectID verifies branchGet returns an error for empty project_id.
+// TestBranchGet_EmptyProjectID verifies the BranchGet_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchGet_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -406,7 +415,9 @@ func TestBranchGet_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestBranchDelete_Success verifies that branchDelete removes a branch.
+// TestBranchDelete_Success verifies that BranchDelete succeeds when the GitLab API returns a valid response.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == pathRepoBranches+"/feature/old" {
@@ -425,7 +436,9 @@ func TestBranchDelete_Success(t *testing.T) {
 	}
 }
 
-// TestBranchDelete_EmptyProjectID verifies branchDelete returns an error for empty project_id.
+// TestBranchDelete_EmptyProjectID verifies the BranchDelete_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchDelete_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -437,7 +450,9 @@ func TestBranchDelete_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestBranchDelete_APIError verifies branchDelete returns an error on API failure.
+// TestBranchDelete_APIError verifies that BranchDelete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestBranchDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -456,7 +471,9 @@ func TestBranchDelete_APIError(t *testing.T) {
 // protectedBranchGet tests
 // ---------------------------------------------------------------------------.
 
-// TestProtectedBranchGet_Success verifies ProtectedBranchGet when success.
+// TestProtectedBranchGet_Success verifies that ProtectedBranchGet succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProtectedBranchGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == pathProtectedBranches+"/main" {
@@ -487,7 +504,9 @@ func TestProtectedBranchGet_Success(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_MissingProjectID verifies ProtectedBranchGet when missing project ID.
+// TestProtectedBranchGet_MissingProjectID verifies that ProtectedBranchGet_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProtectedBranchGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -502,7 +521,9 @@ func TestProtectedBranchGet_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_MissingBranchName verifies ProtectedBranchGet when missing branch name.
+// TestProtectedBranchGet_MissingBranchName verifies that ProtectedBranchGet_MissingBranchName returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProtectedBranchGet_MissingBranchName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -517,7 +538,9 @@ func TestProtectedBranchGet_MissingBranchName(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_CancelledContext verifies ProtectedBranchGet when cancelled context.
+// TestProtectedBranchGet_CancelledContext verifies the ProtectedBranchGet_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestProtectedBranchGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -535,7 +558,9 @@ func TestProtectedBranchGet_CancelledContext(t *testing.T) {
 // protectedBranchUpdate tests
 // ---------------------------------------------------------------------------.
 
-// TestProtectedBranchUpdate_Success verifies ProtectedBranchUpdate when success.
+// TestProtectedBranchUpdate_Success verifies that ProtectedBranchUpdate succeeds when the GitLab API returns a valid response.
+// The test exercises the PATCH path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProtectedBranchUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == pathProtectedBranches+"/main" {
@@ -562,7 +587,9 @@ func TestProtectedBranchUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_MissingProjectID verifies ProtectedBranchUpdate when missing project ID.
+// TestProtectedBranchUpdate_MissingProjectID verifies that ProtectedBranchUpdate_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProtectedBranchUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -577,7 +604,9 @@ func TestProtectedBranchUpdate_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_MissingBranchName verifies ProtectedBranchUpdate when missing branch name.
+// TestProtectedBranchUpdate_MissingBranchName verifies that ProtectedBranchUpdate_MissingBranchName returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProtectedBranchUpdate_MissingBranchName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -592,7 +621,9 @@ func TestProtectedBranchUpdate_MissingBranchName(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_CancelledContext verifies ProtectedBranchUpdate when cancelled context.
+// TestProtectedBranchUpdate_CancelledContext verifies the ProtectedBranchUpdate_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestProtectedBranchUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -610,7 +641,9 @@ func TestProtectedBranchUpdate_CancelledContext(t *testing.T) {
 // DeleteMerged tests
 // ---------------------------------------------------------------------------.
 
-// TestDeleteMerged_Success verifies DeleteMerged when success.
+// TestDeleteMerged_Success verifies that DeleteMerged succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/repository/merged_branches (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDeleteMerged_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/projects/42/repository/merged_branches" {
@@ -626,7 +659,9 @@ func TestDeleteMerged_Success(t *testing.T) {
 	}
 }
 
-// TestDeleteMerged_MissingProjectID verifies DeleteMerged when missing project ID.
+// TestDeleteMerged_MissingProjectID verifies that DeleteMerged_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteMerged_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -638,7 +673,9 @@ func TestDeleteMerged_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeleteMerged_APIError verifies DeleteMerged when API error.
+// TestDeleteMerged_APIError verifies that DeleteMerged returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeleteMerged_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -650,7 +687,9 @@ func TestDeleteMerged_APIError(t *testing.T) {
 	}
 }
 
-// TestDeleteMerged_CancelledContext verifies DeleteMerged when cancelled context.
+// TestDeleteMerged_CancelledContext verifies the DeleteMerged_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeleteMerged_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -668,7 +707,9 @@ func TestDeleteMerged_CancelledContext(t *testing.T) {
 // Canceled context tests for remaining functions
 // ---------------------------------------------------------------------------.
 
-// TestBranchCreate_CancelledContext verifies BranchCreate when cancelled context.
+// TestBranchCreate_CancelledContext verifies the BranchCreate_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestBranchCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -680,7 +721,9 @@ func TestBranchCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchList_CancelledContext verifies BranchList when cancelled context.
+// TestBranchList_CancelledContext verifies the BranchList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestBranchList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -692,7 +735,9 @@ func TestBranchList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchGet_CancelledContext verifies BranchGet when cancelled context.
+// TestBranchGet_CancelledContext verifies the BranchGet_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestBranchGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -704,7 +749,9 @@ func TestBranchGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchDelete_CancelledContext verifies BranchDelete when cancelled context.
+// TestBranchDelete_CancelledContext verifies the BranchDelete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestBranchDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -716,7 +763,9 @@ func TestBranchDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_CancelledContext verifies BranchProtect when cancelled context.
+// TestBranchProtect_CancelledContext verifies the BranchProtect_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestBranchProtect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -728,7 +777,9 @@ func TestBranchProtect_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestBranchUnprotect_CancelledContext verifies BranchUnprotect when cancelled context.
+// TestBranchUnprotect_CancelledContext verifies the BranchUnprotect_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestBranchUnprotect_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -740,7 +791,9 @@ func TestBranchUnprotect_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestProtectedList_CancelledContext verifies ProtectedList when cancelled context.
+// TestProtectedList_CancelledContext verifies the ProtectedList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestProtectedList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -756,7 +809,9 @@ func TestProtectedList_CancelledContext(t *testing.T) {
 // Empty ProjectID tests for remaining functions
 // ---------------------------------------------------------------------------.
 
-// TestBranchCreate_EmptyProjectID verifies BranchCreate when empty project ID.
+// TestBranchCreate_EmptyProjectID verifies the BranchCreate_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchCreate_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -767,7 +822,9 @@ func TestBranchCreate_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestBranchList_EmptyProjectID verifies BranchList when empty project ID.
+// TestBranchList_EmptyProjectID verifies the BranchList_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -778,7 +835,9 @@ func TestBranchList_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_EmptyProjectID verifies BranchProtect when empty project ID.
+// TestBranchProtect_EmptyProjectID verifies the BranchProtect_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchProtect_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{}`)
@@ -789,7 +848,9 @@ func TestBranchProtect_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestBranchUnprotect_EmptyProjectID verifies BranchUnprotect when empty project ID.
+// TestBranchUnprotect_EmptyProjectID verifies the BranchUnprotect_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchUnprotect_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -800,7 +861,9 @@ func TestBranchUnprotect_EmptyProjectID(t *testing.T) {
 	}
 }
 
-// TestProtectedList_EmptyProjectID verifies ProtectedList when empty project ID.
+// TestProtectedList_EmptyProjectID verifies the ProtectedList_EmptyProjectID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProtectedList_EmptyProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -815,7 +878,9 @@ func TestProtectedList_EmptyProjectID(t *testing.T) {
 // API error tests
 // ---------------------------------------------------------------------------.
 
-// TestBranchProtect_APIError verifies BranchProtect when API error.
+// TestBranchProtect_APIError verifies that BranchProtect returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestBranchProtect_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -826,7 +891,9 @@ func TestBranchProtect_APIError(t *testing.T) {
 	}
 }
 
-// TestBranchList_APIError verifies BranchList when API error.
+// TestBranchList_APIError verifies that BranchList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestBranchList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -837,7 +904,9 @@ func TestBranchList_APIError(t *testing.T) {
 	}
 }
 
-// TestBranchGet_APIError verifies BranchGet when API error.
+// TestBranchGet_APIError verifies that BranchGet returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestBranchGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Branch Not Found"}`)
@@ -848,7 +917,9 @@ func TestBranchGet_APIError(t *testing.T) {
 	}
 }
 
-// TestProtectedList_APIError verifies ProtectedList when API error.
+// TestProtectedList_APIError verifies that ProtectedList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProtectedList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -859,7 +930,9 @@ func TestProtectedList_APIError(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchGet_APIError verifies ProtectedBranchGet when API error.
+// TestProtectedBranchGet_APIError verifies that ProtectedBranchGet returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProtectedBranchGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
@@ -870,7 +943,9 @@ func TestProtectedBranchGet_APIError(t *testing.T) {
 	}
 }
 
-// TestProtectedBranchUpdate_APIError verifies ProtectedBranchUpdate when API error.
+// TestProtectedBranchUpdate_APIError verifies that ProtectedBranchUpdate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestProtectedBranchUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -898,7 +973,9 @@ func TestProtectedBranchUpdate_NotFound(t *testing.T) {
 	}
 }
 
-// TestBranchUnprotect_APIError verifies BranchUnprotect when API error.
+// TestBranchUnprotect_APIError verifies that BranchUnprotect returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestBranchUnprotect_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"403 Forbidden"}`)
@@ -913,7 +990,9 @@ func TestBranchUnprotect_APIError(t *testing.T) {
 // Protect with advanced options
 // ---------------------------------------------------------------------------.
 
-// TestBranchProtect_WithForcePushAndCodeOwner verifies BranchProtect when with force push and code owner.
+// TestBranchProtect_WithForcePushAndCodeOwner verifies the BranchProtect_WithForcePushAndCodeOwner handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchProtect_WithForcePushAndCodeOwner(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedBranches {
@@ -948,7 +1027,9 @@ func TestBranchProtect_WithForcePushAndCodeOwner(t *testing.T) {
 // ProtectedUpdate with CodeOwnerApproval
 // ---------------------------------------------------------------------------.
 
-// TestProtectedBranchUpdate_WithCodeOwner verifies ProtectedBranchUpdate when with code owner.
+// TestProtectedBranchUpdate_WithCodeOwner verifies the ProtectedBranchUpdate_WithCodeOwner handler.
+// The test exercises the PATCH path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProtectedBranchUpdate_WithCodeOwner(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPatch && r.URL.Path == pathProtectedBranches+"/main" {
@@ -975,7 +1056,9 @@ func TestProtectedBranchUpdate_WithCodeOwner(t *testing.T) {
 // Converter edge cases
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_NilCommit verifies ToOutput when nil commit.
+// TestToOutput_NilCommit verifies the ToOutput_NilCommit handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_NilCommit(t *testing.T) {
 	b := &gl.Branch{Name: "main", Protected: true}
 	out := ToOutput(b)
@@ -984,7 +1067,9 @@ func TestToOutput_NilCommit(t *testing.T) {
 	}
 }
 
-// TestProtectedToOutput_EmptyAccessLevels verifies ProtectedToOutput when empty access levels.
+// TestProtectedToOutput_EmptyAccessLevels verifies the ProtectedToOutput_EmptyAccessLevels handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestProtectedToOutput_EmptyAccessLevels(t *testing.T) {
 	pb := &gl.ProtectedBranch{ID: 1, Name: "main"}
 	out := ProtectedToOutput(pb)
@@ -1000,7 +1085,9 @@ func TestProtectedToOutput_EmptyAccessLevels(t *testing.T) {
 // Markdown formatters
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown verifies FormatOutputMarkdown.
+// TestFormatOutputMarkdown verifies the OutputMarkdown Markdown formatter for a representative output input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		Name:      "main",
@@ -1021,7 +1108,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_NoURL verifies FormatOutputMarkdown when no URL.
+// TestFormatOutputMarkdown_NoURL verifies the OutputMarkdown_NoURL Markdown formatter for a representative output_nourl input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_NoURL(t *testing.T) {
 	md := FormatOutputMarkdown(Output{Name: "dev"})
 	if !strings.Contains(md, "## Branch: dev") {
@@ -1032,7 +1121,9 @@ func TestFormatOutputMarkdown_NoURL(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown verifies FormatListMarkdown.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Branches: []Output{
@@ -1052,8 +1143,9 @@ func TestFormatListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_ClickableBranchLinks verifies that branch names
-// appear as clickable Markdown links when WebURL is present.
+// TestFormatListMarkdown_ClickableBranchLinks verifies the ListMarkdown_ClickableBranchLinks Markdown formatter for a representative list_clickablebranchlinks input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_ClickableBranchLinks(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Branches: []Output{
@@ -1066,8 +1158,9 @@ func TestFormatListMarkdown_ClickableBranchLinks(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_NoLinkWithoutWebURL verifies that branch names
-// appear as plain text when WebURL is empty.
+// TestFormatListMarkdown_NoLinkWithoutWebURL verifies the ListMarkdown_NoLinkWithoutWebURL Markdown formatter for a representative list_nolinkwithoutweburl input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_NoLinkWithoutWebURL(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Branches: []Output{
@@ -1083,7 +1176,9 @@ func TestFormatListMarkdown_NoLinkWithoutWebURL(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No branches found") {
@@ -1091,7 +1186,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedMarkdown verifies FormatProtectedMarkdown.
+// TestFormatProtectedMarkdown verifies the ProtectedMarkdown Markdown formatter for a representative protected input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatProtectedMarkdown(t *testing.T) {
 	md := FormatProtectedMarkdown(ProtectedOutput{
 		ID:               1,
@@ -1108,7 +1205,9 @@ func TestFormatProtectedMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedListMarkdown verifies FormatProtectedListMarkdown.
+// TestFormatProtectedListMarkdown verifies the ProtectedListMarkdown Markdown formatter for a representative protectedlist input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatProtectedListMarkdown(t *testing.T) {
 	md := FormatProtectedListMarkdown(ProtectedListOutput{
 		Branches: []ProtectedOutput{
@@ -1124,7 +1223,9 @@ func TestFormatProtectedListMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatProtectedListMarkdown_Empty verifies FormatProtectedListMarkdown when empty.
+// TestFormatProtectedListMarkdown_Empty verifies the ProtectedListMarkdown_Empty Markdown formatter for a representative protectedlist_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatProtectedListMarkdown_Empty(t *testing.T) {
 	md := FormatProtectedListMarkdown(ProtectedListOutput{})
 	if !strings.Contains(md, "No protected branches found") {
@@ -1132,8 +1233,9 @@ func TestFormatProtectedListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestMarkdownRegistry_BranchNotFound verifies the canonical not-found output
-// renders as an MCP error result with actionable branch hints.
+// TestMarkdownRegistry_BranchNotFound verifies that MarkdownRegistry_BranchNotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestMarkdownRegistry_BranchNotFound(t *testing.T) {
 	result := toolutil.MarkdownForResult(branchNotFoundOutput{Identifier: `"missing" in project 42`})
 	if result == nil {
@@ -1157,7 +1259,9 @@ func TestMarkdownRegistry_BranchNotFound(t *testing.T) {
 // List with pagination params
 // ---------------------------------------------------------------------------.
 
-// TestBranchList_PaginationQueryParams verifies BranchList when pagination query params.
+// TestBranchList_PaginationQueryParams verifies that BranchListQueryParams forwards pagination parameters to the GitLab API and parses the response metadata.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestBranchList_PaginationQueryParams(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == pathRepoBranches {
@@ -1268,8 +1372,9 @@ func requireBranchRouteSuccess(t *testing.T, specs map[string]toolutil.ActionSpe
 // Protection level combination edge cases
 // ---------------------------------------------------------------------------.
 
-// TestBranchProtect_AccessLevels_Developer_Maintainer verifies protection with
-// push=30 (Developer) and merge=40 (Maintainer).
+// TestBranchProtect_AccessLevels_Developer_Maintainer verifies the BranchProtect_AccessLevels_Developer_Maintainer handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchProtect_AccessLevels_Developer_Maintainer(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedBranches {
@@ -1293,8 +1398,9 @@ func TestBranchProtect_AccessLevels_Developer_Maintainer(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_AccessLevels_Maintainer_Maintainer verifies protection with
-// both push and merge at Maintainer level (40).
+// TestBranchProtect_AccessLevels_Maintainer_Maintainer verifies the BranchProtect_AccessLevels_Maintainer_Maintainer handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchProtect_AccessLevels_Maintainer_Maintainer(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedBranches {
@@ -1318,8 +1424,9 @@ func TestBranchProtect_AccessLevels_Maintainer_Maintainer(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_CodeOwner_WithAccessLevels verifies that code owner approval
-// can be combined with non-default access levels.
+// TestBranchProtect_CodeOwner_WithAccessLevels verifies the BranchProtect_CodeOwner_WithAccessLevels handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchProtect_CodeOwner_WithAccessLevels(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedBranches {
@@ -1345,8 +1452,9 @@ func TestBranchProtect_CodeOwner_WithAccessLevels(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_ForcePush_WithRestrictiveAccess verifies that force push
-// can be enabled even with restrictive (Maintainer) access levels.
+// TestBranchProtect_ForcePush_WithRestrictiveAccess verifies the BranchProtect_ForcePush_WithRestrictiveAccess handler.
+// The test exercises the POST path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchProtect_ForcePush_WithRestrictiveAccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedBranches {
@@ -1375,7 +1483,9 @@ func TestBranchProtect_ForcePush_WithRestrictiveAccess(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallAllRoutes validates branch routes across multiple scenarios.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	specs := newBranchSpecsByTool(t)
 
@@ -1402,7 +1512,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_Metadata verifies canonical metadata for branch actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	byTool := newBranchSpecsByTool(t)
 
@@ -1487,7 +1599,9 @@ func TestBranchProtect_Conflict409_GetFails(t *testing.T) {
 	}
 }
 
-// TestBranchDelete_ProtectedBranch verifies the hint when deleting a protected branch.
+// TestBranchDelete_ProtectedBranch verifies the BranchDelete_ProtectedBranch handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchDelete_ProtectedBranch(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"protected branch"}`)
@@ -1501,7 +1615,9 @@ func TestBranchDelete_ProtectedBranch(t *testing.T) {
 	}
 }
 
-// TestBranchDelete_NotFound verifies the hint when deleting a nonexistent branch.
+// TestBranchDelete_NotFound verifies that BranchDelete_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestBranchDelete_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Branch Not Found"}`)
@@ -1515,7 +1631,9 @@ func TestBranchDelete_NotFound(t *testing.T) {
 	}
 }
 
-// TestBranchCreate_GenericAPIError verifies that Create wraps generic server errors.
+// TestBranchCreate_GenericAPIError verifies that BranchCreate_GenericAPIError returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestBranchCreate_GenericAPIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -1526,7 +1644,9 @@ func TestBranchCreate_GenericAPIError(t *testing.T) {
 	}
 }
 
-// TestBranchCreate_EmptyBranchName verifies validation for empty branch name.
+// TestBranchCreate_EmptyBranchName verifies the BranchCreate_EmptyBranchName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchCreate_EmptyBranchName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Create(context.Background(), client, CreateInput{ProjectID: "42", Ref: "main"})
@@ -1535,7 +1655,9 @@ func TestBranchCreate_EmptyBranchName(t *testing.T) {
 	}
 }
 
-// TestBranchGet_EmptyBranchName verifies validation for empty branch name.
+// TestBranchGet_EmptyBranchName verifies the BranchGet_EmptyBranchName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchGet_EmptyBranchName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
@@ -1544,7 +1666,9 @@ func TestBranchGet_EmptyBranchName(t *testing.T) {
 	}
 }
 
-// TestBranchDelete_EmptyBranchName verifies validation for empty branch name.
+// TestBranchDelete_EmptyBranchName verifies the BranchDelete_EmptyBranchName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchDelete_EmptyBranchName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: "42"})
@@ -1553,7 +1677,9 @@ func TestBranchDelete_EmptyBranchName(t *testing.T) {
 	}
 }
 
-// TestBranchProtect_EmptyBranchName verifies validation for empty branch name.
+// TestBranchProtect_EmptyBranchName verifies the BranchProtect_EmptyBranchName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchProtect_EmptyBranchName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Protect(context.Background(), client, ProtectInput{ProjectID: "42"})
@@ -1562,7 +1688,9 @@ func TestBranchProtect_EmptyBranchName(t *testing.T) {
 	}
 }
 
-// TestBranchUnprotect_EmptyBranchName verifies validation for empty branch name.
+// TestBranchUnprotect_EmptyBranchName verifies the BranchUnprotect_EmptyBranchName handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestBranchUnprotect_EmptyBranchName(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := Unprotect(context.Background(), client, UnprotectInput{ProjectID: "42"})
@@ -1571,7 +1699,9 @@ func TestBranchUnprotect_EmptyBranchName(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_BranchGetRoute verifies the canonical branch get route output.
+// TestActionSpecs_BranchGetRoute validates the BranchGetRoute route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_BranchGetRoute(t *testing.T) {
 	const respJSON = `{"name":"main","protected":true,"merged":false,"default":true,"web_url":"https://gitlab.example.com/p/-/tree/main","commit":{"id":"abc"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1597,8 +1727,9 @@ func TestActionSpecs_BranchGetRoute(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_BranchGetRouteNotFound verifies the canonical branch get
-// route converts GitLab 404s into the package not-found output type.
+// TestActionSpecs_BranchGetRouteNotFound validates the BranchGetRouteNotFound route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_BranchGetRouteNotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Branch Not Found"}`)

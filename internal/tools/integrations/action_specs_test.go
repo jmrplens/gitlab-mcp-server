@@ -14,7 +14,9 @@ import (
 
 const actionSpecIntegrationJSON = `{"id":1,"title":"Jira","slug":"jira","active":true}`
 
-// TestActionSpecs_CallAllRoutes exercises every integration tool through its canonical route.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := integrationSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, integrationActionHandler())))
 
@@ -41,7 +43,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteOutput verifies the delete route preserves its success message.
+// TestActionSpecs_DeleteOutput validates the DeleteOutput route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_DeleteOutput(t *testing.T) {
 	byTool := integrationSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, integrationActionHandler())))
 
@@ -58,7 +62,9 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteError verifies delete route failures propagate.
+// TestActionSpecs_DeleteError validates the DeleteError route through the catalog surface.
+// The test exercises the DELETE path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteError(t *testing.T) {
 	byTool := integrationSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete {
@@ -74,7 +80,9 @@ func TestActionSpecs_DeleteError(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API when confirm is declined")

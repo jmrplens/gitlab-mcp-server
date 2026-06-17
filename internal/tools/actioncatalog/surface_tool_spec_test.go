@@ -18,7 +18,9 @@ type surfaceSpecOutput struct {
 	OK bool `json:"ok" jsonschema:"operation result"`
 }
 
-// TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata verifies SurfaceToolSpec preserves catalog metadata with action spec.
+// TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata verifies the SurfaceToolSpec_ActionSpec_PreservesCatalogMetadata handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata(t *testing.T) {
 	route := toolutil.RouteFunc(func(context.Context, surfaceSpecInput) (surfaceSpecOutput, error) {
 		return surfaceSpecOutput{OK: true}, nil
@@ -68,7 +70,9 @@ func TestSurfaceToolSpec_ActionSpec_PreservesCatalogMetadata(t *testing.T) {
 	}
 }
 
-// TestSurfaceToolSpec_Validate_RequiresSchemas verifies SurfaceToolSpec requires schemas with validate.
+// TestSurfaceToolSpec_Validate_RequiresSchemas verifies the SurfaceToolSpec_Validate_RequiresSchemas handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSurfaceToolSpec_Validate_RequiresSchemas(t *testing.T) {
 	spec := SurfaceToolSpec{
 		Name:          "gitlab_test_surface",
@@ -85,8 +89,14 @@ func TestSurfaceToolSpec_Validate_RequiresSchemas(t *testing.T) {
 	}
 }
 
-// TestSurfaceToolSpec_ValidateRejectsMissingMetadata covers each required
-// metadata field so catalog projection failures remain specific.
+// TestSurfaceToolSpec_ValidateRejectsMissingMetadata verifies that the
+// SurfaceToolSpec.Validate method rejects specs that omit any required field
+// (description, route, schema, name, owner package, etc.).
+//
+// The test starts from a fully valid spec, strips one field at a time, and
+// asserts each variant produces a validation error. This protects the
+// catalog from registering incomplete surfaces that would later fail at
+// runtime.
 func TestSurfaceToolSpec_ValidateRejectsMissingMetadata(t *testing.T) {
 	valid := SurfaceToolSpec{
 		Name:          "gitlab_test_surface",
@@ -126,8 +136,9 @@ func TestSurfaceToolSpec_ValidateRejectsMissingMetadata(t *testing.T) {
 	}
 }
 
-// TestSurfaceToolSpec_ActionSpecRejectsInvalidSpec verifies ActionSpec returns
-// validation errors instead of projecting incomplete metadata.
+// TestSurfaceToolSpec_ActionSpecRejectsInvalidSpec verifies the SurfaceToolSpec_ActionSpecRejectsInvalidSpec handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSurfaceToolSpec_ActionSpecRejectsInvalidSpec(t *testing.T) {
 	_, err := (SurfaceToolSpec{}).ActionSpec()
 	if err == nil {

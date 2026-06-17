@@ -18,7 +18,9 @@ import (
 // GetMember
 // ----------------------------------------------.
 
-// TestGetMember_Success verifies GetMember when success.
+// TestGetMember_Success verifies that GetMember succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetMember_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/5/members/10", func(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +43,9 @@ func TestGetMember_Success(t *testing.T) {
 	}
 }
 
-// TestGetMember_MissingGroupID verifies GetMember when missing group ID.
+// TestGetMember_MissingGroupID verifies that GetMember_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetMember(context.Background(), client, GetInput{UserID: 10})
@@ -50,7 +54,9 @@ func TestGetMember_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetMember_MissingUserID verifies GetMember when missing user ID.
+// TestGetMember_MissingUserID verifies that GetMember_MissingUserID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetMember_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetMember(context.Background(), client, GetInput{GroupID: "5"})
@@ -63,7 +69,9 @@ func TestGetMember_MissingUserID(t *testing.T) {
 // GetInheritedMember
 // ----------------------------------------------.
 
-// TestGetInheritedMember_Success verifies GetInheritedMember when success.
+// TestGetInheritedMember_Success verifies that GetInheritedMember succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestGetInheritedMember_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/5/members/all/10", func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +92,9 @@ func TestGetInheritedMember_Success(t *testing.T) {
 // AddMember
 // ----------------------------------------------.
 
-// TestAddMember_Success verifies AddMember when success.
+// TestAddMember_Success verifies that AddMember succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAddMember_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/members", func(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +118,9 @@ func TestAddMember_Success(t *testing.T) {
 	}
 }
 
-// TestAddMember_MissingUserAndUsername verifies AddMember when missing user and username.
+// TestAddMember_MissingUserAndUsername verifies that AddMember_MissingUserAndUsername returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddMember_MissingUserAndUsername(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := AddMember(context.Background(), client, AddInput{GroupID: "5", AccessLevel: 30})
@@ -117,7 +129,9 @@ func TestAddMember_MissingUserAndUsername(t *testing.T) {
 	}
 }
 
-// TestAddMember_MissingAccessLevel verifies AddMember when missing access level.
+// TestAddMember_MissingAccessLevel verifies that AddMember_MissingAccessLevel returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddMember_MissingAccessLevel(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := AddMember(context.Background(), client, AddInput{GroupID: "5", UserID: 1})
@@ -130,7 +144,9 @@ func TestAddMember_MissingAccessLevel(t *testing.T) {
 // EditMember
 // ----------------------------------------------.
 
-// TestEditMember_Success verifies EditMember when success.
+// TestEditMember_Success verifies that EditMember succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEditMember_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/groups/5/members/10", func(w http.ResponseWriter, r *http.Request) {
@@ -151,7 +167,9 @@ func TestEditMember_Success(t *testing.T) {
 	}
 }
 
-// TestEditMember_MissingUserID verifies EditMember when missing user ID.
+// TestEditMember_MissingUserID verifies that EditMember_MissingUserID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEditMember_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := EditMember(context.Background(), client, EditInput{GroupID: "5"})
@@ -164,7 +182,9 @@ func TestEditMember_MissingUserID(t *testing.T) {
 // RemoveMember
 // ----------------------------------------------.
 
-// TestRemoveMember_Success verifies RemoveMember when success.
+// TestRemoveMember_Success verifies that RemoveMember succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRemoveMember_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/groups/5/members/10", func(w http.ResponseWriter, r *http.Request) {
@@ -178,7 +198,9 @@ func TestRemoveMember_Success(t *testing.T) {
 	}
 }
 
-// TestRemoveMember_MissingGroupID verifies RemoveMember when missing group ID.
+// TestRemoveMember_MissingGroupID verifies that RemoveMember_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRemoveMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := RemoveMember(context.Background(), client, RemoveInput{UserID: 10})
@@ -191,7 +213,9 @@ func TestRemoveMember_MissingGroupID(t *testing.T) {
 // ShareGroup
 // ----------------------------------------------.
 
-// TestShareGroup_Success verifies ShareGroup when success.
+// TestShareGroup_Success verifies that ShareGroup succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestShareGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, r *http.Request) {
@@ -215,7 +239,9 @@ func TestShareGroup_Success(t *testing.T) {
 	}
 }
 
-// TestShareGroup_MissingShareGroupID verifies ShareGroup when missing share group ID.
+// TestShareGroup_MissingShareGroupID verifies that ShareGroup_MissingShareGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestShareGroup_MissingShareGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", GroupAccess: 30})
@@ -224,7 +250,9 @@ func TestShareGroup_MissingShareGroupID(t *testing.T) {
 	}
 }
 
-// TestShareGroup_MissingGroupAccess verifies ShareGroup when missing group access.
+// TestShareGroup_MissingGroupAccess verifies that ShareGroup_MissingGroupAccess returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestShareGroup_MissingGroupAccess(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ShareGroup(context.Background(), client, ShareInput{GroupID: "5", ShareGroupID: 10})
@@ -277,7 +305,9 @@ func TestShareGroup_BadRequestHint(t *testing.T) {
 // UnshareGroup
 // ----------------------------------------------.
 
-// TestUnshareGroup_Success verifies UnshareGroup when success.
+// TestUnshareGroup_Success verifies that UnshareGroup succeeds when the GitLab API returns a valid response.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestUnshareGroup_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/groups/5/share/10", func(w http.ResponseWriter, r *http.Request) {
@@ -291,7 +321,9 @@ func TestUnshareGroup_Success(t *testing.T) {
 	}
 }
 
-// TestUnshareGroup_MissingShareGroupID verifies UnshareGroup when missing share group ID.
+// TestUnshareGroup_MissingShareGroupID verifies that UnshareGroup_MissingShareGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUnshareGroup_MissingShareGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := UnshareGroup(context.Background(), client, UnshareInput{GroupID: "5"})
@@ -304,7 +336,9 @@ func TestUnshareGroup_MissingShareGroupID(t *testing.T) {
 // Markdown formatters
 // ----------------------------------------------.
 
-// TestFormatMemberMarkdown verifies FormatMemberMarkdown.
+// TestFormatMemberMarkdown verifies the MemberMarkdown Markdown formatter for a representative member input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMemberMarkdown(t *testing.T) {
 	md := FormatMemberMarkdown(Output{ID: 10, Username: "dev", Name: "Developer", AccessLevel: 30, AccessLevelDescription: "Developer"})
 	if md == "" {
@@ -312,7 +346,9 @@ func TestFormatMemberMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatShareMarkdown verifies FormatShareMarkdown.
+// TestFormatShareMarkdown verifies the ShareMarkdown Markdown formatter for a representative share input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatShareMarkdown(t *testing.T) {
 	md := FormatShareMarkdown(ShareOutput{ID: 5, Name: "MyGroup", Path: "mygroup"})
 	if md == "" {
@@ -332,7 +368,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // GetMember — API error, canceled context
 // ---------------------------------------------------------------------------.
 
-// TestGetMember_APIError verifies GetMember when API error.
+// TestGetMember_APIError verifies that GetMember returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetMember_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -343,7 +381,9 @@ func TestGetMember_APIError(t *testing.T) {
 	}
 }
 
-// TestGetMember_CancelledContext verifies GetMember when cancelled context.
+// TestGetMember_CancelledContext verifies the GetMember_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10}`)
@@ -359,7 +399,9 @@ func TestGetMember_CancelledContext(t *testing.T) {
 // GetInheritedMember — API error, missing group_id, missing user_id, canceled
 // ---------------------------------------------------------------------------.
 
-// TestGetInheritedMember_APIError verifies GetInheritedMember when API error.
+// TestGetInheritedMember_APIError verifies that GetInheritedMember returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetInheritedMember_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -370,7 +412,9 @@ func TestGetInheritedMember_APIError(t *testing.T) {
 	}
 }
 
-// TestGetInheritedMember_MissingGroupID verifies GetInheritedMember when missing group ID.
+// TestGetInheritedMember_MissingGroupID verifies that GetInheritedMember_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetInheritedMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetInheritedMember(context.Background(), client, GetInput{UserID: 10})
@@ -379,7 +423,9 @@ func TestGetInheritedMember_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestGetInheritedMember_MissingUserID verifies GetInheritedMember when missing user ID.
+// TestGetInheritedMember_MissingUserID verifies that GetInheritedMember_MissingUserID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetInheritedMember_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := GetInheritedMember(context.Background(), client, GetInput{GroupID: "5"})
@@ -388,7 +434,9 @@ func TestGetInheritedMember_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestGetInheritedMember_CancelledContext verifies GetInheritedMember when cancelled context.
+// TestGetInheritedMember_CancelledContext verifies the GetInheritedMember_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetInheritedMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10}`)
@@ -404,7 +452,9 @@ func TestGetInheritedMember_CancelledContext(t *testing.T) {
 // AddMember — API error, missing group_id, canceled, with username, with expires_at
 // ---------------------------------------------------------------------------.
 
-// TestAddMember_APIError verifies AddMember when API error.
+// TestAddMember_APIError verifies that AddMember returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddMember_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -415,7 +465,9 @@ func TestAddMember_APIError(t *testing.T) {
 	}
 }
 
-// TestAddMember_StatusErrorBranches verifies add-member status-specific hints.
+// TestAddMember_StatusErrorBranches verifies that AddMember_StatusErrorBranches returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddMember_StatusErrorBranches(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -442,7 +494,9 @@ func TestAddMember_StatusErrorBranches(t *testing.T) {
 	}
 }
 
-// TestAddMember_MissingGroupID verifies AddMember when missing group ID.
+// TestAddMember_MissingGroupID verifies that AddMember_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestAddMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := AddMember(context.Background(), client, AddInput{UserID: 1, AccessLevel: 30})
@@ -451,7 +505,9 @@ func TestAddMember_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestAddMember_CancelledContext verifies AddMember when cancelled context.
+// TestAddMember_CancelledContext verifies the AddMember_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestAddMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":1}`)
@@ -463,7 +519,9 @@ func TestAddMember_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestAddMember_WithUsername verifies AddMember when with username.
+// TestAddMember_WithUsername verifies the AddMember_WithUsername handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAddMember_WithUsername(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/members", func(w http.ResponseWriter, _ *http.Request) {
@@ -484,7 +542,9 @@ func TestAddMember_WithUsername(t *testing.T) {
 	}
 }
 
-// TestAddMember_WithExpiresAt verifies AddMember when with expires at.
+// TestAddMember_WithExpiresAt verifies the AddMember_WithExpiresAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAddMember_WithExpiresAt(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/members", func(w http.ResponseWriter, _ *http.Request) {
@@ -510,7 +570,9 @@ func TestAddMember_WithExpiresAt(t *testing.T) {
 // EditMember — API error, missing group_id, canceled, with optional fields
 // ---------------------------------------------------------------------------.
 
-// TestEditMember_APIError verifies EditMember when API error.
+// TestEditMember_APIError verifies that EditMember returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEditMember_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -521,7 +583,9 @@ func TestEditMember_APIError(t *testing.T) {
 	}
 }
 
-// TestEditMember_MissingGroupID verifies EditMember when missing group ID.
+// TestEditMember_MissingGroupID verifies that EditMember_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEditMember_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := EditMember(context.Background(), client, EditInput{UserID: 10})
@@ -530,7 +594,9 @@ func TestEditMember_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestEditMember_CancelledContext verifies EditMember when cancelled context.
+// TestEditMember_CancelledContext verifies the EditMember_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestEditMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"id":10}`)
@@ -542,7 +608,9 @@ func TestEditMember_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestEditMember_WithExpiresAt verifies EditMember when with expires at.
+// TestEditMember_WithExpiresAt verifies the EditMember_WithExpiresAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestEditMember_WithExpiresAt(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("PUT /api/v4/groups/5/members/10", func(w http.ResponseWriter, _ *http.Request) {
@@ -567,7 +635,9 @@ func TestEditMember_WithExpiresAt(t *testing.T) {
 // RemoveMember — API error, missing user_id, canceled, with optional flags
 // ---------------------------------------------------------------------------.
 
-// TestRemoveMember_APIError verifies RemoveMember when API error.
+// TestRemoveMember_APIError verifies that RemoveMember returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRemoveMember_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -578,7 +648,9 @@ func TestRemoveMember_APIError(t *testing.T) {
 	}
 }
 
-// TestRemoveMember_MissingUserID verifies RemoveMember when missing user ID.
+// TestRemoveMember_MissingUserID verifies that RemoveMember_MissingUserID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRemoveMember_MissingUserID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := RemoveMember(context.Background(), client, RemoveInput{GroupID: "5"})
@@ -587,7 +659,9 @@ func TestRemoveMember_MissingUserID(t *testing.T) {
 	}
 }
 
-// TestRemoveMember_CancelledContext verifies RemoveMember when cancelled context.
+// TestRemoveMember_CancelledContext verifies the RemoveMember_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestRemoveMember_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -599,7 +673,9 @@ func TestRemoveMember_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRemoveMember_WithOptionalFlags verifies RemoveMember flags for with optional.
+// TestRemoveMember_WithOptionalFlags verifies the RemoveMember_WithOptionalFlags handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestRemoveMember_WithOptionalFlags(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v4/groups/5/members/10", func(w http.ResponseWriter, _ *http.Request) {
@@ -622,7 +698,9 @@ func TestRemoveMember_WithOptionalFlags(t *testing.T) {
 // ShareGroup — API error, missing group_id, canceled, with expires_at
 // ---------------------------------------------------------------------------.
 
-// TestShareGroup_APIError verifies ShareGroup when API error.
+// TestShareGroup_APIError verifies that ShareGroup returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestShareGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -633,7 +711,9 @@ func TestShareGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestShareGroup_Conflict verifies already-shared group hints.
+// TestShareGroup_Conflict verifies the ShareGroup_Conflict handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestShareGroup_Conflict(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusConflict, `{"message":"conflict"}`)
@@ -647,7 +727,9 @@ func TestShareGroup_Conflict(t *testing.T) {
 	}
 }
 
-// TestShareGroup_MissingGroupID verifies ShareGroup when missing group ID.
+// TestShareGroup_MissingGroupID verifies that ShareGroup_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestShareGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	_, err := ShareGroup(context.Background(), client, ShareInput{ShareGroupID: 10, GroupAccess: 30})
@@ -656,7 +738,9 @@ func TestShareGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestShareGroup_CancelledContext verifies ShareGroup when cancelled context.
+// TestShareGroup_CancelledContext verifies the ShareGroup_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestShareGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusCreated, `{"id":5}`)
@@ -668,7 +752,9 @@ func TestShareGroup_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestShareGroup_WithExpiresAt verifies ShareGroup when with expires at.
+// TestShareGroup_WithExpiresAt verifies the ShareGroup_WithExpiresAt handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestShareGroup_WithExpiresAt(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v4/groups/5/share", func(w http.ResponseWriter, _ *http.Request) {
@@ -697,7 +783,9 @@ func TestShareGroup_WithExpiresAt(t *testing.T) {
 // UnshareGroup — API error, missing group_id, canceled
 // ---------------------------------------------------------------------------.
 
-// TestUnshareGroup_APIError verifies UnshareGroup when API error.
+// TestUnshareGroup_APIError verifies that UnshareGroup returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUnshareGroup_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -708,7 +796,9 @@ func TestUnshareGroup_APIError(t *testing.T) {
 	}
 }
 
-// TestUnshareGroup_MissingGroupID verifies UnshareGroup when missing group ID.
+// TestUnshareGroup_MissingGroupID verifies that UnshareGroup_MissingGroupID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestUnshareGroup_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	err := UnshareGroup(context.Background(), client, UnshareInput{ShareGroupID: 10})
@@ -717,7 +807,9 @@ func TestUnshareGroup_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestUnshareGroup_CancelledContext verifies UnshareGroup when cancelled context.
+// TestUnshareGroup_CancelledContext verifies the UnshareGroup_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUnshareGroup_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -733,7 +825,9 @@ func TestUnshareGroup_CancelledContext(t *testing.T) {
 // accessLevelDescription — all levels
 // ---------------------------------------------------------------------------.
 
-// TestAccessLevelDescription_AllLevels covers AccessLevelDescription with table-driven subtests for all levels.
+// TestAccessLevelDescription_AllLevels verifies the AccessLevelDescription_AllLevels handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestAccessLevelDescription_AllLevels(t *testing.T) {
 	tests := []struct {
 		level int
@@ -765,7 +859,9 @@ func TestAccessLevelDescription_AllLevels(t *testing.T) {
 // convertMember — with all optional fields populated
 // ---------------------------------------------------------------------------.
 
-// TestConvertMember_FullFields verifies ConvertMember when full fields.
+// TestConvertMember_FullFields verifies the ConvertMember_FullFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestConvertMember_FullFields(t *testing.T) {
 	now := "2026-01-15T10:00:00Z"
 	mux := http.NewServeMux()
@@ -808,7 +904,9 @@ func TestConvertMember_FullFields(t *testing.T) {
 	}
 }
 
-// TestConvertMember_MinimalFields verifies ConvertMember when minimal fields.
+// TestConvertMember_MinimalFields verifies the ConvertMember_MinimalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestConvertMember_MinimalFields(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/5/members/1", func(w http.ResponseWriter, _ *http.Request) {
@@ -838,7 +936,9 @@ func TestConvertMember_MinimalFields(t *testing.T) {
 // FormatMemberMarkdown — detailed checks
 // ---------------------------------------------------------------------------.
 
-// TestFormatMemberMarkdown_WithAllFields verifies FormatMemberMarkdown when with all fields.
+// TestFormatMemberMarkdown_WithAllFields verifies the MemberMarkdown_WithAllFields Markdown formatter for a representative member_withallfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
 	md := FormatMemberMarkdown(Output{
 		ID:                     10,
@@ -867,7 +967,9 @@ func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
 	}
 }
 
-// TestFormatMemberMarkdown_Empty verifies FormatMemberMarkdown when empty.
+// TestFormatMemberMarkdown_Empty verifies the MemberMarkdown_Empty Markdown formatter for a representative member_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMemberMarkdown_Empty(t *testing.T) {
 	md := FormatMemberMarkdown(Output{})
 	if !strings.Contains(md, "## Group Member") {
@@ -881,7 +983,9 @@ func TestFormatMemberMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatMemberMarkdown_NoOptionalFields verifies FormatMemberMarkdown when no optional fields.
+// TestFormatMemberMarkdown_NoOptionalFields verifies the MemberMarkdown_NoOptionalFields Markdown formatter for a representative member_nooptionalfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMemberMarkdown_NoOptionalFields(t *testing.T) {
 	md := FormatMemberMarkdown(Output{
 		ID:                     5,
@@ -903,7 +1007,9 @@ func TestFormatMemberMarkdown_NoOptionalFields(t *testing.T) {
 // FormatShareMarkdown — detailed checks
 // ---------------------------------------------------------------------------.
 
-// TestFormatShareMarkdown_WithAllFields verifies FormatShareMarkdown when with all fields.
+// TestFormatShareMarkdown_WithAllFields verifies the ShareMarkdown_WithAllFields Markdown formatter for a representative share_withallfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatShareMarkdown_WithAllFields(t *testing.T) {
 	md := FormatShareMarkdown(ShareOutput{
 		ID:     5,
@@ -925,7 +1031,9 @@ func TestFormatShareMarkdown_WithAllFields(t *testing.T) {
 	}
 }
 
-// TestFormatShareMarkdown_Empty verifies FormatShareMarkdown when empty.
+// TestFormatShareMarkdown_Empty verifies the ShareMarkdown_Empty Markdown formatter for a representative share_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatShareMarkdown_Empty(t *testing.T) {
 	md := FormatShareMarkdown(ShareOutput{})
 	if !strings.Contains(md, "## Group Shared") {
@@ -936,7 +1044,9 @@ func TestFormatShareMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatShareMarkdown_NoWebURL verifies FormatShareMarkdown when no web URL.
+// TestFormatShareMarkdown_NoWebURL verifies the ShareMarkdown_NoWebURL Markdown formatter for a representative share_noweburl input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatShareMarkdown_NoWebURL(t *testing.T) {
 	md := FormatShareMarkdown(ShareOutput{
 		ID:   5,

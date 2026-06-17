@@ -1,3 +1,11 @@
+// main_test.go covers the audit_action_spec_coverage command, which
+// validates the catalog-first migration by walking internal/tools and
+// reporting the per-domain coverage of the action spec system.
+//
+// Tests rely on the live repository (via cmdutil.RepositoryRoot) so the
+// production state is exercised end-to-end. A small set of unit tests
+// target the individual helpers that classify stale AI-context lines,
+// surface classifications, and catalog invariants.
 package main
 
 import (

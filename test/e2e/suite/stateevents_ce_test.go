@@ -13,8 +13,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourceevents"
 )
 
-// TestMeta_StateEvents exercises issue/MR state event listing via meta-tools.
-// It creates an issue, closes it, lists state events, then verifies MR state events too.
+// TestMeta_StateEvents exercises issue and MR state event listing through
+// the meta-tools against a live GitLab CE instance.
+//
+// The test creates a project fixture, opens and closes an issue to
+// generate state events, then lists them via the meta-tool. It also
+// creates a branch and an MR (then closes it) to exercise the MR state
+// event listing. Each subtest asserts the meta-tool returns the expected
+// state event payload with the documented action types.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_StateEvents(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

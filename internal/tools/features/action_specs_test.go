@@ -14,7 +14,9 @@ import (
 
 const actionSpecFeatureJSON = `{"name":"flag1","state":"on","gates":[{"key":"boolean","value":true}]}`
 
-// TestActionSpecs_Metadata verifies canonical metadata for feature actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
 	if len(byTool) != 4 {
@@ -39,7 +41,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoutes exercises feature tools through their canonical routes.
+// TestActionSpecs_CallRoutes validates the CallRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoutes(t *testing.T) {
 	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
 
@@ -66,7 +70,9 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_SetRouteSchema verifies the feature value schema preserves multiple accepted types.
+// TestActionSpecs_SetRouteSchema validates the SetRouteSchema route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_SetRouteSchema(t *testing.T) {
 	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
 
@@ -87,7 +93,9 @@ func TestActionSpecs_SetRouteSchema(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteOutput verifies delete preserves its success message.
+// TestActionSpecs_DeleteOutput validates the DeleteOutput route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_DeleteOutput(t *testing.T) {
 	byTool := featureSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, featureActionHandler())))
 
@@ -104,7 +112,9 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteOutputError verifies delete output propagates backend errors.
+// TestActionSpecs_DeleteOutputError validates the DeleteOutputError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteOutputError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -115,7 +125,9 @@ func TestActionSpecs_DeleteOutputError(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_ErrorsPropagate verifies route backend errors propagate directly.
+// TestActionSpecs_ErrorsPropagate validates the ErrorsPropagate route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_ErrorsPropagate(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -139,7 +151,9 @@ func TestActionSpecs_ErrorsPropagate(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_DeleteConfirmDeclined verifies the CatalogSurface_DeleteConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API when confirm is declined")

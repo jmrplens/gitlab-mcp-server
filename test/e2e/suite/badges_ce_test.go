@@ -3,6 +3,8 @@
 // badges_ce_test.go tests the project badge MCP tools against a live GitLab
 // instance using both individual tools and the gitlab_project meta-tool.
 // Exercises the full badge lifecycle: create → get → list → update → delete.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -15,6 +17,13 @@ import (
 
 // TestIndividual_Badges exercises the project badge lifecycle using
 // individual MCP tools: create → get → list → update → delete.
+//
+// The test creates a project fixture, attaches a placeholder badge through
+// gitlab_add_project_badge, fetches it by ID, lists all project badges,
+// updates its link URL, and finally deletes it. Each subtest asserts the
+// expected ID or URL round-trips and that the list contains the badge.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: individual.
 func TestIndividual_Badges(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -83,8 +92,16 @@ func TestIndividual_Badges(t *testing.T) {
 	})
 }
 
-// TestMeta_Badges exercises the same badge lifecycle via the
+// TestMeta_Badges exercises the same project badge lifecycle via the
 // gitlab_project meta-tool.
+//
+// The test mirrors [TestIndividual_Badges] but drives every step with
+// {action, params} arguments through the catalog-backed gitlab_project
+// tool, using badge_add, badge_list, badge_edit, and badge_delete. The
+// test skips the explicit get subtest because the meta-tool routes through
+// the same GitLab endpoint and the list subtest confirms identity.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_Badges(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

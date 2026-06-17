@@ -27,7 +27,9 @@ const (
 	testGitLabVersion = "17.5.0"
 )
 
-// TestCheck_Healthy verifies Check when healthy.
+// TestCheck_Healthy verifies the Check_Healthy handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCheck_Healthy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -120,8 +122,9 @@ func TestSetServerInfo_PopulatesCheckOutput(t *testing.T) {
 	}
 }
 
-// TestSetServerInfo_DefaultsEmpty verifies that when SetServerInfo is not called
-// (or called with zero value), the metadata fields remain empty.
+// TestSetServerInfo_DefaultsEmpty verifies the SetServerInfo_DefaultsEmpty handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestSetServerInfo_DefaultsEmpty(t *testing.T) {
 	original := serverInfo
 	t.Cleanup(func() { serverInfo = original })
@@ -157,7 +160,9 @@ func TestSetServerInfo_DefaultsEmpty(t *testing.T) {
 	}
 }
 
-// TestCheck_UnhealthyVersionFails verifies Check when unhealthy version fails.
+// TestCheck_UnhealthyVersionFails verifies the Check_UnhealthyVersionFails handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -183,7 +188,9 @@ func TestCheck_UnhealthyVersionFails(t *testing.T) {
 	}
 }
 
-// TestCheck_DegradedUserFails verifies Check when degraded user fails.
+// TestCheck_DegradedUserFails verifies the Check_DegradedUserFails handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCheck_DegradedUserFails(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -214,7 +221,9 @@ func TestCheck_DegradedUserFails(t *testing.T) {
 	}
 }
 
-// TestCheck_CancelledContext verifies Check when cancelled context.
+// TestCheck_CancelledContext verifies the Check_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCheck_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -234,7 +243,9 @@ func TestCheck_CancelledContext(t *testing.T) {
 // FormatMarkdownString — healthy
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Healthy covers FormatMarkdownString with table-driven subtests for healthy.
+// TestFormatMarkdownString_Healthy verifies the MarkdownString_Healthy Markdown formatter for a representative string_healthy input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_Healthy(t *testing.T) {
 	out := Output{
 		Status:           "healthy",
@@ -279,8 +290,9 @@ func TestFormatMarkdownString_Healthy(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_WithMetadata verifies that metadata fields
-// (MCP Server Version, Author, Department, Repository) appear when set.
+// TestFormatMarkdownString_WithMetadata verifies the MarkdownString_WithMetadata Markdown formatter for a representative string_withmetadata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_WithMetadata(t *testing.T) {
 	out := Output{
 		Status:           "healthy",
@@ -304,8 +316,9 @@ func TestFormatMarkdownString_WithMetadata(t *testing.T) {
 	}
 }
 
-// TestFormatMarkdownString_WithoutMetadata verifies that metadata labels
-// are omitted when the fields are empty.
+// TestFormatMarkdownString_WithoutMetadata verifies the MarkdownString_WithoutMetadata Markdown formatter for a representative string_withoutmetadata input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_WithoutMetadata(t *testing.T) {
 	out := Output{
 		Status:    "healthy",
@@ -329,7 +342,9 @@ func TestFormatMarkdownString_WithoutMetadata(t *testing.T) {
 // FormatMarkdownString — unhealthy
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Unhealthy verifies FormatMarkdownString when unhealthy.
+// TestFormatMarkdownString_Unhealthy verifies the MarkdownString_Unhealthy Markdown formatter for a representative string_unhealthy input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_Unhealthy(t *testing.T) {
 	out := Output{
 		Status:         "unhealthy",
@@ -359,7 +374,9 @@ func TestFormatMarkdownString_Unhealthy(t *testing.T) {
 // FormatMarkdownString — degraded
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_Degraded verifies FormatMarkdownString when degraded.
+// TestFormatMarkdownString_Degraded verifies the MarkdownString_Degraded Markdown formatter for a representative string_degraded input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_Degraded(t *testing.T) {
 	out := Output{
 		Status:         "degraded",
@@ -386,7 +403,9 @@ func TestFormatMarkdownString_Degraded(t *testing.T) {
 // FormatMarkdownString — no username (empty)
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_NoUsername verifies FormatMarkdownString when no username.
+// TestFormatMarkdownString_NoUsername verifies the MarkdownString_NoUsername Markdown formatter for a representative string_nousername input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_NoUsername(t *testing.T) {
 	out := Output{
 		Status:    "healthy",
@@ -402,7 +421,9 @@ func TestFormatMarkdownString_NoUsername(t *testing.T) {
 // FormatMarkdownString — no version (empty)
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdownString_NoVersion verifies FormatMarkdownString when no version.
+// TestFormatMarkdownString_NoVersion verifies the MarkdownString_NoVersion Markdown formatter for a representative string_noversion input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdownString_NoVersion(t *testing.T) {
 	out := Output{
 		Status:    "unhealthy",
@@ -419,7 +440,9 @@ func TestFormatMarkdownString_NoVersion(t *testing.T) {
 // FormatMarkdown wrapper
 // ---------------------------------------------------------------------------.
 
-// TestFormatMarkdown_Wrapper verifies FormatMarkdown when wrapper.
+// TestFormatMarkdown_Wrapper verifies the Markdown_Wrapper Markdown formatter for a representative _wrapper input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatMarkdown_Wrapper(t *testing.T) {
 	out := Output{Status: "healthy", GitLabURL: "https://gitlab.example.com"}
 	result := FormatMarkdown(out)
@@ -435,7 +458,9 @@ func TestFormatMarkdown_Wrapper(t *testing.T) {
 // ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies health action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{"version":"17.5.0","revision":"abc"}`)
@@ -469,7 +494,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpec route execution — gitlab_server_status
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRoute verifies the health canonical route.
+// TestActionSpecs_CallRoute validates the CallRoute route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoute(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
@@ -496,7 +523,9 @@ func TestActionSpecs_CallRoute(t *testing.T) {
 // ActionSpec route execution — gitlab_server_status unhealthy (API error)
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallRouteUnhealthy verifies the unhealthy health route path.
+// TestActionSpecs_CallRouteUnhealthy validates the CallRouteUnhealthy route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRouteUnhealthy(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad request"}`)

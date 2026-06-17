@@ -2,6 +2,8 @@
 
 // groups_meta_ce_test.go tests advanced CE/common gitlab_group meta-tool actions
 // against a live GitLab instance.
+//
+// Build tag: e2e && !enterprise.
 package suite
 
 import (
@@ -13,8 +15,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
 )
 
-// TestMeta_GroupDeep exercises gitlab_group meta-tool actions not covered by
-// groups_ce_test.go, grouplabels_ce_test.go, or groupmilestones_ce_test.go.
+// TestMeta_GroupDeep exercises gitlab_group meta-tool actions not covered
+// by groups_ce_test.go, grouplabels_ce_test.go, or groupmilestones_ce_test.go.
+//
+// The test creates a parent group fixture and a child subgroup, then
+// drives the deep group actions (transfer, search, restore, and other
+// catalog actions) through the catalog-backed gitlab_group meta-tool.
+// Each subtest asserts the expected ID or path round-trips through the
+// GitLab API.
+//
+// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
 func TestMeta_GroupDeep(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

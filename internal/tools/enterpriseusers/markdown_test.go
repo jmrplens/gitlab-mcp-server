@@ -139,8 +139,9 @@ func TestFormatOutputMarkdown(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown validates the list Markdown formatter.
-// Covers empty list, single user, multiple users, and 2FA column rendering.
+// TestFormatListMarkdown verifies the ListMarkdown Markdown formatter for a representative list input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string

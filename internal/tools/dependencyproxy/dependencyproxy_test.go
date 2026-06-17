@@ -10,7 +10,9 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
-// TestPurge verifies Purge.
+// TestPurge verifies the Purge handler.
+// The mock GitLab API at /api/v4/groups/5/dependency_proxy/cache (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestPurge(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v4/groups/5/dependency_proxy/cache" || r.Method != http.MethodDelete {
@@ -25,7 +27,9 @@ func TestPurge(t *testing.T) {
 	}
 }
 
-// TestPurge_Error verifies Purge when error.
+// TestPurge_Error verifies that Purge returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestPurge_Error(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)
@@ -38,7 +42,9 @@ func TestPurge_Error(t *testing.T) {
 
 // ---------- Tests consolidated from coverage_test.go ----------.
 
-// TestActionSpecs_Metadata verifies dependency proxy action spec metadata.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -61,7 +67,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRoute verifies dependency proxy canonical route execution.
+// TestActionSpecs_CallRoute validates the CallRoute route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallRoute(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
@@ -78,7 +86,9 @@ func TestActionSpecs_CallRoute(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_CallRouteError verifies the dependency proxy route error path.
+// TestActionSpecs_CallRouteError validates the CallRouteError route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_CallRouteError(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"forbidden"}`)

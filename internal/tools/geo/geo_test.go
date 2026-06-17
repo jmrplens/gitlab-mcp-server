@@ -47,8 +47,9 @@ const geoSiteStatusJSON = `{
 	"updated_at": "2026-01-15T10:30:00Z"
 }`
 
-// TestCreate_Success verifies that Create posts to /api/v4/geo_sites and
-// returns the created Geo site with the expected ID, name and primary flag.
+// TestCreate_Success verifies that Create succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/geo_sites (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/geo_sites" {
@@ -74,8 +75,9 @@ func TestCreate_Success(t *testing.T) {
 	}
 }
 
-// TestCreate_APIError verifies that Create returns an error when the GitLab
-// Geo API responds with 403 Forbidden.
+// TestCreate_APIError verifies that Create returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -87,8 +89,9 @@ func TestCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestList_Success verifies that List returns the Geo sites returned by
-// GET /api/v4/geo_sites, preserving site names and fields.
+// TestList_Success verifies that List succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/geo_sites (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites" {
@@ -110,8 +113,9 @@ func TestList_Success(t *testing.T) {
 	}
 }
 
-// TestList_Empty verifies that List returns an empty slice when the Geo
-// API responds with an empty array.
+// TestList_Empty verifies the List_Empty handler.
+// The mock GitLab API at /api/v4/geo_sites (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestList_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/geo_sites" {
@@ -130,8 +134,9 @@ func TestList_Empty(t *testing.T) {
 	}
 }
 
-// TestList_APIError verifies that List returns an error when the GitLab
-// Geo API responds with 400 Bad Request.
+// TestList_APIError verifies that List returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -143,8 +148,9 @@ func TestList_APIError(t *testing.T) {
 	}
 }
 
-// TestGet_Success verifies that Get retrieves a single Geo site by ID and
-// returns the expected URL and identifier.
+// TestGet_Success verifies that Get succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/geo_sites/1 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/1" {
@@ -166,8 +172,9 @@ func TestGet_Success(t *testing.T) {
 	}
 }
 
-// TestGet_MissingID verifies that Get returns a validation error when ID
-// is zero.
+// TestGet_MissingID verifies that Get_MissingID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -179,8 +186,9 @@ func TestGet_MissingID(t *testing.T) {
 	}
 }
 
-// TestGet_NotFound verifies that Get returns an error when the Geo API
-// responds with 404 for an unknown site ID.
+// TestGet_NotFound verifies that Get_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -192,8 +200,9 @@ func TestGet_NotFound(t *testing.T) {
 	}
 }
 
-// TestEdit_Success verifies that Edit issues PUT /api/v4/geo_sites/:id and
-// returns the updated site.
+// TestEdit_Success verifies that Edit succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/geo_sites/1 (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestEdit_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/geo_sites/1" {
@@ -213,8 +222,9 @@ func TestEdit_Success(t *testing.T) {
 	}
 }
 
-// TestEdit_MissingID verifies that Edit returns a validation error when
-// ID is zero.
+// TestEdit_MissingID verifies that Edit_MissingID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEdit_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -226,8 +236,9 @@ func TestEdit_MissingID(t *testing.T) {
 	}
 }
 
-// TestEdit_APIError verifies that Edit returns an error when the Geo API
-// responds with 422 Unprocessable Entity.
+// TestEdit_APIError verifies that Edit returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestEdit_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
@@ -239,8 +250,9 @@ func TestEdit_APIError(t *testing.T) {
 	}
 }
 
-// TestDelete_Success verifies that Delete issues DELETE /api/v4/geo_sites/:id
-// and returns no error on 204 No Content.
+// TestDelete_Success verifies that Delete succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/geo_sites/1 (DELETE) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodDelete && r.URL.Path == "/api/v4/geo_sites/1" {
@@ -256,8 +268,9 @@ func TestDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDelete_MissingID verifies that Delete returns a validation error
-// when ID is zero.
+// TestDelete_MissingID verifies that Delete_MissingID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -269,8 +282,9 @@ func TestDelete_MissingID(t *testing.T) {
 	}
 }
 
-// TestDelete_APIError verifies that Delete returns an error when the Geo
-// API responds with 403 Forbidden.
+// TestDelete_APIError verifies that Delete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -282,8 +296,9 @@ func TestDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestRepair_Success verifies that Repair issues POST /api/v4/geo_sites/:id/repair
-// and returns the repaired site.
+// TestRepair_Success verifies that Repair succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/geo_sites/1/repair (POST) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestRepair_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/geo_sites/1/repair" {
@@ -325,8 +340,9 @@ func TestRepair_NullResponse(t *testing.T) {
 	}
 }
 
-// TestRepair_MissingID verifies that Repair returns a validation error
-// when ID is zero.
+// TestRepair_MissingID verifies that Repair_MissingID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRepair_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -338,8 +354,9 @@ func TestRepair_MissingID(t *testing.T) {
 	}
 }
 
-// TestRepair_APIError verifies that Repair returns an error when the Geo
-// API responds with 400 Bad Request.
+// TestRepair_APIError verifies that Repair returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestRepair_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -351,8 +368,9 @@ func TestRepair_APIError(t *testing.T) {
 	}
 }
 
-// TestListStatus_Success verifies that ListStatus returns the Geo site
-// statuses from /api/v4/geo_sites/status including health and version.
+// TestListStatus_Success verifies that ListStatus succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/geo_sites/status (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListStatus_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/status" {
@@ -380,8 +398,9 @@ func TestListStatus_Success(t *testing.T) {
 	}
 }
 
-// TestListStatus_Empty verifies that ListStatus returns an empty slice
-// when the Geo status endpoint responds with an empty array.
+// TestListStatus_Empty verifies the ListStatus_Empty handler.
+// The mock GitLab API at /api/v4/geo_sites/status (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestListStatus_Empty(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/geo_sites/status" {
@@ -400,8 +419,9 @@ func TestListStatus_Empty(t *testing.T) {
 	}
 }
 
-// TestListStatus_APIError verifies that ListStatus returns an error when
-// the Geo status endpoint responds with 403 Forbidden.
+// TestListStatus_APIError verifies that ListStatus returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestListStatus_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -413,8 +433,9 @@ func TestListStatus_APIError(t *testing.T) {
 	}
 }
 
-// TestGetStatus_Success verifies that GetStatus retrieves the status for
-// a single Geo site including health, version and project count.
+// TestGetStatus_Success verifies that GetStatus succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/geo_sites/1/status (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestGetStatus_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/1/status" {
@@ -439,8 +460,9 @@ func TestGetStatus_Success(t *testing.T) {
 	}
 }
 
-// TestGetStatus_MissingID verifies that GetStatus returns a validation
-// error when ID is zero.
+// TestGetStatus_MissingID verifies that GetStatus_MissingID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetStatus_MissingID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -452,8 +474,9 @@ func TestGetStatus_MissingID(t *testing.T) {
 	}
 }
 
-// TestGetStatus_APIError verifies that GetStatus returns an error when
-// the Geo status endpoint responds with 404 Not Found.
+// TestGetStatus_APIError verifies that GetStatus returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetStatus_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -465,8 +488,9 @@ func TestGetStatus_APIError(t *testing.T) {
 	}
 }
 
-// TestCreate_CancelledContext verifies that Create returns an error when
-// invoked with an already-cancelled context.
+// TestCreate_CancelledContext verifies the Create_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -480,8 +504,9 @@ func TestCreate_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestList_CancelledContext verifies that List returns an error when
-// invoked with an already-cancelled context.
+// TestList_CancelledContext verifies the List_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -499,8 +524,9 @@ func TestList_CancelledContext(t *testing.T) {
 // Context cancellation — Get, Edit, Delete, Repair, ListStatus, GetStatus
 // ---------------------------------------------------------------------------
 
-// TestGet_CancelledContext verifies Get returns an error when the context
-// is cancelled before the API call.
+// TestGet_CancelledContext verifies the Get_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -514,8 +540,9 @@ func TestGet_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestEdit_CancelledContext verifies Edit returns an error when the context
-// is cancelled before the API call.
+// TestEdit_CancelledContext verifies the Edit_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestEdit_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -529,8 +556,9 @@ func TestEdit_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestDelete_CancelledContext verifies Delete returns an error when the context
-// is cancelled before the API call.
+// TestDelete_CancelledContext verifies the Delete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -544,8 +572,9 @@ func TestDelete_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestRepair_CancelledContext verifies Repair returns an error when the context
-// is cancelled before the API call.
+// TestRepair_CancelledContext verifies the Repair_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestRepair_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -559,8 +588,9 @@ func TestRepair_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestListStatus_CancelledContext verifies ListStatus returns an error when the
-// context is cancelled before the API call.
+// TestListStatus_CancelledContext verifies the ListStatus_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -574,8 +604,9 @@ func TestListStatus_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestGetStatus_CancelledContext verifies GetStatus returns an error when the
-// context is cancelled before the API call.
+// TestGetStatus_CancelledContext verifies the GetStatus_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetStatus_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -593,8 +624,9 @@ func TestGetStatus_CancelledContext(t *testing.T) {
 // Pagination — List and ListStatus with pagination headers
 // ---------------------------------------------------------------------------
 
-// TestList_WithPagination verifies that List correctly parses pagination headers
-// from the GitLab API response into the output pagination metadata.
+// TestList_WithPagination verifies that List_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/geo_sites (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestList_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites" {
@@ -631,8 +663,9 @@ func TestList_WithPagination(t *testing.T) {
 	}
 }
 
-// TestListStatus_WithPagination verifies that ListStatus correctly parses pagination
-// headers from the GitLab API response.
+// TestListStatus_WithPagination verifies that ListStatus_WithPagination forwards pagination parameters to the GitLab API and parses the response metadata.
+// The mock GitLab API at /api/v4/geo_sites/status (GET) responds with HTTP OK.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestListStatus_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/v4/geo_sites/status" {
@@ -744,8 +777,9 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 // FormatListMarkdown — with items, empty, with pagination
 // ---------------------------------------------------------------------------
 
-// TestFormatListMarkdown_WithItems verifies the list Markdown output contains
-// a table row for each site and the HintPreserveLinks header.
+// TestFormatListMarkdown_WithItems verifies the ListMarkdown_WithItems Markdown formatter for a representative list_withitems input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithItems(t *testing.T) {
 	out := ListOutput{
 		Sites: []Output{
@@ -768,8 +802,9 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies the list output for an empty site list
-// contains the heading but no data rows.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	out := ListOutput{Sites: []Output{}}
 	md := FormatListMarkdown(out)
@@ -782,8 +817,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_WithPagination verifies the pagination footer appears
-// when pagination page is set.
+// TestFormatListMarkdown_WithPagination verifies the ListMarkdown_WithPagination Markdown formatter for a representative list_withpagination input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestFormatListMarkdown_WithPagination(t *testing.T) {
 	out := ListOutput{
 		Sites: []Output{
@@ -802,8 +838,9 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 // FormatStatusMarkdown — all fields, minimal fields
 // ---------------------------------------------------------------------------
 
-// TestFormatStatusMarkdown_AllFields verifies that all status fields including
-// optional Health and UpdatedAt are present in the Markdown output.
+// TestFormatStatusMarkdown_AllFields verifies the StatusMarkdown_AllFields Markdown formatter for a representative status_allfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatStatusMarkdown_AllFields(t *testing.T) {
 	out := StatusOutput{
 		GeoNodeID:                      1,
@@ -848,8 +885,9 @@ func TestFormatStatusMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatStatusMarkdown_MinimalFields verifies that optional fields (Health,
-// UpdatedAt) are omitted when empty or zero.
+// TestFormatStatusMarkdown_MinimalFields verifies the StatusMarkdown_MinimalFields Markdown formatter for a representative status_minimalfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatStatusMarkdown_MinimalFields(t *testing.T) {
 	out := StatusOutput{
 		GeoNodeID:    2,
@@ -876,8 +914,9 @@ func TestFormatStatusMarkdown_MinimalFields(t *testing.T) {
 // FormatListStatusMarkdown — with items, empty, with pagination
 // ---------------------------------------------------------------------------
 
-// TestFormatListStatusMarkdown_WithItems verifies the list status Markdown output
-// contains a table row for each status.
+// TestFormatListStatusMarkdown_WithItems verifies the ListStatusMarkdown_WithItems Markdown formatter for a representative liststatus_withitems input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListStatusMarkdown_WithItems(t *testing.T) {
 	out := ListStatusOutput{
 		Statuses: []StatusOutput{
@@ -900,7 +939,9 @@ func TestFormatListStatusMarkdown_WithItems(t *testing.T) {
 	}
 }
 
-// TestFormatListStatusMarkdown_Empty verifies the output for an empty status list.
+// TestFormatListStatusMarkdown_Empty verifies the ListStatusMarkdown_Empty Markdown formatter for a representative liststatus_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListStatusMarkdown_Empty(t *testing.T) {
 	out := ListStatusOutput{Statuses: []StatusOutput{}}
 	md := FormatListStatusMarkdown(out)
@@ -913,8 +954,9 @@ func TestFormatListStatusMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatListStatusMarkdown_WithPagination verifies the pagination footer
-// appears when pagination page is set.
+// TestFormatListStatusMarkdown_WithPagination verifies the ListStatusMarkdown_WithPagination Markdown formatter for a representative liststatus_withpagination input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the response metadata is propagated to the [toolutil.PaginationOutput].
 func TestFormatListStatusMarkdown_WithPagination(t *testing.T) {
 	out := ListStatusOutput{
 		Statuses: []StatusOutput{

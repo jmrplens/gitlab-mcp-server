@@ -22,7 +22,9 @@ const fmtUnexpErr = "unexpected error: %v"
 // deploymentList tests
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentList_Success verifies DeploymentList when success.
+// TestDeploymentList_Success verifies that DeploymentList succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/deployments (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments" && r.Method == http.MethodGet {
@@ -50,7 +52,9 @@ func TestDeploymentList_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentList_WithFilters verifies DeploymentList when with filters.
+// TestDeploymentList_WithFilters verifies the DeploymentList_WithFilters handler.
+// The mock GitLab API at /api/v4/projects/42/deployments (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentList_WithFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments" {
@@ -80,7 +84,9 @@ func TestDeploymentList_WithFilters(t *testing.T) {
 	}
 }
 
-// TestDeploymentList_MissingProjectID verifies DeploymentList when missing project ID.
+// TestDeploymentList_MissingProjectID verifies that DeploymentList_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentList_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -92,7 +98,9 @@ func TestDeploymentList_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeploymentList_CancelledContext verifies DeploymentList when cancelled context.
+// TestDeploymentList_CancelledContext verifies the DeploymentList_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeploymentList_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
@@ -110,8 +118,9 @@ func TestDeploymentList_CancelledContext(t *testing.T) {
 // deploymentGet tests
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentGet_WithPipelineWebURL verifies that toOutput populates
-// PipelineWebURL when the deployable.pipeline.web_url field is non-empty.
+// TestDeploymentGet_WithPipelineWebURL verifies the DeploymentGet_WithPipelineWebURL handler.
+// The mock GitLab API at /api/v4/projects/42/deployments/1 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentGet_WithPipelineWebURL(t *testing.T) {
 	const pipelineURL = "https://gitlab.example.com/my-org/project/-/pipelines/123"
 
@@ -138,7 +147,9 @@ func TestDeploymentGet_WithPipelineWebURL(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_Success verifies DeploymentGet when success.
+// TestDeploymentGet_Success verifies that DeploymentGet succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/deployments/1 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentGet_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
@@ -157,7 +168,9 @@ func TestDeploymentGet_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_NilDeployable verifies DeploymentGet when deployable is absent.
+// TestDeploymentGet_NilDeployable verifies the DeploymentGet_NilDeployable handler.
+// The mock GitLab API at /api/v4/projects/42/deployments/1 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentGet_NilDeployable(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
@@ -177,7 +190,9 @@ func TestDeploymentGet_NilDeployable(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_NilPipeline verifies DeploymentGet when deployable exists but pipeline is absent.
+// TestDeploymentGet_NilPipeline verifies the DeploymentGet_NilPipeline handler.
+// The mock GitLab API at /api/v4/projects/42/deployments/1 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentGet_NilPipeline(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
@@ -196,7 +211,9 @@ func TestDeploymentGet_NilPipeline(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_EmptyWebURL verifies DeploymentGet when pipeline exists but web_url is empty.
+// TestDeploymentGet_EmptyWebURL verifies the DeploymentGet_EmptyWebURL handler.
+// The mock GitLab API at /api/v4/projects/42/deployments/1 (GET) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentGet_EmptyWebURL(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodGet {
@@ -215,7 +232,9 @@ func TestDeploymentGet_EmptyWebURL(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_ZeroID verifies DeploymentGet when zero ID.
+// TestDeploymentGet_ZeroID verifies the DeploymentGet_ZeroID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentGet_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -227,7 +246,9 @@ func TestDeploymentGet_ZeroID(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_CancelledContext verifies DeploymentGet when cancelled context.
+// TestDeploymentGet_CancelledContext verifies the DeploymentGet_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeploymentGet_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -245,7 +266,9 @@ func TestDeploymentGet_CancelledContext(t *testing.T) {
 // deploymentCreate tests
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentCreate_Success verifies DeploymentCreate when success.
+// TestDeploymentCreate_Success verifies that DeploymentCreate succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/deployments (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentCreate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments" && r.Method == http.MethodPost {
@@ -269,7 +292,9 @@ func TestDeploymentCreate_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentCreate_MissingFields covers DeploymentCreate with table-driven subtests for missing fields.
+// TestDeploymentCreate_MissingFields verifies that DeploymentCreate_MissingFields returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentCreate_MissingFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -295,7 +320,9 @@ func TestDeploymentCreate_MissingFields(t *testing.T) {
 	}
 }
 
-// TestDeploymentCreate_CancelledContext verifies DeploymentCreate when cancelled context.
+// TestDeploymentCreate_CancelledContext verifies the DeploymentCreate_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeploymentCreate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -313,7 +340,9 @@ func TestDeploymentCreate_CancelledContext(t *testing.T) {
 // deploymentUpdate tests
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentUpdate_Success verifies DeploymentUpdate when success.
+// TestDeploymentUpdate_Success verifies that DeploymentUpdate succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/deployments/1 (PUT) responds with HTTP OK.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentUpdate_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodPut {
@@ -336,7 +365,9 @@ func TestDeploymentUpdate_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_ZeroID verifies DeploymentUpdate when zero ID.
+// TestDeploymentUpdate_ZeroID verifies the DeploymentUpdate_ZeroID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentUpdate_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -348,7 +379,9 @@ func TestDeploymentUpdate_ZeroID(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_MissingStatus verifies DeploymentUpdate when missing status.
+// TestDeploymentUpdate_MissingStatus verifies that DeploymentUpdate_MissingStatus returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentUpdate_MissingStatus(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -360,7 +393,9 @@ func TestDeploymentUpdate_MissingStatus(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_CancelledContext verifies DeploymentUpdate when cancelled context.
+// TestDeploymentUpdate_CancelledContext verifies the DeploymentUpdate_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeploymentUpdate_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
@@ -378,7 +413,9 @@ func TestDeploymentUpdate_CancelledContext(t *testing.T) {
 // deploymentDelete tests
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentDelete_Success verifies DeploymentDelete when success.
+// TestDeploymentDelete_Success verifies that DeploymentDelete succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/deployments/1 (DELETE) responds with HTTP NotFound.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentDelete_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/42/deployments/1" && r.Method == http.MethodDelete {
@@ -394,7 +431,9 @@ func TestDeploymentDelete_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentDelete_ZeroID verifies DeploymentDelete when zero ID.
+// TestDeploymentDelete_ZeroID verifies the DeploymentDelete_ZeroID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentDelete_ZeroID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -406,7 +445,9 @@ func TestDeploymentDelete_ZeroID(t *testing.T) {
 	}
 }
 
-// TestDeploymentDelete_CancelledContext verifies DeploymentDelete when cancelled context.
+// TestDeploymentDelete_CancelledContext verifies the DeploymentDelete_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeploymentDelete_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -422,7 +463,9 @@ func TestDeploymentDelete_CancelledContext(t *testing.T) {
 
 // Approve or Reject Tests.
 
-// TestDeploymentApprove_Success verifies DeploymentApprove when success.
+// TestDeploymentApprove_Success verifies that DeploymentApprove succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/deployments/10/approval (POST) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentApprove_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/deployments/10/approval" {
@@ -446,7 +489,9 @@ func TestDeploymentApprove_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentReject_Success verifies DeploymentReject when success.
+// TestDeploymentReject_Success verifies that DeploymentReject succeeds when the GitLab API returns a valid response.
+// The mock GitLab API at /api/v4/projects/42/deployments/10/approval (POST) returns a representative success body.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentReject_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/deployments/10/approval" {
@@ -469,7 +514,9 @@ func TestDeploymentReject_Success(t *testing.T) {
 	}
 }
 
-// TestDeploymentApproveOrReject_MissingProjectID verifies DeploymentApproveOrReject when missing project ID.
+// TestDeploymentApproveOrReject_MissingProjectID verifies that DeploymentApproveOrReject_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentApproveOrReject_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -484,7 +531,9 @@ func TestDeploymentApproveOrReject_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestDeploymentApprove_OrRejectZeroDeploymentID verifies DeploymentApprove when or reject zero deployment ID.
+// TestDeploymentApprove_OrRejectZeroDeploymentID verifies the DeploymentApprove_OrRejectZeroDeploymentID handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentApprove_OrRejectZeroDeploymentID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -499,7 +548,9 @@ func TestDeploymentApprove_OrRejectZeroDeploymentID(t *testing.T) {
 	}
 }
 
-// TestDeploymentApproveOrReject_InvalidStatus verifies DeploymentApproveOrReject when invalid status.
+// TestDeploymentApproveOrReject_InvalidStatus verifies the DeploymentApproveOrReject_InvalidStatus handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentApproveOrReject_InvalidStatus(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -515,7 +566,9 @@ func TestDeploymentApproveOrReject_InvalidStatus(t *testing.T) {
 	}
 }
 
-// TestDeploymentApproveOrReject_APIError verifies DeploymentApproveOrReject when API error.
+// TestDeploymentApproveOrReject_APIError verifies that DeploymentApproveOrReject returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentApproveOrReject_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
@@ -540,7 +593,9 @@ const errExpectedAPI = "expected API error, got nil"
 // List — API error, missing project_id (via empty StringOrInt)
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentList_APIError verifies DeploymentList when API error.
+// TestDeploymentList_APIError verifies that DeploymentList returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentList_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -555,7 +610,9 @@ func TestDeploymentList_APIError(t *testing.T) {
 // Get — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentGet_APIError verifies DeploymentGet when API error.
+// TestDeploymentGet_APIError verifies that DeploymentGet returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentGet_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -566,7 +623,9 @@ func TestDeploymentGet_APIError(t *testing.T) {
 	}
 }
 
-// TestDeploymentGet_MissingProjectID verifies DeploymentGet when missing project ID.
+// TestDeploymentGet_MissingProjectID verifies that DeploymentGet_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentGet_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Get(context.Background(), client, GetInput{DeploymentID: 1})
@@ -579,7 +638,9 @@ func TestDeploymentGet_MissingProjectID(t *testing.T) {
 // Create — API error, with optional fields (Tag + Status)
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentCreate_APIError verifies DeploymentCreate when API error.
+// TestDeploymentCreate_APIError verifies that DeploymentCreate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentCreate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -592,7 +653,9 @@ func TestDeploymentCreate_APIError(t *testing.T) {
 	}
 }
 
-// TestDeploymentCreate_StatusErrorBranches verifies status-specific create errors.
+// TestDeploymentCreate_StatusErrorBranches verifies that DeploymentCreate_StatusErrorBranches returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentCreate_StatusErrorBranches(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -619,7 +682,9 @@ func TestDeploymentCreate_StatusErrorBranches(t *testing.T) {
 	}
 }
 
-// TestDeploymentCreate_WithOptionalFields verifies DeploymentCreate when with optional fields.
+// TestDeploymentCreate_WithOptionalFields verifies the DeploymentCreate_WithOptionalFields handler.
+// The mock GitLab API at /api/v4/projects/42/deployments (POST) responds with HTTP Created.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentCreate_WithOptionalFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/projects/42/deployments" {
@@ -664,7 +729,9 @@ func TestDeploymentCreate_WithOptionalFields(t *testing.T) {
 // Update — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentUpdate_APIError verifies DeploymentUpdate when API error.
+// TestDeploymentUpdate_APIError verifies that DeploymentUpdate returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentUpdate_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -675,7 +742,9 @@ func TestDeploymentUpdate_APIError(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_BadRequest verifies invalid status transition hints.
+// TestDeploymentUpdate_BadRequest verifies the DeploymentUpdate_BadRequest handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestDeploymentUpdate_BadRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad status"}`)
@@ -689,7 +758,9 @@ func TestDeploymentUpdate_BadRequest(t *testing.T) {
 	}
 }
 
-// TestDeploymentUpdate_MissingProjectID verifies DeploymentUpdate when missing project ID.
+// TestDeploymentUpdate_MissingProjectID verifies that DeploymentUpdate_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentUpdate_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := Update(context.Background(), client, UpdateInput{DeploymentID: 1, Status: "success"})
@@ -702,7 +773,9 @@ func TestDeploymentUpdate_MissingProjectID(t *testing.T) {
 // Delete — API error, missing project_id
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentDelete_APIError verifies DeploymentDelete when API error.
+// TestDeploymentDelete_APIError verifies that DeploymentDelete returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentDelete_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":msgServerError}`)
@@ -713,7 +786,9 @@ func TestDeploymentDelete_APIError(t *testing.T) {
 	}
 }
 
-// TestDeploymentDelete_NotFound verifies non-forbidden delete errors use the not-found hint path.
+// TestDeploymentDelete_NotFound verifies that DeploymentDelete_NotFound returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentDelete_NotFound(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"not found"}`)
@@ -727,7 +802,9 @@ func TestDeploymentDelete_NotFound(t *testing.T) {
 	}
 }
 
-// TestDeploymentDelete_MissingProjectID verifies DeploymentDelete when missing project ID.
+// TestDeploymentDelete_MissingProjectID verifies that DeploymentDelete_MissingProjectID returns a wrapped error when the GitLab API responds with an error status.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestDeploymentDelete_MissingProjectID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	err := Delete(context.Background(), client, DeleteInput{DeploymentID: 1})
@@ -740,7 +817,9 @@ func TestDeploymentDelete_MissingProjectID(t *testing.T) {
 // ApproveOrReject — canceled context
 // ---------------------------------------------------------------------------.
 
-// TestDeploymentApproveOrReject_CancelledContext verifies DeploymentApproveOrReject when cancelled context.
+// TestDeploymentApproveOrReject_CancelledContext verifies the DeploymentApproveOrReject_CancelledContext handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDeploymentApproveOrReject_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
@@ -757,7 +836,9 @@ func TestDeploymentApproveOrReject_CancelledContext(t *testing.T) {
 // FormatOutputMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatOutputMarkdown_AllFields verifies FormatOutputMarkdown when all fields.
+// TestFormatOutputMarkdown_AllFields verifies the OutputMarkdown_AllFields Markdown formatter for a representative output_allfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:              1,
@@ -788,7 +869,9 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_ZeroID verifies FormatOutputMarkdown when zero ID.
+// TestFormatOutputMarkdown_ZeroID verifies the OutputMarkdown_ZeroID Markdown formatter for a representative output_zeroid input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_ZeroID(t *testing.T) {
 	md := FormatOutputMarkdown(Output{})
 	if md != "" {
@@ -796,7 +879,9 @@ func TestFormatOutputMarkdown_ZeroID(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_MinimalFields verifies FormatOutputMarkdown when minimal fields.
+// TestFormatOutputMarkdown_MinimalFields verifies the OutputMarkdown_MinimalFields Markdown formatter for a representative output_minimalfields input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:     2,
@@ -821,7 +906,9 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 	}
 }
 
-// TestFormatOutputMarkdown_WithPipelineWebURL verifies that pipeline_web_url renders a link.
+// TestFormatOutputMarkdown_WithPipelineWebURL verifies the OutputMarkdown_WithPipelineWebURL Markdown formatter for a representative output_withpipelineweburl input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatOutputMarkdown_WithPipelineWebURL(t *testing.T) {
 	md := FormatOutputMarkdown(Output{
 		ID:             5,
@@ -844,7 +931,9 @@ func TestFormatOutputMarkdown_WithPipelineWebURL(t *testing.T) {
 // FormatListMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatListMarkdown_WithDeployments verifies FormatListMarkdown when with deployments.
+// TestFormatListMarkdown_WithDeployments verifies the ListMarkdown_WithDeployments Markdown formatter for a representative list_withdeployments input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_WithDeployments(t *testing.T) {
 	out := ListOutput{
 		Deployments: []Output{
@@ -876,7 +965,9 @@ func TestFormatListMarkdown_WithDeployments(t *testing.T) {
 	}
 }
 
-// TestFormatListMarkdown_Empty verifies FormatListMarkdown when empty.
+// TestFormatListMarkdown_Empty verifies the ListMarkdown_Empty Markdown formatter for a representative list_empty input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{})
 	if !strings.Contains(md, "No deployments found") {
@@ -887,7 +978,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	}
 }
 
-// TestFormatDeploymentNotFound verifies the deployment not-found Markdown adapter.
+// TestFormatDeploymentNotFound verifies the DeploymentNotFound Markdown formatter for a representative deploymentnotfound input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestFormatDeploymentNotFound(t *testing.T) {
 	result := formatDeploymentNotFound(deploymentNotFoundOutput{Identifier: "17"})
 	if result == nil || !result.IsError {
@@ -902,7 +995,9 @@ func TestFormatDeploymentNotFound(t *testing.T) {
 // FormatApproveOrRejectMarkdown
 // ---------------------------------------------------------------------------.
 
-// TestFormatApproveOrRejectMarkdown_Approved verifies FormatApproveOrRejectMarkdown when approved.
+// TestFormatApproveOrRejectMarkdown_Approved verifies the ApproveOrRejectMarkdown_Approved Markdown formatter for a representative approveorreject_approved input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatApproveOrRejectMarkdown_Approved(t *testing.T) {
 	md := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{
 		Message: "Deployment #10 approved successfully",
@@ -915,7 +1010,9 @@ func TestFormatApproveOrRejectMarkdown_Approved(t *testing.T) {
 	}
 }
 
-// TestFormatApproveOrRejectMarkdown_Rejected verifies FormatApproveOrRejectMarkdown when rejected.
+// TestFormatApproveOrRejectMarkdown_Rejected verifies the ApproveOrRejectMarkdown_Rejected Markdown formatter for a representative approveorreject_rejected input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatApproveOrRejectMarkdown_Rejected(t *testing.T) {
 	md := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{
 		Message: "Deployment #10 rejected successfully",
@@ -925,7 +1022,9 @@ func TestFormatApproveOrRejectMarkdown_Rejected(t *testing.T) {
 	}
 }
 
-// TestFormatApproveOrRejectMarkdown_EmptyMessage verifies FormatApproveOrRejectMarkdown when empty message.
+// TestFormatApproveOrRejectMarkdown_EmptyMessage verifies the ApproveOrRejectMarkdown_EmptyMessage Markdown formatter for a representative approveorreject_emptymessage input.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatApproveOrRejectMarkdown_EmptyMessage(t *testing.T) {
 	md := FormatApproveOrRejectMarkdown(ApproveOrRejectOutput{})
 	if md == "" {
@@ -937,7 +1036,9 @@ func TestFormatApproveOrRejectMarkdown_EmptyMessage(t *testing.T) {
 // toOutput — all optional fields
 // ---------------------------------------------------------------------------.
 
-// TestToOutput_AllOptionalFields verifies ToOutput when all optional fields.
+// TestToOutput_AllOptionalFields verifies the ToOutput_AllOptionalFields handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestToOutput_AllOptionalFields(t *testing.T) {
 	out := FormatOutputMarkdown(Output{
 		ID:              100,
@@ -968,7 +1069,9 @@ func TestToOutput_AllOptionalFields(t *testing.T) {
 	}
 }
 
-// TestList_WithSortField verifies the Sort option is passed to the API.
+// TestList_WithSortField verifies the List_WithSortField handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestList_WithSortField(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("sort") != "desc" {
@@ -989,7 +1092,9 @@ func TestList_WithSortField(t *testing.T) {
 // ActionSpecs metadata
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_Metadata verifies canonical metadata for deployment actions.
+// TestActionSpecs_Metadata validates the Metadata route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_Metadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.NotFound(w, nil)
@@ -1029,7 +1134,9 @@ func TestActionSpecs_Metadata(t *testing.T) {
 // ActionSpecs route coverage for all 6 tools
 // ---------------------------------------------------------------------------.
 
-// TestActionSpecs_CallAllRoutes validates deployment routes across multiple scenarios.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	byTool := newDeploymentSpecsByTool(t)
 
@@ -1105,7 +1212,9 @@ func newDeploymentSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec {
 	return deploymentSpecsByTool(t, ActionSpecs(client))
 }
 
-// TestActionSpecs_DeploymentGetRoute verifies the canonical deployment get route output.
+// TestActionSpecs_DeploymentGetRoute validates the DeploymentGetRoute route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_DeploymentGetRoute(t *testing.T) {
 	const respJSON = `{"id":17,"iid":1,"ref":"main","sha":"abc","status":"success","environment":{"name":"prod"}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

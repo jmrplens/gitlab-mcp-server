@@ -8,7 +8,9 @@ import (
 // ProjectActionSpecs returns canonical specs for project security settings actions.
 func ProjectActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_get_project_security_settings — read the project's security settings (secret push protection, scanning).
 		projectSecurityReadSpec("security_settings_get", toolutil.RouteAction(client, GetProject), "gitlab_get_project_security_settings"),
+		// gitlab_update_project_secret_push_protection — toggle secret push protection on a project.
 		projectSecurityUpdateSpec("security_settings_update", toolutil.RouteAction(client, UpdateProject), "gitlab_update_project_secret_push_protection"),
 	}
 }
@@ -16,14 +18,17 @@ func ProjectActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 // GroupActionSpecs returns canonical specs for group security setting actions.
 func GroupActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 	return []toolutil.ActionSpec{
+		// gitlab_update_group_secret_push_protection — toggle secret push protection for a group (inherits to projects).
 		groupSecuritySettingUpdateSpec("security_settings_update", toolutil.RouteAction(client, UpdateGroup), "gitlab_update_group_secret_push_protection"),
 	}
 }
 
+// projectSecurityReadSpec builds the canonical read-only spec for a project security settings tool.
 func projectSecurityReadSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewReadActionSpec(name, route, projectSecurityOptions(individualTool))
 }
 
+// projectSecurityUpdateSpec builds the canonical update spec for a project security settings tool.
 func projectSecurityUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, projectSecurityOptions(individualTool))
 }
@@ -63,6 +68,7 @@ func projectSecurityOptions(individualTool string) toolutil.ActionSpecOptions {
 	}
 }
 
+// groupSecuritySettingUpdateSpec builds the canonical update spec for a group security settings tool.
 func groupSecuritySettingUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, groupSecuritySettingsOptions(individualTool))
 }

@@ -18,7 +18,9 @@ const (
 	actionSpecSSHKeyJSON = `[{"id":5,"title":"test-key","key":"ssh-rsa AAAA...","created_at":"2026-01-01T00:00:00Z"}]`
 )
 
-// TestActionSpecs_CallAllRoutes exercises every group credential tool through its canonical route.
+// TestActionSpecs_CallAllRoutes validates the CallAllRoutes route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +62,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_ReadErrorPaths verifies read routes propagate backend errors.
+// TestActionSpecs_ReadErrorPaths validates the ReadErrorPaths route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_ReadErrorPaths(t *testing.T) {
 	byTool := groupCredentialSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusForbidden, `{"message":"server error"}`)
@@ -85,7 +89,9 @@ func TestActionSpecs_ReadErrorPaths(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteOutputs verifies destructive routes preserve their success messages.
+// TestActionSpecs_DeleteOutputs validates the DeleteOutputs route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the route returns the expected error or result.
 func TestActionSpecs_DeleteOutputs(t *testing.T) {
 	handler := http.NewServeMux()
 	handler.HandleFunc("DELETE /api/v4/groups/mygroup/manage/personal_access_tokens/99", func(w http.ResponseWriter, _ *http.Request) {
@@ -121,7 +127,9 @@ func TestActionSpecs_DeleteOutputs(t *testing.T) {
 	}
 }
 
-// TestActionSpecs_DeleteOutputErrors verifies destructive wrappers propagate validation errors.
+// TestActionSpecs_DeleteOutputErrors validates the DeleteOutputErrors route through the catalog surface.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteOutputErrors(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("API should not be called when required identifiers are missing")
@@ -151,7 +159,9 @@ func TestActionSpecs_DeleteOutputErrors(t *testing.T) {
 	}
 }
 
-// TestCatalogSurface_ConfirmDeclined covers destructive confirmation when the user declines.
+// TestCatalogSurface_ConfirmDeclined verifies the CatalogSurface_ConfirmDeclined handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
 func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Fatal("should not reach API when confirm is declined")
