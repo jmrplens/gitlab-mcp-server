@@ -115,6 +115,7 @@ type httpConfig struct {
 	rateLimitRPS       float64
 	rateLimitBurst     int
 	metaParamSchema    string
+	httpIdleTimeout    time.Duration
 }
 
 // main parses CLI flags, handles one-shot commands such as --help and
@@ -161,6 +162,7 @@ func main() {
 	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", 0, "Per-server tools/call rate limit in requests/second (0 = disabled)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
+	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", 120*time.Second, "HTTP server IdleTimeout; 0 disables idle connection closure")
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
@@ -398,7 +400,7 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	autoupdate.CleanupOldBinary()
 	startAutoUpdate(ctx, cfg)
 
-	return serveHTTP(ctx, cfg, hcfg.addr)
+	return serveHTTP(ctx, cfg, hcfg.addr, hcfg.httpIdleTimeout)
 }
 
 func normalizeFixedGitLabURL(hcfg *httpConfig) error {
@@ -850,7 +852,7 @@ const httpShutdownTimeout = 5 * time.Second
 // backed by a dedicated GitLab client. Requests without a valid authentication
 // token are rejected. Sessions expire after cfg.SessionTimeout of inactivity.
 // The pool is bounded by cfg.MaxHTTPClients entries with LRU eviction.
-func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
+func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdleTimeout time.Duration) error {
 	slog.Info(
 		"starting MCP server in HTTP mode",
 		"addr", httpAddr,
@@ -904,7 +906,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		IdleTimeout:       httpIdleTimeout,
 	}
 
 	serverErr := make(chan error, 1)
