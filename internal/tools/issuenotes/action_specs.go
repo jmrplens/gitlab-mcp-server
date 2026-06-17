@@ -64,7 +64,7 @@ func issueNoteDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 
 // issueNoteOptions returns the base [toolutil.ActionSpecOptions] shared
 // by every issue note action (tags, owner, individual tool metadata). It
-// customises the Usage string for the get action to highlight the
+// customizes the Usage string for the get action to highlight the
 // note_id-based lookup.
 func issueNoteOptions(individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{

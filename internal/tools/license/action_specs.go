@@ -51,7 +51,7 @@ func licenseDeleteSpec(name string, route toolutil.ActionRoute, individualTool s
 }
 
 // licenseOptions returns the base [toolutil.ActionSpecOptions] for a
-// license action and customises the Usage/ParameterGuidance for the
+// license action and customizes the Usage/ParameterGuidance for the
 // add and delete individual tools.
 func licenseOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	usage := "Get the currently installed GitLab license details."

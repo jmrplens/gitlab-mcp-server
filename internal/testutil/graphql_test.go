@@ -191,7 +191,7 @@ type graphqlFailReader struct{}
 func (graphqlFailReader) Read([]byte) (int, error) { return 0, errors.New("read failed") }
 
 // Close is a no-op that always succeeds, satisfying [io.Closer].
-func (graphqlFailReader) Close() error             { return nil }
+func (graphqlFailReader) Close() error { return nil }
 
 // TestGraphQLHandler_ReadError verifies that [GraphQLHandler] responds with
 // 400 Bad Request when the request body cannot be read.

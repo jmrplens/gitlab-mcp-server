@@ -66,7 +66,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 }
 
 // getOutput wraps [Output] so the issue.get route can return a distinct
-// type that downstream formatters recognise as a single-issue payload.
+// type that downstream formatters recognize as a single-issue payload.
 type getOutput struct {
 	Output
 }

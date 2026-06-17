@@ -428,9 +428,9 @@ func TestMeta_UserSSHKeyLifecycle(t *testing.T) {
 //
 // Cleanup unblocks and deletes the user when the test exits, even on failure.
 //
-//nolint:maintidx // Ordered admin E2E workflow keeps one created user lifecycle visible through cleanup.
-//
 // Build tag: e2e && !enterprise. Mode: CE. Surface: meta. Admin token required.
+//
+//nolint:maintidx // Ordered admin E2E workflow keeps one created user lifecycle visible through cleanup.
 func TestMeta_UserAdmin(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {

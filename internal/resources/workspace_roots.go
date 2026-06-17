@@ -61,7 +61,7 @@ func RegisterWorkspaceRoots(server *mcp.Server, rootsMgr *roots.Manager) {
 
 // marshalWorkspaceRootsJSON serializes a [WorkspaceRootsOutput] as a JSON
 // text resource suitable for returning from an MCP ReadResource handler.
-// The marshalled value is wrapped in a single text contents block with
+// The marshaled value is wrapped in a single text contents block with
 // [mimeJSON].
 func marshalWorkspaceRootsJSON(v WorkspaceRootsOutput) (*mcp.ReadResourceResult, error) {
 	data, err := json.Marshal(v)

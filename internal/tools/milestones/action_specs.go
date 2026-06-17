@@ -79,7 +79,7 @@ func milestoneDeleteSpec(name string, route toolutil.ActionRoute, individualTool
 }
 
 // milestoneOptionsForAction returns the base [toolutil.ActionSpecOptions]
-// for a milestone action and customises the Usage/Aliases/ParameterGuidance
+// for a milestone action and customizes the Usage/Aliases/ParameterGuidance
 // for the list, get, and create individual tools.
 func milestoneOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{

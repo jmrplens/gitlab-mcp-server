@@ -157,7 +157,7 @@ func TestEvaluatePreparedCase_UsesRenderedPromptAndTypedSteps(t *testing.T) {
 // resource list, required resource read) and a scripted runner that skips
 // the optional prelude. It asserts the result reports first-pass success
 // without a repair, exposes the expected bridge metrics, and records an
-// "accepted optional" note. This protects the runner from penalising
+// "accepted optional" note. This protects the runner from penalizing
 // models that intelligently skip optional capability preludes.
 func TestEvaluateTask_AcceptsOptionalCapabilityBridgePreludeSkip(t *testing.T) {
 	runner := newScriptedRunner(

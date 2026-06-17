@@ -124,7 +124,7 @@ func TestAggregatePublishRows_RepairSuccessUsesRepairAttempts(t *testing.T) {
 // capabilityList tool, but the recorded first call was resourceList. The
 // assertion confirms all three outcome flags return true so the report
 // does not flag this as a first-call mismatch. This protects the
-// documentation publish path from penalising models that intelligently
+// documentation publish path from penalizing models that intelligently
 // skip optional prelude steps.
 func TestPublishEffectiveTraceOutcome_AcceptsOptionalCapabilityPreludeSkip(t *testing.T) {
 	trace := taskTrace{

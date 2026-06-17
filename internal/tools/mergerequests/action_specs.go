@@ -195,7 +195,7 @@ func mergeRequestDestructiveUpdateIndividualSpec(name string, route toolutil.Act
 }
 
 // mergeRequestOptions returns the base [toolutil.ActionSpecOptions]
-// for a merge request action and customises the Usage/Aliases for
+// for a merge request action and customizes the Usage/Aliases for
 // the merge, pipelines, create_pipeline, and cancel_auto_merge
 // individual tools.
 func mergeRequestOptions(actionName, individualTool string) toolutil.ActionSpecOptions {

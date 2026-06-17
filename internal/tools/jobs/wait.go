@@ -17,7 +17,7 @@ import (
 
 // pollDuration converts a seconds value to a [time.Duration]. It is
 // overridable from tests to inject a faster clock without changing the
-// production behaviour.
+// production behavior.
 var pollDuration = func(seconds int) time.Duration { return time.Duration(seconds) * time.Second }
 
 // WaitInput defines parameters for waiting on a job to complete.

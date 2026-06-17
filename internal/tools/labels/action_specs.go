@@ -80,7 +80,7 @@ func labelDeleteSpec(name string, route toolutil.ActionRoute, individualTool str
 }
 
 // labelOptionsForAction returns the base [toolutil.ActionSpecOptions]
-// for a label action and customises the Usage/Aliases for the list,
+// for a label action and customizes the Usage/Aliases for the list,
 // get, and create individual tools.
 func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpecOptions {
 	options := toolutil.ActionSpecOptions{

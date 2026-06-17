@@ -1,4 +1,4 @@
-// Package termio centralises terminal and log-file output helpers used by the
+// Package termio centralizes terminal and log-file output helpers used by the
 // eval_mcp_surfaces CLI so commands can write progress to a tee'd destination
 // (stdout plus an optional log file) with a consistent format.
 //

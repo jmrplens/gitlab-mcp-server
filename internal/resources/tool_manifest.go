@@ -71,7 +71,7 @@ type ToolSurfaceEntry struct {
 }
 
 // ToolSurfaceManifest is the JSON payload returned by the
-// "gitlab://tools" resource. It summarises the active tool surface
+// "gitlab://tools" resource. It summarizes the active tool surface
 // and lists every executable entry the surface exposes.
 type ToolSurfaceManifest struct {
 	Surface          string                   `json:"surface"`

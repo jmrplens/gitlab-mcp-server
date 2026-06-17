@@ -10,7 +10,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// Field and tool name constants shared by the issuelinks handlers. Centralising
+// Field and tool name constants shared by the issuelinks handlers. Centralizing
 // them keeps the error messages and parameter validation consistent.
 const (
 	fieldProjectID      = "project_id"

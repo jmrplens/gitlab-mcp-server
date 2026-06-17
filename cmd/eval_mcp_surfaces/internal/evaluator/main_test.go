@@ -5347,7 +5347,7 @@ func TestAggregateUsage_SumsRequestsToolCallsAndTokens(t *testing.T) {
 // read for project.get and a prompt get for project_overview) and asserts
 // the resulting usage slice contains three grouped entries covering the
 // shared targets and the model-specific call counts. This protects the
-// report from losing capability bridge utilisation metrics.
+// report from losing capability bridge utilization metrics.
 func TestCollectCapabilityBridgeUsage_GroupsToolTargetsAndModels(t *testing.T) {
 	results := []taskResult{
 		{

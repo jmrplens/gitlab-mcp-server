@@ -103,7 +103,7 @@ func jobDeleteSpec(name string, route toolutil.ActionRoute, individualTool strin
 
 // jobOptionsForAction returns the base [toolutil.ActionSpecOptions] for
 // a jobs action, layering the ci/job tags and any per-action extras,
-// and customising the Usage/Aliases/Description for the most common
+// and customizing the Usage/Aliases/Description for the most common
 // individual tools.
 func jobOptionsForAction(actionName, individualTool string, extraTags ...string) toolutil.ActionSpecOptions {
 	_ = actionName

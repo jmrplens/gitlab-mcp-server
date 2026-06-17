@@ -123,25 +123,25 @@ const (
 	flagSkipUnavailable = "skip-unavailable"
 
 	// promptMarkerIssue is the natural-language marker that the prompt parser
-	// recognises when extracting issue identifiers.
+	// recognizes when extracting issue identifiers.
 	promptMarkerIssue = "issue "
-	// promptMarkerMergeRequest is the natural-language marker recognised when
+	// promptMarkerMergeRequest is the natural-language marker recognized when
 	// extracting merge-request identifiers.
 	promptMarkerMergeRequest = "merge request "
-	// promptMarkerBranch is the natural-language marker recognised when
+	// promptMarkerBranch is the natural-language marker recognized when
 	// extracting branch names.
 	promptMarkerBranch = "branch "
-	// promptMarkerProject is the natural-language marker recognised when
+	// promptMarkerProject is the natural-language marker recognized when
 	// extracting project paths.
 	promptMarkerProject = "project "
-	// promptMarkerAllowlistProject is the marker recognised around CI job
+	// promptMarkerAllowlistProject is the marker recognized around CI job
 	// token allowlist project identifiers.
 	promptMarkerAllowlistProject = "allowlist of project "
-	// promptMarkerIssueIID is the marker recognised around an issue IID.
+	// promptMarkerIssueIID is the marker recognized around an issue IID.
 	promptMarkerIssueIID = "issue IID "
-	// promptMarkerGroupPath is the marker recognised around a group path.
+	// promptMarkerGroupPath is the marker recognized around a group path.
 	promptMarkerGroupPath = "group path "
-	// promptMarkerAwardEmojiID is the marker recognised around an award
+	// promptMarkerAwardEmojiID is the marker recognized around an award
 	// emoji identifier.
 	promptMarkerAwardEmojiID = "award emoji ID "
 	// promptMarkerFrom is the shared connector marker used by compare-style

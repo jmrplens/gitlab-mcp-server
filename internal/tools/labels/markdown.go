@@ -9,7 +9,7 @@ import (
 
 // labelMarkdownOptions configures the shared [toolutil.LabelMarkdownOptions]
 // used by the package's single-label and list Markdown formatters. It
-// centralises the title, empty-state copy, and follow-up hints so both
+// centralizes the title, empty-state copy, and follow-up hints so both
 // renderers stay in sync.
 var labelMarkdownOptions = toolutil.LabelMarkdownOptions{
 	DetailTitle:       "Label",

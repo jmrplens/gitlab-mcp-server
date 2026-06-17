@@ -11,7 +11,7 @@ import (
 )
 
 // parseFlags parses flags from evaluator input. Each flag below is documented
-// with the user-visible behaviour; flag.* descriptions are also surfaced
+// with the user-visible behavior; flag.* descriptions are also surfaced
 // verbatim by --help.
 func parseFlags() options {
 	var opts options

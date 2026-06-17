@@ -80,7 +80,7 @@ func packageDeleteSpec(name string, route toolutil.ActionRoute, individualTool s
 }
 
 // packageOptions returns the base [toolutil.ActionSpecOptions] for a
-// Generic Package Registry action and customises the Usage,
+// Generic Package Registry action and customizes the Usage,
 // ParameterGuidance, and InputSchemaOverrides for the list and
 // publish_directory individual tools.
 func packageOptions(actionName, individualTool string) toolutil.ActionSpecOptions {

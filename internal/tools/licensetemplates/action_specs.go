@@ -26,7 +26,7 @@ func licenseTemplateSpec(name string, route toolutil.ActionRoute, individualTool
 }
 
 // licenseTemplateOptions returns the base [toolutil.ActionSpecOptions]
-// for a license template action and customises the Usage/ParameterGuidance
+// for a license template action and customizes the Usage/ParameterGuidance
 // for the get individual tool.
 func licenseTemplateOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
 	opts := toolutil.ActionSpecOptions{
